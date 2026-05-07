@@ -12,16 +12,22 @@ import {
   User,
 } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { validateCredentials, saveSession } from "@/lib/auth";
+import { DEMO_CREDENTIALS } from "@/lib/auth";
 
 type Role = "cliente" | "admin";
 
 export function LoginForm() {
+  const router = useRouter();
   const [role, setRole] = useState<Role>("cliente");
   const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const canSubmit =
     email.length > 0 &&
@@ -30,7 +36,26 @@ export function LoginForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: integrar con auth (Supabase / NextAuth) cuando montemos el backend
+    setError("");
+    setIsLoading(true);
+
+    // Validar credenciales
+    if (validateCredentials(email, password, role)) {
+      // Guardar sesión
+      saveSession({
+        email,
+        role,
+        isAuthenticated: true,
+      });
+
+      // Redirigir al dashboard
+      setTimeout(() => {
+        router.push(`/dashboard/${role}`);
+      }, 300);
+    } else {
+      setError("Correo o contraseña incorrectos");
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -69,15 +94,22 @@ export function LoginForm() {
         />
       </div>
 
+      {error && (
+        <div className="mt-3.5 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="mt-3.5 space-y-2.5">
         <Field icon={<Mail size={18} strokeWidth={1.5} />}>
           <input
-            type="text"
+            type="email"
             autoComplete="username"
             placeholder="Correo o usuario"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
+            disabled={isLoading}
+            className="w-full bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none disabled:opacity-50"
           />
         </Field>
 
@@ -88,15 +120,17 @@ export function LoginForm() {
             placeholder="Contraseña"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-transparent py-2.5 pr-2 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
+            disabled={isLoading}
+            className="w-full bg-transparent py-2.5 pr-2 text-sm text-ink placeholder:text-ink/40 focus:outline-none disabled:opacity-50"
           />
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
+            disabled={isLoading}
             aria-label={
               showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
             }
-            className="pr-3 text-ink/40 transition hover:text-ink/70"
+            className="pr-3 text-ink/40 transition hover:text-ink/70 disabled:opacity-50"
           >
             {showPassword ? (
               <EyeOff size={18} strokeWidth={1.5} />
@@ -140,13 +174,13 @@ export function LoginForm() {
 
       <button
         type="submit"
-        disabled={!canSubmit}
+        disabled={!canSubmit || isLoading}
         className={cn(
           "mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-ink px-5 py-3 text-sm font-medium tracking-wide text-cream-50 transition",
           "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
-        <span>Iniciar sesión</span>
+        <span>{isLoading ? "Validando..." : "Iniciar sesión"}</span>
         <ArrowRight size={18} strokeWidth={1.75} className="text-gold" />
       </button>
 
