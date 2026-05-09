@@ -11,12 +11,16 @@ import {
   ShoppingBag,
   User,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 type Role = "cliente" | "admin";
 
 export function LoginForm() {
+  const t = useT();
+  const router = useRouter();
   const [role, setRole] = useState<Role>("cliente");
   const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -30,7 +34,8 @@ export function LoginForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: integrar con auth (Supabase / NextAuth) cuando montemos el backend
+    // TODO: integrar con auth real (Supabase / NextAuth) — por ahora navegación mock
+    router.push(role === "cliente" ? "/propiedades" : "/admin");
   }
 
   return (
@@ -47,11 +52,9 @@ export function LoginForm() {
         />
         <span className="mt-1.5 h-px w-8 bg-gold/60" />
         <h2 className="mt-2 font-serif text-2xl font-medium leading-tight tracking-tight text-ink md:text-[1.75rem]">
-          Acceso Privado
+          {t("login.title")}
         </h2>
-        <p className="mt-1 text-[13px] text-ink/60">
-          Portal exclusivo para clientes y administradores
-        </p>
+        <p className="mt-1 text-[13px] text-ink/60">{t("login.subtitle")}</p>
       </div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl border border-gold/20 bg-white/40 p-1.5">
@@ -59,13 +62,13 @@ export function LoginForm() {
           active={role === "cliente"}
           onClick={() => setRole("cliente")}
           icon={<User size={16} strokeWidth={1.75} />}
-          label="Clientes"
+          label={t("login.role.client")}
         />
         <RoleTab
           active={role === "admin"}
           onClick={() => setRole("admin")}
           icon={<ShieldCheck size={16} strokeWidth={1.75} />}
-          label="Administradores"
+          label={t("login.role.admin")}
         />
       </div>
 
@@ -74,7 +77,7 @@ export function LoginForm() {
           <input
             type="text"
             autoComplete="username"
-            placeholder="Correo o usuario"
+            placeholder={t("login.email.placeholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
@@ -85,7 +88,7 @@ export function LoginForm() {
           <input
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
-            placeholder="Contraseña"
+            placeholder={t("login.password.placeholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-transparent py-2.5 pr-2 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
@@ -94,7 +97,7 @@ export function LoginForm() {
             type="button"
             onClick={() => setShowPassword((v) => !v)}
             aria-label={
-              showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+              showPassword ? t("login.password.hide") : t("login.password.show")
             }
             className="pr-3 text-ink/40 transition hover:text-ink/70"
           >
@@ -115,11 +118,10 @@ export function LoginForm() {
             </span>
             <div className="min-w-0">
               <p className="font-serif text-sm font-semibold text-ink">
-                Personal Shopper
+                {t("login.shopper.title")}
               </p>
               <p className="mt-0.5 text-[11px] leading-snug text-ink/70">
-                Servicio equivalente a un mes de alquiler/renta. Se valida cuando
-                el cliente alquila oficialmente con Benjamín Cousiño Propiedades.
+                {t("login.shopper.text")}
               </p>
             </div>
           </div>
@@ -132,7 +134,7 @@ export function LoginForm() {
                 onChange={(e) => setAccepted(e.target.checked)}
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-ink"
               />
-              <span>He leído y acepto las condiciones del Personal Shopper.</span>
+              <span>{t("login.shopper.accept")}</span>
             </label>
           </div>
         </div>
@@ -146,7 +148,7 @@ export function LoginForm() {
           "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
-        <span>Iniciar sesión</span>
+        <span>{t("login.submit")}</span>
         <ArrowRight size={18} strokeWidth={1.75} className="text-gold" />
       </button>
 
@@ -155,7 +157,7 @@ export function LoginForm() {
           href="#"
           className="text-[13px] text-gold-dark underline-offset-4 transition hover:underline"
         >
-          ¿Olvidaste tu contraseña?
+          {t("login.forgot")}
         </a>
       </div>
 
@@ -167,7 +169,7 @@ export function LoginForm() {
           aria-hidden="true"
         />
         <p className="mt-1 text-center text-[11px] text-ink/55">
-          Acceso seguro a propiedades disponibles y seguimiento personalizado
+          {t("login.footer")}
         </p>
       </div>
     </form>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cinzel, Inter, Playfair_Display } from "next/font/google";
+import { LanguageProvider } from "@/lib/i18n/provider";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -39,7 +40,9 @@ export default function RootLayout({
       lang="es"
       className={`${cinzel.variable} ${playfair.variable} ${inter.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }
