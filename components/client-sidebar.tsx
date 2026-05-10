@@ -4,6 +4,7 @@ import { Building2, Heart, Home, LogOut, Mail, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOutAction } from "@/app/(auth)/actions";
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
@@ -82,13 +83,15 @@ export function ClientSidebar({
             </p>
           </div>
         </div>
-        <Link
-          href="/login"
-          className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
-        >
-          <LogOut size={13} strokeWidth={1.75} />
-          <span>{t("sidebar.logout")}</span>
-        </Link>
+        <form action={signOutAction} className="mt-3">
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
+          >
+            <LogOut size={13} strokeWidth={1.75} />
+            <span>{t("sidebar.logout")}</span>
+          </button>
+        </form>
       </div>
     </aside>
   );

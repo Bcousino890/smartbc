@@ -33,8 +33,12 @@ const es: Strings = {
   "login.shopper.accept":
     "He leído y acepto las condiciones del Personal Shopper.",
   "login.submit": "Iniciar sesión",
+  "login.submitting": "Entrando…",
   "login.forgot": "¿Olvidaste tu contraseña?",
   "login.footer": "Acceso seguro a propiedades disponibles y seguimiento personalizado",
+  "auth.error.invalidCredentials": "Email o contraseña incorrectos.",
+  "auth.error.notAdmin": "Esta cuenta no tiene acceso de administrador.",
+  "auth.error.noProfile": "La cuenta no tiene perfil asociado. Contacta con soporte.",
 
   // Sidebar
   "sidebar.inicio": "Inicio",
@@ -611,8 +615,12 @@ const en: Strings = {
   "login.shopper.accept":
     "I have read and accept the Personal Shopper terms.",
   "login.submit": "Sign in",
+  "login.submitting": "Signing in…",
   "login.forgot": "Forgot your password?",
   "login.footer": "Secure access to available properties and personalized tracking",
+  "auth.error.invalidCredentials": "Incorrect email or password.",
+  "auth.error.notAdmin": "This account does not have admin access.",
+  "auth.error.noProfile": "This account has no profile linked. Contact support.",
 
   "sidebar.inicio": "Home",
   "sidebar.propiedades": "Properties",
@@ -1172,9 +1180,13 @@ const fr: Strings = {
   "login.shopper.accept":
     "J'ai lu et j'accepte les conditions du Personal Shopper.",
   "login.submit": "Se connecter",
+  "login.submitting": "Connexion…",
   "login.forgot": "Mot de passe oublié ?",
   "login.footer":
     "Accès sécurisé aux propriétés disponibles et suivi personnalisé",
+  "auth.error.invalidCredentials": "E-mail ou mot de passe incorrect.",
+  "auth.error.notAdmin": "Ce compte n'a pas d'accès administrateur.",
+  "auth.error.noProfile": "Ce compte n'a pas de profil associé. Contactez le support.",
 
   "sidebar.inicio": "Accueil",
   "sidebar.propiedades": "Propriétés",
@@ -1738,9 +1750,13 @@ const de: Strings = {
   "login.shopper.accept":
     "Ich habe die Bedingungen des Personal Shoppers gelesen und akzeptiere sie.",
   "login.submit": "Anmelden",
+  "login.submitting": "Wird angemeldet…",
   "login.forgot": "Passwort vergessen?",
   "login.footer":
     "Sicherer Zugang zu verfügbaren Immobilien und persönliche Betreuung",
+  "auth.error.invalidCredentials": "E-Mail oder Passwort ist falsch.",
+  "auth.error.notAdmin": "Dieses Konto hat keinen Admin-Zugriff.",
+  "auth.error.noProfile": "Dieses Konto hat kein verknüpftes Profil. Kontaktieren Sie den Support.",
 
   "sidebar.inicio": "Start",
   "sidebar.propiedades": "Immobilien",

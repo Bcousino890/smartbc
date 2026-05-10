@@ -1,0 +1,370 @@
+// Tipos generados manualmente para reflejar supabase/migrations/0001_init.sql.
+// Para regenerar desde el proyecto remoto: `npx supabase login && npx supabase gen types typescript --project-id healauhivrjunlulrlui > lib/db/database.types.ts`
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export type UserRole = "client" | "admin" | "advisor";
+export type PropertyOperation = "rent" | "sale";
+export type PropertyStay = "short" | "long";
+export type PropertyStatus = "available" | "reserved" | "sold" | "archived";
+export type PropertySource = "manual" | "scrape" | "api";
+export type VisitStatus = "pending" | "confirmed" | "completed" | "cancelled";
+export type MessageSenderType = "client" | "advisor" | "admin";
+
+export type Database = {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          role: UserRole;
+          full_name: string | null;
+          email: string;
+          phone: string | null;
+          avatar_url: string | null;
+          assigned_advisor_id: string | null;
+          personal_shopper_terms_accepted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          role?: UserRole;
+          full_name?: string | null;
+          email: string;
+          phone?: string | null;
+          avatar_url?: string | null;
+          assigned_advisor_id?: string | null;
+          personal_shopper_terms_accepted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+      };
+      agencies: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          logo_url: string | null;
+          website: string | null;
+          contact_name: string | null;
+          contact_email: string | null;
+          contact_phone: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          logo_url?: string | null;
+          website?: string | null;
+          contact_name?: string | null;
+          contact_email?: string | null;
+          contact_phone?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["agencies"]["Insert"]>;
+      };
+      agency_partnerships: {
+        Row: {
+          id: string;
+          agency_id: string;
+          commission_pct: number | null;
+          agreement_signed_at: string | null;
+          watermark_required: boolean;
+          attribution_visible: boolean;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          commission_pct?: number | null;
+          agreement_signed_at?: string | null;
+          watermark_required?: boolean;
+          attribution_visible?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["agency_partnerships"]["Insert"]>;
+      };
+      properties: {
+        Row: {
+          id: string;
+          agency_id: string | null;
+          source: PropertySource;
+          external_id: string | null;
+          slug: string;
+          title: string;
+          description: string | null;
+          operation: PropertyOperation;
+          stay: PropertyStay | null;
+          status: PropertyStatus;
+          price: number;
+          bedrooms: number;
+          bathrooms: number;
+          square_meters: number | null;
+          zone: string;
+          address: string | null;
+          available_from: string | null;
+          features: string[];
+          cover_photo_url: string | null;
+          last_synced_at: string | null;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id?: string | null;
+          source?: PropertySource;
+          external_id?: string | null;
+          slug: string;
+          title: string;
+          description?: string | null;
+          operation: PropertyOperation;
+          stay?: PropertyStay | null;
+          status?: PropertyStatus;
+          price: number;
+          bedrooms?: number;
+          bathrooms?: number;
+          square_meters?: number | null;
+          zone: string;
+          address?: string | null;
+          available_from?: string | null;
+          features?: string[];
+          cover_photo_url?: string | null;
+          last_synced_at?: string | null;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["properties"]["Insert"]>;
+      };
+      property_photos: {
+        Row: {
+          id: string;
+          property_id: string;
+          url: string;
+          alt: string | null;
+          position: number;
+          is_cover: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          url: string;
+          alt?: string | null;
+          position?: number;
+          is_cover?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_photos"]["Insert"]>;
+      };
+      client_tags: {
+        Row: {
+          id: string;
+          name: string;
+          category: string | null;
+          color: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          category?: string | null;
+          color?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["client_tags"]["Insert"]>;
+      };
+      client_tag_assignments: {
+        Row: {
+          client_id: string;
+          tag_id: string;
+          assigned_by: string | null;
+          assigned_at: string;
+        };
+        Insert: {
+          client_id: string;
+          tag_id: string;
+          assigned_by?: string | null;
+          assigned_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["client_tag_assignments"]["Insert"]>;
+      };
+      client_preferences: {
+        Row: {
+          client_id: string;
+          operation: PropertyOperation | null;
+          stay: PropertyStay | null;
+          min_price: number | null;
+          max_price: number | null;
+          min_bedrooms: number | null;
+          max_bedrooms: number | null;
+          min_bathrooms: number | null;
+          min_square_meters: number | null;
+          max_square_meters: number | null;
+          zones: string[];
+          available_from: string | null;
+          notes: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          client_id: string;
+          operation?: PropertyOperation | null;
+          stay?: PropertyStay | null;
+          min_price?: number | null;
+          max_price?: number | null;
+          min_bedrooms?: number | null;
+          max_bedrooms?: number | null;
+          min_bathrooms?: number | null;
+          min_square_meters?: number | null;
+          max_square_meters?: number | null;
+          zones?: string[];
+          available_from?: string | null;
+          notes?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["client_preferences"]["Insert"]>;
+      };
+      favorites: {
+        Row: {
+          client_id: string;
+          property_id: string;
+          created_at: string;
+        };
+        Insert: {
+          client_id: string;
+          property_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["favorites"]["Insert"]>;
+      };
+      visit_requests: {
+        Row: {
+          id: string;
+          client_id: string;
+          property_id: string;
+          requested_at: string;
+          status: VisitStatus;
+          notes: string | null;
+          confirmed_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          property_id: string;
+          requested_at: string;
+          status?: VisitStatus;
+          notes?: string | null;
+          confirmed_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["visit_requests"]["Insert"]>;
+      };
+      conversations: {
+        Row: {
+          id: string;
+          client_id: string;
+          last_message_at: string | null;
+          unread_count_client: number;
+          unread_count_advisor: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          last_message_at?: string | null;
+          unread_count_client?: number;
+          unread_count_advisor?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["conversations"]["Insert"]>;
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          sender_type: MessageSenderType;
+          body: string;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          sender_type: MessageSenderType;
+          body: string;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
+      };
+      internal_notes: {
+        Row: {
+          id: string;
+          client_id: string;
+          author_id: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          author_id: string;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["internal_notes"]["Insert"]>;
+      };
+      app_settings: {
+        Row: {
+          key: string;
+          value: Json;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          value: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_settings"]["Insert"]>;
+      };
+    };
+    Enums: {
+      user_role: UserRole;
+      property_operation: PropertyOperation;
+      property_stay: PropertyStay;
+      property_status: PropertyStatus;
+      property_source: PropertySource;
+      visit_status: VisitStatus;
+      message_sender_type: MessageSenderType;
+    };
+  };
+};

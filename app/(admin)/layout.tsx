@@ -1,11 +1,19 @@
+import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
-import { mockAdmin } from "@/lib/mock-agencies";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import type { AdminUser } from "@/lib/types";
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const profile = await getCurrentProfile();
+  if (!profile) redirect("/login");
+  if (profile.role === "client") redirect("/inicio");
+
+  const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
+
   return (
     <div className="relative min-h-screen bg-cream-50">
       {/* Soft warm background */}
@@ -23,9 +31,29 @@ export default function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={mockAdmin} />
+        <AdminSidebar user={adminUser} />
         <main className="ml-[260px] min-h-screen">{children}</main>
       </div>
     </div>
   );
+}
+
+function profileToAdminUser(
+  fullName: string | null,
+  email: string,
+  role: "admin" | "advisor" | "client"
+): AdminUser {
+  const display = fullName?.trim() || email;
+  const parts = display.split(/\s+/);
+  const firstName = parts[0] ?? "";
+  const lastName = parts.slice(1).join(" ");
+  const initials = (
+    (firstName[0] ?? "") + (lastName[0] ?? firstName[1] ?? "")
+  ).toUpperCase() || display.slice(0, 2).toUpperCase();
+  return {
+    firstName,
+    lastName,
+    initials,
+    roleKey: role === "advisor" ? "admin.role.advisor" : "admin.role",
+  };
 }

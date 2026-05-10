@@ -11,36 +11,33 @@ import {
   ShoppingBag,
   User,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
+import { signInAction, type SignInState } from "@/app/(auth)/actions";
 
-type Role = "cliente" | "admin";
+type Role = "client" | "admin";
+
+const initialState: SignInState = {};
 
 export function LoginForm() {
   const t = useT();
-  const router = useRouter();
-  const [role, setRole] = useState<Role>("cliente");
+  const [state, formAction, pending] = useActionState(signInAction, initialState);
+  const [role, setRole] = useState<Role>("client");
   const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const canSubmit =
+    !pending &&
     email.length > 0 &&
     password.length > 0 &&
     (role === "admin" || accepted);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    // TODO: integrar con auth real (Supabase / NextAuth) — por ahora navegación mock
-    router.push(role === "cliente" ? "/propiedades" : "/admin");
-  }
-
   return (
     <form
-      onSubmit={handleSubmit}
+      action={formAction}
       className="w-full max-w-md rounded-[20px] border border-white/60 bg-cream-50/85 px-6 pb-5 pt-3.5 shadow-[0_30px_80px_-20px_rgba(40,28,10,0.45),0_0_0_1px_rgba(201,169,110,0.18)] backdrop-blur-md md:px-8 md:pb-6 md:pt-4"
     >
       <div className="flex flex-col items-center text-center">
@@ -59,8 +56,8 @@ export function LoginForm() {
 
       <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl border border-gold/20 bg-white/40 p-1.5">
         <RoleTab
-          active={role === "cliente"}
-          onClick={() => setRole("cliente")}
+          active={role === "client"}
+          onClick={() => setRole("client")}
           icon={<User size={16} strokeWidth={1.75} />}
           label={t("login.role.client")}
         />
@@ -72,10 +69,13 @@ export function LoginForm() {
         />
       </div>
 
+      <input type="hidden" name="role" value={role} />
+
       <div className="mt-3.5 space-y-2.5">
         <Field icon={<Mail size={18} strokeWidth={1.5} />}>
           <input
-            type="text"
+            name="email"
+            type="email"
             autoComplete="username"
             placeholder={t("login.email.placeholder")}
             value={email}
@@ -86,6 +86,7 @@ export function LoginForm() {
 
         <Field icon={<Lock size={18} strokeWidth={1.5} />}>
           <input
+            name="password"
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             placeholder={t("login.password.placeholder")}
@@ -110,7 +111,7 @@ export function LoginForm() {
         </Field>
       </div>
 
-      {role === "cliente" && (
+      {role === "client" && (
         <div className="mt-3.5 rounded-xl border border-gold/30 bg-cream-100/70 p-3">
           <div className="flex items-start gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/50 text-gold">
@@ -140,6 +141,15 @@ export function LoginForm() {
         </div>
       )}
 
+      {state.error && (
+        <p
+          role="alert"
+          className="mt-3 rounded-lg border border-red-300/60 bg-red-50/80 px-3 py-2 text-[12px] text-red-700"
+        >
+          {t(state.error)}
+        </p>
+      )}
+
       <button
         type="submit"
         disabled={!canSubmit}
@@ -148,7 +158,7 @@ export function LoginForm() {
           "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
-        <span>{t("login.submit")}</span>
+        <span>{pending ? t("login.submitting") : t("login.submit")}</span>
         <ArrowRight size={18} strokeWidth={1.75} className="text-gold" />
       </button>
 

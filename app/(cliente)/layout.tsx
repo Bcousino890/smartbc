@@ -1,15 +1,18 @@
+import { redirect } from "next/navigation";
 import { ClientSidebar } from "@/components/client-sidebar";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
-const CURRENT_USER = {
-  name: "María Álvarez",
-  roleKey: "sidebar.role.client",
-};
-
-export default function ClientLayout({
+export default async function ClientLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const profile = await getCurrentProfile();
+  if (!profile) redirect("/login");
+  if (profile.role === "admin" || profile.role === "advisor") redirect("/admin");
+
+  const displayName = profile.full_name?.trim() || profile.email;
+
   return (
     <>
       {/* Background — same lobby photo + overlays as the login screen.
@@ -53,7 +56,7 @@ export default function ClientLayout({
 
       {/* Foreground */}
       <div className="relative z-10 min-h-screen">
-        <ClientSidebar user={CURRENT_USER} />
+        <ClientSidebar user={{ name: displayName, roleKey: "sidebar.role.client" }} />
         <main className="ml-[260px] min-h-screen">{children}</main>
       </div>
     </>

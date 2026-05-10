@@ -1,12 +1,8 @@
-import type { AdminUser, Agency } from "@/lib/types";
+import type { Agency } from "@/lib/types";
 
-export const mockAdmin: AdminUser = {
-  firstName: "Admin",
-  lastName: "BC",
-  initials: "BC",
-  roleKey: "admin.role",
-};
-
+// `mockAgencies` se mantiene como dataset base para `mock-agency-details.ts`,
+// que aún alimenta el detalle de agencia hasta que el schema modele contactos
+// y condiciones por agencia.
 export const mockAgencies: Agency[] = [
   {
     id: "barnes",
