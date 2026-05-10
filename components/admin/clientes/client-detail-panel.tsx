@@ -9,11 +9,13 @@ import {
   MapPin,
   MessageSquare,
   MoreVertical,
+  PawPrint,
   Pencil,
   Phone,
   RefreshCw,
   Save,
   Star,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { formatPrice } from "@/lib/format";
@@ -227,14 +229,15 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
   const [sector, setSector] = useState(client.sector);
   const [zone, setZone] = useState(client.preferredZone);
   const [budget, setBudget] = useState(
-    `${client.budgetMin}-${client.budgetMax}`,
-  );
-
-  const budgetLabel = (min: number, max: number) =>
     t("clientes.detail.filters.budget.range", {
-      min: formatPrice(min),
-      max: formatPrice(max),
-    });
+      min: formatPrice(client.budgetMin),
+      max: formatPrice(client.budgetMax),
+    }),
+  );
+  const [occupants, setOccupants] = useState(client.occupants);
+  const [students, setStudents] = useState(client.students);
+  const [workers, setWorkers] = useState(client.workers);
+  const [pets, setPets] = useState(client.pets);
 
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
@@ -288,17 +291,49 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
           />
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.budget")}>
-          <Select
+          <TextInput
             value={budget}
             onChange={setBudget}
+            placeholder={t("clientes.detail.filters.budget.placeholder")}
+          />
+        </FilterRow>
+        <FilterRow label={t("clientes.detail.filters.occupants")}>
+          <NumberInput
+            value={occupants}
+            onChange={setOccupants}
+            min={0}
+            icon={<Users size={13} strokeWidth={1.75} />}
+            suffix={t("clientes.detail.filters.occupants.unit")}
+          />
+        </FilterRow>
+        <FilterRow label={t("clientes.detail.filters.students")}>
+          <NumberInput
+            value={students}
+            onChange={setStudents}
+            min={0}
+          />
+        </FilterRow>
+        <FilterRow label={t("clientes.detail.filters.workers")}>
+          <NumberInput
+            value={workers}
+            onChange={setWorkers}
+            min={0}
+          />
+        </FilterRow>
+        <FilterRow label={t("clientes.detail.filters.pets")}>
+          <Toggle
+            value={pets ? "yes" : "no"}
+            onChange={(v) => setPets(v === "yes")}
             options={[
               {
-                value: `${client.budgetMin}-${client.budgetMax}`,
-                label: budgetLabel(client.budgetMin, client.budgetMax),
+                value: "yes",
+                label: t("clientes.detail.filters.pets.yes"),
+                icon: <PawPrint size={13} strokeWidth={1.75} />,
               },
-              { value: "0-1500", label: budgetLabel(0, 1500) },
-              { value: "1500-3000", label: budgetLabel(1500, 3000) },
-              { value: "3000-6000", label: budgetLabel(3000, 6000) },
+              {
+                value: "no",
+                label: t("clientes.detail.filters.pets.no"),
+              },
             ]}
           />
         </FilterRow>
@@ -410,7 +445,7 @@ function Toggle({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: React.ReactNode }[];
 }) {
   return (
     <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
@@ -422,16 +457,68 @@ function Toggle({
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
               active
                 ? "bg-ink text-cream-50 shadow-sm"
                 : "text-ink/65 hover:text-ink",
             )}
           >
-            {opt.label}
+            {opt.icon}
+            <span>{opt.label}</span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+    />
+  );
+}
+
+function NumberInput({
+  value,
+  onChange,
+  min,
+  icon,
+  suffix,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  icon?: React.ReactNode;
+  suffix?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[12px] text-ink focus-within:border-gold/55">
+      {icon && <span className="text-gold">{icon}</span>}
+      <input
+        type="number"
+        min={min}
+        value={value}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          onChange(Number.isFinite(n) ? n : 0);
+        }}
+        className="w-full bg-transparent py-0.5 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      {suffix && <span className="shrink-0 text-ink/50">{suffix}</span>}
     </div>
   );
 }

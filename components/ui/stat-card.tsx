@@ -27,6 +27,8 @@ export type StatCardProps = {
   action?: { href: string; labelKey: string };
   /** Optional element rendered on the right (donut, alt icon, ...) */
   rightSlot?: React.ReactNode;
+  /** Optional extra node rendered under the value/help (e.g. a price threshold) */
+  footer?: React.ReactNode;
   className?: string;
 };
 
@@ -38,6 +40,7 @@ export function StatCard({
   helpKey,
   action,
   rightSlot,
+  footer,
   className,
 }: StatCardProps) {
   const t = useT();
@@ -75,6 +78,8 @@ export function StatCard({
         </div>
         {rightSlot}
       </div>
+
+      {footer && <div className="mt-3">{footer}</div>}
 
       {action && (
         <Link

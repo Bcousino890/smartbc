@@ -17,6 +17,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Ene 2022",
     rentCommissionPct: 35,
     saleCommissionPct: 25,
+    rentCommissionMinPrice: 2500,
+    saleCommissionMinPrice: 600000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "María Rodríguez",
@@ -79,6 +81,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Mar 2023",
     rentCommissionPct: 30,
     saleCommissionPct: 22,
+    rentCommissionMinPrice: 1800,
+    saleCommissionMinPrice: 450000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Carlos López",
@@ -96,6 +100,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Sep 2022",
     rentCommissionPct: 32,
     saleCommissionPct: 24,
+    rentCommissionMinPrice: 2000,
+    saleCommissionMinPrice: 500000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Lucía Fernández",
@@ -113,6 +119,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Jun 2021",
     rentCommissionPct: 38,
     saleCommissionPct: 28,
+    rentCommissionMinPrice: 3000,
+    saleCommissionMinPrice: 750000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Pablo Hernández",
@@ -130,6 +138,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Feb 2024",
     rentCommissionPct: 28,
     saleCommissionPct: 20,
+    rentCommissionMinPrice: 1500,
+    saleCommissionMinPrice: 350000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Sofía Martín",
@@ -147,6 +157,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Oct 2023",
     rentCommissionPct: 27,
     saleCommissionPct: 21,
+    rentCommissionMinPrice: 1400,
+    saleCommissionMinPrice: 320000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Helena García",
@@ -164,6 +176,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Jul 2023",
     rentCommissionPct: 33,
     saleCommissionPct: 23,
+    rentCommissionMinPrice: 2200,
+    saleCommissionMinPrice: 480000,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Andrea Bueno",
@@ -181,6 +195,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     partnerSinceLabel: "Abr 2020",
     rentCommissionPct: 0,
     saleCommissionPct: 0,
+    rentCommissionMinPrice: 0,
+    saleCommissionMinPrice: 0,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Javier Núñez",

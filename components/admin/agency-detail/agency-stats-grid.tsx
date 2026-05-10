@@ -2,6 +2,9 @@
 
 import { Building2, Home, Tag } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
+import { useState } from "react";
+import { formatPrice } from "@/lib/format";
+import { useT } from "@/lib/i18n/provider";
 import type { AgencyDetail } from "@/lib/types";
 
 export function AgencyStatsGrid({ agency }: { agency: AgencyDetail }) {
@@ -12,12 +15,24 @@ export function AgencyStatsGrid({ agency }: { agency: AgencyDetail }) {
         helpKey="agency.stats.rentCommission.help"
         value={`${agency.rentCommissionPct}%`}
         rightSlot={<Donut percent={agency.rentCommissionPct} />}
+        footer={
+          <CommissionMinPrice
+            initialValue={agency.rentCommissionMinPrice}
+            operation="alquiler"
+          />
+        }
       />
       <StatCard
         labelKey="agency.stats.saleCommission"
         helpKey="agency.stats.saleCommission.help"
         value={`${agency.saleCommissionPct}%`}
         rightSlot={<Donut percent={agency.saleCommissionPct} />}
+        footer={
+          <CommissionMinPrice
+            initialValue={agency.saleCommissionMinPrice}
+            operation="venta"
+          />
+        }
       />
       <StatCard
         labelKey="agency.stats.rentCount"
@@ -50,6 +65,58 @@ export function AgencyStatsGrid({ agency }: { agency: AgencyDetail }) {
         }
       />
     </section>
+  );
+}
+
+const RENT_THRESHOLDS = [0, 1000, 1500, 1800, 2200, 2500, 3000, 3500, 4000];
+const SALE_THRESHOLDS = [
+  0,
+  200000,
+  300000,
+  350000,
+  450000,
+  500000,
+  600000,
+  750000,
+  1000000,
+];
+
+function CommissionMinPrice({
+  initialValue,
+  operation,
+}: {
+  initialValue: number;
+  operation: "alquiler" | "venta";
+}) {
+  const t = useT();
+  const [value, setValue] = useState<number>(initialValue);
+  const options =
+    operation === "alquiler" ? RENT_THRESHOLDS : SALE_THRESHOLDS;
+
+  // Make sure the agency's stored value is always picked from the dropdown.
+  const allOptions = options.includes(value) ? options : [...options, value];
+  allOptions.sort((a, b) => a - b);
+
+  const formatLabel = (v: number) => {
+    if (v <= 0) return t("agency.stats.minPrice.notSet");
+    const base = t("agency.stats.minPrice", { price: formatPrice(v) });
+    return operation === "alquiler"
+      ? `${base}${t("agency.stats.minPrice.rentSuffix")}`
+      : base;
+  };
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => setValue(Number(e.target.value))}
+      className="w-full appearance-none rounded-lg border border-gold/25 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/75 focus:border-gold/55 focus:outline-none"
+    >
+      {allOptions.map((v) => (
+        <option key={v} value={v}>
+          {formatLabel(v)}
+        </option>
+      ))}
+    </select>
   );
 }
 

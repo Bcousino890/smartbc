@@ -3,6 +3,10 @@
 import { ArrowLeft, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  PropertyCalendarCard,
+  PropertyMapCard,
+} from "@/components/property-detail/property-availability";
 import { PropertyContactBlock } from "@/components/property-detail/property-contact";
 import { PropertyConditionsBlock } from "@/components/property-detail/property-conditions";
 import { PropertyFeaturesBlock } from "@/components/property-detail/property-features";
@@ -87,6 +91,8 @@ export function PropertyDetail({ property }: { property: Property }) {
           {property.features && property.features.length > 0 && (
             <PropertyFeaturesBlock features={property.features} />
           )}
+
+          <PropertyMapCard property={property} />
         </div>
 
         <aside className="flex flex-col gap-5">
@@ -94,6 +100,7 @@ export function PropertyDetail({ property }: { property: Property }) {
             <PropertyContactBlock contact={property.contact} />
           )}
           {property.specs && <PropertySpecsBlock specs={property.specs} />}
+          <PropertyCalendarCard />
         </aside>
       </div>
 

@@ -233,6 +233,9 @@ export type AgencyDetail = Agency & {
   partnerSinceLabel: string;
   rentCommissionPct: number; // 0-100
   saleCommissionPct: number; // 0-100
+  // Umbral de precio a partir del cual aplica la colaboración.
+  rentCommissionMinPrice: number; // €/mes
+  saleCommissionMinPrice: number; // € total
   conditionKeys: AgencyConditionKind[];
   contact: AgencyContact;
   properties: AgencyPropertyRow[];
@@ -272,6 +275,11 @@ export type AdminClient = {
   sector: string;
   budgetMin: number;
   budgetMax: number;
+  // Composición del grupo que ocupará la vivienda.
+  occupants: number;
+  students: number;
+  workers: number;
+  pets: boolean;
 
   // Last access label rendered in the table.
   lastAccessLabelKey?: string;
