@@ -22,7 +22,7 @@ export function ClientesAdminClient({
   );
 
   return (
-    <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.7fr_1fr]">
+    <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
       <ClientsTable
         clients={clients}
         totalClients={totalClients}

@@ -69,7 +69,40 @@ export async function getAgencyBySlug(slug: string) {
     .maybeSingle();
 
   if (error) throw error;
+  // Supabase devuelve un objeto único cuando la FK lleva `unique`. Conservamos
+  // ambos shapes en el tipo para que el adapter pueda lidiar con ello.
   return data as
-    | (AgencyRow & { agency_partnerships: AgencyPartnershipRow[] | null })
+    | (AgencyRow & {
+        agency_partnerships:
+          | AgencyPartnershipRow
+          | AgencyPartnershipRow[]
+          | null;
+      })
     | null;
+}
+
+export async function getAgencyProperties(agencyId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .select(
+      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at",
+    )
+    .eq("agency_id", agencyId)
+    .is("archived_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data ?? []) as Array<{
+    id: string;
+    slug: string;
+    title: string;
+    external_id: string | null;
+    operation: "rent" | "sale";
+    zone: string;
+    bedrooms: number;
+    bathrooms: number;
+    price: number;
+    updated_at: string;
+  }>;
 }

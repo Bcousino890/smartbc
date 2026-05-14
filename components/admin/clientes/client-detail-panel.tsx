@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Check,
   Clock,
   Eye,
   Heart,
@@ -12,13 +13,13 @@ import {
   PawPrint,
   Pencil,
   Phone,
-  RefreshCw,
+  RotateCcw,
   Save,
   Star,
   Users,
 } from "lucide-react";
-import { useState } from "react";
-import { formatPrice } from "@/lib/format";
+import { useState, useTransition } from "react";
+import { saveClientPreferences } from "@/app/(admin)/admin/clientes/actions";
 import { useT } from "@/lib/i18n/provider";
 import { MADRID_ZONES } from "@/lib/mock-properties";
 import type {
@@ -28,6 +29,54 @@ import type {
   StayType,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+type FeedbackKind = "idle" | "saved" | "error";
+
+type FiltersState = {
+  profileType: ClientProfileType;
+  operation: Operation;
+  stayType: StayType;
+  preferredZone: string;
+  sector: string;
+  budgetMin: number;
+  budgetMax: number;
+  occupants: number;
+  students: number;
+  workers: number;
+  pets: boolean;
+};
+
+function snapshotFromClient(client: AdminClient): FiltersState {
+  return {
+    profileType: client.profileType,
+    operation: client.operation,
+    stayType: client.stayType,
+    preferredZone: client.preferredZone,
+    sector: client.sector,
+    budgetMin: client.budgetMin,
+    budgetMax: client.budgetMax,
+    occupants: client.occupants,
+    students: client.students,
+    workers: client.workers,
+    pets: client.pets,
+  };
+}
+
+function statesEqual(a: FiltersState, b: FiltersState): boolean {
+  return (
+    a.profileType === b.profileType &&
+    a.operation === b.operation &&
+    a.stayType === b.stayType &&
+    a.preferredZone === b.preferredZone &&
+    a.sector === b.sector &&
+    a.budgetMin === b.budgetMin &&
+    a.budgetMax === b.budgetMax &&
+    a.occupants === b.occupants &&
+    a.students === b.students &&
+    a.workers === b.workers &&
+    a.pets === b.pets
+  );
+}
 
 const PROFILE_OPTIONS: { value: ClientProfileType; labelKey: string }[] = [
   { value: "student", labelKey: "clientes.profile.student" },
@@ -53,7 +102,7 @@ export function ClientDetailPanel({
 
   if (!client) {
     return (
-      <aside className="flex h-full flex-col items-center justify-center rounded-2xl border border-gold/15 bg-cream-50/85 p-8 text-center shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
+      <aside className="flex flex-col items-center justify-center rounded-2xl border border-gold/15 bg-cream-50/85 p-8 text-center shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
         <p className="font-serif text-lg text-ink">
           {t("clientes.detail.empty.title")}
         </p>
@@ -64,14 +113,67 @@ export function ClientDetailPanel({
     );
   }
 
+  return <ClientDetailPanelInner client={client} />;
+}
+
+function ClientDetailPanelInner({ client }: { client: AdminClient }) {
+  // El snapshot inicial es lo que viene de BD (vía adapter). Editamos sobre él
+  // y comparamos para saber si hay cambios pendientes.
+  const initial = snapshotFromClient(client);
+  const [state, setState] = useState<FiltersState>(initial);
+  const [isPending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<FeedbackKind>("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const isDirty = !statesEqual(state, initial);
+
+  const handleSave = () => {
+    setFeedback("idle");
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await saveClientPreferences({
+        clientId: client.id,
+        operation: state.operation,
+        stayType: state.stayType,
+        preferredZone: state.preferredZone,
+        budgetMin: state.budgetMin,
+        budgetMax: state.budgetMax,
+        occupants: state.occupants,
+        students: state.students,
+        workers: state.workers,
+        pets: state.pets,
+      });
+      if (result.ok) {
+        setFeedback("saved");
+        setTimeout(() => setFeedback("idle"), 2500);
+      } else {
+        setFeedback("error");
+        setErrorMsg(result.error);
+      }
+    });
+  };
+
+  const handleReset = () => {
+    setState(initial);
+    setFeedback("idle");
+    setErrorMsg(null);
+  };
+
   return (
-    <aside className="flex h-full flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+    <aside className="flex flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <ClientHeader client={client} />
       <ContactInfo client={client} />
       <ActivityBlock client={client} />
-      <CustomFiltersBlock client={client} />
+      <CustomFiltersBlock state={state} setState={setState} />
       <InternalNotesBlock client={client} />
-      <ActionsRow />
+      <ActionsRow
+        isDirty={isDirty}
+        isPending={isPending}
+        feedback={feedback}
+        errorMsg={errorMsg}
+        onSave={handleSave}
+        onReset={handleReset}
+      />
     </aside>
   );
 }
@@ -81,12 +183,12 @@ function ClientHeader({ client }: { client: AdminClient }) {
   const isActive = client.status === "active";
   return (
     <header className="flex items-start justify-between gap-3">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-xs font-medium text-cream-50">
           {client.avatarInitials}
         </span>
-        <div>
-          <h2 className="font-serif text-xl font-semibold text-ink">
+        <div className="min-w-0">
+          <h2 className="truncate font-serif text-xl font-semibold text-ink">
             {client.firstName} {client.lastName}
           </h2>
           <span
@@ -220,24 +322,18 @@ function ActivityItem({
   );
 }
 
-function CustomFiltersBlock({ client }: { client: AdminClient }) {
+function CustomFiltersBlock({
+  state,
+  setState,
+}: {
+  state: FiltersState;
+  setState: React.Dispatch<React.SetStateAction<FiltersState>>;
+}) {
   const t = useT();
-  // Local state — admin can play with the filters; backend will persist later.
-  const [profileType, setProfileType] = useState(client.profileType);
-  const [operation, setOperation] = useState(client.operation);
-  const [stayType, setStayType] = useState(client.stayType);
-  const [sector, setSector] = useState(client.sector);
-  const [zone, setZone] = useState(client.preferredZone);
-  const [budget, setBudget] = useState(
-    t("clientes.detail.filters.budget.range", {
-      min: formatPrice(client.budgetMin),
-      max: formatPrice(client.budgetMax),
-    }),
-  );
-  const [occupants, setOccupants] = useState(client.occupants);
-  const [students, setStudents] = useState(client.students);
-  const [workers, setWorkers] = useState(client.workers);
-  const [pets, setPets] = useState(client.pets);
+
+  // Helper para update parcial sin escribir el spread en cada handler.
+  const patch = <K extends keyof FiltersState>(key: K, value: FiltersState[K]) =>
+    setState((s) => ({ ...s, [key]: value }));
 
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
@@ -248,8 +344,8 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
       <div className="mt-3 space-y-3">
         <FilterRow label={t("clientes.detail.filters.profile")}>
           <Toggle
-            value={profileType}
-            onChange={(v) => setProfileType(v as ClientProfileType)}
+            value={state.profileType}
+            onChange={(v) => patch("profileType", v as ClientProfileType)}
             options={PROFILE_OPTIONS.map((o) => ({
               value: o.value,
               label: t(o.labelKey),
@@ -258,8 +354,8 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.operation")}>
           <Toggle
-            value={operation}
-            onChange={(v) => setOperation(v as Operation)}
+            value={state.operation}
+            onChange={(v) => patch("operation", v as Operation)}
             options={OPERATION_OPTIONS.map((o) => ({
               value: o.value,
               label: t(o.labelKey),
@@ -268,8 +364,8 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.stay")}>
           <Toggle
-            value={stayType}
-            onChange={(v) => setStayType(v as StayType)}
+            value={state.stayType}
+            onChange={(v) => patch("stayType", v as StayType)}
             options={STAY_OPTIONS.map((o) => ({
               value: o.value,
               label: t(o.labelKey),
@@ -278,29 +374,31 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.sector")}>
           <Select
-            value={sector}
-            onChange={setSector}
+            value={state.sector}
+            onChange={(v) => patch("sector", v)}
             options={["Madrid"].map((v) => ({ value: v, label: v }))}
           />
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.zone")}>
           <Select
-            value={zone}
-            onChange={setZone}
+            value={state.preferredZone}
+            onChange={(v) => patch("preferredZone", v)}
             options={MADRID_ZONES.map((z) => ({ value: z, label: z }))}
           />
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.budget")}>
-          <TextInput
-            value={budget}
-            onChange={setBudget}
-            placeholder={t("clientes.detail.filters.budget.placeholder")}
+          <BudgetRange
+            min={state.budgetMin}
+            max={state.budgetMax}
+            onChange={(min, max) =>
+              setState((s) => ({ ...s, budgetMin: min, budgetMax: max }))
+            }
           />
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.occupants")}>
           <NumberInput
-            value={occupants}
-            onChange={setOccupants}
+            value={state.occupants}
+            onChange={(v) => patch("occupants", v)}
             min={0}
             icon={<Users size={13} strokeWidth={1.75} />}
             suffix={t("clientes.detail.filters.occupants.unit")}
@@ -308,22 +406,22 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.students")}>
           <NumberInput
-            value={students}
-            onChange={setStudents}
+            value={state.students}
+            onChange={(v) => patch("students", v)}
             min={0}
           />
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.workers")}>
           <NumberInput
-            value={workers}
-            onChange={setWorkers}
+            value={state.workers}
+            onChange={(v) => patch("workers", v)}
             min={0}
           />
         </FilterRow>
         <FilterRow label={t("clientes.detail.filters.pets")}>
           <Toggle
-            value={pets ? "yes" : "no"}
-            onChange={(v) => setPets(v === "yes")}
+            value={state.pets ? "yes" : "no"}
+            onChange={(v) => patch("pets", v === "yes")}
             options={[
               {
                 value: "yes",
@@ -344,6 +442,34 @@ function CustomFiltersBlock({ client }: { client: AdminClient }) {
         <span>{t("clientes.detail.filters.notice")}</span>
       </p>
     </section>
+  );
+}
+
+function BudgetRange({
+  min,
+  max,
+  onChange,
+}: {
+  min: number;
+  max: number;
+  onChange: (min: number, max: number) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <NumberInput
+        value={min}
+        onChange={(v) => onChange(v, max)}
+        min={0}
+        suffix={t("clientes.detail.filters.budget.unit.from")}
+      />
+      <NumberInput
+        value={max}
+        onChange={(v) => onChange(min, v)}
+        min={0}
+        suffix={t("clientes.detail.filters.budget.unit.to")}
+      />
+    </div>
   );
 }
 
@@ -401,24 +527,73 @@ function InternalNotesBlock({ client }: { client: AdminClient }) {
   );
 }
 
-function ActionsRow() {
+function ActionsRow({
+  isDirty,
+  isPending,
+  feedback,
+  errorMsg,
+  onSave,
+  onReset,
+}: {
+  isDirty: boolean;
+  isPending: boolean;
+  feedback: FeedbackKind;
+  errorMsg: string | null;
+  onSave: () => void;
+  onReset: () => void;
+}) {
   const t = useT();
+
   return (
-    <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gold/15 pt-4">
-      <button
-        type="button"
-        className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-[13px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
-      >
-        <RefreshCw size={14} strokeWidth={1.75} className="text-gold" />
-        <span>{t("clientes.detail.actions.update")}</span>
-      </button>
-      <button
-        type="button"
-        className="flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[13px] font-medium text-cream-50 transition hover:bg-ink-soft"
-      >
-        <Save size={14} strokeWidth={1.75} className="text-gold" />
-        <span>{t("clientes.detail.actions.saveFilters")}</span>
-      </button>
+    <div className="mt-5 border-t border-gold/15 pt-4">
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={!isDirty || isPending}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-[13px] font-medium text-ink transition",
+            "hover:border-gold/55 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50",
+          )}
+        >
+          <RotateCcw size={14} strokeWidth={1.75} className="text-gold" />
+          <span>{t("clientes.detail.actions.reset")}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!isDirty || isPending}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[13px] font-medium text-cream-50 transition",
+            "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
+          )}
+        >
+          <Save size={14} strokeWidth={1.75} className="text-gold" />
+          <span>
+            {isPending
+              ? t("clientes.detail.actions.saving")
+              : t("clientes.detail.actions.saveFilters")}
+          </span>
+        </button>
+      </div>
+
+      {feedback === "saved" && (
+        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[12px] font-medium text-emerald-700">
+          <Check size={13} strokeWidth={2} />
+          <span>{t("clientes.detail.actions.saved")}</span>
+        </p>
+      )}
+      {feedback === "error" && (
+        <p className="mt-2.5 text-center text-[12px] font-medium text-red-600">
+          {t("clientes.detail.actions.error")}
+          {errorMsg ? ` · ${errorMsg}` : ""}
+        </p>
+      )}
+      {feedback === "idle" && isDirty && (
+        <p className="mt-2.5 text-center text-[11px] text-ink/55">
+          {t("clientes.detail.actions.unsaved")}
+        </p>
+      )}
     </div>
   );
 }
@@ -472,25 +647,6 @@ function Toggle({
   );
 }
 
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-    />
-  );
-}
 
 function NumberInput({
   value,

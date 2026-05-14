@@ -231,11 +231,14 @@ export type AgencyDetail = Agency & {
   country: string;
   // Free-form short label like "Ene 2022" — when backend lands, derive with Intl.
   partnerSinceLabel: string;
-  rentCommissionPct: number; // 0-100
-  saleCommissionPct: number; // 0-100
+  rentCommissionPct: number; // 0-100 — % efectivo que recibe la agencia en alquiler
+  saleCommissionPct: number; // 0-100 — % efectivo que recibe la agencia en venta
   // Umbral de precio a partir del cual aplica la colaboración.
   rentCommissionMinPrice: number; // €/mes
   saleCommissionMinPrice: number; // € total
+  // Para venta: % de comisión acordado con el vendedor (1-6). La agencia recibe
+  // la mitad → saleCommissionPct = saleAgreedCommissionPct / 2.
+  saleAgreedCommissionPct: number;
   conditionKeys: AgencyConditionKind[];
   contact: AgencyContact;
   properties: AgencyPropertyRow[];
@@ -321,6 +324,8 @@ export type AdminProperty = {
   price: number;
   publishedLabel: string; // free-form date
   featured?: boolean;
+  coverPhotoUrl?: string | null;
+  photos?: { url: string; isCover: boolean }[];
 };
 
 export type AdminPropertiesStats = {

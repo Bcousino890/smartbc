@@ -3,12 +3,20 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { propertyRowToAdminProperty } from "@/lib/db/adapters";
+import { getAgencies } from "@/lib/db/queries/agencies";
 import { getProperties } from "@/lib/db/queries/properties";
 import { PropertiesAdminClient } from "./properties-admin-client";
 
 export default async function AdminPropiedadesPage() {
-  const rows = await getProperties({ includeUnavailable: true }, 200);
+  const [rows, agencyRows] = await Promise.all([
+    getProperties({ includeUnavailable: true }, 200),
+    getAgencies(),
+  ]);
   const properties = rows.map(propertyRowToAdminProperty);
+  const agencies = ((agencyRows ?? []) as Array<{
+    slug: string;
+    name: string;
+  }>).map((a) => ({ slug: a.slug, name: a.name }));
 
   const stats = {
     total: properties.length,
@@ -51,7 +59,7 @@ export default async function AdminPropiedadesPage() {
         />
       </div>
 
-      <PropertiesAdminClient properties={properties} />
+      <PropertiesAdminClient properties={properties} agencies={agencies} />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

@@ -20,11 +20,58 @@ insert into client_tags (name, category, color) values
 on conflict (name) do nothing;
 
 -- Agencias colaboradoras reales — añadir según vayas confirmando acuerdos.
--- (Lucas Fox, Engel & Völkers, Gilmar, Álvora estaban como placeholders y se
---  retiraron tras confirmar que solo Barnes colabora oficialmente.)
-insert into agencies (name, slug, website) values
-  ('Barnes Madrid', 'barnes-madrid', 'https://www.barnes-madrid.com')
-on conflict (slug) do nothing;
+-- (Hasta hoy: solo Level Real Estate confirmada oficialmente.)
+insert into agencies (name, slug, website, contact_name, contact_email, contact_phone)
+values (
+  'Level Real Estate',
+  'level',
+  'https://levelrealestate.es',
+  'Carmen Braojos',
+  'carmen@levelrealestate.es',
+  '+34 619 66 65 67'
+)
+on conflict (slug) do update
+  set name = excluded.name,
+      contact_name = excluded.contact_name,
+      contact_email = excluded.contact_email,
+      contact_phone = excluded.contact_phone,
+      website = excluded.website;
+
+-- Condiciones reales con Level: 50% de nuestra comisión en alquiler (desde
+-- 3.000 €/mes) y 50% de la comisión acordada con el vendedor en venta
+-- (acordada por defecto 4% → efectiva 2%). Editable desde el panel.
+insert into agency_partnerships (
+  agency_id,
+  commission_pct,
+  rent_commission_pct,
+  sale_commission_pct,
+  sale_agreed_commission_pct,
+  rent_commission_min_price,
+  sale_commission_min_price,
+  agreement_signed_at,
+  watermark_required,
+  attribution_visible
+)
+select
+  a.id,
+  50,                 -- legacy
+  50,                 -- alquiler efectivo
+  2,                  -- venta efectiva (4% acordada / 2)
+  4,                  -- venta acordada
+  3000,               -- alquiler desde 3.000 €/mes
+  0,                  -- venta sin umbral mínimo
+  date '2022-01-01',
+  true,
+  false
+from agencies a
+where a.slug = 'level'
+on conflict (agency_id) do update
+  set rent_commission_pct = excluded.rent_commission_pct,
+      sale_commission_pct = excluded.sale_commission_pct,
+      sale_agreed_commission_pct = excluded.sale_agreed_commission_pct,
+      rent_commission_min_price = excluded.rent_commission_min_price,
+      sale_commission_min_price = excluded.sale_commission_min_price,
+      agreement_signed_at = excluded.agreement_signed_at;
 
 -- App settings iniciales
 insert into app_settings (key, value) values

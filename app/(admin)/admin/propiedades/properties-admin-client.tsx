@@ -1,11 +1,21 @@
 "use client";
 
 import {
-  ArrowRight,
+  Archive,
+  Image as ImageIcon,
+  Loader2,
   Plus,
   Search,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { archiveProperty } from "@/app/(admin)/admin/propiedades/actions";
+import {
+  type AgencyOption,
+  NewPropertyModal,
+} from "@/components/admin/new-property-modal";
+import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
@@ -22,11 +32,14 @@ const STATUS_STYLES: Record<AdminPropertyStatus, string> = {
 
 export function PropertiesAdminClient({
   properties,
+  agencies,
 }: {
   properties: AdminProperty[];
+  agencies: AgencyOption[];
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -54,12 +67,19 @@ export function PropertiesAdminClient({
         </label>
         <button
           type="button"
+          onClick={() => setModalOpen(true)}
           className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
         >
           <Plus size={14} strokeWidth={1.75} className="text-gold" />
           <span>{t("adminProps.add")}</span>
         </button>
       </div>
+
+      <NewPropertyModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        agencies={agencies}
+      />
 
       <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[1100px] border-separate border-spacing-y-1.5 text-left text-sm">
@@ -104,17 +124,38 @@ export function PropertiesAdminClient({
 
 function PropertyRow({ property }: { property: AdminProperty }) {
   const t = useT();
+  const [photosOpen, setPhotosOpen] = useState(false);
   const isRent = property.operation === "alquiler";
   const formatted = formatPrice(property.price);
+  const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
+
   return (
     <tr className="bg-white/55 transition hover:bg-white/85">
       <td className="rounded-l-xl px-3 py-3">
         <div className="flex items-center gap-3">
-          <div
-            aria-hidden="true"
-            className="h-12 w-16 shrink-0 rounded-md"
-            style={{ backgroundImage: PLACEHOLDER_GRADIENT }}
-          />
+          <button
+            type="button"
+            onClick={() => setPhotosOpen(true)}
+            aria-label={t("adminProps.photos.manage")}
+            className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md border border-gold/15 transition hover:border-gold/55"
+            style={cover ? undefined : { backgroundImage: PLACEHOLDER_GRADIENT }}
+          >
+            {cover ? (
+              <Image
+                src={cover}
+                alt=""
+                fill
+                sizes="64px"
+                className="object-cover"
+              />
+            ) : (
+              <ImageIcon
+                size={14}
+                strokeWidth={1.75}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink/45"
+              />
+            )}
+          </button>
           <div>
             <p className="flex items-center gap-2 font-medium text-ink">
               {property.title}
@@ -129,6 +170,13 @@ function PropertyRow({ property }: { property: AdminProperty }) {
             </p>
           </div>
         </div>
+        <PropertyPhotosModal
+          open={photosOpen}
+          onClose={() => setPhotosOpen(false)}
+          slug={property.id}
+          title={property.title}
+          initialPhotos={property.photos ?? []}
+        />
       </td>
       <td className="px-3 py-3 text-ink/75">{property.agencyName}</td>
       <td className="px-3 py-3 text-ink/75">{property.zone}</td>
@@ -166,14 +214,61 @@ function PropertyRow({ property }: { property: AdminProperty }) {
         {property.publishedLabel}
       </td>
       <td className="rounded-r-xl px-3 py-3 text-right">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
-        >
-          <span>{t("clientes.table.viewDetails")}</span>
-          <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
-        </button>
+        <div className="inline-flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPhotosOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+          >
+            <ImageIcon size={12} strokeWidth={1.75} className="text-gold" />
+            <span>
+              {t("adminProps.photos.action", {
+                count: property.photos?.length ?? 0,
+              })}
+            </span>
+          </button>
+          <ArchiveButton slug={property.id} />
+        </div>
       </td>
     </tr>
+  );
+}
+
+function ArchiveButton({ slug }: { slug: string }) {
+  const t = useT();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const handleArchive = () => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(t("adminProps.archive.confirm"))
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const result = await archiveProperty({ slug });
+      if (result.ok) {
+        router.refresh();
+      } else if (typeof window !== "undefined") {
+        window.alert(`${t("adminProps.archive.error")} · ${result.error}`);
+      }
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleArchive}
+      disabled={isPending}
+      className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {isPending ? (
+        <Loader2 size={12} strokeWidth={1.75} className="animate-spin" />
+      ) : (
+        <Archive size={12} strokeWidth={1.75} />
+      )}
+      <span>{t("adminProps.archive.action")}</span>
+    </button>
   );
 }

@@ -6,11 +6,13 @@ import type {
   AdminProperty,
   AdminPropertyStatus,
   Agency,
+  AgencyDetail,
   ClientPriority,
   ClientProfileType,
   ClientStatus,
   InternalUser,
   Operation,
+  Property,
   StayType,
   VisitRequest,
   VisitRequestStatus,
@@ -21,6 +23,8 @@ import type {
   VisitStatus,
 } from "./database.types";
 import type {
+  AgencyPartnershipRow,
+  AgencyRow,
   AgencyWithStats,
   ClientWithRelations,
   PropertyRow,
@@ -40,6 +44,73 @@ export function deriveInitials(name: string, fallback = ""): string {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
   return (parts[0]?.slice(0, 2) ?? fallback).toUpperCase();
+}
+
+const PARTNER_SINCE_FMT = new Intl.DateTimeFormat("es-ES", {
+  month: "short",
+  year: "numeric",
+});
+
+export function agencyDetailFromDb(
+  dbAgency: AgencyRow & {
+    // Supabase devuelve un OBJETO cuando la FK es unique (1:1), array cuando es 1:N.
+    // El schema declara agency_id como `unique`, así que en runtime es un objeto.
+    agency_partnerships:
+      | AgencyPartnershipRow
+      | AgencyPartnershipRow[]
+      | null;
+  },
+  fallback: AgencyDetail,
+): AgencyDetail {
+  const partnership = Array.isArray(dbAgency.agency_partnerships)
+    ? (dbAgency.agency_partnerships[0] ?? null)
+    : (dbAgency.agency_partnerships ?? null);
+  const contactName = dbAgency.contact_name ?? fallback.contact.name;
+  const partnerSinceLabel = partnership?.agreement_signed_at
+    ? PARTNER_SINCE_FMT.format(new Date(partnership.agreement_signed_at))
+    : fallback.partnerSinceLabel;
+
+  const saleAgreedPct =
+    partnership?.sale_agreed_commission_pct != null
+      ? Number(partnership.sale_agreed_commission_pct)
+      : fallback.saleAgreedCommissionPct;
+  // La agencia recibe la mitad de la comisión acordada. Si la BD trae un
+  // sale_commission_pct directo (datos legacy), lo respetamos.
+  const saleEffectivePct =
+    partnership?.sale_commission_pct != null
+      ? Number(partnership.sale_commission_pct)
+      : saleAgreedPct / 2;
+
+  return {
+    ...fallback,
+    id: dbAgency.slug,
+    name: dbAgency.name,
+    initials: deriveInitials(dbAgency.name, dbAgency.slug),
+    lastUpdateMinutes: minutesSince(dbAgency.updated_at),
+    partnerSinceLabel,
+    rentCommissionPct: Number(
+      partnership?.rent_commission_pct ??
+        partnership?.commission_pct ??
+        fallback.rentCommissionPct,
+    ),
+    saleCommissionPct: saleEffectivePct,
+    rentCommissionMinPrice: Number(
+      partnership?.rent_commission_min_price ??
+        fallback.rentCommissionMinPrice,
+    ),
+    saleCommissionMinPrice: Number(
+      partnership?.sale_commission_min_price ??
+        fallback.saleCommissionMinPrice,
+    ),
+    saleAgreedCommissionPct: saleAgreedPct,
+    contact: {
+      ...fallback.contact,
+      name: contactName,
+      initials: deriveInitials(contactName, fallback.contact.initials),
+      phone: dbAgency.contact_phone ?? fallback.contact.phone,
+      email: dbAgency.contact_email ?? fallback.contact.email,
+    },
+  };
 }
 
 export function agencyRowToLegacy(row: AgencyWithStats): Agency {
@@ -106,10 +177,10 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     sector: "Madrid",
     budgetMin: Number(prefs?.min_price ?? 0),
     budgetMax: Number(prefs?.max_price ?? 0),
-    occupants: 1,
-    students: 0,
-    workers: 1,
-    pets: false,
+    occupants: prefs?.occupants ?? 1,
+    students: prefs?.students ?? 0,
+    workers: prefs?.workers ?? 1,
+    pets: prefs?.pets ?? false,
     lastAccessText: undefined,
     status: "active" as ClientStatus,
     assignedAdvisor: "—",
@@ -174,9 +245,47 @@ export function profileRowToInternalUser(
   };
 }
 
+export function propertyRowToClientProperty(
+  row: PropertyRow & {
+    agencies?: { name: string; slug: string } | null;
+    property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
+  },
+): Property {
+  const sortedPhotos =
+    row.property_photos
+      ?.slice()
+      .sort((a, b) => a.position - b.position) ?? [];
+  const cover = row.cover_photo_url ?? sortedPhotos[0]?.url;
+  return {
+    id: row.slug,
+    title: row.title,
+    zone: row.zone,
+    city: "Madrid",
+    bedrooms: row.bedrooms,
+    bathrooms: row.bathrooms,
+    squareMeters: row.square_meters ?? 0,
+    price: Number(row.price),
+    stayType: row.stay === "short" ? "corta" : "larga",
+    operation: row.operation === "rent" ? "alquiler" : "venta",
+    image: cover ?? undefined,
+    description: row.description ?? undefined,
+    photos: sortedPhotos.map((p) => p.url),
+    longDescription: row.description ?? undefined,
+  };
+}
+
 export function propertyRowToAdminProperty(
-  row: PropertyRow & { agencies?: { name: string; slug: string } | null }
+  row: PropertyRow & {
+    agencies?: { name: string; slug: string } | null;
+    property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
+  }
 ): AdminProperty {
+  const sortedPhotos =
+    row.property_photos
+      ?.slice()
+      .sort((a, b) => a.position - b.position)
+      .map((p) => ({ url: p.url, isCover: p.is_cover })) ?? [];
+
   return {
     id: row.slug,
     reference: row.external_id ?? row.id.slice(0, 8).toUpperCase(),
@@ -192,5 +301,7 @@ export function propertyRowToAdminProperty(
     price: Number(row.price),
     publishedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     featured: false,
+    coverPhotoUrl: row.cover_photo_url,
+    photos: sortedPhotos,
   };
 }

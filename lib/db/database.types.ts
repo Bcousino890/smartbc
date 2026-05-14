@@ -81,6 +81,11 @@ export type Database = {
           id: string;
           agency_id: string;
           commission_pct: number | null;
+          rent_commission_pct: number | null;
+          sale_commission_pct: number | null;
+          sale_agreed_commission_pct: number | null;
+          rent_commission_min_price: number | null;
+          sale_commission_min_price: number | null;
           agreement_signed_at: string | null;
           watermark_required: boolean;
           attribution_visible: boolean;
@@ -92,6 +97,11 @@ export type Database = {
           id?: string;
           agency_id: string;
           commission_pct?: number | null;
+          rent_commission_pct?: number | null;
+          sale_commission_pct?: number | null;
+          sale_agreed_commission_pct?: number | null;
+          rent_commission_min_price?: number | null;
+          sale_commission_min_price?: number | null;
           agreement_signed_at?: string | null;
           watermark_required?: boolean;
           attribution_visible?: boolean;
@@ -222,6 +232,10 @@ export type Database = {
           zones: string[];
           available_from: string | null;
           notes: string | null;
+          occupants: number | null;
+          students: number | null;
+          workers: number | null;
+          pets: boolean;
           updated_at: string;
         };
         Insert: {
@@ -238,6 +252,10 @@ export type Database = {
           zones?: string[];
           available_from?: string | null;
           notes?: string | null;
+          occupants?: number | null;
+          students?: number | null;
+          workers?: number | null;
+          pets?: boolean;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["client_preferences"]["Insert"]>;

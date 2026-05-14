@@ -17,7 +17,13 @@ import { PageFooter } from "@/components/ui/page-footer";
 import { useT } from "@/lib/i18n/provider";
 import type { Property } from "@/lib/types";
 
-export function PropertyDetail({ property }: { property: Property }) {
+export function PropertyDetail({
+  property,
+  isFavorite = false,
+}: {
+  property: Property;
+  isFavorite?: boolean;
+}) {
   const t = useT();
 
   return (
@@ -63,7 +69,7 @@ export function PropertyDetail({ property }: { property: Property }) {
 
       {/* Header card with title + stats + actions */}
       <div className="mt-5">
-        <PropertyHeaderCard property={property} />
+        <PropertyHeaderCard property={property} isFavorite={isFavorite} />
       </div>
 
       {/* Two columns: main (description + conditions + features) and aside (contact + specs) */}

@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { AgencyDetailView } from "./agency-detail-view";
-import { getAgencyBySlug } from "@/lib/db/queries/agencies";
+import { agencyDetailFromDb, minutesSince } from "@/lib/db/adapters";
+import {
+  getAgencyBySlug,
+  getAgencyProperties,
+} from "@/lib/db/queries/agencies";
 import { getAgencyDetail } from "@/lib/mock-agency-details";
+import type { AgencyPropertyRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +19,26 @@ export default async function AgencyDetailPage({
   const dbAgency = await getAgencyBySlug(id);
   if (!dbAgency) notFound();
 
-  // TODO: cuando el schema modele contacts/conditions/properties por agencia,
-  //       construir AgencyDetail desde BD. Por ahora reusamos el mock como
-  //       fallback de presentación, sustituyendo los campos que sí tenemos.
-  const fallback = getAgencyDetail(id) ?? getAgencyDetail("barnes");
+  // Las comisiones, umbrales y contacto vienen ya de BD (vía agency_partnerships
+  // y agencies). El mock se mantiene como fallback solo para los campos que
+  // aún no están modelados (condiciones del acuerdo, dirección).
+  const fallback = getAgencyDetail(id) ?? getAgencyDetail("level");
   if (!fallback) notFound();
 
-  const agency = {
-    ...fallback,
-    id: dbAgency.slug,
-    name: dbAgency.name,
-  };
+  const propertyRows = await getAgencyProperties(dbAgency.id);
+  const properties: AgencyPropertyRow[] = propertyRows.map((p) => ({
+    id: p.slug,
+    title: p.title,
+    reference: p.external_id ?? p.slug.toUpperCase(),
+    operation: p.operation === "rent" ? "alquiler" : "venta",
+    zone: p.zone,
+    bedrooms: p.bedrooms,
+    bathrooms: p.bathrooms,
+    price: Number(p.price),
+    lastUpdateMinutes: minutesSince(p.updated_at),
+  }));
 
+  const agencyBase = agencyDetailFromDb(dbAgency, fallback);
+  const agency = { ...agencyBase, properties };
   return <AgencyDetailView agency={agency} />;
 }

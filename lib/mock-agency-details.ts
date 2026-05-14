@@ -11,28 +11,31 @@ const DEFAULT_CONDITIONS = [
 // One detailed entry per agency. Only Barnes is fully fleshed out for the
 // design; the rest reuse defaults so every agency has a working detail page.
 export const mockAgencyDetails: Record<string, AgencyDetail> = {
-  barnes: extend(mockAgencies[0], {
+  level: extend(mockAgencies[0], {
     status: "active",
     country: "España",
     partnerSinceLabel: "Ene 2022",
-    rentCommissionPct: 35,
-    saleCommissionPct: 25,
-    rentCommissionMinPrice: 2500,
-    saleCommissionMinPrice: 600000,
+    // Level cobra el 50% de nuestra comisión en alquiler (todo desde 3.000 €/mes)
+    // y el 50% de la comisión acordada en venta (acordada por defecto 4% → 2%).
+    rentCommissionPct: 50,
+    saleCommissionPct: 2,
+    rentCommissionMinPrice: 3000,
+    saleCommissionMinPrice: 0,
+    saleAgreedCommissionPct: 4,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
-      name: "María Rodríguez",
-      initials: "MR",
+      name: "Carmen Braojos",
+      initials: "CB",
       roleKey: "agency.contact.role.alliancesDirector",
-      phone: "+34 91 123 45 67",
-      email: "mrodriguez@barnes-madrid.com",
-      address: "Calle de Serrano, 76, 28006 Madrid, España",
+      phone: "+34 619 66 65 67",
+      email: "carmen@levelrealestate.es",
+      address: "Madrid, España",
     },
     properties: [
       {
-        id: "barnes-9876",
+        id: "level-9876",
         title: "Ático en Recoletos",
-        reference: "BM-9876",
+        reference: "LV-9876",
         operation: "alquiler",
         zone: "Recoletos",
         bedrooms: 3,
@@ -41,9 +44,9 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         lastUpdateMinutes: 10,
       },
       {
-        id: "barnes-9574",
+        id: "level-9574",
         title: "Piso en Salamanca",
-        reference: "BM-9574",
+        reference: "LV-9574",
         operation: "venta",
         zone: "Salamanca",
         bedrooms: 4,
@@ -52,9 +55,9 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         lastUpdateMinutes: 25,
       },
       {
-        id: "barnes-9421",
+        id: "level-9421",
         title: "Bajo con jardín en Chamartín",
-        reference: "BM-9421",
+        reference: "LV-9421",
         operation: "alquiler",
         zone: "Chamartín",
         bedrooms: 2,
@@ -63,9 +66,9 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         lastUpdateMinutes: 60,
       },
       {
-        id: "barnes-9333",
+        id: "level-9333",
         title: "Dúplex en Justicia",
-        reference: "BM-9333",
+        reference: "LV-9333",
         operation: "venta",
         zone: "Justicia",
         bedrooms: 3,
@@ -83,6 +86,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 22,
     rentCommissionMinPrice: 1800,
     saleCommissionMinPrice: 450000,
+    saleAgreedCommissionPct: 4,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Carlos López",
@@ -102,6 +106,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 24,
     rentCommissionMinPrice: 2000,
     saleCommissionMinPrice: 500000,
+    saleAgreedCommissionPct: 4,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Lucía Fernández",
@@ -121,6 +126,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 28,
     rentCommissionMinPrice: 3000,
     saleCommissionMinPrice: 750000,
+    saleAgreedCommissionPct: 5,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Pablo Hernández",
@@ -140,6 +146,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 20,
     rentCommissionMinPrice: 1500,
     saleCommissionMinPrice: 350000,
+    saleAgreedCommissionPct: 4,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Sofía Martín",
@@ -159,6 +166,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 21,
     rentCommissionMinPrice: 1400,
     saleCommissionMinPrice: 320000,
+    saleAgreedCommissionPct: 4,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Helena García",
@@ -178,6 +186,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 23,
     rentCommissionMinPrice: 2200,
     saleCommissionMinPrice: 480000,
+    saleAgreedCommissionPct: 4,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Andrea Bueno",
@@ -197,6 +206,7 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
     saleCommissionPct: 0,
     rentCommissionMinPrice: 0,
     saleCommissionMinPrice: 0,
+    saleAgreedCommissionPct: 0,
     conditionKeys: [...DEFAULT_CONDITIONS],
     contact: {
       name: "Javier Núñez",

@@ -1,8 +1,10 @@
 "use client";
 
 import { ArrowRight, Bath, Bed, Euro, Heart, Maximize2 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useOptimistic, useTransition } from "react";
+import { toggleFavorite } from "@/app/(cliente)/actions";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPropertyPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
@@ -18,18 +20,30 @@ const BADGE_KEYS: Record<PropertyBadge, string> = {
 type Props = {
   property: Property;
   variant?: "grid" | "list";
+  isFavorite?: boolean;
 };
 
-export function PropertyCard({ property, variant = "grid" }: Props) {
-  if (variant === "list") return <PropertyCardList property={property} />;
-  return <PropertyCardGrid property={property} />;
+export function PropertyCard({
+  property,
+  variant = "grid",
+  isFavorite = false,
+}: Props) {
+  if (variant === "list")
+    return <PropertyCardList property={property} isFavorite={isFavorite} />;
+  return <PropertyCardGrid property={property} isFavorite={isFavorite} />;
 }
 
-function PropertyCardGrid({ property }: { property: Property }) {
+function PropertyCardGrid({
+  property,
+  isFavorite,
+}: {
+  property: Property;
+  isFavorite: boolean;
+}) {
   const t = useT();
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-gold/20 bg-cream-50/85 shadow-[0_15px_40px_-20px_rgba(40,28,10,0.30)] backdrop-blur-sm transition hover:shadow-[0_25px_60px_-25px_rgba(40,28,10,0.45)]">
-      <CoverImage property={property} />
+      <CoverImage property={property} isFavorite={isFavorite} />
       <div className="flex flex-1 flex-col gap-3 p-4 md:p-5">
         <div>
           <h3 className="font-serif text-lg font-medium text-ink">
@@ -53,11 +67,21 @@ function PropertyCardGrid({ property }: { property: Property }) {
   );
 }
 
-function PropertyCardList({ property }: { property: Property }) {
+function PropertyCardList({
+  property,
+  isFavorite,
+}: {
+  property: Property;
+  isFavorite: boolean;
+}) {
   const t = useT();
   return (
     <article className="group grid grid-cols-1 overflow-hidden rounded-2xl border border-gold/20 bg-cream-50/85 shadow-[0_15px_40px_-20px_rgba(40,28,10,0.30)] backdrop-blur-sm transition hover:shadow-[0_25px_60px_-25px_rgba(40,28,10,0.45)] md:grid-cols-[1.1fr_1fr]">
-      <CoverImage property={property} className="md:h-full" />
+      <CoverImage
+        property={property}
+        isFavorite={isFavorite}
+        className="md:h-full"
+      />
       <div className="flex flex-col gap-3 p-5 md:p-6">
         <div>
           <h3 className="font-serif text-xl font-medium text-ink">
@@ -90,12 +114,15 @@ function PropertyCardList({ property }: { property: Property }) {
 
 function CoverImage({
   property,
+  isFavorite,
   className,
 }: {
   property: Property;
+  isFavorite: boolean;
   className?: string;
 }) {
   const t = useT();
+  const cover = property.image ?? property.photos?.[0];
   return (
     <div
       className={cn(
@@ -103,22 +130,33 @@ function CoverImage({
         className,
       )}
     >
-      {/* Placeholder elegant gradient — replace with real photos later */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0"
-        style={{ backgroundImage: PLACEHOLDER_GRADIENT }}
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,235,190,0.55),transparent_60%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_80%,rgba(40,28,10,0.35),transparent_60%)]"
-      />
+      {cover ? (
+        <Image
+          src={cover}
+          alt={property.title}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover"
+        />
+      ) : (
+        <>
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ backgroundImage: PLACEHOLDER_GRADIENT }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,235,190,0.55),transparent_60%)]"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_80%,rgba(40,28,10,0.35),transparent_60%)]"
+          />
+        </>
+      )}
 
-      <FavoriteButton propertyId={property.id} />
+      <FavoriteButton propertySlug={property.id} initialActive={isFavorite} />
 
       {property.badge && (
         <span className="absolute bottom-3 left-3 rounded-md bg-cream-50/95 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-gold-dark shadow-sm">
@@ -129,14 +167,40 @@ function CoverImage({
   );
 }
 
-function FavoriteButton({ propertyId: _ }: { propertyId: string }) {
+function FavoriteButton({
+  propertySlug,
+  initialActive,
+}: {
+  propertySlug: string;
+  initialActive: boolean;
+}) {
   const t = useT();
-  const [active, setActive] = useState(false);
+  const [, startTransition] = useTransition();
+  // Optimistic UI: el corazón cambia al instante, el server confirma después.
+  const [optimisticActive, applyOptimistic] = useOptimistic(
+    initialActive,
+    (_, next: boolean) => next,
+  );
+
+  const handleClick = () => {
+    const next = !optimisticActive;
+    startTransition(async () => {
+      applyOptimistic(next);
+      const result = await toggleFavorite({ slug: propertySlug });
+      if (!result.ok) {
+        // Revertir si falló: aplicar el valor opuesto al optimista.
+        applyOptimistic(!next);
+      }
+    });
+  };
+
   return (
     <button
       type="button"
-      onClick={() => setActive((v) => !v)}
-      aria-label={active ? t("card.favorite.remove") : t("card.favorite.add")}
+      onClick={handleClick}
+      aria-label={
+        optimisticActive ? t("card.favorite.remove") : t("card.favorite.add")
+      }
       className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-cream-50/90 text-ink shadow-sm transition hover:bg-cream-50"
     >
       <Heart
@@ -144,7 +208,7 @@ function FavoriteButton({ propertyId: _ }: { propertyId: string }) {
         strokeWidth={1.75}
         className={cn(
           "transition",
-          active ? "fill-rose-500 text-rose-500" : "text-ink/60",
+          optimisticActive ? "fill-rose-500 text-rose-500" : "text-ink/60",
         )}
       />
     </button>

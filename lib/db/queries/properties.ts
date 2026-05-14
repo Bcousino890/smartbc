@@ -8,7 +8,9 @@ export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
   const supabase = await createClient();
   let query = supabase
     .from("properties")
-    .select("*, agencies(name, slug)")
+    .select(
+      "*, agencies(name, slug), property_photos(url, is_cover, position)",
+    )
     .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);

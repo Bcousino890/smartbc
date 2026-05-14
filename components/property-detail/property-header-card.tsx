@@ -1,15 +1,37 @@
 "use client";
 
 import { ArrowRight, Bath, Bed, Euro, Heart, Maximize2 } from "lucide-react";
-import { useState } from "react";
+import { useOptimistic, useState, useTransition } from "react";
+import { toggleFavorite } from "@/app/(cliente)/actions";
+import { RequestVisitModal } from "@/components/property-detail/request-visit-modal";
 import { formatPropertyPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
 import type { Property } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function PropertyHeaderCard({ property }: { property: Property }) {
+export function PropertyHeaderCard({
+  property,
+  isFavorite = false,
+}: {
+  property: Property;
+  isFavorite?: boolean;
+}) {
   const t = useT();
-  const [favorite, setFavorite] = useState(false);
+  const [, startTransition] = useTransition();
+  const [optimisticFav, applyOptimistic] = useOptimistic(
+    isFavorite,
+    (_, next: boolean) => next,
+  );
+  const [visitOpen, setVisitOpen] = useState(false);
+
+  const handleFavorite = () => {
+    const next = !optimisticFav;
+    startTransition(async () => {
+      applyOptimistic(next);
+      const result = await toggleFavorite({ slug: property.id });
+      if (!result.ok) applyOptimistic(!next);
+    });
+  };
 
   return (
     <div className="rounded-2xl border border-gold/20 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-6">
@@ -25,9 +47,11 @@ export function PropertyHeaderCard({ property }: { property: Property }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setFavorite((v) => !v)}
+            onClick={handleFavorite}
             aria-label={
-              favorite ? t("card.favorite.remove") : t("card.favorite.add")
+              optimisticFav
+                ? t("card.favorite.remove")
+                : t("card.favorite.add")
             }
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-gold/25 bg-white/80 text-ink/60 transition hover:border-gold/50 hover:text-ink"
           >
@@ -36,12 +60,13 @@ export function PropertyHeaderCard({ property }: { property: Property }) {
               strokeWidth={1.75}
               className={cn(
                 "transition",
-                favorite && "fill-rose-500 text-rose-500",
+                optimisticFav && "fill-rose-500 text-rose-500",
               )}
             />
           </button>
           <button
             type="button"
+            onClick={() => setVisitOpen(true)}
             className="flex items-center gap-3 rounded-xl bg-ink px-5 py-3 text-sm font-medium tracking-wide text-cream-50 transition hover:bg-ink-soft"
           >
             <span>{t("detail.requestVisit")}</span>
@@ -73,6 +98,13 @@ export function PropertyHeaderCard({ property }: { property: Property }) {
           )}
         </span>
       </ul>
+
+      <RequestVisitModal
+        open={visitOpen}
+        onClose={() => setVisitOpen(false)}
+        propertySlug={property.id}
+        propertyTitle={property.title}
+      />
     </div>
   );
 }

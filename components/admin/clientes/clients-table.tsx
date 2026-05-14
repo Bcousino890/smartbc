@@ -51,7 +51,7 @@ export function ClientsTable({
   const visibleTo = Math.min(filtered.length, PAGE_SIZE);
 
   return (
-    <section className="flex h-full flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+    <section className="flex flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       {/* Top: search + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">

@@ -5,10 +5,10 @@ import type { Agency } from "@/lib/types";
 // y condiciones por agencia.
 export const mockAgencies: Agency[] = [
   {
-    id: "barnes",
-    name: "Barnes Madrid",
+    id: "level",
+    name: "Level Real Estate",
     city: "Madrid",
-    initials: "BR",
+    initials: "LV",
     rentCount: 24,
     saleCount: 15,
     lastUpdateMinutes: 2,
