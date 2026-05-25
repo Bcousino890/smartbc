@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { RawPhoto, RawProperty, Scraper } from "../types";
+import { extractMobiliaPhotos } from "./mobilia";
 
 const SITE_BASE = "https://levelrealestate.es";
 const SITEMAP_URL = `${SITE_BASE}/property-sitemap.xml`;
@@ -203,20 +204,12 @@ function extractPhotos(
   $: cheerio.CheerioAPI,
   ref: string,
 ): RawPhoto[] {
-  const photos = new Map<string, RawPhoto>(); // dedupe por URL
-  const refPath = `/Images/${ref}/`;
-  $(".swiper-slide-image, .swiper-slide img").each((_, el) => {
-    const src = $(el).attr("src");
-    if (!src) return;
-    // Solo aceptamos fotos cuyo path contenga la referencia de la propiedad
-    // actual. Esto descarta automáticamente las galerías de propiedades
-    // sugeridas que aparecen al final de la página.
-    if (!src.includes(refPath)) return;
-    if (!photos.has(src)) {
-      photos.set(src, { url: src, alt: $(el).attr("alt") ?? undefined });
-    }
-  });
-  return Array.from(photos.values());
+  // Level sirve sus imágenes desde Mobilia. Delegamos en el helper común,
+  // que valida dominio (`media.mobiliagestion.es`), descarta `Flags`,
+  // recorre src/data-src/data-original/srcset y transforma a
+  // `-original.jpg` (versión sin marca de agua). Limitamos al subpath
+  // de la propiedad para no capturar galerías de fichas sugeridas.
+  return extractMobiliaPhotos($, { pathMustInclude: `/Images/${ref}/` });
 }
 
 export async function scrapeProperty(
