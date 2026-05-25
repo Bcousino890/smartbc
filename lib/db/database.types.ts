@@ -16,6 +16,8 @@ export type PropertyStatus = "available" | "reserved" | "sold" | "archived";
 export type PropertySource = "manual" | "scrape" | "api";
 export type VisitStatus = "pending" | "confirmed" | "completed" | "cancelled";
 export type MessageSenderType = "client" | "advisor" | "admin";
+export type SyncStatus = "running" | "success" | "partial" | "error";
+export type FeedHealth = "healthy" | "warning" | "error" | "idle";
 
 export type Database = {
   public: {
@@ -132,6 +134,7 @@ export type Database = {
           available_from: string | null;
           features: string[];
           cover_photo_url: string | null;
+          source_url: string | null;
           last_synced_at: string | null;
           archived_at: string | null;
           created_at: string;
@@ -157,6 +160,7 @@ export type Database = {
           available_from?: string | null;
           features?: string[];
           cover_photo_url?: string | null;
+          source_url?: string | null;
           last_synced_at?: string | null;
           archived_at?: string | null;
           created_at?: string;
@@ -374,6 +378,74 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["app_settings"]["Insert"]>;
       };
+      agency_feeds: {
+        Row: {
+          id: string;
+          agency_id: string;
+          scraper_key: string;
+          feed_url: string | null;
+          active: boolean;
+          frequency_hours: number;
+          last_run_at: string | null;
+          last_status: SyncStatus | null;
+          last_error: string | null;
+          health: FeedHealth;
+          next_run_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          scraper_key: string;
+          feed_url?: string | null;
+          active?: boolean;
+          frequency_hours?: number;
+          last_run_at?: string | null;
+          last_status?: SyncStatus | null;
+          last_error?: string | null;
+          health?: FeedHealth;
+          next_run_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["agency_feeds"]["Insert"]>;
+      };
+      sync_logs: {
+        Row: {
+          id: string;
+          feed_id: string;
+          started_at: string;
+          finished_at: string | null;
+          status: SyncStatus;
+          triggered_by: string;
+          properties_seen: number;
+          properties_inserted: number;
+          properties_updated: number;
+          properties_archived: number;
+          properties_skipped: number;
+          photos_processed: number;
+          error_message: string | null;
+          details: Json | null;
+        };
+        Insert: {
+          id?: string;
+          feed_id: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: SyncStatus;
+          triggered_by?: string;
+          properties_seen?: number;
+          properties_inserted?: number;
+          properties_updated?: number;
+          properties_archived?: number;
+          properties_skipped?: number;
+          photos_processed?: number;
+          error_message?: string | null;
+          details?: Json | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["sync_logs"]["Insert"]>;
+      };
     };
     Enums: {
       user_role: UserRole;
@@ -383,6 +455,8 @@ export type Database = {
       property_source: PropertySource;
       visit_status: VisitStatus;
       message_sender_type: MessageSenderType;
+      sync_status: SyncStatus;
+      feed_health: FeedHealth;
     };
   };
 };

@@ -5,6 +5,12 @@ import type { Database, PropertyOperation, PropertyStay } from "./database.types
 
 export type AgencyRow = Database["public"]["Tables"]["agencies"]["Row"];
 export type AgencyPartnershipRow = Database["public"]["Tables"]["agency_partnerships"]["Row"];
+export type AgencyFeedRow = Database["public"]["Tables"]["agency_feeds"]["Row"];
+export type SyncLogRow = Database["public"]["Tables"]["sync_logs"]["Row"];
+
+export type FeedWithAgency = AgencyFeedRow & {
+  agencies: Pick<AgencyRow, "id" | "name" | "slug" | "logo_url"> | null;
+};
 
 export type AgencyWithStats = AgencyRow & {
   agency_partnerships: AgencyPartnershipRow[] | null;
