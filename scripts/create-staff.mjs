@@ -1,21 +1,22 @@
-// Crea (o actualiza) un usuario staff con rol admin/advisor.
+// Crea (o actualiza) un usuario con rol admin/advisor/client.
 // Uso:
-//   node --env-file=.env.local scripts/create-staff.mjs <email> <password> [admin|advisor] [full_name]
+//   node --env-file=.env.local scripts/create-staff.mjs <email> <password> [admin|advisor|client] [full_name]
 //
 // Ejemplos:
 //   node --env-file=.env.local scripts/create-staff.mjs benjamin@bc.com Cousino2026! admin "Benjamín Cousiño"
 //   node --env-file=.env.local scripts/create-staff.mjs maria@bc.com Pass1234! advisor "María Pérez"
+//   node --env-file=.env.local scripts/create-staff.mjs cliente@bc.com Cliente2026 client "Cliente Prueba"
 
 import { createClient } from "@supabase/supabase-js";
 
 const [, , email, password, roleArg = "admin", fullName] = process.argv;
 
 if (!email || !password) {
-  console.error("❌ Falta email o password.\n   Uso: node --env-file=.env.local scripts/create-staff.mjs <email> <password> [admin|advisor] [full_name]");
+  console.error("❌ Falta email o password.\n   Uso: node --env-file=.env.local scripts/create-staff.mjs <email> <password> [admin|advisor|client] [full_name]");
   process.exit(1);
 }
 
-const role = ["admin", "advisor"].includes(roleArg) ? roleArg : "admin";
+const role = ["admin", "advisor", "client"].includes(roleArg) ? roleArg : "admin";
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
