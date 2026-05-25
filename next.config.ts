@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
         hostname: "*.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
+      {
+        // Backend self-host en Hetzner (Supabase Storage). Las fotos
+        // sincronizadas con watermark se sirven desde aquí.
+        protocol: "https",
+        hostname: "crm.bcousinoprop.com",
+        pathname: "/storage/v1/object/public/**",
+      },
     ],
   },
 };

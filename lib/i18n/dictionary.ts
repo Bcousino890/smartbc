@@ -325,6 +325,7 @@ const es: Strings = {
   "admin.nav.clientes": "Clientes",
   "admin.nav.solicitudes": "Solicitudes",
   "admin.nav.mensajes": "Mensajes",
+  "admin.nav.sindicacion": "Sindicación",
   "admin.nav.reportes": "Reportes",
   "adminMensajes.title": "Mensajes",
   "adminMensajes.subtitle":
@@ -743,6 +744,79 @@ const es: Strings = {
   "config.notifications.weeklyReport": "Reporte semanal",
   "config.notifications.propertyUpdates":
     "Actualizaciones del catálogo",
+
+  // Sindicación · Fase 4
+  "sindicacion.title": "Sindicación de agencias",
+  "sindicacion.subtitle":
+    "Motor de sincronización con webs colaboradoras. Marca de agua y archivado automático.",
+  "sindicacion.stats.activeFeeds": "Feeds activos",
+  "sindicacion.stats.activeFeeds.help": "Sobre el total configurado",
+  "sindicacion.stats.healthy": "En buen estado",
+  "sindicacion.stats.healthy.help": "Última sincronización OK",
+  "sindicacion.stats.errors": "Con errores",
+  "sindicacion.stats.errors.help": "Requieren atención",
+  "sindicacion.stats.synced24h": "Cambios últimas 24h",
+  "sindicacion.stats.synced24h.help": "Altas + modificaciones + archivos",
+  "sindicacion.feeds.title": "Feeds configurados",
+  "sindicacion.feeds.subtitle":
+    "Cada agencia colaboradora se sincroniza con su propio scraper.",
+  "sindicacion.new.button": "Nuevo feed",
+  "sindicacion.new.title": "Nuevo feed de agencia",
+  "sindicacion.new.subtitle":
+    "Conecta una agencia colaboradora a un scraper registrado.",
+  "sindicacion.new.agency": "Agencia",
+  "sindicacion.new.selectAgency": "Selecciona una agencia",
+  "sindicacion.new.scraper": "Scraper",
+  "sindicacion.new.selectScraper": "Selecciona un scraper",
+  "sindicacion.new.scraperHelp":
+    "Cada scraper conoce la estructura HTML de una web concreta.",
+  "sindicacion.new.feedUrl": "URL del listado (opcional)",
+  "sindicacion.new.frequency": "Frecuencia de sincronización",
+  "sindicacion.new.submit": "Crear feed",
+  "sindicacion.new.noAgencies":
+    "Todas las agencias ya tienen un feed configurado. Crea una nueva agencia primero.",
+  "sindicacion.table.agency": "AGENCIA",
+  "sindicacion.table.scraper": "SCRAPER",
+  "sindicacion.table.health": "ESTADO",
+  "sindicacion.table.lastRun": "ÚLTIMA SYNC",
+  "sindicacion.table.frequency": "FRECUENCIA",
+  "sindicacion.table.actions": "ACCIONES",
+  "sindicacion.table.everyHours": "Cada {n}h",
+  "sindicacion.table.neverRun": "Nunca",
+  "sindicacion.table.empty":
+    "No hay feeds configurados. Crea el primero para empezar a sindicar.",
+  "sindicacion.health.healthy": "OK",
+  "sindicacion.health.warning": "Avisos",
+  "sindicacion.health.error": "Error",
+  "sindicacion.health.idle": "Sin estrenar",
+  "sindicacion.actions.syncNow": "Sincronizar",
+  "sindicacion.actions.pause": "Pausar",
+  "sindicacion.actions.resume": "Reanudar",
+  "sindicacion.actions.delete": "Eliminar feed",
+  "sindicacion.actions.alreadyRunning":
+    "Ya hay una sincronización en curso. Espera a que termine.",
+  "sindicacion.toast.alreadyRunning":
+    "Este feed ya está sincronizándose. Espera a que el run actual termine.",
+  "sindicacion.confirmDelete":
+    "¿Eliminar este feed? Las propiedades existentes se conservan.",
+  "sindicacion.toast.success":
+    "Sync completada: +{inserted} nuevas, {updated} actualizadas, {archived} archivadas.",
+  "sindicacion.toast.error": "Error: {error}",
+  "sindicacion.recent.title": "Sincronizaciones recientes",
+  "sindicacion.recent.subtitle":
+    "Últimos 15 runs en todas las agencias.",
+  "sindicacion.recent.empty":
+    "Aún no se ha ejecutado ninguna sincronización.",
+  "sindicacion.status.running": "En curso",
+  "sindicacion.status.success": "Éxito",
+  "sindicacion.status.partial": "Parcial",
+  "sindicacion.status.error": "Error",
+  "sindicacion.trigger.cron": "automático",
+  "sindicacion.trigger.manual": "manual",
+  "sindicacion.trigger.test": "test",
+  "sindicacion.counters.inserted": "Nuevas",
+  "sindicacion.counters.updated": "Modif.",
+  "sindicacion.counters.archived": "Arch.",
 };
 
 const en: Strings = {
@@ -1050,6 +1124,7 @@ const en: Strings = {
   "admin.nav.clientes": "Clients",
   "admin.nav.solicitudes": "Requests",
   "admin.nav.mensajes": "Messages",
+  "admin.nav.sindicacion": "Syndication",
   "admin.nav.reportes": "Reports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle": "All your client conversations in one place.",
@@ -1456,6 +1531,77 @@ const en: Strings = {
   "config.notifications.newClients": "New clients",
   "config.notifications.weeklyReport": "Weekly report",
   "config.notifications.propertyUpdates": "Catalog updates",
+
+  // Syndication · Phase 4
+  "sindicacion.title": "Agency syndication",
+  "sindicacion.subtitle":
+    "Sync engine for partner websites. Watermark and auto-archive included.",
+  "sindicacion.stats.activeFeeds": "Active feeds",
+  "sindicacion.stats.activeFeeds.help": "Over total configured",
+  "sindicacion.stats.healthy": "Healthy",
+  "sindicacion.stats.healthy.help": "Last sync succeeded",
+  "sindicacion.stats.errors": "Errors",
+  "sindicacion.stats.errors.help": "Need attention",
+  "sindicacion.stats.synced24h": "Changes last 24h",
+  "sindicacion.stats.synced24h.help": "Inserts + updates + archives",
+  "sindicacion.feeds.title": "Configured feeds",
+  "sindicacion.feeds.subtitle":
+    "Each partner agency syncs through its own scraper.",
+  "sindicacion.new.button": "New feed",
+  "sindicacion.new.title": "New agency feed",
+  "sindicacion.new.subtitle":
+    "Connect a partner agency to a registered scraper.",
+  "sindicacion.new.agency": "Agency",
+  "sindicacion.new.selectAgency": "Pick an agency",
+  "sindicacion.new.scraper": "Scraper",
+  "sindicacion.new.selectScraper": "Pick a scraper",
+  "sindicacion.new.scraperHelp":
+    "Each scraper knows the HTML structure of a specific website.",
+  "sindicacion.new.feedUrl": "Listing URL (optional)",
+  "sindicacion.new.frequency": "Sync frequency",
+  "sindicacion.new.submit": "Create feed",
+  "sindicacion.new.noAgencies":
+    "All agencies already have a feed configured. Create a new agency first.",
+  "sindicacion.table.agency": "AGENCY",
+  "sindicacion.table.scraper": "SCRAPER",
+  "sindicacion.table.health": "STATUS",
+  "sindicacion.table.lastRun": "LAST SYNC",
+  "sindicacion.table.frequency": "FREQUENCY",
+  "sindicacion.table.actions": "ACTIONS",
+  "sindicacion.table.everyHours": "Every {n}h",
+  "sindicacion.table.neverRun": "Never",
+  "sindicacion.table.empty":
+    "No feeds configured. Create the first one to start syndicating.",
+  "sindicacion.health.healthy": "OK",
+  "sindicacion.health.warning": "Warnings",
+  "sindicacion.health.error": "Error",
+  "sindicacion.health.idle": "Idle",
+  "sindicacion.actions.syncNow": "Sync now",
+  "sindicacion.actions.pause": "Pause",
+  "sindicacion.actions.resume": "Resume",
+  "sindicacion.actions.delete": "Delete feed",
+  "sindicacion.actions.alreadyRunning":
+    "A sync is already running. Wait for it to finish.",
+  "sindicacion.toast.alreadyRunning":
+    "This feed is already syncing. Wait for the current run to finish.",
+  "sindicacion.confirmDelete":
+    "Delete this feed? Existing properties remain intact.",
+  "sindicacion.toast.success":
+    "Sync complete: +{inserted} new, {updated} updated, {archived} archived.",
+  "sindicacion.toast.error": "Error: {error}",
+  "sindicacion.recent.title": "Recent syncs",
+  "sindicacion.recent.subtitle": "Last 15 runs across all agencies.",
+  "sindicacion.recent.empty": "No syncs have run yet.",
+  "sindicacion.status.running": "Running",
+  "sindicacion.status.success": "Success",
+  "sindicacion.status.partial": "Partial",
+  "sindicacion.status.error": "Error",
+  "sindicacion.trigger.cron": "automatic",
+  "sindicacion.trigger.manual": "manual",
+  "sindicacion.trigger.test": "test",
+  "sindicacion.counters.inserted": "New",
+  "sindicacion.counters.updated": "Updated",
+  "sindicacion.counters.archived": "Archived",
 };
 
 const fr: Strings = {
@@ -1768,6 +1914,7 @@ const fr: Strings = {
   "admin.nav.clientes": "Clients",
   "admin.nav.solicitudes": "Demandes",
   "admin.nav.mensajes": "Messages",
+  "admin.nav.sindicacion": "Syndication",
   "admin.nav.reportes": "Rapports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle":
@@ -2177,6 +2324,78 @@ const fr: Strings = {
   "config.notifications.newClients": "Nouveaux clients",
   "config.notifications.weeklyReport": "Rapport hebdomadaire",
   "config.notifications.propertyUpdates": "Mises à jour du catalogue",
+
+  // Syndication · Phase 4
+  "sindicacion.title": "Syndication d'agences",
+  "sindicacion.subtitle":
+    "Moteur de synchronisation avec les sites partenaires. Filigrane et archivage automatique.",
+  "sindicacion.stats.activeFeeds": "Flux actifs",
+  "sindicacion.stats.activeFeeds.help": "Sur le total configuré",
+  "sindicacion.stats.healthy": "En bonne santé",
+  "sindicacion.stats.healthy.help": "Dernière sync réussie",
+  "sindicacion.stats.errors": "En erreur",
+  "sindicacion.stats.errors.help": "Nécessitent attention",
+  "sindicacion.stats.synced24h": "Changements 24h",
+  "sindicacion.stats.synced24h.help": "Ajouts + maj + archives",
+  "sindicacion.feeds.title": "Flux configurés",
+  "sindicacion.feeds.subtitle":
+    "Chaque agence partenaire se synchronise avec son propre scraper.",
+  "sindicacion.new.button": "Nouveau flux",
+  "sindicacion.new.title": "Nouveau flux d'agence",
+  "sindicacion.new.subtitle":
+    "Connecter une agence partenaire à un scraper enregistré.",
+  "sindicacion.new.agency": "Agence",
+  "sindicacion.new.selectAgency": "Choisir une agence",
+  "sindicacion.new.scraper": "Scraper",
+  "sindicacion.new.selectScraper": "Choisir un scraper",
+  "sindicacion.new.scraperHelp":
+    "Chaque scraper connaît la structure HTML d'un site spécifique.",
+  "sindicacion.new.feedUrl": "URL du listing (optionnel)",
+  "sindicacion.new.frequency": "Fréquence de sync",
+  "sindicacion.new.submit": "Créer le flux",
+  "sindicacion.new.noAgencies":
+    "Toutes les agences ont déjà un flux. Créez d'abord une nouvelle agence.",
+  "sindicacion.table.agency": "AGENCE",
+  "sindicacion.table.scraper": "SCRAPER",
+  "sindicacion.table.health": "ÉTAT",
+  "sindicacion.table.lastRun": "DERNIÈRE SYNC",
+  "sindicacion.table.frequency": "FRÉQUENCE",
+  "sindicacion.table.actions": "ACTIONS",
+  "sindicacion.table.everyHours": "Toutes les {n}h",
+  "sindicacion.table.neverRun": "Jamais",
+  "sindicacion.table.empty":
+    "Aucun flux configuré. Créez le premier pour démarrer la syndication.",
+  "sindicacion.health.healthy": "OK",
+  "sindicacion.health.warning": "Avertissements",
+  "sindicacion.health.error": "Erreur",
+  "sindicacion.health.idle": "Inactif",
+  "sindicacion.actions.syncNow": "Synchroniser",
+  "sindicacion.actions.pause": "Mettre en pause",
+  "sindicacion.actions.resume": "Reprendre",
+  "sindicacion.actions.delete": "Supprimer le flux",
+  "sindicacion.actions.alreadyRunning":
+    "Une synchronisation est déjà en cours. Attendez qu'elle se termine.",
+  "sindicacion.toast.alreadyRunning":
+    "Ce flux est déjà en cours de synchronisation. Attendez la fin du run actuel.",
+  "sindicacion.confirmDelete":
+    "Supprimer ce flux ? Les propriétés existantes sont conservées.",
+  "sindicacion.toast.success":
+    "Sync terminée : +{inserted} nouvelles, {updated} modifiées, {archived} archivées.",
+  "sindicacion.toast.error": "Erreur : {error}",
+  "sindicacion.recent.title": "Synchronisations récentes",
+  "sindicacion.recent.subtitle":
+    "15 dernières exécutions sur toutes les agences.",
+  "sindicacion.recent.empty": "Aucune synchronisation exécutée pour le moment.",
+  "sindicacion.status.running": "En cours",
+  "sindicacion.status.success": "Succès",
+  "sindicacion.status.partial": "Partielle",
+  "sindicacion.status.error": "Erreur",
+  "sindicacion.trigger.cron": "automatique",
+  "sindicacion.trigger.manual": "manuelle",
+  "sindicacion.trigger.test": "test",
+  "sindicacion.counters.inserted": "Nouv.",
+  "sindicacion.counters.updated": "Modif.",
+  "sindicacion.counters.archived": "Arch.",
 };
 
 const de: Strings = {
@@ -2491,6 +2710,7 @@ const de: Strings = {
   "admin.nav.clientes": "Kunden",
   "admin.nav.solicitudes": "Anfragen",
   "admin.nav.mensajes": "Nachrichten",
+  "admin.nav.sindicacion": "Syndikation",
   "admin.nav.reportes": "Berichte",
   "adminMensajes.title": "Nachrichten",
   "adminMensajes.subtitle":
@@ -2900,6 +3120,77 @@ const de: Strings = {
   "config.notifications.newClients": "Neue Kunden",
   "config.notifications.weeklyReport": "Wochenbericht",
   "config.notifications.propertyUpdates": "Katalog-Aktualisierungen",
+
+  // Syndikation · Phase 4
+  "sindicacion.title": "Agentursyndikation",
+  "sindicacion.subtitle":
+    "Synchronisations-Engine für Partnerseiten. Wasserzeichen und Auto-Archiv inklusive.",
+  "sindicacion.stats.activeFeeds": "Aktive Feeds",
+  "sindicacion.stats.activeFeeds.help": "Von gesamt konfiguriert",
+  "sindicacion.stats.healthy": "Gesund",
+  "sindicacion.stats.healthy.help": "Letzte Sync OK",
+  "sindicacion.stats.errors": "Fehler",
+  "sindicacion.stats.errors.help": "Benötigen Aufmerksamkeit",
+  "sindicacion.stats.synced24h": "Änderungen 24h",
+  "sindicacion.stats.synced24h.help": "Neu + aktualisiert + archiviert",
+  "sindicacion.feeds.title": "Konfigurierte Feeds",
+  "sindicacion.feeds.subtitle":
+    "Jede Partneragentur synchronisiert mit ihrem eigenen Scraper.",
+  "sindicacion.new.button": "Neuer Feed",
+  "sindicacion.new.title": "Neuer Agentur-Feed",
+  "sindicacion.new.subtitle":
+    "Partneragentur mit registriertem Scraper verbinden.",
+  "sindicacion.new.agency": "Agentur",
+  "sindicacion.new.selectAgency": "Agentur auswählen",
+  "sindicacion.new.scraper": "Scraper",
+  "sindicacion.new.selectScraper": "Scraper auswählen",
+  "sindicacion.new.scraperHelp":
+    "Jeder Scraper kennt die HTML-Struktur einer bestimmten Website.",
+  "sindicacion.new.feedUrl": "Listing-URL (optional)",
+  "sindicacion.new.frequency": "Sync-Frequenz",
+  "sindicacion.new.submit": "Feed erstellen",
+  "sindicacion.new.noAgencies":
+    "Alle Agenturen haben bereits einen Feed. Erst eine neue Agentur erstellen.",
+  "sindicacion.table.agency": "AGENTUR",
+  "sindicacion.table.scraper": "SCRAPER",
+  "sindicacion.table.health": "STATUS",
+  "sindicacion.table.lastRun": "LETZTE SYNC",
+  "sindicacion.table.frequency": "FREQUENZ",
+  "sindicacion.table.actions": "AKTIONEN",
+  "sindicacion.table.everyHours": "Alle {n}h",
+  "sindicacion.table.neverRun": "Nie",
+  "sindicacion.table.empty":
+    "Keine Feeds konfiguriert. Erstellen Sie den ersten, um zu starten.",
+  "sindicacion.health.healthy": "OK",
+  "sindicacion.health.warning": "Warnungen",
+  "sindicacion.health.error": "Fehler",
+  "sindicacion.health.idle": "Inaktiv",
+  "sindicacion.actions.syncNow": "Synchronisieren",
+  "sindicacion.actions.pause": "Pausieren",
+  "sindicacion.actions.resume": "Fortsetzen",
+  "sindicacion.actions.delete": "Feed löschen",
+  "sindicacion.actions.alreadyRunning":
+    "Eine Synchronisation läuft bereits. Warten Sie, bis sie beendet ist.",
+  "sindicacion.toast.alreadyRunning":
+    "Dieser Feed wird gerade synchronisiert. Warten Sie auf das Ende des aktuellen Laufs.",
+  "sindicacion.confirmDelete":
+    "Diesen Feed löschen? Vorhandene Immobilien bleiben erhalten.",
+  "sindicacion.toast.success":
+    "Sync abgeschlossen: +{inserted} neu, {updated} aktualisiert, {archived} archiviert.",
+  "sindicacion.toast.error": "Fehler: {error}",
+  "sindicacion.recent.title": "Letzte Synchronisationen",
+  "sindicacion.recent.subtitle": "Letzte 15 Läufe aller Agenturen.",
+  "sindicacion.recent.empty": "Bisher keine Synchronisation ausgeführt.",
+  "sindicacion.status.running": "Läuft",
+  "sindicacion.status.success": "Erfolg",
+  "sindicacion.status.partial": "Teilweise",
+  "sindicacion.status.error": "Fehler",
+  "sindicacion.trigger.cron": "automatisch",
+  "sindicacion.trigger.manual": "manuell",
+  "sindicacion.trigger.test": "Test",
+  "sindicacion.counters.inserted": "Neu",
+  "sindicacion.counters.updated": "Aktual.",
+  "sindicacion.counters.archived": "Arch.",
 };
 
 export const dictionary: Record<Lang, Strings> = { es, en, fr, de };
