@@ -45,30 +45,34 @@ export function extractMobiliaPhotos(
 
   $("img").each((_, el) => {
     const $el = $(el);
-    const candidates: string[] = [];
-    const src = $el.attr("src");
-    const dataSrc = $el.attr("data-src");
+    // Cada `<img>` representa UNA foto. `src`, `data-src`, `data-original` y
+    // `srcset` son distintas variantes (tamaños / lazy-load) del mismo recurso.
+    // Elegimos UNA sola en orden de preferencia: data-original > data-src >
+    // src > primer entry de srcset. Así evitamos generar URLs inexistentes
+    // tipo `XXX-thumb-original.jpg` cuando el srcset incluye thumbs.
     const dataOriginal = $el.attr("data-original");
+    const dataSrc = $el.attr("data-src");
+    const src = $el.attr("src");
     const srcset = $el.attr("srcset");
+    const firstSrcset = srcset
+      ? srcset.split(",")[0]?.trim().split(/\s+/)[0]
+      : undefined;
 
-    if (src) candidates.push(src);
-    if (dataSrc) candidates.push(dataSrc);
-    if (dataOriginal) candidates.push(dataOriginal);
-    if (srcset) {
-      for (const entry of srcset.split(",")) {
-        const u = entry.trim().split(/\s+/)[0];
-        if (u) candidates.push(u);
+    const ordered = [dataOriginal, dataSrc, src, firstSrcset];
+    let chosen: string | undefined;
+    for (const candidate of ordered) {
+      if (candidate && isMobiliaImageUrl(candidate)) {
+        if (pathMustInclude && !candidate.includes(pathMustInclude)) continue;
+        chosen = candidate;
+        break;
       }
     }
+    if (!chosen) return;
 
-    for (const raw of candidates) {
-      if (!isMobiliaImageUrl(raw)) continue;
-      if (pathMustInclude && !raw.includes(pathMustInclude)) continue;
-      const normalized = toMobiliaOriginal(raw);
-      if (seen.has(normalized)) continue;
-      seen.add(normalized);
-      photos.push({ url: normalized, alt: $el.attr("alt") ?? undefined });
-    }
+    const normalized = toMobiliaOriginal(chosen);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    photos.push({ url: normalized, alt: $el.attr("alt") ?? undefined });
   });
 
   return photos;
