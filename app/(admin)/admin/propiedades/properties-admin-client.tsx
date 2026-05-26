@@ -15,7 +15,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { archiveProperty } from "@/app/(admin)/admin/propiedades/actions";
-import { ImportPropertyModal } from "@/components/admin/import-property-modal";
 import {
   type AgencyOption,
   NewPropertyModal,
@@ -45,7 +44,6 @@ export function PropertiesAdminClient({
   const t = useT();
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -137,13 +135,12 @@ export function PropertiesAdminClient({
                   </p>
                 </div>
               </button>
-              <button
-                type="button"
+              {/* "Importar por link" navega a la página dedicada
+                  /admin/propiedades/importar (Idealista / Fotocasa / Inmoweb). */}
+              <Link
+                href="/admin/propiedades/importar"
                 role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setImportOpen(true);
-                }}
+                onClick={() => setMenuOpen(false)}
                 className="flex w-full items-start gap-3 border-t border-gold/10 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
               >
                 <LinkIcon
@@ -157,7 +154,7 @@ export function PropertiesAdminClient({
                     {t("adminProps.add.byLink.help")}
                   </p>
                 </div>
-              </button>
+              </Link>
             </div>
           )}
         </div>
@@ -167,10 +164,6 @@ export function PropertiesAdminClient({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         agencies={agencies}
-      />
-      <ImportPropertyModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
       />
 
       <div className="mt-5 overflow-x-auto">

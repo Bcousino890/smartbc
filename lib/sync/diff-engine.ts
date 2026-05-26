@@ -160,8 +160,9 @@ async function insertProperty(
 }
 
 // IMPORTANTE: este UPDATE solo toca los campos que vienen del scraper.
-// Los campos internos del admin (owner_*, internal_notes) NO se incluyen
-// adrede — son siempre propiedad del admin y nunca se sobrescriben en sync.
+// Los campos internos del admin (owner_*, internal_notes, features_manual)
+// NO se incluyen adrede — son siempre propiedad del admin y nunca se
+// sobrescriben en sync.
 async function updateExistingProperty(
   supabase: AdminClient,
   existing: ExistingProperty,

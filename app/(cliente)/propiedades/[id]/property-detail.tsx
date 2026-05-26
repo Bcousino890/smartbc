@@ -13,6 +13,7 @@ import { PropertyFeaturesBlock } from "@/components/property-detail/property-fea
 import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { PropertyHeaderCard } from "@/components/property-detail/property-header-card";
 import { PropertySpecsBlock } from "@/components/property-detail/property-specs";
+import { PropertyUniversityDistance } from "@/components/property-detail/property-university-distance";
 import { PageFooter } from "@/components/ui/page-footer";
 import { useT } from "@/lib/i18n/provider";
 import type { Property } from "@/lib/types";
@@ -99,6 +100,19 @@ export function PropertyDetail({
           )}
 
           <PropertyMapCard property={property} />
+
+          {/* Distancia al campus: solo se muestra si la propiedad tiene
+              coordenadas. Las nuevas importaciones (Idealista) las popúan
+              automáticamente; las propiedades antiguas necesitan que el
+              admin las añada para que esta sección aparezca. */}
+          {typeof property.latitude === "number" &&
+            typeof property.longitude === "number" && (
+              <PropertyUniversityDistance
+                propertyTitle={property.title}
+                propertyLat={property.latitude}
+                propertyLng={property.longitude}
+              />
+            )}
         </div>
 
         <aside className="flex flex-col gap-5">

@@ -88,7 +88,8 @@ export type Property = {
   // vista del SmartLink y el detalle público.
   featuresText?: string[];
   // Coordenadas reales (geocodificadas) si las tenemos cacheadas. Si no
-  // están, el SmartLink usa coords aproximadas del barrio.
+  // están, el SmartLink usa coords aproximadas del barrio. Se usan también
+  // para el cálculo de distancia a universidades.
   latitude?: number | null;
   longitude?: number | null;
 };
