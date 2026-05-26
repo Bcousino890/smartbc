@@ -245,6 +245,22 @@ export function profileRowToInternalUser(
   };
 }
 
+// Títulos placeholder que algunos datos antiguos guardaron en BD ("Titulo",
+// "Title", "Propiedad", string vacío…). Cuando vienen así, generamos uno
+// descriptivo basado en tipo + zona para evitar mostrar "Titulo" al cliente.
+const GENERIC_TITLE_RE = /^(t[ií]tulos?|titles?|propiedad|sin t[ií]tulo|untitled|—|-)$/i;
+
+function displayPropertyTitle(row: PropertyRow): string {
+  const raw = row.title?.trim() ?? "";
+  if (raw && !GENERIC_TITLE_RE.test(raw)) return raw;
+  const typ = row.property_type?.trim();
+  const typeLabel =
+    typ && typ.length > 0
+      ? typ.charAt(0).toUpperCase() + typ.slice(1).toLowerCase()
+      : "Vivienda";
+  return `${typeLabel} en ${row.zone}`;
+}
+
 export function propertyRowToClientProperty(
   row: PropertyRow & {
     agencies?: { name: string; slug: string } | null;
@@ -255,10 +271,13 @@ export function propertyRowToClientProperty(
     row.property_photos
       ?.slice()
       .sort((a, b) => a.position - b.position) ?? [];
-  const cover = row.cover_photo_url ?? sortedPhotos[0]?.url;
+  // URLs neutras vía el proxy /p/{slug}/{idx} — no exponemos rutas de
+  // Storage internas (que delatan el portal de origen, ej. `synced/level/…`).
+  const photoUrls = sortedPhotos.map((_, i) => `/p/${row.slug}/${i}`);
+  const cover = photoUrls[0];
   return {
     id: row.slug,
-    title: row.title,
+    title: displayPropertyTitle(row),
     zone: row.zone,
     city: "Madrid",
     bedrooms: row.bedrooms,
@@ -269,7 +288,7 @@ export function propertyRowToClientProperty(
     operation: row.operation === "rent" ? "alquiler" : "venta",
     image: cover ?? undefined,
     description: row.description ?? undefined,
-    photos: sortedPhotos.map((p) => p.url),
+    photos: photoUrls,
     longDescription: row.description ?? undefined,
     propertyTypeLabel: row.property_type ?? null,
     // Features auto-extraídas del scraper + manuales del admin, deduplicadas.
@@ -278,6 +297,7 @@ export function propertyRowToClientProperty(
     ),
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
+    bcReference: row.bc_reference ?? null,
   };
 }
 
@@ -296,6 +316,7 @@ export function propertyRowToAdminProperty(
   return {
     id: row.slug,
     reference: row.external_id ?? row.id.slice(0, 8).toUpperCase(),
+    bcReference: row.bc_reference ?? null,
     title: row.title,
     zone: row.zone,
     agencyId: row.agencies?.slug ?? "",

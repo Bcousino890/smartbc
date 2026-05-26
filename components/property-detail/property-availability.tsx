@@ -140,12 +140,45 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
+// Coordenadas aproximadas de cada zona (fallback si la propiedad no se
+// ha geocodificado todavía). Mismas que usa el SmartLink — mantenidas en
+// sync con app/compartir/[slug]/public-property-view.tsx.
+const ZONE_COORDS: Record<string, { lat: number; lng: number; zoom: number }> = {
+  Salamanca: { lat: 40.4264, lng: -3.684, zoom: 15 },
+  Chamberí: { lat: 40.4378, lng: -3.704, zoom: 15 },
+  Retiro: { lat: 40.4151, lng: -3.6814, zoom: 15 },
+  Pozuelo: { lat: 40.4337, lng: -3.8087, zoom: 14 },
+  Chamartín: { lat: 40.4607, lng: -3.6772, zoom: 14 },
+  Centro: { lat: 40.4168, lng: -3.7038, zoom: 15 },
+  "La Moraleja": { lat: 40.5197, lng: -3.6332, zoom: 14 },
+};
+
 export function PropertyMapCard({ property }: { property: Property }) {
   const t = useT();
-  const query = encodeURIComponent(
-    `${property.zone}, ${property.city}`,
-  );
-  const externalHref = `https://www.google.com/maps/search/?api=1&query=${query}`;
+  const hasPreciseCoords =
+    typeof property.latitude === "number" &&
+    typeof property.longitude === "number";
+  const fallback = ZONE_COORDS[property.zone] ?? {
+    lat: 40.4168,
+    lng: -3.7038,
+    zoom: 14,
+  };
+  const coords = hasPreciseCoords
+    ? { lat: property.latitude as number, lng: property.longitude as number, zoom: 15 }
+    : fallback;
+  // Bbox alrededor del centro: márgenes calculados para que el círculo
+  // cubra una zona razonable sin revelar la dirección exacta.
+  const delta = 0.012 / (coords.zoom > 14 ? (coords.zoom > 15 ? 4 : 1.8) : 1);
+  const bbox = [
+    coords.lng - delta,
+    coords.lat - delta * 0.6,
+    coords.lng + delta,
+    coords.lat + delta * 0.6,
+  ].join(",");
+  // Iframe SIN `marker=` a propósito: cubrimos la ubicación con un
+  // círculo CSS para no exponer la dirección exacta al cliente final.
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
+  const externalHref = `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=${coords.zoom}/${coords.lat}/${coords.lng}`;
 
   return (
     <div className="rounded-2xl border border-gold/20 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-6">
@@ -175,22 +208,24 @@ export function PropertyMapCard({ property }: { property: Property }) {
       </header>
 
       <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-xl border border-gold/15">
-        <MapMockup />
-        <div className="absolute inset-0 flex items-end justify-between gap-3 bg-gradient-to-t from-ink/35 via-transparent to-transparent p-4">
-          <div className="flex items-center gap-2 rounded-lg bg-cream-50/90 px-3 py-1.5 text-[12px] font-medium text-ink shadow-sm backdrop-blur-sm">
-            <MapPin size={13} strokeWidth={1.75} className="text-gold" />
-            <span>
-              {property.zone}, {property.city}
-            </span>
-          </div>
-          <span className="rounded-md bg-cream-50/85 px-2 py-1 text-[10px] uppercase tracking-wider text-ink/55 backdrop-blur-sm">
-            {t("detail.map.placeholder")}
-          </span>
+        <iframe
+          title={`Mapa de ${property.zone}`}
+          src={src}
+          className="pointer-events-none h-full w-full border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+        {/* Círculo dorado: zona aproximada (no calle exacta). Iframe sin
+            interacción para que el círculo siempre cubra la ubicación. */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="h-28 w-28 rounded-full border-2 border-gold/80 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.18)] md:h-36 md:w-36" />
         </div>
       </div>
 
       <p className="mt-3 text-[12px] text-ink/60">
-        {t("detail.map.subtitle")}
+        {hasPreciseCoords
+          ? "Zona aproximada de la propiedad. Te facilitamos la dirección exacta al coordinar la visita."
+          : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
       </p>
     </div>
   );

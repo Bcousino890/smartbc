@@ -78,8 +78,8 @@ export function PropertyUniversityDistance({
         </a>
       </header>
 
-      <div className="mt-4">
-        <label className="block text-xs font-medium text-ink/65">
+      <div className="mt-5">
+        <label className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/55">
           Universidad / Escuela
         </label>
         <select
@@ -89,7 +89,7 @@ export function PropertyUniversityDistance({
             const next = UNIVERSITIES.find((u) => u.id === e.target.value);
             if (next) setActiveCampusId(next.campuses[0].id);
           }}
-          className="mt-1 w-full rounded-xl border border-ink/15 bg-white px-3 py-2 text-sm focus:border-gold/55 focus:outline-none"
+          className="mt-2 w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink transition focus:border-gold/55 focus:outline-none focus:ring-2 focus:ring-gold/20"
         >
           {UNIVERSITIES.map((u) => (
             <option key={u.id} value={u.id}>
@@ -99,74 +99,92 @@ export function PropertyUniversityDistance({
         </select>
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-[1.4fr_1fr]">
-        {/* Mapa */}
-        <div className="aspect-[4/3] overflow-hidden rounded-xl border border-gold/15">
-          <iframe
-            key={`${activeCampus.id}-${propertyLat}-${propertyLng}`}
-            src={embedUrl}
-            width="100%"
-            height="100%"
-            style={{ border: 0 }}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            title={`Ruta a ${activeCampus.label}`}
-          />
-        </div>
-
-        {/* Tarjetas de campus (una por sede). Cuando hay >1 funcionan también como
-            selector del mapa activo. */}
-        <div className="flex flex-col gap-3">
-          {university.campuses.map((campus) => {
-            const times = estimateTimes(
-              propertyLat,
-              propertyLng,
-              campus.lat,
-              campus.lng,
-            );
-            const isActive = campus.id === activeCampusId;
-            return (
-              <button
-                key={campus.id}
-                type="button"
-                onClick={() => setActiveCampusId(campus.id)}
-                className={[
-                  "rounded-xl border bg-white text-left transition focus:outline-none",
-                  isActive
-                    ? "border-gold ring-2 ring-gold/30"
-                    : "border-ink/10 hover:border-gold/40",
-                ].join(" ")}
-              >
-                <div className="rounded-t-xl bg-[#1d2c3a] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cream-50">
-                  {campus.label}
-                </div>
-                <div className="divide-y divide-ink/10 text-sm">
-                  <ModeRow
-                    icon={<Car size={20} strokeWidth={1.5} />}
-                    minutes={times.car}
-                    label="en coche al campus"
-                  />
-                  <ModeRow
-                    icon={<Train size={20} strokeWidth={1.5} />}
-                    minutes={times.metro}
-                    label="en metro al campus"
-                  />
-                  <ModeRow
-                    icon={<Bus size={20} strokeWidth={1.5} />}
-                    minutes={times.bus}
-                    label="en autobús al campus"
-                  />
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      {/* Mapa grande full-width arriba. Antes era una columna estrecha al
+          50% — ahora ocupa todo el ancho y respira mucho mejor. */}
+      <div className="mt-5 aspect-[16/9] overflow-hidden rounded-xl border border-gold/15 bg-white">
+        <iframe
+          key={`${activeCampus.id}-${propertyLat}-${propertyLng}`}
+          src={embedUrl}
+          width="100%"
+          height="100%"
+          style={{ border: 0 }}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          title={`Ruta a ${activeCampus.label}`}
+        />
       </div>
 
-      <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ink/45">
-        <MapPin size={11} />
-        Tiempos aproximados calculados sobre distancia en línea recta. Para una
-        estimación exacta consulta Google Maps.
+      {/* Tarjetas de campus en grid horizontal debajo del mapa. 1, 2 o 3
+          columnas según el número de sedes. Pulsar una cambia el mapa. */}
+      <div
+        className={[
+          "mt-4 grid gap-3",
+          university.campuses.length === 1
+            ? "md:grid-cols-1"
+            : university.campuses.length === 2
+              ? "md:grid-cols-2"
+              : "md:grid-cols-3",
+        ].join(" ")}
+      >
+        {university.campuses.map((campus) => {
+          const times = estimateTimes(
+            propertyLat,
+            propertyLng,
+            campus.lat,
+            campus.lng,
+          );
+          const isActive = campus.id === activeCampusId;
+          return (
+            <button
+              key={campus.id}
+              type="button"
+              onClick={() => setActiveCampusId(campus.id)}
+              aria-pressed={isActive}
+              className={[
+                "overflow-hidden rounded-xl border bg-white text-left transition focus:outline-none",
+                isActive
+                  ? "border-gold shadow-[0_10px_30px_-15px_rgba(168,129,74,0.45)] ring-2 ring-gold/30"
+                  : "border-ink/10 hover:border-gold/40 hover:shadow-[0_8px_20px_-15px_rgba(40,28,10,0.25)]",
+              ].join(" ")}
+            >
+              <div
+                className={[
+                  "px-4 py-2.5 font-serif text-[13px] font-medium tracking-wide",
+                  isActive
+                    ? "bg-ink text-cream-50"
+                    : "bg-ink/[0.92] text-cream-50",
+                ].join(" ")}
+              >
+                {campus.label}
+              </div>
+              <div className="divide-y divide-ink/10">
+                <ModeRow
+                  icon={<Car size={16} strokeWidth={1.75} />}
+                  minutes={times.car}
+                  label="en coche"
+                />
+                <ModeRow
+                  icon={<Train size={16} strokeWidth={1.75} />}
+                  minutes={times.metro}
+                  label="en metro"
+                />
+                <ModeRow
+                  icon={<Bus size={16} strokeWidth={1.75} />}
+                  minutes={times.bus}
+                  label="en autobús"
+                />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-4 flex items-start gap-1.5 text-[11px] text-ink/45">
+        <MapPin size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Tiempos aproximados calculados sobre distancia en línea recta. Para
+          una estimación exacta consulta Google Maps.
+        </span>
       </p>
     </div>
   );
@@ -183,10 +201,14 @@ function ModeRow({
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
-      <span className="text-cyan-500">{icon}</span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold-dark">
+        {icon}
+      </span>
       <div className="flex-1">
-        <div className="font-semibold text-ink">{minutes} minutos</div>
-        <div className="text-[10px] uppercase tracking-wide text-ink/55">
+        <div className="text-[13px] font-semibold text-ink">
+          {minutes} <span className="text-[11px] font-medium text-ink/55">min</span>
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.1em] text-ink/55">
           {label}
         </div>
       </div>

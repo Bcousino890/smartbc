@@ -134,6 +134,7 @@ export type Database = {
           available_from: string | null;
           features: string[];
           features_manual: string[];
+          bc_reference: string;
           cover_photo_url: string | null;
           source_url: string | null;
           owner_name: string | null;
@@ -170,6 +171,7 @@ export type Database = {
           available_from?: string | null;
           features?: string[];
           features_manual?: string[];
+          bc_reference?: string;
           cover_photo_url?: string | null;
           source_url?: string | null;
           owner_name?: string | null;

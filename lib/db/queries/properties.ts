@@ -47,6 +47,30 @@ export async function getPropertyBySlug(slug: string) {
   return data;
 }
 
+// Resuelve un slug viejo a su slug actual usando la tabla `legacy_slugs`.
+// Se usa solo cuando el lookup directo falla — los slugs viejos se crearon
+// con prefijo de agencia (ej. "level-titulo-3291") antes de neutralizarlos.
+export async function resolveLegacySlug(
+  oldSlug: string,
+): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data } = await (
+    supabase.from("legacy_slugs") as unknown as {
+      select: (cols: string) => {
+        eq: (col: string, value: string) => {
+          maybeSingle: () => Promise<{
+            data: { new_slug: string } | null;
+          }>;
+        };
+      };
+    }
+  )
+    .select("new_slug")
+    .eq("old_slug", oldSlug)
+    .maybeSingle();
+  return data?.new_slug ?? null;
+}
+
 // Variante pública para los SmartLinks (/compartir/[slug]). Bypasa la RLS
 // con el service role porque el visitante no está autenticado. Solo
 // devuelve propiedades NO archivadas para no exponer borradores ni

@@ -43,9 +43,32 @@ export function PropertiesAdminClient({
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
+  const [operationFilter, setOperationFilter] = useState<"" | "alquiler" | "venta">("");
+  const [statusFilter, setStatusFilter] = useState<"" | "available" | "reserved" | "sold" | "rented" | "draft">("");
+  const [zoneFilter, setZoneFilter] = useState<string>("");
+  const [agencyFilter, setAgencyFilter] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Opciones únicas para los selects de zona y agencia, derivadas del
+  // listado actual. Ordenadas alfabéticamente.
+  const zoneOptions = useMemo(
+    () =>
+      Array.from(new Set(properties.map((p) => p.zone))).filter(Boolean).sort(),
+    [properties],
+  );
+  const agencyOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          properties.map((p) => [p.agencyId, p.agencyName]),
+        ).entries(),
+      )
+        .filter(([id]) => Boolean(id))
+        .sort((a, b) => a[1].localeCompare(b[1])),
+    [properties],
+  );
 
   // Cerrar el menú al hacer click fuera o al pulsar Escape.
   useEffect(() => {
@@ -68,14 +91,42 @@ export function PropertiesAdminClient({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return properties;
-    return properties.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.reference.toLowerCase().includes(q) ||
-        p.zone.toLowerCase().includes(q),
-    );
-  }, [properties, query]);
+    return properties.filter((p) => {
+      if (
+        q &&
+        !p.title.toLowerCase().includes(q) &&
+        !p.reference.toLowerCase().includes(q) &&
+        !(p.bcReference?.toLowerCase().includes(q) ?? false) &&
+        !p.zone.toLowerCase().includes(q)
+      ) {
+        return false;
+      }
+      if (operationFilter && p.operation !== operationFilter) return false;
+      if (statusFilter && p.status !== statusFilter) return false;
+      if (zoneFilter && p.zone !== zoneFilter) return false;
+      if (agencyFilter && p.agencyId !== agencyFilter) return false;
+      return true;
+    });
+  }, [
+    properties,
+    query,
+    operationFilter,
+    statusFilter,
+    zoneFilter,
+    agencyFilter,
+  ]);
+
+  const hasActiveFilters = Boolean(
+    operationFilter || statusFilter || zoneFilter || agencyFilter || query,
+  );
+
+  const clearFilters = () => {
+    setQuery("");
+    setOperationFilter("");
+    setStatusFilter("");
+    setZoneFilter("");
+    setAgencyFilter("");
+  };
 
   return (
     <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -86,7 +137,7 @@ export function PropertiesAdminClient({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("adminProps.search.placeholder")}
+            placeholder="Buscar por título, ref. BC, ref. portal o zona…"
             className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
@@ -158,6 +209,65 @@ export function PropertiesAdminClient({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Filtros: operación, estado, zona, agencia. Aparecen siempre — el
+          listado puede tener cientos de propiedades y el buscador de texto
+          no basta para acotar por categoría. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+        <FilterSelect
+          label="Operación"
+          value={operationFilter}
+          onChange={(v) => setOperationFilter(v as typeof operationFilter)}
+          options={[
+            { value: "", label: "Todas" },
+            { value: "alquiler", label: "Alquiler" },
+            { value: "venta", label: "Venta" },
+          ]}
+        />
+        <FilterSelect
+          label="Estado"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+          options={[
+            { value: "", label: "Todos" },
+            { value: "available", label: "Disponible" },
+            { value: "reserved", label: "Reservado" },
+            { value: "sold", label: "Vendido" },
+            { value: "rented", label: "Alquilado" },
+            { value: "draft", label: "Borrador" },
+          ]}
+        />
+        <FilterSelect
+          label="Zona"
+          value={zoneFilter}
+          onChange={setZoneFilter}
+          options={[
+            { value: "", label: "Todas" },
+            ...zoneOptions.map((z) => ({ value: z, label: z })),
+          ]}
+        />
+        <FilterSelect
+          label="Agencia"
+          value={agencyFilter}
+          onChange={setAgencyFilter}
+          options={[
+            { value: "", label: "Todas" },
+            ...agencyOptions.map(([id, name]) => ({ value: id, label: name })),
+          ]}
+        />
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-md border border-ink/15 bg-white px-2.5 py-1 text-[11px] font-medium text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
+          >
+            Limpiar filtros
+          </button>
+        )}
+        <span className="ml-auto text-[11px] text-ink/55">
+          {filtered.length} de {properties.length}
+        </span>
       </div>
 
       <NewPropertyModal
@@ -250,8 +360,15 @@ function PropertyRow({ property }: { property: AdminProperty }) {
                 </span>
               )}
             </p>
-            <p className="text-[11px] text-ink/55">
-              {t("agency.properties.ref", { ref: property.reference })}
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/55">
+              {property.bcReference && (
+                <span className="rounded-md border border-gold/30 bg-gold/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold-dark">
+                  {property.bcReference}
+                </span>
+              )}
+              <span>
+                {t("agency.properties.ref", { ref: property.reference })}
+              </span>
             </p>
           </div>
         </div>
@@ -362,5 +479,36 @@ function ArchiveButton({ slug }: { slug: string }) {
       )}
       <span>{t("adminProps.archive.action")}</span>
     </button>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <label className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none bg-transparent text-[12px] text-ink focus:outline-none"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -5,7 +5,7 @@ import { updateSession } from "@/lib/db/middleware";
 // y `/c/{token}` (link único por envío comercial, con tracking). `/og/*`
 // son las imágenes para preview en redes sociales/WhatsApp. Todos
 // accesibles sin login.
-const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og"];
+const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes"];
 const ADMIN_PATHS = ["/admin"];
 
