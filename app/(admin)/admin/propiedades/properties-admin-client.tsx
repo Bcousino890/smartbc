@@ -2,15 +2,19 @@
 
 import {
   Archive,
+  ChevronDown,
   Image as ImageIcon,
+  Link as LinkIcon,
   Loader2,
+  Pencil,
   Plus,
   Search,
 } from "lucide-react";
 import Image from "next/image";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { archiveProperty } from "@/app/(admin)/admin/propiedades/actions";
+import { ImportPropertyModal } from "@/components/admin/import-property-modal";
 import {
   type AgencyOption,
   NewPropertyModal,
@@ -40,6 +44,28 @@ export function PropertiesAdminClient({
   const t = useT();
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar el menú al hacer click fuera o al pulsar Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -65,20 +91,85 @@ export function PropertiesAdminClient({
             className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
-        >
-          <Plus size={14} strokeWidth={1.75} className="text-gold" />
-          <span>{t("adminProps.add")}</span>
-        </button>
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
+          >
+            <Plus size={14} strokeWidth={1.75} className="text-gold" />
+            <span>{t("adminProps.add")}</span>
+            <ChevronDown
+              size={13}
+              strokeWidth={1.75}
+              className={cn(
+                "transition",
+                menuOpen ? "rotate-180" : "rotate-0",
+              )}
+            />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-10 mt-2 w-64 overflow-hidden rounded-xl border border-gold/20 bg-cream-50 shadow-[0_15px_40px_-15px_rgba(40,28,10,0.4)]"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setModalOpen(true);
+                }}
+                className="flex w-full items-start gap-3 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
+              >
+                <Pencil
+                  size={15}
+                  strokeWidth={1.75}
+                  className="mt-0.5 shrink-0 text-gold-dark"
+                />
+                <div>
+                  <p className="font-medium">{t("adminProps.add.manual")}</p>
+                  <p className="text-[11px] text-ink/55">
+                    {t("adminProps.add.manual.help")}
+                  </p>
+                </div>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setImportOpen(true);
+                }}
+                className="flex w-full items-start gap-3 border-t border-gold/10 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
+              >
+                <LinkIcon
+                  size={15}
+                  strokeWidth={1.75}
+                  className="mt-0.5 shrink-0 text-gold-dark"
+                />
+                <div>
+                  <p className="font-medium">{t("adminProps.add.byLink")}</p>
+                  <p className="text-[11px] text-ink/55">
+                    {t("adminProps.add.byLink.help")}
+                  </p>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <NewPropertyModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         agencies={agencies}
+      />
+      <ImportPropertyModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
       />
 
       <div className="mt-5 overflow-x-auto">

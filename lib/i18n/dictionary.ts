@@ -560,6 +560,22 @@ const es: Strings = {
   "adminProps.subtitle":
     "Catálogo global de propiedades de todas las agencias colaboradoras.",
   "adminProps.add": "Añadir propiedad",
+  "adminProps.add.manual": "Añadir manualmente",
+  "adminProps.add.manual.help":
+    "Rellena los datos paso a paso en un formulario.",
+  "adminProps.add.byLink": "Importar por link",
+  "adminProps.add.byLink.help":
+    "Pega la URL de la propiedad (Idealista, Fotocasa…) y la importamos.",
+  "adminProps.import.title": "Importar propiedad por link",
+  "adminProps.import.subtitle":
+    "Pega el enlace público de la propiedad y la traemos automáticamente.",
+  "adminProps.import.urlLabel": "URL de la propiedad",
+  "adminProps.import.urlHint":
+    "Funciona con enlaces de Idealista, Fotocasa, webs de agencias y otros portales.",
+  "adminProps.import.submit": "Importar",
+  "adminProps.import.soon":
+    "Próximamente: la importación automática llegará en una actualización. De momento usa \"Añadir manualmente\" para crear la propiedad.",
+  "adminProps.import.error": "No se pudo importar: {error}",
   "adminProps.archive.action": "Archivar",
   "adminProps.archive.confirm":
     "¿Seguro que quieres archivar esta propiedad? Se ocultará del catálogo.",
@@ -1353,6 +1369,21 @@ const en: Strings = {
   "adminProps.subtitle":
     "Global property catalog from all partner agencies.",
   "adminProps.add": "Add property",
+  "adminProps.add.manual": "Add manually",
+  "adminProps.add.manual.help": "Fill in the details step by step in a form.",
+  "adminProps.add.byLink": "Import by link",
+  "adminProps.add.byLink.help":
+    "Paste the property URL (Idealista, Fotocasa…) and we import it.",
+  "adminProps.import.title": "Import property from link",
+  "adminProps.import.subtitle":
+    "Paste the public URL of the property and we'll pull it in automatically.",
+  "adminProps.import.urlLabel": "Property URL",
+  "adminProps.import.urlHint":
+    "Works with Idealista, Fotocasa, agency websites and other portals.",
+  "adminProps.import.submit": "Import",
+  "adminProps.import.soon":
+    "Coming soon: automatic import will arrive in an upcoming update. For now use \"Add manually\" to create the property.",
+  "adminProps.import.error": "Couldn't import: {error}",
   "adminProps.archive.action": "Archive",
   "adminProps.archive.confirm":
     "Are you sure you want to archive this property? It will be hidden from the catalog.",
@@ -2146,6 +2177,22 @@ const fr: Strings = {
   "adminProps.subtitle":
     "Catalogue global des propriétés de toutes les agences partenaires.",
   "adminProps.add": "Ajouter une propriété",
+  "adminProps.add.manual": "Ajouter manuellement",
+  "adminProps.add.manual.help":
+    "Remplis les détails étape par étape dans un formulaire.",
+  "adminProps.add.byLink": "Importer par lien",
+  "adminProps.add.byLink.help":
+    "Colle l'URL de la propriété (Idealista, Fotocasa…) et nous l'importons.",
+  "adminProps.import.title": "Importer une propriété depuis un lien",
+  "adminProps.import.subtitle":
+    "Colle l'URL publique de la propriété et nous la récupérons automatiquement.",
+  "adminProps.import.urlLabel": "URL de la propriété",
+  "adminProps.import.urlHint":
+    "Fonctionne avec Idealista, Fotocasa, sites d'agences et autres portails.",
+  "adminProps.import.submit": "Importer",
+  "adminProps.import.soon":
+    "Bientôt disponible : l'import automatique arrivera dans une prochaine mise à jour. Pour l'instant, utilise « Ajouter manuellement ».",
+  "adminProps.import.error": "Impossible d'importer : {error}",
   "adminProps.archive.action": "Archiver",
   "adminProps.archive.confirm":
     "Êtes-vous sûr de vouloir archiver cette propriété ? Elle sera masquée du catalogue.",
@@ -2942,6 +2989,22 @@ const de: Strings = {
   "adminProps.subtitle":
     "Globaler Immobilienkatalog aller Partneragenturen.",
   "adminProps.add": "Immobilie hinzufügen",
+  "adminProps.add.manual": "Manuell hinzufügen",
+  "adminProps.add.manual.help":
+    "Felder Schritt für Schritt in einem Formular ausfüllen.",
+  "adminProps.add.byLink": "Per Link importieren",
+  "adminProps.add.byLink.help":
+    "Füge die URL der Immobilie ein (Idealista, Fotocasa…) und wir importieren sie.",
+  "adminProps.import.title": "Immobilie per Link importieren",
+  "adminProps.import.subtitle":
+    "Füge die öffentliche URL der Immobilie ein und wir holen sie automatisch ab.",
+  "adminProps.import.urlLabel": "URL der Immobilie",
+  "adminProps.import.urlHint":
+    "Funktioniert mit Idealista, Fotocasa, Agenturwebsites und anderen Portalen.",
+  "adminProps.import.submit": "Importieren",
+  "adminProps.import.soon":
+    "Demnächst verfügbar: Der automatische Import kommt in einem kommenden Update. Verwende vorerst 'Manuell hinzufügen'.",
+  "adminProps.import.error": "Import nicht möglich: {error}",
   "adminProps.archive.action": "Archivieren",
   "adminProps.archive.confirm":
     "Möchtest du diese Immobilie wirklich archivieren? Sie wird aus dem Katalog ausgeblendet.",
