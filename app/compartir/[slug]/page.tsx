@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { propertyRowToClientProperty } from "@/lib/db/adapters";
-import { getPropertyBySlugPublic } from "@/lib/db/queries/properties";
+import {
+  getPropertyBySlugPublic,
+  resolveLegacySlug,
+} from "@/lib/db/queries/properties";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
 import { PublicPropertyView } from "./public-property-view";
 
@@ -108,7 +111,15 @@ export default async function PublicSharePage({
         longitude: number | null;
       })
     | null;
-  if (!row) notFound();
+  if (!row) {
+    // Slug viejo (con prefijo de agencia, ej. "level-…"): redirigimos al
+    // nuevo para no romper SmartLinks ya enviados a clientes.
+    const newSlug = await resolveLegacySlug(slug);
+    if (newSlug && newSlug !== slug) {
+      redirect(`/compartir/${newSlug}`);
+    }
+    notFound();
+  }
 
   // Geocoding cacheado: en el primer acceso resuelve y guarda; en los
   // siguientes devuelve las coords ya guardadas. Si falla devuelve null

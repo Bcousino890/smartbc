@@ -30,6 +30,9 @@ export default async function PropertyDetailPage({
         address: string | null;
         features: string[] | null;
         features_manual: string[] | null;
+        latitude: number | null;
+        longitude: number | null;
+        bc_reference: string | null;
         source: "manual" | "scrape" | "api";
         source_url: string | null;
         archived_at: string | null;
@@ -84,6 +87,9 @@ export default async function PropertyDetailPage({
         address: property.address,
         features: property.features ?? [],
         features_manual: property.features_manual ?? [],
+        latitude: property.latitude,
+        longitude: property.longitude,
+        bc_reference: property.bc_reference,
         source: property.source,
         source_url: property.source_url,
         archived_at: property.archived_at,

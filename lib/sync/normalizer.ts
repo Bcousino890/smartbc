@@ -15,19 +15,21 @@ function slugify(input: string): string {
 }
 
 export function buildPropertySlug(
-  agencySlug: string,
+  _agencySlug: string,
   externalId: string,
   title: string,
 ): string {
-  // El externalId va SIEMPRE completo al final para garantizar unicidad.
-  // Recortamos el título (no el externalId) para no superar 120 chars, así
-  // dos propiedades con títulos largos parecidos nunca colisionan de slug.
+  // El externalId va SIEMPRE completo al final para garantizar unicidad
+  // entre dos propiedades con título idéntico. La agencia NO entra en el
+  // slug a propósito: queremos URLs neutras (`/compartir/titulo-3291`)
+  // sin exponer al cliente final que la propiedad viene de un portal de
+  // sindicación concreto. La tabla `legacy_slugs` mantiene los redirects
+  // desde slugs antiguos para no romper SmartLinks ya enviados.
   const ext = slugify(externalId);
-  const prefix = `${agencySlug}-`;
   const suffix = `-${ext}`;
-  const maxTitleLen = Math.max(1, 120 - prefix.length - suffix.length);
+  const maxTitleLen = Math.max(1, 120 - suffix.length);
   const base = (slugify(title) || "propiedad").slice(0, maxTitleLen);
-  return `${prefix}${base}${suffix}`;
+  return `${base}${suffix}`;
 }
 
 export function normalizeRawProperty(

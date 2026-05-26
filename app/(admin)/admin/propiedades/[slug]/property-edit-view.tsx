@@ -50,6 +50,9 @@ export type PropertyForEdit = {
   address: string | null;
   features: string[];
   features_manual: string[];
+  latitude: number | null;
+  longitude: number | null;
+  bc_reference: string | null;
   source: "manual" | "scrape" | "api";
   source_url: string | null;
   archived_at: string | null;
@@ -230,7 +233,16 @@ export function PropertyEditView({
           )}
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="font-serif text-2xl font-medium leading-tight text-ink md:text-3xl">
+          <div className="flex items-center gap-2">
+            {property.bc_reference && (
+              <span
+                className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-gold-dark"
+              >
+                {property.bc_reference}
+              </span>
+            )}
+          </div>
+          <h1 className="mt-1 font-serif text-2xl font-medium leading-tight text-ink md:text-3xl">
             {property.title}
           </h1>
           <p className="mt-1 text-[12px] text-ink/55">
@@ -422,6 +434,18 @@ export function PropertyEditView({
               placeholder={t("adminProps.detail.addressPlaceholder")}
             />
           </Field>
+
+          {/* Mapa con la ubicación REAL geocodificada (uso interno —
+              dirección exacta visible). El admin lo usa para verificar
+              que el geocoding acertó. Si la posición es incorrecta, basta
+              con corregir la dirección y guardar: en el siguiente acceso
+              al SmartLink se recalcula. */}
+          <AdminPropertyMap
+            lat={property.latitude}
+            lng={property.longitude}
+            address={address || null}
+            zone={zone}
+          />
         </Section>
 
         {/* Info del dueño — NUNCA se sobrescribe por el sync */}
@@ -655,5 +679,68 @@ function Field({
       <span>{label}</span>
       {children}
     </label>
+  );
+}
+
+// Mini-mapa para el admin: muestra la ubicación REAL del piso con el pin
+// exacto (no aproximada como en el SmartLink). Si no hay coordenadas
+// geocodificadas todavía, informa al admin.
+function AdminPropertyMap({
+  lat,
+  lng,
+  address,
+  zone,
+}: {
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
+  zone: string;
+}) {
+  if (lat == null || lng == null) {
+    return (
+      <div className="rounded-lg border border-dashed border-ink/15 bg-ink/[0.03] p-4 text-[12px] text-ink/55">
+        <p className="font-medium text-ink/70">Sin coordenadas geocodificadas</p>
+        <p className="mt-1">
+          Las coordenadas se calculan automáticamente la primera vez que
+          alguien abre el SmartLink público de la propiedad. Si acabas de
+          editar la dirección, las coordenadas anteriores se han borrado y
+          se recalcularán en el próximo acceso al SmartLink.
+        </p>
+      </div>
+    );
+  }
+  // Centro exacto + marker preciso (el admin sí ve la dirección). Bbox
+  // estrecho (~150m radio) para ver la calle concreta.
+  const delta = 0.0025;
+  const bbox = [lng - delta, lat - delta * 0.6, lng + delta, lat + delta * 0.6].join(
+    ",",
+  );
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  const externalLink = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
+  return (
+    <div className="overflow-hidden rounded-lg border border-ink/15 bg-white">
+      <div className="flex items-center justify-between px-3 py-2 text-[11px] text-ink/55">
+        <span>
+          Ubicación geocodificada · {address ? address : zone}
+        </span>
+        <a
+          href={externalLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gold-dark hover:underline"
+        >
+          Abrir en OSM ↗
+        </a>
+      </div>
+      <div className="aspect-[16/9] w-full md:aspect-[16/8]">
+        <iframe
+          title={`Mapa de ${address ?? zone}`}
+          src={src}
+          className="h-full w-full border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      </div>
+    </div>
   );
 }

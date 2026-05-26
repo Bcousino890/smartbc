@@ -115,17 +115,17 @@ export function PropertyFilters({ initial, onApply }: Props) {
           label={t("filters.price")}
           icon={<Euro size={16} strokeWidth={1.5} />}
         >
-          <SelectInput
+          {/* Input numérico libre: BC pidió poder escribir el precio
+              exacto en lugar de elegir entre opciones fijas. */}
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={100}
             value={maxPrice}
-            onChange={setMaxPrice}
+            onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder={t("common.any")}
-            options={[
-              { value: "", label: t("common.any") },
-              { value: "2000", label: priceOption(2000) },
-              { value: "3500", label: priceOption(3500) },
-              { value: "5000", label: priceOption(5000) },
-              { value: "8000", label: priceOption(8000) },
-            ]}
+            className="w-full appearance-none bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </FieldGroup>
 

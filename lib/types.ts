@@ -88,9 +88,14 @@ export type Property = {
   // vista del SmartLink y el detalle público.
   featuresText?: string[];
   // Coordenadas reales (geocodificadas) si las tenemos cacheadas. Si no
-  // están, el SmartLink usa coords aproximadas del barrio.
+  // están, el SmartLink usa coords aproximadas del barrio. Se usan también
+  // para el cálculo de distancia a universidades.
   latitude?: number | null;
   longitude?: number | null;
+  // Referencia interna BC (BC-0001, BC-0002…). Única por propiedad y
+  // distinta del `external_id` del portal de origen. Se muestra al cliente
+  // en SmartLink para que pueda mencionarla al contactar con BC.
+  bcReference?: string | null;
 };
 
 export type Filters = {
@@ -323,6 +328,9 @@ export type AdminPropertyStatus = "available" | "reserved" | "rented" | "sold" |
 export type AdminProperty = {
   id: string;
   reference: string;
+  // Referencia interna BC (BC-0001, BC-0002…). Independiente de `reference`,
+  // que es la ref del portal de origen (ej. 3291 en Level).
+  bcReference: string | null;
   title: string;
   zone: string;
   agencyId: string;

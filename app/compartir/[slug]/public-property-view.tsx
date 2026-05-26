@@ -1,6 +1,15 @@
 "use client";
 
-import { Bath, BedDouble, Mail, MapPin, Phone, Ruler } from "lucide-react";
+import {
+  Bath,
+  BedDouble,
+  FileSignature,
+  Mail,
+  MapPin,
+  Phone,
+  Ruler,
+  Sparkles,
+} from "lucide-react";
 import Image from "next/image";
 import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { formatPrice } from "@/lib/format";
@@ -75,14 +84,24 @@ export function PublicPropertyView({ property }: { property: Property }) {
         <section className="mt-6 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-dark">
-                {[
-                  isRent ? "Alquiler" : "Venta",
-                  property.propertyTypeLabel,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-dark">
+                  {[
+                    isRent ? "Alquiler" : "Venta",
+                    property.propertyTypeLabel,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                {property.bcReference && (
+                  <span
+                    className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold-dark"
+                    aria-label={`Referencia interna ${property.bcReference}`}
+                  >
+                    Ref. {property.bcReference}
+                  </span>
+                )}
+              </div>
               <h1 className="mt-2 font-serif text-3xl font-medium leading-tight text-ink md:text-4xl">
                 {property.title}
               </h1>
@@ -154,6 +173,11 @@ export function PublicPropertyView({ property }: { property: Property }) {
           lng={property.longitude ?? null}
         />
 
+        {/* Requisitos y servicios BC: informa al cliente de las
+            condiciones generales (fianza/garantías) y del valor añadido
+            de BC (Personal Shopper). Sin cifras concretas — las
+            condiciones se acuerdan al cerrar la operación. */}
+        <RequirementsAndServices isRent={isRent} />
 
         {/* Contacto BC */}
         <section
@@ -335,8 +359,11 @@ function ZoneMap({
   // hardcoded), usamos el zoom de barrio.
   const hasPreciseCoords = lat != null && lng != null;
   const fallback = ZONE_COORDS[zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 };
+  // Si tenemos coordenadas reales, usamos un zoom intermedio (15) para que
+  // el círculo cubra una zona razonable y NO se vea la calle exacta. La
+  // dirección exacta se reserva para cuando se concrete la visita.
   const coords = hasPreciseCoords
-    ? { lat, lng, zoom: 16 }
+    ? { lat, lng, zoom: 15 }
     : fallback;
   const delta = 0.012 / (coords.zoom > 14 ? coords.zoom > 15 ? 4 : 1.8 : 1);
   const bbox = [
@@ -345,7 +372,11 @@ function ZoneMap({
     coords.lng + delta,
     coords.lat + delta * 0.6,
   ].join(",");
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lng}`;
+  // Iframe SIN `marker=` a propósito: cubrimos la ubicación con un círculo
+  // CSS overlay para indicar zona aproximada en lugar del pin rojo, que
+  // resultaba demasiado preciso para un enlace que se comparte por
+  // WhatsApp con clientes que aún no han firmado nada.
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
   const externalLink = `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=${coords.zoom}/${coords.lat}/${coords.lng}`;
   return (
     <section className="mt-5 overflow-hidden rounded-2xl border border-gold/20 bg-white/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm">
@@ -355,18 +386,26 @@ function ZoneMap({
         </h2>
         <p className="mt-1 text-[12px] text-ink/55">
           {hasPreciseCoords
-            ? "Ubicación aproximada de la propiedad. Te facilitamos la dirección exacta al coordinar la visita."
-            : "Ubicación aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
+            ? "Zona aproximada de la propiedad. Te facilitamos la dirección exacta al coordinar la visita."
+            : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
         </p>
       </div>
-      <div className="mt-4 aspect-[16/9] w-full">
+      <div className="relative mt-4 aspect-[4/3] w-full md:aspect-[16/10]">
         <iframe
           title={`Mapa de ${zone}`}
           src={src}
-          className="h-full w-full border-0"
+          className="pointer-events-none h-full w-full border-0"
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
         />
+        {/* Overlay circular SIEMPRE sobre la ubicación real. Como el
+            iframe está fijo (pointer-events-none), el cliente no puede
+            arrastrarlo ni desalinear el círculo. Para explorar el área
+            tiene el link "Ver mapa en pantalla completa" abajo, que
+            abre OSM en una pestaña nueva. */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="h-32 w-32 rounded-full border-2 border-gold/80 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.18)] md:h-40 md:w-40" />
+        </div>
       </div>
       <div className="px-6 py-3 md:px-8">
         <a
@@ -377,6 +416,135 @@ function ZoneMap({
         >
           Ver mapa en pantalla completa ↗
         </a>
+      </div>
+    </section>
+  );
+}
+
+// Bloque de requisitos generales (fianza/garantías) + servicios BC. Las
+// cifras concretas se acuerdan al cerrar la operación, así que aquí solo
+// se informa de la existencia de estos puntos. La parte de Personal
+// Shopper es el valor diferencial de BC frente a anunciar el piso a pelo.
+function RequirementsAndServices({ isRent }: { isRent: boolean }) {
+  return (
+    <section className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-7">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-gold-dark">
+            <FileSignature size={17} strokeWidth={1.75} />
+          </span>
+          <h2 className="font-serif text-xl font-medium text-ink md:text-2xl">
+            Requisitos
+          </h2>
+        </div>
+        <ul className="mt-4 space-y-3 text-sm text-ink/75">
+          {isRent ? (
+            <>
+              <li className="flex gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>
+                  <strong className="font-medium text-ink">
+                    Fianza legal
+                  </strong>{" "}
+                  según ley (LAU). Se entrega al firmar el contrato.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>
+                  <strong className="font-medium text-ink">
+                    Garantías adicionales
+                  </strong>{" "}
+                  según perfil del inquilino (aval, seguro de impago o
+                  meses adicionales). Lo acordamos contigo en la visita.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>
+                  <strong className="font-medium text-ink">
+                    Documentación
+                  </strong>
+                  : DNI/NIE, nóminas o justificantes de ingresos y
+                  declaración de renta del último año.
+                </span>
+              </li>
+            </>
+          ) : (
+            <>
+              <li className="flex gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>
+                  <strong className="font-medium text-ink">
+                    Reserva
+                  </strong>{" "}
+                  al aceptar oferta. El importe se descuenta del precio
+                  final.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>
+                  <strong className="font-medium text-ink">
+                    Arras
+                  </strong>{" "}
+                  al firmar contrato privado. Habitualmente un 10% del
+                  precio.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span>
+                  <strong className="font-medium text-ink">
+                    Documentación
+                  </strong>
+                  : DNI/NIE, justificante de fondos y, si aplica, oferta
+                  vinculante del banco.
+                </span>
+              </li>
+            </>
+          )}
+        </ul>
+        <p className="mt-4 text-[11px] text-ink/55">
+          Importes concretos a coordinar con tu agente BC al planificar la
+          visita.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-gold/35 bg-ink p-6 text-cream-50 shadow-[0_25px_50px_-25px_rgba(40,28,10,0.55)] md:p-7">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 text-gold">
+            <Sparkles size={17} strokeWidth={1.75} />
+          </span>
+          <h2 className="font-serif text-xl font-medium md:text-2xl">
+            Personal Shopper Inmobiliario
+          </h2>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-cream-50/80">
+          En Benjamín Cousiño Propiedades no solo enseñamos pisos: te
+          acompañamos en todo el proceso como tu Personal Shopper
+          inmobiliario.
+        </p>
+        <ul className="mt-4 space-y-2.5 text-sm text-cream-50/85">
+          <li className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+            <span>Búsqueda a medida y filtrado de propiedades reales.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+            <span>Visitas coordinadas en una sola jornada si lo necesitas.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+            <span>Negociación de precio y condiciones en tu nombre.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+            <span>
+              Asesoramiento fiscal y contractual hasta la firma.
+            </span>
+          </li>
+        </ul>
       </div>
     </section>
   );
