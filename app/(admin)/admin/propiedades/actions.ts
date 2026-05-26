@@ -275,6 +275,94 @@ export async function deletePropertyPhoto(
   return { ok: true };
 }
 
+export type UpdatePropertyInput = {
+  slug: string;
+  // Campos sindicados: si la propiedad viene de una agencia (source='scrape')
+  // estos se sobrescriben en el siguiente sync. Para manuales son definitivos.
+  // `null` (donde aplica) significa "limpiar el campo".
+  title?: string;
+  description?: string | null;
+  price?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  squareMeters?: number | null;
+  zone?: string;
+  address?: string | null;
+  status?: "available" | "reserved" | "sold" | "archived";
+  features?: string[];
+  // Campos internos del admin: el motor de sync NO los toca nunca.
+  ownerName?: string | null;
+  ownerPhone?: string | null;
+  ownerEmail?: string | null;
+  internalNotes?: string | null;
+};
+
+export type UpdatePropertyResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function updateProperty(
+  input: UpdatePropertyInput,
+): Promise<UpdatePropertyResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!input.slug) return { ok: false, error: "slug_required" };
+
+  // Solo incluimos los campos que el admin envía (undefined = no tocar).
+  // Permitimos null explícito para limpiar un campo opcional.
+  const payload: Record<string, unknown> = {};
+  if (input.title !== undefined) payload.title = input.title.trim();
+  if (input.description !== undefined)
+    payload.description = input.description?.trim() || null;
+  if (input.price !== undefined) payload.price = input.price;
+  if (input.bedrooms !== undefined) payload.bedrooms = input.bedrooms;
+  if (input.bathrooms !== undefined) payload.bathrooms = input.bathrooms;
+  if (input.squareMeters !== undefined)
+    payload.square_meters = input.squareMeters;
+  if (input.zone !== undefined) payload.zone = input.zone.trim();
+  if (input.address !== undefined)
+    payload.address = input.address?.trim() || null;
+  if (input.status !== undefined) {
+    payload.status = input.status;
+    // Si pasa a archived, también ponemos archived_at; si se reactiva, lo limpiamos.
+    if (input.status === "archived") {
+      payload.archived_at = new Date().toISOString();
+    } else {
+      payload.archived_at = null;
+    }
+  }
+  if (input.features !== undefined) payload.features = input.features;
+  if (input.ownerName !== undefined)
+    payload.owner_name = input.ownerName?.trim() || null;
+  if (input.ownerPhone !== undefined)
+    payload.owner_phone = input.ownerPhone?.trim() || null;
+  if (input.ownerEmail !== undefined)
+    payload.owner_email = input.ownerEmail?.trim() || null;
+  if (input.internalNotes !== undefined)
+    payload.internal_notes = input.internalNotes?.trim() || null;
+
+  if (Object.keys(payload).length === 0) {
+    return { ok: false, error: "nothing_to_update" };
+  }
+
+  const propsTbl = supabase.from("properties") as unknown as {
+    update: (payload: Record<string, unknown>) => {
+      eq: (column: string, value: string) => Promise<{
+        error: { message: string } | null;
+      }>;
+    };
+  };
+
+  const res = await propsTbl.update(payload).eq("slug", input.slug);
+  if (res.error) return { ok: false, error: res.error.message };
+
+  revalidatePath("/admin/propiedades");
+  revalidatePath(`/admin/propiedades/${input.slug}`);
+  return { ok: true };
+}
+
 export async function archiveProperty(
   input: ArchivePropertyInput,
 ): Promise<ArchivePropertyResult> {

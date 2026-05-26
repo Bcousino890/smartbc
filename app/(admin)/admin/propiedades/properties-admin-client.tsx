@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { archiveProperty } from "@/app/(admin)/admin/propiedades/actions";
@@ -306,6 +307,13 @@ function PropertyRow({ property }: { property: AdminProperty }) {
       </td>
       <td className="rounded-r-xl px-3 py-3 text-right">
         <div className="inline-flex items-center gap-2">
+          <Link
+            href={`/admin/propiedades/${property.id}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+          >
+            <Pencil size={12} strokeWidth={1.75} className="text-gold" />
+            <span>{t("adminProps.viewEdit")}</span>
+          </Link>
           <button
             type="button"
             onClick={() => setPhotosOpen(true)}

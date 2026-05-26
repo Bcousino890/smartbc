@@ -135,6 +135,10 @@ export type Database = {
           features: string[];
           cover_photo_url: string | null;
           source_url: string | null;
+          owner_name: string | null;
+          owner_phone: string | null;
+          owner_email: string | null;
+          internal_notes: string | null;
           last_synced_at: string | null;
           archived_at: string | null;
           created_at: string;
@@ -161,6 +165,10 @@ export type Database = {
           features?: string[];
           cover_photo_url?: string | null;
           source_url?: string | null;
+          owner_name?: string | null;
+          owner_phone?: string | null;
+          owner_email?: string | null;
+          internal_notes?: string | null;
           last_synced_at?: string | null;
           archived_at?: string | null;
           created_at?: string;
