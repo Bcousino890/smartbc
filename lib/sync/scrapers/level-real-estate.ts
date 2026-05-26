@@ -93,13 +93,21 @@ async function loadSitemapRefs(): Promise<
   const xml = await fetchText(SITEMAP_URL);
   if (!xml) return [];
 
+  // Dedupe por ref: el sitemap de Level puede listar la misma propiedad en
+  // dos URLs distintas (visto en mayo 2026 con ref 5379). Sin dedupe el
+  // diff engine procesa la propiedad dos veces y el segundo INSERT falla
+  // con "duplicate key violates properties_slug_key", dejando el sync en
+  // partial.
+  const seen = new Set<string>();
   const urls: Array<{ ref: string; url: string }> = [];
   const re = /<loc>([^<]+)<\/loc>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null) {
     const url = m[1].trim();
     const ref = refFromUrl(url);
-    if (ref) urls.push({ ref, url });
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    urls.push({ ref, url });
   }
   return urls;
 }
