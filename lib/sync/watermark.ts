@@ -6,32 +6,6 @@ const BUCKET = "properties-photos";
 const MAX_WIDTH = 1920;
 const WEBP_QUALITY = 82;
 
-function watermarkSvg(width: number, height: number): Buffer {
-  // Marca diagonal sutil + bloque visible abajo derecha.
-  const fontSize = Math.max(18, Math.round(width / 38));
-  const padding = Math.round(width / 50);
-  const blockHeight = Math.round(fontSize * 2.6);
-  return Buffer.from(
-    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="rgba(0,0,0,0)" />
-          <stop offset="1" stop-color="rgba(0,0,0,0.55)" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="${height - blockHeight}" width="${width}" height="${blockHeight}" fill="url(#g)" />
-      <text x="${width - padding}" y="${height - padding - Math.round(fontSize * 0.4)}"
-            font-family="Georgia, 'Times New Roman', serif"
-            font-size="${fontSize}" fill="#d4af7f" text-anchor="end"
-            font-weight="600" letter-spacing="2">BENJAMÍN COUSIÑO</text>
-      <text x="${width - padding}" y="${height - padding + Math.round(fontSize * 0.45)}"
-            font-family="Helvetica, Arial, sans-serif"
-            font-size="${Math.round(fontSize * 0.45)}" fill="#f7f1e6" text-anchor="end"
-            letter-spacing="4" opacity="0.85">PROPIEDADES · MADRID</text>
-    </svg>`,
-  );
-}
-
 export type WatermarkedPhoto = {
   url: string;
   storagePath: string;
@@ -63,22 +37,11 @@ export async function downloadAndWatermark(params: {
     const meta = await image.metadata();
     const targetWidth = Math.min(meta.width ?? MAX_WIDTH, MAX_WIDTH);
 
-    const resized = image.resize({
-      width: targetWidth,
-      withoutEnlargement: true,
-    });
-    const resizedMeta = await resized.clone().metadata();
-    const finalWidth = resizedMeta.width ?? targetWidth;
-    const finalHeight = resizedMeta.height ?? Math.round(finalWidth * 0.66);
-
-    const output = await resized
-      .composite([
-        {
-          input: watermarkSvg(finalWidth, finalHeight),
-          top: 0,
-          left: 0,
-        },
-      ])
+    // Sin marca de agua propia: las imágenes vienen ya limpias del CDN de
+    // Mobilia (sufijo `-original.jpg`) y queremos mostrarlas tal cual. Sharp
+    // solo redimensiona a 1920px máx y convierte a webp para optimizar peso.
+    const output = await image
+      .resize({ width: targetWidth, withoutEnlargement: true })
       .webp({ quality: WEBP_QUALITY })
       .toBuffer();
 
