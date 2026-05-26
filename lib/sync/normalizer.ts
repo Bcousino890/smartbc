@@ -42,6 +42,7 @@ export function normalizeRawProperty(
     description: raw.description?.trim() || null,
     operation: raw.operation,
     stay: raw.stay ?? null,
+    property_type: raw.propertyType?.trim() || null,
     price: Math.max(0, Math.round(raw.price)),
     bedrooms: raw.bedrooms ?? 0,
     bathrooms: raw.bathrooms ?? 0,

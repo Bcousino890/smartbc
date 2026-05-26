@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
+import { getSharesForProperty } from "@/lib/db/queries/shares";
 import { PropertyEditView } from "./property-edit-view";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function PropertyDetailPage({
         zone: string;
         address: string | null;
         features: string[] | null;
+        features_manual: string[] | null;
         source: "manual" | "scrape" | "api";
         source_url: string | null;
         archived_at: string | null;
@@ -60,8 +62,12 @@ export default async function PropertyDetailPage({
     .slice()
     .sort((a, b) => a.position - b.position);
 
+  // SmartLinks de esta propiedad (con stats de aperturas).
+  const shares = await getSharesForProperty(property.id);
+
   return (
     <PropertyEditView
+      shares={shares}
       property={{
         id: property.id,
         slug: property.slug,
@@ -77,6 +83,7 @@ export default async function PropertyDetailPage({
         zone: property.zone,
         address: property.address,
         features: property.features ?? [],
+        features_manual: property.features_manual ?? [],
         source: property.source,
         source_url: property.source_url,
         archived_at: property.archived_at,

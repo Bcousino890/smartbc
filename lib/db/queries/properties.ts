@@ -1,4 +1,5 @@
 import "server-only";
+import { createAdminClient } from "../admin";
 import { createClient } from "../server";
 import type { PropertyFilters, PropertyRow } from "../row-types";
 
@@ -42,6 +43,23 @@ export async function getPropertyBySlug(slug: string) {
     .is("archived_at", null)
     .maybeSingle();
 
+  if (error) throw error;
+  return data;
+}
+
+// Variante pública para los SmartLinks (/compartir/[slug]). Bypasa la RLS
+// con el service role porque el visitante no está autenticado. Solo
+// devuelve propiedades NO archivadas para no exponer borradores ni
+// retiradas. La privacidad se basa en lo difícil de adivinar del slug.
+export async function getPropertyBySlugPublic(slug: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*, property_photos(*), agencies(name, slug, logo_url)")
+    .eq("slug", slug)
+    .is("archived_at", null)
+    .neq("status", "archived")
+    .maybeSingle();
   if (error) throw error;
   return data;
 }

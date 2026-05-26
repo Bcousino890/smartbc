@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/db/middleware";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// SmartLinks públicos: `/compartir/{slug}` (link estable por propiedad)
+// y `/c/{token}` (link único por envío comercial, con tracking). `/og/*`
+// son las imágenes para preview en redes sociales/WhatsApp. Todos
+// accesibles sin login.
+const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes"];
 const ADMIN_PATHS = ["/admin"];
 

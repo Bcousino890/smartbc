@@ -3,10 +3,15 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  Check,
+  ExternalLink,
+  FileDown,
   Image as ImageIcon,
   Info,
+  Link2,
   Loader2,
   Save,
+  Send,
   User,
 } from "lucide-react";
 import Image from "next/image";
@@ -15,6 +20,10 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { updateProperty } from "@/app/(admin)/admin/propiedades/actions";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
+import {
+  type SmartLinkRow,
+  SmartLinksPanel,
+} from "@/components/admin/smart-links-panel";
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +49,7 @@ export type PropertyForEdit = {
   zone: string;
   address: string | null;
   features: string[];
+  features_manual: string[];
   source: "manual" | "scrape" | "api";
   source_url: string | null;
   archived_at: string | null;
@@ -57,7 +67,13 @@ type SaveState =
   | { kind: "saved"; at: number }
   | { kind: "error"; msg: string };
 
-export function PropertyEditView({ property }: { property: PropertyForEdit }) {
+export function PropertyEditView({
+  property,
+  shares,
+}: {
+  property: PropertyForEdit;
+  shares: SmartLinkRow[];
+}) {
   const t = useT();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -82,8 +98,52 @@ export function PropertyEditView({ property }: { property: PropertyForEdit }) {
   const [internalNotes, setInternalNotes] = useState(
     property.internal_notes ?? "",
   );
+  const [featuresManual, setFeaturesManual] = useState<string[]>(
+    property.features_manual ?? [],
+  );
+  const [newFeature, setNewFeature] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const addManualFeature = () => {
+    const f = newFeature.trim();
+    if (!f) return;
+    // Evita duplicados con las auto-detectadas y entre las manuales.
+    const already = new Set(
+      [...property.features, ...featuresManual].map((x) =>
+        x.toLowerCase(),
+      ),
+    );
+    if (already.has(f.toLowerCase())) {
+      setNewFeature("");
+      return;
+    }
+    setFeaturesManual((prev) => [...prev, f]);
+    setNewFeature("");
+  };
+
+  const removeManualFeature = (f: string) => {
+    setFeaturesManual((prev) => prev.filter((x) => x !== f));
+  };
 
   const isScraped = property.source === "scrape";
+
+  // SmartLink: URL pública del compartir. En cliente usamos window.origin
+  // para que funcione tanto en local (localhost) como en producción.
+  const smartLink =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/compartir/${property.slug}`
+      : `/compartir/${property.slug}`;
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(smartLink);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback rudimentario si no hay permiso de portapapeles.
+      window.prompt(t("adminProps.detail.copyLinkFallback"), smartLink);
+    }
+  };
   const cover =
     property.cover_photo_url ??
     property.photos.find((p) => p.is_cover)?.url ??
@@ -109,6 +169,7 @@ export function PropertyEditView({ property }: { property: PropertyForEdit }) {
         ownerPhone: ownerPhone || null,
         ownerEmail: ownerEmail || null,
         internalNotes: internalNotes || null,
+        featuresManual,
       });
       if (res.ok) {
         setSaveState({ kind: "saved", at: Date.now() });
@@ -191,6 +252,49 @@ export function PropertyEditView({ property }: { property: PropertyForEdit }) {
           </p>
         </div>
       </header>
+
+      {/* Acciones rápidas: ver como cliente / copiar SmartLink / descargar PDF */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <a
+          href={`/compartir/${property.slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+        >
+          <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
+          <span>{t("adminProps.detail.viewAsClient")}</span>
+        </a>
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[12px] font-medium transition",
+            copied
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-gold/30 bg-cream-50 text-ink hover:border-gold/55 hover:bg-white",
+          )}
+        >
+          {copied ? (
+            <Check size={13} strokeWidth={2} />
+          ) : (
+            <Link2 size={13} strokeWidth={1.75} className="text-gold-dark" />
+          )}
+          <span>
+            {copied
+              ? t("adminProps.detail.linkCopied")
+              : t("adminProps.detail.copyLink")}
+          </span>
+        </button>
+        <a
+          href={`/api/admin/properties/${property.slug}/pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+        >
+          <FileDown size={13} strokeWidth={1.75} className="text-gold-dark" />
+          <span>{t("adminProps.detail.downloadPdf")}</span>
+        </a>
+      </div>
 
       {/* Aviso para propiedades sindicadas */}
       {isScraped && (
@@ -364,6 +468,87 @@ export function PropertyEditView({ property }: { property: PropertyForEdit }) {
               placeholder={t("adminProps.detail.internalNotesPh")}
             />
           </Field>
+        </Section>
+
+        {/* Características: auto-detectadas (de la descripción) + manuales */}
+        <Section
+          icon={<Info size={15} strokeWidth={1.75} />}
+          title="Características"
+          subtitle="Las auto-detectadas vienen de la descripción del piso (se actualizan en cada sync). Añade manuales si conoces alguna que la descripción no menciona."
+        >
+          {property.features.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+                Auto-detectadas
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {property.features.map((f) => (
+                  <span
+                    key={`auto-${f}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 text-[12px] text-ink/70"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+              Manuales
+            </p>
+            {featuresManual.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {featuresManual.map((f) => (
+                  <span
+                    key={`man-${f}`}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-[12px] text-ink"
+                  >
+                    {f}
+                    <button
+                      type="button"
+                      onClick={() => removeManualFeature(f)}
+                      className="text-ink/55 hover:text-rose-700"
+                      aria-label={`Quitar ${f}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newFeature}
+                onChange={(e) => setNewFeature(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addManualFeature();
+                  }
+                }}
+                placeholder="Ej. Vistas al parque, Suelo de tarima, Bodega…"
+                className={cn(inputClass, "flex-1")}
+              />
+              <button
+                type="button"
+                onClick={addManualFeature}
+                disabled={!newFeature.trim()}
+                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+              >
+                Añadir
+              </button>
+            </div>
+          </div>
+        </Section>
+
+        {/* SmartLinks: links únicos con tracking por envío */}
+        <Section
+          icon={<Send size={15} strokeWidth={1.75} />}
+          title={t("adminProps.smartLinks.title")}
+        >
+          <SmartLinksPanel slug={property.slug} initialLinks={shares} />
         </Section>
 
         {/* Fotos */}

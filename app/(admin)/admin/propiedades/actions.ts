@@ -290,6 +290,9 @@ export type UpdatePropertyInput = {
   address?: string | null;
   status?: "available" | "reserved" | "sold" | "archived";
   features?: string[];
+  // Features añadidas a mano por BC. Se preservan en sync (no se sobreescriben).
+  // En la vista pública se unen con `features` deduplicando.
+  featuresManual?: string[];
   // Campos internos del admin: el motor de sync NO los toca nunca.
   ownerName?: string | null;
   ownerPhone?: string | null;
@@ -321,9 +324,22 @@ export async function updateProperty(
   if (input.bathrooms !== undefined) payload.bathrooms = input.bathrooms;
   if (input.squareMeters !== undefined)
     payload.square_meters = input.squareMeters;
-  if (input.zone !== undefined) payload.zone = input.zone.trim();
-  if (input.address !== undefined)
+  if (input.zone !== undefined) {
+    payload.zone = input.zone.trim();
+    // Si cambia la zona, invalidamos las coords cacheadas para que el
+    // próximo SmartLink vuelva a geocodificar con la zona nueva.
+    payload.latitude = null;
+    payload.longitude = null;
+    payload.geocoded_at = null;
+  }
+  if (input.address !== undefined) {
     payload.address = input.address?.trim() || null;
+    // Misma lógica: si cambia la dirección, re-geocodificar al próximo
+    // acceso al SmartLink.
+    payload.latitude = null;
+    payload.longitude = null;
+    payload.geocoded_at = null;
+  }
   if (input.status !== undefined) {
     payload.status = input.status;
     // Si pasa a archived, también ponemos archived_at; si se reactiva, lo limpiamos.
@@ -334,6 +350,17 @@ export async function updateProperty(
     }
   }
   if (input.features !== undefined) payload.features = input.features;
+  if (input.featuresManual !== undefined) {
+    // Normalizamos: trim, descartamos vacíos, deduplicamos.
+    const cleaned = Array.from(
+      new Set(
+        input.featuresManual
+          .map((f) => f.trim())
+          .filter((f): f is string => f.length > 0),
+      ),
+    );
+    payload.features_manual = cleaned;
+  }
   if (input.ownerName !== undefined)
     payload.owner_name = input.ownerName?.trim() || null;
   if (input.ownerPhone !== undefined)
@@ -360,6 +387,95 @@ export async function updateProperty(
 
   revalidatePath("/admin/propiedades");
   revalidatePath(`/admin/propiedades/${input.slug}`);
+  return { ok: true };
+}
+
+// ============================================================
+// SmartLinks (tokens únicos por envío + tracking de aperturas)
+// ============================================================
+
+export type ShareSummary = {
+  id: string;
+  token: string;
+  label: string | null;
+  expires_at: string | null;
+  created_at: string;
+  opens_count: number;
+  last_opened_at: string | null;
+};
+
+function randomToken(len = 28): string {
+  // Token URL-safe (base64url sin padding). 28 chars ≈ 168 bits, suficiente.
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return Buffer.from(arr)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+    .slice(0, len);
+}
+
+export type CreateShareResult =
+  | { ok: true; token: string }
+  | { ok: false; error: string };
+
+export async function createShareLink(
+  slug: string,
+  label: string | null,
+): Promise<CreateShareResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  // Resolver property_id desde el slug.
+  const propRes = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propRes.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const token = randomToken();
+  const sharesTbl = supabase.from("property_shares") as unknown as {
+    insert: (payload: Record<string, unknown>) => Promise<{
+      error: { message: string } | null;
+    }>;
+  };
+  const res = await sharesTbl.insert({
+    property_id: prop.id,
+    token,
+    label: label?.trim() || null,
+    created_by: auth.userId,
+  });
+  if (res.error) return { ok: false, error: res.error.message };
+
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return { ok: true, token };
+}
+
+export type DeleteShareResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteShareLink(
+  shareId: string,
+  slug: string,
+): Promise<DeleteShareResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const sharesTbl = supabase.from("property_shares") as unknown as {
+    delete: () => {
+      eq: (col: string, val: string) => Promise<{
+        error: { message: string } | null;
+      }>;
+    };
+  };
+  const res = await sharesTbl.delete().eq("id", shareId);
+  if (res.error) return { ok: false, error: res.error.message };
+
+  revalidatePath(`/admin/propiedades/${slug}`);
   return { ok: true };
 }
 

@@ -133,12 +133,18 @@ export type Database = {
           address: string | null;
           available_from: string | null;
           features: string[];
+          features_manual: string[];
           cover_photo_url: string | null;
           source_url: string | null;
           owner_name: string | null;
           owner_phone: string | null;
           owner_email: string | null;
           internal_notes: string | null;
+          property_type: string | null;
+          building_features: Json | null;
+          latitude: number | null;
+          longitude: number | null;
+          geocoded_at: string | null;
           last_synced_at: string | null;
           archived_at: string | null;
           created_at: string;
@@ -163,12 +169,18 @@ export type Database = {
           address?: string | null;
           available_from?: string | null;
           features?: string[];
+          features_manual?: string[];
           cover_photo_url?: string | null;
           source_url?: string | null;
           owner_name?: string | null;
           owner_phone?: string | null;
           owner_email?: string | null;
           internal_notes?: string | null;
+          property_type?: string | null;
+          building_features?: Json | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          geocoded_at?: string | null;
           last_synced_at?: string | null;
           archived_at?: string | null;
           created_at?: string;
@@ -418,6 +430,44 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["agency_feeds"]["Insert"]>;
+      };
+      property_shares: {
+        Row: {
+          id: string;
+          property_id: string;
+          token: string;
+          label: string | null;
+          created_by: string | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          token: string;
+          label?: string | null;
+          created_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_shares"]["Insert"]>;
+      };
+      property_share_opens: {
+        Row: {
+          id: string;
+          share_id: string;
+          opened_at: string;
+          ip: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          id?: string;
+          share_id: string;
+          opened_at?: string;
+          ip?: string | null;
+          user_agent?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_share_opens"]["Insert"]>;
       };
       sync_logs: {
         Row: {

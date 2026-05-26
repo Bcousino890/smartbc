@@ -610,6 +610,28 @@ const es: Strings = {
   "adminProps.detail.save": "Guardar cambios",
   "adminProps.detail.saved": "Guardado",
   "adminProps.detail.errorSaving": "Error al guardar: {error}",
+  "adminProps.detail.viewAsClient": "Ver como cliente",
+  "adminProps.detail.copyLink": "Copiar SmartLink",
+  "adminProps.detail.linkCopied": "¡Enlace copiado!",
+  "adminProps.detail.copyLinkFallback": "Copia este enlace:",
+  "adminProps.detail.downloadPdf": "Descargar PDF",
+  "adminProps.smartLinks.title": "SmartLinks (enlaces personalizados)",
+  "adminProps.smartLinks.help":
+    "Genera un enlace único por cliente o canal. Cada apertura se registra y puedes ver cuántas veces se ha abierto.",
+  "adminProps.smartLinks.labelPlaceholder":
+    "Etiqueta (ej. 'María Pérez' o 'Anuncio FB')",
+  "adminProps.smartLinks.create": "Generar enlace",
+  "adminProps.smartLinks.empty":
+    "Aún no has generado ningún SmartLink para esta propiedad.",
+  "adminProps.smartLinks.unlabeled": "Sin etiqueta",
+  "adminProps.smartLinks.opens": "{n} aperturas",
+  "adminProps.smartLinks.copy": "Copiar enlace",
+  "adminProps.smartLinks.copied": "¡Copiado!",
+  "adminProps.smartLinks.open": "Abrir",
+  "adminProps.smartLinks.delete": "Eliminar",
+  "adminProps.smartLinks.confirmDelete":
+    "¿Eliminar este SmartLink? Los clientes que lo tengan dejarán de poder abrirlo.",
+  "adminProps.smartLinks.error": "Error: {error}",
   "adminProps.archive.action": "Archivar",
   "adminProps.archive.confirm":
     "¿Seguro que quieres archivar esta propiedad? Se ocultará del catálogo.",
@@ -1452,6 +1474,28 @@ const en: Strings = {
   "adminProps.detail.save": "Save changes",
   "adminProps.detail.saved": "Saved",
   "adminProps.detail.errorSaving": "Error saving: {error}",
+  "adminProps.detail.viewAsClient": "View as client",
+  "adminProps.detail.copyLink": "Copy SmartLink",
+  "adminProps.detail.linkCopied": "Link copied!",
+  "adminProps.detail.copyLinkFallback": "Copy this link:",
+  "adminProps.detail.downloadPdf": "Download PDF",
+  "adminProps.smartLinks.title": "SmartLinks (personalised links)",
+  "adminProps.smartLinks.help":
+    "Generate a unique link per client or channel. Each open is tracked.",
+  "adminProps.smartLinks.labelPlaceholder":
+    "Label (e.g. 'María Pérez' or 'FB ad')",
+  "adminProps.smartLinks.create": "Generate link",
+  "adminProps.smartLinks.empty":
+    "You haven't generated any SmartLink yet for this property.",
+  "adminProps.smartLinks.unlabeled": "No label",
+  "adminProps.smartLinks.opens": "{n} opens",
+  "adminProps.smartLinks.copy": "Copy link",
+  "adminProps.smartLinks.copied": "Copied!",
+  "adminProps.smartLinks.open": "Open",
+  "adminProps.smartLinks.delete": "Delete",
+  "adminProps.smartLinks.confirmDelete":
+    "Delete this SmartLink? Clients with it won't be able to open it anymore.",
+  "adminProps.smartLinks.error": "Error: {error}",
   "adminProps.archive.action": "Archive",
   "adminProps.archive.confirm":
     "Are you sure you want to archive this property? It will be hidden from the catalog.",
@@ -2295,6 +2339,28 @@ const fr: Strings = {
   "adminProps.detail.save": "Enregistrer",
   "adminProps.detail.saved": "Enregistré",
   "adminProps.detail.errorSaving": "Erreur d'enregistrement : {error}",
+  "adminProps.detail.viewAsClient": "Voir comme client",
+  "adminProps.detail.copyLink": "Copier le SmartLink",
+  "adminProps.detail.linkCopied": "Lien copié !",
+  "adminProps.detail.copyLinkFallback": "Copie ce lien :",
+  "adminProps.detail.downloadPdf": "Télécharger le PDF",
+  "adminProps.smartLinks.title": "SmartLinks (liens personnalisés)",
+  "adminProps.smartLinks.help":
+    "Génère un lien unique par client ou canal. Chaque ouverture est enregistrée.",
+  "adminProps.smartLinks.labelPlaceholder":
+    "Étiquette (p. ex. 'María Pérez' ou 'Annonce FB')",
+  "adminProps.smartLinks.create": "Générer le lien",
+  "adminProps.smartLinks.empty":
+    "Tu n'as encore généré aucun SmartLink pour cette propriété.",
+  "adminProps.smartLinks.unlabeled": "Sans étiquette",
+  "adminProps.smartLinks.opens": "{n} ouvertures",
+  "adminProps.smartLinks.copy": "Copier le lien",
+  "adminProps.smartLinks.copied": "Copié !",
+  "adminProps.smartLinks.open": "Ouvrir",
+  "adminProps.smartLinks.delete": "Supprimer",
+  "adminProps.smartLinks.confirmDelete":
+    "Supprimer ce SmartLink ? Les clients ne pourront plus l'ouvrir.",
+  "adminProps.smartLinks.error": "Erreur : {error}",
   "adminProps.archive.action": "Archiver",
   "adminProps.archive.confirm":
     "Êtes-vous sûr de vouloir archiver cette propriété ? Elle sera masquée du catalogue.",
@@ -3141,6 +3207,28 @@ const de: Strings = {
   "adminProps.detail.save": "Änderungen speichern",
   "adminProps.detail.saved": "Gespeichert",
   "adminProps.detail.errorSaving": "Speicherfehler: {error}",
+  "adminProps.detail.viewAsClient": "Als Kunde ansehen",
+  "adminProps.detail.copyLink": "SmartLink kopieren",
+  "adminProps.detail.linkCopied": "Link kopiert!",
+  "adminProps.detail.copyLinkFallback": "Kopiere diesen Link:",
+  "adminProps.detail.downloadPdf": "PDF herunterladen",
+  "adminProps.smartLinks.title": "SmartLinks (personalisierte Links)",
+  "adminProps.smartLinks.help":
+    "Erstelle einen einzigartigen Link pro Kunde oder Kanal. Jedes Öffnen wird erfasst.",
+  "adminProps.smartLinks.labelPlaceholder":
+    "Bezeichnung (z. B. 'María Pérez' oder 'FB-Anzeige')",
+  "adminProps.smartLinks.create": "Link generieren",
+  "adminProps.smartLinks.empty":
+    "Du hast für diese Immobilie noch keinen SmartLink generiert.",
+  "adminProps.smartLinks.unlabeled": "Ohne Bezeichnung",
+  "adminProps.smartLinks.opens": "{n} Öffnungen",
+  "adminProps.smartLinks.copy": "Link kopieren",
+  "adminProps.smartLinks.copied": "Kopiert!",
+  "adminProps.smartLinks.open": "Öffnen",
+  "adminProps.smartLinks.delete": "Löschen",
+  "adminProps.smartLinks.confirmDelete":
+    "Diesen SmartLink löschen? Kunden mit dem Link können ihn nicht mehr öffnen.",
+  "adminProps.smartLinks.error": "Fehler: {error}",
   "adminProps.archive.action": "Archivieren",
   "adminProps.archive.confirm":
     "Möchtest du diese Immobilie wirklich archivieren? Sie wird aus dem Katalog ausgeblendet.",

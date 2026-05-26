@@ -271,6 +271,13 @@ export function propertyRowToClientProperty(
     description: row.description ?? undefined,
     photos: sortedPhotos.map((p) => p.url),
     longDescription: row.description ?? undefined,
+    propertyTypeLabel: row.property_type ?? null,
+    // Features auto-extraídas del scraper + manuales del admin, deduplicadas.
+    featuresText: Array.from(
+      new Set([...(row.features ?? []), ...(row.features_manual ?? [])]),
+    ),
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
   };
 }
 

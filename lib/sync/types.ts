@@ -16,6 +16,9 @@ export type RawProperty = {
   description?: string;
   operation: PropertyOperation;
   stay?: PropertyStay;
+  // Tipo: "Piso", "Ático", "Chalet", "Dúplex", etc. (texto libre, normalizado
+  // por el scraper).
+  propertyType?: string;
   price: number;
   bedrooms?: number;
   bathrooms?: number;
@@ -35,6 +38,7 @@ export type NormalizedProperty = {
   description: string | null;
   operation: PropertyOperation;
   stay: PropertyStay | null;
+  property_type: string | null;
   price: number;
   bedrooms: number;
   bathrooms: number;

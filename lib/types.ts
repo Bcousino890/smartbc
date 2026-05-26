@@ -80,6 +80,17 @@ export type Property = {
   conditions?: PropertyCondition[];
   specs?: PropertySpecs;
   contact?: PropertyContact;
+  // Tipo legible ("Piso", "Ático", "Chalet"…) extraído del scraper o
+  // editado manualmente. Opcional para no romper mocks/cards existentes.
+  propertyTypeLabel?: string | null;
+  // Features como strings libres (vienen del scraper, sin enum estricto).
+  // `features` arriba es un enum legacy; este campo es el real para la
+  // vista del SmartLink y el detalle público.
+  featuresText?: string[];
+  // Coordenadas reales (geocodificadas) si las tenemos cacheadas. Si no
+  // están, el SmartLink usa coords aproximadas del barrio.
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type Filters = {
