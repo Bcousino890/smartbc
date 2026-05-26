@@ -72,16 +72,20 @@ export async function runDueFeeds(): Promise<{
   const now = new Date().toISOString();
   const dueRes = await supabase
     .from("agency_feeds")
-    .select("id")
+    .select("id, last_status")
     .eq("active", true)
-    // Excluir feeds que ya están corriendo (otro cron/manual los está
-    // procesando). Sin este filtro dos crones solapados o un manual + cron
-    // se pisaban entre sí causando errores de duplicate-key.
-    .neq("last_status", "running")
     .or(`next_run_at.is.null,next_run_at.lte.${now}`);
   if (dueRes.error) throw new Error(dueRes.error.message);
 
-  const ids = ((dueRes.data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  // Filtramos en JS los feeds en running (Postgres trata NULL != 'running'
+  // como NULL, no true, así que un .neq() en PostgREST excluiría también
+  // los feeds reseteados con last_status=NULL). Sin este filtro, dos crones
+  // solapados o manual + cron se pisaban entre sí.
+  const ids = (
+    (dueRes.data ?? []) as Array<{ id: string; last_status: string | null }>
+  )
+    .filter((r) => r.last_status !== "running")
+    .map((r) => r.id);
   const results: Array<{
     feedId: string;
     status: SyncResult["status"] | "error";
