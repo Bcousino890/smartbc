@@ -178,6 +178,8 @@ export function extractFotocasa(
     zone,
     address,
     features,
+    latitude: null,
+    longitude: null,
     photos,
     rawAttributes: {},
     warnings,

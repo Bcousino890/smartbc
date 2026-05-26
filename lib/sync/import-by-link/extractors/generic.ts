@@ -112,6 +112,8 @@ export function extractGeneric(
     zone,
     address,
     features: [],
+    latitude: null,
+    longitude: null,
     photos: Array.from(photoSet).map((url) => ({ url })),
     rawAttributes: {},
     warnings,

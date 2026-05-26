@@ -102,6 +102,8 @@ export async function insertImportedProperty(
       features: overrides.features,
       cover_photo_url: coverUrl,
       source_url: preview.sourceUrl,
+      latitude: preview.latitude,
+      longitude: preview.longitude,
       last_synced_at: new Date().toISOString(),
     })
     .select("id, slug")

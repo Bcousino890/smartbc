@@ -80,6 +80,10 @@ export type Property = {
   conditions?: PropertyCondition[];
   specs?: PropertySpecs;
   contact?: PropertyContact;
+  // Coordenadas para cálculo de distancia a universidades. Nullables porque
+  // las propiedades antiguas no las tienen.
+  latitude?: number;
+  longitude?: number;
 };
 
 export type Filters = {

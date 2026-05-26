@@ -271,6 +271,14 @@ export function propertyRowToClientProperty(
     description: row.description ?? undefined,
     photos: sortedPhotos.map((p) => p.url),
     longDescription: row.description ?? undefined,
+    latitude:
+      typeof (row as Record<string, unknown>).latitude === "number"
+        ? ((row as Record<string, unknown>).latitude as number)
+        : undefined,
+    longitude:
+      typeof (row as Record<string, unknown>).longitude === "number"
+        ? ((row as Record<string, unknown>).longitude as number)
+        : undefined,
   };
 }
 

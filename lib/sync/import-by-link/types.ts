@@ -35,6 +35,10 @@ export type ImportPreview = {
   zone: string | null;
   address: string | null;
   features: string[];
+  // Coordenadas geográficas si el portal las expone (Idealista las trae en el
+  // JSON embebido). Habilitan el feature de "distancia al campus".
+  latitude: number | null;
+  longitude: number | null;
   photos: ImportPhoto[];
   // Campos sin parsear pero potencialmente útiles para el admin. p.ej. "Año
   // construcción", "Planta", "Estado conservación".

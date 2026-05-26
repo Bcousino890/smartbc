@@ -107,6 +107,8 @@ export function extractInmoweb(
     zone,
     address,
     features,
+    latitude: null,
+    longitude: null,
     photos,
     rawAttributes: {},
     warnings,
