@@ -45,3 +45,20 @@ export async function getPropertyBySlug(slug: string) {
   if (error) throw error;
   return data;
 }
+
+// Variante para el admin: trae la propiedad por slug incluso si está
+// archivada (necesario para la página de edición — el admin tiene que
+// poder ver y reactivar propiedades archivadas).
+export async function getPropertyBySlugForAdmin(slug: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .select(
+      "*, property_photos(url, alt, position, is_cover), agencies(id, name, slug, logo_url)",
+    )
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
