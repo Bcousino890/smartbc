@@ -3,11 +3,13 @@
 import {
   Archive,
   Image as ImageIcon,
+  Link2,
   Loader2,
   Plus,
   Search,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { archiveProperty } from "@/app/(admin)/admin/propiedades/actions";
@@ -65,14 +67,23 @@ export function PropertiesAdminClient({
             className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
-        >
-          <Plus size={14} strokeWidth={1.75} className="text-gold" />
-          <span>{t("adminProps.add")}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/propiedades/importar"
+            className="flex items-center gap-2 rounded-xl border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink/80 transition hover:border-gold/55 hover:text-ink"
+          >
+            <Link2 size={14} strokeWidth={1.75} className="text-gold" />
+            <span>Importar por link</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
+          >
+            <Plus size={14} strokeWidth={1.75} className="text-gold" />
+            <span>{t("adminProps.add")}</span>
+          </button>
+        </div>
       </div>
 
       <NewPropertyModal
