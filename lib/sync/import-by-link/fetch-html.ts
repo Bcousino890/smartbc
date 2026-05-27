@@ -1,5 +1,6 @@
 import "server-only";
 import { ProxyAgent } from "undici";
+import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
 import type { ImportExtractError } from "./types";
 
 // Fetcher de HTML para extractores. Manda UA + headers de navegador real
@@ -130,22 +131,57 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
         console.log(`[fetch-html] Fallback a proxy exitoso para ${url}`);
         return proxyResult;
       }
-      // Si el proxy también falla, devolver error con contexto
-      return {
-        ok: false,
-        error: {
-          kind: "blocked",
-          reason: `portal bloqueó fetch directo (${directResult.error.reason}) y reintento con proxy también falló (${proxyResult.error.reason})`,
-        },
-      };
+
+      // Si el proxy también falla, intentar Playwright como último recurso
+      console.log(`[fetch-html] Proxy falló, intentando Playwright para ${url}`);
+      try {
+        const playwrightResult = await fetchHtmlWithPlaywright(url);
+        if (playwrightResult.ok) {
+          console.log(`[fetch-html] Fallback a Playwright exitoso para ${url}`);
+          return playwrightResult;
+        }
+        // Si Playwright también falla, devolver error con contexto completo
+        return {
+          ok: false,
+          error: {
+            kind: "blocked",
+            reason: `portal bloqueó: fetch directo (${directResult.error.reason}), proxy (${proxyResult.error.reason}), y Playwright (${playwrightResult.error.reason})`,
+          },
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          error: {
+            kind: "blocked",
+            reason: `portal bloqueó: fetch directo (${directResult.error.reason}), proxy (${proxyResult.error.reason}), y Playwright falló: ${err instanceof Error ? err.message : "error desconocido"}`,
+          },
+        };
+      }
     } catch (err) {
-      return {
-        ok: false,
-        error: {
-          kind: "blocked",
-          reason: `portal bloqueó: ${directResult.error.reason}. Reintento con proxy falló: ${err instanceof Error ? err.message : "error desconocido"}`,
-        },
-      };
+      // Error al crear el proxy agent, intentar Playwright
+      console.log(`[fetch-html] Error con proxy, intentando Playwright para ${url}`);
+      try {
+        const playwrightResult = await fetchHtmlWithPlaywright(url);
+        if (playwrightResult.ok) {
+          console.log(`[fetch-html] Fallback a Playwright exitoso (sin proxy) para ${url}`);
+          return playwrightResult;
+        }
+        return {
+          ok: false,
+          error: {
+            kind: "blocked",
+            reason: `portal bloqueó: ${directResult.error.reason}. Error con proxy: ${err instanceof Error ? err.message : "error desconocido"}. Playwright: ${playwrightResult.error.reason}`,
+          },
+        };
+      } catch (playwrightErr) {
+        return {
+          ok: false,
+          error: {
+            kind: "blocked",
+            reason: `portal bloqueó: ${directResult.error.reason}. Error con proxy: ${err instanceof Error ? err.message : "error desconocido"}. Playwright: ${playwrightErr instanceof Error ? playwrightErr.message : "error desconocido"}`,
+          },
+        };
+      }
     }
   }
 
