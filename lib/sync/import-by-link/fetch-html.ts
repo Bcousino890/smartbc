@@ -28,6 +28,19 @@ const DEFAULT_HEADERS: HeadersInit = {
 const TIMEOUT_MS = 20_000;
 const PROXY_URL = process.env.SMARTPROXY_URL;
 
+// Detecta redirects "anti-bot": el portal devuelve 200 OK pero la URL
+// final NO conserva el ID numérico de la URL original. Pasa con Fotocasa
+// (redirige a `/viviendas/.../todas-las-zonas/l`) y portales similares
+// cuando sospechan que somos un bot pero no quieren mandar un 403 limpio.
+// Tratamos esto como "blocked" para que el flow caiga al siguiente método
+// (proxy → Playwright).
+function isAntibotRedirect(originalUrl: string, finalUrl: string): boolean {
+  // IDs numéricos de 6+ dígitos. Cubre Idealista, Fotocasa, Inmoweb.
+  const inputIds = originalUrl.match(/\/(\d{6,})\b/g);
+  if (!inputIds || inputIds.length === 0) return false;
+  return !inputIds.some((id) => finalUrl.includes(id));
+}
+
 export type FetchHtmlResult =
   | { ok: true; html: string; finalUrl: string }
   | { ok: false; error: ImportExtractError };
@@ -87,6 +100,18 @@ async function tryFetch(
         error: {
           kind: "parse_failed",
           reason: "HTML vacío o demasiado corto",
+        },
+      };
+    }
+    // Si el portal nos redirigió silenciosamente a una página de listado
+    // (status 200 pero URL distinta sin el ID del anuncio), tratamos
+    // como bloqueo para que el caller intente proxy/Playwright.
+    if (isAntibotRedirect(url, finalUrl)) {
+      return {
+        ok: false,
+        error: {
+          kind: "blocked",
+          reason: `redirect anti-bot: → ${finalUrl}`,
         },
       };
     }

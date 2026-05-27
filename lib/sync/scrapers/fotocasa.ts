@@ -24,29 +24,52 @@ const FOTOCASA_SIZE_TOKENS: { from: RegExp; to: string }[] = [
   { from: /\/\d{2,4}x\d{2,4}\//, to: "/1280x720/" },
 ];
 
+// Patrón seguro de path para fotos REALES del anuncio en Fotocasa. En
+// Fotocasa, `/images/ads/<uuid>` y `/images/client/<uuid>` son las fotos
+// de la propiedad publicada. Tratarlas como fotos seguras nos permite
+// saltar el filtro genérico `isLikelyNonPhoto`, que descarta cualquier URL
+// que contenga "ads" (pensado para filtrar banners de advertising, pero
+// que aquí confunde "ads" = anuncios con "ads" = ads publicitarios).
+const FOTOCASA_PHOTO_PATH_RE = /\/images\/(?:ads|client)\/[^?#]+/i;
+
 export function isFotocasaImageUrl(url: string): boolean {
   if (!url) return false;
   if (!FOTOCASA_HOST_RE.test(url)) return false;
+  // Path de fotos del anuncio: aceptar directamente sin pasar por el
+  // filtro genérico (que rechaza la palabra "ads"). Las URLs aquí no
+  // tienen por qué tener extensión .jpg/.png — Fotocasa negocia el
+  // content-type con el header Accept.
+  if (FOTOCASA_PHOTO_PATH_RE.test(url)) return true;
+  // Cualquier otra cosa en host Fotocasa pasa por el filtro genérico
+  // (logos, iconos, mapas, banners) y luego por la comprobación de
+  // extensión clásica.
   if (isLikelyNonPhoto(url)) return false;
-  // Tiene que parecer una foto real, no un asset estático ni mapa.
-  if (/\/static\//i.test(url) && !/\/static\//i.test(url.split("?")[0])) {
-    // unreachable; mantener guard simple
-  }
   if (/\/assets\//i.test(url)) return false;
   if (/\/maps?\//i.test(url)) return false;
   return /\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url);
 }
 
 /**
- * Intenta forzar la versión grande conocida cambiando el segmento
- * `/<ancho>x<alto>/` por `/1280x720/`. Si la URL no encaja, se devuelve igual.
+ * Normaliza una URL de Fotocasa a su versión de mayor calidad:
+ * - Las URLs nuevas usan `?rule=web_NxM_ar` o `?rule=original`. Forzamos
+ *   `rule=original` para todos los UUIDs de `/images/ads/` y
+ *   `/images/client/`, así dos size-variants del mismo UUID se deduplican
+ *   y nos quedamos con la grande.
+ * - Las URLs antiguas exponen `/<ancho>x<alto>/` en el path. Sustituimos
+ *   por `/1280x720/` cuando aparece.
  */
 export function toFotocasaHighQuality(url: string): string {
   let out = url;
+  // (1) Path segment `/NNNxMMM/` → `/1280x720/`.
   for (const rule of FOTOCASA_SIZE_TOKENS) {
     if (rule.from.test(out) && !out.includes(rule.to)) {
       out = out.replace(rule.from, rule.to);
     }
+  }
+  // (2) Query `rule=...` → `rule=original` para uniformar todas las
+  //     variantes (`web_412x257`, `web_580x387_ar`, etc.) al original.
+  if (/[?&]rule=/i.test(out)) {
+    out = out.replace(/([?&])rule=[^&]+/i, "$1rule=original");
   }
   return out;
 }
@@ -61,7 +84,10 @@ export function extractFotocasaPhotos(
     const resolved = resolveUrl(raw ?? undefined, baseUrl);
     if (!resolved) return;
     if (!isFotocasaImageUrl(resolved)) return;
-    collector.add(toFotocasaHighQuality(resolved), alt);
+    // `addTrusted`: ya hemos validado con `isFotocasaImageUrl`, que sabe
+    // distinguir `/images/ads/` (fotos del anuncio) de banners reales. El
+    // `add` genérico rechazaría por la palabra "ads" en la URL.
+    collector.addTrusted(toFotocasaHighQuality(resolved), alt);
   };
 
   // 1) <img> (incluye lazy data-src/data-original).

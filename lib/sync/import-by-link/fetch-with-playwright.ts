@@ -18,11 +18,42 @@ export async function fetchHtmlWithPlaywright(
 
   try {
     console.log(`[playwright] Iniciando navegador para ${url}`);
-    const { chromium } = await import("playwright");
+    // playwright-extra + stealth plugin: parchea fingerprints típicos de
+    // bot (navigator.webdriver, plugins, canvas, WebGL, …) que DataDome y
+    // similares usan para detectar headless. Sin esto, Playwright recibe
+    // 403 incluso con proxy residencial.
+    const { chromium } = await import("playwright-extra");
+    const stealthMod = await import("puppeteer-extra-plugin-stealth");
+    const stealth = (
+      stealthMod as unknown as { default: () => unknown }
+    ).default();
+    (chromium as unknown as { use: (p: unknown) => void }).use(stealth);
+
+    // Si hay proxy residencial configurado, mandamos el tráfico de
+    // Playwright a través de él. Sin esto, Chromium sale por la IP del
+    // datacenter (Hetzner) y portales con DataDome (Idealista) la marcan
+    // como bot incluso con un navegador real. La combinación
+    // proxy-residencial + JS-real es la que pasa la mayoría de filtros.
+    const proxyUrl = process.env.SMARTPROXY_URL;
+    let proxyConfig: { server: string; username?: string; password?: string } | undefined;
+    if (proxyUrl) {
+      try {
+        const u = new URL(proxyUrl);
+        proxyConfig = {
+          server: `${u.protocol}//${u.host}`,
+          username: decodeURIComponent(u.username) || undefined,
+          password: decodeURIComponent(u.password) || undefined,
+        };
+        console.log(`[playwright] Usando proxy ${u.host}`);
+      } catch {
+        console.log(`[playwright] SMARTPROXY_URL inválida, lanzando sin proxy`);
+      }
+    }
 
     browser = await chromium.launch({
       headless: true,
       args: ["--disable-blink-features=AutomationControlled"],
+      proxy: proxyConfig,
     });
     console.log(`[playwright] Navegador iniciado`);
 
