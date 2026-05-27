@@ -24,10 +24,11 @@ export async function fetchHtmlWithPlaywright(
       args: ["--disable-blink-features=AutomationControlled"],
     });
 
-    page = await browser.newPage();
+    page = await browser.newPage({
+      userAgent: BROWSER_UA,
+    });
 
-    // Configurar user agent y headers como un navegador real
-    await page.setUserAgent(BROWSER_UA);
+    // Headers adicionales como un navegador real
     await page.setExtraHTTPHeaders({
       "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
       "Accept-Encoding": "gzip, deflate, br",
