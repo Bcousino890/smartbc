@@ -15,6 +15,8 @@ import {
   parseBedrooms,
   parsePriceString,
 } from "../parse-utils";
+import { checkIdealistaAdvertiserType } from "../../particulares/idealista-advertiser-detector";
+import type { AdvertiserCheckResult } from "../../particulares/idealista-advertiser-detector";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos que refleja el JSON embebido de Idealista. Basado en el schema real de
@@ -331,11 +333,27 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry point del extractor de Idealista.
 // ─────────────────────────────────────────────────────────────────────────────
-export function extractIdealista(
+export async function extractIdealista(
   $: CheerioAPI,
   sourceUrl: string,
-): ImportPreview {
+  options?: { proxyUrl?: string }
+): Promise<ImportPreview & { advertiserInfo?: AdvertiserCheckResult }> {
   const embedded = findEmbeddedListing($);
-  if (embedded) return listingToPreview(embedded, sourceUrl);
-  return extractFromDom($, sourceUrl);
+  const preview = embedded
+    ? listingToPreview(embedded, sourceUrl)
+    : extractFromDom($, sourceUrl);
+
+  // Detectar si es particular o profesional
+  let advertiserInfo: AdvertiserCheckResult | undefined;
+  const adIdMatch = sourceUrl.match(/\/inmueble\/(\d+)/);
+  if (adIdMatch?.[1]) {
+    advertiserInfo = await checkIdealistaAdvertiserType(adIdMatch[1], {
+      proxyUrl: options?.proxyUrl,
+    });
+  }
+
+  return {
+    ...preview,
+    advertiserInfo,
+  };
 }
