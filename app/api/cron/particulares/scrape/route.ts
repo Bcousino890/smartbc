@@ -1,15 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
-import type { Database } from "@/lib/db/database.types";
-
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
-
-const CRON_SECRET = process.env.CRON_SECRET;
-const PROXY_URL = process.env.SMARTPROXY_URL;
 
 // Búsquedas de Idealista con particulares en Madrid
 const SEARCH_URLS = [
@@ -18,6 +9,12 @@ const SEARCH_URLS = [
 ];
 
 async function scrapeMadridParticulares() {
+  // Inicializar cliente dentro de la función para evitar errores en build time
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   const results = {
     processed: 0,
     particulares: 0,
@@ -132,9 +129,8 @@ async function extractPropertyUrlsFromSearch(): Promise<string[]> {
 }
 
 export async function POST(req: Request) {
-  // Validar CRON_SECRET
   const authHeader = req.headers.get("Authorization");
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 

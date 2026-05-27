@@ -1,4 +1,5 @@
 import type { PropertyOperation, PropertyStay } from "@/lib/db/database.types";
+import type { AdvertiserCheckResult } from "../particulares/idealista-advertiser-detector";
 
 // Resultado de la extracción de una ficha pública. Mismo "shape" que
 // NormalizedProperty del diff-engine, pero opcional en casi todos los
@@ -46,6 +47,8 @@ export type ImportPreview = {
   // Mensajes informativos del extractor (qué no se pudo parsear). No son
   // errores — la preview se considera válida aunque haya warnings.
   warnings: string[];
+  // Tipo de anunciante (solo Idealista). particular / professional / unknown.
+  advertiserInfo?: AdvertiserCheckResult;
 };
 
 export type ImportExtractError =

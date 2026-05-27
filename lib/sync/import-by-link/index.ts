@@ -38,7 +38,7 @@ export async function extractFromUrl(
 
   switch (detected.portal) {
     case "idealista":
-      return { ok: true, preview: extractIdealista($, finalUrl) };
+      return { ok: true, preview: await extractIdealista($, finalUrl, { proxyUrl: process.env.SMARTPROXY_URL }) };
     case "fotocasa":
       return { ok: true, preview: extractFotocasa($, finalUrl) };
     case "inmoweb":
