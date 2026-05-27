@@ -1,7 +1,25 @@
 import "server-only";
 import { ProxyAgent } from "undici";
 import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
+import { fetchHtmlWithWayback } from "./fetch-with-wayback";
 import type { ImportExtractError } from "./types";
+
+// Hosts donde merece la pena intentar el fallback final de Wayback Machine
+// cuando todos los demás métodos fallan. Solo Idealista por ahora — su
+// anti-bot DataDome no se pasa ni con proxy residencial + Playwright +
+// stealth. Wayback sirve snapshots del HTML que el extractor parsea igual.
+const WAYBACK_FALLBACK_HOSTS = ["idealista.com", "www.idealista.com"];
+
+function shouldTryWayback(url: string): boolean {
+  try {
+    const host = new URL(url).host;
+    return WAYBACK_FALLBACK_HOSTS.some(
+      (h) => host === h || host.endsWith(`.${h}`),
+    );
+  } catch {
+    return false;
+  }
+}
 
 // Fetcher de HTML para extractores. Manda UA + headers de navegador real
 // porque los portales rechazan agresivamente UAs vacíos o bot-friendly.
@@ -140,6 +158,36 @@ async function tryFetch(
   }
 }
 
+// Antes de rendirnos con un "blocked", intentamos Wayback Machine para
+// hosts donde sabemos que el anti-bot es prácticamente imposible de
+// pasar gratis (Idealista). El HTML del snapshot tiene los mismos
+// selectores y nuestro extractor lo parsea sin cambios.
+async function maybeTryWayback(
+  url: string,
+  prevReason: string,
+): Promise<FetchHtmlResult> {
+  if (!shouldTryWayback(url)) {
+    return {
+      ok: false,
+      error: { kind: "blocked", reason: prevReason },
+    };
+  }
+  console.log(`[fetch-html] Intento 4: Wayback Machine`);
+  const waybackResult = await fetchHtmlWithWayback(url);
+  if (waybackResult.ok) {
+    console.log(`[fetch-html] ✓ Wayback exitoso`);
+    return waybackResult;
+  }
+  console.log(`[fetch-html] ✗ Wayback falló: ${waybackResult.error.reason}`);
+  return {
+    ok: false,
+    error: {
+      kind: "blocked",
+      reason: `${prevReason} | Wayback: ${waybackResult.error.reason}`,
+    },
+  };
+}
+
 export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
   console.log(`[fetch-html] Iniciando para ${url}`);
 
@@ -177,24 +225,18 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
           return playwrightResult;
         }
         console.log(`[fetch-html] ✗ Playwright falló: ${playwrightResult.error.reason}`);
-        // Si Playwright también falla, devolver error con contexto completo
-        return {
-          ok: false,
-          error: {
-            kind: "blocked",
-            reason: `portal bloqueó todas las estrategias - Direct: ${directResult.error.reason} | Proxy: ${proxyResult.error.reason} | Playwright: ${playwrightResult.error.reason}`,
-          },
-        };
+        // Si Playwright también falla, intentar Wayback (solo Idealista).
+        return maybeTryWayback(
+          url,
+          `Direct: ${directResult.error.reason} | Proxy: ${proxyResult.error.reason} | Playwright: ${playwrightResult.error.reason}`,
+        );
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "error desconocido";
         console.log(`[fetch-html] ✗ Playwright error: ${errMsg}`);
-        return {
-          ok: false,
-          error: {
-            kind: "blocked",
-            reason: `portal bloqueó todas las estrategias - Direct: ${directResult.error.reason} | Proxy: ${proxyResult.error.reason} | Playwright: ${errMsg}`,
-          },
-        };
+        return maybeTryWayback(
+          url,
+          `Direct: ${directResult.error.reason} | Proxy: ${proxyResult.error.reason} | Playwright: ${errMsg}`,
+        );
       }
     } catch (err) {
       // Error al crear el proxy agent, intentar Playwright
@@ -208,23 +250,17 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
           return playwrightResult;
         }
         console.log(`[fetch-html] ✗ Playwright falló: ${playwrightResult.error.reason}`);
-        return {
-          ok: false,
-          error: {
-            kind: "blocked",
-            reason: `Portal bloqueado - Direct: ${directResult.error.reason} | Proxy error: ${errMsg} | Playwright: ${playwrightResult.error.reason}`,
-          },
-        };
+        return maybeTryWayback(
+          url,
+          `Direct: ${directResult.error.reason} | Proxy error: ${errMsg} | Playwright: ${playwrightResult.error.reason}`,
+        );
       } catch (playwrightErr) {
         const pwErrMsg = playwrightErr instanceof Error ? playwrightErr.message : "error desconocido";
         console.log(`[fetch-html] ✗ Playwright error: ${pwErrMsg}`);
-        return {
-          ok: false,
-          error: {
-            kind: "blocked",
-            reason: `Portal bloqueado - Direct: ${directResult.error.reason} | Proxy error: ${errMsg} | Playwright error: ${pwErrMsg}`,
-          },
-        };
+        return maybeTryWayback(
+          url,
+          `Direct: ${directResult.error.reason} | Proxy error: ${errMsg} | Playwright error: ${pwErrMsg}`,
+        );
       }
     }
   }

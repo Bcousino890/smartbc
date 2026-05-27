@@ -299,6 +299,22 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
       if (u && isIdealistaImageUrl(u)) collector.add(toIdealistaHighQuality(u));
     }
   });
+
+  // Fallback adicional: cuando el HTML viene de Wayback Machine, las fotos
+  // del slider no están en <img>/<source> sino en una variable JS inline
+  // `multimediaCarrousel: { multimedias: [...] }`. Extraemos las URLs
+  // `img\d+.idealista.com/blur/...` con un regex sobre el HTML raw.
+  const rawHtml = $.html();
+  if (/multimediaCarrousel/.test(rawHtml)) {
+    const carrouselRe =
+      /https?:\/\/img\d*\.idealista\.com\/blur\/[A-Z_-]+\/[^"'\s)>]+\.(?:jpe?g|webp|png)/gi;
+    let m: RegExpExecArray | null;
+    while ((m = carrouselRe.exec(rawHtml)) !== null) {
+      const u = m[0];
+      if (isIdealistaImageUrl(u)) collector.add(toIdealistaHighQuality(u));
+    }
+  }
+
   const photos = collector.toArray();
 
   if (!title) warnings.push("título no detectado");
