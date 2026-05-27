@@ -1,10 +1,10 @@
 import "server-only";
+import { ProxyAgent } from "undici";
 import type { ImportExtractError } from "./types";
 
 // Fetcher de HTML para extractores. Manda UA + headers de navegador real
-// porque los portales rechazan agresivamente UAs vacíos o bot-friendly. NO
-// gestiona captchas ni JavaScript: si la ficha requiere JS, devuelve fetch
-// con HTML mínimo y el extractor caerá a sus selectores OG/JSON-LD.
+// porque los portales rechazan agresivamente UAs vacíos o bot-friendly.
+// Si recibe 403/429, reintenenta automáticamente con proxy residencial.
 
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -25,12 +25,16 @@ const DEFAULT_HEADERS: HeadersInit = {
 };
 
 const TIMEOUT_MS = 20_000;
+const PROXY_URL = process.env.SMARTPROXY_URL;
 
 export type FetchHtmlResult =
   | { ok: true; html: string; finalUrl: string }
   | { ok: false; error: ImportExtractError };
 
-export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
+async function tryFetch(
+  url: string,
+  dispatcher?: ProxyAgent,
+): Promise<FetchHtmlResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -39,19 +43,20 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
       redirect: "follow",
       signal: controller.signal,
       cache: "no-store",
+      ...(dispatcher && { dispatcher }),
     });
     const finalUrl = res.url || url;
 
-    if (res.status === 403 || res.status === 429) {
-      return {
-        ok: false,
-        error: {
-          kind: "blocked",
-          reason: `portal rechazó el fetch con HTTP ${res.status}`,
-        },
-      };
-    }
     if (!res.ok) {
+      if (res.status === 403 || res.status === 429) {
+        return {
+          ok: false,
+          error: {
+            kind: "blocked",
+            reason: `HTTP ${res.status}`,
+          },
+        };
+      }
       return {
         ok: false,
         error: {
@@ -107,4 +112,43 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
+  // Intento 1: fetch directo (sin proxy)
+  const directResult = await tryFetch(url);
+  if (directResult.ok) return directResult;
+
+  // Si recibe 403/429 y tenemos proxy, reintentar con proxy
+  const isBlocked =
+    directResult.error.kind === "blocked" && PROXY_URL;
+  if (isBlocked) {
+    try {
+      const proxyAgent = new ProxyAgent(PROXY_URL);
+      const proxyResult = await tryFetch(url, proxyAgent);
+      if (proxyResult.ok) {
+        console.log(`[fetch-html] Fallback a proxy exitoso para ${url}`);
+        return proxyResult;
+      }
+      // Si el proxy también falla, devolver error con contexto
+      return {
+        ok: false,
+        error: {
+          kind: "blocked",
+          reason: `portal bloqueó fetch directo (${directResult.error.reason}) y reintento con proxy también falló (${proxyResult.error.reason})`,
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          kind: "blocked",
+          reason: `portal bloqueó: ${directResult.error.reason}. Reintento con proxy falló: ${err instanceof Error ? err.message : "error desconocido"}`,
+        },
+      };
+    }
+  }
+
+  // Si no es bloqueo, devolver error original
+  return directResult;
 }
