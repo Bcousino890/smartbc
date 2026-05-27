@@ -17,12 +17,14 @@ export async function fetchHtmlWithPlaywright(
   let page;
 
   try {
+    console.log(`[playwright] Iniciando navegador para ${url}`);
     const { chromium } = await import("playwright");
 
     browser = await chromium.launch({
       headless: true,
       args: ["--disable-blink-features=AutomationControlled"],
     });
+    console.log(`[playwright] Navegador iniciado`);
 
     page = await browser.newPage({
       userAgent: BROWSER_UA,
@@ -42,12 +44,14 @@ export async function fetchHtmlWithPlaywright(
     });
 
     // Esperar a que la página cargue
+    console.log(`[playwright] Navegando a ${url}`);
     const response = await page.goto(url, {
       waitUntil: "networkidle",
       timeout: TIMEOUT_MS,
     });
 
     if (!response) {
+      console.log(`[playwright] No response from server`);
       return {
         ok: false,
         error: {
@@ -59,8 +63,10 @@ export async function fetchHtmlWithPlaywright(
     }
 
     const status = response.status();
+    console.log(`[playwright] HTTP ${status}`);
 
     if (status === 403 || status === 429) {
+      console.log(`[playwright] Bloqueado: HTTP ${status}`);
       return {
         ok: false,
         error: {
@@ -71,6 +77,7 @@ export async function fetchHtmlWithPlaywright(
     }
 
     if (status < 200 || status >= 300) {
+      console.log(`[playwright] Error HTTP: ${status}`);
       return {
         ok: false,
         error: {
@@ -83,8 +90,10 @@ export async function fetchHtmlWithPlaywright(
 
     // Obtener el HTML después de que JS se haya ejecutado
     const html = await page.content();
+    console.log(`[playwright] HTML obtenido (${html.length} bytes)`);
 
     if (!html || html.length < 200) {
+      console.log(`[playwright] HTML vacío o demasiado corto`);
       return {
         ok: false,
         error: {
@@ -95,6 +104,7 @@ export async function fetchHtmlWithPlaywright(
     }
 
     const finalUrl = page.url() || url;
+    console.log(`[playwright] ✓ Éxito`);
 
     return { ok: true, html, finalUrl };
   } catch (err) {
