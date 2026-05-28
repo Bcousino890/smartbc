@@ -12,10 +12,10 @@ export default async function AdminParticularesPage() {
   const { data } = await supabase
     .from("particulares")
     .select(
-      "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, detected_at, is_active",
+      "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, created_at, is_active",
     )
     .eq("is_active", true)
-    .order("detected_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(2000);
 
   const rows = (data ?? []) as unknown as ParticularRow[];
@@ -26,8 +26,8 @@ export default async function AdminParticularesPage() {
     sale: rows.filter((r) => r.operation === "sale").length,
     last24h: rows.filter(
       (r) =>
-        r.detected_at &&
-        Date.now() - new Date(r.detected_at).getTime() < 24 * 60 * 60 * 1000,
+        r.created_at &&
+        Date.now() - new Date(r.created_at).getTime() < 24 * 60 * 60 * 1000,
     ).length,
   };
 

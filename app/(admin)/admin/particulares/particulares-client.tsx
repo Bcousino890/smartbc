@@ -18,7 +18,7 @@ export type ParticularRow = {
   description: string | null;
   // Cada foto es { url, alt } (así las guarda el scraper), NO un string.
   photos: Array<{ url: string; alt?: string }> | null;
-  detected_at: string | null;
+  created_at: string | null;
   is_active: boolean;
 };
 
@@ -68,7 +68,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
       if (
         last24h &&
-        !(r.detected_at && new Date(r.detected_at).getTime() >= since)
+        !(r.created_at && new Date(r.created_at).getTime() >= since)
       ) {
         return false;
       }
@@ -230,8 +230,8 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                   </p>
                   <div className="mt-auto flex items-center justify-between pt-3 text-[11px] text-ink/45">
                     <span>
-                      {r.detected_at
-                        ? DATE_FMT.format(new Date(r.detected_at))
+                      {r.created_at
+                        ? DATE_FMT.format(new Date(r.created_at))
                         : ""}
                     </span>
                     <span className="inline-flex items-center gap-1 text-gold-dark group-hover:underline">
