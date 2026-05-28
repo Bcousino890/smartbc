@@ -8,6 +8,28 @@ export type AdvertiserCheckResult = {
   error?: string;
 };
 
+// Detecta si un anuncio de Idealista es de particular o profesional a partir
+// del HTML de la ficha (obtenido con el UA de WhatsApp, que pasa DataDome).
+// Idealista expone en un <script> inline `adProfessionalName: 'Nombre'`
+// cuando el anunciante es una agencia/profesional, y `adProfessionalName: ''`
+// (vacío) cuando es un particular. Esto reemplaza al endpoint AJAX
+// `adContactInfoForDetail.ajax`, que DataDome bloquea con 403.
+export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
+  // El valor puede venir con comillas simples o dobles según la variante
+  // del HTML que sirva Idealista: `adProfessionalName: 'X'` o
+  // `adProfessionalName: "X"`. Capturamos ambas. Ignoramos el placeholder
+  // de plantilla `adProfessionalName}}` (sin comillas, no casa).
+  const m = html.match(/adProfessionalName\s*:\s*(['"])([^'"]*)\1/);
+  if (!m) {
+    return { advertiser_type: "unknown", is_ad_professional: null };
+  }
+  const name = m[2].trim();
+  if (name.length === 0) {
+    return { advertiser_type: "particular", is_ad_professional: false };
+  }
+  return { advertiser_type: "professional", is_ad_professional: true };
+}
+
 const IDEALISTA_CONTACT_INFO_URL = "https://www.idealista.com/ajax/listingcontroller/adContactInfoForDetail.ajax";
 
 export async function checkIdealistaAdvertiserType(

@@ -1,12 +1,40 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
+import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 
-// Búsquedas de Idealista con particulares en Madrid
-const SEARCH_URLS = [
-  "https://www.idealista.com/venta-pisos-madrid/?sort=fechabaja-desc",
-  "https://www.idealista.com/alquiler-pisos-madrid/?sort=fechabaja-desc",
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 800; // ~600 fichas × ~1s + márgenes
+
+// Búsquedas base de Idealista en Madrid (todas las zonas). Ordenadas por
+// fecha de publicación descendente: recorremos las primeras MAX_PAGES
+// páginas para capturar los anuncios MÁS RECIENTES. El cron corre cada 6h
+// y va acumulando los particulares nuevos que van apareciendo (estrategia
+// incremental — capturar todo Madrid de golpe son ~30k fichas, inviable).
+const SEARCH_BASES = [
+  "https://www.idealista.com/venta-viviendas/madrid-madrid/",
+  "https://www.idealista.com/alquiler-viviendas/madrid-madrid/",
 ];
+
+// Páginas por listado y por run. 10 × 30 anuncios × 2 listados = ~600
+// fichas/run. Configurable vía env para ajustar cobertura vs consumo proxy.
+const MAX_PAGES = Number.parseInt(
+  process.env.PARTICULARES_MAX_PAGES ?? "10",
+  10,
+);
+
+// Idealista pagina con `/pagina-N.htm` en el path (la página 1 es la base).
+function buildSearchUrls(): string[] {
+  const urls: string[] = [];
+  const sort = "?ordenado-por=fecha-publicacion-desc";
+  for (const base of SEARCH_BASES) {
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      urls.push(page === 1 ? `${base}${sort}` : `${base}pagina-${page}.htm${sort}`);
+    }
+  }
+  return urls;
+}
 
 async function scrapeMadridParticulares() {
   // Inicializar cliente dentro de la función para evitar errores en build time
@@ -95,37 +123,37 @@ async function scrapeMadridParticulares() {
   }
 }
 
+// UA de WhatsApp: DataDome lo deja pasar (whitelist por los previews de
+// links compartidos por WhatsApp). Permite scrapear listados y fichas de
+// Idealista con un fetch directo, sin proxy ni navegador.
+const WHATSAPP_UA = "WhatsApp/2.23.20.0";
+
 async function extractPropertyUrlsFromSearch(): Promise<string[]> {
-  const urls: string[] = [];
+  const seen = new Set<string>();
 
-  for (const searchUrl of SEARCH_URLS) {
-    try {
-      const res = await fetch(searchUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        },
-        signal: AbortSignal.timeout(20000),
-      });
+  for (const searchUrl of buildSearchUrls()) {
+    // Vía curl con UA WhatsApp + proxy residencial — pasa DataDome (el TLS
+    // de undici no, y la IP del datacenter se quema sin el proxy).
+    const res = await fetchViaCurl(searchUrl, WHATSAPP_UA, {
+      proxyUrl: process.env.SMARTPROXY_URL,
+    });
+    if (!res.ok) {
+      console.warn(
+        `[cron-particulares] listado ${searchUrl} -> ${res.reason}`,
+      );
+      continue;
+    }
 
-      if (!res.ok) continue;
-
-      const html = await res.text();
-
-      // Extraer URLs de propiedades del HTML (regex simple)
-      const matches = html.matchAll(/href="(\/inmueble\/\d+[^"]*)/g);
-      for (const match of matches) {
-        if (match[1]) {
-          urls.push(`https://www.idealista.com${match[1]}`);
-        }
+    // Extraer IDs de propiedades del HTML y normalizar a URL canónica.
+    const matches = res.html.matchAll(/\/inmueble\/(\d+)/g);
+    for (const match of matches) {
+      if (match[1]) {
+        seen.add(`https://www.idealista.com/inmueble/${match[1]}/`);
       }
-    } catch (err) {
-      console.warn("[cron-particulares] Error scrapeando búsqueda:", err);
     }
   }
 
-  // Retornar máximo 50 para evitar overload
-  return urls.slice(0, 50);
+  return Array.from(seen);
 }
 
 export async function POST(req: Request) {

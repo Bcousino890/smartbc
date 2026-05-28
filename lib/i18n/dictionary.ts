@@ -326,6 +326,7 @@ const es: Strings = {
   "admin.nav.solicitudes": "Solicitudes",
   "admin.nav.mensajes": "Mensajes",
   "admin.nav.sindicacion": "Sindicación",
+  "admin.nav.particulares": "Particulares",
   "admin.nav.reportes": "Reportes",
   "adminMensajes.title": "Mensajes",
   "adminMensajes.subtitle":
@@ -556,6 +557,14 @@ const es: Strings = {
   "clientes.detail.filters.budget.unit.to": "€ max",
 
   // Admin / Propiedades (catalog management)
+  "adminParticulares.title": "Particulares",
+  "adminParticulares.subtitle":
+    "Anuncios publicados por particulares (no agencias) detectados en Idealista. Captación: contacta tú antes que la competencia.",
+  "adminParticulares.stats.total": "TOTAL PARTICULARES",
+  "adminParticulares.stats.rent": "EN ALQUILER",
+  "adminParticulares.stats.sale": "EN VENTA",
+  "adminParticulares.stats.last24h": "ÚLTIMAS 24H",
+  "adminParticulares.stats.help": "Detectados automáticamente",
   "adminProps.title": "Propiedades",
   "adminProps.subtitle":
     "Catálogo global de propiedades de todas las agencias colaboradoras.",
@@ -1197,6 +1206,7 @@ const en: Strings = {
   "admin.nav.solicitudes": "Requests",
   "admin.nav.mensajes": "Messages",
   "admin.nav.sindicacion": "Syndication",
+  "admin.nav.particulares": "Private listings",
   "admin.nav.reportes": "Reports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle": "All your client conversations in one place.",
@@ -1421,6 +1431,14 @@ const en: Strings = {
   "clientes.detail.filters.budget.unit.from": "€ min",
   "clientes.detail.filters.budget.unit.to": "€ max",
 
+  "adminParticulares.title": "Private listings",
+  "adminParticulares.subtitle":
+    "Listings posted by private owners (not agencies) detected on Idealista. Lead generation: reach out before the competition.",
+  "adminParticulares.stats.total": "TOTAL PRIVATE",
+  "adminParticulares.stats.rent": "FOR RENT",
+  "adminParticulares.stats.sale": "FOR SALE",
+  "adminParticulares.stats.last24h": "LAST 24H",
+  "adminParticulares.stats.help": "Detected automatically",
   "adminProps.title": "Properties",
   "adminProps.subtitle":
     "Global property catalog from all partner agencies.",
@@ -2058,6 +2076,7 @@ const fr: Strings = {
   "admin.nav.solicitudes": "Demandes",
   "admin.nav.mensajes": "Messages",
   "admin.nav.sindicacion": "Syndication",
+  "admin.nav.particulares": "Particuliers",
   "admin.nav.reportes": "Rapports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle":
@@ -2285,6 +2304,14 @@ const fr: Strings = {
   "clientes.detail.filters.budget.unit.from": "€ min",
   "clientes.detail.filters.budget.unit.to": "€ max",
 
+  "adminParticulares.title": "Particuliers",
+  "adminParticulares.subtitle":
+    "Annonces publiées par des particuliers (pas des agences) détectées sur Idealista. Prospection : contactez-les avant la concurrence.",
+  "adminParticulares.stats.total": "TOTAL PARTICULIERS",
+  "adminParticulares.stats.rent": "EN LOCATION",
+  "adminParticulares.stats.sale": "EN VENTE",
+  "adminParticulares.stats.last24h": "DERNIÈRES 24H",
+  "adminParticulares.stats.help": "Détectés automatiquement",
   "adminProps.title": "Propriétés",
   "adminProps.subtitle":
     "Catalogue global des propriétés de toutes les agences partenaires.",
@@ -2926,6 +2953,7 @@ const de: Strings = {
   "admin.nav.solicitudes": "Anfragen",
   "admin.nav.mensajes": "Nachrichten",
   "admin.nav.sindicacion": "Syndikation",
+  "admin.nav.particulares": "Privatpersonen",
   "admin.nav.reportes": "Berichte",
   "adminMensajes.title": "Nachrichten",
   "adminMensajes.subtitle":
@@ -3153,6 +3181,14 @@ const de: Strings = {
   "clientes.detail.filters.budget.unit.from": "€ min",
   "clientes.detail.filters.budget.unit.to": "€ max",
 
+  "adminParticulares.title": "Privatpersonen",
+  "adminParticulares.subtitle":
+    "Von Privatpersonen (nicht Agenturen) auf Idealista veröffentlichte Anzeigen. Akquise: Kontaktieren Sie vor der Konkurrenz.",
+  "adminParticulares.stats.total": "GESAMT PRIVAT",
+  "adminParticulares.stats.rent": "ZUR MIETE",
+  "adminParticulares.stats.sale": "ZUM VERKAUF",
+  "adminParticulares.stats.last24h": "LETZTE 24H",
+  "adminParticulares.stats.help": "Automatisch erkannt",
   "adminProps.title": "Immobilien",
   "adminProps.subtitle":
     "Globaler Immobilienkatalog aller Partneragenturen.",
