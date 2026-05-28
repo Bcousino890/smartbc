@@ -16,7 +16,8 @@ export type ParticularRow = {
   bathrooms: number | null;
   square_meters: number | null;
   description: string | null;
-  photos: string[] | null;
+  // Cada foto es { url, alt } (así las guarda el scraper), NO un string.
+  photos: Array<{ url: string; alt?: string }> | null;
   detected_at: string | null;
   is_active: boolean;
 };
@@ -102,7 +103,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((r) => {
-            const cover = r.photos?.[0];
+            const cover = r.photos?.[0]?.url;
             return (
               <a
                 key={r.id}

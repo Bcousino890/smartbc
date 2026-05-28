@@ -12,15 +12,33 @@ export const maxDuration = 800; // ~600 fichas × ~1s + márgenes
 // páginas para capturar los anuncios MÁS RECIENTES. El cron corre cada 6h
 // y va acumulando los particulares nuevos que van apareciendo (estrategia
 // incremental — capturar todo Madrid de golpe son ~30k fichas, inviable).
+// Distritos/municipios premium donde opera BC. Acotamos a estas zonas en
+// vez de "todo Madrid" (~30k anuncios) porque: (a) son las relevantes para
+// el negocio, (b) tienen volumen manejable (500-2400 anuncios c/u) y
+// permiten capturar TODOS sus particulares paginando. Cada zona se recorre
+// en venta y alquiler.
 const SEARCH_BASES = [
-  "https://www.idealista.com/venta-viviendas/madrid-madrid/",
-  "https://www.idealista.com/alquiler-viviendas/madrid-madrid/",
+  // Barrio de Salamanca
+  "https://www.idealista.com/venta-viviendas/madrid/barrio-de-salamanca/",
+  "https://www.idealista.com/alquiler-viviendas/madrid/barrio-de-salamanca/",
+  // Chamberí
+  "https://www.idealista.com/venta-viviendas/madrid/chamberi/",
+  "https://www.idealista.com/alquiler-viviendas/madrid/chamberi/",
+  // Retiro
+  "https://www.idealista.com/venta-viviendas/madrid/retiro/",
+  "https://www.idealista.com/alquiler-viviendas/madrid/retiro/",
+  // Pozuelo de Alarcón (municipio aparte)
+  "https://www.idealista.com/venta-viviendas/pozuelo-de-alarcon-madrid/",
+  "https://www.idealista.com/alquiler-viviendas/pozuelo-de-alarcon-madrid/",
 ];
 
-// Páginas por listado y por run. 10 × 30 anuncios × 2 listados = ~600
-// fichas/run. Configurable vía env para ajustar cobertura vs consumo proxy.
+// Páginas por listado y por run. 8 listados (4 zonas × venta/alquiler) × 5
+// páginas × 30 anuncios = ~1200 fichas/run máx. Ordenadas por fecha
+// reciente: captura las novedades de cada zona en cada run. Para un
+// backfill completo de una zona, subir PARTICULARES_MAX_PAGES (ej. 80) y
+// disparar manualmente una vez.
 const MAX_PAGES = Number.parseInt(
-  process.env.PARTICULARES_MAX_PAGES ?? "10",
+  process.env.PARTICULARES_MAX_PAGES ?? "5",
   10,
 );
 
