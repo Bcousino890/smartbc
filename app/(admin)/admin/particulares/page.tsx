@@ -16,7 +16,7 @@ export default async function AdminParticularesPage() {
     )
     .eq("is_active", true)
     .order("detected_at", { ascending: false })
-    .limit(300);
+    .limit(2000);
 
   const rows = (data ?? []) as unknown as ParticularRow[];
 

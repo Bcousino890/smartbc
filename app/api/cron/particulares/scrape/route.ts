@@ -7,29 +7,24 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 800; // ~600 fichas × ~1s + márgenes
 
+// Tipo laxo para el cliente Supabase (evita fricción con los genéricos del
+// SDK; ya usamos casts puntuales para las operaciones).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseLike = any;
+
 // Búsquedas base de Idealista en Madrid (todas las zonas). Ordenadas por
 // fecha de publicación descendente: recorremos las primeras MAX_PAGES
 // páginas para capturar los anuncios MÁS RECIENTES. El cron corre cada 6h
 // y va acumulando los particulares nuevos que van apareciendo (estrategia
 // incremental — capturar todo Madrid de golpe son ~30k fichas, inviable).
-// Distritos/municipios premium donde opera BC. Acotamos a estas zonas en
-// vez de "todo Madrid" (~30k anuncios) porque: (a) son las relevantes para
-// el negocio, (b) tienen volumen manejable (500-2400 anuncios c/u) y
-// permiten capturar TODOS sus particulares paginando. Cada zona se recorre
-// en venta y alquiler.
+// Todo Madrid capital, venta y alquiler. Ordenado por fecha reciente: el
+// cron captura los particulares NUEVOS de toda la ciudad cada run. El
+// histórico completo (~30k anuncios) NO se descarga de golpe; se acumula
+// incrementalmente. Para un backfill de N páginas recientes, subir
+// PARTICULARES_MAX_PAGES y disparar el script de backfill.
 const SEARCH_BASES = [
-  // Barrio de Salamanca
-  "https://www.idealista.com/venta-viviendas/madrid/barrio-de-salamanca/",
-  "https://www.idealista.com/alquiler-viviendas/madrid/barrio-de-salamanca/",
-  // Chamberí
-  "https://www.idealista.com/venta-viviendas/madrid/chamberi/",
-  "https://www.idealista.com/alquiler-viviendas/madrid/chamberi/",
-  // Retiro
-  "https://www.idealista.com/venta-viviendas/madrid/retiro/",
-  "https://www.idealista.com/alquiler-viviendas/madrid/retiro/",
-  // Pozuelo de Alarcón (municipio aparte)
-  "https://www.idealista.com/venta-viviendas/pozuelo-de-alarcon-madrid/",
-  "https://www.idealista.com/alquiler-viviendas/pozuelo-de-alarcon-madrid/",
+  "https://www.idealista.com/venta-viviendas/madrid-madrid/",
+  "https://www.idealista.com/alquiler-viviendas/madrid-madrid/",
 ];
 
 // Páginas por listado y por run. 8 listados (4 zonas × venta/alquiler) × 5
@@ -43,18 +38,21 @@ const MAX_PAGES = Number.parseInt(
 );
 
 // Idealista pagina con `/pagina-N.htm` en el path (la página 1 es la base).
-function buildSearchUrls(): string[] {
+// Rango [fromPage, toPage] para poder hacer el backfill por tramos (un
+// request HTTP no aguanta miles de fichas — el script de backfill llama
+// con tramos pequeños).
+function buildSearchUrls(fromPage: number, toPage: number): string[] {
   const urls: string[] = [];
   const sort = "?ordenado-por=fecha-publicacion-desc";
   for (const base of SEARCH_BASES) {
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    for (let page = fromPage; page <= toPage; page++) {
       urls.push(page === 1 ? `${base}${sort}` : `${base}pagina-${page}.htm${sort}`);
     }
   }
   return urls;
 }
 
-async function scrapeMadridParticulares() {
+async function scrapeMadridParticulares(fromPage: number, toPage: number) {
   // Inicializar cliente dentro de la función para evitar errores en build time
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -71,7 +69,7 @@ async function scrapeMadridParticulares() {
 
   try {
     // Obtener listado de URLs de propiedades
-    const propertyUrls = await extractPropertyUrlsFromSearch();
+    const propertyUrls = await extractPropertyUrlsFromSearch(fromPage, toPage);
 
     for (const url of propertyUrls) {
       try {
@@ -134,6 +132,13 @@ async function scrapeMadridParticulares() {
       results.processed++;
     }
 
+    // Detección de bajas: revisita los activos vistos hace más tiempo y
+    // marca como inactivos los que ya no existen en Idealista (404 = el
+    // particular retiró el anuncio: vendió, alquiló o fichó con agencia).
+    // Los activos que siguen vivos refrescan su updated_at.
+    const removed = await markStaleListingsInactive(supabase);
+    (results as Record<string, number>).bajas = removed;
+
     return results;
   } catch (error) {
     console.error("[cron-particulares] Error general:", error);
@@ -141,15 +146,72 @@ async function scrapeMadridParticulares() {
   }
 }
 
+// Revisa hasta `limit` anuncios activos (los menos refrescados) y marca
+// inactivos los que devuelven 404. Acota el coste por run.
+async function markStaleListingsInactive(
+  supabase: SupabaseLike,
+  limit = 40,
+): Promise<number> {
+  const { data } = await (
+    supabase.from("particulares") as unknown as {
+      select: (c: string) => {
+        eq: (k: string, v: boolean) => {
+          order: (
+            c: string,
+            o: { ascending: boolean },
+          ) => {
+            limit: (n: number) => Promise<{
+              data: Array<{ id: string; source_url: string }> | null;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .select("id, source_url")
+    .eq("is_active", true)
+    .order("updated_at", { ascending: true })
+    .limit(limit);
+
+  let removed = 0;
+  for (const row of data ?? []) {
+    const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
+      proxyUrl: process.env.SMARTPROXY_URL,
+    });
+    const patch =
+      !res.ok && res.status === 404
+        ? { is_active: false, updated_at: new Date().toISOString() }
+        : res.ok
+          ? { updated_at: new Date().toISOString() }
+          : null; // error transitorio: no tocar, reintentar otro run
+    if (!patch) continue;
+    if (patch.is_active === false) removed++;
+    await (
+      supabase.from("particulares") as unknown as {
+        update: (p: Record<string, unknown>) => {
+          eq: (k: string, v: string) => Promise<unknown>;
+        };
+      }
+    )
+      .update(patch)
+      .eq("id", row.id);
+  }
+  console.log(`[cron-particulares] bajas detectadas: ${removed}`);
+  return removed;
+}
+
 // UA de WhatsApp: DataDome lo deja pasar (whitelist por los previews de
 // links compartidos por WhatsApp). Permite scrapear listados y fichas de
 // Idealista con un fetch directo, sin proxy ni navegador.
 const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 
-async function extractPropertyUrlsFromSearch(): Promise<string[]> {
+async function extractPropertyUrlsFromSearch(
+  fromPage: number,
+  toPage: number,
+): Promise<string[]> {
   const seen = new Set<string>();
 
-  for (const searchUrl of buildSearchUrls()) {
+  for (const searchUrl of buildSearchUrls(fromPage, toPage)) {
     // Vía curl con UA WhatsApp + proxy residencial — pasa DataDome (el TLS
     // de undici no, y la IP del datacenter se quema sin el proxy).
     const res = await fetchViaCurl(searchUrl, WHATSAPP_UA, {
@@ -180,12 +242,28 @@ export async function POST(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // Rango de páginas opcional vía query (?fromPage=1&toPage=3) para el
+  // backfill por tramos. Por defecto usa [1, MAX_PAGES] (modo cron normal).
+  const { searchParams } = new URL(req.url);
+  const fromPage = Math.max(
+    1,
+    Number.parseInt(searchParams.get("fromPage") ?? "1", 10) || 1,
+  );
+  const toPage = Math.max(
+    fromPage,
+    Number.parseInt(searchParams.get("toPage") ?? String(MAX_PAGES), 10) ||
+      MAX_PAGES,
+  );
+
   try {
-    console.log("[cron-particulares] Iniciando scraping cada 30 min");
-    const results = await scrapeMadridParticulares();
+    console.log(
+      `[cron-particulares] Iniciando scraping páginas ${fromPage}-${toPage}`,
+    );
+    const results = await scrapeMadridParticulares(fromPage, toPage);
     return Response.json({
       ok: true,
       timestamp: new Date().toISOString(),
+      pages: { fromPage, toPage },
       results,
     });
   } catch (error) {

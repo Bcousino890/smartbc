@@ -33,6 +33,11 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
   const [zone, setZone] = useState("");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+  const [areaMin, setAreaMin] = useState("");
+  const [last24h, setLast24h] = useState(false);
 
   const zoneOptions = useMemo(
     () =>
@@ -42,6 +47,11 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const pMin = priceMin ? Number(priceMin) : null;
+    const pMax = priceMax ? Number(priceMax) : null;
+    const bMin = bedrooms ? Number(bedrooms) : null;
+    const aMin = areaMin ? Number(areaMin) : null;
+    const since = Date.now() - 24 * 60 * 60 * 1000;
     return rows.filter((r) => {
       if (q) {
         const hay =
@@ -52,9 +62,29 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       }
       if (operation && r.operation !== operation) return false;
       if (zone && r.zone !== zone) return false;
+      if (pMin != null && (r.price ?? 0) < pMin) return false;
+      if (pMax != null && (r.price ?? Infinity) > pMax) return false;
+      if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
+      if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
+      if (
+        last24h &&
+        !(r.detected_at && new Date(r.detected_at).getTime() >= since)
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [rows, query, operation, zone]);
+  }, [
+    rows,
+    query,
+    operation,
+    zone,
+    priceMin,
+    priceMax,
+    bedrooms,
+    areaMin,
+    last24h,
+  ]);
 
   return (
     <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -90,6 +120,52 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
             </option>
           ))}
         </select>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={priceMin}
+          onChange={(e) => setPriceMin(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="€ mín"
+          className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+        />
+        <input
+          type="number"
+          inputMode="numeric"
+          value={priceMax}
+          onChange={(e) => setPriceMax(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="€ máx"
+          className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+        />
+        <select
+          value={bedrooms}
+          onChange={(e) => setBedrooms(e.target.value)}
+          className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+        >
+          <option value="">Hab: todas</option>
+          <option value="1">1+</option>
+          <option value="2">2+</option>
+          <option value="3">3+</option>
+          <option value="4">4+</option>
+        </select>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={areaMin}
+          onChange={(e) => setAreaMin(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="m² mín"
+          className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => setLast24h((v) => !v)}
+          className={
+            last24h
+              ? "rounded-lg border border-gold bg-gold/15 px-3 py-2 text-[13px] font-medium text-gold-dark"
+              : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-gold/40"
+          }
+        >
+          Últimas 24h
+        </button>
         <span className="ml-auto text-[11px] text-ink/55">
           {filtered.length} de {rows.length}
         </span>
@@ -98,7 +174,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       {filtered.length === 0 ? (
         <div className="mt-6 rounded-xl border border-gold/15 bg-white/40 px-4 py-12 text-center text-ink/55">
           No hay anuncios de particulares todavía. El scraper los detecta
-          automáticamente cada 30 minutos.
+          automáticamente cada 6 horas.
         </div>
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
