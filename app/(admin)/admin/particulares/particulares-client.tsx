@@ -345,24 +345,67 @@ export function ParticularesCient({
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 rounded-lg bg-white p-4 shadow-sm">
-              <button
-                onClick={() => setOffset(Math.max(0, offset - limit))}
-                disabled={offset === 0}
-                className="rounded px-3 py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <span className="text-sm text-gray-600">
-                Página {currentPage} de {totalPages}
-              </span>
-              <button
-                onClick={() => setOffset(offset + limit)}
-                disabled={offset + limit >= count}
-                className="rounded px-3 py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
-              >
-                Siguiente
-              </button>
+            <div className="flex flex-col items-center gap-3 rounded-lg bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-1 flex-wrap justify-center">
+                {/* Prev */}
+                <button
+                  onClick={() => setOffset(Math.max(0, offset - limit))}
+                  disabled={offset === 0}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ‹ Anterior
+                </button>
+
+                {/* Page numbers */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((page) => {
+                    // Show first, last, current, and pages adjacent to current
+                    return (
+                      page === 1 ||
+                      page === totalPages ||
+                      Math.abs(page - currentPage) <= 1
+                    );
+                  })
+                  .reduce<(number | "...")[]>((acc, page, idx, arr) => {
+                    if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
+                      acc.push("...");
+                    }
+                    acc.push(page);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === "..." ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => setOffset((item - 1) * limit)}
+                        className={cn(
+                          "h-9 w-9 rounded-lg border text-sm font-medium transition-colors",
+                          item === currentPage
+                            ? "border-blue-500 bg-blue-600 text-white"
+                            : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                        )}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+
+                {/* Next */}
+                <button
+                  onClick={() => setOffset(offset + limit)}
+                  disabled={offset + limit >= count}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente ›
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Página {currentPage} de {totalPages} · {count} resultado{count !== 1 ? "s" : ""}
+              </p>
             </div>
           )}
         </>
