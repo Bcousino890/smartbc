@@ -12,7 +12,7 @@ export default async function AdminParticularesPage() {
   const { data } = await supabase
     .from("particulares")
     .select(
-      "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, created_at, is_active",
+      "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, created_at, is_active",
     )
     .eq("is_active", true)
     .order("created_at", { ascending: false })
