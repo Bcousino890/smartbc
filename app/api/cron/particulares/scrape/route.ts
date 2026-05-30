@@ -52,6 +52,130 @@ function buildSearchUrls(fromPage: number, toPage: number): string[] {
   return urls;
 }
 
+// ─── Upsert preservando historial ────────────────────────────────────────────
+// Lógica: si ya existe en BD → actualiza datos frescos + reactiva si estaba
+// dado de baja + trackea cambios de precio. Si es nuevo → inserta completo.
+// Nunca borra datos. detected_at nunca se sobreescribe.
+
+type ParticularPayload = {
+  external_id: string;
+  source_url: string;
+  owner_name: string | null;
+  zone: string | null;
+  price: number | null;
+  operation: "rent" | "sale" | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  square_meters: number | null;
+  description: string | null;
+  features: string[];
+  photos: Array<{ url: string; alt?: string }>;
+  advertiser_type: string;
+  is_ad_professional: boolean | null;
+};
+
+async function upsertParticular(
+  supabase: SupabaseLike,
+  payload: ParticularPayload,
+): Promise<boolean> {
+  const now = new Date().toISOString();
+
+  // Buscar si ya existe (activo o no)
+  const { data: existing } = await supabase
+    .from("particulares")
+    .select("id, price, is_active")
+    .eq("external_id", payload.external_id)
+    .maybeSingle();
+
+  if (existing) {
+    const priceChanged =
+      payload.price !== null && existing.price !== payload.price;
+    const wasInactive = !existing.is_active;
+
+    // Actualizar con datos frescos. detected_at NO se toca (campo de primera
+    // detección). Si estaba inactivo, lo reactivamos y limpiamos taken_down_at.
+    const { error } = await supabase
+      .from("particulares")
+      .update({
+        source_url: payload.source_url,
+        owner_name: payload.owner_name,
+        zone: payload.zone,
+        price: payload.price,
+        bedrooms: payload.bedrooms,
+        bathrooms: payload.bathrooms,
+        square_meters: payload.square_meters,
+        description: payload.description,
+        features: payload.features,
+        photos: payload.photos,
+        advertiser_type: payload.advertiser_type,
+        is_ad_professional: payload.is_ad_professional,
+        is_active: true,
+        taken_down_at: null,
+        updated_at: now,
+      })
+      .eq("id", existing.id);
+
+    if (error) {
+      console.error("[cron-particulares] Error actualizando:", error);
+      return false;
+    }
+
+    // Trackear cambios relevantes en particulares_changes
+    if (priceChanged) {
+      await supabase.from("particulares_changes").insert({
+        particular_id: existing.id,
+        change_type: "price_change",
+        old_value: { price: existing.price },
+        new_value: { price: payload.price },
+        changed_at: now,
+      });
+    }
+    if (wasInactive) {
+      console.log(
+        `[cron-particulares] Reactivado: ${payload.external_id}`,
+      );
+      await supabase.from("particulares_changes").insert({
+        particular_id: existing.id,
+        change_type: "reactivated",
+        old_value: null,
+        new_value: { reactivated_at: now },
+        changed_at: now,
+      });
+    }
+
+    return true;
+  }
+
+  // Nuevo registro — insertar con detected_at = ahora
+  const { error } = await supabase.from("particulares").insert({
+    portal: "idealista",
+    external_id: payload.external_id,
+    source_url: payload.source_url,
+    owner_name: payload.owner_name,
+    zone: payload.zone,
+    price: payload.price,
+    operation: payload.operation,
+    bedrooms: payload.bedrooms,
+    bathrooms: payload.bathrooms,
+    square_meters: payload.square_meters,
+    description: payload.description,
+    features: payload.features,
+    photos: payload.photos,
+    advertiser_type: payload.advertiser_type,
+    is_ad_professional: payload.is_ad_professional,
+    is_active: true,
+    detected_at: now,
+    updated_at: now,
+  });
+
+  if (error) {
+    console.error("[cron-particulares] Error insertando:", error);
+    return false;
+  }
+
+  return true;
+}
+
 async function scrapeMadridParticulares(fromPage: number, toPage: number) {
   // Inicializar cliente dentro de la función para evitar errores en build time
   const supabase = createClient(
@@ -94,32 +218,25 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           continue;
         }
 
-        // Guardar en BD
-        const { error } = await supabase.from("particulares").upsert(
-          {
-            portal: "idealista",
-            external_id: preview.externalReference,
-            source_url: url,
-            owner_name: preview.title ?? null,
-            zone: preview.zone ?? null,
-            price: preview.price ?? null,
-            operation: preview.operation ?? null,
-            bedrooms: preview.bedrooms ?? null,
-            bathrooms: preview.bathrooms ?? null,
-            square_meters: preview.squareMeters ?? null,
-            description: preview.description ?? null,
-            features: preview.features ?? [],
-            photos: preview.photos ?? [],
-            advertiser_type: advertiserInfo.advertiser_type,
-            is_ad_professional: advertiserInfo.is_ad_professional,
-            detected_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "external_id" }
-        );
+        // Guardar en BD preservando detected_at y rastreando cambios
+        const saved = await upsertParticular(supabase, {
+          external_id: preview.externalReference,
+          source_url: url,
+          owner_name: preview.title ?? null,
+          zone: preview.zone ?? null,
+          price: preview.price ?? null,
+          operation: (preview.operation as "rent" | "sale") ?? null,
+          bedrooms: preview.bedrooms ?? null,
+          bathrooms: preview.bathrooms ?? null,
+          square_meters: preview.squareMeters ?? null,
+          description: preview.description ?? null,
+          features: preview.features ?? [],
+          photos: (preview.photos ?? []) as Array<{ url: string; alt?: string }>,
+          advertiser_type: advertiserInfo.advertiser_type,
+          is_ad_professional: advertiserInfo.is_ad_professional ?? null,
+        });
 
-        if (error) {
-          console.error("[cron-particulares] Error guardando:", error);
+        if (!saved) {
           results.errors++;
         } else {
           results.particulares++;
@@ -147,55 +264,58 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
 }
 
 // Revisa hasta `limit` anuncios activos (los menos refrescados) y marca
-// inactivos los que devuelven 404. Acota el coste por run.
+// inactivos los que devuelven 404 — preservando TODOS los datos.
+// 404 = el particular retiró el anuncio (vendió, alquiló o fichó agencia).
+// Los datos (fotos, precio, contacto, descripción) se conservan íntegros
+// para poder consultarlos o reactivarlos si el anuncio vuelve.
 async function markStaleListingsInactive(
   supabase: SupabaseLike,
   limit = 40,
 ): Promise<number> {
-  const { data } = await (
-    supabase.from("particulares") as unknown as {
-      select: (c: string) => {
-        eq: (k: string, v: boolean) => {
-          order: (
-            c: string,
-            o: { ascending: boolean },
-          ) => {
-            limit: (n: number) => Promise<{
-              data: Array<{ id: string; source_url: string }> | null;
-            }>;
-          };
-        };
-      };
-    }
-  )
+  const { data } = await supabase
+    .from("particulares")
     .select("id, source_url")
     .eq("is_active", true)
     .order("updated_at", { ascending: true })
     .limit(limit);
 
   let removed = 0;
-  for (const row of data ?? []) {
+  const now = new Date().toISOString();
+
+  for (const row of (data ?? []) as Array<{ id: string; source_url: string }>) {
     const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
       proxyUrl: process.env.SMARTPROXY_URL,
     });
-    const patch =
-      !res.ok && res.status === 404
-        ? { is_active: false, updated_at: new Date().toISOString() }
-        : res.ok
-          ? { updated_at: new Date().toISOString() }
-          : null; // error transitorio: no tocar, reintentar otro run
-    if (!patch) continue;
-    if (patch.is_active === false) removed++;
-    await (
-      supabase.from("particulares") as unknown as {
-        update: (p: Record<string, unknown>) => {
-          eq: (k: string, v: string) => Promise<unknown>;
-        };
-      }
-    )
-      .update(patch)
-      .eq("id", row.id);
+
+    if (!res.ok && res.status === 404) {
+      // Baja confirmada: marcar inactivo + registrar taken_down_at.
+      // Todos los demás campos (fotos, precio, contacto…) se conservan.
+      await supabase
+        .from("particulares")
+        .update({ is_active: false, taken_down_at: now, updated_at: now })
+        .eq("id", row.id);
+
+      // Log en histórico de cambios
+      await supabase.from("particulares_changes").insert({
+        particular_id: row.id,
+        change_type: "deleted",
+        old_value: null,
+        new_value: { taken_down_at: now },
+        changed_at: now,
+      });
+
+      removed++;
+      console.log(`[cron-particulares] Baja: ${row.source_url}`);
+    } else if (res.ok) {
+      // Sigue activo: refrescar updated_at para no revisarlo en cada run.
+      await supabase
+        .from("particulares")
+        .update({ updated_at: now })
+        .eq("id", row.id);
+    }
+    // res.ok=false pero ≠404 (timeout, error red…): no tocar, reintentar otro run
   }
+
   console.log(`[cron-particulares] bajas detectadas: ${removed}`);
   return removed;
 }

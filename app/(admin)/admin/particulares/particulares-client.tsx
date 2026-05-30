@@ -31,6 +31,7 @@ export type ParticularRow = {
   phone: string | null;
   chat_only: boolean | null;
   created_at: string | null;
+  taken_down_at: string | null;
   is_active: boolean;
 };
 
@@ -137,6 +138,20 @@ function ParticularModal({
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
           {/* Precio + zona */}
           <div>
+            {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
+            {!row.is_active && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <span className="font-semibold">Anuncio retirado</span>
+                {row.taken_down_at && (
+                  <span className="text-red-500">
+                    · {DATE_FMT.format(new Date(row.taken_down_at))}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-red-400">
+                  Datos conservados — puede volver a estar disponible
+                </span>
+              </div>
+            )}
             <p className="font-serif text-2xl font-semibold text-ink">
               {row.price != null
                 ? `${formatPrice(row.price)}${row.operation === "rent" ? "/mes" : ""}`
@@ -433,6 +448,14 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                     <span className="absolute right-2 top-2 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
                       {r.portal}
                     </span>
+                    {/* Badge de retirado */}
+                    {!r.is_active && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-ink/30">
+                        <span className="rounded-md bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
+                          Retirado
+                        </span>
+                      </span>
+                    )}
                     {/* Indicador de contacto disponible */}
                     {r.phone && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-semibold text-white">
