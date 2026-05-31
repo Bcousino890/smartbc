@@ -204,11 +204,12 @@ export async function scrapeProperty(
   const sqmMatch = mainBlock.match(/Sup\.?\s*(?:Construida|[ÚU]til)\D*(\d+)\s*m/i);
   const squareMeters = sqmMatch ? parseInt(sqmMatch[1], 10) : undefined;
 
-  const description = $(".descripcion")
-    .first()
-    .text()
-    .replace(/\s+/g, " ")
-    .trim();
+  // La descripción COMPLETA está en `.detallesFicha` (titular <h3> + cuerpo
+  // <p>, ~2500 caracteres). `.descripcion` es solo un teaser de ~110 chars,
+  // así que se usa únicamente como fallback.
+  const fullDesc = $(".detallesFicha").first().text().replace(/\s+/g, " ").trim();
+  const description =
+    fullDesc || $(".descripcion").first().text().replace(/\s+/g, " ").trim();
 
   const zone = parseZone(h1, zoneKeyFromUrl(url));
   const propertyType = detectPropertyType(h1);
