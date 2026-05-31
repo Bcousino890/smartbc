@@ -3,11 +3,15 @@
 import {
   ChevronLeft,
   ChevronRight,
+  Check,
+  Copy,
   ExternalLink,
+  Loader2,
   MapPin,
   MessageSquare,
   Phone,
   Plus,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react";
@@ -304,7 +308,40 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [last24h, setLast24h] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [page, setPage] = useState(1);
+  const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const itemsPerPage = 9;
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setRefreshMessage(null);
+    try {
+      const response = await fetch("/api/admin/particulares/refresh", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setRefreshMessage({
+        text: `✓ Actualizado: ${data.results?.particulares || 0} nuevos, ${data.results?.bajas || 0} retirados`,
+        type: "success",
+      });
+
+      setTimeout(() => setRefreshMessage(null), 5000);
+    } catch (error) {
+      setRefreshMessage({
+        text: `Error: ${error instanceof Error ? error.message : "Desconocido"}`,
+        type: "error",
+      });
+      setTimeout(() => setRefreshMessage(null), 5000);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const zoneOptions = useMemo(
     () =>
@@ -442,6 +479,29 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
           >
             Últimas 24h
           </button>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-gold/40 disabled:opacity-50"
+          >
+            {isRefreshing ? (
+              <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
+            ) : (
+              <RefreshCw size={14} strokeWidth={1.75} />
+            )}
+            Actualizar
+          </button>
+          {refreshMessage && (
+            <span className={cn(
+              "rounded-lg px-3 py-2 text-[11px] font-medium",
+              refreshMessage.type === "success"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-red-100 text-red-700"
+            )}>
+              {refreshMessage.text}
+            </span>
+          )}
           <span className="ml-auto text-[11px] text-ink/55">
             {filtered.length} de {rows.length}
           </span>
