@@ -48,6 +48,17 @@ const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   minute: "2-digit",
 });
 
+function formatPhone(phone: string): string {
+  const d = phone.replace(/[\s\-\(\)\.]/g, "");
+  if (/^[6789]\d{8}$/.test(d))
+    return `+34 ${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
+  if (/^34[6789]\d{8}$/.test(d))
+    return `+34 ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
+  if (/^\+34[6789]\d{8}$/.test(d))
+    return `+${d.slice(1, 3)} ${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}`;
+  return phone;
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 function ParticularModal({
@@ -196,7 +207,7 @@ function ParticularModal({
                 className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 <Phone size={16} strokeWidth={2} />
-                Llamar · {row.phone}
+                Llamar · {formatPhone(row.phone!)}
               </a>
             ) : (
               <a
@@ -520,12 +531,31 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                         </span>
                       </span>
                     )}
-                    {/* Indicador de contacto disponible */}
+                    {/* Teléfono visible + copiar */}
                     {r.phone && (
-                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        <Phone size={10} strokeWidth={2} />
-                        Teléfono
-                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const digits = r.phone!.replace(/[\s\-\(\)\.]/g, "");
+                          navigator.clipboard.writeText(digits).catch(() => {});
+                          setCopiedPhoneId(r.id);
+                          setTimeout(() => setCopiedPhoneId(null), 2000);
+                        }}
+                        className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-700"
+                      >
+                        {copiedPhoneId === r.id ? (
+                          <>
+                            <Check size={10} strokeWidth={2.5} />
+                            ¡Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Phone size={10} strokeWidth={2} />
+                            {formatPhone(r.phone)}
+                          </>
+                        )}
+                      </button>
                     )}
                     {!r.phone && r.chat_only && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
