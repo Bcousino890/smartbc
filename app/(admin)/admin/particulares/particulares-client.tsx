@@ -1,17 +1,15 @@
 "use client";
 
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
-  Check,
   Copy,
   ExternalLink,
-  Loader2,
   MapPin,
   MessageSquare,
   Phone,
   Plus,
-  RefreshCw,
   Search,
   X,
 } from "lucide-react";
@@ -49,6 +47,17 @@ const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+function formatPhone(phone: string): string {
+  const d = phone.replace(/[\s\-\(\)\.]/g, "");
+  if (/^[6789]\d{8}$/.test(d))
+    return `+34 ${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
+  if (/^34[6789]\d{8}$/.test(d))
+    return `+34 ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
+  if (/^\+34[6789]\d{8}$/.test(d))
+    return `+${d.slice(1, 3)} ${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}`;
+  return phone;
+}
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
@@ -198,7 +207,7 @@ function ParticularModal({
                 className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 <Phone size={16} strokeWidth={2} />
-                Llamar · {row.phone}
+                Llamar · {formatPhone(row.phone!)}
               </a>
             ) : (
               <a
@@ -295,6 +304,30 @@ function ParticularModal({
   );
 }
 
+// ─── Utilidades ────────────────────────────────────────────────────────
+
+function formatPhoneToInternational(phone: string | null): string {
+  if (!phone) return "";
+  const cleaned = phone.replace(/[\s\-()]/g, "");
+  if (/^[6789]\d{8}$/.test(cleaned)) {
+    return `+34 ${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
+  }
+  if (cleaned.startsWith("34")) {
+    const withoutCountry = cleaned.slice(2);
+    return `+34 ${withoutCountry.slice(0, 3)} ${withoutCountry.slice(3, 6)} ${withoutCountry.slice(6)}`;
+  }
+  return phone;
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Listado principal ────────────────────────────────────────────────────────
 
 export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
@@ -309,39 +342,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [page, setPage] = useState(1);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshMessage, setRefreshMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const itemsPerPage = 9;
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setRefreshMessage(null);
-    try {
-      const response = await fetch("/api/admin/particulares/refresh", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      setRefreshMessage({
-        text: `✓ Actualizado: ${data.results?.particulares || 0} nuevos, ${data.results?.bajas || 0} retirados`,
-        type: "success",
-      });
-
-      setTimeout(() => setRefreshMessage(null), 5000);
-    } catch (error) {
-      setRefreshMessage({
-        text: `Error: ${error instanceof Error ? error.message : "Desconocido"}`,
-        type: "error",
-      });
-      setTimeout(() => setRefreshMessage(null), 5000);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   const zoneOptions = useMemo(
     () =>
@@ -479,29 +480,6 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
           >
             Últimas 24h
           </button>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-gold/40 disabled:opacity-50"
-          >
-            {isRefreshing ? (
-              <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
-            ) : (
-              <RefreshCw size={14} strokeWidth={1.75} />
-            )}
-            Actualizar
-          </button>
-          {refreshMessage && (
-            <span className={cn(
-              "rounded-lg px-3 py-2 text-[11px] font-medium",
-              refreshMessage.type === "success"
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-red-100 text-red-700"
-            )}>
-              {refreshMessage.text}
-            </span>
-          )}
           <span className="ml-auto text-[11px] text-ink/55">
             {filtered.length} de {rows.length}
           </span>
@@ -553,12 +531,31 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                         </span>
                       </span>
                     )}
-                    {/* Indicador de contacto disponible */}
+                    {/* Teléfono visible + copiar */}
                     {r.phone && (
-                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        <Phone size={10} strokeWidth={2} />
-                        Teléfono
-                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const digits = r.phone!.replace(/[\s\-\(\)\.]/g, "");
+                          navigator.clipboard.writeText(digits).catch(() => {});
+                          setCopiedPhoneId(r.id);
+                          setTimeout(() => setCopiedPhoneId(null), 2000);
+                        }}
+                        className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-700"
+                      >
+                        {copiedPhoneId === r.id ? (
+                          <>
+                            <Check size={10} strokeWidth={2.5} />
+                            ¡Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Phone size={10} strokeWidth={2} />
+                            {formatPhone(r.phone)}
+                          </>
+                        )}
+                      </button>
                     )}
                     {!r.phone && r.chat_only && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
@@ -586,6 +583,30 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {r.phone && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const cleanPhone = r.phone!.replace(/[\s\-()]/g, "");
+                          copyToClipboard(cleanPhone);
+                          setCopiedPhoneId(r.id);
+                          setTimeout(() => setCopiedPhoneId(null), 2000);
+                        }}
+                        className="mt-2 flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        {copiedPhoneId === r.id ? (
+                          <>
+                            <Check size={12} strokeWidth={2.5} />
+                            ¡Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} strokeWidth={1.75} />
+                            {formatPhoneToInternational(r.phone)}
+                          </>
+                        )}
+                      </button>
+                    )}
                     <div className="mt-auto flex items-center justify-between pt-3 text-[11px] text-ink/45">
                       <span>
                         {r.created_at
