@@ -227,23 +227,42 @@ function ParticularModal({
             )}
           </div>
 
-          {/* Mapa */}
-          {row.latitude && row.longitude && (
+          {/* Mapa — exacto si hay coords, fallback por zona/dirección */}
+          {(row.latitude && row.longitude) || row.zone ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Ubicación
               </p>
-              <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
-                <iframe
-                  width="100%"
-                  height="100%"
-                  style={{ border: "none" }}
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${row.longitude - 0.003},${row.latitude - 0.003},${row.longitude + 0.003},${row.latitude + 0.003}&layer=mapnik&marker=${row.latitude},${row.longitude}`}
-                  allowFullScreen
-                />
-              </div>
+              {row.latitude && row.longitude ? (
+                <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    style={{ border: "none" }}
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${row.longitude - 0.003},${row.latitude - 0.003},${row.longitude + 0.003},${row.latitude + 0.003}&layer=mapnik&marker=${row.latitude},${row.longitude}`}
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-ink/10">
+                  <div className="relative h-48 w-full bg-gray-100">
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      style={{ border: "none" }}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent((row.zone ?? "") + ", Madrid")}&output=embed&zoom=15`}
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-[11px] text-ink/50">
+                    <MapPin size={11} strokeWidth={1.75} className="text-gold" />
+                    Zona aproximada · {row.zone}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
 
           {/* Características */}
           {row.features && row.features.length > 0 && (
