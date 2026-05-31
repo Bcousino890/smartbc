@@ -1,5 +1,8 @@
-// Tipos generados manualmente para reflejar supabase/migrations/0001_init.sql.
-// Para regenerar desde el proyecto remoto: `npx supabase login && npx supabase gen types typescript --project-id healauhivrjunlulrlui > lib/db/database.types.ts`
+// Tipos generados manualmente para reflejar las migraciones de supabase/migrations/.
+// Backend en producción: self-host Supabase en Hetzner. El proyecto antiguo
+// en supabase.com (`healauhivrjunlulrlui`) fue eliminado tras la migración —
+// si en algún momento se vuelve a generar tipos automáticos, hay que apuntar
+// al endpoint del self-host (o regenerar a mano con las migraciones nuevas).
 
 export type Json =
   | string
