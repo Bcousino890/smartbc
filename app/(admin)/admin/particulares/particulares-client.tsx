@@ -1,428 +1,661 @@
 "use client";
 
 import {
-  ChevronDown,
-  Image as ImageIcon,
-  Loader2,
-  Search,
-  Filter,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  MapPin,
+  MessageSquare,
   Phone,
-  Wifi,
+  Plus,
+  Search,
+  X,
 } from "lucide-react";
-import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  ParticulareDetailModal,
-  type ParticularData,
-} from "@/components/admin/particulares-detail-modal";
-import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
+import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
-import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-interface Particular extends ParticularData {}
+export type ParticularRow = {
+  id: string;
+  portal: string;
+  external_id: string;
+  source_url: string;
+  zone: string | null;
+  price: number | null;
+  operation: "rent" | "sale" | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  square_meters: number | null;
+  description: string | null;
+  photos: Array<{ url: string; alt?: string }> | null;
+  features: string[] | null;
+  owner_name: string | null;
+  phone: string | null;
+  chat_only: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string | null;
+  taken_down_at: string | null;
+  is_active: boolean;
+};
 
-export function ParticularesCient({
-  initialData,
-  initialCount,
+const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
+function ParticularModal({
+  row,
+  onClose,
 }: {
-  initialData: Particular[];
-  initialCount: number;
+  row: ParticularRow;
+  onClose: () => void;
 }) {
-  const t = useT();
-  const router = useRouter();
-  const [data, setData] = useState<Particular[]>(initialData);
-  const [count, setCount] = useState(initialCount);
-  const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [zoneFilter, setZoneFilter] = useState("");
-  const [operationFilter, setOperationFilter] = useState<"" | "rent" | "sale">(
-    ""
-  );
-  const [portalFilter, setPortalFilter] = useState("");
-  const [hasPhoneFilter, setHasPhoneFilter] = useState(false);
-  const [selectedParticular, setSelectedParticular] =
-    useState<Particular | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const photos = row.photos ?? [];
+  const cover = photos[photoIdx]?.url;
+  const hasPhone = Boolean(row.phone);
 
-  const limit = 50;
-
-  // Get unique zones and portals
-  const zoneOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          initialData
-            .map((p) => p.zone)
-            .filter((z): z is string => Boolean(z))
-        )
-      ).sort(),
-    [initialData]
-  );
-
-  const portalOptions = useMemo(
-    () => Array.from(new Set(initialData.map((p) => p.portal))).sort(),
-    [initialData]
-  );
-
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [menuOpen]);
-
-  // Fetch with filters
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-
-      if (query) params.append("search", query);
-      if (zoneFilter) params.append("zone", zoneFilter);
-      if (operationFilter) params.append("operation", operationFilter);
-      if (portalFilter) params.append("portal", portalFilter);
-      if (hasPhoneFilter) params.append("hasPhone", "true");
-
-      const res = await fetch(`/api/admin/particulares?${params}`);
-      const result = await res.json();
-
-      setData(result.data);
-      setCount(result.count);
-    } catch (error) {
-      console.error("Error fetching particulares:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch when filters change
-  useEffect(() => {
-    setOffset(0);
-    fetchData();
-  }, [query, zoneFilter, operationFilter, portalFilter, hasPhoneFilter]);
-
-  // Fetch on pagination
-  useEffect(() => {
-    if (offset > 0) fetchData();
-  }, [offset]);
-
-  const handleOpenModal = (particular: Particular) => {
-    setSelectedParticular(particular);
-    setModalOpen(true);
-  };
-
-  const totalPages = Math.ceil(count / limit);
-  const currentPage = offset / limit + 1;
+  const portalLabel =
+    row.portal.charAt(0).toUpperCase() + row.portal.slice(1);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Particulares</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            {count} propiedad{count !== 1 ? "es" : ""} encontrada{count !== 1 ? "s" : ""}
-          </p>
-        </div>
-      </div>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Foto + nav */}
+        <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-ink/5">
+          {cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cover}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-ink/30">
+              sin foto
+            </div>
+          )}
 
-      {/* Search and Filters */}
-      <div className="space-y-4 rounded-lg bg-white p-4 shadow-sm">
-        {/* Search */}
-        <div className="relative">
-          <Search
-            size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, zona, descripción..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Filter Buttons */}
-        <div className="flex flex-wrap gap-3">
-          {/* Zone Filter */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
-            >
-              <Filter size={16} />
-              Zona: {zoneFilter || "Todas"}
-              <ChevronDown
-                size={16}
-                className={cn(
-                  "transition-transform",
-                  menuOpen && "rotate-180"
-                )}
-              />
-            </button>
-            {menuOpen && (
-              <div className="absolute left-0 top-full z-10 mt-1 w-48 rounded-lg border border-gray-300 bg-white shadow-lg">
-                <button
-                  onClick={() => {
-                    setZoneFilter("");
-                    setMenuOpen(false);
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50"
-                >
-                  Todas las zonas
-                </button>
-                {zoneOptions.map((zone) => (
+          {/* Prev / Next */}
+          {photos.length > 1 && (
+            <>
+              <button
+                onClick={() =>
+                  setPhotoIdx((i) => (i === 0 ? photos.length - 1 : i - 1))
+                }
+                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-white hover:bg-ink/70"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() =>
+                  setPhotoIdx((i) => (i === photos.length - 1 ? 0 : i + 1))
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-white hover:bg-ink/70"
+              >
+                ›
+              </button>
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+                {photos.map((_, i) => (
                   <button
-                    key={zone}
-                    onClick={() => {
-                      setZoneFilter(zone);
-                      setMenuOpen(false);
-                    }}
+                    key={i}
+                    onClick={() => setPhotoIdx(i)}
                     className={cn(
-                      "w-full px-4 py-2 text-left text-sm hover:bg-gray-50",
-                      zoneFilter === zone && "bg-blue-50 text-blue-700"
+                      "h-1.5 w-1.5 rounded-full transition-colors",
+                      i === photoIdx ? "bg-white" : "bg-white/50",
                     )}
-                  >
-                    {zone}
-                  </button>
+                  />
                 ))}
               </div>
-            )}
-          </div>
+            </>
+          )}
 
-          {/* Operation Filter */}
-          <select
-            value={operationFilter}
-            onChange={(e) =>
-              setOperationFilter(e.target.value as "" | "rent" | "sale")
-            }
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
-          >
-            <option value="">Tipo: Todos</option>
-            <option value="rent">Alquiler</option>
-            <option value="sale">Venta</option>
-          </select>
+          {/* Badges */}
+          <span className="absolute left-3 top-3 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
+            {row.operation === "rent" ? "Alquiler" : "Venta"}
+          </span>
+          <span className="absolute right-10 top-3 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+            {portalLabel}
+          </span>
 
-          {/* Portal Filter */}
-          <select
-            value={portalFilter}
-            onChange={(e) => setPortalFilter(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
-          >
-            <option value="">Portal: Todos</option>
-            {portalOptions.map((portal) => (
-              <option key={portal} value={portal}>
-                {portal.charAt(0).toUpperCase() + portal.slice(1)}
-              </option>
-            ))}
-          </select>
-
-          {/* Has Phone Filter */}
+          {/* Close */}
           <button
-            onClick={() => setHasPhoneFilter(!hasPhoneFilter)}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors",
-              hasPhoneFilter
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-gray-300 bg-white hover:bg-gray-50"
-            )}
+            onClick={onClose}
+            className="absolute right-3 top-3 rounded-full bg-white/90 p-1 text-ink hover:bg-white"
           >
-            <Phone size={16} />
-            {hasPhoneFilter ? "Con teléfono" : "Filtrar: Teléfono"}
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
-      </div>
 
-      {/* Grid */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 size={32} className="animate-spin text-gray-400" />
-        </div>
-      ) : data.length === 0 ? (
-        <div className="rounded-lg bg-white p-12 text-center shadow-sm">
-          <p className="text-gray-600">No hay particulares que coincidan con los filtros</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.map((particular) => (
-              <div
-                key={particular.id}
-                onClick={() => handleOpenModal(particular)}
-                className="group cursor-pointer rounded-lg bg-white shadow-sm transition-all hover:shadow-lg"
-              >
-                {/* Image */}
-                <div className="relative h-48 w-full overflow-hidden bg-gray-100">
-                  {particular.photos?.[0] ? (
-                    <Image
-                      src={particular.photos[0].url}
-                      alt={particular.photos[0].alt || "Property"}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
-                    />
-                  ) : (
-                    <div
-                      className={cn("h-full w-full", PLACEHOLDER_GRADIENT)}
-                    >
-                      <div className="flex h-full items-center justify-center">
-                        <ImageIcon size={32} className="text-white/50" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Badge */}
-                  <div className="absolute right-2 top-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-900 shadow-md">
-                    {particular.portal}
-                  </div>
-
-                  {/* Contact Badge */}
-                  {particular.phone ? (
-                    <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs text-white">
-                      <Phone size={12} />
-                      Contacto disponible
-                    </div>
-                  ) : particular.chat_only ? (
-                    <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1 text-xs text-white">
-                      <Wifi size={12} />
-                      Solo chat
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Content */}
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 line-clamp-1">
-                    {particular.owner_name || "Sin nombre"}
-                  </h3>
-
-                  {particular.price && (
-                    <p className="text-lg font-bold text-blue-600">
-                      {formatPrice(particular.price)}
-                    </p>
-                  )}
-
-                  <div className="mt-2 flex gap-2 text-sm text-gray-600">
-                    {particular.bedrooms !== null && (
-                      <span>🛏️ {particular.bedrooms}</span>
-                    )}
-                    {particular.bathrooms !== null && (
-                      <span>🚿 {particular.bathrooms}</span>
-                    )}
-                    {particular.square_meters && (
-                      <span>📐 {particular.square_meters}m²</span>
-                    )}
-                  </div>
-
-                  {particular.zone && (
-                    <p className="mt-2 text-sm text-gray-500">
-                      📍 {particular.zone}
-                    </p>
-                  )}
-
-                  {particular.operation && (
-                    <p className="mt-1 inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                      {particular.operation === "rent" ? "Alquiler" : "Venta"}
-                    </p>
-                  )}
-                </div>
+        {/* Contenido scrollable */}
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+          {/* Precio + zona */}
+          <div>
+            {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
+            {!row.is_active && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <span className="font-semibold">Anuncio retirado</span>
+                {row.taken_down_at && (
+                  <span className="text-red-500">
+                    · {DATE_FMT.format(new Date(row.taken_down_at))}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-red-400">
+                  Datos conservados — puede volver a estar disponible
+                </span>
               </div>
-            ))}
+            )}
+            <p className="font-serif text-2xl font-semibold text-ink">
+              {row.price != null
+                ? `${formatPrice(row.price)}${row.operation === "rent" ? "/mes" : ""}`
+                : "Precio no disponible"}
+            </p>
+            {row.zone && (
+              <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
+                <MapPin size={13} strokeWidth={1.75} className="text-gold" />
+                {row.zone}
+              </div>
+            )}
+            <p className="mt-1 text-sm text-ink/50">
+              {[
+                row.bedrooms != null ? `${row.bedrooms} hab` : null,
+                row.bathrooms != null ? `${row.bathrooms} baños` : null,
+                row.square_meters != null ? `${row.square_meters} m²` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex flex-col items-center gap-3 rounded-lg bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-1 flex-wrap justify-center">
-                {/* Prev */}
-                <button
-                  onClick={() => setOffset(Math.max(0, offset - limit))}
-                  disabled={offset === 0}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  ‹ Anterior
-                </button>
+          {/* Datos de contacto */}
+          <div className="rounded-xl border border-gold/20 bg-white p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+              Contacto · Particular
+            </p>
 
-                {/* Page numbers */}
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((page) => {
-                    // Show first, last, current, and pages adjacent to current
-                    return (
-                      page === 1 ||
-                      page === totalPages ||
-                      Math.abs(page - currentPage) <= 1
-                    );
-                  })
-                  .reduce<(number | "...")[]>((acc, page, idx, arr) => {
-                    if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
-                      acc.push("...");
-                    }
-                    acc.push(page);
-                    return acc;
-                  }, [])
-                  .map((item, idx) =>
-                    item === "..." ? (
-                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={item}
-                        onClick={() => setOffset((item - 1) * limit)}
-                        className={cn(
-                          "h-9 w-9 rounded-lg border text-sm font-medium transition-colors",
-                          item === currentPage
-                            ? "border-blue-500 bg-blue-600 text-white"
-                            : "border-gray-200 hover:bg-gray-50 text-gray-700"
-                        )}
-                      >
-                        {item}
-                      </button>
-                    )
-                  )}
+            {row.owner_name && (
+              <p className="mb-3 font-medium text-ink">{row.owner_name}</p>
+            )}
 
-                {/* Next */}
-                <button
-                  onClick={() => setOffset(offset + limit)}
-                  disabled={offset + limit >= count}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Siguiente ›
-                </button>
+            {hasPhone ? (
+              <a
+                href={`tel:${row.phone}`}
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <Phone size={16} strokeWidth={2} />
+                Llamar · {row.phone}
+              </a>
+            ) : (
+              <a
+                href={row.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
+              >
+                <MessageSquare size={16} strokeWidth={1.75} />
+                Escribir por {portalLabel}
+                {row.chat_only && (
+                  <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                    Solo chat
+                  </span>
+                )}
+              </a>
+            )}
+          </div>
+
+          {/* Mapa */}
+          {row.latitude && row.longitude && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Ubicación
+              </p>
+              <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  style={{ border: "none" }}
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${row.longitude - 0.003},${row.latitude - 0.003},${row.longitude + 0.003},${row.latitude + 0.003}&layer=mapnik&marker=${row.latitude},${row.longitude}`}
+                  allowFullScreen
+                />
               </div>
-              <p className="text-xs text-gray-500">
-                Página {currentPage} de {totalPages} · {count} resultado{count !== 1 ? "s" : ""}
+            </div>
+          )}
+
+          {/* Características */}
+          {row.features && row.features.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Características
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {row.features.map((f, i) => (
+                  <span
+                    key={i}
+                    className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-[12px] text-ink/70"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Descripción */}
+          {row.description && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Descripción
+              </p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/75">
+                {row.description}
               </p>
             </div>
           )}
-        </>
+
+          {/* Acciones inferiores */}
+          <div className="flex gap-2 border-t border-ink/8 pt-4">
+            <a
+              href={row.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink/15 px-4 py-2 text-sm text-ink/70 transition hover:border-gold/40 hover:text-ink"
+            >
+              <ExternalLink size={14} strokeWidth={1.75} />
+              Ver en {portalLabel}
+            </a>
+            <button
+              onClick={() => {
+                // TODO: abrir modal de nueva propiedad con datos pre-rellenados
+                alert("Crear propiedad — próximamente");
+              }}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark"
+            >
+              <Plus size={14} strokeWidth={2} />
+              Crear propiedad
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Utilidades ────────────────────────────────────────────────────────
+
+function formatPhoneToInternational(phone: string | null): string {
+  if (!phone) return "";
+  const cleaned = phone.replace(/[\s\-()]/g, "");
+  if (/^[6789]\d{8}$/.test(cleaned)) {
+    return `+34 ${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
+  }
+  if (cleaned.startsWith("34")) {
+    const withoutCountry = cleaned.slice(2);
+    return `+34 ${withoutCountry.slice(0, 3)} ${withoutCountry.slice(3, 6)} ${withoutCountry.slice(6)}`;
+  }
+  return phone;
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Listado principal ────────────────────────────────────────────────────────
+
+export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
+  const [query, setQuery] = useState("");
+  const [operation, setOperation] = useState<"" | "rent" | "sale">("");
+  const [zone, setZone] = useState("");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+  const [areaMin, setAreaMin] = useState("");
+  const [last24h, setLast24h] = useState(false);
+  const [selected, setSelected] = useState<ParticularRow | null>(null);
+  const [page, setPage] = useState(1);
+  const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
+  const itemsPerPage = 9;
+
+  const zoneOptions = useMemo(
+    () =>
+      Array.from(new Set(rows.map((r) => r.zone).filter(Boolean))).sort() as string[],
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pMin = priceMin ? Number(priceMin) : null;
+    const pMax = priceMax ? Number(priceMax) : null;
+    const bMin = bedrooms ? Number(bedrooms) : null;
+    const aMin = areaMin ? Number(areaMin) : null;
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    return rows.filter((r) => {
+      if (q) {
+        const hay =
+          (r.zone?.toLowerCase().includes(q) ?? false) ||
+          (r.description?.toLowerCase().includes(q) ?? false) ||
+          r.external_id.toLowerCase().includes(q);
+        if (!hay) return false;
+      }
+      if (operation && r.operation !== operation) return false;
+      if (zone && r.zone !== zone) return false;
+      if (pMin != null && (r.price ?? 0) < pMin) return false;
+      if (pMax != null && (r.price ?? Infinity) > pMax) return false;
+      if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
+      if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
+      if (
+        last24h &&
+        !(r.created_at && new Date(r.created_at).getTime() >= since)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
+
+  // Paginación
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginatedRows = filtered.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage,
+  );
+
+  // Reset a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setPage(1);
+  }, [query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
+
+  return (
+    <>
+      {/* Modal */}
+      {selected && (
+        <ParticularModal row={selected} onClose={() => setSelected(null)} />
       )}
 
-      {/* Modal */}
-      <ParticulareDetailModal
-        isOpen={modalOpen}
-        data={selectedParticular}
-        onClose={() => setModalOpen(false)}
-        onCreateProperty={(particular) => {
-          // Navigate to create property with data pre-filled
-          router.push(
-            `/admin/propiedades/new?source=${encodeURIComponent(JSON.stringify(particular))}`
-          );
-        }}
-      />
-    </div>
+      <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+        {/* Filtros */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
+            <Search size={15} strokeWidth={1.75} className="text-ink/45" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por zona, descripción o ref…"
+              className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
+            />
+          </label>
+          <select
+            value={operation}
+            onChange={(e) => setOperation(e.target.value as typeof operation)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Operación: todas</option>
+            <option value="rent">Alquiler</option>
+            <option value="sale">Venta</option>
+          </select>
+          <select
+            value={zone}
+            onChange={(e) => setZone(e.target.value)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Zona: todas</option>
+            {zoneOptions.map((z) => (
+              <option key={z} value={z}>
+                {z}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={priceMin}
+            onChange={(e) => setPriceMin(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="€ mín"
+            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <input
+            type="number"
+            inputMode="numeric"
+            value={priceMax}
+            onChange={(e) => setPriceMax(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="€ máx"
+            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <select
+            value={bedrooms}
+            onChange={(e) => setBedrooms(e.target.value)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Hab: todas</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+          </select>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={areaMin}
+            onChange={(e) => setAreaMin(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="m² mín"
+            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setLast24h((v) => !v)}
+            className={
+              last24h
+                ? "rounded-lg border border-gold bg-gold/15 px-3 py-2 text-[13px] font-medium text-gold-dark"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-gold/40"
+            }
+          >
+            Últimas 24h
+          </button>
+          <span className="ml-auto text-[11px] text-ink/55">
+            {filtered.length} de {rows.length}
+          </span>
+        </div>
+
+        {/* Grid */}
+        {filtered.length === 0 ? (
+          <div className="mt-6 rounded-xl border border-gold/15 bg-white/40 px-4 py-12 text-center text-ink/55">
+            No hay anuncios de particulares todavía. El scraper los detecta
+            automáticamente cada hora.
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {paginatedRows.map((r) => {
+              const cover = r.photos?.[0]?.url;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSelected(r)}
+                  className="group flex flex-col overflow-hidden rounded-xl border border-ink/10 bg-white text-left transition hover:border-gold/50 hover:shadow-[0_12px_30px_-18px_rgba(40,28,10,0.35)]"
+                >
+                  <div className="relative aspect-[16/10] w-full overflow-hidden bg-ink/5">
+                    {cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={cover}
+                        alt=""
+                        className="h-full w-full object-cover transition group-hover:scale-[1.03]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-ink/30">
+                        sin foto
+                      </div>
+                    )}
+                    <span className="absolute left-2 top-2 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
+                      {r.operation === "rent" ? "Alquiler" : "Venta"}
+                    </span>
+                    <span className="absolute right-2 top-2 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+                      {r.portal}
+                    </span>
+                    {/* Badge de retirado */}
+                    {!r.is_active && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-ink/30">
+                        <span className="rounded-md bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
+                          Retirado
+                        </span>
+                      </span>
+                    )}
+                    {/* Indicador de contacto disponible */}
+                    {r.phone && (
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        <Phone size={10} strokeWidth={2} />
+                        Teléfono
+                      </span>
+                    )}
+                    {!r.phone && r.chat_only && (
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        <MessageSquare size={10} strokeWidth={1.75} />
+                        Solo chat
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-3.5">
+                    <div className="flex items-center gap-1.5 text-[12px] text-ink/60">
+                      <MapPin size={12} strokeWidth={1.75} className="text-gold" />
+                      <span>{r.zone ?? "Madrid"}</span>
+                    </div>
+                    <p className="mt-1 font-serif text-lg font-medium text-ink">
+                      {r.price != null
+                        ? `${formatPrice(r.price)}${r.operation === "rent" ? "/mes" : ""}`
+                        : "Precio n/d"}
+                    </p>
+                    <p className="mt-1 text-[12px] text-ink/60">
+                      {[
+                        r.bedrooms != null ? `${r.bedrooms} hab` : null,
+                        r.bathrooms != null ? `${r.bathrooms} baños` : null,
+                        r.square_meters != null ? `${r.square_meters} m²` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                    {r.phone && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const cleanPhone = r.phone!.replace(/[\s\-()]/g, "");
+                          copyToClipboard(cleanPhone);
+                          setCopiedPhoneId(r.id);
+                          setTimeout(() => setCopiedPhoneId(null), 2000);
+                        }}
+                        className="mt-2 flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        {copiedPhoneId === r.id ? (
+                          <>
+                            <Check size={12} strokeWidth={2.5} />
+                            ¡Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} strokeWidth={1.75} />
+                            {formatPhoneToInternational(r.phone)}
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <div className="mt-auto flex items-center justify-between pt-3 text-[11px] text-ink/45">
+                      <span>
+                        {r.created_at
+                          ? DATE_FMT.format(new Date(r.created_at))
+                          : ""}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-gold-dark group-hover:underline">
+                        Ver detalles
+                        <ExternalLink size={11} strokeWidth={1.75} />
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+            </div>
+
+            {/* Paginación */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex flex-col items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="rounded-lg border border-ink/10 bg-white/85 p-2 text-ink disabled:opacity-40"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <div className="flex gap-1.5">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => {
+                        return p === 1 || p === totalPages || Math.abs(p - page) <= 1;
+                      })
+                      .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                          acc.push("...");
+                        }
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((item, idx) =>
+                        item === "..." ? (
+                          <span key={`ellipsis-${idx}`} className="px-1 text-ink/40">
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={item}
+                            onClick={() => setPage(item)}
+                            className={cn(
+                              "h-8 w-8 rounded-lg border text-sm font-medium transition-colors",
+                              item === page
+                                ? "border-gold bg-gold/15 text-gold-dark"
+                                : "border-ink/10 hover:bg-white/85 text-ink/70",
+                            )}
+                          >
+                            {item}
+                          </button>
+                        ),
+                      )}
+                  </div>
+
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="rounded-lg border border-ink/10 bg-white/85 p-2 text-ink disabled:opacity-40"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+                <p className="text-xs text-ink/55">
+                  Página {page} de {totalPages} · {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }
