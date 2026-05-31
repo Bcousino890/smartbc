@@ -1,13 +1,15 @@
 "use client";
 
 import {
+  AlertTriangle,
+  Building2,
   Check,
-  ChevronDown,
   ExternalLink,
   Key,
   Loader2,
   Search,
   Send,
+  User,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -29,6 +31,30 @@ export type PublicacionProperty = {
   external_id: string | null;
   bc_reference: string | null;
   created_at: string;
+};
+
+type SourceFilter = "" | "own" | "agency" | "particular" | "unknown";
+
+// Determina la fuente de una propiedad basándose en sus referencias
+function getSource(p: PublicacionProperty): "own" | "agency" | "particular" | "unknown" {
+  if (p.bc_reference) return "own";
+  if (p.external_id?.startsWith("idealista-")) return "particular";
+  if (p.external_id) return "agency";
+  return "unknown";
+}
+
+const SOURCE_LABEL: Record<ReturnType<typeof getSource>, string> = {
+  own: "Propia BC",
+  agency: "Agencia",
+  particular: "Particular",
+  unknown: "Sin fuente",
+};
+
+const SOURCE_STYLE: Record<ReturnType<typeof getSource>, string> = {
+  own: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  agency: "border-blue-200 bg-blue-50 text-blue-700",
+  particular: "border-violet-200 bg-violet-50 text-violet-700",
+  unknown: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
 type PublishStatus = "idle" | "loading" | "success" | "error";
@@ -133,6 +159,7 @@ export function PublicacionClient({
 }) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("own");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [publishStates, setPublishStates] = useState<
     Record<string, PropertyPublishState>
@@ -145,10 +172,17 @@ export function PublicacionClient({
     type: "success" | "error";
   } | null>(null);
 
+  const sourceCounts = useMemo(() => {
+    const counts = { own: 0, agency: 0, particular: 0, unknown: 0 };
+    for (const p of properties) counts[getSource(p)]++;
+    return counts;
+  }, [properties]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return properties.filter((p) => {
       if (operation && p.operation !== operation) return false;
+      if (sourceFilter && getSource(p) !== sourceFilter) return false;
       if (q) {
         const hay =
           p.title.toLowerCase().includes(q) ||
@@ -159,7 +193,7 @@ export function PublicacionClient({
       }
       return true;
     });
-  }, [properties, query, operation]);
+  }, [properties, query, operation, sourceFilter]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -257,6 +291,49 @@ export function PublicacionClient({
       )}
 
       <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+        {/* Filtros de fuente */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {(
+            [
+              { value: "" as SourceFilter, label: "Todas", count: properties.length },
+              { value: "own" as SourceFilter, label: "Propias BC", count: sourceCounts.own },
+              { value: "agency" as SourceFilter, label: "Agencias", count: sourceCounts.agency },
+              { value: "particular" as SourceFilter, label: "Particulares", count: sourceCounts.particular },
+              { value: "unknown" as SourceFilter, label: "Sin fuente", count: sourceCounts.unknown },
+            ] as const
+          ).map(({ value, label, count }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSourceFilter(value)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition",
+                sourceFilter === value
+                  ? "border-ink bg-ink text-cream-50"
+                  : "border-ink/10 bg-white/85 text-ink/65 hover:border-ink/25 hover:text-ink",
+              )}
+            >
+              {value === "own" && <Check size={11} strokeWidth={2.5} />}
+              {value === "agency" && <Building2 size={11} strokeWidth={1.75} />}
+              {value === "particular" && <User size={11} strokeWidth={1.75} />}
+              {value === "unknown" && <AlertTriangle size={11} strokeWidth={1.75} />}
+              {label}
+              <span className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px]",
+                sourceFilter === value ? "bg-white/20 text-white" : "bg-ink/8 text-ink/55"
+              )}>
+                {count}
+              </span>
+            </button>
+          ))}
+          {sourceFilter !== "own" && (
+            <span className="flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700">
+              <AlertTriangle size={11} strokeWidth={1.75} />
+              Solo publica propiedades &quot;Propias BC&quot;
+            </span>
+          )}
+        </div>
+
         {/* Barra de herramientas */}
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
@@ -407,7 +484,15 @@ export function PublicacionClient({
                         : "—"}
                     </td>
                     <td className="px-3 py-3 text-[12px] text-ink/60">
-                      {p.bc_reference ?? p.external_id ?? "—"}
+                      <div className="flex flex-col gap-1">
+                        <span>{p.bc_reference ?? p.external_id ?? "—"}</span>
+                        <span className={cn(
+                          "inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                          SOURCE_STYLE[getSource(p)]
+                        )}>
+                          {SOURCE_LABEL[getSource(p)]}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-[12px] text-ink/60">
                       {DATE_FMT.format(new Date(p.created_at))}
