@@ -22,22 +22,38 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
   // de plantilla `adProfessionalName}}` (sin comillas, no casa).
   const m = html.match(/adProfessionalName\s*:\s*(['"])([^'"]*)\1/);
 
-  // Intentar extraer teléfono de varios patrones que Idealista puede incluir
-  // en el HTML inline (scripts de analytics, JSON-LD, atributos data-*, tel:).
+  // Extraer teléfono de los patrones que Idealista usa en el HTML.
+  // Prioridad: appcallback_target_phone (más confiable) → href="tel:" → otros patrones.
   let phone: string | null = null;
-  const phonePatterns = [
-    /"phone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
-    /phoneNumber\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
-    /href="tel:([^"]+)"/,
-    /telefono\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/i,
-    /contactPhone\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
-    /"telefono"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
-  ];
-  for (const pattern of phonePatterns) {
-    const pm = html.match(pattern);
+
+  // Patrón 1: appcallback_target_phone="609808765" (sin +34, solo dígitos)
+  let pm = html.match(/appcallback_target_phone="(\d{9,})"/);
+  if (pm?.[1]) {
+    phone = `+34${pm[1]}`;
+  }
+
+  // Patrón 2: href="tel:+34609808765" (completo con +34)
+  if (!phone) {
+    pm = html.match(/href="tel:([+\d][\d\s\-]{6,})"/);
     if (pm?.[1]) {
       phone = pm[1].trim();
-      break;
+    }
+  }
+
+  // Patrón 3: Otros patrones en scripts inline
+  if (!phone) {
+    const phonePatterns = [
+      /"phone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+      /phoneNumber\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
+      /telefono\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/i,
+      /contactPhone\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
+    ];
+    for (const pattern of phonePatterns) {
+      pm = html.match(pattern);
+      if (pm?.[1]) {
+        phone = pm[1].trim();
+        break;
+      }
     }
   }
 
