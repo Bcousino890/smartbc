@@ -76,6 +76,47 @@ function firstInt(raw: string): number {
   return m ? parseInt(m[0], 10) : 0;
 }
 
+// Las descripciones de Housingo vienen con su propia marca ("HousinGo presenta
+// …", "HousinGo, by David de Gea. Somos una agencia…"), teléfonos y llamadas a
+// la acción. BC republica las fichas como propias, así que hay que sanear todo
+// eso para no confundir al cliente final ni promocionar a la competencia.
+const PROMO_SENTENCE =
+  /(somos una agencia|agencia inmobiliaria|especializad|ll[aá]m[ae]|ll[aá]menos|cont[aá]ct|no dude|no dudes|escr[ií]ban|wh?atsapp|vis[ií]ten?os|ven a vernos|gestionamos|ponte en contacto|m[aá]s informaci[oó]n|concertar (una )?(visita|cita)|@|www\.|https?:\/\/|\b[\w.-]+\.(es|com|net)\b)/i;
+
+export function cleanHousingoDescription(raw: string): string {
+  if (!raw) return "";
+  let text = raw;
+
+  // 1) Quitar el nombre de la agencia y sus muletillas ("HousinGo presenta",
+  //    "HousinGo, by David de Gea.").
+  text = text.replace(/housin\s?go\s*,?\s*by[^.!?]*[.!?]/gi, " ");
+  text = text.replace(/housin\s?go\s+presenta\b/gi, " ");
+  text = text.replace(/housin\s?go/gi, " ");
+  // Nombre del titular que aparece en la marca.
+  text = text.replace(/david de gea/gi, " ");
+
+  // 2) Quitar teléfonos y prefijos.
+  text = text.replace(/\+?\d[\d\s.\-]{7,}\d/g, " ");
+
+  // 3) Separar frases pegadas ("reformado.Somos" → "reformado. Somos") para
+  //    poder descartar las de promo/contacto.
+  text = text.replace(/([.!?])([A-ZÁÉÍÓÚÑ¡¿])/g, "$1 $2");
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !PROMO_SENTENCE.test(s));
+  text = sentences.join(" ");
+
+  // 4) Limpiar espacios y signos sueltos al principio.
+  text = text
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/^[\s,.;:!¡?¿)\-]+/, "")
+    .trim();
+  // Capitalizar la primera letra si quedó en minúscula.
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 type Entry = {
   ref: string;
   url: string;
@@ -146,11 +187,13 @@ async function scrapeDetail(entry: Entry): Promise<RawProperty | null> {
   const $ = cheerio.load(html);
 
   const title = $("h1").first().text().trim() || `Inmueble ${entry.ref}`;
-  const description = $(".IDDescripcionBig")
+  const rawDescription = $(".IDDescripcionBig")
     .first()
     .text()
     .replace(/\s+/g, " ")
     .trim();
+  // Saneamos: fuera nombre de la agencia, teléfonos y autopromo/contacto.
+  const description = cleanHousingoDescription(rawDescription);
   // Fotos servidas por Mobilia (media.mobiliagestion.es), acotadas a esta
   // propiedad. extractMobiliaPhotos las pasa a la versión `-original` limpia.
   const photos = extractMobiliaPhotos($, {
