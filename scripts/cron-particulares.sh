@@ -6,7 +6,7 @@
 set -e
 
 # Variables de config
-API_URL="${API_URL:-http://localhost:3000}"  # URL del app en el VPS
+API_URL="${API_URL:-http://localhost:3000}"  # URL del app en el VPS (pm2 arranca next start --port 3000)
 CRON_SECRET="${CRON_SECRET:-}"  # Debe estar en .env o exportado
 
 if [ -z "$CRON_SECRET" ]; then

@@ -12,26 +12,22 @@ export const maxDuration = 800; // ~600 fichas × ~1s + márgenes
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
 
-// Búsquedas base de Idealista en Madrid (todas las zonas). Ordenadas por
-// fecha de publicación descendente: recorremos las primeras MAX_PAGES
-// páginas para capturar los anuncios MÁS RECIENTES. El cron corre cada 6h
-// y va acumulando los particulares nuevos que van apareciendo (estrategia
-// incremental — capturar todo Madrid de golpe son ~30k fichas, inviable).
-// Todo Madrid capital, venta y alquiler. Ordenado por fecha reciente: el
-// cron captura los particulares NUEVOS de toda la ciudad cada run. El
-// histórico completo (~30k anuncios) NO se descarga de golpe; se acumula
-// incrementalmente. Para un backfill de N páginas recientes, subir
-// PARTICULARES_MAX_PAGES y disparar el script de backfill.
+// Búsquedas base de Idealista: todo Madrid capital, venta y alquiler.
+// Ordenadas por fecha de publicación descendente, así cada run captura los
+// particulares MÁS RECIENTES. El cron corre cada hora desde el VPS y va
+// acumulando los anuncios nuevos de toda la ciudad (estrategia incremental:
+// el histórico completo son ~30k fichas, inviable de golpe). Para un backfill
+// de N páginas recientes, subir PARTICULARES_MAX_PAGES y disparar el script
+// de backfill manualmente.
 const SEARCH_BASES = [
   "https://www.idealista.com/venta-viviendas/madrid-madrid/",
   "https://www.idealista.com/alquiler-viviendas/madrid-madrid/",
 ];
 
-// Páginas por listado y por run. 8 listados (4 zonas × venta/alquiler) × 5
-// páginas × 30 anuncios = ~1200 fichas/run máx. Ordenadas por fecha
-// reciente: captura las novedades de cada zona en cada run. Para un
-// backfill completo de una zona, subir PARTICULARES_MAX_PAGES (ej. 80) y
-// disparar manualmente una vez.
+// Páginas por listado y por run. 2 listados (venta + alquiler) × 5 páginas
+// × 30 anuncios = ~300 fichas/run máx. Ordenadas por fecha reciente: captura
+// las novedades de cada listado en cada run. Para un backfill, subir
+// PARTICULARES_MAX_PAGES (ej. 80) y disparar manualmente una vez.
 const MAX_PAGES = Number.parseInt(
   process.env.PARTICULARES_MAX_PAGES ?? "5",
   10,
