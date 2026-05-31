@@ -327,6 +327,7 @@ const es: Strings = {
   "admin.nav.mensajes": "Mensajes",
   "admin.nav.sindicacion": "Sindicación",
   "admin.nav.particulares": "Particulares",
+  "admin.nav.publicacion": "Publicación",
   "admin.nav.reportes": "Reportes",
   "adminMensajes.title": "Mensajes",
   "adminMensajes.subtitle":
@@ -341,6 +342,12 @@ const es: Strings = {
   "admin.nav.usuarios": "Usuarios",
   "admin.nav.configuracion": "Configuración",
   "admin.realtime.footer": "Datos actualizados en tiempo real",
+  "publicacion.title": "Publicación",
+  "publicacion.subtitle": "Vuelca tus propiedades a Idealista y otros portales con un clic.",
+  "publicacion.stats.total": "Total propiedades",
+  "publicacion.stats.rent": "En alquiler",
+  "publicacion.stats.sale": "En venta",
+  "publicacion.stats.help": "Propiedades disponibles para publicar",
   "admin.relativeTime.minutesAgo": "Hace {n} min",
   "admin.lastUpdate.label": "Última actualización:",
 
@@ -1207,6 +1214,7 @@ const en: Strings = {
   "admin.nav.mensajes": "Messages",
   "admin.nav.sindicacion": "Syndication",
   "admin.nav.particulares": "Private listings",
+  "admin.nav.publicacion": "Publishing",
   "admin.nav.reportes": "Reports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle": "All your client conversations in one place.",
@@ -2077,6 +2085,7 @@ const fr: Strings = {
   "admin.nav.mensajes": "Messages",
   "admin.nav.sindicacion": "Syndication",
   "admin.nav.particulares": "Particuliers",
+  "admin.nav.publicacion": "Publication",
   "admin.nav.reportes": "Rapports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle":
@@ -2954,6 +2963,7 @@ const de: Strings = {
   "admin.nav.mensajes": "Nachrichten",
   "admin.nav.sindicacion": "Syndikation",
   "admin.nav.particulares": "Privatpersonen",
+  "admin.nav.publicacion": "Veröffentlichung",
   "admin.nav.reportes": "Berichte",
   "adminMensajes.title": "Nachrichten",
   "adminMensajes.subtitle":
