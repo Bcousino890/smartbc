@@ -107,8 +107,13 @@ export function agencyDetailFromDb(
       ...fallback.contact,
       name: contactName,
       initials: deriveInitials(contactName, fallback.contact.initials),
-      phone: dbAgency.contact_phone ?? fallback.contact.phone,
-      email: dbAgency.contact_email ?? fallback.contact.email,
+      // Email/teléfono/dirección salen SOLO de BD (vacío si no hay). NO se
+      // hereda el contacto del mock de otra agencia: antes una agencia con el
+      // email vacío mostraba el de Level (carmen@levelrealestate.es). La
+      // dirección no está modelada en BD, así que no se inventa.
+      phone: dbAgency.contact_phone ?? "",
+      email: dbAgency.contact_email ?? "",
+      address: "",
     },
   };
 }

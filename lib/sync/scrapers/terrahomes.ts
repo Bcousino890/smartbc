@@ -12,10 +12,14 @@ import { extractFeaturesFromText } from "./level-real-estate";
 //     Chamartín y Pozuelo (el resto de Madrid se descarta).
 const SITE_BASE = "https://www.terrahomes.es";
 const USER_AGENT = "smartbc-bot/1.0 (contacto@bcousinoprop.com)";
-const REQUEST_DELAY_MS = 2500;
+const REQUEST_DELAY_MS = 1000;
 const REQUEST_TIMEOUT_MS = 20000;
 const PAGE_SIZE = 18; // Inmoweb pagina con &i=<offset>&c=18
 const MAX_PAGES = 40; // tope de seguridad por operación (40×18 = 720 fichas)
+// Tope de fichas a scrapear por run (acota el tiempo del sync). El listado de
+// referencias (`listExternalIds`) NO se limita, así que el diff engine nunca
+// archiva las que aún no se han scrapeado. Subir vía env para un backfill.
+const DEFAULT_LIMIT = Number(process.env.TERRAHOMES_SYNC_LIMIT ?? 400);
 
 // Inmoweb usa códigos de operación: 1 = venta, 2 = alquiler.
 const OP_SALE = 1;
@@ -234,41 +238,47 @@ export async function scrapeProperty(
   };
 }
 
-// Enumera las URLs de ficha de una operación, paginando con &i=<offset>&c=18,
-// y filtrando por zona desde el slug (barato, sin abrir la ficha).
-async function listUrlsForOperation(
-  operation: "rent" | "sale",
-): Promise<string[]> {
-  const opCode = operation === "rent" ? OP_RENT : OP_SALE;
-  const priceParam = operation === "rent" ? `&precio_min=${RENT_MIN_PRICE}` : "";
+type Entry = { ref: string; url: string; operation: "rent" | "sale" };
+
+// Enumera (barato, sin abrir fichas) TODAS las referencias de zonas premium,
+// paginando venta + alquiler con &i=<offset>&c=18 y filtrando por zona desde
+// el slug. Es la base tanto de scrape() como de listExternalIds().
+async function listPremiumEntries(): Promise<Entry[]> {
   const seen = new Set<string>();
-  const urls: string[] = [];
+  const entries: Entry[] = [];
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const offset = page * PAGE_SIZE;
-    const listUrl = `${SITE_BASE}/results/?id_tipo_operacion=${opCode}${priceParam}&i=${offset}&c=${PAGE_SIZE}`;
-    const html = await fetchText(listUrl);
-    if (!html) break;
+  for (const operation of ["sale", "rent"] as const) {
+    const opCode = operation === "rent" ? OP_RENT : OP_SALE;
+    const priceParam =
+      operation === "rent" ? `&precio_min=${RENT_MIN_PRICE}` : "";
 
-    let addedOnThisPage = 0;
-    const re = /href="(\/[a-z0-9-]+-es\d+\.html)"/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) !== null) {
-      const path = m[1];
-      const ref = refFromUrl(path);
-      if (!ref || seen.has(ref)) continue;
-      seen.add(ref);
-      addedOnThisPage++;
-      if (zoneKeyFromUrl(path)) urls.push(`${SITE_BASE}${path}`); // solo zonas premium
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * PAGE_SIZE;
+      const listUrl = `${SITE_BASE}/results/?id_tipo_operacion=${opCode}${priceParam}&i=${offset}&c=${PAGE_SIZE}`;
+      const html = await fetchText(listUrl);
+      if (!html) break;
+
+      let addedOnThisPage = 0;
+      const re = /href="(\/[a-z0-9-]+-es\d+\.html)"/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(html)) !== null) {
+        const path = m[1];
+        const ref = refFromUrl(path);
+        if (!ref || seen.has(ref)) continue;
+        seen.add(ref);
+        addedOnThisPage++;
+        if (zoneKeyFromUrl(path)) {
+          entries.push({ ref, url: `${SITE_BASE}${path}`, operation }); // solo zonas premium
+        }
+      }
+
+      // Sin fichas nuevas = fin (Inmoweb repite la última página al pasarse).
+      if (addedOnThisPage === 0) break;
+      if (page < MAX_PAGES - 1) await delay(REQUEST_DELAY_MS);
     }
-
-    // Sin fichas nuevas en esta página = hemos llegado al final (Inmoweb repite
-    // la última página cuando el offset se pasa del total).
-    if (addedOnThisPage === 0) break;
-    if (page < MAX_PAGES - 1) await delay(REQUEST_DELAY_MS);
   }
 
-  return urls;
+  return entries;
 }
 
 export const terrahomesScraper: Scraper = {
@@ -276,19 +286,24 @@ export const terrahomesScraper: Scraper = {
   label: "TerraHomes (web pública)",
   agencySlug: "terrahomes",
   scrape: async () => {
+    const entries = await listPremiumEntries();
+    const sliced = entries.slice(0, Math.max(1, DEFAULT_LIMIT));
     const results: RawProperty[] = [];
-    for (const operation of ["sale", "rent"] as const) {
-      const urls = await listUrlsForOperation(operation);
-      for (let i = 0; i < urls.length; i++) {
-        try {
-          const prop = await scrapeProperty(urls[i], operation);
-          if (prop) results.push(prop);
-        } catch {
-          // fallos individuales se ignoran; el sync log refleja el agregado
-        }
-        if (i < urls.length - 1) await delay(REQUEST_DELAY_MS);
+    for (let i = 0; i < sliced.length; i++) {
+      try {
+        const prop = await scrapeProperty(sliced[i].url, sliced[i].operation);
+        if (prop) results.push(prop);
+      } catch {
+        // fallos individuales se ignoran; el sync log refleja el agregado
       }
+      if (i < sliced.length - 1) await delay(REQUEST_DELAY_MS);
     }
     return results;
+  },
+  // Autoridad de "qué sigue publicado": todas las refs premium (sin límite),
+  // para que el diff engine no archive las que el run actual no alcanzó.
+  listExternalIds: async () => {
+    const entries = await listPremiumEntries();
+    return entries.map((e) => e.ref);
   },
 };

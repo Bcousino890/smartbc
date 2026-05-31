@@ -26,20 +26,26 @@ export function AgencyContactCard({ contact }: { contact: AgencyContact }) {
       </div>
 
       <ul className="mt-5 space-y-3 text-sm">
-        <ContactRow
-          icon={<Phone size={14} strokeWidth={1.75} />}
-          href={`tel:${contact.phone.replace(/\s+/g, "")}`}
-          label={contact.phone}
-        />
-        <ContactRow
-          icon={<Mail size={14} strokeWidth={1.75} />}
-          href={`mailto:${contact.email}`}
-          label={contact.email}
-        />
-        <ContactRow
-          icon={<MapPin size={14} strokeWidth={1.75} />}
-          label={contact.address}
-        />
+        {contact.phone && (
+          <ContactRow
+            icon={<Phone size={14} strokeWidth={1.75} />}
+            href={`tel:${contact.phone.replace(/\s+/g, "")}`}
+            label={contact.phone}
+          />
+        )}
+        {contact.email && (
+          <ContactRow
+            icon={<Mail size={14} strokeWidth={1.75} />}
+            href={`mailto:${contact.email}`}
+            label={contact.email}
+          />
+        )}
+        {contact.address && (
+          <ContactRow
+            icon={<MapPin size={14} strokeWidth={1.75} />}
+            label={contact.address}
+          />
+        )}
       </ul>
 
       <button
