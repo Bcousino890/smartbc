@@ -5,6 +5,7 @@ export type AdvertiserType = "particular" | "professional" | "unknown";
 export type AdvertiserCheckResult = {
   advertiser_type: AdvertiserType;
   is_ad_professional: boolean | null;
+  phone?: string | null;
   error?: string;
 };
 
@@ -89,19 +90,23 @@ export async function checkIdealistaAdvertiserType(
     }
 
     const json = (await res.json()) as Record<string, unknown>;
-    const value = (json?.data as Record<string, unknown>)?.isAdProfessional;
+    const data = json?.data as Record<string, unknown>;
+    const value = data?.isAdProfessional;
+    const phone = (data?.phone as string) || null;
 
     // Validar que sea boolean
     if (typeof value === "boolean") {
       return {
         advertiser_type: value ? "professional" : "particular",
         is_ad_professional: value,
+        phone,
       };
     }
 
     return {
       advertiser_type: "unknown",
       is_ad_professional: null,
+      phone,
       error: "isAdProfessional no es boolean",
     };
   } catch (error) {

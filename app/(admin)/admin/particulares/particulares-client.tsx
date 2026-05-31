@@ -30,6 +30,8 @@ export type ParticularRow = {
   owner_name: string | null;
   phone: string | null;
   chat_only: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string | null;
   taken_down_at: string | null;
   is_active: boolean;
@@ -209,6 +211,24 @@ function ParticularModal({
               </a>
             )}
           </div>
+
+          {/* Mapa */}
+          {row.latitude && row.longitude && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Ubicación
+              </p>
+              <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  style={{ border: "none" }}
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${row.longitude - 0.003},${row.latitude - 0.003},${row.longitude + 0.003},${row.latitude + 0.003}&layer=mapnik&marker=${row.latitude},${row.longitude}`}
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          )}
 
           {/* Características */}
           {row.features && row.features.length > 0 && (

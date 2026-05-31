@@ -68,6 +68,9 @@ type ParticularPayload = {
   photos: Array<{ url: string; alt?: string }>;
   advertiser_type: string;
   is_ad_professional: boolean | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 async function upsertParticular(
@@ -103,6 +106,9 @@ async function upsertParticular(
         description: payload.description,
         features: payload.features,
         photos: payload.photos,
+        phone: payload.phone,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
         advertiser_type: payload.advertiser_type,
         is_ad_professional: payload.is_ad_professional,
         is_active: true,
@@ -157,6 +163,9 @@ async function upsertParticular(
     description: payload.description,
     features: payload.features,
     photos: payload.photos,
+    phone: payload.phone,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
     advertiser_type: payload.advertiser_type,
     is_ad_professional: payload.is_ad_professional,
     is_active: true,
@@ -230,6 +239,9 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           photos: (preview.photos ?? []) as Array<{ url: string; alt?: string }>,
           advertiser_type: advertiserInfo.advertiser_type,
           is_ad_professional: advertiserInfo.is_ad_professional ?? null,
+          phone: advertiserInfo.phone ?? null,
+          latitude: preview.latitude ?? null,
+          longitude: preview.longitude ?? null,
         });
 
         if (!saved) {
