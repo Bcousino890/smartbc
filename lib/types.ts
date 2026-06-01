@@ -62,6 +62,7 @@ export type Property = {
   id: string;
   title: string;
   zone: string;
+  subzone?: string | null;
   city: string;
   bedrooms: number;
   bathrooms: number;

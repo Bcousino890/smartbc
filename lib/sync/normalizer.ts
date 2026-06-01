@@ -50,6 +50,7 @@ export function normalizeRawProperty(
     bathrooms: raw.bathrooms ?? 0,
     square_meters: raw.squareMeters ?? null,
     zone: raw.zone.trim(),
+    subzone: raw.subzone?.trim() || null,
     address: raw.address?.trim() || null,
     available_from: raw.availableFrom ?? null,
     features: raw.features ?? [],
