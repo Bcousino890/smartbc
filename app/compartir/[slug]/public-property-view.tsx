@@ -46,8 +46,15 @@ function WhatsAppIcon({ size = 16 }: { size?: number }) {
 export function PublicPropertyView({ property }: { property: Property }) {
   const isRent = property.operation === "alquiler";
   const price = formatPrice(property.price);
+  // Enlace canónico al propio SmartLink (property.id es el slug) y referencia
+  // NEUTRA de BC (BC-XXXX, no delata el portal de origen). Ambos van en el
+  // mensaje de WhatsApp para que el cliente identifique el piso y BC sepa cuál.
+  const portalUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.bcousinoprop.com";
+  const shareUrl = `${portalUrl}/compartir/${property.id}`;
+  const refLabel = property.bcReference ? ` (Ref. ${property.bcReference})` : "";
   const waText = encodeURIComponent(
-    `Hola, me interesa esta propiedad de Benjamín Cousiño Propiedades: ${property.title}. ¿Podríamos hablar?`,
+    `Hola, me interesa esta propiedad de Benjamín Cousiño Propiedades${refLabel}: ${property.title}.\n${shareUrl}\n¿Podríamos hablar?`,
   );
   const waLink = `https://wa.me/${BC_CONTACT.whatsapp}?text=${waText}`;
 
