@@ -20,6 +20,7 @@ import {
   NewPropertyModal,
 } from "@/components/admin/new-property-modal";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
+import { Pagination } from "@/components/ui/pagination";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
@@ -48,6 +49,7 @@ export function PropertiesAdminClient({
   const [zoneFilter, setZoneFilter] = useState<string>("");
   const [subzoneFilter, setSubzoneFilter] = useState<string>("");
   const [agencyFilter, setAgencyFilter] = useState<string>("");
+  const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -132,6 +134,17 @@ export function PropertiesAdminClient({
     subzoneFilter,
     agencyFilter,
   ]);
+
+  // Paginación: solo renderizamos una página de la tabla (DOM acotado).
+  const PER_PAGE = 25;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const paged = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
+
+  // Al cambiar cualquier filtro/búsqueda, volver a la primera página.
+  useEffect(() => {
+    setPage(1);
+  }, [query, operationFilter, statusFilter, zoneFilter, subzoneFilter, agencyFilter]);
 
   const hasActiveFilters = Boolean(
     operationFilter ||
@@ -345,11 +358,15 @@ export function PropertiesAdminClient({
                 </td>
               </tr>
             ) : (
-              filtered.map((p) => <PropertyRow key={p.id} property={p} />)
+              paged.map((p) => <PropertyRow key={p.id} property={p} />)
             )}
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+      )}
     </section>
   );
 }
