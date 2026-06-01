@@ -23,9 +23,9 @@ import type { Property } from "@/lib/types";
 const BC_CONTACT = {
   email: "contacto@bcousinoprop.com",
   // Para WhatsApp usamos el formato internacional sin espacios ni "+".
-  phoneDisplay: "+34 600 000 000",
-  phoneE164: "+34600000000",
-  whatsapp: "34600000000",
+  phoneDisplay: "+34 694 20 97 63",
+  phoneE164: "+34694209763",
+  whatsapp: "34694209763",
 };
 
 // SVG inline del logo de WhatsApp (evita una dependencia extra).

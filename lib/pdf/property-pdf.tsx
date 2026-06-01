@@ -225,7 +225,7 @@ const BC = {
   brand: "BENJAMÍN COUSIÑO",
   sub: "PROPIEDADES · MADRID",
   email: "contacto@bcousinoprop.com",
-  phone: "+34 600 000 000",
+  phone: "+34 694 20 97 63",
 };
 
 function fmtPrice(n: number): string {
