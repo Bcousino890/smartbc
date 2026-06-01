@@ -211,6 +211,59 @@ export async function uploadPropertyPhoto(
   return { ok: true, url: publicUrl };
 }
 
+export type ReorderPhotosResult = { ok: true } | { ok: false; error: string };
+
+// Reordena las fotos de una propiedad. La PRIMERA del array pasa a ser la
+// portada (position 0 + is_cover + properties.cover_photo_url), que es la que
+// el SmartLink usa como principal.
+export async function reorderPropertyPhotos(
+  slug: string,
+  orderedUrls: string[],
+): Promise<ReorderPhotosResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+  if (!slug || orderedUrls.length === 0)
+    return { ok: false, error: "invalid_input" };
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propLookup.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const photosTbl = supabase.from("property_photos") as unknown as {
+    update: (payload: Record<string, unknown>) => {
+      eq: (c: string, v: string) => {
+        eq: (
+          c2: string,
+          v2: string,
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  for (let i = 0; i < orderedUrls.length; i++) {
+    const res = await photosTbl
+      .update({ position: i, is_cover: i === 0 })
+      .eq("property_id", prop.id)
+      .eq("url", orderedUrls[i]);
+    if (res.error) return { ok: false, error: res.error.message };
+  }
+
+  const propsTbl = supabase.from("properties") as unknown as {
+    update: (payload: Record<string, unknown>) => {
+      eq: (c: string, v: string) => Promise<{ error: { message: string } | null }>;
+    };
+  };
+  await propsTbl.update({ cover_photo_url: orderedUrls[0] }).eq("id", prop.id);
+
+  revalidatePath("/admin/propiedades");
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return { ok: true };
+}
+
 export type DeletePropertyPhotoInput = {
   slug: string;
   photoUrl: string;
