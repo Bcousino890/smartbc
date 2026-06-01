@@ -13,9 +13,11 @@ import {
   Search,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { createPropertyFromParticular } from "./actions";
 
 export type ParticularRow = {
   id: string;
@@ -72,6 +74,25 @@ function ParticularModal({
   const photos = row.photos ?? [];
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(row.phone);
+
+  // Estado de la conversión particular → propiedad (en Portales externos).
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<{ slug: string } | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function handleCreateProperty() {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await createPropertyFromParticular(row.id);
+      if (res.ok) setCreated({ slug: res.slug });
+      else setCreateError(res.error);
+    } catch {
+      setCreateError("network_error");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const portalLabel =
     row.portal.charAt(0).toUpperCase() + row.portal.slice(1);
@@ -306,17 +327,30 @@ function ParticularModal({
               <ExternalLink size={14} strokeWidth={1.75} />
               Ver en {portalLabel}
             </a>
-            <button
-              onClick={() => {
-                // TODO: abrir modal de nueva propiedad con datos pre-rellenados
-                alert("Crear propiedad — próximamente");
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark"
-            >
-              <Plus size={14} strokeWidth={2} />
-              Crear propiedad
-            </button>
+            {created ? (
+              <Link
+                href={`/admin/propiedades/${created.slug}`}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <Check size={14} strokeWidth={2} />
+                Propiedad creada · abrir ficha
+              </Link>
+            ) : (
+              <button
+                onClick={handleCreateProperty}
+                disabled={creating}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+              >
+                <Plus size={14} strokeWidth={2} />
+                {creating ? "Creando…" : "Crear propiedad"}
+              </button>
+            )}
           </div>
+          {createError && (
+            <p className="text-xs text-red-600">
+              No se pudo crear la propiedad ({createError}). Inténtalo de nuevo.
+            </p>
+          )}
         </div>
       </div>
     </div>
