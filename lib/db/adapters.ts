@@ -266,6 +266,15 @@ function displayPropertyTitle(row: PropertyRow): string {
   return `${typeLabel} en ${row.zone}`;
 }
 
+// Hash corto y estable de una lista de strings (para versionar las URLs de
+// fotos del proxy y poder invalidar su caché al reordenar/añadir/borrar).
+function hashStrings(parts: string[]): string {
+  const s = parts.join("|");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
 export function propertyRowToClientProperty(
   row: PropertyRow & {
     agencies?: { name: string; slug: string } | null;
@@ -278,7 +287,13 @@ export function propertyRowToClientProperty(
       .sort((a, b) => a.position - b.position) ?? [];
   // URLs neutras vía el proxy /p/{slug}/{idx} — no exponemos rutas de
   // Storage internas (que delatan el portal de origen, ej. `synced/level/…`).
-  const photoUrls = sortedPhotos.map((_, i) => `/p/${row.slug}/${i}`);
+  // El proxy cachea 24h, así que añadimos `?v=` con un hash del ORDEN de las
+  // fotos: cambia al reordenar/añadir/borrar (invalidando la caché justo
+  // entonces), pero NO en un sync que no toca fotos (preserva la caché).
+  const orderHash = hashStrings(sortedPhotos.map((p) => p.url));
+  const photoUrls = sortedPhotos.map(
+    (_, i) => `/p/${row.slug}/${i}?v=${orderHash}`,
+  );
   const cover = photoUrls[0];
   return {
     id: row.slug,
