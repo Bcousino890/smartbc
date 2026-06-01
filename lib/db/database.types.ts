@@ -133,6 +133,7 @@ export type Database = {
           bathrooms: number;
           square_meters: number | null;
           zone: string;
+          subzone: string | null;
           address: string | null;
           available_from: string | null;
           features: string[];
@@ -170,6 +171,7 @@ export type Database = {
           bathrooms?: number;
           square_meters?: number | null;
           zone: string;
+          subzone?: string | null;
           address?: string | null;
           available_from?: string | null;
           features?: string[];

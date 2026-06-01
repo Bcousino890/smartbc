@@ -23,6 +23,7 @@ type ExistingProperty = {
   bathrooms: number;
   square_meters: number | null;
   zone: string;
+  subzone: string | null;
   address: string | null;
   available_from: string | null;
   features: string[];
@@ -54,6 +55,7 @@ function needsUpdate(
   if (existing.bathrooms !== normalized.bathrooms) return true;
   if ((existing.square_meters ?? null) !== normalized.square_meters) return true;
   if (existing.zone !== normalized.zone) return true;
+  if ((existing.subzone ?? null) !== normalized.subzone) return true;
   if ((existing.address ?? null) !== normalized.address) return true;
   if ((existing.available_from ?? null) !== normalized.available_from)
     return true;
@@ -129,6 +131,7 @@ async function insertProperty(
       bathrooms: normalized.bathrooms,
       square_meters: normalized.square_meters,
       zone: normalized.zone,
+      subzone: normalized.subzone,
       address: normalized.address,
       available_from: normalized.available_from,
       features: normalized.features,
@@ -186,6 +189,7 @@ async function updateExistingProperty(
       bathrooms: normalized.bathrooms,
       square_meters: normalized.square_meters,
       zone: normalized.zone,
+      subzone: normalized.subzone,
       address: normalized.address,
       available_from: normalized.available_from,
       features: normalized.features,
@@ -301,7 +305,7 @@ export async function runSyncForFeed(params: {
     const existingRes = await supabase
       .from("properties")
       .select(
-        "id, external_id, title, description, property_type, price, bedrooms, bathrooms, square_meters, zone, address, available_from, features, archived_at, status",
+        "id, external_id, title, description, property_type, price, bedrooms, bathrooms, square_meters, zone, subzone, address, available_from, features, archived_at, status",
       )
       .eq("agency_id", params.agencyId)
       .eq("source", "scrape");

@@ -105,6 +105,14 @@ function parseZone(h1: string, urlKey: string | null): string {
   return fromUrl?.label ?? "Madrid";
 }
 
+// Subzona (barrio): el h1 trae "{tipo} en Madrid, {Distrito} - {Subzona}, {op}".
+// Devolvemos lo que va tras " - " (Goya, Almagro, Recoletos…) si existe.
+function parseSubzone(h1: string): string | undefined {
+  const m = h1.match(/Madrid,\s*[^,-]+-\s*([^,]+?)\s*,/i);
+  const sub = m?.[1]?.trim();
+  return sub && sub.length > 1 ? sub : undefined;
+}
+
 function parsePriceText(raw: string): number {
   const cleaned = raw
     .replace(/[^\d.,]/g, "")
@@ -212,6 +220,7 @@ export async function scrapeProperty(
     fullDesc || $(".descripcion").first().text().replace(/\s+/g, " ").trim();
 
   const zone = parseZone(h1, zoneKeyFromUrl(url));
+  const subzone = parseSubzone(h1);
   const propertyType = detectPropertyType(h1);
 
   // Alquiler de temporada (corta estancia) lo marca el h1 o la descripción.
@@ -234,6 +243,7 @@ export async function scrapeProperty(
     bathrooms,
     squareMeters,
     zone,
+    subzone,
     features,
     photos,
   };

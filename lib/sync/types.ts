@@ -24,6 +24,8 @@ export type RawProperty = {
   bathrooms?: number;
   squareMeters?: number;
   zone: string;
+  // Barrio dentro del distrito (Goya, Almagro…) cuando el origen lo expone.
+  subzone?: string;
   address?: string;
   availableFrom?: string;
   features?: string[];
@@ -44,6 +46,7 @@ export type NormalizedProperty = {
   bathrooms: number;
   square_meters: number | null;
   zone: string;
+  subzone: string | null;
   address: string | null;
   available_from: string | null;
   features: string[];

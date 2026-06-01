@@ -284,6 +284,7 @@ export function propertyRowToClientProperty(
     id: row.slug,
     title: displayPropertyTitle(row),
     zone: row.zone,
+    subzone: row.subzone ?? null,
     city: "Madrid",
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
