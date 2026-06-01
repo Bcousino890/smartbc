@@ -52,9 +52,10 @@ export function PublicPropertyView({ property }: { property: Property }) {
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.bcousinoprop.com";
   const shareUrl = `${portalUrl}/compartir/${property.id}`;
-  const refLabel = property.bcReference ? ` (Ref. ${property.bcReference})` : "";
+  // Referencia sin guion (BC0871) para un mensaje más corto y directo.
+  const ref = property.bcReference?.replace(/-/g, "") ?? "";
   const waText = encodeURIComponent(
-    `Hola, me interesa esta propiedad de Benjamín Cousiño Propiedades${refLabel}: ${property.title}.\n${shareUrl}\n¿Podríamos hablar?`,
+    `Hola, me interesa esta propiedad ${ref ? `${ref}, ` : ""}${property.title}\n${shareUrl}`,
   );
   const waLink = `https://wa.me/${BC_CONTACT.whatsapp}?text=${waText}`;
 
