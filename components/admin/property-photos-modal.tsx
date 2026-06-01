@@ -1,11 +1,20 @@
 "use client";
 
-import { Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  Loader2,
+  Star,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   deletePropertyPhoto,
+  reorderPropertyPhotos,
   uploadPropertyPhoto,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { Modal } from "@/components/ui/modal";
@@ -85,6 +94,36 @@ export function PropertyPhotosModal({
     });
   };
 
+  // Persiste un nuevo orden (la 1ª pasa a ser la portada del SmartLink).
+  const persistOrder = (next: PropertyPhoto[]) => {
+    setPhotos(next);
+    setError(null);
+    startTransition(async () => {
+      const res = await reorderPropertyPhotos(
+        slug,
+        next.map((p) => p.url),
+      );
+      if (!res.ok) setError(res.error);
+      router.refresh();
+    });
+  };
+
+  const move = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= photos.length) return;
+    const next = [...photos];
+    [next[index], next[target]] = [next[target], next[index]];
+    persistOrder(next);
+  };
+
+  const makePrincipal = (index: number) => {
+    if (index === 0) return;
+    const next = [...photos];
+    const [item] = next.splice(index, 1);
+    next.unshift(item);
+    persistOrder(next);
+  };
+
   return (
     <Modal
       open={open}
@@ -148,16 +187,26 @@ export function PropertyPhotosModal({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {photos.map((photo) => (
-                <PhotoCard
-                  key={photo.url}
-                  photo={photo}
-                  onDelete={() => handleDelete(photo.url)}
-                  isPending={isPending}
-                />
-              ))}
-            </div>
+            <>
+              <p className="mb-3 text-[12px] text-ink/55">
+                {t("adminProps.photos.reorderHint")}
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {photos.map((photo, index) => (
+                  <PhotoCard
+                    key={photo.url}
+                    photo={photo}
+                    index={index}
+                    total={photos.length}
+                    onDelete={() => handleDelete(photo.url)}
+                    onMoveLeft={() => move(index, -1)}
+                    onMoveRight={() => move(index, 1)}
+                    onMakePrincipal={() => makePrincipal(index)}
+                    isPending={isPending}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
     </Modal>
@@ -166,14 +215,25 @@ export function PropertyPhotosModal({
 
 function PhotoCard({
   photo,
+  index,
+  total,
   onDelete,
+  onMoveLeft,
+  onMoveRight,
+  onMakePrincipal,
   isPending,
 }: {
   photo: PropertyPhoto;
+  index: number;
+  total: number;
   onDelete: () => void;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+  onMakePrincipal: () => void;
   isPending: boolean;
 }) {
   const t = useT();
+  const isPrincipal = index === 0;
   return (
     <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gold/15 bg-cream-100">
       <Image
@@ -183,11 +243,14 @@ function PhotoCard({
         sizes="(max-width: 640px) 50vw, 33vw"
         className="object-cover"
       />
-      {photo.isCover && (
-        <span className="absolute left-2 top-2 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
-          {t("adminProps.photos.cover")}
+      {isPrincipal && (
+        <span className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+          <Star size={10} strokeWidth={2} fill="currentColor" />
+          {t("adminProps.photos.principal")}
         </span>
       )}
+
+      {/* Borrar (arriba derecha) */}
       <button
         type="button"
         onClick={onDelete}
@@ -197,6 +260,61 @@ function PhotoCard({
       >
         <Trash2 size={13} strokeWidth={1.75} />
       </button>
+
+      {/* Controles de orden (abajo) */}
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-ink/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+        <div className="flex gap-1">
+          <CardBtn
+            onClick={onMoveLeft}
+            disabled={isPending || index === 0}
+            label={t("adminProps.photos.moveLeft")}
+          >
+            <ChevronLeft size={14} strokeWidth={2} />
+          </CardBtn>
+          <CardBtn
+            onClick={onMoveRight}
+            disabled={isPending || index === total - 1}
+            label={t("adminProps.photos.moveRight")}
+          >
+            <ChevronRight size={14} strokeWidth={2} />
+          </CardBtn>
+        </div>
+        {!isPrincipal && (
+          <button
+            type="button"
+            onClick={onMakePrincipal}
+            disabled={isPending}
+            className="flex items-center gap-1 rounded-md bg-cream-50/95 px-2 py-1 text-[10px] font-semibold text-ink transition hover:bg-white disabled:opacity-40"
+          >
+            <Star size={11} strokeWidth={2} className="text-gold" />
+            {t("adminProps.photos.makePrincipal")}
+          </button>
+        )}
+      </div>
     </div>
+  );
+}
+
+function CardBtn({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex h-7 w-7 items-center justify-center rounded-md bg-cream-50/95 text-ink transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }
