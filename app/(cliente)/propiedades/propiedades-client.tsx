@@ -33,6 +33,22 @@ export function PropiedadesClient({
     [properties, filters],
   );
 
+  // Árbol distrito → subzonas, derivado de las propiedades cargadas, para el
+  // filtro jerárquico (Salamanca → Goya, Recoletos, Lista…).
+  const zoneTree = useMemo(() => {
+    const acc: Record<string, Set<string>> = {};
+    for (const p of properties) {
+      if (!p.zone) continue;
+      (acc[p.zone] ??= new Set<string>());
+      if (p.subzone) acc[p.zone].add(p.subzone);
+    }
+    const out: Record<string, string[]> = {};
+    for (const [district, subs] of Object.entries(acc)) {
+      out[district] = [...subs].sort((a, b) => a.localeCompare(b, "es"));
+    }
+    return out;
+  }, [properties]);
+
   const resultsKey =
     filtered.length === 0
       ? "propiedades.results.0"
@@ -48,7 +64,11 @@ export function PropiedadesClient({
       />
 
       <div className="mt-8">
-        <PropertyFilters initial={filters} onApply={setFilters} />
+        <PropertyFilters
+          initial={filters}
+          onApply={setFilters}
+          zoneTree={zoneTree}
+        />
       </div>
 
       <div className="mt-6 flex items-center justify-between">
@@ -114,6 +134,7 @@ function filterProperties(list: Property[], filters: Filters) {
       return false;
     if (filters.maxPrice && p.price > filters.maxPrice) return false;
     if (filters.zone && p.zone !== filters.zone) return false;
+    if (filters.subzone && p.subzone !== filters.subzone) return false;
     if (filters.stayType && p.stayType !== filters.stayType) return false;
     if (filters.operation && p.operation !== filters.operation) return false;
     return true;

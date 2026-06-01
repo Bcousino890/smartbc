@@ -19,9 +19,11 @@ import { cn } from "@/lib/utils";
 type Props = {
   initial?: Filters;
   onApply: (filters: Filters) => void;
+  // Distrito → subzonas disponibles (derivado de las propiedades cargadas).
+  zoneTree?: Record<string, string[]>;
 };
 
-export function PropertyFilters({ initial, onApply }: Props) {
+export function PropertyFilters({ initial, onApply, zoneTree }: Props) {
   const t = useT();
   const [bedrooms, setBedrooms] = useState<string>(
     initial?.bedrooms ? String(initial.bedrooms) : "",
@@ -40,9 +42,16 @@ export function PropertyFilters({ initial, onApply }: Props) {
     initial?.minSquareMeters ? String(initial.minSquareMeters) : "",
   );
   const [zone, setZone] = useState<string>(initial?.zone ?? "");
+  const [subzone, setSubzone] = useState<string>(initial?.subzone ?? "");
   const [operation, setOperation] = useState<Operation>(
     initial?.operation ?? "alquiler",
   );
+
+  // Distritos a mostrar (los de los datos si hay árbol; si no, lista estática).
+  const districts = zoneTree
+    ? Object.keys(zoneTree).sort((a, b) => a.localeCompare(b, "es"))
+    : [...MADRID_ZONES];
+  const subzonesForZone = (zone && zoneTree?.[zone]) || [];
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +63,7 @@ export function PropertyFilters({ initial, onApply }: Props) {
       bathrooms: bathrooms ? Number(bathrooms) : undefined,
       minSquareMeters: minSquareMeters ? Number(minSquareMeters) : undefined,
       zone: zone || undefined,
+      subzone: subzone || undefined,
       operation,
     });
   }
@@ -170,13 +180,29 @@ export function PropertyFilters({ initial, onApply }: Props) {
         >
           <SelectInput
             value={zone}
-            onChange={setZone}
+            onChange={(v) => {
+              setZone(v);
+              setSubzone(""); // al cambiar de distrito, reiniciar subzona
+            }}
             placeholder={t("filters.zone.all")}
             options={[
               { value: "", label: t("filters.zone.all") },
-              ...MADRID_ZONES.map((z) => ({ value: z, label: z })),
+              ...districts.map((z) => ({ value: z, label: z })),
             ]}
           />
+          {subzonesForZone.length > 0 && (
+            <div className="mt-2">
+              <SelectInput
+                value={subzone}
+                onChange={setSubzone}
+                placeholder={t("filters.subzone.all")}
+                options={[
+                  { value: "", label: t("filters.subzone.all") },
+                  ...subzonesForZone.map((s) => ({ value: s, label: s })),
+                ]}
+              />
+            </div>
+          )}
         </FieldGroup>
 
         <FieldGroup label={t("filters.operation")}>

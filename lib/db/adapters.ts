@@ -325,6 +325,7 @@ export function propertyRowToAdminProperty(
     bcReference: row.bc_reference ?? null,
     title: row.title,
     zone: row.zone,
+    subzone: row.subzone ?? null,
     agencyId: row.agencies?.slug ?? "",
     agencyName: row.agencies?.name ?? "—",
     operation: row.operation === "rent" ? "alquiler" : "venta",

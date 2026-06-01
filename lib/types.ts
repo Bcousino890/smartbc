@@ -107,6 +107,7 @@ export type Filters = {
   bathrooms?: number;
   minSquareMeters?: number;
   zone?: string;
+  subzone?: string;
   operation?: Operation;
 };
 
@@ -335,6 +336,7 @@ export type AdminProperty = {
   bcReference: string | null;
   title: string;
   zone: string;
+  subzone?: string | null;
   agencyId: string;
   agencyName: string;
   operation: Operation;

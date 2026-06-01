@@ -46,6 +46,7 @@ export function PropertiesAdminClient({
   const [operationFilter, setOperationFilter] = useState<"" | "alquiler" | "venta">("");
   const [statusFilter, setStatusFilter] = useState<"" | "available" | "reserved" | "sold" | "rented" | "draft">("");
   const [zoneFilter, setZoneFilter] = useState<string>("");
+  const [subzoneFilter, setSubzoneFilter] = useState<string>("");
   const [agencyFilter, setAgencyFilter] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -57,6 +58,20 @@ export function PropertiesAdminClient({
     () =>
       Array.from(new Set(properties.map((p) => p.zone))).filter(Boolean).sort(),
     [properties],
+  );
+  // Subzonas disponibles dentro del distrito seleccionado.
+  const subzoneOptions = useMemo(
+    () =>
+      zoneFilter
+        ? Array.from(
+            new Set(
+              properties
+                .filter((p) => p.zone === zoneFilter && p.subzone)
+                .map((p) => p.subzone as string),
+            ),
+          ).sort((a, b) => a.localeCompare(b, "es"))
+        : [],
+    [properties, zoneFilter],
   );
   const agencyOptions = useMemo(
     () =>
@@ -104,6 +119,7 @@ export function PropertiesAdminClient({
       if (operationFilter && p.operation !== operationFilter) return false;
       if (statusFilter && p.status !== statusFilter) return false;
       if (zoneFilter && p.zone !== zoneFilter) return false;
+      if (subzoneFilter && p.subzone !== subzoneFilter) return false;
       if (agencyFilter && p.agencyId !== agencyFilter) return false;
       return true;
     });
@@ -113,11 +129,17 @@ export function PropertiesAdminClient({
     operationFilter,
     statusFilter,
     zoneFilter,
+    subzoneFilter,
     agencyFilter,
   ]);
 
   const hasActiveFilters = Boolean(
-    operationFilter || statusFilter || zoneFilter || agencyFilter || query,
+    operationFilter ||
+      statusFilter ||
+      zoneFilter ||
+      subzoneFilter ||
+      agencyFilter ||
+      query,
   );
 
   const clearFilters = () => {
@@ -125,6 +147,7 @@ export function PropertiesAdminClient({
     setOperationFilter("");
     setStatusFilter("");
     setZoneFilter("");
+    setSubzoneFilter("");
     setAgencyFilter("");
   };
 
@@ -239,14 +262,28 @@ export function PropertiesAdminClient({
           ]}
         />
         <FilterSelect
-          label="Zona"
+          label="Distrito"
           value={zoneFilter}
-          onChange={setZoneFilter}
+          onChange={(v) => {
+            setZoneFilter(v);
+            setSubzoneFilter(""); // al cambiar de distrito, reiniciar subzona
+          }}
           options={[
             { value: "", label: "Todas" },
             ...zoneOptions.map((z) => ({ value: z, label: z })),
           ]}
         />
+        {subzoneOptions.length > 0 && (
+          <FilterSelect
+            label="Subzona"
+            value={subzoneFilter}
+            onChange={setSubzoneFilter}
+            options={[
+              { value: "", label: "Todo el distrito" },
+              ...subzoneOptions.map((s) => ({ value: s, label: s })),
+            ]}
+          />
+        )}
         <FilterSelect
           label="Agencia"
           value={agencyFilter}
