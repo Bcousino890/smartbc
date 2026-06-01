@@ -25,6 +25,7 @@ import {
   SmartLinksPanel,
 } from "@/components/admin/smart-links-panel";
 import { useT } from "@/lib/i18n/provider";
+import { shareSlug } from "@/lib/share-slug";
 import { cn } from "@/lib/utils";
 
 type Photo = {
@@ -130,12 +131,14 @@ export function PropertyEditView({
 
   const isScraped = property.source === "scrape";
 
-  // SmartLink: URL pública del compartir. En cliente usamos window.origin
-  // para que funcione tanto en local (localhost) como en producción.
+  // SmartLink: URL pública del compartir, con la referencia BC al inicio del
+  // slug (bc0871-…). En cliente usamos window.origin para que funcione tanto
+  // en local (localhost) como en producción.
+  const publicSlug = shareSlug(property.slug, property.bc_reference);
   const smartLink =
     typeof window !== "undefined"
-      ? `${window.location.origin}/compartir/${property.slug}`
-      : `/compartir/${property.slug}`;
+      ? `${window.location.origin}/compartir/${publicSlug}`
+      : `/compartir/${publicSlug}`;
 
   const handleCopyLink = async () => {
     try {
