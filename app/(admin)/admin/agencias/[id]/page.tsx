@@ -36,6 +36,7 @@ export default async function AgencyDetailPage({
     bathrooms: p.bathrooms,
     price: Number(p.price),
     lastUpdateMinutes: minutesSince(p.updated_at),
+    coverPhotoUrl: p.cover_photo_url ?? null,
   }));
 
   const agencyBase = agencyDetailFromDb(dbAgency, fallback);
