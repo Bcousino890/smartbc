@@ -134,13 +134,16 @@ type Entry = {
 // así que el filtrado (zona + precio + tipo) se hace aquí sin abrir fichas.
 async function listEntries(): Promise<Entry[]> {
   const entries: Entry[] = [];
+  // Dedup GLOBAL por ref: un mismo inmueble puede aparecer en venta Y en
+  // alquiler. external_id es único por (source, external_id) en BD, así que
+  // solo nos quedamos con la primera aparición (venta) para no chocar.
+  const seen = new Set<string>();
 
   for (const operation of ["sale", "rent"] as const) {
     const page = operation === "rent" ? "alquiler" : "venta";
     const html = await fetchText(`${SITE_BASE}/es/${page}`);
     if (!html) continue;
     const $ = cheerio.load(html);
-    const seen = new Set<string>();
 
     $("table tr").each((_, tr) => {
       const cells = $(tr)

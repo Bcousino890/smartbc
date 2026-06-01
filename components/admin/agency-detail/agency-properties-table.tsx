@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
@@ -15,21 +16,52 @@ export function AgencyPropertiesTable({
   properties: AgencyPropertyRow[];
 }) {
   const t = useT();
+  const [query, setQuery] = useState("");
+
+  // Buscador local: filtra por título, referencia o zona sobre las propiedades
+  // ya cargadas. Soluciona el "lío" de encontrar un piso concreto entre muchos.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return properties;
+    return properties.filter((p) =>
+      [p.title, p.reference, p.zone]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(q)),
+    );
+  }, [properties, query]);
 
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
           {t("agency.properties.title")}
         </h2>
         <Link
-          href="#"
+          href="/admin/propiedades"
           className="flex items-center gap-1.5 text-[12px] font-medium text-gold-dark transition hover:text-gold"
         >
           <span>{t("agency.properties.viewAll")}</span>
           <ArrowRight size={13} strokeWidth={1.75} />
         </Link>
       </header>
+
+      {properties.length > 0 && (
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-ink/10 bg-white px-3 py-2">
+          <Search size={15} strokeWidth={1.75} className="text-ink/45" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("agency.properties.search")}
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink/40"
+          />
+          {query && (
+            <span className="shrink-0 text-[11px] text-ink/50">
+              {filtered.length}/{properties.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {properties.length === 0 ? (
         <p className="mt-6 rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-sm text-ink/55">
@@ -65,7 +97,7 @@ export function AgencyPropertiesTable({
               </tr>
             </thead>
             <tbody>
-              {properties.map((p) => (
+              {filtered.map((p) => (
                 <PropertyRow key={p.id} property={p} />
               ))}
             </tbody>
@@ -127,13 +159,13 @@ function PropertyRow({ property }: { property: AgencyPropertyRow }) {
         {formatRelativeMinutes(property.lastUpdateMinutes, t)}
       </td>
       <td className="rounded-r-xl px-4 py-3 text-right">
-        <button
-          type="button"
+        <Link
+          href={`/admin/propiedades/${property.id}`}
           className="inline-flex items-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft"
         >
           <span>{t("agency.properties.table.viewDetails")}</span>
           <ArrowRight size={13} strokeWidth={1.75} className="text-gold" />
-        </button>
+        </Link>
       </td>
     </tr>
   );

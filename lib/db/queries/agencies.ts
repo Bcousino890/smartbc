@@ -91,7 +91,10 @@ export async function getAgencyProperties(agencyId: string) {
     .eq("agency_id", agencyId)
     .is("archived_at", null)
     .order("updated_at", { ascending: false })
-    .limit(20);
+    // Antes 20: en Portales externos (pisos manuales/propios) hay que poder
+    // verlos TODOS para encontrar uno concreto. El buscador de la tabla filtra
+    // sobre este conjunto, así que cargamos un máximo generoso.
+    .limit(500);
   if (error) throw error;
   return (data ?? []) as Array<{
     id: string;
