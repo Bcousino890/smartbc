@@ -6,6 +6,7 @@ import { PropertyCard } from "@/components/property-card";
 import { PropertyFilters } from "@/components/property-filters";
 import { SectionHeader } from "@/components/section-header";
 import { PageFooter } from "@/components/ui/page-footer";
+import { Pagination } from "@/components/ui/pagination";
 import { useT } from "@/lib/i18n/provider";
 import type { Filters, Property } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ export function PropiedadesClient({
     operation: "alquiler",
   });
   const [view, setView] = useState<View>("grid");
+  const [page, setPage] = useState(1);
 
   const favoriteSet = useMemo(() => new Set(favoriteSlugs), [favoriteSlugs]);
 
@@ -32,6 +34,18 @@ export function PropiedadesClient({
     () => filterProperties(properties, filters),
     [properties, filters],
   );
+
+  // Paginación en cliente: renderizamos solo una página (el DOM no se infla con
+  // cientos de fichas). La página se reinicia al cambiar los filtros.
+  const PER_PAGE = 24;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const paged = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
+
+  const applyFilters = (f: Filters) => {
+    setFilters(f);
+    setPage(1);
+  };
 
   // Árbol distrito → subzonas, derivado de las propiedades cargadas, para el
   // filtro jerárquico (Salamanca → Goya, Recoletos, Lista…).
@@ -66,7 +80,7 @@ export function PropiedadesClient({
       <div className="mt-8">
         <PropertyFilters
           initial={filters}
-          onApply={setFilters}
+          onApply={applyFilters}
           zoneTree={zoneTree}
         />
       </div>
@@ -98,7 +112,7 @@ export function PropiedadesClient({
           <EmptyState />
         ) : view === "grid" ? (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            {filtered.map((p) => (
+            {paged.map((p) => (
               <PropertyCard
                 key={p.id}
                 property={p}
@@ -109,7 +123,7 @@ export function PropiedadesClient({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {filtered.map((p) => (
+            {paged.map((p) => (
               <PropertyCard
                 key={p.id}
                 property={p}
@@ -120,6 +134,18 @@ export function PropiedadesClient({
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          onChange={(p) => {
+            setPage(p);
+            if (typeof window !== "undefined")
+              window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      )}
 
       <PageFooter textKey="login.footer" />
     </div>
