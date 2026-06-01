@@ -1,8 +1,7 @@
 "use client";
 
 import {
-  ChevronLeft,
-  ChevronRight,
+  GripVertical,
   Image as ImageIcon,
   Loader2,
   Star,
@@ -108,12 +107,33 @@ export function PropertyPhotosModal({
     });
   };
 
-  const move = (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= photos.length) return;
-    const next = [...photos];
-    [next[index], next[target]] = [next[target], next[index]];
-    persistOrder(next);
+  // Reordenar arrastrando: reordenamos en LOCAL mientras se arrastra y solo
+  // guardamos al soltar (evita una llamada al servidor por cada movimiento).
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const orderRef = useRef(photos);
+  orderRef.current = photos;
+
+  const reorderLocal = (from: number, to: number) => {
+    if (from === to) return;
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      orderRef.current = next;
+      return next;
+    });
+  };
+
+  const persistCurrentOrder = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await reorderPropertyPhotos(
+        slug,
+        orderRef.current.map((p) => p.url),
+      );
+      if (!res.ok) setError(res.error);
+      router.refresh();
+    });
   };
 
   const makePrincipal = (index: number) => {
@@ -197,11 +217,20 @@ export function PropertyPhotosModal({
                     key={photo.url}
                     photo={photo}
                     index={index}
-                    total={photos.length}
+                    isDragging={dragIndex === index}
                     onDelete={() => handleDelete(photo.url)}
-                    onMoveLeft={() => move(index, -1)}
-                    onMoveRight={() => move(index, 1)}
                     onMakePrincipal={() => makePrincipal(index)}
+                    onDragStart={() => setDragIndex(index)}
+                    onDragEnter={() => {
+                      if (dragIndex !== null && dragIndex !== index) {
+                        reorderLocal(dragIndex, index);
+                        setDragIndex(index);
+                      }
+                    }}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      persistCurrentOrder();
+                    }}
                     isPending={isPending}
                   />
                 ))}
@@ -216,35 +245,53 @@ export function PropertyPhotosModal({
 function PhotoCard({
   photo,
   index,
-  total,
+  isDragging,
   onDelete,
-  onMoveLeft,
-  onMoveRight,
   onMakePrincipal,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
   isPending,
 }: {
   photo: PropertyPhoto;
   index: number;
-  total: number;
+  isDragging: boolean;
   onDelete: () => void;
-  onMoveLeft: () => void;
-  onMoveRight: () => void;
   onMakePrincipal: () => void;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragEnd: () => void;
   isPending: boolean;
 }) {
   const t = useT();
   const isPrincipal = index === 0;
   return (
-    <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gold/15 bg-cream-100">
+    <div
+      draggable={!isPending}
+      onDragStart={onDragStart}
+      onDragEnter={onDragEnter}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnd={onDragEnd}
+      className={cn(
+        "group relative aspect-[4/3] cursor-grab overflow-hidden rounded-xl border border-gold/15 bg-cream-100 active:cursor-grabbing",
+        isDragging && "opacity-40 ring-2 ring-gold",
+      )}
+    >
       <Image
         src={photo.url}
         alt=""
         fill
         sizes="(max-width: 640px) 50vw, 33vw"
-        className="object-cover"
+        className="pointer-events-none object-cover"
       />
+
+      {/* Asa de arrastre (señal visual) */}
+      <span className="absolute left-1.5 top-1.5 rounded-md bg-cream-50/85 p-1 text-ink/55 opacity-0 transition group-hover:opacity-100">
+        <GripVertical size={13} strokeWidth={1.75} />
+      </span>
+
       {isPrincipal && (
-        <span className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+        <span className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
           <Star size={10} strokeWidth={2} fill="currentColor" />
           {t("adminProps.photos.principal")}
         </span>
@@ -261,60 +308,18 @@ function PhotoCard({
         <Trash2 size={13} strokeWidth={1.75} />
       </button>
 
-      {/* Controles de orden (abajo) */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-ink/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-        <div className="flex gap-1">
-          <CardBtn
-            onClick={onMoveLeft}
-            disabled={isPending || index === 0}
-            label={t("adminProps.photos.moveLeft")}
-          >
-            <ChevronLeft size={14} strokeWidth={2} />
-          </CardBtn>
-          <CardBtn
-            onClick={onMoveRight}
-            disabled={isPending || index === total - 1}
-            label={t("adminProps.photos.moveRight")}
-          >
-            <ChevronRight size={14} strokeWidth={2} />
-          </CardBtn>
-        </div>
-        {!isPrincipal && (
-          <button
-            type="button"
-            onClick={onMakePrincipal}
-            disabled={isPending}
-            className="flex items-center gap-1 rounded-md bg-cream-50/95 px-2 py-1 text-[10px] font-semibold text-ink transition hover:bg-white disabled:opacity-40"
-          >
-            <Star size={11} strokeWidth={2} className="text-gold" />
-            {t("adminProps.photos.makePrincipal")}
-          </button>
-        )}
-      </div>
+      {/* Hacer principal (solo si no lo es ya) */}
+      {!isPrincipal && (
+        <button
+          type="button"
+          onClick={onMakePrincipal}
+          disabled={isPending}
+          className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1 rounded-md bg-cream-50/95 px-2 py-1 text-[10px] font-semibold text-ink opacity-0 transition group-hover:opacity-100 hover:bg-white disabled:opacity-40"
+        >
+          <Star size={11} strokeWidth={2} className="text-gold" />
+          {t("adminProps.photos.makePrincipal")}
+        </button>
+      )}
     </div>
-  );
-}
-
-function CardBtn({
-  onClick,
-  disabled,
-  label,
-  children,
-}: {
-  onClick: () => void;
-  disabled: boolean;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="flex h-7 w-7 items-center justify-center rounded-md bg-cream-50/95 text-ink transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"
-    >
-      {children}
-    </button>
   );
 }
