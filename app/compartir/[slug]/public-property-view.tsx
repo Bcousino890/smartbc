@@ -13,6 +13,7 @@ import {
 import Image from "next/image";
 import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { formatPrice } from "@/lib/format";
+import { shareSlug } from "@/lib/share-slug";
 import type { Property } from "@/lib/types";
 
 // URL pública de "SmartLink": vista limpia de la propiedad, sin login.
@@ -51,7 +52,7 @@ export function PublicPropertyView({ property }: { property: Property }) {
   // mensaje de WhatsApp para que el cliente identifique el piso y BC sepa cuál.
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.bcousinoprop.com";
-  const shareUrl = `${portalUrl}/compartir/${property.id}`;
+  const shareUrl = `${portalUrl}/compartir/${shareSlug(property.id, property.bcReference)}`;
   // Referencia sin guion (BC0871) para un mensaje más corto y directo.
   const ref = property.bcReference?.replace(/-/g, "") ?? "";
   const waText = encodeURIComponent(

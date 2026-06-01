@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { createAdminClient } from "@/lib/db/admin";
+import { storedSlugFromShare } from "@/lib/share-slug";
 
 // Endpoint público que sirve la foto principal de una propiedad como
 // JPEG 1200×630 (formato estándar Open Graph). WhatsApp/Twitter/Slack
@@ -20,7 +21,7 @@ async function getCoverUrl(slug: string): Promise<string | null> {
   const res = await supabase
     .from("properties")
     .select("cover_photo_url, property_photos(url, is_cover, position)")
-    .eq("slug", slug)
+    .eq("slug", storedSlugFromShare(slug))
     .is("archived_at", null)
     .maybeSingle();
   if (res.error || !res.data) return null;

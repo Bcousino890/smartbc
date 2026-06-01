@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
+import { shareSlug } from "@/lib/share-slug";
 import {
   PropertyPdfDocument,
   type PropertyPdfData,
@@ -111,7 +112,10 @@ export async function GET(
   const origin =
     process.env.NEXT_PUBLIC_PORTAL_URL?.replace(/\/+$/, "") ||
     "https://portal.bcousinoprop.com";
-  const smartLink = `${origin}/compartir/${slug}`;
+  const smartLink = `${origin}/compartir/${shareSlug(
+    slug,
+    (row as { bc_reference?: string | null }).bc_reference,
+  )}`;
 
   const data: PropertyPdfData = {
     title: row.title,

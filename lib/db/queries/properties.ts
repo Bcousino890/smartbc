@@ -1,4 +1,5 @@
 import "server-only";
+import { storedSlugFromShare } from "../../share-slug";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
 import type { PropertyFilters, PropertyRow } from "../row-types";
@@ -77,15 +78,23 @@ export async function resolveLegacySlug(
 // retiradas. La privacidad se basa en lo difícil de adivinar del slug.
 export async function getPropertyBySlugPublic(slug: string) {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*, property_photos(*), agencies(name, slug, logo_url)")
-    .eq("slug", slug)
-    .is("archived_at", null)
-    .neq("status", "archived")
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const fetchBy = async (s: string) => {
+    const { data, error } = await supabase
+      .from("properties")
+      .select("*, property_photos(*), agencies(name, slug, logo_url)")
+      .eq("slug", s)
+      .is("archived_at", null)
+      .neq("status", "archived")
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  // Exacto: links viejos (sin prefijo) y el propio slug almacenado.
+  const exact = await fetchBy(slug);
+  if (exact) return exact;
+  // URLs nuevas con la referencia delante ("bc0871-{slug}"): quitamos el prefijo.
+  const stripped = storedSlugFromShare(slug);
+  return stripped !== slug ? await fetchBy(stripped) : null;
 }
 
 // Variante para el admin: trae la propiedad por slug incluso si está
