@@ -120,11 +120,21 @@ function PropertyRow({ property }: { property: AgencyPropertyRow }) {
     <tr className="bg-white/55 transition hover:bg-white/85">
       <td className="rounded-l-xl px-4 py-3">
         <div className="flex items-center gap-3">
-          <div
-            aria-hidden="true"
-            className="h-12 w-16 shrink-0 rounded-md"
-            style={{ backgroundImage: PLACEHOLDER_GRADIENT }}
-          />
+          {property.coverPhotoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={property.coverPhotoUrl}
+              alt=""
+              loading="lazy"
+              className="h-12 w-16 shrink-0 rounded-md object-cover"
+            />
+          ) : (
+            <div
+              aria-hidden="true"
+              className="h-12 w-16 shrink-0 rounded-md"
+              style={{ backgroundImage: PLACEHOLDER_GRADIENT }}
+            />
+          )}
           <div>
             <p className="font-medium text-ink">{property.title}</p>
             <p className="text-[11px] text-ink/55">

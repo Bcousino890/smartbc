@@ -240,6 +240,7 @@ export type AgencyPropertyRow = {
   bathrooms: number;
   price: number; // monthly for rent, total for sale
   lastUpdateMinutes: number;
+  coverPhotoUrl?: string | null;
 };
 
 export type AgencyDetail = Agency & {
