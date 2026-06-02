@@ -2,7 +2,7 @@ import "server-only";
 import * as cheerio from "cheerio";
 import { detectPortal } from "./detect-portal";
 import { fetchHtml } from "./fetch-html";
-import { extractClikalia } from "./extractors/clikalia";
+import { extractClikalia, normalizeClikaliaUrl } from "./extractors/clikalia";
 import { extractFotocasa } from "./extractors/fotocasa";
 import { extractGeneric } from "./extractors/generic";
 import { extractIdealista } from "./extractors/idealista";
@@ -29,6 +29,12 @@ export async function extractFromUrl(
         reason: "URL inválida o esquema no soportado (solo http/https)",
       },
     };
+  }
+
+  // Clikalia: forzamos la ficha en español para parsear los datos en el idioma
+  // correcto, sea cual sea el idioma del link pegado.
+  if (detected.portal === "clikalia") {
+    detected.url = normalizeClikaliaUrl(detected.url);
   }
 
   const fetched = await fetchHtml(detected.url.toString());

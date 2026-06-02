@@ -23,6 +23,18 @@ import {
 
 const PHOTO_BUCKET = "es-api-clikoffice-infra-esp-pro";
 
+// Clikalia sirve la ficha en varios idiomas (".../alquilar/en/inmueble/...").
+// Forzamos SIEMPRE el español: así los datos (descripción, dormitorios, m²)
+// llegan en el idioma que parseamos, sin importar qué link pegue el usuario.
+export function normalizeClikaliaUrl(url: URL): URL {
+  const next = new URL(url.toString());
+  next.pathname = next.pathname.replace(
+    /^\/(alquilar|comprar|vender|alquiler|venta)\/[a-z]{2}\//i,
+    "/$1/es/",
+  );
+  return next;
+}
+
 // "https://.../madrid/ayala-AM1905" -> "AM1905"
 function referenceFromUrl(url: string): string | null {
   const m = url.match(/-([A-Z]{2}\d{3,6})(?:[/?#]|$)/i);
