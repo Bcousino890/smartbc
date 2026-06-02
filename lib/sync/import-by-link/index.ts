@@ -2,6 +2,7 @@ import "server-only";
 import * as cheerio from "cheerio";
 import { detectPortal } from "./detect-portal";
 import { fetchHtml } from "./fetch-html";
+import { extractClikalia } from "./extractors/clikalia";
 import { extractFotocasa } from "./extractors/fotocasa";
 import { extractGeneric } from "./extractors/generic";
 import { extractIdealista } from "./extractors/idealista";
@@ -43,6 +44,8 @@ export async function extractFromUrl(
       return { ok: true, preview: extractFotocasa($, finalUrl) };
     case "inmoweb":
       return { ok: true, preview: extractInmoweb($, finalUrl) };
+    case "clikalia":
+      return { ok: true, preview: extractClikalia($, finalUrl) };
     case "mobilia":
     case "generic":
     default:
