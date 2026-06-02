@@ -102,7 +102,7 @@ export async function insertImportedProperty(
       eq: (c: string, v: string) => {
         eq: (c: string, v: string) => {
           maybeSingle: () => Promise<{
-            data: { id: string; slug: string } | null;
+            data: { id: string; slug: string; status: string | null } | null;
             error: { message: string } | null;
           }>;
         };
@@ -110,7 +110,7 @@ export async function insertImportedProperty(
     };
   };
   const existing = await lookupTbl
-    .select("id, slug")
+    .select("id, slug, status")
     .eq("agency_id", agencyId)
     .eq("external_id", overrides.externalReference)
     .maybeSingle();
@@ -131,7 +131,18 @@ export async function insertImportedProperty(
         ) => Promise<{ error: { message: string } | null }>;
       };
     };
-    const upd = await updTbl.update(commonFields).eq("id", propertyId);
+    // Reimportar es una señal explícita de "quiero esta propiedad activa":
+    // la DESARCHIVAMOS siempre (si no, una propiedad archivada se actualizaba
+    // pero seguía oculta del catálogo, que filtra archived_at IS NULL). Si
+    // estaba archivada, además la devolvemos a 'available'; si tenía otro
+    // estado (reserved/sold), lo respetamos.
+    const reactivate: Record<string, unknown> = { archived_at: null };
+    if (existing.data.status === "archived" || existing.data.status === null) {
+      reactivate.status = "available";
+    }
+    const upd = await updTbl
+      .update({ ...commonFields, ...reactivate })
+      .eq("id", propertyId);
     if (upd.error) return { ok: false, error: upd.error.message };
 
     // Borramos las fotos viejas; abajo insertamos las nuevas ya procesadas.
