@@ -87,6 +87,11 @@ export async function insertImportedProperty(
     latitude: preview.latitude,
     longitude: preview.longitude,
     last_synced_at: new Date().toISOString(),
+    // Fecha de "publicación" en NUESTRO catálogo. La refrescamos también en la
+    // re-importación: el admin acaba de re-publicarla, así que debe subir al
+    // principio del listado (ordenado por created_at desc) como una alta nueva,
+    // en vez de quedar enterrada por su fecha original.
+    created_at: new Date().toISOString(),
   };
 
   // 2) ¿Ya existe esta propiedad (misma agencia + referencia)? Entonces es una
