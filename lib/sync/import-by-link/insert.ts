@@ -68,51 +68,108 @@ export async function insertImportedProperty(
   }
   const coverUrl = photoUrls[0] ?? null;
 
-  // 2) Insert en properties.
-  const propsTbl = supabase.from("properties") as unknown as {
-    insert: (payload: Record<string, unknown>) => {
-      select: (cols: string) => {
-        maybeSingle: () => Promise<{
-          data: { id: string; slug: string } | null;
-          error: { message: string } | null;
-        }>;
+  // Campos comunes a alta nueva y re-importación (todo menos los inmutables:
+  // agency_id, external_id, slug, source y status).
+  const commonFields: Record<string, unknown> = {
+    title: overrides.title,
+    description: overrides.description,
+    operation: overrides.operation,
+    stay: overrides.stay,
+    price: overrides.price,
+    bedrooms: overrides.bedrooms,
+    bathrooms: overrides.bathrooms,
+    square_meters: overrides.squareMeters,
+    zone: overrides.zone,
+    address: overrides.address,
+    features: overrides.features,
+    cover_photo_url: coverUrl,
+    source_url: preview.sourceUrl,
+    latitude: preview.latitude,
+    longitude: preview.longitude,
+    last_synced_at: new Date().toISOString(),
+  };
+
+  // 2) ¿Ya existe esta propiedad (misma agencia + referencia)? Entonces es una
+  // RE-IMPORTACIÓN: actualizamos la ficha y reemplazamos sus fotos, en vez de
+  // chocar contra la restricción única (agency_id, external_id).
+  const lookupTbl = supabase.from("properties") as unknown as {
+    select: (cols: string) => {
+      eq: (c: string, v: string) => {
+        eq: (c: string, v: string) => {
+          maybeSingle: () => Promise<{
+            data: { id: string; slug: string } | null;
+            error: { message: string } | null;
+          }>;
+        };
       };
     };
   };
-  const inserted = await propsTbl
-    .insert({
-      agency_id: agencyId,
-      // Marcamos como 'manual' (no 'scrape') porque no proviene del cron de
-      // sindicación; es una alta manual asistida. El `source_url` distingue
-      // este origen de altas escritas a mano.
-      source: "manual",
-      external_id: overrides.externalReference,
-      slug,
-      title: overrides.title,
-      description: overrides.description,
-      operation: overrides.operation,
-      stay: overrides.stay,
-      status: "available",
-      price: overrides.price,
-      bedrooms: overrides.bedrooms,
-      bathrooms: overrides.bathrooms,
-      square_meters: overrides.squareMeters,
-      zone: overrides.zone,
-      address: overrides.address,
-      features: overrides.features,
-      cover_photo_url: coverUrl,
-      source_url: preview.sourceUrl,
-      latitude: preview.latitude,
-      longitude: preview.longitude,
-      last_synced_at: new Date().toISOString(),
-    })
+  const existing = await lookupTbl
     .select("id, slug")
+    .eq("agency_id", agencyId)
+    .eq("external_id", overrides.externalReference)
     .maybeSingle();
+  if (existing.error) return { ok: false, error: existing.error.message };
 
-  if (inserted.error) return { ok: false, error: inserted.error.message };
-  if (!inserted.data) return { ok: false, error: "insert_no_row" };
+  let propertyId: string;
+  let resultSlug: string;
 
-  const propertyId = inserted.data.id;
+  if (existing.data) {
+    // --- RE-IMPORTACIÓN: update + reemplazo de fotos ---
+    propertyId = existing.data.id;
+    resultSlug = existing.data.slug; // conservamos la URL existente
+    const updTbl = supabase.from("properties") as unknown as {
+      update: (payload: Record<string, unknown>) => {
+        eq: (
+          c: string,
+          v: string,
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+    const upd = await updTbl.update(commonFields).eq("id", propertyId);
+    if (upd.error) return { ok: false, error: upd.error.message };
+
+    // Borramos las fotos viejas; abajo insertamos las nuevas ya procesadas.
+    const delTbl = supabase.from("property_photos") as unknown as {
+      delete: () => {
+        eq: (
+          c: string,
+          v: string,
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+    const del = await delTbl.delete().eq("property_id", propertyId);
+    if (del.error) return { ok: false, error: del.error.message };
+  } else {
+    // --- ALTA NUEVA ---
+    const propsTbl = supabase.from("properties") as unknown as {
+      insert: (payload: Record<string, unknown>) => {
+        select: (cols: string) => {
+          maybeSingle: () => Promise<{
+            data: { id: string; slug: string } | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+    const inserted = await propsTbl
+      .insert({
+        agency_id: agencyId,
+        // 'manual' (no 'scrape'): alta asistida, no del cron de sindicación.
+        source: "manual",
+        external_id: overrides.externalReference,
+        slug,
+        status: "available",
+        ...commonFields,
+      })
+      .select("id, slug")
+      .maybeSingle();
+
+    if (inserted.error) return { ok: false, error: inserted.error.message };
+    if (!inserted.data) return { ok: false, error: "insert_no_row" };
+    propertyId = inserted.data.id;
+    resultSlug = inserted.data.slug;
+  }
 
   // 3) Insert en property_photos.
   if (photoUrls.length > 0) {
@@ -129,12 +186,12 @@ export async function insertImportedProperty(
     };
     const photosRes = await photosTbl.insert(photoRows);
     if (photosRes.error) {
-      // No revertimos el insert: el admin verá la propiedad sin fotos y puede
-      // re-importar o subirlas a mano. Devolvemos el error como warning.
+      // No revertimos: el admin verá la propiedad sin fotos y puede re-importar
+      // o subirlas a mano. Devolvemos el error como warning.
       return {
         ok: true,
         propertyId,
-        slug: inserted.data.slug,
+        slug: resultSlug,
         photosProcessed: photoUrls.length,
       };
     }
@@ -147,7 +204,7 @@ export async function insertImportedProperty(
   return {
     ok: true,
     propertyId,
-    slug: inserted.data.slug,
+    slug: resultSlug,
     photosProcessed: photoUrls.length,
   };
 }
