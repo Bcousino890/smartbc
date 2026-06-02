@@ -114,7 +114,7 @@ export function PropertiesAdminClient({
         !p.title.toLowerCase().includes(q) &&
         !p.reference.toLowerCase().includes(q) &&
         !(p.bcReference?.toLowerCase().includes(q) ?? false) &&
-        !p.zone.toLowerCase().includes(q)
+        !(p.zone?.toLowerCase().includes(q) ?? false)
       ) {
         return false;
       }
