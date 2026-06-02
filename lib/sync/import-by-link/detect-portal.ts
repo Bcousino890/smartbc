@@ -20,6 +20,10 @@ const RULES: { match: (host: string) => boolean; portal: ImportPortal }[] = [
     match: (h) => h === "media.mobiliagestion.es",
     portal: "mobilia",
   },
+  {
+    match: (h) => /(^|\.)clikalia\.[a-z.]+$/i.test(h),
+    portal: "clikalia",
+  },
 ];
 
 export function detectPortal(rawUrl: string): {

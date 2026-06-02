@@ -1,6 +1,7 @@
 import "server-only";
 import sharp from "sharp";
 import { createAdminClient } from "@/lib/db/admin";
+import { removeKnownWatermark } from "./watermark-removal";
 
 const BUCKET = "properties-photos";
 const MAX_WIDTH = 1920;
@@ -32,7 +33,10 @@ export async function downloadAndWatermark(params: {
       return { ok: false, error: `fetch_${res.status}` };
     }
 
-    const buf = Buffer.from(await res.arrayBuffer());
+    const rawBuf = Buffer.from(await res.arrayBuffer());
+    // Si la fuente tiene marca de agua constante (ej. Clikalia), la quitamos
+    // antes de procesar. Si no, devuelve el buffer igual.
+    const buf = await removeKnownWatermark(params.sourceUrl, rawBuf);
     const image = sharp(buf, { failOn: "none" }).rotate();
     const meta = await image.metadata();
     const targetWidth = Math.min(meta.width ?? MAX_WIDTH, MAX_WIDTH);

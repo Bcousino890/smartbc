@@ -11,6 +11,7 @@ export type ImportPortal =
   | "fotocasa"
   | "inmoweb"
   | "mobilia"
+  | "clikalia"
   | "generic";
 
 export type ImportPhoto = {
