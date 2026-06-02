@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Borrado de marca de agua CONSTANTE por perfil.
+"""Borrado de marca de agua CONSTANTE por perfil (v3).
 
 Uso:  wm_remove.py <perfil> <entrada.jpg> <salida.jpg>
 
-El perfil (/opt/wmrm/profiles/<perfil>.npz) lleva tres mapas estimados a partir
+El perfil (/opt/wmrm/profiles/<perfil>.npz) lleva dos mapas estimados a partir
 de muchas fotos con la MISMA marca:
-  W      = matte aditivo premultiplicado (= alpha * color_marca)
-  beta   = 1 - alpha  (atenuacion; estimada por reduccion de varianza)
-  smooth = peso de suavizado (alto donde hay marca sobre fondo liso)
+  W     = matte aditivo premultiplicado (= alpha * color_marca)
+  beta  = 1 - alpha  (atenuacion; estimada por reduccion de varianza)
 
-Reconstruccion:  J = (I - W) / beta     (recupera el contenido bajo la marca)
-y en zonas lisas con marca se mezcla J hacia su version suavizada para borrar el
-fantasma residual sin tocar las zonas con textura real.
+Reconstruccion:  J = (I - W) / beta   recupera el contenido bajo la marca.
+
+El fantasma residual solo se nota en superficies LISAS (paredes, puertas). Asi
+que suavizamos J hacia su version difuminada SOLO donde, EN ESTA foto, el pixel
+es realmente liso (poca alta frecuencia). En muebles, bordes, TV, etc. no se
+toca: quedan nitidos. Es per-imagen, por eso no emborrona toda la foto.
 """
 import sys, os
 import numpy as np
@@ -36,9 +38,13 @@ def boxmean(x, r):
 
 def load_profile(name):
     base = os.environ.get("WMRM_PROFILES", "/opt/wmrm/profiles")
-    path = os.path.join(base, name + ".npz")
-    d = np.load(path)
-    return d["W"].astype(np.float64), d["beta"].astype(np.float64), d["smooth"].astype(np.float64)
+    d = np.load(os.path.join(base, name + ".npz"))
+    return d["W"].astype(np.float64), d["beta"].astype(np.float64)
+
+
+# Fuerza del criterio de "liso": mas alto = suaviza mas zonas (mas limpio pero
+# arriesga emborronar); mas bajo = mas conservador (mas nitido, mas fantasma).
+SMOOTH_K = 3.0
 
 
 def main():
@@ -47,23 +53,32 @@ def main():
         sys.exit(2)
     profile, inp, outp = sys.argv[1], sys.argv[2], sys.argv[3]
 
-    W, beta, smooth = load_profile(profile)
+    W, beta = load_profile(profile)
     ph, pw = W.shape[:2]
+    alpha = 1.0 - beta
+
+    # Mascara de marca (donde hay algo que quitar), dilatada y con borde suave.
+    wm = (alpha.mean(2) > 0.06).astype(np.float64)
+    wm = (boxmean(wm, 3) > 0.25).astype(np.float64)
+    wm = boxmean(wm, 4)
 
     im = Image.open(inp).convert("RGB")
     ow, oh = im.size
+    I = np.asarray(im.resize((pw, ph)), np.float64)
 
-    # Trabajamos a la resolucion del perfil; si la imagen no coincide, la
-    # llevamos a (pw, ph), procesamos y devolvemos al tamano original.
-    work = np.asarray(im.resize((pw, ph)), np.float64)
+    J = (I - W) / beta
 
-    J = (work - W) / beta
-    Jb = boxmean(J, 8)
-    final = (1.0 - smooth) * J + smooth * Jb
+    # Detalle (alta frecuencia) de ESTA foto reconstruida.
+    g = J.mean(2)
+    detail = boxmean(np.abs(g - boxmean(g, 3)), 4)
+    flat = np.exp(-detail / SMOOTH_K)  # ~1 liso, ~0 con detalle
+
+    w = (wm * flat)[..., None]
+    Jb = boxmean(J, 6)
+    final = (1.0 - w) * J + w * Jb
     final = np.clip(final, 0, 255).astype(np.uint8)
 
-    out = Image.fromarray(final).resize((ow, oh))
-    out.save(outp, quality=92)
+    Image.fromarray(final).resize((ow, oh)).save(outp, quality=92)
 
 
 if __name__ == "__main__":
