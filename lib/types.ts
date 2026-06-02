@@ -340,6 +340,8 @@ export type AdminProperty = {
   agencyId: string;
   agencyName: string;
   operation: Operation;
+  // Tipo de estancia para alquileres: "larga" / "corta". null en ventas.
+  stayType?: "larga" | "corta" | null;
   status: AdminPropertyStatus;
   bedrooms: number;
   bathrooms: number;
