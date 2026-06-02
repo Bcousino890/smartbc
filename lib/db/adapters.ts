@@ -287,10 +287,19 @@ export function propertyRowToClientProperty(
       .sort((a, b) => a.position - b.position) ?? [];
   // URLs neutras vía el proxy /p/{slug}/{idx} — no exponemos rutas de
   // Storage internas (que delatan el portal de origen, ej. `synced/level/…`).
-  // El proxy cachea 24h, así que añadimos `?v=` con un hash del ORDEN de las
-  // fotos: cambia al reordenar/añadir/borrar (invalidando la caché justo
-  // entonces), pero NO en un sync que no toca fotos (preserva la caché).
-  const orderHash = hashStrings(sortedPhotos.map((p) => p.url));
+  // El proxy cachea 24h, así que añadimos `?v=` con un hash que cambia cuando
+  // las fotos pueden haber cambiado:
+  //  - el ORDEN/URLs de las fotos (reordenar/añadir/borrar), y
+  //  - `last_synced_at`: clave cuando se REPROCESA una foto en la MISMA ruta
+  //    (ej. re-importar con la marca de agua ya quitada). Sin esto, la URL del
+  //    proxy no cambiaba y el navegador servía la versión vieja cacheada.
+  // Es seguro: el diff-engine solo toca `last_synced_at` cuando hay cambios
+  // reales (needsUpdate), así que un sync que no toca nada preserva la caché.
+  const freshness =
+    (row as { last_synced_at?: string | null }).last_synced_at ??
+    (row as { updated_at?: string | null }).updated_at ??
+    "";
+  const orderHash = hashStrings([...sortedPhotos.map((p) => p.url), freshness]);
   const photoUrls = sortedPhotos.map(
     (_, i) => `/p/${row.slug}/${i}?v=${orderHash}`,
   );
