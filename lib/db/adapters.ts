@@ -353,6 +353,8 @@ export function propertyRowToAdminProperty(
     agencyId: row.agencies?.slug ?? "",
     agencyName: row.agencies?.name ?? "—",
     operation: row.operation === "rent" ? "alquiler" : "venta",
+    stayType:
+      row.stay === "short" ? "corta" : row.stay === "long" ? "larga" : null,
     status: PROPERTY_STATUS_MAP[row.status],
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,

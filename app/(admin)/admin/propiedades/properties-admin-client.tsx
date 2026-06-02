@@ -49,6 +49,10 @@ export function PropertiesAdminClient({
   const [zoneFilter, setZoneFilter] = useState<string>("");
   const [subzoneFilter, setSubzoneFilter] = useState<string>("");
   const [agencyFilter, setAgencyFilter] = useState<string>("");
+  const [stayFilter, setStayFilter] = useState<"" | "larga" | "corta">("");
+  const [bedroomsFilter, setBedroomsFilter] = useState<string>("");
+  const [minPrice, setMinPrice] = useState<string>("");
+  const [maxPrice, setMaxPrice] = useState<string>("");
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -123,6 +127,10 @@ export function PropertiesAdminClient({
       if (zoneFilter && p.zone !== zoneFilter) return false;
       if (subzoneFilter && p.subzone !== subzoneFilter) return false;
       if (agencyFilter && p.agencyId !== agencyFilter) return false;
+      if (stayFilter && p.stayType !== stayFilter) return false;
+      if (bedroomsFilter && p.bedrooms < Number(bedroomsFilter)) return false;
+      if (minPrice && p.price < Number(minPrice)) return false;
+      if (maxPrice && p.price > Number(maxPrice)) return false;
       return true;
     });
   }, [
@@ -133,6 +141,10 @@ export function PropertiesAdminClient({
     zoneFilter,
     subzoneFilter,
     agencyFilter,
+    stayFilter,
+    bedroomsFilter,
+    minPrice,
+    maxPrice,
   ]);
 
   // Paginación: solo renderizamos una página de la tabla (DOM acotado).
@@ -144,7 +156,18 @@ export function PropertiesAdminClient({
   // Al cambiar cualquier filtro/búsqueda, volver a la primera página.
   useEffect(() => {
     setPage(1);
-  }, [query, operationFilter, statusFilter, zoneFilter, subzoneFilter, agencyFilter]);
+  }, [
+    query,
+    operationFilter,
+    statusFilter,
+    zoneFilter,
+    subzoneFilter,
+    agencyFilter,
+    stayFilter,
+    bedroomsFilter,
+    minPrice,
+    maxPrice,
+  ]);
 
   const hasActiveFilters = Boolean(
     operationFilter ||
@@ -152,6 +175,10 @@ export function PropertiesAdminClient({
       zoneFilter ||
       subzoneFilter ||
       agencyFilter ||
+      stayFilter ||
+      bedroomsFilter ||
+      minPrice ||
+      maxPrice ||
       query,
   );
 
@@ -162,6 +189,10 @@ export function PropertiesAdminClient({
     setZoneFilter("");
     setSubzoneFilter("");
     setAgencyFilter("");
+    setStayFilter("");
+    setBedroomsFilter("");
+    setMinPrice("");
+    setMaxPrice("");
   };
 
   return (
@@ -305,6 +336,35 @@ export function PropertiesAdminClient({
             { value: "", label: "Todas" },
             ...agencyOptions.map(([id, name]) => ({ value: id, label: name })),
           ]}
+        />
+        <FilterSelect
+          label="Estancia"
+          value={stayFilter}
+          onChange={(v) => setStayFilter(v as typeof stayFilter)}
+          options={[
+            { value: "", label: "Todas" },
+            { value: "larga", label: "Larga" },
+            { value: "corta", label: "Corta" },
+          ]}
+        />
+        <FilterSelect
+          label="Dormitorios"
+          value={bedroomsFilter}
+          onChange={setBedroomsFilter}
+          options={[
+            { value: "", label: "Todos" },
+            { value: "1", label: "1+" },
+            { value: "2", label: "2+" },
+            { value: "3", label: "3+" },
+            { value: "4", label: "4+" },
+            { value: "5", label: "5+" },
+          ]}
+        />
+        <PriceRange
+          min={minPrice}
+          max={maxPrice}
+          onMin={setMinPrice}
+          onMax={setMaxPrice}
         />
         {hasActiveFilters && (
           <button
@@ -533,6 +593,46 @@ function ArchiveButton({ slug }: { slug: string }) {
       )}
       <span>{t("adminProps.archive.action")}</span>
     </button>
+  );
+}
+
+// Rango de precio: dos inputs numéricos (min – max €) con el mismo estilo de
+// chip que FilterSelect. Vacío = sin límite por ese lado.
+function PriceRange({
+  min,
+  max,
+  onMin,
+  onMax,
+}: {
+  min: string;
+  max: string;
+  onMin: (v: string) => void;
+  onMax: (v: string) => void;
+}) {
+  const sanitize = (v: string) => v.replace(/[^\d]/g, "");
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+        Precio €
+      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={min}
+        onChange={(e) => onMin(sanitize(e.target.value))}
+        placeholder="mín"
+        className="w-12 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+      />
+      <span className="text-ink/35">–</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={max}
+        onChange={(e) => onMax(sanitize(e.target.value))}
+        placeholder="máx"
+        className="w-14 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+      />
+    </div>
   );
 }
 
