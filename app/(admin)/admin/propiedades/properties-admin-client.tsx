@@ -3,6 +3,7 @@
 import {
   Archive,
   ChevronDown,
+  Eye,
   Image as ImageIcon,
   Link as LinkIcon,
   Loader2,
@@ -387,10 +388,11 @@ export function PropertiesAdminClient({
       />
 
       <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-separate border-spacing-y-1.5 text-left text-sm">
+        <table className="w-full min-w-[1200px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
             <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
               <th className="px-3 pb-2">{t("adminProps.table.property")}</th>
+              <th className="px-3 pb-2">{t("adminProps.table.reference")}</th>
               <th className="px-3 pb-2">{t("adminProps.table.agency")}</th>
               <th className="px-3 pb-2">{t("adminProps.table.zone")}</th>
               <th className="px-3 pb-2">{t("adminProps.table.operation")}</th>
@@ -494,7 +496,12 @@ function PropertyRow({ property }: { property: AdminProperty }) {
           initialPhotos={property.photos ?? []}
         />
       </td>
-      <td className="px-3 py-3 text-ink/75">{property.agencyName}</td>
+      <td className="px-3 py-3">
+        <span className="inline-block rounded-md border border-ink/10 bg-ink/5 px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-ink/80">
+          {property.propertyReference}
+        </span>
+      </td>
+      <td className="px-3 py-3 text-ink/75">{property.agencyName || "—"}</td>
       <td className="px-3 py-3 text-ink/75">{property.zone}</td>
       <td className="px-3 py-3">
         <span
@@ -531,12 +538,21 @@ function PropertyRow({ property }: { property: AdminProperty }) {
       </td>
       <td className="rounded-r-xl px-3 py-3 text-right">
         <div className="inline-flex items-center gap-2">
+          <a
+            href={`/compartir/${property.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <Eye size={12} strokeWidth={1.75} />
+            <span>{t("adminProps.view")}</span>
+          </a>
           <Link
             href={`/admin/propiedades/${property.id}`}
             className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
           >
             <Pencil size={12} strokeWidth={1.75} className="text-gold" />
-            <span>{t("adminProps.viewEdit")}</span>
+            <span>{t("adminProps.edit")}</span>
           </Link>
           <button
             type="button"

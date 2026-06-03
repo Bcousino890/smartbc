@@ -330,10 +330,12 @@ export type AdminPropertyStatus = "available" | "reserved" | "rented" | "sold" |
 
 export type AdminProperty = {
   id: string;
-  reference: string;
-  // Referencia interna BC (BC-0001, BC-0002…). Independiente de `reference`,
-  // que es la ref del portal de origen (ej. 3291 en Level).
+  reference: string; // Ref del portal de origen (ej. 3291 en Level)
+  // Referencia interna BC (BC-0001, BC-0002…). Única por propiedad.
   bcReference: string | null;
+  // Referencia interna amigable en formato PROP-YYYY-NNNN (año + secuencial).
+  // Inmutable una vez generada, para mostrar al cliente y admin.
+  propertyReference: string;
   title: string;
   zone: string;
   subzone?: string | null;
@@ -415,6 +417,7 @@ export type InternalUserRole =
   | "owner"
   | "admin"
   | "advisor"
+  | "client"
   | "viewer";
 
 export type InternalUserStatus = "active" | "invited" | "suspended";

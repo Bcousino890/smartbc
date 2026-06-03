@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { createPropertyFromParticular } from "./actions";
+import { createPropertyFromParticular, updateParticularPhone } from "./actions";
 
 export type ParticularRow = {
   id: string;
@@ -61,19 +61,121 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
+// ─── Edit Phone Modal ────────────────────────────────────────────────────────
+
+function EditPhoneModal({
+  particularId,
+  currentPhone,
+  onClose,
+  onSaved,
+}: {
+  particularId: string;
+  currentPhone: string | null;
+  onClose: () => void;
+  onSaved: (newPhone: string | null) => void;
+}) {
+  const [phone, setPhone] = useState(currentPhone ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await updateParticularPhone(particularId, phone || null);
+      if (res.ok) {
+        onSaved(phone || null);
+        onClose();
+      } else {
+        setError(res.error);
+      }
+    } catch {
+      setError("network_error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-ink/10 p-6">
+          <h2 className="text-lg font-semibold text-ink">Editar teléfono</h2>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-ink/50 hover:text-ink"
+          >
+            <X size={20} strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="flex flex-1 flex-col gap-4 p-6">
+          <div>
+            <label className="block text-sm font-medium text-ink/75 mb-2">
+              Teléfono
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Ej: +34 600 123 456"
+              className="w-full rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-ink/50">
+              Deja en blanco para eliminar el teléfono
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              No se pudo guardar ({error}). Inténtalo de nuevo.
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 border-t border-ink/10 p-6">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-ink/15 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-ink/5"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 function ParticularModal({
   row,
   onClose,
+  onPhoneUpdated,
 }: {
   row: ParticularRow;
   onClose: () => void;
+  onPhoneUpdated?: (newPhone: string | null) => void;
 }) {
   const [photoIdx, setPhotoIdx] = useState(0);
-  const photos = row.photos ?? [];
+  const [currentRow, setCurrentRow] = useState(row);
+  const [showEditPhone, setShowEditPhone] = useState(false);
+  const photos = currentRow.photos ?? [];
   const cover = photos[photoIdx]?.url;
-  const hasPhone = Boolean(row.phone);
+  const hasPhone = Boolean(currentRow.phone);
 
   // Estado de la conversión particular → propiedad (en Portales externos).
   const [creating, setCreating] = useState(false);
@@ -84,7 +186,7 @@ function ParticularModal({
     setCreating(true);
     setCreateError(null);
     try {
-      const res = await createPropertyFromParticular(row.id);
+      const res = await createPropertyFromParticular(currentRow.id);
       if (res.ok) setCreated({ slug: res.slug });
       else setCreateError(res.error);
     } catch {
@@ -95,17 +197,32 @@ function ParticularModal({
   }
 
   const portalLabel =
-    row.portal.charAt(0).toUpperCase() + row.portal.slice(1);
+    currentRow.portal.charAt(0).toUpperCase() + currentRow.portal.slice(1);
+
+  function handlePhoneSaved(newPhone: string | null) {
+    setCurrentRow({ ...currentRow, phone: newPhone });
+    onPhoneUpdated?.(newPhone);
+    setShowEditPhone(false);
+  }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <>
+      {showEditPhone && (
+        <EditPhoneModal
+          particularId={currentRow.id}
+          currentPhone={currentRow.phone}
+          onClose={() => setShowEditPhone(false)}
+          onSaved={handlePhoneSaved}
+        />
+      )}
       <div
-        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+        onClick={onClose}
       >
+        <div
+          className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Foto + nav */}
         <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-ink/5">
           {cover ? (
@@ -157,7 +274,7 @@ function ParticularModal({
 
           {/* Badges */}
           <span className="absolute left-3 top-3 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
-            {row.operation === "rent" ? "Alquiler" : "Venta"}
+            {currentRow.operation === "rent" ? "Alquiler" : "Venta"}
           </span>
           <span className="absolute right-10 top-3 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
             {portalLabel}
@@ -177,12 +294,12 @@ function ParticularModal({
           {/* Precio + zona */}
           <div>
             {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
-            {!row.is_active && (
+            {!currentRow.is_active && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <span className="font-semibold">Anuncio retirado</span>
-                {row.taken_down_at && (
+                {currentRow.taken_down_at && (
                   <span className="text-red-500">
-                    · {DATE_FMT.format(new Date(row.taken_down_at))}
+                    · {DATE_FMT.format(new Date(currentRow.taken_down_at))}
                   </span>
                 )}
                 <span className="ml-auto text-xs text-red-400">
@@ -191,21 +308,21 @@ function ParticularModal({
               </div>
             )}
             <p className="font-serif text-2xl font-semibold text-ink">
-              {row.price != null
-                ? `${formatPrice(row.price)}${row.operation === "rent" ? "/mes" : ""}`
+              {currentRow.price != null
+                ? `${formatPrice(currentRow.price)}${currentRow.operation === "rent" ? "/mes" : ""}`
                 : "Precio no disponible"}
             </p>
-            {row.zone && (
+            {currentRow.zone && (
               <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
                 <MapPin size={13} strokeWidth={1.75} className="text-gold" />
-                {row.zone}
+                {currentRow.zone}
               </div>
             )}
             <p className="mt-1 text-sm text-ink/50">
               {[
-                row.bedrooms != null ? `${row.bedrooms} hab` : null,
-                row.bathrooms != null ? `${row.bathrooms} baños` : null,
-                row.square_meters != null ? `${row.square_meters} m²` : null,
+                currentRow.bedrooms != null ? `${currentRow.bedrooms} hab` : null,
+                currentRow.bathrooms != null ? `${currentRow.bathrooms} baños` : null,
+                currentRow.square_meters != null ? `${currentRow.square_meters} m²` : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -218,49 +335,66 @@ function ParticularModal({
               Contacto · Particular
             </p>
 
-            {row.owner_name && (
-              <p className="mb-3 font-medium text-ink">{row.owner_name}</p>
+            {currentRow.owner_name && (
+              <p className="mb-3 font-medium text-ink">{currentRow.owner_name}</p>
             )}
 
             {hasPhone ? (
-              <a
-                href={`tel:${row.phone}`}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-              >
-                <Phone size={16} strokeWidth={2} />
-                Llamar · {formatPhone(row.phone!)}
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={`tel:${currentRow.phone}`}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  <Phone size={16} strokeWidth={2} />
+                  Llamar · {formatPhone(currentRow.phone!)}
+                </a>
+                <button
+                  onClick={() => setShowEditPhone(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
+                >
+                  Editar teléfono
+                </button>
+              </div>
             ) : (
-              <a
-                href={row.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
-              >
-                <MessageSquare size={16} strokeWidth={1.75} />
-                Escribir por {portalLabel}
-                {row.chat_only && (
-                  <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                    Solo chat
-                  </span>
-                )}
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={currentRow.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
+                >
+                  <MessageSquare size={16} strokeWidth={1.75} />
+                  Contactar por chat
+                  {currentRow.chat_only && (
+                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Solo disponible
+                    </span>
+                  )}
+                </a>
+                <button
+                  onClick={() => setShowEditPhone(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-gold/30 bg-gold/5 px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
+                >
+                  <Phone size={14} strokeWidth={1.75} />
+                  Agregar teléfono
+                </button>
+              </div>
             )}
           </div>
 
           {/* Mapa — exacto si hay coords, fallback por zona/dirección */}
-          {(row.latitude && row.longitude) || row.zone ? (
+          {(currentRow.latitude && currentRow.longitude) || currentRow.zone ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Ubicación
               </p>
-              {row.latitude && row.longitude ? (
+              {currentRow.latitude && currentRow.longitude ? (
                 <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
                   <iframe
                     width="100%"
                     height="100%"
                     style={{ border: "none" }}
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${row.longitude - 0.003},${row.latitude - 0.003},${row.longitude + 0.003},${row.latitude + 0.003}&layer=mapnik&marker=${row.latitude},${row.longitude}`}
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${currentRow.longitude - 0.003},${currentRow.latitude - 0.003},${currentRow.longitude + 0.003},${currentRow.latitude + 0.003}&layer=mapnik&marker=${currentRow.latitude},${currentRow.longitude}`}
                     allowFullScreen
                   />
                 </div>
@@ -271,14 +405,14 @@ function ParticularModal({
                       width="100%"
                       height="100%"
                       style={{ border: "none" }}
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent((row.zone ?? "") + ", Madrid")}&output=embed&zoom=15`}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent((currentRow.zone ?? "") + ", Madrid")}&output=embed&zoom=15`}
                       allowFullScreen
                       loading="lazy"
                     />
                   </div>
                   <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-[11px] text-ink/50">
                     <MapPin size={11} strokeWidth={1.75} className="text-gold" />
-                    Zona aproximada · {row.zone}
+                    Zona aproximada · {currentRow.zone}
                   </div>
                 </div>
               )}
@@ -286,13 +420,13 @@ function ParticularModal({
           ) : null}
 
           {/* Características */}
-          {row.features && row.features.length > 0 && (
+          {currentRow.features && currentRow.features.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Características
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {row.features.map((f, i) => (
+                {currentRow.features.map((f, i) => (
                   <span
                     key={i}
                     className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-[12px] text-ink/70"
@@ -305,13 +439,13 @@ function ParticularModal({
           )}
 
           {/* Descripción */}
-          {row.description && (
+          {currentRow.description && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Descripción
               </p>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/75">
-                {row.description}
+                {currentRow.description}
               </p>
             </div>
           )}
@@ -319,7 +453,7 @@ function ParticularModal({
           {/* Acciones inferiores */}
           <div className="flex gap-2 border-t border-ink/8 pt-4">
             <a
-              href={row.source_url}
+              href={currentRow.source_url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink/15 px-4 py-2 text-sm text-ink/70 transition hover:border-gold/40 hover:text-ink"
@@ -353,7 +487,8 @@ function ParticularModal({
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -446,11 +581,19 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
     setPage(1);
   }, [query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
 
+  function handlePhoneUpdated(newPhone: string | null) {
+    setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
+  }
+
   return (
     <>
       {/* Modal */}
       {selected && (
-        <ParticularModal row={selected} onClose={() => setSelected(null)} />
+        <ParticularModal
+          row={selected}
+          onClose={() => setSelected(null)}
+          onPhoneUpdated={handlePhoneUpdated}
+        />
       )}
 
       <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -610,10 +753,10 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                         )}
                       </button>
                     )}
-                    {!r.phone && r.chat_only && (
+                    {!r.phone && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
                         <MessageSquare size={10} strokeWidth={1.75} />
-                        Solo chat
+                        Contactar por chat
                       </span>
                     )}
                   </div>

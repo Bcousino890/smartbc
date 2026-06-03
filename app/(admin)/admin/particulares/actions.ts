@@ -4,6 +4,31 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 
+export type UpdatePhoneResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function updateParticularPhone(
+  particularId: string,
+  phone: string | null,
+): Promise<UpdatePhoneResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!particularId) return { ok: false, error: "id_required" };
+
+  const { error } = await supabase
+    .from("particulares")
+    .update({ phone, updated_at: new Date().toISOString() })
+    .eq("id", particularId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/particulares");
+  return { ok: true };
+}
+
 export type CreateFromParticularResult =
   | { ok: true; slug: string; alreadyExisted: boolean }
   | { ok: false; error: string };

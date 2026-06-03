@@ -347,6 +347,7 @@ export function propertyRowToAdminProperty(
     id: row.slug,
     reference: row.external_id ?? row.id.slice(0, 8).toUpperCase(),
     bcReference: row.bc_reference ?? null,
+    propertyReference: (row as any).property_reference ?? "PROP-2026-0000",
     title: row.title,
     zone: row.zone,
     subzone: row.subzone ?? null,
