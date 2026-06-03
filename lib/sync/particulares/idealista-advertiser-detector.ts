@@ -6,6 +6,7 @@ export type AdvertiserCheckResult = {
   advertiser_type: AdvertiserType;
   is_ad_professional: boolean | null;
   phone?: string | null;
+  contact_name?: string | null;
   error?: string;
 };
 
@@ -57,14 +58,32 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
     }
   }
 
+  // Extraer nombre de contacto del particular. Idealista lo expone en el HTML
+  // como `advertiserName: 'Beatriz'` en scripts inline, o como texto en el
+  // bloque de contacto. Capturamos ambas variantes.
+  let contact_name: string | null = null;
+  const cn1 = html.match(/advertiserName\s*:\s*(['"])([^'"]{2,60})\1/);
+  if (cn1?.[2]) {
+    contact_name = cn1[2].trim();
+  }
+  if (!contact_name) {
+    const cn2 = html.match(/"advertiserName"\s*:\s*"([^"]{2,60})"/);
+    if (cn2?.[1]) contact_name = cn2[1].trim();
+  }
+  if (!contact_name) {
+    // Fallback: nombre en el bloque de contacto visible en el HTML
+    const cn3 = html.match(/class="[^"]*advertiser-name[^"]*"[^>]*>([^<]{2,60})</);
+    if (cn3?.[1]) contact_name = cn3[1].trim();
+  }
+
   if (!m) {
-    return { advertiser_type: "unknown", is_ad_professional: null, phone };
+    return { advertiser_type: "unknown", is_ad_professional: null, phone, contact_name };
   }
   const name = m[2].trim();
   if (name.length === 0) {
-    return { advertiser_type: "particular", is_ad_professional: false, phone };
+    return { advertiser_type: "particular", is_ad_professional: false, phone, contact_name };
   }
-  return { advertiser_type: "professional", is_ad_professional: true, phone };
+  return { advertiser_type: "professional", is_ad_professional: true, phone, contact_name };
 }
 
 const IDEALISTA_CONTACT_INFO_URL = "https://www.idealista.com/ajax/listingcontroller/adContactInfoForDetail.ajax";

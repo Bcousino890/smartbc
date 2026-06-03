@@ -57,6 +57,7 @@ type ParticularPayload = {
   external_id: string;
   source_url: string;
   owner_name: string | null;
+  contact_name: string | null;
   zone: string | null;
   price: number | null;
   operation: "rent" | "sale" | null;
@@ -79,10 +80,11 @@ async function upsertParticular(
 ): Promise<boolean> {
   const now = new Date().toISOString();
 
-  // Buscar si ya existe (activo o no)
+  // Buscar si ya existe (activo o no). Incluimos phone para no sobreescribirlo
+  // con null si el HTML no lo expone en este run (Idealista a veces lo oculta).
   const { data: existing } = await supabase
     .from("particulares")
-    .select("id, price, is_active")
+    .select("id, price, is_active, phone")
     .eq("external_id", payload.external_id)
     .maybeSingle();
 
@@ -93,11 +95,12 @@ async function upsertParticular(
 
     // Actualizar con datos frescos. detected_at NO se toca (campo de primera
     // detección). Si estaba inactivo, lo reactivamos y limpiamos taken_down_at.
+    // Preservar phone/contact_name existentes si el nuevo scrape no los encontró.
     const { error } = await supabase
       .from("particulares")
       .update({
         source_url: payload.source_url,
-        owner_name: payload.owner_name,
+        owner_name: payload.contact_name ?? payload.owner_name,
         zone: payload.zone,
         price: payload.price,
         bedrooms: payload.bedrooms,
@@ -106,7 +109,7 @@ async function upsertParticular(
         description: payload.description,
         features: payload.features,
         photos: payload.photos,
-        phone: payload.phone,
+        phone: payload.phone ?? existing.phone,
         latitude: payload.latitude,
         longitude: payload.longitude,
         advertiser_type: payload.advertiser_type,
@@ -153,7 +156,7 @@ async function upsertParticular(
     portal: "idealista",
     external_id: payload.external_id,
     source_url: payload.source_url,
-    owner_name: payload.owner_name,
+    owner_name: payload.contact_name ?? payload.owner_name,
     zone: payload.zone,
     price: payload.price,
     operation: payload.operation,
@@ -228,6 +231,7 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           external_id: preview.externalReference,
           source_url: url,
           owner_name: preview.title ?? null,
+          contact_name: advertiserInfo.contact_name ?? null,
           zone: preview.zone ?? null,
           price: preview.price ?? null,
           operation: (preview.operation as "rent" | "sale") ?? null,
