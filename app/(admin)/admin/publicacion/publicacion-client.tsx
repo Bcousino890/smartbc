@@ -5,6 +5,7 @@ import {
   Building2,
   Check,
   ExternalLink,
+  ImagePlus,
   Key,
   Loader2,
   Search,
@@ -15,6 +16,7 @@ import {
 import { useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { MediaManager } from "./media-manager";
 
 export type PublicacionProperty = {
   id: string;
