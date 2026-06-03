@@ -3,56 +3,81 @@ import { createAdminClient } from "@/lib/db/admin";
 
 export async function POST(req: Request) {
   try {
-    const data = await req.json();
-    const { propertyId, ...listingData } = data;
+    const body = await req.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = createAdminClient() as any;
 
-    if (!propertyId) {
-      return Response.json(
-        { error: "Property ID requerido" },
-        { status: 400 }
-      );
-    }
-
-    const supabase = createAdminClient();
-
-    // Guardar en tabla idealista_listings
-    const { error } = await (supabase
+    const { data: existing } = await db
       .from("idealista_listings")
-      .upsert(
-        {
-          property_id: propertyId,
-          square_meters: listingData.squareMeters,
-          built_square_meters: listingData.builtSquareMeters,
-          price: listingData.price,
-          total_rental_price: listingData.totalRentalPrice,
-          has_elevator: listingData.hasElevator,
-          rental_type: listingData.rentalType,
-          floor: listingData.floor,
-          condition: listingData.condition,
-          energy_class: listingData.energyClass,
-          equipment: listingData.equipment,
-          photo_ids: listingData.photos?.map((p: any) => p.id) || [],
-          video_ids: listingData.videos?.map((v: any) => v.id) || [],
-          plan_ids: listingData.plans?.map((pl: any) => pl.id) || [],
-          updated_at: new Date().toISOString(),
-        } as any,
-        { onConflict: "property_id" }
-      ) as any);
+      .select("id")
+      .eq("property_id", body.propertyId)
+      .limit(1)
+      .single();
 
-    if (error) {
-      console.error("DB error:", error);
-      return Response.json(
-        { error: "Error al guardar en base de datos" },
-        { status: 500 }
-      );
+    const record = {
+      property_id: body.propertyId,
+      property_type: body.propertyType ?? "flat",
+      address_street: body.addressStreet ?? "",
+      address_number: body.addressNumber ?? "",
+      address_postal_code: body.addressPostalCode ?? "",
+      address_city: body.addressCity ?? "",
+      address_block: body.addressBlock ?? "",
+      address_door: body.addressDoor ?? "",
+      address_visibility: body.addressVisibility ?? "exact",
+      square_meters: body.squareMeters || null,
+      built_square_meters: body.builtSquareMeters || null,
+      floor: body.floor ?? "",
+      bedrooms: body.bedrooms ?? 0,
+      bathrooms: body.bathrooms ?? 0,
+      condition: body.condition ?? "good",
+      price: body.price || null,
+      total_rental_price: body.totalRentalPrice || null,
+      rental_type: body.rentalType ?? "residential",
+      max_tenants: body.maxTenants || null,
+      pets_allowed: body.petsAllowed ?? false,
+      children_recommended: body.childrenRecommended ?? false,
+      equipment_type: body.equipmentType ?? "unknown",
+      windows_location: body.windowsLocation ?? "exterior",
+      has_elevator: body.hasElevator ?? false,
+      orientation_north: body.orientationNorth ?? false,
+      orientation_south: body.orientationSouth ?? false,
+      orientation_east: body.orientationEast ?? false,
+      orientation_west: body.orientationWest ?? false,
+      has_terrace: body.hasTerrace ?? false,
+      has_balcony: body.hasBalcony ?? false,
+      has_parking: body.hasParking ?? false,
+      has_storage: body.hasStorage ?? false,
+      has_pool: body.hasPool ?? false,
+      has_garden: body.hasGarden ?? false,
+      has_wardrobes: body.hasWardrobes ?? false,
+      has_ac: body.hasAC ?? false,
+      is_penthouse: body.isPenthouse ?? false,
+      is_studio: body.isStudio ?? false,
+      is_duplex: body.isDuplex ?? false,
+      energy_class: body.energyClass ?? "",
+      energy_performance: body.energyPerformance || null,
+      emission_rating: body.emissionRating ?? "",
+      emission_value: body.emissionValue || null,
+      contact_id: body.contactId ?? "",
+      notes: body.notes ?? "",
+      photo_ids: body.photos ?? [],
+      video_ids: body.videos ?? [],
+      plan_ids: body.plans ?? [],
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existing) {
+      await db
+        .from("idealista_listings")
+        .update(record)
+        .eq("id", existing.id);
+    } else {
+      await db.from("idealista_listings").insert(record);
     }
 
     return Response.json({ ok: true });
   } catch (error) {
-    console.error("Save error:", error);
-    return Response.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    );
+    console.error("Save idealista listing error:", error);
+    return Response.json({ error: "Error al guardar el listado" }, { status: 500 });
   }
 }
