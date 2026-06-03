@@ -4,11 +4,15 @@ import {
   BarChart3,
   Building2,
   ClipboardList,
+  Heart,
   Home,
   LogOut,
   MessageSquare,
   Radio,
+  Send,
   Settings,
+  Sparkles,
+  User,
   UserCog,
   Users,
 } from "lucide-react";
@@ -23,6 +27,9 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/admin/agencias", labelKey: "admin.nav.agencias", icon: Building2 },
   { href: "/admin/propiedades", labelKey: "admin.nav.propiedades", icon: Home },
+  { href: "/admin/particulares", labelKey: "admin.nav.particulares", icon: User },
+  { href: "/admin/publicacion", labelKey: "admin.nav.publicacion", icon: Send },
+  { href: "/admin/idealista", labelKey: "admin.nav.idealista", icon: Sparkles },
   { href: "/admin/clientes", labelKey: "admin.nav.clientes", icon: Users },
   {
     href: "/admin/solicitudes",
