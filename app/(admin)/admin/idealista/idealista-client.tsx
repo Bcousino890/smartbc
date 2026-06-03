@@ -26,6 +26,7 @@ type DbIdealistaListing = {
   property_id: string | null;
   is_inspo: boolean;
   inspo_title: string | null;
+  reference_code: string | null;
   property_type: string | null;
   address_street: string | null;
   address_number: string | null;
@@ -87,6 +88,7 @@ function listingToInitialData(
     propertyId,
     isInspo: listing.is_inspo,
     inspoTitle: listing.inspo_title ?? "",
+    referenceCode: listing.reference_code ?? "",
     propertyType: listing.property_type ?? "flat",
     addressStreet: listing.address_street ?? "",
     addressNumber: listing.address_number ?? "",
@@ -408,6 +410,11 @@ export function IdealistaClient({
                             currency: "EUR",
                             maximumFractionDigits: 0,
                           }).format(listing.price)}
+                        </span>
+                      )}
+                      {listing.reference_code && (
+                        <span className="rounded-full bg-blue-100/60 px-2 py-0.5 text-[10px] font-medium text-blue-700 font-mono">
+                          {listing.reference_code}
                         </span>
                       )}
                       {listing.idealista_state === "published" ? (

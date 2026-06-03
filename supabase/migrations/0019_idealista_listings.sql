@@ -34,6 +34,7 @@ ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS address_city text;
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS address_block text;
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS address_door text;
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS address_visibility text DEFAULT 'exact';
+ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS reference_code text UNIQUE;
 
 -- Características adicionales
 ALTER TABLE idealista_listings ADD COLUMN IF NOT EXISTS bedrooms integer DEFAULT 0;

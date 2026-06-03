@@ -20,6 +20,7 @@ export async function POST(req: Request) {
       is_inspo: isInspo,
       inspo_title: body.inspoTitle ?? null,
       ...(!isInspo && body.propertyId ? { property_id: body.propertyId } : {}),
+      reference_code: body.referenceCode ?? "",
       property_type: body.propertyType ?? "flat",
       address_street: body.addressStreet ?? "",
       address_number: body.addressNumber ?? "",

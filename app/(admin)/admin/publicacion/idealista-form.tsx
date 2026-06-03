@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
-import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Trash2, Video } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Trash2, Video, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
@@ -20,6 +20,7 @@ export type IdealistaListing = {
   // Tipo
   propertyType: string;
   // Localización
+  referenceCode: string;
   addressStreet: string;
   addressNumber: string;
   addressPostalCode: string;
@@ -85,6 +86,7 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   isInspo: false,
   inspoTitle: "",
   propertyType: "flat",
+  referenceCode: "",
   addressStreet: "",
   addressNumber: "",
   addressPostalCode: "",
@@ -136,7 +138,58 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   plans: [],
 };
 
-// ── Micro-components ──────────────────────────────────────────────────────────
+// ── Utilidades ───────────────────────────────────────────────────────────
+
+function generateReferenceCode(): string {
+  const year = new Date().getFullYear();
+  const random = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0");
+  return `IDEAL-${year}-${random}`;
+}
+
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
+
+async function geocodeAddress(
+  street: string,
+  city: string
+): Promise<{ lat: number; lon: number } | null> {
+  if (!street || !city) return null;
+
+  try {
+    const query = `${street}, ${city}`;
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+        query
+      )}&limit=1`,
+      {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "smartbc-idealista-form",
+        },
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const results: NominatimResult[] = await response.json();
+    if (results.length === 0) return null;
+
+    return {
+      lat: parseFloat(results[0].lat),
+      lon: parseFloat(results[0].lon),
+    };
+  } catch (error) {
+    console.error("Geocoding error:", error);
+    return null;
+  }
+}
+
+// ── Micro-components ──────────────────────────────────────────────────────────────
 
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
@@ -261,7 +314,106 @@ function Stepper({
   );
 }
 
-// ── Media upload ──────────────────────────────────────────────────────────────
+// ── Componente: Geocoding con Mapa ───────────────────────────────────────
+
+interface GeocodingMapSectionProps {
+  street: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  onCoordinatesChange: (lat: number, lng: number) => void;
+}
+
+function GeocodingMapSection({
+  street,
+  city,
+  latitude,
+  longitude,
+  onCoordinatesChange,
+}: GeocodingMapSectionProps) {
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce del geocoding
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    // No hacer nada si no hay calle y ciudad
+    if (!street || !city) {
+      setGeocodeError(null);
+      return;
+    }
+
+    setGeocoding(true);
+    setGeocodeError(null);
+
+    debounceTimer.current = setTimeout(async () => {
+      const result = await geocodeAddress(street, city);
+      if (result) {
+        onCoordinatesChange(result.lat, result.lon);
+        setGeocodeError(null);
+      } else {
+        setGeocodeError(
+          "No se encontró la dirección. Puedes ajustar el pin manualmente."
+        );
+      }
+      setGeocoding(false);
+    }, 800);
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [street, city, onCoordinatesChange]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <Label>Ubicación exacta en el mapa</Label>
+        {geocoding && (
+          <span className="flex items-center gap-1 text-[10px] text-ink/50">
+            <Loader2 size={10} className="animate-spin" />
+            Buscando...
+          </span>
+        )}
+        {latitude !== 0 && longitude !== 0 && !geocoding && (
+          <span className="text-[10px] text-ink/40 font-mono">
+            {latitude.toFixed(6)}, {longitude.toFixed(6)}
+          </span>
+        )}
+      </div>
+
+      {geocodeError && (
+        <div className="mb-2 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+          <span className="mt-0.5">⚠️</span>
+          <span>{geocodeError}</span>
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-xl border border-ink/10">
+        <MapPicker
+          lat={latitude}
+          lng={longitude}
+          onChange={(lat, lng) => {
+            onCoordinatesChange(lat, lng);
+          }}
+        />
+      </div>
+      <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink/40">
+        <MapPin size={11} />
+        {geocoding
+          ? "Detectando ubicación..."
+          : "Haz clic en el mapa para marcar la ubicación exacta"}
+      </p>
+    </div>
+  );
+}
+
+// ── Media upload ──────────────────────────────────────────────────────────
 
 type MediaItem = { url: string; name?: string };
 
@@ -510,6 +662,36 @@ export function IdealistaForm({
       {/* ── 2. Localización ──────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={2} title="Localización" />
+
+        {/* Código de referencia */}
+        <div>
+          <Label>Código de referencia</Label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={form.referenceCode}
+              readOnly
+              placeholder="Se generará automáticamente"
+              className={cn(inputCls, "bg-ink/3 cursor-not-allowed")}
+            />
+            {!form.referenceCode && (
+              <button
+                type="button"
+                onClick={() => set("referenceCode", generateReferenceCode())}
+                className="flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/8 px-3 py-2 text-xs font-medium text-gold transition hover:bg-gold/15"
+              >
+                <RefreshCw size={12} />
+                Generar
+              </button>
+            )}
+          </div>
+          {form.referenceCode && (
+            <p className="mt-1 text-[11px] text-ink/40 font-mono">
+              Código inmutable: {form.referenceCode}
+            </p>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <Label>Calle</Label>
@@ -598,30 +780,16 @@ export function IdealistaForm({
         />
 
         {/* Mapa */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Label>Ubicación exacta en el mapa</Label>
-            {form.latitude !== 0 && form.longitude !== 0 && (
-              <span className="text-[10px] text-ink/40 font-mono">
-                {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
-              </span>
-            )}
-          </div>
-          <div className="overflow-hidden rounded-xl border border-ink/10">
-            <MapPicker
-              lat={form.latitude}
-              lng={form.longitude}
-              onChange={(lat, lng) => {
-                set("latitude", lat);
-                set("longitude", lng);
-              }}
-            />
-          </div>
-          <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink/40">
-            <MapPin size={11} />
-            Haz clic en el mapa para marcar la ubicación exacta
-          </p>
-        </div>
+        <GeocodingMapSection
+          street={form.addressStreet}
+          city={form.addressCity}
+          latitude={form.latitude}
+          longitude={form.longitude}
+          onCoordinatesChange={(lat, lng) => {
+            set("latitude", lat);
+            set("longitude", lng);
+          }}
+        />
       </section>
 
       {/* ── 3. Características ───────────────────────────────────────────── */}
