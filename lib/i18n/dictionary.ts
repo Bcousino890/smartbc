@@ -329,6 +329,7 @@ const es: Strings = {
   "admin.nav.sindicacion": "Sindicación",
   "admin.nav.particulares": "Particulares",
   "admin.nav.publicacion": "Publicación",
+  "admin.nav.idealista": "Idealista",
   "admin.nav.reportes": "Reportes",
   "adminMensajes.title": "Mensajes",
   "adminMensajes.subtitle":
@@ -1223,6 +1224,7 @@ const en: Strings = {
   "admin.nav.sindicacion": "Syndication",
   "admin.nav.particulares": "Private listings",
   "admin.nav.publicacion": "Publishing",
+  "admin.nav.idealista": "Idealista",
   "admin.nav.reportes": "Reports",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle": "All your client conversations in one place.",

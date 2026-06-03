@@ -11,6 +11,7 @@ import {
   Radio,
   Send,
   Settings,
+  Sparkles,
   User,
   UserCog,
   Users,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: "/admin/propiedades", labelKey: "admin.nav.propiedades", icon: Home },
   { href: "/admin/particulares", labelKey: "admin.nav.particulares", icon: User },
   { href: "/admin/publicacion", labelKey: "admin.nav.publicacion", icon: Send },
+  { href: "/admin/idealista", labelKey: "admin.nav.idealista", icon: Sparkles },
   { href: "/admin/clientes", labelKey: "admin.nav.clientes", icon: Users },
   {
     href: "/admin/solicitudes",
