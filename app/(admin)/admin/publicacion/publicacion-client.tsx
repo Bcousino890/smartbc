@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { MediaManager } from "./media-manager";
+import { IdealistaForm, type IdealistaListing } from "./idealista-form";
 
 export type PublicacionProperty = {
   id: string;
@@ -163,6 +164,7 @@ export function PublicacionClient({
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("own");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editingIdealistaProperty, setEditingIdealistaProperty] = useState<PublicacionProperty | null>(null);
   const [publishStates, setPublishStates] = useState<
     Record<string, PropertyPublishState>
   >({});
@@ -282,6 +284,25 @@ export function PublicacionClient({
 
   const allSelected = filtered.length > 0 && selected.size === filtered.length;
 
+  const handleSaveIdealistaListing = async (data: IdealistaListing) => {
+    try {
+      const res = await fetch("/api/admin/publicacion/save-idealista-listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Error al guardar");
+      }
+
+      setEditingIdealistaProperty(null);
+    } catch (err) {
+      throw err instanceof Error ? err : new Error("Error desconocido");
+    }
+  };
+
   return (
     <>
       {showApiKeyModal && (
@@ -290,6 +311,26 @@ export function PublicacionClient({
           onSave={setApiKey}
           onClose={() => setShowApiKeyModal(false)}
         />
+      )}
+
+      {editingIdealistaProperty && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/50 p-4 backdrop-blur-sm">
+          <div className="mx-auto max-w-3xl py-6">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setEditingIdealistaProperty(null)}
+                className="text-ink/40 hover:text-ink"
+              >
+                <X size={24} strokeWidth={2} />
+              </button>
+            </div>
+            <IdealistaForm
+              propertyId={editingIdealistaProperty.id}
+              propertyTitle={editingIdealistaProperty.title}
+              onSave={handleSaveIdealistaListing}
+            />
+          </div>
+        </div>
       )}
 
       <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -500,33 +541,14 @@ export function PublicacionClient({
                       {DATE_FMT.format(new Date(p.created_at))}
                     </td>
                     <td className="rounded-r-xl px-3 py-3 text-right">
-                      {isSuccess ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700">
-                          <Check size={12} strokeWidth={2.5} />
-                          Publicado
-                        </span>
-                      ) : isError ? (
-                        <span
-                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-[11px] font-medium text-red-700"
-                          title={state?.message}
-                        >
-                          Error — reintentar
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => publishProperty(p)}
-                          disabled={isLoading}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-gold/40 hover:text-ink disabled:opacity-50"
-                        >
-                          {isLoading ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Send size={12} strokeWidth={1.75} />
-                          )}
-                          Publicar en Idealista
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setEditingIdealistaProperty(p)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold-dark transition hover:bg-gold/20"
+                      >
+                        <ImagePlus size={12} strokeWidth={1.75} />
+                        Preparar Idealista
+                      </button>
                     </td>
                   </tr>
                 );

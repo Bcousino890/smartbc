@@ -15,11 +15,11 @@ export async function POST(req: Request) {
     const supabase = createAdminClient();
 
     // Obtener ruta del archivo
-    const { data: media, error: fetchError } = await supabase
+    const { data: media, error: fetchError } = await (supabase
       .from("property_media")
       .select("storage_path")
       .eq("id", mediaId)
-      .single();
+      .single() as any);
 
     if (fetchError || !media) {
       return Response.json(
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     // Eliminar del storage
     const { error: deleteError } = await supabase.storage
       .from("property-media")
-      .remove([media.storage_path]);
+      .remove([(media as any)?.storage_path || ""]);
 
     if (deleteError) {
       console.error("Storage delete error:", deleteError);
