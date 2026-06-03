@@ -1,24 +1,57 @@
 name: Deploy to VPS
 
+# Auto-deploy: en cada push a main, sube el código al VPS Hetzner y reconstruye.
+# Hace LO MISMO que scripts/deploy.sh (rsync + build + pm2 restart + migraciones),
+# porque el VPS NO es un repo git (se despliega por rsync, no por `git pull`).
+#
+# Único secreto necesario en el repo (Settings → Secrets → Actions):
+#   VPS_SSH_KEY  = clave PRIVADA SSH autorizada en root@178.105.176.3
+# El host, usuario y ruta NO son secretos (ya están en scripts/deploy.sh).
+
 on:
   push:
     branches: [main]
+  workflow_dispatch: {} # permite lanzarlo a mano desde la pestaña Actions
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+env:
+  VPS_HOST: 178.105.176.3
+  VPS_USER: root
+  VPS_PATH: /opt/smartbc-app
+  PM2_APP: smartbc-portal
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          script: |
-            cd ${{ secrets.VPS_PATH }}
-            git pull origin main
-            npm install --production=false
-            npm run build
-            pm2 restart smartbc || pm2 start npm --name "smartbc" -- start
-            echo "✅ Deploy completado: $(date)"
+      - uses: actions/checkout@v4
+
+      - name: Configurar clave SSH
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "::error::Falta el secret VPS_SSH_KEY. Añádelo en Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Subir código al VPS (rsync)
+        run: |
+          rsync -az \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude '.env.local' \
+            --exclude 'tsconfig.tsbuildinfo' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./ "$VPS_USER@$VPS_HOST:$VPS_PATH/"
+
+      - name: Build + restart + migraciones en el VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$VPS_USER@$VPS_HOST" \
+            "cd $VPS_PATH && npm install && npm run build && pm2 restart $PM2_APP && bash scripts/apply-migrations.sh"
