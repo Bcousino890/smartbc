@@ -24,19 +24,55 @@ type Property = {
 type DbIdealistaListing = {
   id: string;
   property_id: string;
+  property_type: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_postal_code: string | null;
+  address_city: string | null;
+  address_block: string | null;
+  address_door: string | null;
+  address_visibility: string | null;
   square_meters: number | null;
   built_square_meters: number | null;
+  floor: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  condition: string | null;
   price: number | null;
   total_rental_price: number | null;
-  has_elevator: boolean;
   rental_type: string | null;
-  floor: string | null;
-  condition: string | null;
+  max_tenants: number | null;
+  pets_allowed: boolean;
+  children_recommended: boolean;
+  equipment_type: string | null;
+  windows_location: string | null;
+  has_elevator: boolean;
+  orientation_north: boolean;
+  orientation_south: boolean;
+  orientation_east: boolean;
+  orientation_west: boolean;
+  has_terrace: boolean;
+  has_balcony: boolean;
+  has_parking: boolean;
+  has_storage: boolean;
+  has_pool: boolean;
+  has_garden: boolean;
+  has_wardrobes: boolean;
+  has_ac: boolean;
+  is_penthouse: boolean;
+  is_studio: boolean;
+  is_duplex: boolean;
   energy_class: string | null;
-  equipment: string | null;
+  energy_performance: number | null;
+  emission_rating: string | null;
+  emission_value: number | null;
+  contact_id: string | null;
+  notes: string | null;
   photo_ids: string[];
   video_ids: string[];
   plan_ids: string[];
+  idealista_property_id: string | null;
+  idealista_state: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -107,27 +143,56 @@ export function IdealistaClient({
   };
 
   if (selectedPropertyId && selectedProperty) {
-    const initialData: Partial<IdealistaListing> = selectedListing
+    const initialData: Partial<IdealistaListing> | undefined = selectedListing
       ? {
           propertyId: selectedProperty.id,
+          propertyType: selectedListing.property_type ?? "flat",
+          addressStreet: selectedListing.address_street ?? "",
+          addressNumber: selectedListing.address_number ?? "",
+          addressPostalCode: selectedListing.address_postal_code ?? "",
+          addressCity: selectedListing.address_city ?? "",
+          addressBlock: selectedListing.address_block ?? "",
+          addressDoor: selectedListing.address_door ?? "",
+          addressVisibility: (selectedListing.address_visibility ?? "exact") as "exact" | "street" | "hidden",
           squareMeters: selectedListing.square_meters || 0,
           builtSquareMeters: selectedListing.built_square_meters || 0,
+          floor: selectedListing.floor ?? "",
+          bedrooms: selectedListing.bedrooms ?? 0,
+          bathrooms: selectedListing.bathrooms ?? 0,
+          condition: (selectedListing.condition ?? "good") as "good" | "to-reform" | "needs-reform" | "new",
           price: selectedListing.price || 0,
           totalRentalPrice: selectedListing.total_rental_price || 0,
+          rentalType: (selectedListing.rental_type ?? "residential") as "residential" | "temporary",
+          maxTenants: selectedListing.max_tenants ?? 0,
+          petsAllowed: selectedListing.pets_allowed,
+          childrenRecommended: selectedListing.children_recommended,
+          equipmentType: (selectedListing.equipment_type ?? "unknown") as "furnished" | "kitchen-only" | "empty" | "unknown",
+          windowsLocation: (selectedListing.windows_location ?? "exterior") as "interior" | "exterior",
           hasElevator: selectedListing.has_elevator,
-          rentalType: (selectedListing.rental_type || "residential") as
-            | "residential"
-            | "temporary",
-          floor: selectedListing.floor || "",
-          condition: (selectedListing.condition || "good") as
-            | "good"
-            | "to-reform"
-            | "needs-reform",
-          energyClass: selectedListing.energy_class || "A",
-          equipment: selectedListing.equipment || "",
-          photos: [],
-          videos: [],
-          plans: [],
+          orientationNorth: selectedListing.orientation_north,
+          orientationSouth: selectedListing.orientation_south,
+          orientationEast: selectedListing.orientation_east,
+          orientationWest: selectedListing.orientation_west,
+          hasTerrace: selectedListing.has_terrace,
+          hasBalcony: selectedListing.has_balcony,
+          hasParking: selectedListing.has_parking,
+          hasStorage: selectedListing.has_storage,
+          hasPool: selectedListing.has_pool,
+          hasGarden: selectedListing.has_garden,
+          hasWardrobes: selectedListing.has_wardrobes,
+          hasAC: selectedListing.has_ac,
+          isPenthouse: selectedListing.is_penthouse,
+          isStudio: selectedListing.is_studio,
+          isDuplex: selectedListing.is_duplex,
+          energyClass: selectedListing.energy_class ?? "",
+          energyPerformance: selectedListing.energy_performance ?? 0,
+          emissionRating: selectedListing.emission_rating ?? "",
+          emissionValue: selectedListing.emission_value ?? 0,
+          contactId: selectedListing.contact_id ?? "",
+          notes: selectedListing.notes ?? "",
+          photos: selectedListing.photo_ids ?? [],
+          videos: selectedListing.video_ids ?? [],
+          plans: selectedListing.plan_ids ?? [],
         }
       : undefined;
 
@@ -281,6 +346,9 @@ export function IdealistaClient({
                         {listing.square_meters && (
                           <span>{listing.square_meters} m²</span>
                         )}
+                        {listing.bedrooms != null && listing.bedrooms > 0 && (
+                          <span>{listing.bedrooms} hab.</span>
+                        )}
                         {listing.price && (
                           <span>
                             {new Intl.NumberFormat("es-ES", {
@@ -293,16 +361,21 @@ export function IdealistaClient({
                         {listing.photo_ids.length > 0 && (
                           <span>📷 {listing.photo_ids.length} foto(s)</span>
                         )}
-                        {listing.video_ids.length > 0 && (
-                          <span>🎥 {listing.video_ids.length} video(s)</span>
-                        )}
                       </div>
-                      <p className="mt-1 text-xs text-ink/40">
-                        Actualizado:{" "}
-                        {new Date(listing.updated_at).toLocaleDateString(
-                          "es-ES"
+                      <div className="mt-1.5 flex items-center gap-2">
+                        {listing.idealista_state === "published" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                            ✓ Publicado en Idealista
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+                            Borrador — subida manual pendiente
+                          </span>
                         )}
-                      </p>
+                        <span className="text-[10px] text-ink/35">
+                          {new Date(listing.updated_at).toLocaleDateString("es-ES")}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex gap-1 shrink-0">

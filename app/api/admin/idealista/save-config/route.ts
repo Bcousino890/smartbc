@@ -4,16 +4,17 @@ import { createAdminClient } from "@/lib/db/admin";
 export async function POST(req: Request) {
   try {
     const { feedKey, clientId, clientSecret, sandboxMode } = await req.json();
-    const supabase = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = createAdminClient() as any;
 
-    const { data: existing } = await (supabase
+    const { data: existing } = await db
       .from("idealista_config")
       .select("id")
       .limit(1)
-      .single() as any);
+      .single();
 
     if (existing) {
-      await (supabase
+      await db
         .from("idealista_config")
         .update({
           feed_key: feedKey,
@@ -21,17 +22,15 @@ export async function POST(req: Request) {
           client_secret: clientSecret,
           sandbox_mode: sandboxMode ?? true,
           updated_at: new Date().toISOString(),
-        } as any)
-        .eq("id", (existing as any).id) as any);
+        })
+        .eq("id", existing.id);
     } else {
-      await (supabase
-        .from("idealista_config")
-        .insert({
-          feed_key: feedKey,
-          client_id: clientId,
-          client_secret: clientSecret,
-          sandbox_mode: sandboxMode ?? true,
-        } as any) as any);
+      await db.from("idealista_config").insert({
+        feed_key: feedKey,
+        client_id: clientId,
+        client_secret: clientSecret,
+        sandbox_mode: sandboxMode ?? true,
+      });
     }
 
     return Response.json({ ok: true });
