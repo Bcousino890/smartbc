@@ -1,4 +1,5 @@
-import { Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Settings, Sparkles } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { createAdminClient } from "@/lib/db/admin";
@@ -70,11 +71,20 @@ export default async function AdminIdealistaPage() {
       />
 
       <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <Sparkles size={20} className="text-gold" />
-          <h2 className="font-serif text-lg font-semibold text-ink">
-            Publicar en Idealista
-          </h2>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles size={20} className="text-gold" />
+            <h2 className="font-serif text-lg font-semibold text-ink">
+              Publicar en Idealista
+            </h2>
+          </div>
+          <Link
+            href="/admin/idealista/configuracion"
+            className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/60 px-3 py-1.5 text-xs font-medium text-ink/60 transition hover:bg-white hover:text-ink"
+          >
+            <Settings size={13} />
+            Configuración API
+          </Link>
         </div>
         <p className="mb-6 text-sm text-ink/60">
           Selecciona una propiedad, completa los datos de Idealista y sube fotos, videos y planos. Los datos quedan guardados y listos para publicar.
