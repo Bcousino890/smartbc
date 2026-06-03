@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles } from "lucide-react";
 import { useState, useMemo } from "react";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,9 @@ type Property = {
 
 type DbIdealistaListing = {
   id: string;
-  property_id: string;
+  property_id: string | null;
+  is_inspo: boolean;
+  inspo_title: string | null;
   property_type: string | null;
   address_street: string | null;
   address_number: string | null;
@@ -77,6 +79,79 @@ type DbIdealistaListing = {
   updated_at: string;
 };
 
+function listingToInitialData(
+  listing: DbIdealistaListing,
+  propertyId: string
+): Partial<IdealistaListing> {
+  return {
+    propertyId,
+    isInspo: listing.is_inspo,
+    inspoTitle: listing.inspo_title ?? "",
+    propertyType: listing.property_type ?? "flat",
+    addressStreet: listing.address_street ?? "",
+    addressNumber: listing.address_number ?? "",
+    addressPostalCode: listing.address_postal_code ?? "",
+    addressCity: listing.address_city ?? "",
+    addressBlock: listing.address_block ?? "",
+    addressDoor: listing.address_door ?? "",
+    addressVisibility: (listing.address_visibility ?? "exact") as
+      | "exact"
+      | "street"
+      | "hidden",
+    squareMeters: listing.square_meters ?? 0,
+    builtSquareMeters: listing.built_square_meters ?? 0,
+    floor: listing.floor ?? "",
+    bedrooms: listing.bedrooms ?? 0,
+    bathrooms: listing.bathrooms ?? 0,
+    condition: (listing.condition ?? "good") as
+      | "good"
+      | "to-reform"
+      | "needs-reform"
+      | "new",
+    price: listing.price ?? 0,
+    totalRentalPrice: listing.total_rental_price ?? 0,
+    rentalType: (listing.rental_type ?? "residential") as
+      | "residential"
+      | "temporary",
+    maxTenants: listing.max_tenants ?? 0,
+    petsAllowed: listing.pets_allowed,
+    childrenRecommended: listing.children_recommended,
+    equipmentType: (listing.equipment_type ?? "unknown") as
+      | "furnished"
+      | "kitchen-only"
+      | "empty"
+      | "unknown",
+    windowsLocation: (listing.windows_location ?? "exterior") as
+      | "interior"
+      | "exterior",
+    hasElevator: listing.has_elevator,
+    orientationNorth: listing.orientation_north,
+    orientationSouth: listing.orientation_south,
+    orientationEast: listing.orientation_east,
+    orientationWest: listing.orientation_west,
+    hasTerrace: listing.has_terrace,
+    hasBalcony: listing.has_balcony,
+    hasParking: listing.has_parking,
+    hasStorage: listing.has_storage,
+    hasPool: listing.has_pool,
+    hasGarden: listing.has_garden,
+    hasWardrobes: listing.has_wardrobes,
+    hasAC: listing.has_ac,
+    isPenthouse: listing.is_penthouse,
+    isStudio: listing.is_studio,
+    isDuplex: listing.is_duplex,
+    energyClass: listing.energy_class ?? "",
+    energyPerformance: listing.energy_performance ?? 0,
+    emissionRating: listing.emission_rating ?? "",
+    emissionValue: listing.emission_value ?? 0,
+    contactId: listing.contact_id ?? "",
+    notes: listing.notes ?? "",
+    photos: listing.photo_ids ?? [],
+    videos: listing.video_ids ?? [],
+    plans: listing.plan_ids ?? [],
+  };
+}
+
 export function IdealistaClient({
   properties,
   listings,
@@ -84,10 +159,9 @@ export function IdealistaClient({
   properties: Property[];
   listings: DbIdealistaListing[];
 }) {
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
-    null
-  );
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+  const [isInspoMode, setIsInspoMode] = useState(false);
+  const [editingInspoId, setEditingInspoId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +176,11 @@ export function IdealistaClient({
     [selectedPropertyId, listings]
   );
 
+  const inspoListing = useMemo(
+    () => listings.find((l) => l.id === editingInspoId),
+    [editingInspoId, listings]
+  );
+
   const filteredProperties = useMemo(() => {
     const query = searchTerm.toLowerCase();
     return properties.filter(
@@ -112,101 +191,67 @@ export function IdealistaClient({
     );
   }, [properties, searchTerm]);
 
+  const inspoListings = useMemo(
+    () => listings.filter((l) => l.is_inspo),
+    [listings]
+  );
+  const systemListings = useMemo(
+    () => listings.filter((l) => !l.is_inspo),
+    [listings]
+  );
+
+  function clearForm() {
+    setSelectedPropertyId(null);
+    setIsInspoMode(false);
+    setEditingInspoId(null);
+    setError(null);
+  }
+
   const handleSave = async (data: IdealistaListing) => {
     setError(null);
     setIsSaving(true);
-
     try {
-      const res = await fetch(
-        "/api/admin/publicacion/save-idealista-listing",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        }
-      );
-
+      const res = await fetch("/api/admin/publicacion/save-idealista-listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || "Error al guardar");
       }
-
-      setSelectedPropertyId(null);
-      setEditingId(null);
+      clearForm();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Error desconocido al guardar"
-      );
+      setError(err instanceof Error ? err.message : "Error desconocido al guardar");
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (selectedPropertyId && selectedProperty) {
-    const initialData: Partial<IdealistaListing> | undefined = selectedListing
-      ? {
-          propertyId: selectedProperty.id,
-          propertyType: selectedListing.property_type ?? "flat",
-          addressStreet: selectedListing.address_street ?? "",
-          addressNumber: selectedListing.address_number ?? "",
-          addressPostalCode: selectedListing.address_postal_code ?? "",
-          addressCity: selectedListing.address_city ?? "",
-          addressBlock: selectedListing.address_block ?? "",
-          addressDoor: selectedListing.address_door ?? "",
-          addressVisibility: (selectedListing.address_visibility ?? "exact") as "exact" | "street" | "hidden",
-          squareMeters: selectedListing.square_meters || 0,
-          builtSquareMeters: selectedListing.built_square_meters || 0,
-          floor: selectedListing.floor ?? "",
-          bedrooms: selectedListing.bedrooms ?? 0,
-          bathrooms: selectedListing.bathrooms ?? 0,
-          condition: (selectedListing.condition ?? "good") as "good" | "to-reform" | "needs-reform" | "new",
-          price: selectedListing.price || 0,
-          totalRentalPrice: selectedListing.total_rental_price || 0,
-          rentalType: (selectedListing.rental_type ?? "residential") as "residential" | "temporary",
-          maxTenants: selectedListing.max_tenants ?? 0,
-          petsAllowed: selectedListing.pets_allowed,
-          childrenRecommended: selectedListing.children_recommended,
-          equipmentType: (selectedListing.equipment_type ?? "unknown") as "furnished" | "kitchen-only" | "empty" | "unknown",
-          windowsLocation: (selectedListing.windows_location ?? "exterior") as "interior" | "exterior",
-          hasElevator: selectedListing.has_elevator,
-          orientationNorth: selectedListing.orientation_north,
-          orientationSouth: selectedListing.orientation_south,
-          orientationEast: selectedListing.orientation_east,
-          orientationWest: selectedListing.orientation_west,
-          hasTerrace: selectedListing.has_terrace,
-          hasBalcony: selectedListing.has_balcony,
-          hasParking: selectedListing.has_parking,
-          hasStorage: selectedListing.has_storage,
-          hasPool: selectedListing.has_pool,
-          hasGarden: selectedListing.has_garden,
-          hasWardrobes: selectedListing.has_wardrobes,
-          hasAC: selectedListing.has_ac,
-          isPenthouse: selectedListing.is_penthouse,
-          isStudio: selectedListing.is_studio,
-          isDuplex: selectedListing.is_duplex,
-          energyClass: selectedListing.energy_class ?? "",
-          energyPerformance: selectedListing.energy_performance ?? 0,
-          emissionRating: selectedListing.emission_rating ?? "",
-          emissionValue: selectedListing.emission_value ?? 0,
-          contactId: selectedListing.contact_id ?? "",
-          notes: selectedListing.notes ?? "",
-          photos: selectedListing.photo_ids ?? [],
-          videos: selectedListing.video_ids ?? [],
-          plans: selectedListing.plan_ids ?? [],
-        }
-      : undefined;
+  // ── Vista de formulario (propiedad existente o inspo) ─────────────────────
+  const showingForm = (selectedPropertyId && selectedProperty) || isInspoMode || editingInspoId;
+
+  if (showingForm) {
+    const isInspo = isInspoMode || inspoListing?.is_inspo;
+    const propertyId = selectedPropertyId ?? editingInspoId ?? `inspo-${Date.now()}`;
+    const propertyTitle = isInspo
+      ? (inspoListing?.inspo_title ?? "")
+      : (selectedProperty?.title ?? "");
+    const initialData =
+      selectedListing
+        ? listingToInitialData(selectedListing, propertyId)
+        : inspoListing
+        ? listingToInitialData(inspoListing, inspoListing.id)
+        : undefined;
 
     return (
       <div className="space-y-6">
         <button
-          onClick={() => {
-            setSelectedPropertyId(null);
-            setEditingId(null);
-          }}
+          onClick={clearForm}
           className="flex items-center gap-2 text-sm font-medium text-ink/60 hover:text-ink transition"
         >
           <ArrowLeft size={16} />
-          Volver a la lista
+          Volver
         </button>
 
         {isSaving && (
@@ -223,8 +268,9 @@ export function IdealistaClient({
         )}
 
         <IdealistaForm
-          propertyId={selectedProperty.id}
-          propertyTitle={selectedProperty.title}
+          propertyId={propertyId}
+          propertyTitle={propertyTitle}
+          isInspo={!!isInspo}
           initialData={initialData}
           onSave={handleSave}
         />
@@ -232,168 +278,179 @@ export function IdealistaClient({
     );
   }
 
+  // ── Vista principal (dos modos) ───────────────────────────────────────────
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      {/* Propiedades disponibles */}
-      <div className="lg:col-span-1">
-        <div className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] md:p-6">
-          <h3 className="mb-4 font-serif text-lg font-semibold text-ink">
-            Propiedades
-          </h3>
-
-          <div className="mb-4">
+    <div className="space-y-6">
+      {/* Cabecera de modos */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Modo 1: propiedad del sistema */}
+        <div className="rounded-xl border border-ink/10 bg-white/60 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Search size={15} className="text-ink/50" />
+            <h3 className="text-sm font-semibold text-ink">Propiedad existente</h3>
+          </div>
+          <p className="text-xs text-ink/50 mb-3">
+            Busca una propiedad ya creada en el sistema y prepara su ficha para Idealista.
+          </p>
+          <div className="relative">
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder="Buscar por nombre, zona, referencia..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
             />
           </div>
+        </div>
 
-          <div className="space-y-1 max-h-[600px] overflow-y-auto">
-            {filteredProperties.length === 0 ? (
-              <p className="text-center py-8 text-sm text-ink/50">
-                {searchTerm ? "No hay propiedades que coincidan" : "No hay propiedades"}
-              </p>
-            ) : (
-              filteredProperties.map((property) => {
-                const hasListing = listings.some(
-                  (l) => l.property_id === property.id
-                );
+        {/* Modo 2: inspo */}
+        <button
+          onClick={() => setIsInspoMode(true)}
+          className="rounded-xl border-2 border-dashed border-gold/40 bg-gold/5 p-4 text-left transition hover:border-gold/70 hover:bg-gold/10 group"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles size={15} className="text-gold" />
+            <h3 className="text-sm font-semibold text-ink">Nueva Inspo</h3>
+          </div>
+          <p className="text-xs text-ink/50">
+            Crea una ficha desde cero para publicar en Idealista, sin necesidad de tener la propiedad en el sistema.
+          </p>
+          <span className="mt-3 inline-flex items-center gap-1 rounded-lg bg-gold/20 px-3 py-1 text-xs font-semibold text-gold group-hover:bg-gold/30 transition">
+            + Crear inspo
+          </span>
+        </button>
+      </div>
 
-                return (
-                  <button
-                    key={property.id}
-                    onClick={() => {
-                      setSelectedPropertyId(property.id);
-                      setEditingId(null);
-                    }}
-                    className={cn(
-                      "w-full text-left px-3 py-2.5 rounded-lg transition",
-                      "hover:bg-gold/10 focus:outline-none focus:bg-gold/10",
-                      hasListing
-                        ? "bg-emerald-50/50 border border-emerald-200/50"
-                        : "border border-ink/10"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-sm text-ink">
-                          {property.title}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-ink/55">
-                          {property.zone || "Sin zona"}
-                        </p>
-                        {property.price && (
-                          <p className="mt-1 text-xs font-semibold text-gold">
-                            {new Intl.NumberFormat("es-ES", {
-                              style: "currency",
-                              currency: "EUR",
-                            }).format(property.price)}
-                          </p>
-                        )}
-                      </div>
-                      {hasListing && (
-                        <span className="mt-1 inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-medium text-emerald-700 whitespace-nowrap">
-                          ✓ Preparado
+      {/* Lista de propiedades del sistema (si hay búsqueda o siempre visible) */}
+      {filteredProperties.length > 0 && (
+        <div className="rounded-xl border border-ink/8 bg-white/40 overflow-hidden">
+          <div className="max-h-[400px] overflow-y-auto divide-y divide-ink/6">
+            {filteredProperties.map((property) => {
+              const listing = systemListings.find((l) => l.property_id === property.id);
+              return (
+                <div
+                  key={property.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gold/5 transition"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {property.title}
+                    </p>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-ink/50">
+                      {property.zone && <span>{property.zone}</span>}
+                      {property.price && (
+                        <span className="font-semibold text-gold">
+                          {new Intl.NumberFormat("es-ES", {
+                            style: "currency",
+                            currency: "EUR",
+                            maximumFractionDigits: 0,
+                          }).format(property.price)}
+                        </span>
+                      )}
+                      {listing && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                          ✓ Preparada
                         </span>
                       )}
                     </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedPropertyId(property.id)}
+                    className="shrink-0 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold transition hover:bg-gold/20"
+                  >
+                    {listing ? "Editar" : "Preparar →"}
                   </button>
-                );
-              })
-            )}
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Lista de propiedades preparadas */}
-      <div className="lg:col-span-2">
-        <div className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] md:p-6">
-          <h3 className="mb-4 font-serif text-lg font-semibold text-ink">
-            Propiedades Preparadas para Idealista
+      {/* Fichas preparadas: del sistema + inspo */}
+      {listings.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink/45">
+            Fichas guardadas ({listings.length})
           </h3>
+          <div className="space-y-2">
+            {listings.map((listing) => {
+              const property = !listing.is_inspo
+                ? properties.find((p) => p.id === listing.property_id)
+                : null;
+              const displayTitle = listing.is_inspo
+                ? (listing.inspo_title || "Inspo sin título")
+                : (property?.title ?? "Propiedad eliminada");
 
-          {listings.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-ink/55 mb-2">
-                No hay propiedades preparadas aún
-              </p>
-              <p className="text-xs text-ink/40">
-                Selecciona una propiedad de la izquierda para comenzar
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {listings.map((listing) => {
-                const property = properties.find(
-                  (p) => p.id === listing.property_id
-                );
-
-                if (!property) return null;
-
-                return (
-                  <div
-                    key={listing.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gold/20 bg-white/50 px-4 py-3 hover:bg-white/80 transition"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-sm text-ink">
-                        {property.title}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-ink/55">
-                        {listing.square_meters && (
-                          <span>{listing.square_meters} m²</span>
-                        )}
-                        {listing.bedrooms != null && listing.bedrooms > 0 && (
-                          <span>{listing.bedrooms} hab.</span>
-                        )}
-                        {listing.price && (
-                          <span>
-                            {new Intl.NumberFormat("es-ES", {
-                              style: "currency",
-                              currency: "EUR",
-                              maximumFractionDigits: 0,
-                            }).format(listing.price)}
-                          </span>
-                        )}
-                        {listing.photo_ids.length > 0 && (
-                          <span>📷 {listing.photo_ids.length} foto(s)</span>
-                        )}
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        {listing.idealista_state === "published" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                            ✓ Publicado en Idealista
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
-                            Borrador — subida manual pendiente
-                          </span>
-                        )}
-                        <span className="text-[10px] text-ink/35">
-                          {new Date(listing.updated_at).toLocaleDateString("es-ES")}
+              return (
+                <div
+                  key={listing.id}
+                  className="flex items-center gap-3 rounded-xl border border-gold/15 bg-white/60 px-4 py-3 hover:bg-white/80 transition"
+                >
+                  {listing.is_inspo && (
+                    <Sparkles size={14} className="shrink-0 text-gold" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {displayTitle}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/50">
+                      {listing.square_meters && (
+                        <span>{listing.square_meters} m²</span>
+                      )}
+                      {listing.bedrooms != null && listing.bedrooms > 0 && (
+                        <span>{listing.bedrooms} hab.</span>
+                      )}
+                      {listing.price && (
+                        <span>
+                          {new Intl.NumberFormat("es-ES", {
+                            style: "currency",
+                            currency: "EUR",
+                            maximumFractionDigits: 0,
+                          }).format(listing.price)}
                         </span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        onClick={() => setSelectedPropertyId(listing.property_id)}
-                        className="flex items-center justify-center gap-1 rounded-lg bg-ink/10 px-2.5 py-1.5 text-sm font-medium text-ink hover:bg-ink/15 transition"
-                        title="Editar"
-                      >
-                        <Edit2 size={14} />
-                      </button>
+                      )}
+                      {listing.idealista_state === "published" ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                          ✓ Publicado
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+                          Borrador
+                        </span>
+                      )}
+                      <span className="text-ink/30">
+                        {new Date(listing.updated_at).toLocaleDateString("es-ES")}
+                      </span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <button
+                    onClick={() => {
+                      if (listing.is_inspo) {
+                        setEditingInspoId(listing.id);
+                      } else {
+                        setSelectedPropertyId(listing.property_id!);
+                      }
+                    }}
+                    className="shrink-0 rounded-lg border border-ink/15 bg-ink/5 p-1.5 text-ink/50 transition hover:bg-ink/10 hover:text-ink"
+                    title="Editar"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {listings.length === 0 && filteredProperties.length === 0 && (
+        <div className="py-12 text-center">
+          <p className="text-sm text-ink/40">
+            No hay propiedades en el sistema
+          </p>
+        </div>
+      )}
     </div>
   );
 }

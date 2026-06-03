@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Minus, Plus, Save } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useRef, useState } from "react";
+import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Trash2, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
+
+// ── Texto fijo que siempre se agrega al final de la descripción ───────────────
+const DESCRIPTION_FOOTER = `\n\nRequisitos: 1 fianza + personal shopper\n\nPara más propiedades consulta por chat de Idealista y WhatsApp y te enviamos más opciones que se acomoden a tus necesidades.`;
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export type IdealistaListing = {
   propertyId: string;
+  listingId?: string;
+  isInspo?: boolean;
+  inspoTitle?: string;
   // Tipo
   propertyType: string;
   // Localización
@@ -16,6 +27,8 @@ export type IdealistaListing = {
   addressBlock: string;
   addressDoor: string;
   addressVisibility: "exact" | "street" | "hidden";
+  latitude: number;
+  longitude: number;
   // Características
   squareMeters: number;
   builtSquareMeters: number;
@@ -57,16 +70,20 @@ export type IdealistaListing = {
   energyPerformance: number;
   emissionRating: string;
   emissionValue: number;
+  // Descripción
+  description: string;
   // Contacto
   contactId: string;
   notes: string;
-  // Media
+  // Media (URLs tras subida)
   photos: string[];
   videos: string[];
   plans: string[];
 };
 
 const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
+  isInspo: false,
+  inspoTitle: "",
   propertyType: "flat",
   addressStreet: "",
   addressNumber: "",
@@ -75,6 +92,8 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   addressBlock: "",
   addressDoor: "",
   addressVisibility: "exact",
+  latitude: 0,
+  longitude: 0,
   squareMeters: 0,
   builtSquareMeters: 0,
   floor: "",
@@ -109,6 +128,7 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   energyPerformance: 0,
   emissionRating: "",
   emissionValue: 0,
+  description: "",
   contactId: "",
   notes: "",
   photos: [],
@@ -131,7 +151,9 @@ function SectionHeader({ step, title }: { step: number; title: string }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-xs font-medium text-ink/55 mb-1">{children}</label>
+    <label className="block text-xs font-medium text-ink/55 mb-1">
+      {children}
+    </label>
   );
 }
 
@@ -239,16 +261,162 @@ function Stepper({
   );
 }
 
+// ── Media upload ──────────────────────────────────────────────────────────────
+
+type MediaItem = { url: string; name?: string };
+
+function MediaUploadZone({
+  label,
+  items,
+  accept,
+  icon: Icon,
+  onChange,
+}: {
+  label: string;
+  items: string[];
+  accept: string;
+  icon: React.ElementType;
+  onChange: (urls: string[]) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const uploaded: string[] = [];
+
+    for (const file of Array.from(files)) {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/admin/idealista/upload-media", {
+          method: "POST",
+          body: fd,
+        });
+        if (res.ok) {
+          const { url } = await res.json();
+          uploaded.push(url);
+        }
+      } catch {
+        // skip failed file
+      }
+    }
+
+    onChange([...items, ...uploaded]);
+    setUploading(false);
+  }
+
+  const isImage = accept.includes("image");
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label>{label}</Label>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1 rounded-lg border border-gold/30 bg-gold/8 px-2.5 py-1 text-xs font-medium text-gold transition hover:bg-gold/15 disabled:opacity-50"
+        >
+          {uploading ? (
+            <Loader2 size={11} className="animate-spin" />
+          ) : (
+            <Icon size={11} />
+          )}
+          {uploading ? "Subiendo..." : "Agregar"}
+        </button>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+
+      {items.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-ink/12 bg-ink/3 py-6 text-ink/35 transition hover:border-gold/30 hover:bg-gold/5"
+        >
+          <Icon size={20} />
+          <span className="text-xs">Haz clic o arrastra archivos aquí</span>
+        </button>
+      ) : (
+        <div
+          className={cn(
+            isImage
+              ? "grid grid-cols-3 gap-2 sm:grid-cols-4"
+              : "space-y-1.5"
+          )}
+        >
+          {items.map((url, i) => (
+            <div key={i} className="group relative">
+              {isImage ? (
+                <div className="aspect-square overflow-hidden rounded-lg border border-ink/10 bg-ink/5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/60 px-3 py-2">
+                  <Icon size={14} className="shrink-0 text-ink/40" />
+                  <span className="truncate text-xs text-ink/60">
+                    {url.split("/").pop()}
+                  </span>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+                className={cn(
+                  "absolute flex items-center justify-center rounded-full bg-red-500 text-white transition hover:bg-red-600",
+                  isImage
+                    ? "right-1 top-1 h-5 w-5 opacity-0 group-hover:opacity-100"
+                    : "right-2 top-1/2 -translate-y-1/2 h-5 w-5"
+                )}
+                title="Eliminar"
+              >
+                <Trash2 size={10} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className={cn(
+              "flex items-center justify-center rounded-lg border-2 border-dashed border-ink/12 text-ink/30 transition hover:border-gold/30 hover:text-gold disabled:opacity-50",
+              isImage ? "aspect-square" : "h-10 w-full"
+            )}
+          >
+            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={16} />}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main form ─────────────────────────────────────────────────────────────────
 
 export function IdealistaForm({
   propertyId,
   propertyTitle,
+  isInspo = false,
   initialData,
   onSave,
 }: {
   propertyId: string;
-  propertyTitle: string;
+  propertyTitle?: string;
+  isInspo?: boolean;
   initialData?: Partial<IdealistaListing>;
   onSave: (data: IdealistaListing) => Promise<void>;
 }) {
@@ -256,10 +424,15 @@ export function IdealistaForm({
     ...DEFAULTS,
     ...initialData,
     propertyId,
+    isInspo,
   });
   const [saving, setSaving] = useState(false);
+  const [showDescPreview, setShowDescPreview] = useState(false);
 
-  function set<K extends keyof IdealistaListing>(key: K, value: IdealistaListing[K]) {
+  function set<K extends keyof IdealistaListing>(
+    key: K,
+    value: IdealistaListing[K]
+  ) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -275,16 +448,34 @@ export function IdealistaForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Cabecera */}
       <div className="mb-2">
-        <p className="text-xs text-ink/45 font-medium uppercase tracking-wide">
-          Preparando ficha para Idealista
-        </p>
-        <h2 className="mt-0.5 font-serif text-xl font-semibold text-ink">
-          {propertyTitle}
-        </h2>
+        <div className="flex items-center gap-2">
+          {isInspo && (
+            <span className="rounded-full bg-gold/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
+              Inspo
+            </span>
+          )}
+          <p className="text-xs text-ink/45 font-medium uppercase tracking-wide">
+            {isInspo ? "Nueva ficha Idealista" : "Preparando ficha para Idealista"}
+          </p>
+        </div>
+        {isInspo ? (
+          <input
+            type="text"
+            value={form.inspoTitle ?? ""}
+            onChange={(e) => set("inspoTitle", e.target.value)}
+            placeholder="Título de la propiedad..."
+            className="mt-1 w-full border-0 border-b border-ink/15 bg-transparent pb-1 font-serif text-xl font-semibold text-ink placeholder:text-ink/25 focus:border-gold/60 focus:outline-none"
+          />
+        ) : (
+          <h2 className="mt-0.5 font-serif text-xl font-semibold text-ink">
+            {propertyTitle}
+          </h2>
+        )}
       </div>
 
-      {/* ── 1. Tipo de inmueble ──────────────────────────────────────────── */}
+      {/* ── 1. Tipo ──────────────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={1} title="Tipo de inmueble" />
         <div>
@@ -309,7 +500,6 @@ export function IdealistaForm({
             <option value="garage">Garaje</option>
           </select>
         </div>
-
         <div className="flex flex-wrap gap-2">
           <Chip label="Ático" checked={form.isPenthouse} onChange={(v) => set("isPenthouse", v)} />
           <Chip label="Estudio" checked={form.isStudio} onChange={(v) => set("isStudio", v)} />
@@ -317,10 +507,9 @@ export function IdealistaForm({
         </div>
       </section>
 
-      {/* ── 2. Localización ────────────────────────────────────────────────── */}
+      {/* ── 2. Localización ──────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={2} title="Localización" />
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <Label>Calle</Label>
@@ -343,7 +532,6 @@ export function IdealistaForm({
             />
           </div>
         </div>
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <Label>Código postal</Label>
@@ -366,7 +554,6 @@ export function IdealistaForm({
             />
           </div>
         </div>
-
         <div className="grid grid-cols-3 gap-3">
           <div>
             <Label>Planta</Label>
@@ -399,7 +586,6 @@ export function IdealistaForm({
             />
           </div>
         </div>
-
         <RadioGroup
           label="Visibilidad de la dirección"
           value={form.addressVisibility}
@@ -410,12 +596,37 @@ export function IdealistaForm({
             { value: "hidden", label: "Ocultar dirección" },
           ]}
         />
+
+        {/* Mapa */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Label>Ubicación exacta en el mapa</Label>
+            {form.latitude !== 0 && form.longitude !== 0 && (
+              <span className="text-[10px] text-ink/40 font-mono">
+                {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
+              </span>
+            )}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-ink/10">
+            <MapPicker
+              lat={form.latitude}
+              lng={form.longitude}
+              onChange={(lat, lng) => {
+                set("latitude", lat);
+                set("longitude", lng);
+              }}
+            />
+          </div>
+          <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink/40">
+            <MapPin size={11} />
+            Haz clic en el mapa para marcar la ubicación exacta
+          </p>
+        </div>
       </section>
 
-      {/* ── 3. Características ────────────────────────────────────────────── */}
+      {/* ── 3. Características ───────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={3} title="Características" />
-
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <Label>Superficie útil (m²)</Label>
@@ -440,9 +651,8 @@ export function IdealistaForm({
             />
           </div>
           <Stepper label="Habitaciones" value={form.bedrooms} onChange={(v) => set("bedrooms", v)} />
-          <Stepper label="Baños" value={form.bathrooms} onChange={(v) => set("bathrooms", v)} min={0} />
+          <Stepper label="Baños" value={form.bathrooms} onChange={(v) => set("bathrooms", v)} />
         </div>
-
         <RadioGroup
           label="Estado del inmueble"
           value={form.condition}
@@ -456,10 +666,9 @@ export function IdealistaForm({
         />
       </section>
 
-      {/* ── 4. Precio ─────────────────────────────────────────────────────── */}
+      {/* ── 4. Precio ────────────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={4} title="Precio y condiciones" />
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label>Precio (€)</Label>
@@ -473,7 +682,7 @@ export function IdealistaForm({
             />
           </div>
           <div>
-            <Label>Precio total alquiler con gastos (€/mes)</Label>
+            <Label>Precio total con gastos (€/mes)</Label>
             <input
               type="number"
               min={0}
@@ -484,7 +693,6 @@ export function IdealistaForm({
             />
           </div>
         </div>
-
         <RadioGroup
           label="Tipo de alquiler"
           value={form.rentalType}
@@ -494,7 +702,6 @@ export function IdealistaForm({
             { value: "temporary", label: "Temporal" },
           ]}
         />
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <Label>Máximo de inquilinos</Label>
@@ -507,14 +714,14 @@ export function IdealistaForm({
               className={inputCls}
             />
           </div>
-          <div className="flex flex-col justify-end pb-0.5">
+          <div>
             <Label>Mascotas permitidas</Label>
             <div className="flex gap-1.5 mt-1">
               <Chip label="Sí" checked={form.petsAllowed} onChange={(v) => set("petsAllowed", v)} />
               <Chip label="No" checked={!form.petsAllowed} onChange={(v) => set("petsAllowed", !v)} />
             </div>
           </div>
-          <div className="flex flex-col justify-end pb-0.5">
+          <div>
             <Label>Apto para niños</Label>
             <div className="flex gap-1.5 mt-1">
               <Chip label="Sí" checked={form.childrenRecommended} onChange={(v) => set("childrenRecommended", v)} />
@@ -524,10 +731,9 @@ export function IdealistaForm({
         </div>
       </section>
 
-      {/* ── 5. Equipamiento y extras ───────────────────────────────────────── */}
+      {/* ── 5. Equipamiento ──────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={5} title="Equipamiento y extras" />
-
         <RadioGroup
           label="Equipamiento"
           value={form.equipmentType}
@@ -539,7 +745,6 @@ export function IdealistaForm({
             { value: "unknown", label: "No lo sé" },
           ]}
         />
-
         <RadioGroup
           label="Orientación de las ventanas"
           value={form.windowsLocation}
@@ -549,7 +754,6 @@ export function IdealistaForm({
             { value: "interior", label: "Interior" },
           ]}
         />
-
         <div>
           <Label>Ascensor</Label>
           <div className="flex gap-1.5">
@@ -557,7 +761,6 @@ export function IdealistaForm({
             <Chip label="No" checked={!form.hasElevator} onChange={(v) => set("hasElevator", !v)} />
           </div>
         </div>
-
         <div>
           <Label>Orientación cardinal</Label>
           <div className="flex flex-wrap gap-1.5">
@@ -567,7 +770,6 @@ export function IdealistaForm({
             <Chip label="Oeste" checked={form.orientationWest} onChange={(v) => set("orientationWest", v)} />
           </div>
         </div>
-
         <div>
           <Label>Otras características</Label>
           <div className="flex flex-wrap gap-1.5">
@@ -583,10 +785,9 @@ export function IdealistaForm({
         </div>
       </section>
 
-      {/* ── 6. Eficiencia energética ───────────────────────────────────────── */}
+      {/* ── 6. Energía ───────────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={6} title="Eficiencia energética" />
-
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <Label>Calificación energética</Label>
@@ -641,10 +842,81 @@ export function IdealistaForm({
         </div>
       </section>
 
-      {/* ── 7. Contacto e info interna ─────────────────────────────────────── */}
+      {/* ── 7. Descripción ───────────────────────────────────────────────── */}
       <section className="space-y-4">
-        <SectionHeader step={7} title="Contacto e info interna" />
+        <SectionHeader step={7} title="Descripción del anuncio" />
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <Label>Descripción principal</Label>
+            <button
+              type="button"
+              onClick={() => setShowDescPreview((v) => !v)}
+              className="text-[11px] text-gold hover:underline"
+            >
+              {showDescPreview ? "Ocultar vista previa" : "Ver con footer"}
+            </button>
+          </div>
+          <textarea
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+            rows={6}
+            placeholder="Describe la propiedad: distribución, calidades, vistas, entorno del barrio..."
+            className={cn(inputCls, "resize-y")}
+          />
+        </div>
 
+        {showDescPreview && (
+          <div className="rounded-xl border border-ink/10 bg-white/60 p-4">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink/40">
+              Vista previa completa del texto
+            </p>
+            <pre className="whitespace-pre-wrap text-sm text-ink/80 font-sans leading-relaxed">
+              {(form.description || "").trimEnd()}
+              {DESCRIPTION_FOOTER}
+            </pre>
+          </div>
+        )}
+
+        <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 text-xs text-ink/60">
+          <strong className="text-ink/80">Footer automático</strong> — al final siempre se agrega:
+          <pre className="mt-1 whitespace-pre-wrap text-xs text-ink/50 font-sans">{DESCRIPTION_FOOTER.trim()}</pre>
+        </div>
+      </section>
+
+      {/* ── 8. Fotos ─────────────────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <SectionHeader step={8} title="Fotos" />
+        <MediaUploadZone
+          label="Imágenes de la propiedad"
+          items={form.photos}
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic"
+          icon={ImageIcon}
+          onChange={(urls) => set("photos", urls)}
+        />
+      </section>
+
+      {/* ── 9. Videos y planos ───────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <SectionHeader step={9} title="Videos y planos" />
+        <MediaUploadZone
+          label="Videos"
+          items={form.videos}
+          accept="video/mp4,video/quicktime,video/webm,video/avi,video/x-matroska"
+          icon={Video}
+          onChange={(urls) => set("videos", urls)}
+        />
+        <MediaUploadZone
+          label="Planos"
+          items={form.plans}
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          icon={ImageIcon}
+          onChange={(urls) => set("plans", urls)}
+        />
+      </section>
+
+      {/* ── 10. Contacto e info interna ──────────────────────────────────── */}
+      <section className="space-y-4">
+        <SectionHeader step={10} title="Contacto e info interna" />
         <div>
           <Label>ID de contacto en Idealista</Label>
           <input
@@ -655,7 +927,6 @@ export function IdealistaForm({
             className={inputCls}
           />
         </div>
-
         <div>
           <Label>Notas internas (no se publican)</Label>
           <textarea
@@ -668,66 +939,7 @@ export function IdealistaForm({
         </div>
       </section>
 
-      {/* ── 8. Media ──────────────────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <SectionHeader step={8} title="Fotos, videos y planos" />
-
-        <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-700">
-          <strong>Subida manual:</strong> La API de Idealista está en fase beta y no está disponible aún.
-          Sube las fotos, videos y planos directamente en el panel de Idealista. Una vez publicado el anuncio,
-          puedes anotar aquí los IDs asignados por Idealista para referencias futuras.
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <Label>IDs de fotos (Idealista)</Label>
-            <textarea
-              value={form.photos.join("\n")}
-              onChange={(e) =>
-                set(
-                  "photos",
-                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              rows={3}
-              placeholder="Un ID por línea"
-              className={cn(inputCls, "resize-none text-xs font-mono")}
-            />
-          </div>
-          <div>
-            <Label>IDs de videos (Idealista)</Label>
-            <textarea
-              value={form.videos.join("\n")}
-              onChange={(e) =>
-                set(
-                  "videos",
-                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              rows={3}
-              placeholder="Un ID por línea"
-              className={cn(inputCls, "resize-none text-xs font-mono")}
-            />
-          </div>
-          <div>
-            <Label>IDs de planos (Idealista)</Label>
-            <textarea
-              value={form.plans.join("\n")}
-              onChange={(e) =>
-                set(
-                  "plans",
-                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              rows={3}
-              placeholder="Un ID por línea"
-              className={cn(inputCls, "resize-none text-xs font-mono")}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ── Guardar ───────────────────────────────────────────────────────── */}
+      {/* ── Guardar ──────────────────────────────────────────────────────── */}
       <div className="flex justify-end pt-2">
         <button
           type="submit"

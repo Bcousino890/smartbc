@@ -7,15 +7,19 @@ export async function POST(req: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = createAdminClient() as any;
 
-    const { data: existing } = await db
-      .from("idealista_listings")
-      .select("id")
-      .eq("property_id", body.propertyId)
-      .limit(1)
-      .single();
+    const isInspo = body.isInspo === true;
+
+    const { data: existing } =
+      isInspo && body.listingId
+        ? await db.from("idealista_listings").select("id").eq("id", body.listingId).limit(1).single()
+        : !isInspo && body.propertyId
+        ? await db.from("idealista_listings").select("id").eq("property_id", body.propertyId).limit(1).single()
+        : { data: null };
 
     const record = {
-      property_id: body.propertyId,
+      is_inspo: isInspo,
+      inspo_title: body.inspoTitle ?? null,
+      ...(!isInspo && body.propertyId ? { property_id: body.propertyId } : {}),
       property_type: body.propertyType ?? "flat",
       address_street: body.addressStreet ?? "",
       address_number: body.addressNumber ?? "",
@@ -24,6 +28,8 @@ export async function POST(req: Request) {
       address_block: body.addressBlock ?? "",
       address_door: body.addressDoor ?? "",
       address_visibility: body.addressVisibility ?? "exact",
+      latitude: body.latitude || null,
+      longitude: body.longitude || null,
       square_meters: body.squareMeters || null,
       built_square_meters: body.builtSquareMeters || null,
       floor: body.floor ?? "",
@@ -58,6 +64,7 @@ export async function POST(req: Request) {
       energy_performance: body.energyPerformance || null,
       emission_rating: body.emissionRating ?? "",
       emission_value: body.emissionValue || null,
+      description: body.description ?? "",
       contact_id: body.contactId ?? "",
       notes: body.notes ?? "",
       photo_ids: body.photos ?? [],
@@ -67,10 +74,7 @@ export async function POST(req: Request) {
     };
 
     if (existing) {
-      await db
-        .from("idealista_listings")
-        .update(record)
-        .eq("id", existing.id);
+      await db.from("idealista_listings").update(record).eq("id", existing.id);
     } else {
       await db.from("idealista_listings").insert(record);
     }
