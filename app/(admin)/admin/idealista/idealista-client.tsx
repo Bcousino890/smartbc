@@ -107,7 +107,7 @@ export function IdealistaClient({
   };
 
   if (selectedPropertyId && selectedProperty) {
-    const initialData: Partial<IdealistaListing> = selectedListing
+    const initialData: Partial<IdealistaListing> | undefined = selectedListing
       ? {
           propertyId: selectedProperty.id,
           squareMeters: selectedListing.square_meters || 0,
