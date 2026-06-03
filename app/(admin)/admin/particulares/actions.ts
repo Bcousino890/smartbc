@@ -181,3 +181,65 @@ export async function createPropertyFromParticular(
   revalidatePath("/admin/agencias/portales-externos");
   return { ok: true, slug: ins.data.slug, alreadyExisted: false };
 }
+
+export type BulkActionResult =
+  | { ok: true; updated: number }
+  | { ok: false; error: string };
+
+export async function markParticularAsVerified(
+  particularIds: string[],
+): Promise<BulkActionResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!particularIds || particularIds.length === 0) {
+    return { ok: false, error: "no_ids" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error, data } = await (supabase as any)
+    .from("particulares")
+    .update({
+      phone_verified: true,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", particularIds)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+
+  const updated = (data as { id: string }[])?.length ?? 0;
+  revalidatePath("/admin/particulares");
+  return { ok: true, updated };
+}
+
+export async function rescrapeParticularPhones(
+  particularIds: string[],
+): Promise<BulkActionResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!particularIds || particularIds.length === 0) {
+    return { ok: false, error: "no_ids" };
+  }
+
+  // Mark as needing re-scrape by resetting phone and phone_verified
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error, data } = await (supabase as any)
+    .from("particulares")
+    .update({
+      phone: null,
+      phone_verified: false,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", particularIds)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+
+  const updated = (data as { id: string }[])?.length ?? 0;
+  revalidatePath("/admin/particulares");
+  return { ok: true, updated };
+}

@@ -528,7 +528,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
-  const [page, setPage] = useState(1);
+  const [displayCount, setDisplayCount] = useState(18);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const itemsPerPage = 9;
 
@@ -569,16 +569,13 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
     });
   }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
 
-  // Paginación
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedRows = filtered.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage,
-  );
+  // Load More - mostrar solo los primeros displayCount elementos
+  const displayedRows = filtered.slice(0, displayCount);
+  const hasMore = displayCount < filtered.length;
 
-  // Reset a página 1 cuando cambian los filtros
+  // Reset displayCount cuando cambian los filtros
   useEffect(() => {
-    setPage(1);
+    setDisplayCount(18);
   }, [query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
 
   function handlePhoneUpdated(newPhone: string | null) {
@@ -677,7 +674,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
             Últimas 24h
           </button>
           <span className="ml-auto text-[11px] text-ink/55">
-            {filtered.length} de {rows.length}
+            Mostrando {displayedRows.length} de {filtered.length} ({rows.length} total)
           </span>
         </div>
 
@@ -690,7 +687,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
         ) : (
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {paginatedRows.map((r) => {
+              {displayedRows.map((r) => {
               const cover = r.photos?.[0]?.url;
               return (
                 <button
@@ -820,62 +817,17 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
             })}
             </div>
 
-            {/* Paginación */}
-            {totalPages > 1 && (
+            {/* Load More Button */}
+            {hasMore && (
               <div className="mt-6 flex flex-col items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="rounded-lg border border-ink/10 bg-white/85 p-2 text-ink disabled:opacity-40"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-
-                  <div className="flex gap-1.5">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter((p) => {
-                        return p === 1 || p === totalPages || Math.abs(p - page) <= 1;
-                      })
-                      .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
-                          acc.push("...");
-                        }
-                        acc.push(p);
-                        return acc;
-                      }, [])
-                      .map((item, idx) =>
-                        item === "..." ? (
-                          <span key={`ellipsis-${idx}`} className="px-1 text-ink/40">
-                            …
-                          </span>
-                        ) : (
-                          <button
-                            key={item}
-                            onClick={() => setPage(item)}
-                            className={cn(
-                              "h-8 w-8 rounded-lg border text-sm font-medium transition-colors",
-                              item === page
-                                ? "border-gold bg-gold/15 text-gold-dark"
-                                : "border-ink/10 hover:bg-white/85 text-ink/70",
-                            )}
-                          >
-                            {item}
-                          </button>
-                        ),
-                      )}
-                  </div>
-
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="rounded-lg border border-ink/10 bg-white/85 p-2 text-ink disabled:opacity-40"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setDisplayCount((c) => c + itemsPerPage * 2)}
+                  className="rounded-lg bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark"
+                >
+                  Cargar más resultados
+                </button>
                 <p className="text-xs text-ink/55">
-                  Página {page} de {totalPages} · {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+                  Mostrando {displayedRows.length} de {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
                 </p>
               </div>
             )}

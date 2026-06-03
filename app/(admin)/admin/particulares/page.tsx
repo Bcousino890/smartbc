@@ -15,8 +15,7 @@ export default async function AdminParticularesPage() {
       "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
     )
     .order("is_active", { ascending: false })  // activos primero
-    .order("created_at", { ascending: false })
-    .limit(2000);
+    .order("created_at", { ascending: false });
 
   const rows = (data ?? []) as unknown as ParticularRow[];
 

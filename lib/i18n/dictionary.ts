@@ -575,6 +575,10 @@ const es: Strings = {
   "adminParticulares.stats.sale": "EN VENTA",
   "adminParticulares.stats.last24h": "ÚLTIMAS 24H",
   "adminParticulares.stats.help": "Detectados automáticamente",
+  "adminParticulares.refresh": "Actualizar",
+  "adminParticulares.refreshing": "Actualizando…",
+  "adminParticulares.lastUpdated": "Actualizado hace {minutes} minutos",
+  "adminParticulares.lastUpdatedJustNow": "Actualizado hace unos segundos",
   "adminProps.title": "Propiedades",
   "adminProps.subtitle":
     "Catálogo global de propiedades de todas las agencias colaboradoras.",
