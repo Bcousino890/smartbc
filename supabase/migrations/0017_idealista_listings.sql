@@ -1,5 +1,7 @@
 -- Table for storing Idealista listing data
-create table idealista_listings (
+-- NOTA (fix): RLS reescrita para usar is_admin() (la original referenciaba una
+-- tabla `internal_users` inexistente). Idempotente por seguridad.
+create table if not exists idealista_listings (
   id uuid primary key default gen_random_uuid(),
   property_id uuid not null unique references properties(id) on delete cascade,
   square_meters integer,
@@ -20,36 +22,20 @@ create table idealista_listings (
 );
 
 -- Index for quick lookups
-create index idx_idealista_listings_property_id on idealista_listings(property_id);
+create index if not exists idx_idealista_listings_property_id on idealista_listings(property_id);
 
 -- RLS
 alter table idealista_listings enable row level security;
 
--- Admin can read/write all listings
-create policy "admin_select" on idealista_listings for select using (
-  exists (
-    select 1 from internal_users
-    where id = auth.uid() and role_key in ('owner', 'admin')
-  )
-);
+-- Solo admin. El acceso de la app va por service role (ignora RLS).
+drop policy if exists "admin_select" on idealista_listings;
+create policy "admin_select" on idealista_listings for select using (is_admin());
 
-create policy "admin_insert" on idealista_listings for insert with check (
-  exists (
-    select 1 from internal_users
-    where id = auth.uid() and role_key in ('owner', 'admin')
-  )
-);
+drop policy if exists "admin_insert" on idealista_listings;
+create policy "admin_insert" on idealista_listings for insert with check (is_admin());
 
-create policy "admin_update" on idealista_listings for update using (
-  exists (
-    select 1 from internal_users
-    where id = auth.uid() and role_key in ('owner', 'admin')
-  )
-);
+drop policy if exists "admin_update" on idealista_listings;
+create policy "admin_update" on idealista_listings for update using (is_admin());
 
-create policy "admin_delete" on idealista_listings for delete using (
-  exists (
-    select 1 from internal_users
-    where id = auth.uid() and role_key in ('owner', 'admin')
-  )
-);
+drop policy if exists "admin_delete" on idealista_listings;
+create policy "admin_delete" on idealista_listings for delete using (is_admin());
