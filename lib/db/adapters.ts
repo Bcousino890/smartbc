@@ -11,6 +11,7 @@ import type {
   ClientProfileType,
   ClientStatus,
   InternalUser,
+  InternalUserRole,
   Operation,
   Property,
   StayType,
@@ -244,7 +245,9 @@ export function profileRowToInternalUser(
     lastName: rest.join(" "),
     email: row.email,
     initials: deriveInitials(display),
-    roleKey: row.role === "admin" ? "admin" : "advisor",
+    roleKey: (["owner", "admin", "advisor", "client", "viewer"].includes(row.role ?? "")
+      ? row.role
+      : "advisor") as InternalUserRole,
     status: "active",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
   };

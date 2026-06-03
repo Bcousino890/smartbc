@@ -498,7 +498,7 @@ function PropertyRow({ property }: { property: AdminProperty }) {
       </td>
       <td className="px-3 py-3">
         <span className="inline-block rounded-md border border-ink/10 bg-ink/5 px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-ink/80">
-          {property.propertyReference}
+          {property.propertyReference ?? "—"}
         </span>
       </td>
       <td className="px-3 py-3 text-ink/75">{property.agencyName || "—"}</td>
