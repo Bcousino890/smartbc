@@ -1,7 +1,7 @@
 "use client";
 
 import { Mail, Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useT } from "@/lib/i18n/provider";
 
 interface EmailConfigData {
@@ -29,10 +29,34 @@ export function EmailConfigClient() {
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
   const [testStatus, setTestStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Load existing config on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const response = await fetch("/api/admin/configuracion/get-email");
+        const data = await response.json();
+
+        if (data.config) {
+          setConfig((prev) => ({
+            ...prev,
+            ...data.config,
+          }));
+        }
+      } catch (error) {
+        console.error("Error loading email config:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadConfig();
+  }, []);
 
   const handleInputChange = (field: keyof EmailConfigData, value: any) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
@@ -100,6 +124,22 @@ export function EmailConfigClient() {
       setTesting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+        <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+          <span className="text-gold">
+            <Mail size={16} strokeWidth={1.75} />
+          </span>
+          <span>Configuración SMTP</span>
+        </header>
+        <div className="mt-4 flex items-center justify-center py-8">
+          <Loader2 size={20} className="animate-spin text-gold" />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">

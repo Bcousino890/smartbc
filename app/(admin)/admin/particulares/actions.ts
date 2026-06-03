@@ -18,7 +18,8 @@ export async function updateParticularPhone(
 
   if (!particularId) return { ok: false, error: "id_required" };
 
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("particulares")
     .update({ phone, updated_at: new Date().toISOString() })
     .eq("id", particularId);

@@ -54,6 +54,7 @@ export type PropertyForEdit = {
   latitude: number | null;
   longitude: number | null;
   bc_reference: string | null;
+  property_reference: string;
   source: "manual" | "scrape" | "api";
   source_url: string | null;
   archived_at: string | null;
@@ -236,7 +237,14 @@ export function PropertyEditView({
           )}
         </button>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {property.property_reference && (
+              <span
+                className="rounded-md border border-ink/10 bg-ink/5 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-ink/80"
+              >
+                {property.property_reference}
+              </span>
+            )}
             {property.bc_reference && (
               <span
                 className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-gold-dark"

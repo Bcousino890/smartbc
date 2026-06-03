@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     firstName: string;
     lastName?: string;
     phone?: string;
-    role: string;
+    role: "admin" | "advisor" | "client";
     password?: string;
     assignedAdvisorId?: string;
   };
@@ -25,10 +25,12 @@ export async function POST(req: Request) {
     firstName,
     lastName = "",
     phone,
-    role,
+    role: roleInput,
     password,
     assignedAdvisorId,
   } = body;
+
+  const role = roleInput;
 
   // Validaciones básicas
   if (!email || !firstName) {
@@ -82,10 +84,11 @@ export async function POST(req: Request) {
   }
 
   const supabase = createAdminClient();
-  const userClient = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userClient = (await createClient()) as any;
 
   // Crear usuario en auth
-  let userId: string;
+  let userId: string = "";
   let authError: string | null = null;
 
   if (role === "advisor") {
@@ -153,14 +156,25 @@ export async function POST(req: Request) {
   }
 
   // Actualizar profile con rol, assigned_advisor_id y created_by
+  // Nota: la migración 0020 agrega la columna created_by, pero no todas las bases de datos pueden tenerla
+  // Si falla, continuamos de todas formas porque el usuario fue creado exitosamente en auth
+  const profileUpdate: any = {
+    role,
+  };
+
+  if (role === "client") {
+    profileUpdate.assigned_advisor_id = assignedAdvisorId || null;
+    if (phone) {
+      profileUpdate.phone = phone;
+    }
+  }
+
+  // Intentar agregar created_by si existe la columna
+  profileUpdate.created_by = currentProfile.id;
+
   const { error: profileError } = await userClient
     .from("profiles")
-    .update({
-      role,
-      assigned_advisor_id: role === "client" ? assignedAdvisorId || null : null,
-      created_by: currentProfile.id,
-      phone: role === "client" ? phone : null,
-    })
+    .update(profileUpdate)
     .eq("id", userId);
 
   if (profileError) {

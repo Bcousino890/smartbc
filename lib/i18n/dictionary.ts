@@ -3368,6 +3368,7 @@ const de: Strings = {
   "adminProps.stats.help": "Aktiver Katalog",
   "adminProps.search.placeholder": "Immobilie oder Referenz suchen...",
   "adminProps.table.property": "IMMOBILIE",
+  "adminProps.table.reference": "REFERENZ",
   "adminProps.table.agency": "AGENTUR",
   "adminProps.table.zone": "BEREICH",
   "adminProps.table.operation": "VORGANG",

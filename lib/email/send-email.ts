@@ -1,5 +1,6 @@
 import "server-only";
-import nodemailer from "nodemailer";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nodemailer = require('nodemailer');
 import { createAdminClient } from "@/lib/db/admin";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 

@@ -1,5 +1,6 @@
 import "server-only";
-import nodemailer from "nodemailer";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nodemailer = require('nodemailer');
 
 export async function POST(req: Request) {
   try {
@@ -18,18 +19,15 @@ export async function POST(req: Request) {
     const tempIv = "test-encryption-key";
 
     // For testing, we pass the plaintext password directly
-    // The testSmtpConnection will handle the connection attempt
     try {
-      const transporter = await import("nodemailer").then((m) => {
-        return m.default.createTransport({
-          host: smtpServer,
-          port: smtpPort,
-          secure: useSsl ?? true,
-          auth: {
-            user: smtpUser,
-            pass: smtpPassword,
-          },
-        });
+      const transporter = nodemailer.createTransport({
+        host: smtpServer,
+        port: smtpPort,
+        secure: useSsl ?? true,
+        auth: {
+          user: smtpUser,
+          pass: smtpPassword,
+        },
       });
 
       await transporter.verify();

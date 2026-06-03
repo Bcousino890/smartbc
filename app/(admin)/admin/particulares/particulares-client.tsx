@@ -87,7 +87,7 @@ function EditPhoneModal({
         onSaved(phone || null);
         onClose();
       } else {
-        setError(res.error);
+        setError((res as any).error || "unknown_error");
       }
     } catch {
       setError("network_error");
@@ -188,7 +188,7 @@ function ParticularModal({
     try {
       const res = await createPropertyFromParticular(currentRow.id);
       if (res.ok) setCreated({ slug: res.slug });
-      else setCreateError(res.error);
+      else setCreateError((res as any).error || "unknown_error");
     } catch {
       setCreateError("network_error");
     } finally {

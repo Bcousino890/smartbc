@@ -1,13 +1,13 @@
 import "server-only";
 import { sendEmail } from "./send-email";
 import { createAdminClient } from "@/lib/db/admin";
-import { crypto } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 /**
  * Generate a secure token for password reset
  */
 export function generateResetToken(): string {
-  return crypto.randomBytes(32).toString("hex");
+  return randomBytes(32).toString("hex");
 }
 
 /**

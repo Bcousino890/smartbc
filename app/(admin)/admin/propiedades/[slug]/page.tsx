@@ -33,6 +33,7 @@ export default async function PropertyDetailPage({
         latitude: number | null;
         longitude: number | null;
         bc_reference: string | null;
+        property_reference: string;
         source: "manual" | "scrape" | "api";
         source_url: string | null;
         archived_at: string | null;
@@ -90,6 +91,7 @@ export default async function PropertyDetailPage({
         latitude: property.latitude,
         longitude: property.longitude,
         bc_reference: property.bc_reference,
+        property_reference: property.property_reference,
         source: property.source,
         source_url: property.source_url,
         archived_at: property.archived_at,
