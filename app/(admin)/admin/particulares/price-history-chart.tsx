@@ -49,7 +49,7 @@ function calculateStats(data: Array<{ date: string; price: number }>) {
   return { min, max, avg, percentChange, isIncrease };
 }
 
-export function PriceHistoryChart({ priceHistory }: PriceHistoryChartProps) {
+export default function PriceHistoryChart({ priceHistory }: PriceHistoryChartProps) {
   const chartData = useMemo(
     () =>
       priceHistory.map((item) => ({
@@ -109,7 +109,12 @@ export function PriceHistoryChart({ priceHistory }: PriceHistoryChartProps) {
                 boxShadow: "0 4px 12px rgba(40, 28, 10, 0.15)",
               }}
               labelStyle={{ color: "#0a0a0a" }}
-              formatter={(value: number) => [`€${formatPrice(value)}`, "Precio"]}
+              formatter={(value: unknown) => {
+                if (typeof value === "number") {
+                  return [`€${formatPrice(value)}`, "Precio"];
+                }
+                return ["N/A", "Precio"];
+              }}
               labelFormatter={(label) => {
                 const item = chartData.find((d) => d.dateLabel === label);
                 return item ? new Date(item.date).toLocaleDateString("es-ES") : label;

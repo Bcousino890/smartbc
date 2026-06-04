@@ -9,15 +9,26 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminParticularesPage() {
   const supabase = createAdminClient();
-  const { data } = await supabase
+  let queryResult = await supabase
     .from("particulares")
     .select(
       "id, portal, external_id, particular_reference, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
     )
-    .order("is_active", { ascending: false })  // activos primero
+    .order("is_active", { ascending: false })
     .order("created_at", { ascending: false });
 
-  const rows = (data ?? []) as unknown as ParticularRow[];
+  // Fallback si la migración 0024 aún no se ha aplicado (columna no existe)
+  if (queryResult.error && queryResult.error.message.includes("particular_reference")) {
+    queryResult = await supabase
+      .from("particulares")
+      .select(
+        "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
+      )
+      .order("is_active", { ascending: false })
+      .order("created_at", { ascending: false });
+  }
+
+  const rows = (queryResult.data ?? []) as unknown as ParticularRow[];
 
   const stats = {
     total: rows.length,
