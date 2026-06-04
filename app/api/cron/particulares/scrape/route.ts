@@ -91,7 +91,15 @@ async function upsertParticular(
   if (existing) {
     const priceChanged = payload.price !== null && existing.price !== payload.price;
     const wasInactive = !existing.is_active;
+    // Phone logic:
+    // - phoneAdded: no phone before, now we have one (HIGH/MEDIUM confidence)
+    // - phoneChanged: had a phone, new scrape found a DIFFERENT valid phone → replace it
+    // - If new scrape returns null (LOW/no confidence), keep the existing phone intact
     const phoneAdded = !existing.phone && !!payload.phone;
+    const phoneChanged = !!existing.phone && !!payload.phone && existing.phone !== payload.phone;
+    // Resolve the phone to persist: prefer new HIGH/MEDIUM phone over existing;
+    // fall back to existing when new scrape found nothing (payload.phone is null).
+    const resolvedPhone = payload.phone ?? existing.phone;
     const existingPhotoCount = Array.isArray(existing.photos) ? existing.photos.length : 0;
     const newPhotoCount = payload.photos.length;
     const photoCountChanged = newPhotoCount !== existingPhotoCount && newPhotoCount > 0;
@@ -111,7 +119,7 @@ async function upsertParticular(
         description: payload.description,
         features: payload.features,
         photos: payload.photos,
-        phone: payload.phone ?? existing.phone,
+        phone: resolvedPhone,
         latitude: payload.latitude,
         longitude: payload.longitude,
         advertiser_type: payload.advertiser_type,
@@ -154,6 +162,15 @@ async function upsertParticular(
         particular_id: existing.id,
         change_type: "phone_added",
         old_value: null,
+        new_value: { phone: payload.phone },
+        changed_at: now,
+      });
+    }
+    if (phoneChanged) {
+      changesToInsert.push({
+        particular_id: existing.id,
+        change_type: "phone_changed",
+        old_value: { phone: existing.phone },
         new_value: { phone: payload.phone },
         changed_at: now,
       });
