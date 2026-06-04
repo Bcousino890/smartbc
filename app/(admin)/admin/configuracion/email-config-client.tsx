@@ -39,7 +39,7 @@ export function EmailConfigClient() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const response = await fetch("/api/admin/configuracion/get-email");
+        const response = await fetch("/api/admin/email-config");
         const data = await response.json();
 
         if (data.config) {
@@ -69,7 +69,7 @@ export function EmailConfigClient() {
     setSuccessMessage("");
 
     try {
-      const response = await fetch("/api/admin/configuracion/save-email", {
+      const response = await fetch("/api/admin/email-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
@@ -100,7 +100,7 @@ export function EmailConfigClient() {
     setSuccessMessage("");
 
     try {
-      const response = await fetch("/api/admin/configuracion/test-email", {
+      const response = await fetch("/api/admin/email-config/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
@@ -115,7 +115,7 @@ export function EmailConfigClient() {
       }
 
       setTestStatus("success");
-      setSuccessMessage("Conexión exitosa. Correo de prueba enviado.");
+      setSuccessMessage(data.message || "Conexión exitosa");
       setTimeout(() => setTestStatus("idle"), 3000);
     } catch (error) {
       setTestStatus("error");
