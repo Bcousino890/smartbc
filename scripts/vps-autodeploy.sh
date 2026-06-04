@@ -32,8 +32,11 @@ git reset --hard origin/main >>"$LOG" 2>&1
 npm install >>"$LOG" 2>&1
 if npm run build >>"$LOG" 2>&1; then
   pm2 restart smartbc-portal >>"$LOG" 2>&1
-  bash scripts/apply-migrations.sh >>"$LOG" 2>&1
-  echo "$(date -Is) [ok] deploy completado" >> "$LOG"
+  if bash scripts/apply-migrations.sh >>"$LOG" 2>&1; then
+    echo "$(date -Is) [ok] deploy completado" >> "$LOG"
+  else
+    echo "$(date -Is) [warn] app desplegada pero MIGRACIONES fallaron — revisar" >> "$LOG"
+  fi
 else
   echo "$(date -Is) [error] build fallo; NO se reinicio (sigue build anterior)" >> "$LOG"
 fi

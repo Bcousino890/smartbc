@@ -25,21 +25,23 @@ BEGIN
 END;
 $$;
 
--- 4. BEFORE INSERT trigger
+-- 4. BEFORE INSERT trigger (idempotente: drop antes de crear)
+DROP TRIGGER IF EXISTS trg_particulares_reference ON particulares;
 CREATE TRIGGER trg_particulares_reference
   BEFORE INSERT ON particulares
   FOR EACH ROW
   EXECUTE FUNCTION generate_particular_reference();
 
--- 5. Backfill existing records ordered by creation date
+-- 5. Backfill de registros existentes. (UPDATE no admite ORDER BY en Postgres.)
+-- nextval por fila garantiza referencias únicas; solo toca las que aún no tienen
+-- referencia, así que es idempotente.
 UPDATE particulares
 SET particular_reference =
   'PART-' ||
   TO_CHAR(created_at, 'YYYY') ||
   '-' ||
   LPAD(nextval('particulares_reference_seq')::TEXT, 4, '0')
-WHERE particular_reference IS NULL
-ORDER BY created_at ASC;
+WHERE particular_reference IS NULL;
 
 -- 6. Expand change_type CHECK constraint on particulares_changes
 ALTER TABLE particulares_changes
