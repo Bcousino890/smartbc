@@ -51,21 +51,29 @@ export async function insertImportedProperty(
   if (!baseSlug) return { ok: false, error: "slug_invalid" };
   const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
 
-  // 1) Procesar fotos: download + watermark + upload a storage. Si una falla,
-  // sigue con las siguientes (no aborta el insert).
-  const photoUrls: string[] = [];
-  let photosFailed = 0;
-  for (let i = 0; i < preview.photos.length; i++) {
-    const photo = preview.photos[i];
-    const res = await downloadAndWatermark({
-      sourceUrl: photo.url,
-      agencySlug,
-      externalId: overrides.externalReference,
-      position: i,
-    });
-    if (res.ok) photoUrls.push(res.photo.url);
-    else photosFailed++;
+  // 1) Procesar fotos: download + watermark + upload a storage. En lotes
+  // CONCURRENTES (no de una en una): con fichas de 30-46 fotos, en serie tardaba
+  // demasiado y el server action podía agotar el tiempo. Conservamos el ORDEN
+  // (resultados indexados por posición original) y si una falla, se omite.
+  const CONCURRENCY = 6;
+  const results: (string | null)[] = new Array(preview.photos.length).fill(null);
+  for (let start = 0; start < preview.photos.length; start += CONCURRENCY) {
+    const batch = preview.photos.slice(start, start + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (photo, j) => {
+        const i = start + j;
+        const res = await downloadAndWatermark({
+          sourceUrl: photo.url,
+          agencySlug,
+          externalId: overrides.externalReference,
+          position: i,
+        });
+        if (res.ok) results[i] = res.photo.url;
+      }),
+    );
   }
+  const photoUrls = results.filter((u): u is string => u !== null);
+  const photosFailed = preview.photos.length - photoUrls.length;
   const coverUrl = photoUrls[0] ?? null;
 
   // Campos comunes a alta nueva y re-importación (todo menos los inmutables:

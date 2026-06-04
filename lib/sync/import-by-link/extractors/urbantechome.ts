@@ -123,15 +123,34 @@ function extractFeatures(room: Room): string[] {
   return [...new Set(feats)];
 }
 
+// Normaliza a NFC (un acento puede venir en NFD desde el portapapeles de Mac y
+// no casaría con el NFC del API aunque se vean idénticos).
+function nfc(s: string): string {
+  return s.normalize("NFC");
+}
+// Versión "plegada": sin acentos y en minúsculas, para un emparejamiento
+// tolerante como último recurso.
+function fold(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
 function findRoom(rooms: Room[], id: string): Room | null {
-  const exact = rooms.find((r) => str(r.id) === id);
+  const nId = nfc(id);
+  const exact = rooms.find((r) => nfc(str(r.id) ?? "") === nId);
   if (exact) return exact;
-  // Fallback: por detail_page (?id=...) o coincidencia laxa.
-  const byPage = rooms.find((r) =>
-    typeof r.detail_page === "string" && r.detail_page.includes(`id=${id}`),
+  // Por detail_page (?id=...).
+  const byPage = rooms.find(
+    (r) => typeof r.detail_page === "string" && nfc(r.detail_page).includes(`id=${nId}`),
   );
   if (byPage) return byPage;
-  return rooms.find((r) => (str(r.id) ?? "").includes(id)) ?? null;
+  // Tolerante a acentos/mayúsculas.
+  const fId = fold(id);
+  const folded = rooms.find((r) => fold(str(r.id) ?? "") === fId);
+  if (folded) return folded;
+  return rooms.find((r) => fold(str(r.id) ?? "").includes(fId)) ?? null;
 }
 
 export async function extractUrbantechome(
