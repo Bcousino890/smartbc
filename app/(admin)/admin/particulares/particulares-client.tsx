@@ -14,15 +14,24 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createPropertyFromParticular, updateParticularPhone } from "./actions";
+
+export type ParticularChangeRow = {
+  id: string;
+  change_type: string;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  changed_at: string;
+};
 
 export type ParticularRow = {
   id: string;
   portal: string;
   external_id: string;
+  particular_reference: string | null;
   source_url: string;
   zone: string | null;
   price: number | null;
@@ -161,6 +170,70 @@ function EditPhoneModal({
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
+const CHANGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  new_listing:       { label: "Alta del anuncio",    color: "bg-emerald-100 text-emerald-700" },
+  price_up:          { label: "Subida de precio",    color: "bg-red-100 text-red-700" },
+  price_down:        { label: "Bajada de precio",    color: "bg-emerald-100 text-emerald-700" },
+  price_change:      { label: "Cambio de precio",    color: "bg-amber-100 text-amber-700" },
+  photo_count_change:{ label: "Cambio de fotos",     color: "bg-blue-100 text-blue-700" },
+  photo_added:       { label: "Fotos añadidas",      color: "bg-blue-100 text-blue-700" },
+  phone_added:       { label: "Teléfono añadido",    color: "bg-emerald-100 text-emerald-700" },
+  description_updated:{ label: "Descripción actualizada", color: "bg-ink/10 text-ink/60" },
+  reactivated:       { label: "Anuncio reactivado",  color: "bg-emerald-100 text-emerald-700" },
+  deleted:           { label: "Anuncio retirado",    color: "bg-red-100 text-red-700" },
+};
+
+function ChangeHistory({ particularId }: { particularId: string }) {
+  const [changes, setChanges] = useState<ParticularChangeRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/admin/particulares/history?id=${particularId}`)
+      .then((r) => r.json())
+      .then((d) => setChanges(d.changes ?? []))
+      .catch(() => setChanges([]))
+      .finally(() => setLoading(false));
+  }, [particularId]);
+
+  if (loading) return <p className="text-xs text-ink/40 py-2">Cargando historial…</p>;
+  if (!changes || changes.length === 0) return <p className="text-xs text-ink/40 py-2">Sin historial de cambios.</p>;
+
+  return (
+    <ol className="relative border-l border-ink/10 pl-4 space-y-3">
+      {changes.map((c) => {
+        const meta = CHANGE_TYPE_LABELS[c.change_type] ?? { label: c.change_type, color: "bg-ink/10 text-ink/60" };
+        const fmt = new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+        return (
+          <li key={c.id} className="flex items-start gap-2">
+            <span className="absolute -left-1.5 mt-0.5 h-3 w-3 rounded-full border-2 border-white bg-gold/50" />
+            <div className="min-w-0">
+              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", meta.color)}>
+                {meta.label}
+              </span>
+              {(c.change_type === "price_up" || c.change_type === "price_down" || c.change_type === "price_change") && c.old_value && c.new_value && (
+                <span className="ml-2 text-[11px] text-ink/55">
+                  {formatPrice(c.old_value.price as number)} → {formatPrice(c.new_value.price as number)} €
+                </span>
+              )}
+              {c.change_type === "photo_count_change" && c.old_value && c.new_value && (
+                <span className="ml-2 text-[11px] text-ink/55">
+                  {c.old_value.count as number} → {c.new_value.count as number} fotos
+                </span>
+              )}
+              {c.change_type === "phone_added" && c.new_value && (
+                <span className="ml-2 text-[11px] text-ink/55">
+                  {String(c.new_value.phone ?? "")}
+                </span>
+              )}
+              <p className="mt-0.5 text-[10px] text-ink/40">{fmt.format(new Date(c.changed_at))}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function ParticularModal({
   row,
   onClose,
@@ -173,6 +246,7 @@ function ParticularModal({
   const [photoIdx, setPhotoIdx] = useState(0);
   const [currentRow, setCurrentRow] = useState(row);
   const [showEditPhone, setShowEditPhone] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const photos = currentRow.photos ?? [];
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(currentRow.phone);
@@ -291,6 +365,35 @@ function ParticularModal({
 
         {/* Contenido scrollable */}
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+          {/* Referencia + historial */}
+          <div className="flex items-center justify-between gap-2">
+            {currentRow.particular_reference ? (
+              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
+                {currentRow.particular_reference}
+              </span>
+            ) : (
+              <span className="rounded-md border border-ink/10 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/40">
+                {currentRow.external_id}
+              </span>
+            )}
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              className="text-[11px] text-ink/50 underline hover:text-ink transition"
+            >
+              {showHistory ? "Ocultar historial" : "Ver historial"}
+            </button>
+          </div>
+
+          {/* Timeline de cambios */}
+          {showHistory && (
+            <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Historial de cambios
+              </p>
+              <ChangeHistory particularId={currentRow.id} />
+            </div>
+          )}
+
           {/* Precio + zona */}
           <div>
             {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
@@ -853,10 +956,12 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                       </button>
                     )}
                     <div className="mt-auto flex items-center justify-between pt-3 text-[11px] text-ink/45">
-                      <span>
-                        {r.created_at
-                          ? DATE_FMT.format(new Date(r.created_at))
-                          : ""}
+                      <span className="flex items-center gap-1.5">
+                        {r.particular_reference ? (
+                          <span className="font-mono font-semibold text-gold-dark/70">{r.particular_reference}</span>
+                        ) : (
+                          r.created_at ? DATE_FMT.format(new Date(r.created_at)) : ""
+                        )}
                       </span>
                       <span className="inline-flex items-center gap-1 text-gold-dark group-hover:underline">
                         Ver detalles

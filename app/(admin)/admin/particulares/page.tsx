@@ -12,7 +12,7 @@ export default async function AdminParticularesPage() {
   const { data } = await supabase
     .from("particulares")
     .select(
-      "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
+      "id, portal, external_id, particular_reference, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
     )
     .order("is_active", { ascending: false })  // activos primero
     .order("created_at", { ascending: false });

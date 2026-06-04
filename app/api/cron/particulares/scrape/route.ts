@@ -80,22 +80,24 @@ async function upsertParticular(
 ): Promise<boolean> {
   const now = new Date().toISOString();
 
-  // Buscar si ya existe (activo o no). Incluimos phone para no sobreescribirlo
-  // con null si el HTML no lo expone en este run (Idealista a veces lo oculta).
+  // Buscar si ya existe (activo o no). Incluimos todos los campos necesarios
+  // para detectar cambios: price, photos count, description, phone.
   const { data: existing } = await supabase
     .from("particulares")
-    .select("id, price, is_active, phone")
+    .select("id, price, is_active, phone, photos, description")
     .eq("external_id", payload.external_id)
     .maybeSingle();
 
   if (existing) {
-    const priceChanged =
-      payload.price !== null && existing.price !== payload.price;
+    const priceChanged = payload.price !== null && existing.price !== payload.price;
     const wasInactive = !existing.is_active;
+    const phoneAdded = !existing.phone && !!payload.phone;
+    const existingPhotoCount = Array.isArray(existing.photos) ? existing.photos.length : 0;
+    const newPhotoCount = payload.photos.length;
+    const photoCountChanged = newPhotoCount !== existingPhotoCount && newPhotoCount > 0;
 
-    // Actualizar con datos frescos. detected_at NO se toca (campo de primera
-    // detección). Si estaba inactivo, lo reactivamos y limpiamos taken_down_at.
-    // Preservar phone/contact_name existentes si el nuevo scrape no los encontró.
+    // Actualizar con datos frescos. detected_at NO se toca.
+    // Preservar phone existente si el nuevo scrape no lo encontró.
     const { error } = await supabase
       .from("particulares")
       .update({
@@ -125,21 +127,21 @@ async function upsertParticular(
       return false;
     }
 
-    // Trackear cambios relevantes en particulares_changes
-    if (priceChanged) {
-      await supabase.from("particulares_changes").insert({
+    // Registrar todos los cambios detectados en el historial
+    const changesToInsert = [];
+
+    if (priceChanged && payload.price !== null) {
+      const priceDirection = payload.price > (existing.price ?? 0) ? "price_up" : "price_down";
+      changesToInsert.push({
         particular_id: existing.id,
-        change_type: "price_change",
+        change_type: priceDirection,
         old_value: { price: existing.price },
         new_value: { price: payload.price },
         changed_at: now,
       });
     }
     if (wasInactive) {
-      console.log(
-        `[cron-particulares] Reactivado: ${payload.external_id}`,
-      );
-      await supabase.from("particulares_changes").insert({
+      changesToInsert.push({
         particular_id: existing.id,
         change_type: "reactivated",
         old_value: null,
@@ -147,38 +149,85 @@ async function upsertParticular(
         changed_at: now,
       });
     }
+    if (phoneAdded) {
+      changesToInsert.push({
+        particular_id: existing.id,
+        change_type: "phone_added",
+        old_value: null,
+        new_value: { phone: payload.phone },
+        changed_at: now,
+      });
+    }
+    if (photoCountChanged) {
+      changesToInsert.push({
+        particular_id: existing.id,
+        change_type: "photo_count_change",
+        old_value: { count: existingPhotoCount },
+        new_value: { count: newPhotoCount },
+        changed_at: now,
+      });
+    }
+
+    if (changesToInsert.length > 0) {
+      await supabase.from("particulares_changes").insert(changesToInsert);
+    }
+
+    if (wasInactive) {
+      console.log(`[cron-particulares] Reactivado: ${payload.external_id}`);
+    }
 
     return true;
   }
 
-  // Nuevo registro — insertar con detected_at = ahora
-  const { error } = await supabase.from("particulares").insert({
-    portal: "idealista",
-    external_id: payload.external_id,
-    source_url: payload.source_url,
-    owner_name: payload.contact_name ?? payload.owner_name,
-    zone: payload.zone,
-    price: payload.price,
-    operation: payload.operation,
-    bedrooms: payload.bedrooms,
-    bathrooms: payload.bathrooms,
-    square_meters: payload.square_meters,
-    description: payload.description,
-    features: payload.features,
-    photos: payload.photos,
-    phone: payload.phone,
-    latitude: payload.latitude,
-    longitude: payload.longitude,
-    advertiser_type: payload.advertiser_type,
-    is_ad_professional: payload.is_ad_professional,
-    is_active: true,
-    detected_at: now,
-    updated_at: now,
-  });
+  // Nuevo registro — insertar con detected_at = ahora.
+  // El trigger trg_particulares_reference genera particular_reference automáticamente.
+  const { data: inserted, error } = await supabase
+    .from("particulares")
+    .insert({
+      portal: "idealista",
+      external_id: payload.external_id,
+      source_url: payload.source_url,
+      owner_name: payload.contact_name ?? payload.owner_name,
+      zone: payload.zone,
+      price: payload.price,
+      operation: payload.operation,
+      bedrooms: payload.bedrooms,
+      bathrooms: payload.bathrooms,
+      square_meters: payload.square_meters,
+      description: payload.description,
+      features: payload.features,
+      photos: payload.photos,
+      phone: payload.phone,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      advertiser_type: payload.advertiser_type,
+      is_ad_professional: payload.is_ad_professional,
+      is_active: true,
+      detected_at: now,
+      updated_at: now,
+    })
+    .select("id, particular_reference")
+    .single();
 
   if (error) {
     console.error("[cron-particulares] Error insertando:", error);
     return false;
+  }
+
+  // Registrar el evento de alta en el historial
+  if (inserted?.id) {
+    await supabase.from("particulares_changes").insert({
+      particular_id: inserted.id,
+      change_type: "new_listing",
+      old_value: null,
+      new_value: {
+        particular_reference: inserted.particular_reference,
+        price: payload.price,
+        zone: payload.zone,
+        phone: payload.phone,
+      },
+      changed_at: now,
+    });
   }
 
   return true;
