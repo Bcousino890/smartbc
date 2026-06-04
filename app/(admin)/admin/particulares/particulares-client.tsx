@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createPropertyFromParticular, updateParticularPhone } from "./actions";
+import PriceHistoryChart from "./price-history-chart";
 
 export type ParticularChangeRow = {
   id: string;
@@ -247,6 +248,7 @@ function ParticularModal({
   const [currentRow, setCurrentRow] = useState(row);
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<Array<{ date: string; price: number }>>([]);
   const photos = currentRow.photos ?? [];
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(currentRow.phone);
@@ -255,6 +257,22 @@ function ParticularModal({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<{ slug: string } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Cargar historial de precios cuando se abre el modal o cambia el row
+  useEffect(() => {
+    fetch(`/api/admin/particulares/history?id=${currentRow.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const prices = (d.changes ?? []).filter((c: ParticularChangeRow) =>
+          ["price_up", "price_down", "price_change"].includes(c.change_type)
+        ).map((c: ParticularChangeRow) => ({
+          date: c.changed_at,
+          price: (c.new_value?.price as number) ?? 0,
+        })).sort((a: { date: string; price: number }, b: { date: string; price: number }) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setPriceHistory(prices);
+      })
+      .catch(() => setPriceHistory([]));
+  }, [currentRow.id]);
 
   async function handleCreateProperty() {
     setCreating(true);
@@ -365,24 +383,35 @@ function ParticularModal({
 
         {/* Contenido scrollable */}
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-          {/* Referencia + historial */}
-          <div className="flex items-center justify-between gap-2">
-            {currentRow.particular_reference ? (
-              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
-                {currentRow.particular_reference}
+          {/* Referencias (interna + externa) + historial */}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {currentRow.particular_reference && (
+                <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
+                  {currentRow.particular_reference}
+                </span>
+              )}
+              <span className="rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/60">
+                {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
-            ) : (
-              <span className="rounded-md border border-ink/10 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/40">
-                {currentRow.external_id}
-              </span>
-            )}
+            </div>
             <button
               onClick={() => setShowHistory((v) => !v)}
-              className="text-[11px] text-ink/50 underline hover:text-ink transition"
+              className="mt-2 text-[11px] text-ink/50 underline hover:text-ink transition"
             >
               {showHistory ? "Ocultar historial" : "Ver historial"}
             </button>
           </div>
+
+          {/* Gráfico de precios */}
+          {priceHistory.length > 0 && (
+            <div className="rounded-xl border border-gold/15 bg-gold/3 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Historial de precios
+              </p>
+              <PriceHistoryChart priceHistory={priceHistory} />
+            </div>
+          )}
 
           {/* Timeline de cambios */}
           {showHistory && (
