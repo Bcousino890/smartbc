@@ -1,6 +1,5 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export async function PATCH(req: Request) {
@@ -35,8 +34,6 @@ export async function PATCH(req: Request) {
   }
 
   const supabase = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (await createClient()) as any;
 
   const updates: Record<string, string> = {};
   if (firstName !== undefined || lastName !== undefined) {
@@ -47,7 +44,7 @@ export async function PATCH(req: Request) {
   if (phone !== undefined) updates.phone = phone;
 
   if (Object.keys(updates).length > 0) {
-    const { error } = await db
+    const { error } = await supabase
       .from("profiles")
       .update(updates)
       .eq("id", userId);
