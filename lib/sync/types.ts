@@ -16,11 +16,16 @@ export type RawProperty = {
   description?: string;
   operation: PropertyOperation;
   stay?: PropertyStay;
+  // Tipo: "Piso", "Ático", "Chalet", "Dúplex", etc. (texto libre, normalizado
+  // por el scraper).
+  propertyType?: string;
   price: number;
   bedrooms?: number;
   bathrooms?: number;
   squareMeters?: number;
   zone: string;
+  // Barrio dentro del distrito (Goya, Almagro…) cuando el origen lo expone.
+  subzone?: string;
   address?: string;
   availableFrom?: string;
   features?: string[];
@@ -35,11 +40,13 @@ export type NormalizedProperty = {
   description: string | null;
   operation: PropertyOperation;
   stay: PropertyStay | null;
+  property_type: string | null;
   price: number;
   bedrooms: number;
   bathrooms: number;
   square_meters: number | null;
   zone: string;
+  subzone: string | null;
   address: string | null;
   available_from: string | null;
   features: string[];

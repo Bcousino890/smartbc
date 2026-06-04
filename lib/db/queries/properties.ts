@@ -1,4 +1,6 @@
 import "server-only";
+import { storedSlugFromShare } from "../../share-slug";
+import { createAdminClient } from "../admin";
 import { createClient } from "../server";
 import type { PropertyFilters, PropertyRow } from "../row-types";
 
@@ -40,6 +42,72 @@ export async function getPropertyBySlug(slug: string) {
     .select("*, property_photos(*), agencies(name, slug, logo_url)")
     .eq("slug", slug)
     .is("archived_at", null)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+// Resuelve un slug viejo a su slug actual usando la tabla `legacy_slugs`.
+// Se usa solo cuando el lookup directo falla — los slugs viejos se crearon
+// con prefijo de agencia (ej. "level-titulo-3291") antes de neutralizarlos.
+export async function resolveLegacySlug(
+  oldSlug: string,
+): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data } = await (
+    supabase.from("legacy_slugs") as unknown as {
+      select: (cols: string) => {
+        eq: (col: string, value: string) => {
+          maybeSingle: () => Promise<{
+            data: { new_slug: string } | null;
+          }>;
+        };
+      };
+    }
+  )
+    .select("new_slug")
+    .eq("old_slug", oldSlug)
+    .maybeSingle();
+  return data?.new_slug ?? null;
+}
+
+// Variante pública para los SmartLinks (/compartir/[slug]). Bypasa la RLS
+// con el service role porque el visitante no está autenticado. Solo
+// devuelve propiedades NO archivadas para no exponer borradores ni
+// retiradas. La privacidad se basa en lo difícil de adivinar del slug.
+export async function getPropertyBySlugPublic(slug: string) {
+  const supabase = createAdminClient();
+  const fetchBy = async (s: string) => {
+    const { data, error } = await supabase
+      .from("properties")
+      .select("*, property_photos(*), agencies(name, slug, logo_url)")
+      .eq("slug", s)
+      .is("archived_at", null)
+      .neq("status", "archived")
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  // Exacto: links viejos (sin prefijo) y el propio slug almacenado.
+  const exact = await fetchBy(slug);
+  if (exact) return exact;
+  // URLs nuevas con la referencia delante ("bc0871-{slug}"): quitamos el prefijo.
+  const stripped = storedSlugFromShare(slug);
+  return stripped !== slug ? await fetchBy(stripped) : null;
+}
+
+// Variante para el admin: trae la propiedad por slug incluso si está
+// archivada (necesario para la página de edición — el admin tiene que
+// poder ver y reactivar propiedades archivadas).
+export async function getPropertyBySlugForAdmin(slug: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .select(
+      "*, property_photos(url, alt, position, is_cover), agencies(id, name, slug, logo_url)",
+    )
+    .eq("slug", slug)
     .maybeSingle();
 
   if (error) throw error;

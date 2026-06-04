@@ -257,6 +257,19 @@ export class PhotoCollector {
   add(url: string | null | undefined, alt?: string): void {
     if (!url) return;
     if (isLikelyNonPhoto(url)) return;
+    this.push(url, alt);
+  }
+
+  // Para cuando el extractor específico ya validó la URL con reglas
+  // propias del portal (ej. Fotocasa sabe que `/images/ads/<uuid>` es
+  // foto del anuncio, no advertising). Salta el filtro genérico
+  // `isLikelyNonPhoto` que rechazaría por la palabra "ads".
+  addTrusted(url: string | null | undefined, alt?: string): void {
+    if (!url) return;
+    this.push(url, alt);
+  }
+
+  private push(url: string, alt?: string): void {
     const key = dedupKey(url);
     if (this.seen.has(key)) return;
     this.seen.add(key);

@@ -2,6 +2,7 @@ import "server-only";
 import * as cheerio from "cheerio";
 import { detectPortal } from "./detect-portal";
 import { fetchHtml } from "./fetch-html";
+import { extractClikalia, normalizeClikaliaUrl } from "./extractors/clikalia";
 import { extractFotocasa } from "./extractors/fotocasa";
 import { extractGeneric } from "./extractors/generic";
 import { extractIdealista } from "./extractors/idealista";
@@ -30,6 +31,12 @@ export async function extractFromUrl(
     };
   }
 
+  // Clikalia: forzamos la ficha en español para parsear los datos en el idioma
+  // correcto, sea cual sea el idioma del link pegado.
+  if (detected.portal === "clikalia") {
+    detected.url = normalizeClikaliaUrl(detected.url);
+  }
+
   const fetched = await fetchHtml(detected.url.toString());
   if (!fetched.ok) return { ok: false, error: fetched.error };
 
@@ -38,11 +45,13 @@ export async function extractFromUrl(
 
   switch (detected.portal) {
     case "idealista":
-      return { ok: true, preview: extractIdealista($, finalUrl) };
+      return { ok: true, preview: await extractIdealista($, finalUrl, { proxyUrl: process.env.SMARTPROXY_URL }) };
     case "fotocasa":
       return { ok: true, preview: extractFotocasa($, finalUrl) };
     case "inmoweb":
       return { ok: true, preview: extractInmoweb($, finalUrl) };
+    case "clikalia":
+      return { ok: true, preview: extractClikalia($, finalUrl) };
     case "mobilia":
     case "generic":
     default:

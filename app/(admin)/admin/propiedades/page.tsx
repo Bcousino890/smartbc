@@ -7,9 +7,17 @@ import { getAgencies } from "@/lib/db/queries/agencies";
 import { getProperties } from "@/lib/db/queries/properties";
 import { PropertiesAdminClient } from "./properties-admin-client";
 
+// Datos en vivo: el catálogo tiene que reflejar altas/ediciones/imports al
+// instante. Sin esto, Next servía una versión cacheada y las propiedades recién
+// importadas no aparecían hasta que expiraba la caché.
+export const dynamic = "force-dynamic";
+
 export default async function AdminPropiedadesPage() {
   const [rows, agencyRows] = await Promise.all([
-    getProperties({ includeUnavailable: true }, 200),
+    // Límite alto: el admin debe ver TODO el catálogo activo (cientos de pisos
+    // de todas las agencias). Con un tope bajo, el total y el filtro de agencia
+    // se quedaban cortos (faltaban agencias). Buscador/filtros operan en cliente.
+    getProperties({ includeUnavailable: true }, 2000),
     getAgencies(),
   ]);
   const properties = rows.map(propertyRowToAdminProperty);

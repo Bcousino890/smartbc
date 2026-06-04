@@ -62,6 +62,7 @@ export type Property = {
   id: string;
   title: string;
   zone: string;
+  subzone?: string | null;
   city: string;
   bedrooms: number;
   bathrooms: number;
@@ -80,10 +81,22 @@ export type Property = {
   conditions?: PropertyCondition[];
   specs?: PropertySpecs;
   contact?: PropertyContact;
-  // Coordenadas para cálculo de distancia a universidades. Nullables porque
-  // las propiedades antiguas no las tienen.
-  latitude?: number;
-  longitude?: number;
+  // Tipo legible ("Piso", "Ático", "Chalet"…) extraído del scraper o
+  // editado manualmente. Opcional para no romper mocks/cards existentes.
+  propertyTypeLabel?: string | null;
+  // Features como strings libres (vienen del scraper, sin enum estricto).
+  // `features` arriba es un enum legacy; este campo es el real para la
+  // vista del SmartLink y el detalle público.
+  featuresText?: string[];
+  // Coordenadas reales (geocodificadas) si las tenemos cacheadas. Si no
+  // están, el SmartLink usa coords aproximadas del barrio. Se usan también
+  // para el cálculo de distancia a universidades.
+  latitude?: number | null;
+  longitude?: number | null;
+  // Referencia interna BC (BC-0001, BC-0002…). Única por propiedad y
+  // distinta del `external_id` del portal de origen. Se muestra al cliente
+  // en SmartLink para que pueda mencionarla al contactar con BC.
+  bcReference?: string | null;
 };
 
 export type Filters = {
@@ -94,6 +107,7 @@ export type Filters = {
   bathrooms?: number;
   minSquareMeters?: number;
   zone?: string;
+  subzone?: string;
   operation?: Operation;
 };
 
@@ -228,6 +242,7 @@ export type AgencyPropertyRow = {
   bathrooms: number;
   price: number; // monthly for rent, total for sale
   lastUpdateMinutes: number;
+  coverPhotoUrl?: string | null;
 };
 
 export type AgencyDetail = Agency & {
@@ -315,12 +330,20 @@ export type AdminPropertyStatus = "available" | "reserved" | "rented" | "sold" |
 
 export type AdminProperty = {
   id: string;
-  reference: string;
+  reference: string; // Ref del portal de origen (ej. 3291 en Level)
+  // Referencia interna BC (BC-0001, BC-0002…). Única por propiedad.
+  bcReference: string | null;
+  // Referencia interna amigable en formato PROP-YYYY-NNNN (año + secuencial).
+  // Inmutable una vez generada, para mostrar al cliente y admin.
+  propertyReference: string;
   title: string;
   zone: string;
+  subzone?: string | null;
   agencyId: string;
   agencyName: string;
   operation: Operation;
+  // Tipo de estancia para alquileres: "larga" / "corta". null en ventas.
+  stayType?: "larga" | "corta" | null;
   status: AdminPropertyStatus;
   bedrooms: number;
   bathrooms: number;
@@ -394,6 +417,7 @@ export type InternalUserRole =
   | "owner"
   | "admin"
   | "advisor"
+  | "client"
   | "viewer";
 
 export type InternalUserStatus = "active" | "invited" | "suspended";

@@ -11,7 +11,11 @@ type RunFeedOptions = {
 
 type RunFeedFailure = {
   ok: false;
-  error: "feed_not_found" | "agency_missing" | "scraper_not_registered";
+  error:
+    | "feed_not_found"
+    | "agency_missing"
+    | "scraper_not_registered"
+    | "already_running";
 };
 
 type RunFeedSuccess = { ok: true; result: SyncResult };
@@ -34,9 +38,17 @@ export async function runFeedById(
     agency_id: string;
     scraper_key: string;
     feed_url: string | null;
+    last_status: string | null;
     agencies: { id: string; slug: string } | null;
   };
   if (!row.agencies) return { ok: false, error: "agency_missing" };
+
+  // Guarda contra concurrencia: si el feed ya está corriendo, salimos sin
+  // tocar nada para que dos disparos (manual + cron, o dos crones que se
+  // solapan) no se pisen entre sí ni creen errores de duplicate-key.
+  if (row.last_status === "running") {
+    return { ok: false, error: "already_running" };
+  }
 
   const scraper = getScraperByKey(row.scraper_key);
   if (!scraper) return { ok: false, error: "scraper_not_registered" };
@@ -60,12 +72,20 @@ export async function runDueFeeds(): Promise<{
   const now = new Date().toISOString();
   const dueRes = await supabase
     .from("agency_feeds")
-    .select("id")
+    .select("id, last_status")
     .eq("active", true)
     .or(`next_run_at.is.null,next_run_at.lte.${now}`);
   if (dueRes.error) throw new Error(dueRes.error.message);
 
-  const ids = ((dueRes.data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  // Filtramos en JS los feeds en running (Postgres trata NULL != 'running'
+  // como NULL, no true, así que un .neq() en PostgREST excluiría también
+  // los feeds reseteados con last_status=NULL). Sin este filtro, dos crones
+  // solapados o manual + cron se pisaban entre sí.
+  const ids = (
+    (dueRes.data ?? []) as Array<{ id: string; last_status: string | null }>
+  )
+    .filter((r) => r.last_status !== "running")
+    .map((r) => r.id);
   const results: Array<{
     feedId: string;
     status: SyncResult["status"] | "error";

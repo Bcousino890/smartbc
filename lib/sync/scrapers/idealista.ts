@@ -32,8 +32,6 @@ const IDEALISTA_SIZE_TOKENS = [
   "WEB_LIST",
 ] as const;
 
-const TARGET_SIZE = "WEB_DETAIL_TOP-XL-L";
-
 export function isIdealistaImageUrl(url: string): boolean {
   if (!url) return false;
   if (!IDEALISTA_HOST_RE.test(url)) return false;
@@ -43,16 +41,26 @@ export function isIdealistaImageUrl(url: string): boolean {
   return /\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url);
 }
 
+// Perfil de imagen que SIEMPRE existe en el CDN y da buena resolución.
+// Idealista expone perfiles compuestos como `WEB_DETAIL_TOP-XL-L_TOP-L-P`
+// que devuelven 404 — por eso no basta con "subir" el token, hay que
+// normalizar el segmento de perfil entero a uno conocido.
+const SAFE_PROFILE = "WEB_DETAIL_TOP-L-L";
+
 /**
- * Sustituye el token de tamaño del CDN por `WEB_DETAIL_TOP-XL-L` cuando es
- * distinto. Si la URL no expone token reconocible, se devuelve sin tocar.
+ * Normaliza la URL de imagen del CDN de Idealista a un perfil de tamaño que
+ * existe seguro. El perfil es el segmento entre `/blur/` y `/<n>/`
+ * (`…/blur/<PERFIL>/0/id.pro.es.image.master/…`). Lo sustituimos por
+ * SAFE_PROFILE. Si la URL no tiene ese patrón, cae al reemplazo por token.
  */
 export function toIdealistaHighQuality(url: string): string {
-  if (url.includes(TARGET_SIZE)) return url;
+  const blurRe = /(\/blur\/)[^/]+(\/\d+\/)/;
+  if (blurRe.test(url)) {
+    return url.replace(blurRe, `$1${SAFE_PROFILE}$2`);
+  }
   for (const token of IDEALISTA_SIZE_TOKENS) {
-    if (token === TARGET_SIZE) continue;
     if (url.includes(token)) {
-      return url.replace(token, TARGET_SIZE);
+      return url.replace(token, SAFE_PROFILE);
     }
   }
   return url;

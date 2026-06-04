@@ -84,7 +84,11 @@ export function ImportByLinkClient({
         return;
       }
       setPreview(result.preview);
-      setForm(previewToFormState(result.preview, agencies[0]?.slug ?? ""));
+      // Los pisos importados por link van TODOS a la agencia genérica
+      // "Portales externos" (slug `portales-externos`). El usuario puede
+      // recategorizar después desde la ficha si tiene un acuerdo con la
+      // agencia o portal concretos.
+      setForm(previewToFormState(result.preview, "portales-externos"));
     });
   }
 
@@ -247,21 +251,20 @@ export function ImportByLinkClient({
               />
             </Field>
 
-            <Field label="Agencia" required>
-              <select
-                value={form.agencySlug}
-                onChange={(e) =>
-                  setForm({ ...form, agencySlug: e.target.value })
-                }
-                className={inputCls}
-              >
-                <option value="">Selecciona agencia…</option>
-                {agencies.map((a) => (
-                  <option key={a.slug} value={a.slug}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+            {/* Agencia: los pisos importados por link siempre se asignan
+                a la agencia genérica "Portales externos". El campo se
+                muestra como informativo (no editable). Para
+                recategorizar, ir a la ficha del piso tras crearlo. */}
+            <Field label="Agencia">
+              <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-ink/[0.04] px-3 py-2 text-sm text-ink/70">
+                <span>
+                  {agencies.find((a) => a.slug === form.agencySlug)?.name ??
+                    "Portales externos"}
+                </span>
+                <span className="ml-auto text-[10px] uppercase tracking-wider text-ink/45">
+                  por defecto
+                </span>
+              </div>
             </Field>
 
             <Field label="Operación" required>

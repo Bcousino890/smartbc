@@ -1,5 +1,8 @@
-// Tipos generados manualmente para reflejar supabase/migrations/0001_init.sql.
-// Para regenerar desde el proyecto remoto: `npx supabase login && npx supabase gen types typescript --project-id healauhivrjunlulrlui > lib/db/database.types.ts`
+// Tipos generados manualmente para reflejar las migraciones de supabase/migrations/.
+// Backend en producción: self-host Supabase en Hetzner. El proyecto antiguo
+// en supabase.com (`healauhivrjunlulrlui`) fue eliminado tras la migración —
+// si en algún momento se vuelve a generar tipos automáticos, hay que apuntar
+// al endpoint del self-host (o regenerar a mano con las migraciones nuevas).
 
 export type Json =
   | string
@@ -130,11 +133,23 @@ export type Database = {
           bathrooms: number;
           square_meters: number | null;
           zone: string;
+          subzone: string | null;
           address: string | null;
           available_from: string | null;
           features: string[];
+          features_manual: string[];
+          bc_reference: string;
           cover_photo_url: string | null;
           source_url: string | null;
+          owner_name: string | null;
+          owner_phone: string | null;
+          owner_email: string | null;
+          internal_notes: string | null;
+          property_type: string | null;
+          building_features: Json | null;
+          latitude: number | null;
+          longitude: number | null;
+          geocoded_at: string | null;
           last_synced_at: string | null;
           archived_at: string | null;
           created_at: string;
@@ -156,11 +171,23 @@ export type Database = {
           bathrooms?: number;
           square_meters?: number | null;
           zone: string;
+          subzone?: string | null;
           address?: string | null;
           available_from?: string | null;
           features?: string[];
+          features_manual?: string[];
+          bc_reference?: string;
           cover_photo_url?: string | null;
           source_url?: string | null;
+          owner_name?: string | null;
+          owner_phone?: string | null;
+          owner_email?: string | null;
+          internal_notes?: string | null;
+          property_type?: string | null;
+          building_features?: Json | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          geocoded_at?: string | null;
           last_synced_at?: string | null;
           archived_at?: string | null;
           created_at?: string;
@@ -410,6 +437,44 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["agency_feeds"]["Insert"]>;
+      };
+      property_shares: {
+        Row: {
+          id: string;
+          property_id: string;
+          token: string;
+          label: string | null;
+          created_by: string | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          token: string;
+          label?: string | null;
+          created_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_shares"]["Insert"]>;
+      };
+      property_share_opens: {
+        Row: {
+          id: string;
+          share_id: string;
+          opened_at: string;
+          ip: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          id?: string;
+          share_id: string;
+          opened_at?: string;
+          ip?: string | null;
+          user_agent?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_share_opens"]["Insert"]>;
       };
       sync_logs: {
         Row: {

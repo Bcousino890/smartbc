@@ -45,7 +45,9 @@ export default async function AdminIdealistaPage() {
 
   const idealista = (listings ?? []) as Array<{
     id: string;
-    property_id: string;
+    property_id: string | null;
+    is_inspo: boolean;
+    inspo_title: string | null;
     property_type: string | null;
     address_street: string | null;
     address_number: string | null;
@@ -95,6 +97,7 @@ export default async function AdminIdealistaPage() {
     plan_ids: string[];
     idealista_property_id: string | null;
     idealista_state: string | null;
+    reference_code: string | null;
     created_at: string;
     updated_at: string;
   }>;

@@ -15,6 +15,8 @@ import {
   parseBedrooms,
   parsePriceString,
 } from "../parse-utils";
+import { detectAdvertiserFromHtml } from "../../particulares/idealista-advertiser-detector";
+import type { AdvertiserCheckResult } from "../../particulares/idealista-advertiser-detector";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos que refleja el JSON embebido de Idealista. Basado en el schema real de
@@ -248,12 +250,24 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
   }
 
   const detailsText = $(".info-features").text();
+  // Fallback amplio: texto completo del body para buscar m²/habs/baños
+  // cuando los selectores específicos no existen (caso típico del HTML
+  // archivado por Wayback, que es SSR sin la hidratación React completa).
+  const bodyText = $("body").text();
+
   const squareMeters =
-    parseAreaString(detailsText) ?? parseAreaString(description ?? "") ?? parseAreaString(title ?? "");
+    parseAreaString(detailsText) ??
+    parseAreaString(description ?? "") ??
+    parseAreaString(title ?? "") ??
+    parseAreaString(bodyText);
   const bedrooms =
-    parseBedrooms(detailsText) ?? parseBedrooms(description ?? "");
+    parseBedrooms(detailsText) ??
+    parseBedrooms(description ?? "") ??
+    parseBedrooms(bodyText);
   const bathrooms =
-    parseBathrooms(detailsText) ?? parseBathrooms(description ?? "");
+    parseBathrooms(detailsText) ??
+    parseBathrooms(description ?? "") ??
+    parseBathrooms(bodyText);
 
   const addressLine = firstText($, [
     ".main-info__title-minor",
@@ -263,9 +277,25 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
   const address = addressLine ?? null;
   const zone = addressLine ? (addressLine.split(",")[0]?.trim() ?? null) : null;
 
+  // Detección de operación. La URL `/inmueble/<id>/` es la misma para
+  // alquiler y venta, así que NO es buen indicador. Mejor mirar el texto
+  // visible: el título y el og:description suelen empezar con "Alquiler de
+  // piso..." o "Venta de piso..." según corresponda. Como último recurso,
+  // un precio en "€/mes" indica alquiler.
   let operation: "rent" | "sale" | null = null;
-  if (/\/inmueble\//.test(sourceUrl) || /\/venta-/i.test(sourceUrl)) operation = "sale";
-  if (/\/alquiler-/i.test(sourceUrl)) operation = "rent";
+  const operationCorpus = [title, description, ogTitle, ogDesc, priceText]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/\balquile[rt]\b|\barrendam|€\s*\/\s*mes|\beur\s*\/\s*mes/i.test(operationCorpus)) {
+    operation = "rent";
+  } else if (/\bventa\b|\bcompra\b|\bvende\b|\ben venta\b/i.test(operationCorpus)) {
+    operation = "sale";
+  } else if (/\/alquiler-/i.test(sourceUrl)) {
+    operation = "rent";
+  } else if (/\/venta-/i.test(sourceUrl)) {
+    operation = "sale";
+  }
 
   const featureSet = new Set<string>();
   $(".details-property_features li, .details-property-feature li").each((_, el) => {
@@ -297,6 +327,22 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
       if (u && isIdealistaImageUrl(u)) collector.add(toIdealistaHighQuality(u));
     }
   });
+
+  // Fallback adicional: cuando el HTML viene de Wayback Machine, las fotos
+  // del slider no están en <img>/<source> sino en una variable JS inline
+  // `multimediaCarrousel: { multimedias: [...] }`. Extraemos las URLs
+  // `img\d+.idealista.com/blur/...` con un regex sobre el HTML raw.
+  const rawHtml = $.html();
+  if (/multimediaCarrousel/.test(rawHtml)) {
+    const carrouselRe =
+      /https?:\/\/img\d*\.idealista\.com\/blur\/[A-Z_-]+\/[^"'\s)>]+\.(?:jpe?g|webp|png)/gi;
+    let m: RegExpExecArray | null;
+    while ((m = carrouselRe.exec(rawHtml)) !== null) {
+      const u = m[0];
+      if (isIdealistaImageUrl(u)) collector.add(toIdealistaHighQuality(u));
+    }
+  }
+
   const photos = collector.toArray();
 
   if (!title) warnings.push("título no detectado");
@@ -331,11 +377,23 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry point del extractor de Idealista.
 // ─────────────────────────────────────────────────────────────────────────────
-export function extractIdealista(
+export async function extractIdealista(
   $: CheerioAPI,
   sourceUrl: string,
-): ImportPreview {
+  options?: { proxyUrl?: string }
+): Promise<ImportPreview & { advertiserInfo?: AdvertiserCheckResult }> {
   const embedded = findEmbeddedListing($);
-  if (embedded) return listingToPreview(embedded, sourceUrl);
-  return extractFromDom($, sourceUrl);
+  const preview = embedded
+    ? listingToPreview(embedded, sourceUrl)
+    : extractFromDom($, sourceUrl);
+
+  // Detectar particular vs profesional desde el HTML (campo
+  // `adProfessionalName`). Más fiable que el endpoint AJAX (que DataDome
+  // bloquea) y sin coste de request extra.
+  const advertiserInfo = detectAdvertiserFromHtml($.html());
+
+  return {
+    ...preview,
+    advertiserInfo,
+  };
 }

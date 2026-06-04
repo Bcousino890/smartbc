@@ -17,11 +17,13 @@ type ExistingProperty = {
   external_id: string | null;
   title: string;
   description: string | null;
+  property_type: string | null;
   price: number;
   bedrooms: number;
   bathrooms: number;
   square_meters: number | null;
   zone: string;
+  subzone: string | null;
   address: string | null;
   available_from: string | null;
   features: string[];
@@ -48,10 +50,12 @@ function needsUpdate(
   if (Number(existing.price) !== normalized.price) return true;
   if (existing.title !== normalized.title) return true;
   if ((existing.description ?? null) !== normalized.description) return true;
+  if ((existing.property_type ?? null) !== normalized.property_type) return true;
   if (existing.bedrooms !== normalized.bedrooms) return true;
   if (existing.bathrooms !== normalized.bathrooms) return true;
   if ((existing.square_meters ?? null) !== normalized.square_meters) return true;
   if (existing.zone !== normalized.zone) return true;
+  if ((existing.subzone ?? null) !== normalized.subzone) return true;
   if ((existing.address ?? null) !== normalized.address) return true;
   if ((existing.available_from ?? null) !== normalized.available_from)
     return true;
@@ -120,12 +124,14 @@ async function insertProperty(
       description: normalized.description,
       operation: normalized.operation,
       stay: normalized.stay,
+      property_type: normalized.property_type,
       status: "available",
       price: normalized.price,
       bedrooms: normalized.bedrooms,
       bathrooms: normalized.bathrooms,
       square_meters: normalized.square_meters,
       zone: normalized.zone,
+      subzone: normalized.subzone,
       address: normalized.address,
       available_from: normalized.available_from,
       features: normalized.features,
@@ -156,6 +162,10 @@ async function insertProperty(
   }
 }
 
+// IMPORTANTE: este UPDATE solo toca los campos que vienen del scraper.
+// Los campos internos del admin (owner_*, internal_notes, features_manual)
+// NO se incluyen adrede — son siempre propiedad del admin y nunca se
+// sobrescriben en sync.
 async function updateExistingProperty(
   supabase: AdminClient,
   existing: ExistingProperty,
@@ -173,11 +183,13 @@ async function updateExistingProperty(
     .update({
       title: normalized.title,
       description: normalized.description,
+      property_type: normalized.property_type,
       price: normalized.price,
       bedrooms: normalized.bedrooms,
       bathrooms: normalized.bathrooms,
       square_meters: normalized.square_meters,
       zone: normalized.zone,
+      subzone: normalized.subzone,
       address: normalized.address,
       available_from: normalized.available_from,
       features: normalized.features,
@@ -293,7 +305,7 @@ export async function runSyncForFeed(params: {
     const existingRes = await supabase
       .from("properties")
       .select(
-        "id, external_id, title, description, price, bedrooms, bathrooms, square_meters, zone, address, available_from, features, archived_at, status",
+        "id, external_id, title, description, property_type, price, bedrooms, bathrooms, square_meters, zone, subzone, address, available_from, features, archived_at, status",
       )
       .eq("agency_id", params.agencyId)
       .eq("source", "scrape");

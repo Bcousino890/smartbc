@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
+import { EmailConfigClient } from "./email-config-client";
 import { useT } from "@/lib/i18n/provider";
 import { mockAppSettings } from "@/lib/mock-admin-extras";
 import type { AppSettings } from "@/lib/types";
@@ -204,6 +205,9 @@ export default function AdminConfiguracionPage() {
             />
           </ul>
         </SettingsSection>
+
+        {/* Email Configuration */}
+        <EmailConfigClient />
 
         {/* Save bar */}
         <div className="flex justify-end">

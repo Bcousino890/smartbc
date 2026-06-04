@@ -2,25 +2,36 @@
 
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
   Copy,
   ExternalLink,
+  Loader2,
   MapPin,
   MessageSquare,
   Phone,
   Plus,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { createPropertyFromParticular, updateParticularPhone } from "./actions";
+
+export type ParticularChangeRow = {
+  id: string;
+  change_type: string;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  changed_at: string;
+};
 
 export type ParticularRow = {
   id: string;
   portal: string;
   external_id: string;
+  particular_reference: string | null;
   source_url: string;
   zone: string | null;
   price: number | null;
@@ -59,22 +70,40 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
-// ─── Modal ────────────────────────────────────────────────────────────────────
+// ─── Edit Phone Modal ────────────────────────────────────────────────────────
 
-function ParticularModal({
-  row,
+function EditPhoneModal({
+  particularId,
+  currentPhone,
   onClose,
+  onSaved,
 }: {
-  row: ParticularRow;
+  particularId: string;
+  currentPhone: string | null;
   onClose: () => void;
+  onSaved: (newPhone: string | null) => void;
 }) {
-  const [photoIdx, setPhotoIdx] = useState(0);
-  const photos = row.photos ?? [];
-  const cover = photos[photoIdx]?.url;
-  const hasPhone = Boolean(row.phone);
+  const [phone, setPhone] = useState(currentPhone ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const portalLabel =
-    row.portal.charAt(0).toUpperCase() + row.portal.slice(1);
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await updateParticularPhone(particularId, phone || null);
+      if (res.ok) {
+        onSaved(phone || null);
+        onClose();
+      } else {
+        setError((res as any).error || "unknown_error");
+      }
+    } catch {
+      setError("network_error");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div
@@ -82,9 +111,192 @@ function ParticularModal({
       onClick={onClose}
     >
       <div
-        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+        className="relative flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="flex items-center justify-between border-b border-ink/10 p-6">
+          <h2 className="text-lg font-semibold text-ink">Editar teléfono</h2>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-ink/50 hover:text-ink"
+          >
+            <X size={20} strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="flex flex-1 flex-col gap-4 p-6">
+          <div>
+            <label className="block text-sm font-medium text-ink/75 mb-2">
+              Teléfono
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Ej: +34 600 123 456"
+              className="w-full rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-ink/50">
+              Deja en blanco para eliminar el teléfono
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              No se pudo guardar ({error}). Inténtalo de nuevo.
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 border-t border-ink/10 p-6">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-ink/15 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-ink/5"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
+const CHANGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  new_listing:       { label: "Alta del anuncio",    color: "bg-emerald-100 text-emerald-700" },
+  price_up:          { label: "Subida de precio",    color: "bg-red-100 text-red-700" },
+  price_down:        { label: "Bajada de precio",    color: "bg-emerald-100 text-emerald-700" },
+  price_change:      { label: "Cambio de precio",    color: "bg-amber-100 text-amber-700" },
+  photo_count_change:{ label: "Cambio de fotos",     color: "bg-blue-100 text-blue-700" },
+  photo_added:       { label: "Fotos añadidas",      color: "bg-blue-100 text-blue-700" },
+  phone_added:       { label: "Teléfono añadido",    color: "bg-emerald-100 text-emerald-700" },
+  description_updated:{ label: "Descripción actualizada", color: "bg-ink/10 text-ink/60" },
+  reactivated:       { label: "Anuncio reactivado",  color: "bg-emerald-100 text-emerald-700" },
+  deleted:           { label: "Anuncio retirado",    color: "bg-red-100 text-red-700" },
+};
+
+function ChangeHistory({ particularId }: { particularId: string }) {
+  const [changes, setChanges] = useState<ParticularChangeRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/admin/particulares/history?id=${particularId}`)
+      .then((r) => r.json())
+      .then((d) => setChanges(d.changes ?? []))
+      .catch(() => setChanges([]))
+      .finally(() => setLoading(false));
+  }, [particularId]);
+
+  if (loading) return <p className="text-xs text-ink/40 py-2">Cargando historial…</p>;
+  if (!changes || changes.length === 0) return <p className="text-xs text-ink/40 py-2">Sin historial de cambios.</p>;
+
+  return (
+    <ol className="relative border-l border-ink/10 pl-4 space-y-3">
+      {changes.map((c) => {
+        const meta = CHANGE_TYPE_LABELS[c.change_type] ?? { label: c.change_type, color: "bg-ink/10 text-ink/60" };
+        const fmt = new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+        return (
+          <li key={c.id} className="flex items-start gap-2">
+            <span className="absolute -left-1.5 mt-0.5 h-3 w-3 rounded-full border-2 border-white bg-gold/50" />
+            <div className="min-w-0">
+              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", meta.color)}>
+                {meta.label}
+              </span>
+              {(c.change_type === "price_up" || c.change_type === "price_down" || c.change_type === "price_change") && c.old_value && c.new_value && (
+                <span className="ml-2 text-[11px] text-ink/55">
+                  {formatPrice(c.old_value.price as number)} → {formatPrice(c.new_value.price as number)} €
+                </span>
+              )}
+              {c.change_type === "photo_count_change" && c.old_value && c.new_value && (
+                <span className="ml-2 text-[11px] text-ink/55">
+                  {c.old_value.count as number} → {c.new_value.count as number} fotos
+                </span>
+              )}
+              {c.change_type === "phone_added" && c.new_value && (
+                <span className="ml-2 text-[11px] text-ink/55">
+                  {String(c.new_value.phone ?? "")}
+                </span>
+              )}
+              <p className="mt-0.5 text-[10px] text-ink/40">{fmt.format(new Date(c.changed_at))}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ParticularModal({
+  row,
+  onClose,
+  onPhoneUpdated,
+}: {
+  row: ParticularRow;
+  onClose: () => void;
+  onPhoneUpdated?: (newPhone: string | null) => void;
+}) {
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const [currentRow, setCurrentRow] = useState(row);
+  const [showEditPhone, setShowEditPhone] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const photos = currentRow.photos ?? [];
+  const cover = photos[photoIdx]?.url;
+  const hasPhone = Boolean(currentRow.phone);
+
+  // Estado de la conversión particular → propiedad (en Portales externos).
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<{ slug: string } | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function handleCreateProperty() {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await createPropertyFromParticular(currentRow.id);
+      if (res.ok) setCreated({ slug: res.slug });
+      else setCreateError((res as any).error || "unknown_error");
+    } catch {
+      setCreateError("network_error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  const portalLabel =
+    currentRow.portal.charAt(0).toUpperCase() + currentRow.portal.slice(1);
+
+  function handlePhoneSaved(newPhone: string | null) {
+    setCurrentRow({ ...currentRow, phone: newPhone });
+    onPhoneUpdated?.(newPhone);
+    setShowEditPhone(false);
+  }
+
+  return (
+    <>
+      {showEditPhone && (
+        <EditPhoneModal
+          particularId={currentRow.id}
+          currentPhone={currentRow.phone}
+          onClose={() => setShowEditPhone(false)}
+          onSaved={handlePhoneSaved}
+        />
+      )}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+        onClick={onClose}
+      >
+        <div
+          className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Foto + nav */}
         <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-ink/5">
           {cover ? (
@@ -136,7 +348,7 @@ function ParticularModal({
 
           {/* Badges */}
           <span className="absolute left-3 top-3 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
-            {row.operation === "rent" ? "Alquiler" : "Venta"}
+            {currentRow.operation === "rent" ? "Alquiler" : "Venta"}
           </span>
           <span className="absolute right-10 top-3 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
             {portalLabel}
@@ -153,15 +365,44 @@ function ParticularModal({
 
         {/* Contenido scrollable */}
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+          {/* Referencia + historial */}
+          <div className="flex items-center justify-between gap-2">
+            {currentRow.particular_reference ? (
+              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
+                {currentRow.particular_reference}
+              </span>
+            ) : (
+              <span className="rounded-md border border-ink/10 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/40">
+                {currentRow.external_id}
+              </span>
+            )}
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              className="text-[11px] text-ink/50 underline hover:text-ink transition"
+            >
+              {showHistory ? "Ocultar historial" : "Ver historial"}
+            </button>
+          </div>
+
+          {/* Timeline de cambios */}
+          {showHistory && (
+            <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Historial de cambios
+              </p>
+              <ChangeHistory particularId={currentRow.id} />
+            </div>
+          )}
+
           {/* Precio + zona */}
           <div>
             {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
-            {!row.is_active && (
+            {!currentRow.is_active && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <span className="font-semibold">Anuncio retirado</span>
-                {row.taken_down_at && (
+                {currentRow.taken_down_at && (
                   <span className="text-red-500">
-                    · {DATE_FMT.format(new Date(row.taken_down_at))}
+                    · {DATE_FMT.format(new Date(currentRow.taken_down_at))}
                   </span>
                 )}
                 <span className="ml-auto text-xs text-red-400">
@@ -170,21 +411,21 @@ function ParticularModal({
               </div>
             )}
             <p className="font-serif text-2xl font-semibold text-ink">
-              {row.price != null
-                ? `${formatPrice(row.price)}${row.operation === "rent" ? "/mes" : ""}`
+              {currentRow.price != null
+                ? `${formatPrice(currentRow.price)}${currentRow.operation === "rent" ? "/mes" : ""}`
                 : "Precio no disponible"}
             </p>
-            {row.zone && (
+            {currentRow.zone && (
               <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
                 <MapPin size={13} strokeWidth={1.75} className="text-gold" />
-                {row.zone}
+                {currentRow.zone}
               </div>
             )}
             <p className="mt-1 text-sm text-ink/50">
               {[
-                row.bedrooms != null ? `${row.bedrooms} hab` : null,
-                row.bathrooms != null ? `${row.bathrooms} baños` : null,
-                row.square_meters != null ? `${row.square_meters} m²` : null,
+                currentRow.bedrooms != null ? `${currentRow.bedrooms} hab` : null,
+                currentRow.bathrooms != null ? `${currentRow.bathrooms} baños` : null,
+                currentRow.square_meters != null ? `${currentRow.square_meters} m²` : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -197,62 +438,98 @@ function ParticularModal({
               Contacto · Particular
             </p>
 
-            {row.owner_name && (
-              <p className="mb-3 font-medium text-ink">{row.owner_name}</p>
+            {currentRow.owner_name && (
+              <p className="mb-3 font-medium text-ink">{currentRow.owner_name}</p>
             )}
 
             {hasPhone ? (
-              <a
-                href={`tel:${row.phone}`}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-              >
-                <Phone size={16} strokeWidth={2} />
-                Llamar · {formatPhone(row.phone!)}
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={`tel:${currentRow.phone}`}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  <Phone size={16} strokeWidth={2} />
+                  Llamar · {formatPhone(currentRow.phone!)}
+                </a>
+                <button
+                  onClick={() => setShowEditPhone(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
+                >
+                  Editar teléfono
+                </button>
+              </div>
             ) : (
-              <a
-                href={row.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
-              >
-                <MessageSquare size={16} strokeWidth={1.75} />
-                Escribir por {portalLabel}
-                {row.chat_only && (
-                  <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                    Solo chat
-                  </span>
-                )}
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={currentRow.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
+                >
+                  <MessageSquare size={16} strokeWidth={1.75} />
+                  Contactar por chat
+                  {currentRow.chat_only && (
+                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Solo disponible
+                    </span>
+                  )}
+                </a>
+                <button
+                  onClick={() => setShowEditPhone(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-gold/30 bg-gold/5 px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
+                >
+                  <Phone size={14} strokeWidth={1.75} />
+                  Agregar teléfono
+                </button>
+              </div>
             )}
           </div>
 
-          {/* Mapa */}
-          {row.latitude && row.longitude && (
+          {/* Mapa — exacto si hay coords, fallback por zona/dirección */}
+          {(currentRow.latitude && currentRow.longitude) || currentRow.zone ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Ubicación
               </p>
-              <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
-                <iframe
-                  width="100%"
-                  height="100%"
-                  style={{ border: "none" }}
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${row.longitude - 0.003},${row.latitude - 0.003},${row.longitude + 0.003},${row.latitude + 0.003}&layer=mapnik&marker=${row.latitude},${row.longitude}`}
-                  allowFullScreen
-                />
-              </div>
+              {currentRow.latitude && currentRow.longitude ? (
+                <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    style={{ border: "none" }}
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${currentRow.longitude - 0.003},${currentRow.latitude - 0.003},${currentRow.longitude + 0.003},${currentRow.latitude + 0.003}&layer=mapnik&marker=${currentRow.latitude},${currentRow.longitude}`}
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-ink/10">
+                  <div className="relative h-48 w-full bg-gray-100">
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      style={{ border: "none" }}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent((currentRow.zone ?? "") + ", Madrid")}&output=embed&zoom=15`}
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-[11px] text-ink/50">
+                    <MapPin size={11} strokeWidth={1.75} className="text-gold" />
+                    Zona aproximada · {currentRow.zone}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
 
           {/* Características */}
-          {row.features && row.features.length > 0 && (
+          {currentRow.features && currentRow.features.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Características
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {row.features.map((f, i) => (
+                {currentRow.features.map((f, i) => (
                   <span
                     key={i}
                     className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-[12px] text-ink/70"
@@ -265,13 +542,13 @@ function ParticularModal({
           )}
 
           {/* Descripción */}
-          {row.description && (
+          {currentRow.description && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Descripción
               </p>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/75">
-                {row.description}
+                {currentRow.description}
               </p>
             </div>
           )}
@@ -279,7 +556,7 @@ function ParticularModal({
           {/* Acciones inferiores */}
           <div className="flex gap-2 border-t border-ink/8 pt-4">
             <a
-              href={row.source_url}
+              href={currentRow.source_url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink/15 px-4 py-2 text-sm text-ink/70 transition hover:border-gold/40 hover:text-ink"
@@ -287,20 +564,34 @@ function ParticularModal({
               <ExternalLink size={14} strokeWidth={1.75} />
               Ver en {portalLabel}
             </a>
-            <button
-              onClick={() => {
-                // TODO: abrir modal de nueva propiedad con datos pre-rellenados
-                alert("Crear propiedad — próximamente");
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark"
-            >
-              <Plus size={14} strokeWidth={2} />
-              Crear propiedad
-            </button>
+            {created ? (
+              <Link
+                href={`/admin/propiedades/${created.slug}`}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <Check size={14} strokeWidth={2} />
+                Propiedad creada · abrir ficha
+              </Link>
+            ) : (
+              <button
+                onClick={handleCreateProperty}
+                disabled={creating}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+              >
+                <Plus size={14} strokeWidth={2} />
+                {creating ? "Creando…" : "Crear propiedad"}
+              </button>
+            )}
           </div>
+          {createError && (
+            <p className="text-xs text-red-600">
+              No se pudo crear la propiedad ({createError}). Inténtalo de nuevo.
+            </p>
+          )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -330,6 +621,8 @@ async function copyToClipboard(text: string) {
 
 // ─── Listado principal ────────────────────────────────────────────────────────
 
+type RefreshState = "idle" | "loading" | "done" | "error";
+
 export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
@@ -339,10 +632,11 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [bedrooms, setBedrooms] = useState("");
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
+  const [onlyNoPhone, setOnlyNoPhone] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
-  const [page, setPage] = useState(1);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
-  const itemsPerPage = 9;
+  const [refreshState, setRefreshState] = useState<RefreshState>("idle");
+  const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
 
   const zoneOptions = useMemo(
     () =>
@@ -371,6 +665,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       if (pMax != null && (r.price ?? Infinity) > pMax) return false;
       if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
+      if (onlyNoPhone && r.phone) return false;
       if (
         last24h &&
         !(r.created_at && new Date(r.created_at).getTime() >= since)
@@ -379,25 +674,42 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       }
       return true;
     });
-  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
+  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone]);
 
-  // Paginación
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedRows = filtered.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage,
-  );
+  async function handleRefreshPhones() {
+    setRefreshState("loading");
+    setRefreshResult(null);
+    try {
+      const res = await fetch("/api/admin/particulares/refresh-phones", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setRefreshResult({ updated: data.updated, checked: data.checked });
+        setRefreshState("done");
+        setTimeout(() => setRefreshState("idle"), 8000);
+      } else {
+        setRefreshState("error");
+        setTimeout(() => setRefreshState("idle"), 5000);
+      }
+    } catch {
+      setRefreshState("error");
+      setTimeout(() => setRefreshState("idle"), 5000);
+    }
+  }
 
-  // Reset a página 1 cuando cambian los filtros
-  useEffect(() => {
-    setPage(1);
-  }, [query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
+
+  function handlePhoneUpdated(newPhone: string | null) {
+    setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
+  }
 
   return (
     <>
       {/* Modal */}
       {selected && (
-        <ParticularModal row={selected} onClose={() => setSelected(null)} />
+        <ParticularModal
+          row={selected}
+          onClose={() => setSelected(null)}
+          onPhoneUpdated={handlePhoneUpdated}
+        />
       )}
 
       <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -480,8 +792,44 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
           >
             Últimas 24h
           </button>
+          <button
+            type="button"
+            onClick={() => setOnlyNoPhone((v) => !v)}
+            className={
+              onlyNoPhone
+                ? "rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-700"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-amber-300"
+            }
+          >
+            Sin teléfono
+          </button>
+          <button
+            type="button"
+            onClick={handleRefreshPhones}
+            disabled={refreshState === "loading"}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium transition",
+              refreshState === "loading"
+                ? "border border-gold/40 bg-gold/10 text-gold-dark opacity-80 cursor-wait"
+                : refreshState === "done"
+                ? "border border-emerald-300 bg-emerald-50 text-emerald-700"
+                : refreshState === "error"
+                ? "border border-red-300 bg-red-50 text-red-700"
+                : "border border-ink/10 bg-white/85 text-ink/70 hover:border-gold/40 hover:bg-gold/5"
+            )}
+          >
+            {refreshState === "loading" ? (
+              <><Loader2 size={13} className="animate-spin" /> Actualizando…</>
+            ) : refreshState === "done" ? (
+              <><Check size={13} strokeWidth={2} /> {refreshResult?.updated ?? 0} teléfonos nuevos</>
+            ) : refreshState === "error" ? (
+              <>Error — reintentar</>
+            ) : (
+              <><RefreshCw size={13} strokeWidth={1.75} /> Actualizar teléfonos</>
+            )}
+          </button>
           <span className="ml-auto text-[11px] text-ink/55">
-            {filtered.length} de {rows.length}
+            {filtered.length} de {rows.length} anuncios · {rows.filter(r => r.phone).length} con teléfono
           </span>
         </div>
 
@@ -494,7 +842,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
         ) : (
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {paginatedRows.map((r) => {
+              {filtered.map((r) => {
               const cover = r.photos?.[0]?.url;
               return (
                 <button
@@ -557,10 +905,10 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                         )}
                       </button>
                     )}
-                    {!r.phone && r.chat_only && (
+                    {!r.phone && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
                         <MessageSquare size={10} strokeWidth={1.75} />
-                        Solo chat
+                        Contactar por chat
                       </span>
                     )}
                   </div>
@@ -608,10 +956,12 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
                       </button>
                     )}
                     <div className="mt-auto flex items-center justify-between pt-3 text-[11px] text-ink/45">
-                      <span>
-                        {r.created_at
-                          ? DATE_FMT.format(new Date(r.created_at))
-                          : ""}
+                      <span className="flex items-center gap-1.5">
+                        {r.particular_reference ? (
+                          <span className="font-mono font-semibold text-gold-dark/70">{r.particular_reference}</span>
+                        ) : (
+                          r.created_at ? DATE_FMT.format(new Date(r.created_at)) : ""
+                        )}
                       </span>
                       <span className="inline-flex items-center gap-1 text-gold-dark group-hover:underline">
                         Ver detalles
@@ -624,65 +974,6 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
             })}
             </div>
 
-            {/* Paginación */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex flex-col items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="rounded-lg border border-ink/10 bg-white/85 p-2 text-ink disabled:opacity-40"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-
-                  <div className="flex gap-1.5">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter((p) => {
-                        return p === 1 || p === totalPages || Math.abs(p - page) <= 1;
-                      })
-                      .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
-                          acc.push("...");
-                        }
-                        acc.push(p);
-                        return acc;
-                      }, [])
-                      .map((item, idx) =>
-                        item === "..." ? (
-                          <span key={`ellipsis-${idx}`} className="px-1 text-ink/40">
-                            …
-                          </span>
-                        ) : (
-                          <button
-                            key={item}
-                            onClick={() => setPage(item)}
-                            className={cn(
-                              "h-8 w-8 rounded-lg border text-sm font-medium transition-colors",
-                              item === page
-                                ? "border-gold bg-gold/15 text-gold-dark"
-                                : "border-ink/10 hover:bg-white/85 text-ink/70",
-                            )}
-                          >
-                            {item}
-                          </button>
-                        ),
-                      )}
-                  </div>
-
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="rounded-lg border border-ink/10 bg-white/85 p-2 text-ink disabled:opacity-40"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-                <p className="text-xs text-ink/55">
-                  Página {page} de {totalPages} · {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-            )}
           </>
         )}
       </section>

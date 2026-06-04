@@ -11,7 +11,10 @@ CREATE TABLE IF NOT EXISTS idealista_config (
 
 ALTER TABLE idealista_config ENABLE ROW LEVEL SECURITY;
 
+-- Fix: usar is_admin() (auth.jwt()->>'role' no refleja el rol de la app en este
+-- esquema). El acceso real va por service role. Idempotente.
+DROP POLICY IF EXISTS "admin_manage_idealista_config" ON idealista_config;
 CREATE POLICY "admin_manage_idealista_config"
-  ON idealista_config FOR ALL TO authenticated
-  USING ((auth.jwt() ->> 'role') IN ('admin', 'owner'))
-  WITH CHECK ((auth.jwt() ->> 'role') IN ('admin', 'owner'));
+  ON idealista_config FOR ALL
+  USING (is_admin())
+  WITH CHECK (is_admin());

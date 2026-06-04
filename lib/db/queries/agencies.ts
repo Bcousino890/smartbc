@@ -86,12 +86,15 @@ export async function getAgencyProperties(agencyId: string) {
   const { data, error } = await supabase
     .from("properties")
     .select(
-      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at",
+      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at, cover_photo_url",
     )
     .eq("agency_id", agencyId)
     .is("archived_at", null)
     .order("updated_at", { ascending: false })
-    .limit(20);
+    // Antes 20: en Portales externos (pisos manuales/propios) hay que poder
+    // verlos TODOS para encontrar uno concreto. El buscador de la tabla filtra
+    // sobre este conjunto, así que cargamos un máximo generoso.
+    .limit(500);
   if (error) throw error;
   return (data ?? []) as Array<{
     id: string;
@@ -104,5 +107,6 @@ export async function getAgencyProperties(agencyId: string) {
     bathrooms: number;
     price: number;
     updated_at: string;
+    cover_photo_url: string | null;
   }>;
 }
