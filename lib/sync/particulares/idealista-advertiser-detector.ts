@@ -6,7 +6,7 @@ export type AdvertiserCheckResult = {
   advertiser_type: AdvertiserType;
   is_ad_professional: boolean | null;
   phone?: string | null;
-  phone_confidence?: "high" | "medium" | "low";
+  phone_confidence?: "high" | "medium" | "low" | null;
   contact_name?: string | null;
   error?: string;
 };

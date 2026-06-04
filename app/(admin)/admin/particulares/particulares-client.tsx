@@ -2,19 +2,19 @@
 
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
   Copy,
   ExternalLink,
+  Loader2,
   MapPin,
   MessageSquare,
   Phone,
   Plus,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createPropertyFromParticular, updateParticularPhone } from "./actions";
@@ -518,6 +518,8 @@ async function copyToClipboard(text: string) {
 
 // ─── Listado principal ────────────────────────────────────────────────────────
 
+type RefreshState = "idle" | "loading" | "done" | "error";
+
 export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
@@ -527,10 +529,11 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [bedrooms, setBedrooms] = useState("");
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
+  const [onlyNoPhone, setOnlyNoPhone] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
-  const [displayCount, setDisplayCount] = useState(18);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
-  const itemsPerPage = 9;
+  const [refreshState, setRefreshState] = useState<RefreshState>("idle");
+  const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
 
   const zoneOptions = useMemo(
     () =>
@@ -559,6 +562,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       if (pMax != null && (r.price ?? Infinity) > pMax) return false;
       if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
+      if (onlyNoPhone && r.phone) return false;
       if (
         last24h &&
         !(r.created_at && new Date(r.created_at).getTime() >= since)
@@ -567,16 +571,28 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       }
       return true;
     });
-  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
+  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone]);
 
-  // Load More - mostrar solo los primeros displayCount elementos
-  const displayedRows = filtered.slice(0, displayCount);
-  const hasMore = displayCount < filtered.length;
+  async function handleRefreshPhones() {
+    setRefreshState("loading");
+    setRefreshResult(null);
+    try {
+      const res = await fetch("/api/admin/particulares/refresh-phones", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setRefreshResult({ updated: data.updated, checked: data.checked });
+        setRefreshState("done");
+        setTimeout(() => setRefreshState("idle"), 8000);
+      } else {
+        setRefreshState("error");
+        setTimeout(() => setRefreshState("idle"), 5000);
+      }
+    } catch {
+      setRefreshState("error");
+      setTimeout(() => setRefreshState("idle"), 5000);
+    }
+  }
 
-  // Reset displayCount cuando cambian los filtros
-  useEffect(() => {
-    setDisplayCount(18);
-  }, [query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h]);
 
   function handlePhoneUpdated(newPhone: string | null) {
     setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
@@ -673,8 +689,44 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
           >
             Últimas 24h
           </button>
+          <button
+            type="button"
+            onClick={() => setOnlyNoPhone((v) => !v)}
+            className={
+              onlyNoPhone
+                ? "rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-700"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-amber-300"
+            }
+          >
+            Sin teléfono
+          </button>
+          <button
+            type="button"
+            onClick={handleRefreshPhones}
+            disabled={refreshState === "loading"}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium transition",
+              refreshState === "loading"
+                ? "border border-gold/40 bg-gold/10 text-gold-dark opacity-80 cursor-wait"
+                : refreshState === "done"
+                ? "border border-emerald-300 bg-emerald-50 text-emerald-700"
+                : refreshState === "error"
+                ? "border border-red-300 bg-red-50 text-red-700"
+                : "border border-ink/10 bg-white/85 text-ink/70 hover:border-gold/40 hover:bg-gold/5"
+            )}
+          >
+            {refreshState === "loading" ? (
+              <><Loader2 size={13} className="animate-spin" /> Actualizando…</>
+            ) : refreshState === "done" ? (
+              <><Check size={13} strokeWidth={2} /> {refreshResult?.updated ?? 0} teléfonos nuevos</>
+            ) : refreshState === "error" ? (
+              <>Error — reintentar</>
+            ) : (
+              <><RefreshCw size={13} strokeWidth={1.75} /> Actualizar teléfonos</>
+            )}
+          </button>
           <span className="ml-auto text-[11px] text-ink/55">
-            Mostrando {displayedRows.length} de {filtered.length} ({rows.length} total)
+            {filtered.length} de {rows.length} anuncios · {rows.filter(r => r.phone).length} con teléfono
           </span>
         </div>
 
@@ -687,7 +739,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
         ) : (
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {displayedRows.map((r) => {
+              {filtered.map((r) => {
               const cover = r.photos?.[0]?.url;
               return (
                 <button
@@ -817,20 +869,6 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
             })}
             </div>
 
-            {/* Load More Button */}
-            {hasMore && (
-              <div className="mt-6 flex flex-col items-center gap-4">
-                <button
-                  onClick={() => setDisplayCount((c) => c + itemsPerPage * 2)}
-                  className="rounded-lg bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark"
-                >
-                  Cargar más resultados
-                </button>
-                <p className="text-xs text-ink/55">
-                  Mostrando {displayedRows.length} de {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-            )}
           </>
         )}
       </section>
