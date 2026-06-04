@@ -1,5 +1,4 @@
 import "server-only";
-import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
@@ -84,8 +83,6 @@ export async function POST(req: Request) {
   }
 
   const supabase = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userClient = (await createClient()) as any;
 
   // Crear usuario en auth
   let userId: string = "";
@@ -155,11 +152,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // Actualizar profile con rol, assigned_advisor_id y created_by
-  // Nota: la migración 0020 agrega la columna created_by, pero no todas las bases de datos pueden tenerla
-  // Si falla, continuamos de todas formas porque el usuario fue creado exitosamente en auth
-  const profileUpdate: any = {
+  // Actualizar profile con rol y email (por si el trigger no existe en el VPS).
+  // Usa el cliente admin (service role) para garantizar que bypasea RLS.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profileUpdate: Record<string, any> = {
     role,
+    // Fallback: si no hay trigger que copie el email desde auth.users, lo seteamos aquí
+    email,
   };
 
   if (role === "client") {
@@ -169,17 +168,13 @@ export async function POST(req: Request) {
     }
   }
 
-  // Intentar agregar created_by si existe la columna
-  profileUpdate.created_by = currentProfile.id;
-
-  const { error: profileError } = await userClient
+  const { error: profileError } = await supabase
     .from("profiles")
     .update(profileUpdate)
     .eq("id", userId);
 
   if (profileError) {
     // El usuario fue creado en auth pero falló la actualización en DB
-    // Por ahora retornamos el error, en prod podrías tener un cleanup
     return Response.json(
       { error: `Error actualizando perfil: ${profileError.message}` },
       { status: 500 }
