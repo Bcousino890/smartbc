@@ -21,43 +21,50 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/(auth)/actions";
 import { useT } from "@/lib/i18n/provider";
+import { canAccess } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { href: "/admin/agencias", labelKey: "admin.nav.agencias", icon: Building2 },
-  { href: "/admin/propiedades", labelKey: "admin.nav.propiedades", icon: Home },
-  { href: "/admin/particulares", labelKey: "admin.nav.particulares", icon: User },
-  { href: "/admin/publicacion", labelKey: "admin.nav.publicacion", icon: Send },
-  { href: "/admin/idealista", labelKey: "admin.nav.idealista", icon: Sparkles },
-  { href: "/admin/clientes", labelKey: "admin.nav.clientes", icon: Users },
-  {
-    href: "/admin/solicitudes",
-    labelKey: "admin.nav.solicitudes",
-    icon: ClipboardList,
-  },
-  {
-    href: "/admin/mensajes",
-    labelKey: "admin.nav.mensajes",
-    icon: MessageSquare,
-  },
-  {
-    href: "/admin/sindicacion",
-    labelKey: "admin.nav.sindicacion",
-    icon: Radio,
-  },
-  { href: "/admin/reportes", labelKey: "admin.nav.reportes", icon: BarChart3 },
-  { href: "/admin/usuarios", labelKey: "admin.nav.usuarios", icon: UserCog },
-  {
-    href: "/admin/configuracion",
-    labelKey: "admin.nav.configuracion",
-    icon: Settings,
-  },
-] as const;
+type NavItem = {
+  href: string;
+  labelKey: string;
+  icon: React.ElementType;
+  /** Recurso de permisos asociado. Si se define, se comprueba canAccess(role, resource, "view") */
+  permissionResource?: string;
+};
 
-export function AdminSidebar({ user }: { user: AdminUser }) {
+const NAV_ITEMS: NavItem[] = [
+  { href: "/admin/agencias",      labelKey: "admin.nav.agencias",      icon: Building2 },
+  { href: "/admin/propiedades",   labelKey: "admin.nav.propiedades",   icon: Home,         permissionResource: "properties"    },
+  { href: "/admin/particulares",  labelKey: "admin.nav.particulares",  icon: User,         permissionResource: "particulares"  },
+  { href: "/admin/publicacion",   labelKey: "admin.nav.publicacion",   icon: Send },
+  { href: "/admin/idealista",     labelKey: "admin.nav.idealista",     icon: Sparkles },
+  { href: "/admin/clientes",      labelKey: "admin.nav.clientes",      icon: Users },
+  { href: "/admin/solicitudes",   labelKey: "admin.nav.solicitudes",   icon: ClipboardList },
+  { href: "/admin/mensajes",      labelKey: "admin.nav.mensajes",      icon: MessageSquare, permissionResource: "mensajes"     },
+  { href: "/admin/sindicacion",   labelKey: "admin.nav.sindicacion",   icon: Radio },
+  { href: "/admin/reportes",      labelKey: "admin.nav.reportes",      icon: BarChart3,    permissionResource: "reportes"      },
+  { href: "/admin/usuarios",      labelKey: "admin.nav.usuarios",      icon: UserCog,      permissionResource: "usuarios"      },
+  { href: "/admin/configuracion", labelKey: "admin.nav.configuracion", icon: Settings,     permissionResource: "configuracion" },
+];
+
+interface AdminSidebarProps {
+  user: AdminUser;
+  /** Rol del usuario actual. Usado para filtrar items según permisos. */
+  currentRole?: string;
+}
+
+export function AdminSidebar({ user, currentRole }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
+
+  // Filtrar items de nav según los permisos del rol actual.
+  // Si el item no tiene permissionResource definido, siempre se muestra.
+  const visibleItems = NAV_ITEMS.filter(({ permissionResource }) => {
+    if (!permissionResource) return true;
+    if (!currentRole) return true;
+    return canAccess(currentRole, permissionResource, "view");
+  });
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-[260px] flex-col bg-ink text-cream-50">
@@ -79,9 +86,9 @@ export function AdminSidebar({ user }: { user: AdminUser }) {
         {t("admin.section.label")}
       </p>
 
-      <nav className="mt-3 flex-1 px-3">
+      <nav className="mt-3 flex-1 overflow-y-auto px-3">
         <ul className="space-y-1">
-          {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
+          {visibleItems.map(({ href, labelKey, icon: Icon }) => {
             const active =
               pathname === href || pathname.startsWith(`${href}/`);
             return (

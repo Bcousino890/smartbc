@@ -3,12 +3,14 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminParticularesPage() {
   const supabase = createAdminClient();
+  const currentProfile = await getCurrentProfile();
   let queryResult = await supabase
     .from("particulares")
     .select(
@@ -75,7 +77,7 @@ export default async function AdminParticularesPage() {
         />
       </div>
 
-      <ParticularesClient rows={rows} />
+      <ParticularesClient rows={rows} currentRole={currentProfile?.role} />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

@@ -31,12 +31,15 @@ export default async function AdminUsuariosPage() {
   }));
 
   const allUsers = [...staffUsers, ...clientUsers];
-  const currentUserRole: InternalUserRole =
-    currentUser?.role === "admin"
-      ? "admin"
-      : currentUser?.role === "advisor"
-        ? "advisor"
-        : "viewer";
+  const validRoles: InternalUserRole[] = [
+    "owner", "admin", "advisor", "client", "viewer",
+    "agent_junior", "agent_senior", "agent_admin",
+  ];
+  const currentUserRole: InternalUserRole = validRoles.includes(
+    currentUser?.role as InternalUserRole
+  )
+    ? (currentUser!.role as InternalUserRole)
+    : "viewer";
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col px-6 pb-10 lg:px-10">

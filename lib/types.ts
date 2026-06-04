@@ -418,7 +418,10 @@ export type InternalUserRole =
   | "admin"
   | "advisor"
   | "client"
-  | "viewer";
+  | "viewer"
+  | "agent_junior"
+  | "agent_senior"
+  | "agent_admin";
 
 export type InternalUserStatus = "active" | "invited" | "suspended";
 

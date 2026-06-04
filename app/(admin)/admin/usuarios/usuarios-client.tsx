@@ -11,11 +11,25 @@ import type {
 import { cn } from "@/lib/utils";
 
 const ROLE_BADGE: Record<InternalUserRole, string> = {
-  owner: "border-violet-200 bg-violet-50 text-violet-700",
-  admin: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  advisor: "border-blue-200 bg-blue-50 text-blue-700",
-  client: "border-amber-200 bg-amber-50 text-amber-700",
-  viewer: "border-ink/15 bg-ink/5 text-ink/65",
+  owner:        "border-violet-200 bg-violet-50 text-violet-700",
+  admin:        "border-emerald-200 bg-emerald-50 text-emerald-700",
+  advisor:      "border-blue-200 bg-blue-50 text-blue-700",
+  client:       "border-amber-200 bg-amber-50 text-amber-700",
+  viewer:       "border-ink/15 bg-ink/5 text-ink/65",
+  agent_junior: "border-sky-200 bg-sky-50 text-sky-700",
+  agent_senior: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  agent_admin:  "border-purple-200 bg-purple-50 text-purple-700",
+};
+
+const ROLE_LABEL: Record<InternalUserRole, string> = {
+  owner:        "Propietario",
+  admin:        "Administrador",
+  advisor:      "Asesor",
+  client:       "Cliente",
+  viewer:       "Visualizador",
+  agent_junior: "Agente Junior",
+  agent_senior: "Agente Senior",
+  agent_admin:  "Agente Admin",
 };
 
 const STATUS_BADGE: Record<InternalUserStatus, string> = {
@@ -295,15 +309,7 @@ function UserRow({ user }: { user: InternalUser }) {
             ROLE_BADGE[user.roleKey]
           )}
         >
-          {user.roleKey === "admin"
-            ? "Administrador"
-            : user.roleKey === "advisor"
-              ? "Asesor"
-              : user.roleKey === "client"
-                ? "Cliente"
-                : user.roleKey === "owner"
-                  ? "Propietario"
-                  : "Visualizador"}
+          {ROLE_LABEL[user.roleKey] ?? user.roleKey}
         </span>
       </td>
       <td className="px-3 py-3">
@@ -356,14 +362,19 @@ export function UsuariosClient({
 }: UsuariosClientProps) {
   const t = useT();
   const [queryAdvisors, setQueryAdvisors] = useState("");
+  const [queryAgents, setQueryAgents] = useState("");
   const [queryClients, setQueryClients] = useState("");
   const [showCreateAdvisor, setShowCreateAdvisor] = useState(false);
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Separar asesores y clientes
+  // Separar por tipo de usuario
   const advisors = useMemo(() => users.filter((u) => u.roleKey === "advisor"), [users]);
-  const clients = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
+  const agents   = useMemo(
+    () => users.filter((u) => ["agent_junior", "agent_senior", "agent_admin"].includes(u.roleKey)),
+    [users],
+  );
+  const clients  = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
 
   // Filtrar
   const filteredAdvisors = useMemo(() => {
@@ -375,6 +386,16 @@ export function UsuariosClient({
         u.email.toLowerCase().includes(q)
     );
   }, [advisors, queryAdvisors]);
+
+  const filteredAgents = useMemo(() => {
+    const q = queryAgents.trim().toLowerCase();
+    if (!q) return agents;
+    return agents.filter(
+      (u) =>
+        `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
+    );
+  }, [agents, queryAgents]);
 
   const filteredClients = useMemo(() => {
     const q = queryClients.trim().toLowerCase();
@@ -390,8 +411,8 @@ export function UsuariosClient({
     setRefreshKey((k) => k + 1);
   }, []);
 
-  // Solo admin puede ver asesores
-  const isAdmin = currentUserRole === "admin";
+  // Solo admin/owner puede ver asesores y agentes
+  const isAdmin = currentUserRole === "admin" || currentUserRole === "owner" || currentUserRole === "agent_admin";
 
   return (
     <>
@@ -469,7 +490,54 @@ export function UsuariosClient({
         </section>
       )}
 
-      {/* Sección 2: Clientes */}
+      {/* Sección 2: Agentes inmobiliarios (solo admin) */}
+      {isAdmin && agents.length > 0 && (
+        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
+            Agentes Inmobiliarios
+          </h2>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
+              <Search size={15} strokeWidth={1.75} className="text-ink/45" />
+              <input
+                type="search"
+                value={queryAgents}
+                onChange={(e) => setQueryAgents(e.target.value)}
+                placeholder="Buscar agentes..."
+                className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
+              <thead>
+                <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+                  <th className="px-3 pb-2">Usuario</th>
+                  <th className="px-3 pb-2">Rol</th>
+                  <th className="px-3 pb-2">Estado</th>
+                  <th className="px-3 pb-2">Último acceso</th>
+                  <th className="px-3 pb-2">Se unió</th>
+                  <th className="px-3 pb-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAgents.map((u) => (
+                  <UserRow key={u.id} user={u} />
+                ))}
+              </tbody>
+            </table>
+            {filteredAgents.length === 0 && (
+              <p className="mt-4 text-center text-sm text-ink/55">
+                No hay agentes que coincidan con tu búsqueda.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Sección 3: Clientes */}
       <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
         <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
           Clientes

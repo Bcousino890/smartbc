@@ -9,6 +9,16 @@ const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes"];
 const ADMIN_PATHS = ["/admin"];
 
+// Roles que acceden al /admin (staff). Los agent_* van a /admin, no a /inicio.
+const STAFF_ROLES = new Set([
+  "owner",
+  "admin",
+  "advisor",
+  "agent_junior",
+  "agent_senior",
+  "agent_admin",
+]);
+
 function startsWithAny(pathname: string, prefixes: string[]) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
@@ -41,11 +51,14 @@ export async function middleware(request: NextRequest) {
     .maybeSingle();
 
   const role = profile?.role ?? "client";
+  const isStaff = STAFF_ROLES.has(role);
 
-  if (isAdmin && role === "client") {
+  // Clientes y roles sin acceso admin son redirigidos a /inicio
+  if (isAdmin && !isStaff) {
     return NextResponse.redirect(new URL("/inicio", request.url));
   }
-  if (isClient && (role === "admin" || role === "advisor")) {
+  // Staff (incluidos agent_*) es redirigido a /admin si intenta acceder a rutas de cliente
+  if (isClient && isStaff) {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
 

@@ -1,7 +1,17 @@
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { isStaffRole } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
+
+const ROLE_KEY_MAP: Record<string, string> = {
+  owner:        "admin.role",
+  admin:        "admin.role",
+  advisor:      "admin.role.advisor",
+  agent_junior: "admin.role.agent_junior",
+  agent_senior: "admin.role.agent_senior",
+  agent_admin:  "admin.role.agent_admin",
+};
 
 export default async function AdminLayout({
   children,
@@ -10,7 +20,7 @@ export default async function AdminLayout({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role === "client") redirect("/inicio");
+  if (!isStaffRole(profile.role)) redirect("/inicio");
 
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
 
@@ -31,7 +41,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} />
         <main className="ml-[260px] min-h-screen">{children}</main>
       </div>
     </div>
@@ -41,7 +51,7 @@ export default async function AdminLayout({
 function profileToAdminUser(
   fullName: string | null,
   email: string,
-  role: "admin" | "advisor" | "client"
+  role: string,
 ): AdminUser {
   const display = fullName?.trim() || email;
   const parts = display.split(/\s+/);
@@ -54,6 +64,6 @@ function profileToAdminUser(
     firstName,
     lastName,
     initials,
-    roleKey: role === "advisor" ? "admin.role.advisor" : "admin.role",
+    roleKey: ROLE_KEY_MAP[role] ?? "admin.role.advisor",
   };
 }

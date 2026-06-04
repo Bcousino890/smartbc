@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
+import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { createPropertyFromParticular, updateParticularPhone } from "./actions";
 import PriceHistoryChart from "./price-history-chart";
@@ -239,10 +240,12 @@ function ParticularModal({
   row,
   onClose,
   onPhoneUpdated,
+  canCreateProperty = true,
 }: {
   row: ParticularRow;
   onClose: () => void;
   onPhoneUpdated?: (newPhone: string | null) => void;
+  canCreateProperty?: boolean;
 }) {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [currentRow, setCurrentRow] = useState(row);
@@ -593,23 +596,25 @@ function ParticularModal({
               <ExternalLink size={14} strokeWidth={1.75} />
               Ver en {portalLabel}
             </a>
-            {created ? (
-              <Link
-                href={`/admin/propiedades/${created.slug}`}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-              >
-                <Check size={14} strokeWidth={2} />
-                Propiedad creada · abrir ficha
-              </Link>
-            ) : (
-              <button
-                onClick={handleCreateProperty}
-                disabled={creating}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
-              >
-                <Plus size={14} strokeWidth={2} />
-                {creating ? "Creando…" : "Crear propiedad"}
-              </button>
+            {canCreateProperty && (
+              created ? (
+                <Link
+                  href={`/admin/propiedades/${created.slug}`}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  <Check size={14} strokeWidth={2} />
+                  Propiedad creada · abrir ficha
+                </Link>
+              ) : (
+                <button
+                  onClick={handleCreateProperty}
+                  disabled={creating}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+                >
+                  <Plus size={14} strokeWidth={2} />
+                  {creating ? "Creando…" : "Crear propiedad"}
+                </button>
+              )
             )}
           </div>
           {createError && (
@@ -652,7 +657,13 @@ async function copyToClipboard(text: string) {
 
 type RefreshState = "idle" | "loading" | "done" | "error";
 
-export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
+export function ParticularesClient({
+  rows,
+  currentRole,
+}: {
+  rows: ParticularRow[];
+  currentRole?: string;
+}) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
   const [zone, setZone] = useState("");
@@ -738,6 +749,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
           row={selected}
           onClose={() => setSelected(null)}
           onPhoneUpdated={handlePhoneUpdated}
+          canCreateProperty={!currentRole || canAccess(currentRole, "properties", "create")}
         />
       )}
 

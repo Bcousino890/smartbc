@@ -25,6 +25,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
+import { canAccess } from "@/lib/permissions";
 import type { AdminProperty, AdminPropertyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -39,9 +40,11 @@ const STATUS_STYLES: Record<AdminPropertyStatus, string> = {
 export function PropertiesAdminClient({
   properties,
   agencies,
+  currentRole,
 }: {
   properties: AdminProperty[];
   agencies: AgencyOption[];
+  currentRole?: string;
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
@@ -420,7 +423,13 @@ export function PropertiesAdminClient({
                 </td>
               </tr>
             ) : (
-              paged.map((p) => <PropertyRow key={p.id} property={p} />)
+              paged.map((p) => (
+                <PropertyRow
+                  key={p.id}
+                  property={p}
+                  canEdit={!currentRole || canAccess(currentRole, "properties", "edit")}
+                />
+              ))
             )}
           </tbody>
         </table>
@@ -433,7 +442,13 @@ export function PropertiesAdminClient({
   );
 }
 
-function PropertyRow({ property }: { property: AdminProperty }) {
+function PropertyRow({
+  property,
+  canEdit = true,
+}: {
+  property: AdminProperty;
+  canEdit?: boolean;
+}) {
   const t = useT();
   const [photosOpen, setPhotosOpen] = useState(false);
   const isRent = property.operation === "alquiler";
@@ -547,13 +562,24 @@ function PropertyRow({ property }: { property: AdminProperty }) {
             <Eye size={12} strokeWidth={1.75} />
             <span>{t("adminProps.view")}</span>
           </a>
-          <Link
-            href={`/admin/propiedades/${property.id}`}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
-          >
-            <Pencil size={12} strokeWidth={1.75} className="text-gold" />
-            <span>{t("adminProps.edit")}</span>
-          </Link>
+          {canEdit ? (
+            <Link
+              href={`/admin/propiedades/${property.id}`}
+              className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+            >
+              <Pencil size={12} strokeWidth={1.75} className="text-gold" />
+              <span>{t("adminProps.edit")}</span>
+            </Link>
+          ) : (
+            <span
+              aria-disabled="true"
+              className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-ink/20 px-3 py-1.5 text-[11px] font-medium text-ink/40"
+              title="Sin permiso para editar"
+            >
+              <Pencil size={12} strokeWidth={1.75} />
+              <span>{t("adminProps.edit")}</span>
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setPhotosOpen(true)}
