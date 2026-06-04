@@ -55,7 +55,7 @@ export async function insertImportedProperty(
   // CONCURRENTES (no de una en una): con fichas de 30-46 fotos, en serie tardaba
   // demasiado y el server action podía agotar el tiempo. Conservamos el ORDEN
   // (resultados indexados por posición original) y si una falla, se omite.
-  const CONCURRENCY = 6;
+  const CONCURRENCY = 8;
   const results: (string | null)[] = new Array(preview.photos.length).fill(null);
   for (let start = 0; start < preview.photos.length; start += CONCURRENCY) {
     const batch = preview.photos.slice(start, start + CONCURRENCY);

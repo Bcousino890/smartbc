@@ -122,34 +122,44 @@ export function ImportByLinkClient({
       .filter(Boolean);
 
     startConfirm(async () => {
-      const result = await confirmByLink({
-        preview,
-        agencySlug: form.agencySlug,
-        overrides: {
-          title: form.title,
-          description: form.description || null,
-          operation: form.operation,
-          stay: form.stay === "" ? null : form.stay,
-          price,
-          bedrooms,
-          bathrooms,
-          squareMeters,
-          zone: form.zone,
-          address: form.address || null,
-          features,
-          externalReference: form.externalReference,
-          photoIndexes: Array.from(form.selectedPhotos),
-        },
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await confirmByLink({
+          preview,
+          agencySlug: form.agencySlug,
+          overrides: {
+            title: form.title,
+            description: form.description || null,
+            operation: form.operation,
+            stay: form.stay === "" ? null : form.stay,
+            price,
+            bedrooms,
+            bathrooms,
+            squareMeters,
+            zone: form.zone,
+            address: form.address || null,
+            features,
+            externalReference: form.externalReference,
+            photoIndexes: Array.from(form.selectedPhotos),
+          },
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setSuccess(
+          `Propiedad creada con ${result.photosProcessed} fotos. Slug: ${result.slug}`,
+        );
+        // Vuelve al listado tras 1.5s.
+        setTimeout(() => router.push("/admin/propiedades"), 1500);
+      } catch {
+        // Si la acción falla o tarda demasiado (muchas fotos), mostramos un
+        // aviso en vez de dejar que reviente la página. La propiedad puede
+        // haberse creado igualmente en el servidor: revísala en el listado.
+        setError(
+          "La importación tardó demasiado o falló. Si la ficha tiene muchas fotos, " +
+            "puede haberse creado igualmente — revisa el catálogo y, si no está, reintenta.",
+        );
       }
-      setSuccess(
-        `Propiedad creada con ${result.photosProcessed} fotos. Slug: ${result.slug}`,
-      );
-      // Vuelve al listado tras 1.5s.
-      setTimeout(() => router.push("/admin/propiedades"), 1500);
     });
   }
 
