@@ -3,10 +3,13 @@ import { createAdminClient } from "@/lib/db/admin";
 import { downloadAndWatermark } from "../watermark";
 import type { ImportPreview } from "./types";
 
-// Inserta una propiedad importada por link. Sigue el mismo contrato que
-// `insertProperty` en diff-engine.ts: procesa fotos con watermark, inserta
-// `properties`, e inserta filas en `property_photos`. NO toca el diff-engine
-// ni el sync log — esta entrada se distingue por `properties.source = 'import'`.
+// Inserta una propiedad importada por link. Para que "Crear propiedad" sea
+// INSTANTÁNEO aunque la ficha tenga muchas fotos (UrbantecHome trae 30-46), NO
+// procesamos las fotos de forma síncrona: insertamos la propiedad + las filas de
+// foto con las URLs de ORIGEN y devolvemos ya. El re-alojado (descarga + quitar
+// marca + subir a nuestro storage) ocurre en SEGUNDO PLANO y va sustituyendo las
+// URLs. Mientras tanto el proxy /p/{slug}/{idx} ya neutraliza el origen.
+// Se distingue de otras altas por `properties.source = 'manual'`.
 
 export type InsertImportInput = {
   preview: ImportPreview;
@@ -41,6 +44,69 @@ function normalizeSlug(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// Re-aloja las fotos en segundo plano: descarga cada una, le quita la marca (si
+// la fuente tiene perfil), la sube a nuestro storage y actualiza la fila para
+// que apunte a la copia propia en vez de a la URL de origen. Se ejecuta sin
+// await; en el VPS (pm2) el proceso sigue vivo tras responder. Si el proceso se
+// reinicia a medias, las fotos no re-alojadas conservan su URL de origen (que
+// sigue funcionando vía el proxy) y una re-importación las regenera.
+async function rehostPhotosInBackground(params: {
+  propertyId: string;
+  agencySlug: string;
+  externalId: string;
+  sources: string[];
+}): Promise<void> {
+  const { propertyId, agencySlug, externalId, sources } = params;
+  const supabase = createAdminClient();
+  const photosUpd = supabase.from("property_photos") as unknown as {
+    update: (p: Record<string, unknown>) => {
+      eq: (c: string, v: string) => {
+        eq: (c: string, v: number) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  const propsUpd = supabase.from("properties") as unknown as {
+    update: (p: Record<string, unknown>) => {
+      eq: (c: string, v: string) => Promise<{ error: { message: string } | null }>;
+    };
+  };
+
+  const CONCURRENCY = 8;
+  for (let start = 0; start < sources.length; start += CONCURRENCY) {
+    const batch = sources.slice(start, start + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (sourceUrl, j) => {
+        const i = start + j;
+        try {
+          const res = await downloadAndWatermark({
+            sourceUrl,
+            agencySlug,
+            externalId,
+            position: i,
+          });
+          if (!res.ok) return;
+          await photosUpd
+            .update({ url: res.photo.url })
+            .eq("property_id", propertyId)
+            .eq("position", i);
+          if (i === 0) {
+            await propsUpd
+              .update({ cover_photo_url: res.photo.url })
+              .eq("id", propertyId);
+          }
+        } catch {
+          // Una foto que falla no aborta el resto; conserva su URL de origen.
+        }
+      }),
+    );
+  }
+  // Refrescar last_synced_at para invalidar la caché del proxy de fotos (su
+  // versión depende de las URLs + last_synced_at), ahora que apuntan a storage.
+  await propsUpd
+    .update({ last_synced_at: new Date().toISOString() })
+    .eq("id", propertyId);
+}
+
 export async function insertImportedProperty(
   input: InsertImportInput,
 ): Promise<InsertImportResult> {
@@ -51,30 +117,23 @@ export async function insertImportedProperty(
   if (!baseSlug) return { ok: false, error: "slug_invalid" };
   const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
 
-  // 1) Procesar fotos: download + watermark + upload a storage. En lotes
-  // CONCURRENTES (no de una en una): con fichas de 30-46 fotos, en serie tardaba
-  // demasiado y el server action podía agotar el tiempo. Conservamos el ORDEN
-  // (resultados indexados por posición original) y si una falla, se omite.
-  const CONCURRENCY = 8;
-  const results: (string | null)[] = new Array(preview.photos.length).fill(null);
-  for (let start = 0; start < preview.photos.length; start += CONCURRENCY) {
-    const batch = preview.photos.slice(start, start + CONCURRENCY);
-    await Promise.all(
-      batch.map(async (photo, j) => {
-        const i = start + j;
-        const res = await downloadAndWatermark({
-          sourceUrl: photo.url,
-          agencySlug,
-          externalId: overrides.externalReference,
-          position: i,
-        });
-        if (res.ok) results[i] = res.photo.url;
-      }),
-    );
+  // Filas de foto con las URLs de ORIGEN (sin procesar todavía).
+  const sources = preview.photos.map((p) => p.url);
+
+  // La PORTADA sí se procesa síncrona (1 sola foto, rápido): el catálogo la
+  // muestra con next/image, que solo admite nuestros dominios. Así cubrimos
+  // cualquier portal sin abrir next/image a hosts arbitrarios. Si falla, cae a
+  // la URL de origen y el re-alojado de fondo la arreglará.
+  let coverUrl = sources[0] ?? null;
+  if (sources[0]) {
+    const c = await downloadAndWatermark({
+      sourceUrl: sources[0],
+      agencySlug,
+      externalId: overrides.externalReference,
+      position: 0,
+    });
+    if (c.ok) coverUrl = c.photo.url;
   }
-  const photoUrls = results.filter((u): u is string => u !== null);
-  const photosFailed = preview.photos.length - photoUrls.length;
-  const coverUrl = photoUrls[0] ?? null;
 
   // Campos comunes a alta nueva y re-importación (todo menos los inmutables:
   // agency_id, external_id, slug, source y status).
@@ -95,16 +154,12 @@ export async function insertImportedProperty(
     latitude: preview.latitude,
     longitude: preview.longitude,
     last_synced_at: new Date().toISOString(),
-    // Fecha de "publicación" en NUESTRO catálogo. La refrescamos también en la
-    // re-importación: el admin acaba de re-publicarla, así que debe subir al
-    // principio del listado (ordenado por created_at desc) como una alta nueva,
-    // en vez de quedar enterrada por su fecha original.
+    // Fecha de "publicación": se refresca también en re-importación para que la
+    // ficha suba al principio del listado (ordenado por created_at desc).
     created_at: new Date().toISOString(),
   };
 
-  // 2) ¿Ya existe esta propiedad (misma agencia + referencia)? Entonces es una
-  // RE-IMPORTACIÓN: actualizamos la ficha y reemplazamos sus fotos, en vez de
-  // chocar contra la restricción única (agency_id, external_id).
+  // ¿Ya existe (misma agencia + referencia)? Entonces es RE-IMPORTACIÓN.
   const lookupTbl = supabase.from("properties") as unknown as {
     select: (cols: string) => {
       eq: (c: string, v: string) => {
@@ -139,11 +194,8 @@ export async function insertImportedProperty(
         ) => Promise<{ error: { message: string } | null }>;
       };
     };
-    // Reimportar es una señal explícita de "quiero esta propiedad activa":
-    // la DESARCHIVAMOS siempre (si no, una propiedad archivada se actualizaba
-    // pero seguía oculta del catálogo, que filtra archived_at IS NULL). Si
-    // estaba archivada, además la devolvemos a 'available'; si tenía otro
-    // estado (reserved/sold), lo respetamos.
+    // Reimportar = "quiero esta propiedad activa": la desarchivamos siempre y, si
+    // estaba archivada, la devolvemos a 'available' (respeta reserved/sold).
     const reactivate: Record<string, unknown> = { archived_at: null };
     if (existing.data.status === "archived" || existing.data.status === null) {
       reactivate.status = "available";
@@ -153,7 +205,6 @@ export async function insertImportedProperty(
       .eq("id", propertyId);
     if (upd.error) return { ok: false, error: upd.error.message };
 
-    // Borramos las fotos viejas; abajo insertamos las nuevas ya procesadas.
     const delTbl = supabase.from("property_photos") as unknown as {
       delete: () => {
         eq: (
@@ -179,7 +230,6 @@ export async function insertImportedProperty(
     const inserted = await propsTbl
       .insert({
         agency_id: agencyId,
-        // 'manual' (no 'scrape'): alta asistida, no del cron de sindicación.
         source: "manual",
         external_id: overrides.externalReference,
         slug,
@@ -195,11 +245,13 @@ export async function insertImportedProperty(
     resultSlug = inserted.data.slug;
   }
 
-  // 3) Insert en property_photos.
-  if (photoUrls.length > 0) {
-    const photoRows = photoUrls.map((url, idx) => ({
+  // Insertar filas de foto con las URLs de ORIGEN (rápido).
+  if (sources.length > 0) {
+    const photoRows = sources.map((url, idx) => ({
       property_id: propertyId,
-      url,
+      // La portada (idx 0) ya está re-alojada en nuestro storage; el resto van
+      // con su URL de origen hasta que el re-alojado de fondo las sustituya.
+      url: idx === 0 ? (coverUrl ?? url) : url,
       position: idx,
       is_cover: idx === 0,
     }));
@@ -210,25 +262,28 @@ export async function insertImportedProperty(
     };
     const photosRes = await photosTbl.insert(photoRows);
     if (photosRes.error) {
-      // No revertimos: el admin verá la propiedad sin fotos y puede re-importar
-      // o subirlas a mano. Devolvemos el error como warning.
       return {
         ok: true,
         propertyId,
         slug: resultSlug,
-        photosProcessed: photoUrls.length,
+        photosProcessed: 0,
       };
     }
   }
 
-  if (photosFailed > 0) {
-    // No es fatal — el preview lo decidió a propósito.
-  }
+  // Re-alojado en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En pm2 el
+  // proceso sigue vivo y completa la descarga/optimización de las fotos.
+  void rehostPhotosInBackground({
+    propertyId,
+    agencySlug,
+    externalId: overrides.externalReference,
+    sources,
+  }).catch(() => {});
 
   return {
     ok: true,
     propertyId,
     slug: resultSlug,
-    photosProcessed: photoUrls.length,
+    photosProcessed: sources.length,
   };
 }

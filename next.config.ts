@@ -27,6 +27,21 @@ const nextConfig: NextConfig = {
         hostname: "crm.bcousinoprop.com",
         pathname: "/storage/v1/object/public/**",
       },
+      // Import-by-link: al crear, las fotos de la GALERÍA se guardan primero con
+      // su URL de ORIGEN y se re-alojan a nuestro storage en segundo plano.
+      // Durante esa ventana, la galería del admin (next/image) necesita poder
+      // cargar el origen de los portales que soportamos. (La PORTADA se procesa
+      // síncrona, así que el catálogo siempre apunta a nuestro storage.)
+      {
+        // Clikalia sirve sus fotos desde este bucket.
+        protocol: "https",
+        hostname: "storage.googleapis.com",
+      },
+      {
+        // UrbantecHome.
+        protocol: "https",
+        hostname: "urbantechome.com",
+      },
     ],
   },
 };
