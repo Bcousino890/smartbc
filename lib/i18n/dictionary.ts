@@ -333,7 +333,7 @@ const es: Strings = {
   "admin.nav.reportes": "Reportes",
   "admin.nav.calendario": "Calendario",
   "calendario.title": "Calendario",
-  "calendario.subtitle": "Gestiona visitas y eventos sincronizados con Google Calendar.",
+  "calendario.subtitle": "Gestiona visitas y eventos del CRM.",
   "adminMensajes.title": "Mensajes",
   "adminMensajes.subtitle":
     "Conversaciones con todos tus clientes en un solo sitio.",
@@ -1237,7 +1237,7 @@ const en: Strings = {
   "admin.nav.reportes": "Reports",
   "admin.nav.calendario": "Calendar",
   "calendario.title": "Calendar",
-  "calendario.subtitle": "Manage visits and events synced with Google Calendar.",
+  "calendario.subtitle": "Manage visits and events in the CRM.",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle": "All your client conversations in one place.",
   "adminMensajes.list.title": "Conversations",
@@ -2120,7 +2120,7 @@ const fr: Strings = {
   "admin.nav.reportes": "Rapports",
   "admin.nav.calendario": "Calendrier",
   "calendario.title": "Calendrier",
-  "calendario.subtitle": "Gérez les visites et événements synchronisés avec Google Agenda.",
+  "calendario.subtitle": "Gérez les visites et événements du CRM.",
   "adminMensajes.title": "Messages",
   "adminMensajes.subtitle":
     "Toutes les conversations avec vos clients au même endroit.",
@@ -3010,7 +3010,7 @@ const de: Strings = {
   "admin.nav.reportes": "Berichte",
   "admin.nav.calendario": "Kalender",
   "calendario.title": "Kalender",
-  "calendario.subtitle": "Verwalte Besichtigungen und Termine, synchronisiert mit Google Kalender.",
+  "calendario.subtitle": "Verwalte Besichtigungen und Termine im CRM.",
   "adminMensajes.title": "Nachrichten",
   "adminMensajes.subtitle":
     "Alle Unterhaltungen mit deinen Kunden an einem Ort.",
