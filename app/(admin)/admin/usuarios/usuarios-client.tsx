@@ -2,6 +2,7 @@
 
 import { Check, Loader2, Mail, Plus, Search, UserCog, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n/provider";
 import type {
   InternalUser,
@@ -40,10 +41,12 @@ const STATUS_BADGE: Record<InternalUserStatus, string> = {
 
 // ─── Modal crear usuario ──────────────────────────────────────────────────
 
+type ModalType = "admin" | "advisor" | "client";
+
 interface CreateUserModalProps {
   userRole: InternalUserRole;
   advisors: InternalUser[];
-  modalType: "advisor" | "client";
+  modalType: ModalType;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -61,9 +64,7 @@ function CreateUserModal({
   const [phone, setPhone] = useState("");
   const [assignedAdvisor, setAssignedAdvisor] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">(
-    "idle"
-  );
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,10 +80,10 @@ function CreateUserModal({
         firstName,
         lastName,
         phone: modalType === "client" ? phone : undefined,
-        role: modalType === "advisor" ? "advisor" : "client",
+        role: modalType,
         assignedAdvisorId:
           modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
-        password: modalType === "advisor" ? password : undefined,
+        password: modalType !== "client" ? password : undefined,
       };
 
       const res = await fetch("/api/admin/usuarios/create", {
@@ -111,11 +112,13 @@ function CreateUserModal({
   };
 
   const modalTitle =
-    modalType === "advisor" ? "Crear asesor" : "Crear cliente";
-  const submitLabel =
-    modalType === "advisor"
-      ? "Crear asesor"
-      : "Crear cliente";
+    modalType === "admin"
+      ? "Crear administrador"
+      : modalType === "advisor"
+        ? "Crear asesor"
+        : "Crear cliente";
+
+  const needsPassword = modalType === "admin" || modalType === "advisor";
 
   return (
     <div
@@ -127,9 +130,7 @@ function CreateUserModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-serif text-xl font-semibold text-ink">
-            {modalTitle}
-          </h2>
+          <h2 className="font-serif text-xl font-semibold text-ink">{modalTitle}</h2>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
@@ -144,9 +145,11 @@ function CreateUserModal({
               <Check size={24} strokeWidth={2} className="text-emerald-600" />
             </span>
             <p className="font-medium text-ink">
-              {modalType === "advisor"
-                ? "Asesor creado exitosamente"
-                : "Cliente creado exitosamente"}
+              {modalType === "admin"
+                ? "Administrador creado exitosamente"
+                : modalType === "advisor"
+                  ? "Asesor creado exitosamente"
+                  : "Cliente creado exitosamente"}
             </p>
             <p className="text-sm text-ink/55">{email}</p>
           </div>
@@ -232,7 +235,7 @@ function CreateUserModal({
               </>
             )}
 
-            {modalType === "advisor" && (
+            {needsPassword && (
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
                   Contraseña <span className="text-red-500">*</span>
@@ -264,7 +267,12 @@ function CreateUserModal({
               </button>
               <button
                 type="submit"
-                disabled={!email || !firstName || status === "loading"}
+                disabled={
+                  !email ||
+                  !firstName ||
+                  (needsPassword && !password) ||
+                  status === "loading"
+                }
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
               >
                 {status === "loading" ? (
@@ -272,7 +280,199 @@ function CreateUserModal({
                 ) : (
                   <Plus size={15} strokeWidth={1.75} />
                 )}
-                {submitLabel}
+                {modalTitle}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal editar usuario ─────────────────────────────────────────────────
+
+interface EditUserModalProps {
+  user: InternalUser;
+  onClose: () => void;
+  onSuccess?: () => void;
+}
+
+function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
+  const [firstName, setFirstName] = useState(user.firstName);
+  const [lastName, setLastName] = useState(user.lastName);
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<InternalUserRole>(user.roleKey);
+  const [newPassword, setNewPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const isClient = user.roleKey === "client";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus("loading");
+    setErrorMsg("");
+
+    try {
+      const payload: Record<string, unknown> = {
+        userId: user.id,
+        firstName,
+        lastName,
+        role,
+      };
+      if (isClient && phone) payload.phone = phone;
+      if (newPassword) payload.password = newPassword;
+
+      const res = await fetch("/api/admin/usuarios/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStatus("error");
+        setErrorMsg(data.error ?? "Error desconocido");
+        return;
+      }
+
+      setStatus("success");
+      setTimeout(() => {
+        onClose();
+        onSuccess?.();
+      }, 1500);
+    } catch (err) {
+      setStatus("error");
+      setErrorMsg(err instanceof Error ? err.message : "Error de red");
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-cream-50 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="font-serif text-xl font-semibold text-ink">Editar usuario</h2>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        </div>
+
+        {status === "success" ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+              <Check size={24} strokeWidth={2} className="text-emerald-600" />
+            </span>
+            <p className="font-medium text-ink">Cambios guardados</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  Apellido
+                </label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {isClient && (
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  Teléfono
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+34 600 123 456"
+                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {!isClient && (
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  Rol
+                </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as InternalUserRole)}
+                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
+                >
+                  <option value="admin">Administrador</option>
+                  <option value="advisor">Asesor</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                Nueva contraseña{" "}
+                <span className="font-normal normal-case text-ink/40">(dejar vacío para no cambiar)</span>
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              />
+            </div>
+
+            {status === "error" && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {errorMsg}
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 rounded-xl border border-ink/10 py-2.5 text-sm text-ink/65 transition hover:border-ink/20 hover:text-ink"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={!firstName || status === "loading"}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
+              >
+                {status === "loading" ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Check size={15} strokeWidth={2} />
+                )}
+                Guardar cambios
               </button>
             </div>
           </form>
@@ -284,8 +484,12 @@ function CreateUserModal({
 
 // ─── Fila de usuario ─────────────────────────────────────────────────────
 
-function UserRow({ user }: { user: InternalUser }) {
-  const t = useT();
+interface UserRowProps {
+  user: InternalUser;
+  onEdit?: (user: InternalUser) => void;
+}
+
+function UserRow({ user, onEdit }: UserRowProps) {
   const isInvited = user.status === "invited";
   return (
     <tr className="bg-white/55 transition hover:bg-white/85">
@@ -306,7 +510,7 @@ function UserRow({ user }: { user: InternalUser }) {
         <span
           className={cn(
             "rounded-md border px-2.5 py-1 text-[11px] font-medium",
-            ROLE_BADGE[user.roleKey]
+            ROLE_BADGE[user.roleKey],
           )}
         >
           {ROLE_LABEL[user.roleKey] ?? user.roleKey}
@@ -322,9 +526,7 @@ function UserRow({ user }: { user: InternalUser }) {
               : "Suspendido"}
         </span>
       </td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">
-        {user.lastLoginText ?? "—"}
-      </td>
+      <td className="px-3 py-3 text-[12px] text-ink/65">{user.lastLoginText ?? "—"}</td>
       <td className="px-3 py-3 text-[12px] text-ink/65">{user.joinedLabel}</td>
       <td className="rounded-r-xl px-3 py-3 text-right">
         {isInvited ? (
@@ -338,7 +540,8 @@ function UserRow({ user }: { user: InternalUser }) {
         ) : (
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:bg-white"
+            onClick={() => onEdit?.(user)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:bg-white hover:text-ink"
           >
             <UserCog size={12} strokeWidth={1.75} />
             <span>Editar</span>
@@ -349,6 +552,43 @@ function UserRow({ user }: { user: InternalUser }) {
   );
 }
 
+// ─── Tabla reutilizable ───────────────────────────────────────────────────
+
+function UsersTable({
+  users,
+  onEdit,
+  emptyText,
+}: {
+  users: InternalUser[];
+  onEdit: (user: InternalUser) => void;
+  emptyText: string;
+}) {
+  return (
+    <div className="mt-5 overflow-x-auto">
+      <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
+        <thead>
+          <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <th className="px-3 pb-2">Usuario</th>
+            <th className="px-3 pb-2">Rol</th>
+            <th className="px-3 pb-2">Estado</th>
+            <th className="px-3 pb-2">Último acceso</th>
+            <th className="px-3 pb-2">Se unió</th>
+            <th className="px-3 pb-2 text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u) => (
+            <UserRow key={u.id} user={u} onEdit={onEdit} />
+          ))}
+        </tbody>
+      </table>
+      {users.length === 0 && (
+        <p className="mt-4 text-center text-sm text-ink/55">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────
 
 interface UsuariosClientProps {
@@ -356,34 +596,43 @@ interface UsuariosClientProps {
   currentUserRole: InternalUserRole;
 }
 
-export function UsuariosClient({
-  users,
-  currentUserRole,
-}: UsuariosClientProps) {
-  const t = useT();
+export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) {
+  const router = useRouter();
+  const [queryAdmins, setQueryAdmins] = useState("");
   const [queryAdvisors, setQueryAdvisors] = useState("");
   const [queryAgents, setQueryAgents] = useState("");
   const [queryClients, setQueryClients] = useState("");
-  const [showCreateAdvisor, setShowCreateAdvisor] = useState(false);
-  const [showCreateClient, setShowCreateClient] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [createModal, setCreateModal] = useState<ModalType | null>(null);
+  const [editUser, setEditUser] = useState<InternalUser | null>(null);
 
-  // Separar por tipo de usuario
+  const admins = useMemo(
+    () => users.filter((u) => u.roleKey === "admin" || u.roleKey === "owner"),
+    [users],
+  );
   const advisors = useMemo(() => users.filter((u) => u.roleKey === "advisor"), [users]);
-  const agents   = useMemo(
+  const agents = useMemo(
     () => users.filter((u) => ["agent_junior", "agent_senior", "agent_admin"].includes(u.roleKey)),
     [users],
   );
-  const clients  = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
+  const clients = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
 
-  // Filtrar
+  const filteredAdmins = useMemo(() => {
+    const q = queryAdmins.trim().toLowerCase();
+    if (!q) return admins;
+    return admins.filter(
+      (u) =>
+        `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q),
+    );
+  }, [admins, queryAdmins]);
+
   const filteredAdvisors = useMemo(() => {
     const q = queryAdvisors.trim().toLowerCase();
     if (!q) return advisors;
     return advisors.filter(
       (u) =>
         `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q)
+        u.email.toLowerCase().includes(q),
     );
   }, [advisors, queryAdvisors]);
 
@@ -403,44 +652,75 @@ export function UsuariosClient({
     return clients.filter(
       (u) =>
         `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q)
+        u.email.toLowerCase().includes(q),
     );
   }, [clients, queryClients]);
 
   const handleSuccess = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
+    router.refresh();
+  }, [router]);
 
-  // Solo admin/owner puede ver asesores y agentes
   const isAdmin = currentUserRole === "admin" || currentUserRole === "owner" || currentUserRole === "agent_admin";
 
   return (
     <>
-      {showCreateAdvisor && (
+      {createModal && (
         <CreateUserModal
           userRole={currentUserRole}
           advisors={advisors}
-          modalType="advisor"
-          onClose={() => setShowCreateAdvisor(false)}
+          modalType={createModal}
+          onClose={() => setCreateModal(null)}
           onSuccess={handleSuccess}
         />
       )}
-      {showCreateClient && (
-        <CreateUserModal
-          userRole={currentUserRole}
-          advisors={advisors}
-          modalType="client"
-          onClose={() => setShowCreateClient(false)}
+      {editUser && (
+        <EditUserModal
+          user={editUser}
+          onClose={() => setEditUser(null)}
           onSuccess={handleSuccess}
         />
       )}
 
-      {/* Sección 1: Asesores (solo admin) */}
+      {/* Sección 1: Administradores (solo admin) */}
       {isAdmin && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
           <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
-            Asesores
+            Administradores
           </h2>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
+              <Search size={15} strokeWidth={1.75} className="text-ink/45" />
+              <input
+                type="search"
+                value={queryAdmins}
+                onChange={(e) => setQueryAdmins(e.target.value)}
+                placeholder="Buscar admins..."
+                className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setCreateModal("admin")}
+              className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-800"
+            >
+              <Plus size={14} strokeWidth={1.75} />
+              <span>Crear admin</span>
+            </button>
+          </div>
+
+          <UsersTable
+            users={filteredAdmins}
+            onEdit={setEditUser}
+            emptyText="No hay administradores que coincidan con tu búsqueda."
+          />
+        </section>
+      )}
+
+      {/* Sección 2: Asesores (solo admin) */}
+      {isAdmin && (
+        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">Asesores</h2>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
@@ -455,7 +735,7 @@ export function UsuariosClient({
             </label>
             <button
               type="button"
-              onClick={() => setShowCreateAdvisor(true)}
+              onClick={() => setCreateModal("advisor")}
               className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/80"
             >
               <Plus size={14} strokeWidth={1.75} className="text-gold" />
@@ -463,34 +743,15 @@ export function UsuariosClient({
             </button>
           </div>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
-              <thead>
-                <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
-                  <th className="px-3 pb-2">Usuario</th>
-                  <th className="px-3 pb-2">Rol</th>
-                  <th className="px-3 pb-2">Estado</th>
-                  <th className="px-3 pb-2">Último acceso</th>
-                  <th className="px-3 pb-2">Se unió</th>
-                  <th className="px-3 pb-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAdvisors.map((u) => (
-                  <UserRow key={u.id} user={u} />
-                ))}
-              </tbody>
-            </table>
-            {filteredAdvisors.length === 0 && (
-              <p className="mt-4 text-center text-sm text-ink/55">
-                No hay asesores que coincidan con tu búsqueda.
-              </p>
-            )}
-          </div>
+          <UsersTable
+            users={filteredAdvisors}
+            onEdit={setEditUser}
+            emptyText="No hay asesores que coincidan con tu búsqueda."
+          />
         </section>
       )}
 
-      {/* Sección 2: Agentes inmobiliarios (solo admin) */}
+      {/* Sección 3: Agentes inmobiliarios (solo admin) */}
       {isAdmin && agents.length > 0 && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
           <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
@@ -510,38 +771,18 @@ export function UsuariosClient({
             </label>
           </div>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
-              <thead>
-                <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
-                  <th className="px-3 pb-2">Usuario</th>
-                  <th className="px-3 pb-2">Rol</th>
-                  <th className="px-3 pb-2">Estado</th>
-                  <th className="px-3 pb-2">Último acceso</th>
-                  <th className="px-3 pb-2">Se unió</th>
-                  <th className="px-3 pb-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAgents.map((u) => (
-                  <UserRow key={u.id} user={u} />
-                ))}
-              </tbody>
-            </table>
-            {filteredAgents.length === 0 && (
-              <p className="mt-4 text-center text-sm text-ink/55">
-                No hay agentes que coincidan con tu búsqueda.
-              </p>
-            )}
-          </div>
+          <UsersTable
+            users={filteredAgents}
+            onEdit={setEditUser}
+            emptyText="No hay agentes que coincidan con tu búsqueda."
+          />
         </section>
       )}
 
+
       {/* Sección 3: Clientes */}
       <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-        <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
-          Clientes
-        </h2>
+        <h2 className="mb-5 font-serif text-lg font-semibold text-ink">Clientes</h2>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
@@ -556,7 +797,7 @@ export function UsuariosClient({
           </label>
           <button
             type="button"
-            onClick={() => setShowCreateClient(true)}
+            onClick={() => setCreateModal("client")}
             className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/80"
           >
             <Plus size={14} strokeWidth={1.75} className="text-gold" />
@@ -564,30 +805,11 @@ export function UsuariosClient({
           </button>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
-            <thead>
-              <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
-                <th className="px-3 pb-2">Usuario</th>
-                <th className="px-3 pb-2">Rol</th>
-                <th className="px-3 pb-2">Estado</th>
-                <th className="px-3 pb-2">Último acceso</th>
-                <th className="px-3 pb-2">Se unió</th>
-                <th className="px-3 pb-2 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredClients.map((u) => (
-                <UserRow key={u.id} user={u} />
-              ))}
-            </tbody>
-          </table>
-          {filteredClients.length === 0 && (
-            <p className="mt-4 text-center text-sm text-ink/55">
-              No hay clientes que coincidan con tu búsqueda.
-            </p>
-          )}
-        </div>
+        <UsersTable
+          users={filteredClients}
+          onEdit={setEditUser}
+          emptyText="No hay clientes que coincidan con tu búsqueda."
+        />
       </section>
     </>
   );
