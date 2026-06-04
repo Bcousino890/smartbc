@@ -70,7 +70,14 @@ function needsUpdate(
 async function processPhotos(
   agencySlug: string,
   normalized: NormalizedProperty,
+  rehost: boolean,
 ): Promise<{ urls: string[]; processed: number; failed: number }> {
+  // Sin re-alojado: guardamos las URLs de origen tal cual (el proxy las
+  // neutraliza). Instantáneo, para agencias con fotos limpias de CDN fiable.
+  if (!rehost) {
+    const urls = normalized.photos.map((p) => p.url);
+    return { urls, processed: urls.length, failed: 0 };
+  }
   // Lotes CONCURRENTES (no de una en una): con agencias de muchas fotos por
   // ficha (UrbantecHome ~25), en serie el primer sync tardaba demasiado.
   // Conservamos el ORDEN (resultados indexados por posición original).
@@ -105,8 +112,9 @@ async function insertProperty(
   agencySlug: string,
   normalized: NormalizedProperty,
   counters: SyncCounters,
+  rehost: boolean,
 ): Promise<void> {
-  const { urls, processed } = await processPhotos(agencySlug, normalized);
+  const { urls, processed } = await processPhotos(agencySlug, normalized, rehost);
   counters.photosProcessed += processed;
   const coverUrl = urls[0] ?? null;
 
@@ -340,6 +348,7 @@ export async function runSyncForFeed(params: {
               params.agencySlug,
               normalized,
               counters,
+              params.scraper.rehostPhotos !== false,
             );
             counters.inserted++;
           } else if (needsUpdate(existing, normalized)) {

@@ -218,6 +218,9 @@ export const urbantechomeScraper: Scraper = {
   key: "urbantechome",
   label: "UrbantecHome (API pública)",
   agencySlug: "urbantechome",
+  // Fotos limpias servidas desde su CDN: no re-alojamos (sync instantáneo). El
+  // proxy /p/{slug}/{idx} neutraliza el origen al mostrarlas.
+  rehostPhotos: false,
   scrape: async () => {
     const rooms = await fetchRooms();
     const today = new Date().toISOString().slice(0, 10);

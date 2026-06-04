@@ -61,6 +61,15 @@ export type Scraper = {
   key: string;
   label: string;
   agencySlug: string;
+  /**
+   * Si es `false`, el diff engine NO re-aloja las fotos a nuestro storage:
+   * guarda las URLs de ORIGEN tal cual (el proxy /p/{slug}/{idx} ya las
+   * neutraliza al servirlas). Útil cuando la agencia sirve fotos limpias desde
+   * un CDN fiable (UrbantecHome): el sync es instantáneo en vez de tardar
+   * minutos descargando/optimizando/subiendo cientos de fotos. Por defecto se
+   * re-aloja, como siempre.
+   */
+  rehostPhotos?: boolean;
   scrape: (ctx: ScraperContext) => Promise<RawProperty[]>;
   /**
    * Lista barata (sin scrapear contenido) de TODAS las referencias externas
