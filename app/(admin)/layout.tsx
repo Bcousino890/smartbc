@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { isStaffRole } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
@@ -24,6 +25,13 @@ export default async function AdminLayout({
 
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
 
+  // Obtener visitas pendientes para el badge del sidebar
+  const supabase = await createClient();
+  const { count: pendingVisits } = await supabase
+    .from("visit_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+
   return (
     <div className="relative min-h-screen bg-cream-50">
       {/* Soft warm background */}
@@ -41,7 +49,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} pendingVisits={pendingVisits ?? 0} />
         <main className="ml-[260px] min-h-screen">{children}</main>
       </div>
     </div>

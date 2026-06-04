@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Building2,
+  Calendar,
   ClipboardList,
   Heart,
   Home,
@@ -41,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/idealista",     labelKey: "admin.nav.idealista",     icon: Sparkles },
   { href: "/admin/clientes",      labelKey: "admin.nav.clientes",      icon: Users },
   { href: "/admin/solicitudes",   labelKey: "admin.nav.solicitudes",   icon: ClipboardList },
+  { href: "/admin/calendario",    labelKey: "admin.nav.calendario",    icon: Calendar },
   { href: "/admin/mensajes",      labelKey: "admin.nav.mensajes",      icon: MessageSquare, permissionResource: "mensajes"     },
   { href: "/admin/sindicacion",   labelKey: "admin.nav.sindicacion",   icon: Radio },
   { href: "/admin/reportes",      labelKey: "admin.nav.reportes",      icon: BarChart3,    permissionResource: "reportes"      },
@@ -52,9 +54,11 @@ interface AdminSidebarProps {
   user: AdminUser;
   /** Rol del usuario actual. Usado para filtrar items según permisos. */
   currentRole?: string;
+  /** Cantidad de visitas pendientes para el badge de Calendario. */
+  pendingVisits?: number;
 }
 
-export function AdminSidebar({ user, currentRole }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, pendingVisits = 0 }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
 
@@ -91,6 +95,7 @@ export function AdminSidebar({ user, currentRole }: AdminSidebarProps) {
           {visibleItems.map(({ href, labelKey, icon: Icon }) => {
             const active =
               pathname === href || pathname.startsWith(`${href}/`);
+            const isCalendario = href === "/admin/calendario";
             return (
               <li key={href}>
                 <Link
@@ -104,7 +109,12 @@ export function AdminSidebar({ user, currentRole }: AdminSidebarProps) {
                   aria-current={active ? "page" : undefined}
                 >
                   <Icon size={17} strokeWidth={1.75} />
-                  <span>{t(labelKey)}</span>
+                  <span className="flex-1">{t(labelKey)}</span>
+                  {isCalendario && pendingVisits > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
+                      {pendingVisits}
+                    </span>
+                  )}
                 </Link>
               </li>
             );

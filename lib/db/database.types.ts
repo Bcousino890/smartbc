@@ -314,6 +314,8 @@ export type Database = {
           notes: string | null;
           confirmed_at: string | null;
           completed_at: string | null;
+          google_event_id: string | null;
+          calendar_synced_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -326,10 +328,44 @@ export type Database = {
           notes?: string | null;
           confirmed_at?: string | null;
           completed_at?: string | null;
+          google_event_id?: string | null;
+          calendar_synced_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["visit_requests"]["Insert"]>;
+      };
+      google_calendar_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          access_token: string | null;
+          refresh_token: string;
+          token_expiry: string | null;
+          calendar_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          access_token?: string | null;
+          refresh_token: string;
+          token_expiry?: string | null;
+          calendar_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          access_token?: string | null;
+          refresh_token?: string;
+          token_expiry?: string | null;
+          calendar_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
       };
       conversations: {
         Row: {
