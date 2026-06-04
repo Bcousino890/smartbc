@@ -1,6 +1,17 @@
 "use client";
 
-import { Loader2, MessageSquarePlus, Send, X } from "lucide-react";
+import {
+  Bath,
+  Bed,
+  Building2,
+  ExternalLink,
+  Loader2,
+  MessageSquarePlus,
+  Maximize2,
+  Send,
+  X,
+} from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +70,280 @@ type ActiveView =
       otherInitials: string;
     };
 
+// ─── Property preview types ───────────────────────────────────────────────────
+
+type PropertyPreviewData = {
+  type: "property" | "particular";
+  id: string;
+  title: string;
+  zone: string | null;
+  operation: string | null;
+  price: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  squareMeters: number | null;
+  coverPhotoUrl: string | null;
+  bcReference: string | null;
+  partReference: string | null;
+  status: string;
+  shareUrl: string;
+};
+
+// Detect BC-YYYY-NNNN, PART-YYYY-NNNN, /compartir/slug, /propiedades/slug
+function extractPropertyRefs(text: string): string[] {
+  const refs: string[] = [];
+  const seen = new Set<string>();
+
+  const addRef = (r: string) => {
+    const key = r.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      refs.push(r);
+    }
+  };
+
+  // BC-YYYY-NNNN
+  for (const m of text.matchAll(/BC-\d{4}-\d+/gi)) addRef(m[0].toUpperCase());
+  // PART-YYYY-NNNN
+  for (const m of text.matchAll(/PART-\d{4}-\d+/gi)) addRef(m[0].toUpperCase());
+  // /compartir/slug or /propiedades/slug
+  for (const m of text.matchAll(/\/compartir\/([a-z0-9-]+)/gi)) addRef(m[1]);
+  for (const m of text.matchAll(/\/propiedades\/([a-z0-9-]+)/gi)) addRef(m[1]);
+
+  return refs;
+}
+
+// ─── Property preview card ────────────────────────────────────────────────────
+
+function PropertyPreviewCard({ refStr }: { refStr: string }) {
+  const [data, setData] = useState<PropertyPreviewData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setNotFound(false);
+    setData(null);
+
+    fetch(`/api/admin/search/property?ref=${encodeURIComponent(refStr)}`)
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.status === 404) {
+          setNotFound(true);
+          return;
+        }
+        if (!res.ok) return;
+        const json: PropertyPreviewData = await res.json();
+        if (!cancelled) setData(json);
+      })
+      .catch(() => {
+        if (!cancelled) setNotFound(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refStr]);
+
+  if (loading) {
+    return (
+      <div className="mt-1.5 flex h-14 w-64 items-center gap-2 rounded-lg border border-gold/15 bg-cream-50/70 px-3 text-[11px] text-ink/50">
+        <Loader2 size={12} strokeWidth={1.75} className="animate-spin text-gold" />
+        <span>Cargando propiedad…</span>
+      </div>
+    );
+  }
+
+  if (notFound || !data) return null;
+
+  const badge =
+    data.status === "available"
+      ? "Disponible"
+      : data.status === "reserved"
+      ? "Reservado"
+      : data.status === "sold"
+      ? "Vendido"
+      : data.status === "active"
+      ? "Activo"
+      : data.status;
+
+  const badgeColor =
+    data.status === "available" || data.status === "active"
+      ? "bg-emerald-50 text-emerald-700"
+      : data.status === "reserved"
+      ? "bg-amber-50 text-amber-700"
+      : "bg-rose-50 text-rose-700";
+
+  const priceLabel =
+    data.price !== null
+      ? new Intl.NumberFormat("es-ES", {
+          style: "currency",
+          currency: "EUR",
+          maximumFractionDigits: 0,
+        }).format(data.price)
+      : null;
+
+  const href =
+    data.type === "particular" ? data.shareUrl : data.shareUrl;
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-1.5 flex w-72 items-center gap-2.5 overflow-hidden rounded-lg border border-gold/20 bg-cream-50/90 shadow-sm transition hover:border-gold/40 hover:shadow-md"
+    >
+      {/* Cover photo */}
+      <div className="relative h-16 w-20 shrink-0 overflow-hidden bg-gold/10">
+        {data.coverPhotoUrl ? (
+          <Image
+            src={data.coverPhotoUrl}
+            alt={data.title}
+            fill
+            sizes="80px"
+            className="object-cover"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Building2 size={20} strokeWidth={1.25} className="text-gold/40" />
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="min-w-0 flex-1 py-2 pr-2">
+        {/* Reference + status */}
+        <div className="flex items-center gap-1.5">
+          {(data.bcReference ?? data.partReference) && (
+            <span className="font-mono text-[9px] font-semibold uppercase tracking-wider text-ink/40">
+              {data.bcReference ?? data.partReference}
+            </span>
+          )}
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+              badgeColor,
+            )}
+          >
+            {badge}
+          </span>
+        </div>
+
+        {/* Title */}
+        <p className="truncate text-[11px] font-semibold leading-tight text-ink">
+          {data.title}
+        </p>
+
+        {/* Zone + price */}
+        {(data.zone || priceLabel) && (
+          <p className="truncate text-[10px] text-ink/55">
+            {[data.zone, priceLabel].filter(Boolean).join(" · ")}
+          </p>
+        )}
+
+        {/* Beds / baths / m² */}
+        <div className="mt-0.5 flex items-center gap-2">
+          {data.bedrooms !== null && (
+            <span className="flex items-center gap-0.5 text-[10px] text-ink/50">
+              <Bed size={10} strokeWidth={1.75} />
+              {data.bedrooms}
+            </span>
+          )}
+          {data.bathrooms !== null && (
+            <span className="flex items-center gap-0.5 text-[10px] text-ink/50">
+              <Bath size={10} strokeWidth={1.75} />
+              {data.bathrooms}
+            </span>
+          )}
+          {data.squareMeters !== null && (
+            <span className="flex items-center gap-0.5 text-[10px] text-ink/50">
+              <Maximize2 size={9} strokeWidth={1.75} />
+              {data.squareMeters} m²
+            </span>
+          )}
+          <ExternalLink size={9} strokeWidth={1.75} className="ml-auto text-ink/30" />
+        </div>
+      </div>
+    </a>
+  );
+}
+
+// ─── Propiedad command — recent properties list ───────────────────────────────
+
+type RecentProperty = {
+  id: string;
+  slug: string;
+  title: string;
+  bc_reference: string;
+  zone: string;
+};
+
+function PropiedadDropdown({
+  onSelect,
+}: {
+  onSelect: (text: string) => void;
+}) {
+  const [items, setItems] = useState<RecentProperty[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch a small list of recent properties for the dropdown
+    fetch(
+      "/api/admin/search/property/recent",
+    )
+      .then((r) => r.json())
+      .then((d: { properties?: RecentProperty[] }) => {
+        setItems(d.properties ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="absolute bottom-full left-0 z-40 mb-1 flex w-72 items-center justify-center rounded-lg border border-gold/20 bg-cream-50 p-3 shadow-lg">
+        <Loader2 size={14} strokeWidth={1.75} className="animate-spin text-gold" />
+      </div>
+    );
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="absolute bottom-full left-0 z-40 mb-1 w-72 overflow-hidden rounded-lg border border-gold/20 bg-cream-50 shadow-lg">
+      <p className="border-b border-gold/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink/40">
+        Propiedades recientes
+      </p>
+      <ul className="max-h-48 overflow-y-auto">
+        {items.map((p) => (
+          <li key={p.id}>
+            <button
+              type="button"
+              className="flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-gold/8"
+              onClick={() => onSelect(p.bc_reference)}
+            >
+              <span className="font-mono text-[10px] text-ink/45 mt-0.5">
+                {p.bc_reference}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-medium text-ink">
+                  {p.title}
+                </span>
+                <span className="text-[10px] text-ink/50">{p.zone}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function TeamChat({ currentUserId }: { currentUserId: string }) {
@@ -77,6 +362,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPropDropdown, setShowPropDropdown] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -287,15 +573,32 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
 
   const handleSend = (e: React.FormEvent) => {
     if (!activeView) return;
+    setShowPropDropdown(false);
     if (activeView.type === "channel") return handleSendChannel(e);
     return handleSendDm(e);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setShowPropDropdown(false);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend(e as unknown as React.FormEvent);
     }
+  };
+
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    // Show /propiedad dropdown when the user types "/propiedad " (with space)
+    setShowPropDropdown(value === "/propiedad " || value.startsWith("/propiedad "));
+  };
+
+  const handlePropSelect = (bcRef: string) => {
+    // Replace "/propiedad " prefix with the selected reference
+    setDraft(bcRef + " ");
+    setShowPropDropdown(false);
   };
 
   // ── Open new DM modal ──────────────────────────────────────────────────────
@@ -575,12 +878,15 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
               {/* Input */}
               <form
                 onSubmit={handleSend}
-                className="flex items-center gap-2 border-t border-gold/15 bg-cream-50/85 p-3"
+                className="relative flex items-center gap-2 border-t border-gold/15 bg-cream-50/85 p-3"
               >
+                {showPropDropdown && (
+                  <PropiedadDropdown onSelect={handlePropSelect} />
+                )}
                 <input
                   type="text"
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => handleDraftChange(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={placeholder}
                   className="flex-1 rounded-lg border border-gold/25 bg-white/80 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
@@ -692,6 +998,7 @@ function ChannelMessageRow({
   showHeader: boolean;
 }) {
   const time = formatTime(msg.createdAt);
+  const refs = extractPropertyRefs(msg.content);
   return (
     <li className={cn("flex gap-3", showHeader ? "mt-4 first:mt-0" : "mt-0.5")}>
       {showHeader ? (
@@ -718,6 +1025,9 @@ function ChannelMessageRow({
         <p className="break-words text-sm leading-relaxed text-ink/85">
           {msg.content}
         </p>
+        {refs.map((ref) => (
+          <PropertyPreviewCard key={ref} refStr={ref} />
+        ))}
       </div>
     </li>
   );
@@ -735,6 +1045,7 @@ function DmMessageRow({
   showHeader: boolean;
 }) {
   const time = formatTime(msg.createdAt);
+  const refs = extractPropertyRefs(msg.content);
   return (
     <li className={cn("flex gap-3", showHeader ? "mt-4 first:mt-0" : "mt-0.5")}>
       {showHeader ? (
@@ -761,6 +1072,9 @@ function DmMessageRow({
         <p className="break-words text-sm leading-relaxed text-ink/85">
           {msg.content}
         </p>
+        {refs.map((ref) => (
+          <PropertyPreviewCard key={ref} refStr={ref} />
+        ))}
       </div>
     </li>
   );
