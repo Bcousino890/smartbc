@@ -26,11 +26,18 @@ export default async function AdminLayout({
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
 
   // Obtener visitas pendientes para el badge del sidebar
-  const supabase = await createClient();
-  const { count: pendingVisits } = await supabase
-    .from("visit_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
+  // Wrapped in try-catch: migration 0027 may not be applied yet on the VPS
+  let pendingVisits: number = 0;
+  try {
+    const supabase = await createClient();
+    const { count } = await supabase
+      .from("visit_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    pendingVisits = count ?? 0;
+  } catch {
+    // Silently default to 0 if the query fails (e.g. missing column from migration 0027)
+  }
 
   return (
     <div className="relative min-h-screen bg-cream-50">

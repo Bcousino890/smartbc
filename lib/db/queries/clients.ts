@@ -69,14 +69,35 @@ export async function getVisitRequestsStats() {
 
 export async function getStaff() {
   const supabase = await createClient();
+
+  // Try with all roles (requires migration 0025 enum values to exist)
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .in("role", ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"])
     .order("created_at");
 
-  if (error) throw error;
-  return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  if (!error) {
+    return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  }
+
+  // If the enum values from migration 0025 don't exist yet, fall back to legacy roles
+  if (error.message?.includes("invalid input value for enum")) {
+    const { data: fallback, error: fallbackError } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("role", ["owner", "admin", "advisor"])
+      .order("created_at");
+
+    if (fallbackError) {
+      console.error("getStaff fallback error:", fallbackError);
+      return [];
+    }
+    return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  }
+
+  console.error("getStaff error:", error);
+  return [];
 }
 
 export async function getClientStats() {
