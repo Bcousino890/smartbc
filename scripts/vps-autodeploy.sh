@@ -30,7 +30,9 @@ LOCAL=$(git rev-parse HEAD 2>/dev/null || echo none)
 echo "$(date -Is) [deploy] $LOCAL -> $REMOTE" >> "$LOG"
 git reset --hard origin/main >>"$LOG" 2>&1
 npm install >>"$LOG" 2>&1
-if npm run build >>"$LOG" 2>&1; then
+# Heap de 4GB: el build creció (mapas, gráficos, chat) y se quedaba sin memoria
+# (OOM/SIGABRT). El VPS tiene 7.6GB RAM + swap, así que 4GB de heap entra bien.
+if NODE_OPTIONS="--max-old-space-size=4096" npm run build >>"$LOG" 2>&1; then
   pm2 restart smartbc-portal >>"$LOG" 2>&1
   if bash scripts/apply-migrations.sh >>"$LOG" 2>&1; then
     echo "$(date -Is) [ok] deploy completado" >> "$LOG"
