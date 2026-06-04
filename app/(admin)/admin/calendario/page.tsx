@@ -10,9 +10,9 @@ export default async function CalendarioPage() {
   const [propertiesRes, clientsRes] = await Promise.all([
     supabase
       .from("properties")
-      .select("id, title, address, zone, status")
+      .select("id, title, address, zone, status, bc_reference")
       .eq("status", "available")
-      .order("title", { ascending: true }),
+      .order("bc_reference", { ascending: true }),
     supabase
       .from("profiles")
       .select("id, full_name, email")

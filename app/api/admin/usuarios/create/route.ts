@@ -152,12 +152,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // Actualizar profile con rol y email (por si el trigger no existe en el VPS).
-  // Usa el cliente admin (service role) para garantizar que bypasea RLS.
+  // Actualizar profile con rol y email usando el cliente admin (service role) para bypassear RLS
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profileUpdate: Record<string, any> = {
     role,
-    // Fallback: si no hay trigger que copie el email desde auth.users, lo seteamos aquí
     email,
   };
 
@@ -168,13 +166,13 @@ export async function POST(req: Request) {
     }
   }
 
-  const { error: profileError } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: profileError } = await (supabase as any)
     .from("profiles")
     .update(profileUpdate)
     .eq("id", userId);
 
   if (profileError) {
-    // El usuario fue creado en auth pero falló la actualización en DB
     return Response.json(
       { error: `Error actualizando perfil: ${profileError.message}` },
       { status: 500 }

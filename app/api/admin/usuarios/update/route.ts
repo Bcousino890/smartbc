@@ -44,7 +44,8 @@ export async function PATCH(req: Request) {
   if (phone !== undefined) updates.phone = phone;
 
   if (Object.keys(updates).length > 0) {
-    const { error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
       .from("profiles")
       .update(updates)
       .eq("id", userId);

@@ -22,6 +22,7 @@ type PropertyOption = {
   title: string;
   address: string | null;
   zone: string;
+  bc_reference: string | null;
 };
 
 type ProfileOption = {
@@ -160,6 +161,10 @@ export function CalendarioClient({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Property combobox state
+  const [propertySearch, setPropertySearch] = useState("");
+  const [propertyDropdownOpen, setPropertyDropdownOpen] = useState(false);
+
   // Edit modal
   const [editEvent, setEditEvent] = useState<VisitEvent | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -202,6 +207,8 @@ export function CalendarioClient({
   function openCreate(dateStr?: string) {
     setCreateForm(makeDefaultCreateForm(dateStr));
     setCreateError(null);
+    setPropertySearch("");
+    setPropertyDropdownOpen(false);
     setShowCreate(true);
   }
 
@@ -480,22 +487,93 @@ export function CalendarioClient({
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4">
-              {/* Property */}
-              <div>
+              {/* Property combobox */}
+              <div className="relative">
                 <label className="mb-1 block text-[12px] font-medium text-ink/70">Propiedad *</label>
-                <select
+                <input
+                  type="text"
+                  required={!createForm.property_id}
+                  readOnly={!!createForm.property_id}
+                  placeholder="Buscar por referencia o título..."
+                  value={
+                    createForm.property_id
+                      ? (() => {
+                          const p = properties.find((p) => p.id === createForm.property_id);
+                          return p
+                            ? `${p.bc_reference ? `${p.bc_reference} · ` : ""}${p.title}`
+                            : "";
+                        })()
+                      : propertySearch
+                  }
+                  onClick={() => {
+                    if (createForm.property_id) {
+                      setCreateForm((f) => ({ ...f, property_id: "" }));
+                      setPropertySearch("");
+                      setPropertyDropdownOpen(true);
+                    }
+                  }}
+                  onChange={(e) => {
+                    setPropertySearch(e.target.value);
+                    setPropertyDropdownOpen(true);
+                    if (createForm.property_id) setCreateForm((f) => ({ ...f, property_id: "" }));
+                  }}
+                  onFocus={() => setPropertyDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setPropertyDropdownOpen(false), 150)}
+                  className={`${inputCls} ${createForm.property_id ? "cursor-pointer bg-gold/5" : ""}`}
+                />
+                {/* Hidden real input for required validation */}
+                <input
+                  type="text"
                   required
                   value={createForm.property_id}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, property_id: e.target.value }))}
-                  className={selectCls}
-                >
-                  <option value="">Seleccionar propiedad...</option>
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}{p.zone ? ` · ${p.zone}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  readOnly
+                  className="absolute inset-0 h-0 w-0 opacity-0"
+                  tabIndex={-1}
+                />
+                {propertyDropdownOpen && (
+                  <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-ink/10 bg-white shadow-lg">
+                    {properties
+                      .filter((p) => {
+                        if (!propertySearch) return true;
+                        const q = propertySearch.toLowerCase();
+                        return (
+                          p.bc_reference?.toLowerCase().includes(q) ||
+                          p.title.toLowerCase().includes(q)
+                        );
+                      })
+                      .slice(0, 20)
+                      .map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onMouseDown={() => {
+                            setCreateForm((f) => ({ ...f, property_id: p.id }));
+                            setPropertySearch("");
+                            setPropertyDropdownOpen(false);
+                          }}
+                          className="flex w-full flex-col px-3 py-2 text-left text-[12px] hover:bg-gold/10"
+                        >
+                          {p.bc_reference && (
+                            <span className="font-medium text-gold-800">{p.bc_reference}</span>
+                          )}
+                          <span className="text-ink/80">
+                            {p.title}
+                            {p.zone ? ` · ${p.zone}` : ""}
+                          </span>
+                        </button>
+                      ))}
+                    {properties.filter((p) => {
+                      if (!propertySearch) return true;
+                      const q = propertySearch.toLowerCase();
+                      return (
+                        p.bc_reference?.toLowerCase().includes(q) ||
+                        p.title.toLowerCase().includes(q)
+                      );
+                    }).length === 0 && (
+                      <p className="px-3 py-2 text-[12px] text-ink/45">Sin resultados</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Client */}
