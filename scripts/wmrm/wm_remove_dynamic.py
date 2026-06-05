@@ -51,10 +51,22 @@ def estimate(files):
 def remove(path, out, W_add, beta, wm):
     I = np.asarray(Image.open(path).convert("RGB"), np.float64)
     J = (I - W_add)/beta
-    g = J.mean(2); detail = boxmean(np.abs(g-boxmean(g,3)),4)
-    fl = np.exp(-detail/3.0)[..., None]
-    w = wm*fl; Jb = boxmean(J,6); final=(1-w)*J+w*Jb
-    Image.fromarray(np.clip(final,0,255).astype(np.uint8)).save(out, quality=92)
+    g = J.mean(2)
+    detail = boxmean(np.abs(g - boxmean(g, 3)), 4)
+    # El ojo nota el desenfoque del DETALLE, no el del COLOR. Mantenemos la
+    # luminancia nítida (solo un suavizado MUY leve en los trazos de la marca) y
+    # suavizamos el COLOR en la zona de la marca: eso mata el fantasma "arcoíris"
+    # sin emborronar el fondo.
+    lum = g
+    chroma = J - lum[..., None]
+    m = wm[..., 0]
+    fl = np.exp(-detail / 2.0)
+    wL = np.clip(m * fl * 0.45, 0, 1)                 # luminancia: suavizado leve
+    lum_out = (1 - wL) * lum + wL * boxmean(lum, 3)
+    wC = np.clip(m, 0, 1)[..., None]                  # color: suavizado en la marca
+    chroma_out = (1 - wC) * chroma + wC * boxmean(chroma, 10)
+    final = lum_out[..., None] + chroma_out
+    Image.fromarray(np.clip(final, 0, 255).astype(np.uint8)).save(out, quality=92)
 
 def main():
     if len(sys.argv) != 3:
