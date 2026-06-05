@@ -8,6 +8,7 @@ import {
   Heart,
   Home,
   LogOut,
+  Menu,
   MessageSquare,
   Radio,
   Send,
@@ -16,10 +17,12 @@ import {
   User,
   UserCog,
   Users,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { useT } from "@/lib/i18n/provider";
 import { canAccess } from "@/lib/permissions";
@@ -56,11 +59,25 @@ interface AdminSidebarProps {
   currentRole?: string;
   /** Cantidad de visitas pendientes para el badge de Calendario. */
   pendingVisits?: number;
+  /** Callback para notificar al padre cuando el sidebar abre/cierra (mobile). */
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function AdminSidebar({ user, currentRole, pendingVisits = 0 }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, pendingVisits = 0, onOpenChange }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  function toggleMobile() {
+    const next = !mobileOpen;
+    setMobileOpen(next);
+    onOpenChange?.(next);
+  }
+
+  function closeMobile() {
+    setMobileOpen(false);
+    onOpenChange?.(false);
+  }
 
   // Filtrar items de nav según los permisos del rol actual.
   // Si el item no tiene permissionResource definido, siempre se muestra.
@@ -71,81 +88,111 @@ export function AdminSidebar({ user, currentRole, pendingVisits = 0 }: AdminSide
   });
 
   return (
-    <aside className="fixed left-0 top-0 z-20 flex h-screen w-[260px] flex-col bg-ink text-cream-50">
-      {/* Logo (white via CSS filter trick: brightness 0 turns the dark navy
-          PNG to pure black, invert flips it to white) */}
-      <div className="flex flex-col items-center px-6 pt-7">
-        <Image
-          src="/logo.png"
-          alt="Benjamín Cousiño Propiedades"
-          width={420}
-          height={Math.round(420 * (519 / 3282))}
-          priority
-          className="h-auto w-full select-none"
-          style={{ filter: "brightness(0) invert(1)" }}
+    <>
+      {/* Botón hamburger — solo visible en mobile */}
+      <button
+        type="button"
+        onClick={toggleMobile}
+        aria-label="Abrir menú"
+        className="fixed left-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-ink text-cream-50 shadow-md lg:hidden"
+      >
+        {mobileOpen ? <X size={18} strokeWidth={2} /> : <Menu size={18} strokeWidth={2} />}
+      </button>
+
+      {/* Overlay oscuro — solo en mobile cuando está abierto */}
+      {mobileOpen && (
+        <div
+          aria-hidden="true"
+          onClick={closeMobile}
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
         />
-      </div>
+      )}
 
-      <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
-        {t("admin.section.label")}
-      </p>
-
-      <nav className="mt-3 flex-1 overflow-y-auto px-3">
-        <ul className="space-y-1">
-          {visibleItems.map(({ href, labelKey, icon: Icon }) => {
-            const active =
-              pathname === href || pathname.startsWith(`${href}/`);
-            const isCalendario = href === "/admin/calendario";
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
-                    active
-                      ? "bg-cream-50/8 text-gold"
-                      : "text-cream-50/70 hover:bg-cream-50/5 hover:text-cream-50",
-                  )}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <Icon size={17} strokeWidth={1.75} />
-                  <span className="flex-1">{t(labelKey)}</span>
-                  {isCalendario && pendingVisits > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
-                      {pendingVisits}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      <div className="m-3 rounded-xl border border-cream-50/10 p-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 font-serif text-[11px] font-medium text-cream-50">
-            {user.initials}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold leading-tight">
-              {user.firstName} {user.lastName}
-            </p>
-            <p className="mt-0.5 truncate text-[10px] text-cream-50/55">
-              {t(user.roleKey)}
-            </p>
-          </div>
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-30 flex h-screen w-[260px] flex-col bg-ink text-cream-50 transition-transform duration-300",
+          // Mobile: oculto por defecto, visible cuando mobileOpen
+          "-translate-x-full lg:translate-x-0",
+          mobileOpen && "translate-x-0",
+        )}
+      >
+        {/* Logo (white via CSS filter trick: brightness 0 turns the dark navy
+            PNG to pure black, invert flips it to white) */}
+        <div className="flex flex-col items-center px-6 pt-7">
+          <Image
+            src="/logo.png"
+            alt="Benjamín Cousiño Propiedades"
+            width={420}
+            height={Math.round(420 * (519 / 3282))}
+            priority
+            className="h-auto w-full select-none"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
         </div>
-        <form action={signOutAction} className="mt-3">
-          <button
-            type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
-          >
-            <LogOut size={13} strokeWidth={1.75} />
-            <span>{t("sidebar.logout")}</span>
-          </button>
-        </form>
-      </div>
-    </aside>
+
+        <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
+          {t("admin.section.label")}
+        </p>
+
+        <nav className="mt-3 flex-1 overflow-y-auto px-3">
+          <ul className="space-y-1">
+            {visibleItems.map(({ href, labelKey, icon: Icon }) => {
+              const active =
+                pathname === href || pathname.startsWith(`${href}/`);
+              const isCalendario = href === "/admin/calendario";
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={closeMobile}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                      active
+                        ? "bg-cream-50/8 text-gold"
+                        : "text-cream-50/70 hover:bg-cream-50/5 hover:text-cream-50",
+                    )}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon size={17} strokeWidth={1.75} />
+                    <span className="flex-1">{t(labelKey)}</span>
+                    {isCalendario && pendingVisits > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
+                        {pendingVisits}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="m-3 rounded-xl border border-cream-50/10 p-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 font-serif text-[11px] font-medium text-cream-50">
+              {user.initials}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold leading-tight">
+                {user.firstName} {user.lastName}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-cream-50/55">
+                {t(user.roleKey)}
+              </p>
+            </div>
+          </div>
+          <form action={signOutAction} className="mt-3">
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
+            >
+              <LogOut size={13} strokeWidth={1.75} />
+              <span>{t("sidebar.logout")}</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+    </>
   );
 }
