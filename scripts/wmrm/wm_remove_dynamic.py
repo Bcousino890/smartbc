@@ -14,8 +14,13 @@ import sys, os, glob, collections
 import numpy as np
 from PIL import Image
 
-MIN_PHOTOS = 8        # mínimo por grupo para estimar con fiabilidad
-DETECT_ALPHA = 0.28   # si la opacidad estimada no supera esto, no hay marca
+MIN_PHOTOS = 12       # mínimo por grupo: con pocas fotos correlacionadas la
+                      # estimación se va y "detecta" marca donde no la hay
+DETECT_ALPHA = 0.30   # si la opacidad estimada no supera esto, no hay marca
+# Una marca real es LOCALIZADA (un logo). Si la zona de alta opacidad ocupa
+# demasiada superficie, es un falso positivo (fotos correlacionadas sin marca):
+# NO se toca, para no destrozar las fotos.
+MAX_STRONG_FRAC = 0.22
 
 def boxmean(x, r):
     sq = x.ndim == 2
@@ -50,7 +55,8 @@ def estimate(files):
     # para el inpaint fino).
     wm = (am>0.06).astype(float); wm=(boxmean(wm,3)>0.25).astype(float); wm=boxmean(wm,4)
     strokes = (am > 0.30); strokes = boxmean(strokes.astype(float), 1) > 0.2
-    return W_add, beta, wm[...,None], strokes, float(alpha.max())
+    strong_frac = float((am > 0.40).mean())
+    return W_add, beta, wm[...,None], strokes, float(alpha.max()), strong_frac
 
 def remove(path, out, W_add, beta, wm, strokes):
     I = np.asarray(Image.open(path).convert("RGB"), np.float64)
@@ -89,10 +95,12 @@ def main():
     for size, gfiles in groups.items():
         profile = None
         if len(gfiles) >= MIN_PHOTOS:
-            W_add, beta, wm, strokes, amax = estimate(gfiles)
-            if amax >= DETECT_ALPHA:
+            W_add, beta, wm, strokes, amax, strong_frac = estimate(gfiles)
+            if amax >= DETECT_ALPHA and strong_frac <= MAX_STRONG_FRAC:
                 profile = (W_add, beta, wm, strokes)
-                print(f"  grupo {size} x{len(gfiles)}: marca detectada (alpha={amax:.2f}) -> limpiando")
+                print(f"  grupo {size} x{len(gfiles)}: marca detectada (alpha={amax:.2f}, zona={strong_frac*100:.0f}%) -> limpiando")
+            elif amax >= DETECT_ALPHA:
+                print(f"  grupo {size} x{len(gfiles)}: descartado por zona demasiado amplia ({strong_frac*100:.0f}%) -> intactas (falso positivo)")
             else:
                 print(f"  grupo {size} x{len(gfiles)}: sin marca clara (alpha={amax:.2f}) -> intactas")
         else:
