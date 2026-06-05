@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Mail, Plus, Search, ShieldCheck, UserCog, X } from "lucide-react";
+import { Check, Loader2, Mail, Plus, Search, ShieldCheck, UserCog, Users, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -9,6 +9,7 @@ import type {
   InternalUserStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const ROLE_BADGE: Record<InternalUserRole, string> = {
   owner:        "border-violet-200 bg-violet-50 text-violet-700",
@@ -632,13 +633,27 @@ function UsersTable({
   users,
   onEdit,
   onPermissions,
-  emptyText,
+  emptyIcon,
+  emptyTitle,
+  emptyDescription,
 }: {
   users: InternalUser[];
   onEdit: (user: InternalUser) => void;
   onPermissions: (user: InternalUser) => void;
-  emptyText: string;
+  emptyIcon: React.ReactNode;
+  emptyTitle: string;
+  emptyDescription?: string;
 }) {
+  if (users.length === 0) {
+    return (
+      <EmptyState
+        icon={emptyIcon}
+        title={emptyTitle}
+        description={emptyDescription}
+      />
+    );
+  }
+
   return (
     <div className="mt-5 overflow-x-auto">
       <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
@@ -658,9 +673,6 @@ function UsersTable({
           ))}
         </tbody>
       </table>
-      {users.length === 0 && (
-        <p className="mt-4 text-center text-sm text-ink/55">{emptyText}</p>
-      )}
     </div>
   );
 }
@@ -796,7 +808,9 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
             users={filteredAdmins}
             onEdit={setEditUser}
             onPermissions={setPermissionsUser}
-            emptyText="No hay administradores que coincidan con tu búsqueda."
+            emptyIcon={<UserCog size={24} />}
+            emptyTitle={queryAdmins ? "Sin resultados" : "No hay administradores"}
+            emptyDescription={queryAdmins ? "Prueba con otro término de búsqueda." : "Crea el primer administrador con el botón de arriba."}
           />
         </section>
       )}
@@ -831,7 +845,9 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
             users={filteredAdvisors}
             onEdit={setEditUser}
             onPermissions={setPermissionsUser}
-            emptyText="No hay asesores que coincidan con tu búsqueda."
+            emptyIcon={<Users size={24} />}
+            emptyTitle={queryAdvisors ? "Sin resultados" : "No hay asesores"}
+            emptyDescription={queryAdvisors ? "Prueba con otro término de búsqueda." : "Crea el primer asesor con el botón de arriba."}
           />
         </section>
       )}
@@ -860,7 +876,9 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
             users={filteredAgents}
             onEdit={setEditUser}
             onPermissions={setPermissionsUser}
-            emptyText="No hay agentes que coincidan con tu búsqueda."
+            emptyIcon={<Users size={24} />}
+            emptyTitle={queryAgents ? "Sin resultados" : "No hay agentes"}
+            emptyDescription={queryAgents ? "Prueba con otro término de búsqueda." : undefined}
           />
         </section>
       )}
@@ -895,7 +913,9 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
           users={filteredClients}
           onEdit={setEditUser}
           onPermissions={setPermissionsUser}
-          emptyText="No hay clientes que coincidan con tu búsqueda."
+          emptyIcon={<Users size={24} />}
+          emptyTitle={queryClients ? "Sin resultados" : "No hay clientes"}
+          emptyDescription={queryClients ? "Prueba con otro término de búsqueda." : "Crea el primer cliente con el botón de arriba."}
         />
       </section>
     </>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { ToastProvider } from "@/components/ui/toast";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
@@ -114,7 +115,9 @@ export default async function AdminLayout({
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
-        <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">{children}</main>
+        <main className="min-h-screen pt-16 lg:ml-[260px] lg:pt-0">
+          <ToastProvider>{children}</ToastProvider>
+        </main>
       </div>
     </div>
   );
