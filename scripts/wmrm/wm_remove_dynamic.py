@@ -45,27 +45,31 @@ def estimate(files):
         bg = mbox(Sg,keep,R); beta_g = np.clip(Sg/np.maximum(bg,1e-6),0.05,1)
     bg_mean = np.stack([mbox(M[...,c],keep,R) for c in range(3)], -1)
     beta = beta_g[...,None]; W_add = M - beta*bg_mean; alpha = 1-beta
-    wm = (alpha.mean(2)>0.06).astype(float); wm=(boxmean(wm,3)>0.25).astype(float); wm=boxmean(wm,4)
-    return W_add, beta, wm[...,None], float(alpha.max())
+    am = alpha.mean(2)
+    # Máscara ANCHA (zona de la marca, para el color) y de TRAZOS (alta opacidad,
+    # para el inpaint fino).
+    wm = (am>0.06).astype(float); wm=(boxmean(wm,3)>0.25).astype(float); wm=boxmean(wm,4)
+    strokes = (am > 0.30); strokes = boxmean(strokes.astype(float), 1) > 0.2
+    return W_add, beta, wm[...,None], strokes, float(alpha.max())
 
-def remove(path, out, W_add, beta, wm):
+def remove(path, out, W_add, beta, wm, strokes):
     I = np.asarray(Image.open(path).convert("RGB"), np.float64)
     J = (I - W_add)/beta
-    g = J.mean(2)
-    detail = boxmean(np.abs(g - boxmean(g, 3)), 4)
-    # El ojo nota el desenfoque del DETALLE, no el del COLOR. Mantenemos la
-    # luminancia nítida (solo un suavizado MUY leve en los trazos de la marca) y
-    # suavizamos el COLOR en la zona de la marca: eso mata el fantasma "arcoíris"
-    # sin emborronar el fondo.
-    lum = g
-    chroma = J - lum[..., None]
-    m = wm[..., 0]
-    fl = np.exp(-detail / 2.0)
-    wL = np.clip(m * fl * 0.45, 0, 1)                 # luminancia: suavizado leve
-    lum_out = (1 - wL) * lum + wL * boxmean(lum, 3)
-    wC = np.clip(m, 0, 1)[..., None]                  # color: suavizado en la marca
+    # Quitar los TRAZOS de la marca por INPAINT de difusión: propaga el contenido
+    # vecino hacia dentro de los trazos (sin sesgo oscuro -> sin motitas),
+    # eliminando las líneas SIN emborronar el fondo (solo se rellenan los trazos
+    # finos, no toda la zona).
+    sm = strokes[..., None]
+    rec = J.copy()
+    for _ in range(14):
+        rec = np.where(sm, boxmean(rec, 3), J)
+    # Suavizar SOLO el color residual en la zona ancha de la marca (mata cualquier
+    # tinte), manteniendo la luminancia nítida.
+    lum = rec.mean(2)
+    chroma = rec - lum[..., None]
+    wC = np.clip(wm[..., 0], 0, 1)[..., None]
     chroma_out = (1 - wC) * chroma + wC * boxmean(chroma, 10)
-    final = lum_out[..., None] + chroma_out
+    final = lum[..., None] + chroma_out
     Image.fromarray(np.clip(final, 0, 255).astype(np.uint8)).save(out, quality=92)
 
 def main():
@@ -85,9 +89,9 @@ def main():
     for size, gfiles in groups.items():
         profile = None
         if len(gfiles) >= MIN_PHOTOS:
-            W_add, beta, wm, amax = estimate(gfiles)
+            W_add, beta, wm, strokes, amax = estimate(gfiles)
             if amax >= DETECT_ALPHA:
-                profile = (W_add, beta, wm)
+                profile = (W_add, beta, wm, strokes)
                 print(f"  grupo {size} x{len(gfiles)}: marca detectada (alpha={amax:.2f}) -> limpiando")
             else:
                 print(f"  grupo {size} x{len(gfiles)}: sin marca clara (alpha={amax:.2f}) -> intactas")
