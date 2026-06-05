@@ -3,12 +3,13 @@
 import {
   Bell,
   Building2,
+  Check,
   Globe,
   Palette,
   Save,
   Sliders,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { EmailConfigClient } from "./email-config-client";
@@ -21,6 +22,45 @@ import { cn } from "@/lib/utils";
 export default function AdminConfiguracionPage() {
   const t = useT();
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then((res) => res.json())
+      .then((data: Record<string, unknown>) => {
+        setSettings((prev) => ({
+          ...prev,
+          ...(data.company ? { company: data.company as AppSettings["company"] } : {}),
+          ...(data.branding ? { branding: data.branding as AppSettings["branding"] } : {}),
+          ...(data.defaults ? { defaults: data.defaults as AppSettings["defaults"] } : {}),
+          ...(data.notifications ? { notifications: data.notifications as AppSettings["notifications"] } : {}),
+        }));
+      })
+      .catch(() => {
+        // Si falla la carga, se mantienen los valores mock
+      });
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: settings.company,
+          branding: settings.branding,
+          defaults: settings.defaults,
+          notifications: settings.notifications,
+        }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function updateCompany<K extends keyof AppSettings["company"]>(
     key: K,
@@ -217,10 +257,27 @@ export default function AdminConfiguracionPage() {
         <div className="flex justify-end">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
+            onClick={handleSave}
+            disabled={saving}
+            className={cn(
+              "flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-cream-50 transition",
+              saved
+                ? "bg-green-700 hover:bg-green-800"
+                : "bg-ink hover:bg-ink-soft",
+              saving && "cursor-not-allowed opacity-60",
+            )}
           >
-            <Save size={14} strokeWidth={1.75} className="text-gold" />
-            <span>{t("config.save")}</span>
+            {saved ? (
+              <>
+                <Check size={14} strokeWidth={2} className="text-green-300" />
+                <span>Guardado</span>
+              </>
+            ) : (
+              <>
+                <Save size={14} strokeWidth={1.75} className="text-gold" />
+                <span>{saving ? "Guardando…" : t("config.save")}</span>
+              </>
+            )}
           </button>
         </div>
       </div>
