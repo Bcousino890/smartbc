@@ -31,6 +31,12 @@ type ProfileOption = {
   email: string;
 };
 
+type StaffOption = {
+  id: string;
+  full_name: string | null;
+  role: string;
+};
+
 type VisitEvent = {
   id: string;
   client_id: string;
@@ -94,6 +100,7 @@ const FILTER_OPTIONS: { key: FilterStatus; label: string }[] = [
 type CreateForm = {
   property_id: string;
   client_id: string;
+  assigned_to: string;
   date: string;
   time: string;
   status: VisitStatus;
@@ -104,6 +111,7 @@ function makeDefaultCreateForm(dateStr?: string): CreateForm {
   return {
     property_id: "",
     client_id: "",
+    assigned_to: "",
     date: dateStr ?? new Date().toISOString().slice(0, 10),
     time: "10:00",
     status: "pending",
@@ -143,10 +151,11 @@ function displayName(p: ProfileOption | null | undefined) {
 export function CalendarioClient({
   properties,
   clients,
+  staff,
 }: {
   properties: PropertyOption[];
   clients: ProfileOption[];
-  advisors?: ProfileOption[];
+  staff: StaffOption[];
 }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -224,6 +233,7 @@ export function CalendarioClient({
         body: JSON.stringify({
           client_id: createForm.client_id,
           property_id: createForm.property_id,
+          assigned_to: createForm.assigned_to || null,
           requested_at: requestedAt,
           status: createForm.status,
           notes: createForm.notes || null,
@@ -576,6 +586,23 @@ export function CalendarioClient({
                 )}
               </div>
 
+              {/* Selected property address (read-only) */}
+              {createForm.property_id && (() => {
+                const p = properties.find((p) => p.id === createForm.property_id);
+                return p?.address ? (
+                  <div>
+                    <label className="mb-1 block text-[12px] font-medium text-ink/70">Dirección</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={p.address}
+                      className={`${inputCls} bg-ink/5 text-ink/60`}
+                      tabIndex={-1}
+                    />
+                  </div>
+                ) : null;
+              })()}
+
               {/* Client */}
               <div>
                 <label className="mb-1 block text-[12px] font-medium text-ink/70">Cliente *</label>
@@ -589,6 +616,23 @@ export function CalendarioClient({
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
                       {displayName(c)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Assigned to */}
+              <div>
+                <label className="mb-1 block text-[12px] font-medium text-ink/70">Asignado a</label>
+                <select
+                  value={createForm.assigned_to}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, assigned_to: e.target.value }))}
+                  className={selectCls}
+                >
+                  <option value="">Sin asignar</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.full_name?.trim() || s.id}
                     </option>
                   ))}
                 </select>

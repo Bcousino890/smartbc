@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { client_id, property_id, requested_at, status, notes } = body;
+  const { client_id, property_id, assigned_to, requested_at, status, notes } = body;
 
   if (!client_id || !property_id || !requested_at) {
     return NextResponse.json(
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
     .insert({
       client_id,
       property_id,
+      assigned_to: assigned_to ?? null,
       requested_at,
       status: status ?? "pending",
       notes: notes ?? null,
