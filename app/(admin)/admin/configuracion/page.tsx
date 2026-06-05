@@ -12,6 +12,7 @@ import { useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { EmailConfigClient } from "./email-config-client";
+import { MigrationsManager } from "./migrations-manager";
 import { useT } from "@/lib/i18n/provider";
 import { mockAppSettings } from "@/lib/mock-admin-extras";
 import type { AppSettings } from "@/lib/types";
@@ -205,6 +206,9 @@ export default function AdminConfiguracionPage() {
             />
           </ul>
         </SettingsSection>
+
+        {/* Migrations Manager */}
+        <MigrationsManager />
 
         {/* Email Configuration */}
         <EmailConfigClient />
