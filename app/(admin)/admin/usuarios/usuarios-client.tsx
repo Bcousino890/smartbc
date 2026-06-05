@@ -1,9 +1,8 @@
 "use client";
 
 import { Check, Loader2, Mail, Plus, Search, ShieldCheck, UserCog, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useT } from "@/lib/i18n/provider";
 import type {
   InternalUser,
   InternalUserRole,
@@ -484,194 +483,23 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
 
 // ─── Permisos modal ───────────────────────────────────────────────────────
 
-const PERM_RESOURCES: { key: string; label: string }[] = [
-  { key: "properties",   label: "Propiedades"  },
-  { key: "particulares", label: "Particulares" },
-  { key: "clientes",     label: "Clientes"     },
-  { key: "solicitudes",  label: "Solicitudes"  },
-  { key: "mensajes",     label: "Mensajes"     },
-  { key: "reportes",     label: "Reportes"     },
-  { key: "usuarios",     label: "Usuarios"     },
-  { key: "configuracion",label: "Configuración"},
-];
-
-const PERM_ACTIONS: { key: string; label: string }[] = [
-  { key: "view",   label: "Ver"      },
-  { key: "edit",   label: "Editar"   },
-  { key: "create", label: "Crear"    },
-  { key: "delete", label: "Eliminar" },
-  { key: "export", label: "Exportar" },
-];
-
-type PermValue = true | false | "override_true" | "override_false";
-type PermissionsMap = Record<string, Record<string, PermValue>>;
-
-// Returns whether the effective permission is "on"
-function isEffectivelyAllowed(v: PermValue): boolean {
-  return v === true || v === "override_true";
-}
-
-// Returns whether this cell has been manually overridden
-function isOverride(v: PermValue): boolean {
-  return v === "override_true" || v === "override_false";
-}
-
 interface PermissionsModalProps {
   user: InternalUser;
   onClose: () => void;
 }
 
 function PermissionsModal({ user, onClose }: PermissionsModalProps) {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [role, setRole] = useState("");
-  // local editable state: true/false (flat override values chosen by user)
-  // null means "use role default" (no override)
-  const [localOverrides, setLocalOverrides] = useState<Record<string, Record<string, boolean | null>>>({});
-  // fetched from server — role defaults + existing overrides
-  const [fetched, setFetched] = useState<PermissionsMap>({});
-  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch(`/api/admin/usuarios/${user.id}/permissions`)
-      .then((r) => r.json())
-      .then((data: { role: string; permissions: PermissionsMap }) => {
-        if (cancelled) return;
-        setRole(data.role);
-        setFetched(data.permissions ?? {});
-        // Initialise local overrides from server override values
-        const init: Record<string, Record<string, boolean | null>> = {};
-        for (const res of PERM_RESOURCES) {
-          init[res.key] = {};
-          for (const act of PERM_ACTIONS) {
-            const val = data.permissions?.[res.key]?.[act.key];
-            if (val === "override_true")  init[res.key][act.key] = true;
-            else if (val === "override_false") init[res.key][act.key] = false;
-            else init[res.key][act.key] = null; // role default, no override
-          }
-        }
-        setLocalOverrides(init);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [user.id]);
-
-  // Effective value for a cell, combining role default + local override
-  function effectiveValue(resource: string, action: string): boolean {
-    const override = localOverrides[resource]?.[action];
-    if (override !== null && override !== undefined) return override;
-    const serverVal = fetched[resource]?.[action];
-    return isEffectivelyAllowed(serverVal ?? false);
-  }
-
-  function hasLocalOverride(resource: string, action: string): boolean {
-    return localOverrides[resource]?.[action] !== null &&
-           localOverrides[resource]?.[action] !== undefined;
-  }
-
-  // Clicking a checkbox cycles through: role-default → override(opposite) → back
-  function toggleCell(resource: string, action: string) {
-    const currentLocalOverride = localOverrides[resource]?.[action] ?? null;
-    const roleDefault = (() => {
-      const serverVal = fetched[resource]?.[action];
-      if (serverVal === "override_true" || serverVal === "override_false") {
-        // We ignore the server override here — look at what role alone gives
-        // We don't track original role default separately, so derive it:
-        // role default = server value if it's a plain boolean
-        return false; // safe fallback
-      }
-      return serverVal as boolean;
-    })();
-
-    setLocalOverrides((prev) => {
-      const next = { ...prev, [resource]: { ...prev[resource] } };
-      if (currentLocalOverride === null) {
-        // No override → set override to the opposite of effective (which is roleDefault)
-        const eff = effectiveValue(resource, action);
-        next[resource][action] = !eff;
-      } else {
-        // Has override → remove override (revert to role default)
-        next[resource][action] = null;
-      }
-      return next;
-    });
-    void roleDefault; // suppress unused warning
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    setSaveStatus("idle");
-    setErrorMsg("");
-
-    // Build overrides array — only cells where localOverrides[r][a] !== null
-    const overrides: { resource: string; action: string; allowed: boolean }[] = [];
-    for (const res of PERM_RESOURCES) {
-      for (const act of PERM_ACTIONS) {
-        const val = localOverrides[res.key]?.[act.key] ?? null;
-        if (val !== null) {
-          overrides.push({ resource: res.key, action: act.key, allowed: val });
-        }
-      }
-    }
-
-    try {
-      const res = await fetch(`/api/admin/usuarios/${user.id}/permissions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setSaveStatus("error");
-        setErrorMsg(data.error ?? "Error desconocido");
-      } else {
-        setSaveStatus("success");
-        setTimeout(onClose, 1600);
-      }
-    } catch (err) {
-      setSaveStatus("error");
-      setErrorMsg(err instanceof Error ? err.message : "Error de red");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-3xl flex-col rounded-2xl bg-cream-50 shadow-2xl"
-        style={{ maxHeight: "90vh" }}
+        className="w-full max-w-sm rounded-2xl bg-cream-50 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-ink/8 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-[10px] font-medium text-cream-50">
-              {user.initials}
-            </span>
-            <div>
-              <p className="font-medium text-ink">
-                {user.firstName} {user.lastName}
-              </p>
-              <span
-                className={cn(
-                  "rounded-md border px-2 py-0.5 text-[10px] font-medium",
-                  ROLE_BADGE[user.roleKey],
-                )}
-              >
-                {ROLE_LABEL[user.roleKey] ?? role}
-              </span>
-            </div>
-          </div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-serif text-xl font-semibold text-ink">Permisos</h2>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
@@ -679,186 +507,36 @@ function PermissionsModal({ user, onClose }: PermissionsModalProps) {
             <X size={18} strokeWidth={2} />
           </button>
         </div>
-
-        {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {saveStatus === "success" ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
-                <Check size={24} strokeWidth={2} className="text-emerald-600" />
-              </span>
-              <p className="font-medium text-ink">Permisos guardados</p>
-            </div>
-          ) : loading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 size={24} className="animate-spin text-ink/40" />
-            </div>
-          ) : (
-            <>
-              {/* Legend */}
-              <div className="mb-4 flex flex-wrap items-center gap-4 text-[11px] text-ink/60">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-3.5 w-3.5 rounded border border-ink/20 bg-white" />
-                  Por defecto (denegado)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded border border-ink/20 bg-ink/8">
-                    <Check size={8} strokeWidth={3} className="text-ink/40" />
-                  </span>
-                  Por rol (permitido)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded border border-blue-400 bg-blue-500">
-                    <Check size={8} strokeWidth={3} className="text-white" />
-                  </span>
-                  Permiso manual (override)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded border border-red-300 bg-red-50">
-                    <X size={8} strokeWidth={3} className="text-red-400" />
-                  </span>
-                  Denegado manual (override)
-                </span>
-              </div>
-
-              {/* Matrix */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-[10px] font-semibold uppercase tracking-wider text-ink/50">
-                      <th className="pb-2 pr-3 text-left">Recurso</th>
-                      {PERM_ACTIONS.map((a) => (
-                        <th key={a.key} className="px-2 pb-2 text-center">
-                          {a.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {PERM_RESOURCES.map((res, i) => (
-                      <tr
-                        key={res.key}
-                        className={cn(
-                          "border-t border-ink/6",
-                          i === 0 && "border-t-0",
-                        )}
-                      >
-                        <td className="py-2.5 pr-3 font-medium text-ink">
-                          {res.label}
-                        </td>
-                        {PERM_ACTIONS.map((act) => {
-                          const eff = effectiveValue(res.key, act.key);
-                          const hasOverrideLocal = hasLocalOverride(res.key, act.key);
-                          const serverVal = fetched[res.key]?.[act.key];
-                          const roleAllowed =
-                            !hasOverrideLocal && isEffectivelyAllowed(serverVal ?? false);
-                          const isServerOverride = isOverride(serverVal ?? false);
-
-                          // Determine visual state
-                          let cellStyle = "";
-                          let iconEl: React.ReactNode = null;
-
-                          if (hasOverrideLocal) {
-                            if (eff) {
-                              // manual override TRUE (blue)
-                              cellStyle =
-                                "border-blue-400 bg-blue-500 hover:bg-blue-600";
-                              iconEl = (
-                                <Check size={11} strokeWidth={3} className="text-white" />
-                              );
-                            } else {
-                              // manual override FALSE (red)
-                              cellStyle =
-                                "border-red-300 bg-red-50 hover:bg-red-100";
-                              iconEl = (
-                                <X size={11} strokeWidth={3} className="text-red-400" />
-                              );
-                            }
-                          } else if (isServerOverride) {
-                            // Existing server override not yet touched locally
-                            if (eff) {
-                              cellStyle = "border-blue-400 bg-blue-500";
-                              iconEl = (
-                                <Check size={11} strokeWidth={3} className="text-white" />
-                              );
-                            } else {
-                              cellStyle = "border-red-300 bg-red-50";
-                              iconEl = (
-                                <X size={11} strokeWidth={3} className="text-red-400" />
-                              );
-                            }
-                          } else if (roleAllowed) {
-                            // Role default: permitted
-                            cellStyle =
-                              "border-ink/20 bg-ink/8 cursor-pointer hover:border-ink/30";
-                            iconEl = (
-                              <Check size={11} strokeWidth={3} className="text-ink/40" />
-                            );
-                          } else {
-                            // Role default: denied
-                            cellStyle =
-                              "border-ink/15 bg-white cursor-pointer hover:border-ink/25";
-                            iconEl = null;
-                          }
-
-                          return (
-                            <td key={act.key} className="px-2 py-2.5 text-center">
-                              <button
-                                type="button"
-                                title={`${res.label} → ${act.label}`}
-                                onClick={() => toggleCell(res.key, act.key)}
-                                className={cn(
-                                  "mx-auto flex h-5 w-5 items-center justify-center rounded border transition",
-                                  cellStyle,
-                                )}
-                              >
-                                {iconEl}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {saveStatus === "error" && (
-                <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {errorMsg}
-                </p>
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
+            <ShieldCheck size={24} strokeWidth={1.75} className="text-blue-500" />
+          </span>
+          <div>
+            <p className="font-medium text-ink">
+              {user.firstName} {user.lastName}
+            </p>
+            <span
+              className={cn(
+                "mt-1 inline-block rounded-md border px-2 py-0.5 text-[10px] font-medium",
+                ROLE_BADGE[user.roleKey],
               )}
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        {!loading && saveStatus !== "success" && (
-          <div className="shrink-0 border-t border-ink/8 px-6 py-4">
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-ink/10 px-4 py-2 text-sm text-ink/65 transition hover:border-ink/20 hover:text-ink"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
-              >
-                {saving ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <ShieldCheck size={14} strokeWidth={1.75} />
-                )}
-                Guardar permisos
-              </button>
-            </div>
+            >
+              {ROLE_LABEL[user.roleKey]}
+            </span>
           </div>
-        )}
+          <p className="text-sm text-ink/60">
+            La gestión granular de permisos estará disponible próximamente.
+          </p>
+        </div>
+        <div className="mt-2 flex justify-center">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-ink/10 px-6 py-2.5 text-sm text-ink/65 transition hover:border-ink/20 hover:text-ink"
+          >
+            Cerrar
+          </button>
+        </div>
       </div>
     </div>
   );
