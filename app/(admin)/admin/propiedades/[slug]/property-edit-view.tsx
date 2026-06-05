@@ -28,6 +28,7 @@ import {
   updateProperty,
   addPropertyVideo,
   uploadPropertyPlan,
+  uploadPropertyVideo,
   deletePropertyMedia,
   type MediaItem,
 } from "@/app/(admin)/admin/propiedades/actions";
@@ -107,6 +108,8 @@ export function PropertyEditView({
   const [videoUrl, setVideoUrl] = useState("");
   const [videoError, setVideoError] = useState<string | null>(null);
   const [addingVideo, setAddingVideo] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Planos state
   const [plans, setPlans] = useState<MediaItem[]>(initialPlans);
@@ -182,6 +185,25 @@ export function PropertyEditView({
     if (!confirm("¿Eliminar este video?")) return;
     await deletePropertyMedia(property.slug, item.id, item.storage_path);
     setVideos((v) => v.filter((x) => x.id !== item.id));
+  }
+
+  async function handleVideoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVideoError(null);
+    setUploadingVideo(true);
+    const fd = new FormData();
+    fd.set("slug", property.slug);
+    fd.set("file", file);
+    const res = await uploadPropertyVideo(fd);
+    if (res.ok) {
+      setVideos((v) => [...v, res.item]);
+    } else {
+      setVideoError(res.error);
+    }
+    setUploadingVideo(false);
+    // Limpia el input para permitir subir el mismo archivo de nuevo
+    if (videoFileInputRef.current) videoFileInputRef.current.value = "";
   }
 
   // ─── Plan handlers ─────────────────────────────────────────────────────
@@ -746,6 +768,14 @@ export function PropertyEditView({
           icon={<Video size={15} strokeWidth={1.75} />}
           title="Videos"
         >
+          {/* Input oculto para subir archivo de video */}
+          <input
+            type="file"
+            ref={videoFileInputRef}
+            accept="video/*"
+            onChange={handleVideoFileUpload}
+            className="hidden"
+          />
           <form onSubmit={handleAddVideo} className="flex gap-2">
             <input
               type="url"
@@ -767,6 +797,19 @@ export function PropertyEditView({
               Añadir
             </button>
           </form>
+          <button
+            type="button"
+            onClick={() => videoFileInputRef.current?.click()}
+            disabled={uploadingVideo}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+          >
+            {uploadingVideo ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Plus size={13} strokeWidth={1.75} />
+            )}
+            Subir video (.mp4)
+          </button>
           {videoError && (
             <p className="mt-1 text-[12px] text-rose-700">{videoError}</p>
           )}
@@ -774,6 +817,7 @@ export function PropertyEditView({
             <div className="mt-3 flex flex-col gap-3">
               {videos.map((item) => {
                 const embed = getEmbedUrl(item.url);
+                const isDirectVideo = !embed && item.storage_path && !item.storage_path.startsWith("http");
                 return (
                   <div
                     key={item.id}
@@ -785,6 +829,13 @@ export function PropertyEditView({
                         className="aspect-video w-full"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
+                      />
+                    ) : isDirectVideo ? (
+                      <video
+                        src={item.url}
+                        controls
+                        className="aspect-video w-full"
+                        preload="metadata"
                       />
                     ) : (
                       <a
@@ -812,7 +863,7 @@ export function PropertyEditView({
           )}
           {videos.length === 0 && (
             <p className="mt-2 text-[12px] text-ink/45">
-              Sin videos aún. Añade un enlace de YouTube o Vimeo.
+              Sin videos aún. Añade un enlace de YouTube/Vimeo o sube un archivo MP4.
             </p>
           )}
         </Section>
