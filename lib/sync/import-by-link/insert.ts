@@ -1,7 +1,12 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { downloadAndWatermark } from "../watermark";
+import { cleanDynamicWatermark } from "../watermark-dynamic";
 import type { ImportPreview } from "./types";
+
+// Portales donde cada anuncio trae la marca de la AGENCIA anunciante (no una
+// marca fija): tras importar, se le pasa el borrado dinámico en segundo plano.
+const DYNAMIC_WATERMARK_PORTALS = new Set(["idealista", "fotocasa"]);
 
 // Inserta una propiedad importada por link. Para que "Crear propiedad" sea
 // INSTANTÁNEO aunque la ficha tenga muchas fotos (UrbantecHome trae 30-46), NO
@@ -271,14 +276,26 @@ export async function insertImportedProperty(
     }
   }
 
-  // Re-alojado en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En pm2 el
-  // proceso sigue vivo y completa la descarga/optimización de las fotos.
-  void rehostPhotosInBackground({
-    propertyId,
-    agencySlug,
-    externalId: overrides.externalReference,
-    sources,
-  }).catch(() => {});
+  // Trabajo de fotos en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En
+  // pm2 el proceso sigue vivo. Primero re-aloja (descarga/optimiza/sube), y para
+  // portales con marca de agencia (Idealista/Fotocasa) después le pasa el
+  // borrado dinámico sobre las fotos ya almacenadas.
+  void (async () => {
+    await rehostPhotosInBackground({
+      propertyId,
+      agencySlug,
+      externalId: overrides.externalReference,
+      sources,
+    });
+    if (DYNAMIC_WATERMARK_PORTALS.has(preview.portal)) {
+      await cleanDynamicWatermark({
+        propertyId,
+        agencySlug,
+        externalId: overrides.externalReference,
+        photoCount: sources.length,
+      });
+    }
+  })().catch(() => {});
 
   return {
     ok: true,
