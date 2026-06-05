@@ -1,12 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { downloadAndWatermark } from "../watermark";
-import { cleanDynamicWatermark } from "../watermark-dynamic";
 import type { ImportPreview } from "./types";
-
-// Portales donde cada anuncio trae la marca de la AGENCIA anunciante (no una
-// marca fija): tras importar, se le pasa el borrado dinámico en segundo plano.
-const DYNAMIC_WATERMARK_PORTALS = new Set(["idealista", "fotocasa"]);
 
 // Inserta una propiedad importada por link. Para que "Crear propiedad" sea
 // INSTANTÁNEO aunque la ficha tenga muchas fotos (UrbantecHome trae 30-46), NO
@@ -276,26 +271,20 @@ export async function insertImportedProperty(
     }
   }
 
-  // Trabajo de fotos en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En
-  // pm2 el proceso sigue vivo. Primero re-aloja (descarga/optimiza/sube), y para
-  // portales con marca de agencia (Idealista/Fotocasa) después le pasa el
-  // borrado dinámico sobre las fotos ya almacenadas.
-  void (async () => {
-    await rehostPhotosInBackground({
-      propertyId,
-      agencySlug,
-      externalId: overrides.externalReference,
-      sources,
-    });
-    if (DYNAMIC_WATERMARK_PORTALS.has(preview.portal)) {
-      await cleanDynamicWatermark({
-        propertyId,
-        agencySlug,
-        externalId: overrides.externalReference,
-        photoCount: sources.length,
-      });
-    }
-  })().catch(() => {});
+  // Re-alojado en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En pm2 el
+  // proceso sigue vivo y completa la descarga/optimización de las fotos.
+  //
+  // NOTA: el borrado dinámico de marca (cleanDynamicWatermark) NO se ejecuta
+  // automáticamente. Con pocas fotos o sin marca real, la detección puede fallar
+  // y destrozar las fotos (le pasó a un anuncio sin marca de Vip Consultores).
+  // Se ejecuta SOLO a mano sobre anuncios concretos cuya agencia sí marca las
+  // fotos (scripts/wmrm/clean-property-watermark.sh <slug>).
+  void rehostPhotosInBackground({
+    propertyId,
+    agencySlug,
+    externalId: overrides.externalReference,
+    sources,
+  }).catch(() => {});
 
   return {
     ok: true,
