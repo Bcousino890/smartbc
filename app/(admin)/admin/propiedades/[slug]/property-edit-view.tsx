@@ -65,6 +65,7 @@ export type PropertyForEdit = {
   features_manual: string[];
   latitude: number | null;
   longitude: number | null;
+  available_from: string | null;
   bc_reference: string | null;
   property_reference: string;
   source: "manual" | "scrape" | "api";
@@ -124,6 +125,9 @@ export function PropertyEditView({
   );
   const [zone, setZone] = useState(property.zone);
   const [address, setAddress] = useState(property.address ?? "");
+  const [operation, setOperation] = useState(property.operation);
+  const [stay, setStay] = useState<"short" | "long" | "">(property.stay ?? "");
+  const [availableFrom, setAvailableFrom] = useState(property.available_from ?? "");
   const [status, setStatus] = useState(property.status);
   const [ownerName, setOwnerName] = useState(property.owner_name ?? "");
   const [ownerPhone, setOwnerPhone] = useState(property.owner_phone ?? "");
@@ -263,6 +267,9 @@ export function PropertyEditView({
         squareMeters: squareMeters === "" ? null : Number(squareMeters),
         zone,
         address: address || null,
+        operation,
+        stay: stay || null,
+        availableFrom: availableFrom || null,
         status,
         ownerName: ownerName || null,
         ownerPhone: ownerPhone || null,
@@ -537,6 +544,43 @@ export function PropertyEditView({
               placeholder={t("adminProps.detail.addressPlaceholder")}
             />
           </Field>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Field label="Operación">
+              <select
+                value={operation}
+                onChange={(e) =>
+                  setOperation(e.target.value as "rent" | "sale")
+                }
+                className={inputClass}
+              >
+                <option value="rent">Alquiler</option>
+                <option value="sale">Venta</option>
+              </select>
+            </Field>
+            <Field label="Modalidad">
+              <select
+                value={stay}
+                onChange={(e) =>
+                  setStay(e.target.value as "short" | "long" | "")
+                }
+                className={inputClass}
+                disabled={operation === "sale"}
+              >
+                <option value="">— No aplica —</option>
+                <option value="long">Larga estancia</option>
+                <option value="short">Corta estancia</option>
+              </select>
+            </Field>
+            <Field label="Disponible desde">
+              <input
+                type="date"
+                value={availableFrom}
+                onChange={(e) => setAvailableFrom(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
 
           {/* Mapa con la ubicación REAL geocodificada (uso interno —
               dirección exacta visible). El admin lo usa para verificar

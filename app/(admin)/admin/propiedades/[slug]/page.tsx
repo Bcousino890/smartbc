@@ -26,6 +26,7 @@ export default async function PropertyDetailPage({
         bedrooms: number;
         bathrooms: number;
         square_meters: number | null;
+        available_from: string | null;
         zone: string;
         address: string | null;
         features: string[] | null;
@@ -99,6 +100,7 @@ export default async function PropertyDetailPage({
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
         square_meters: property.square_meters,
+        available_from: property.available_from,
         zone: property.zone,
         address: property.address,
         features: property.features ?? [],

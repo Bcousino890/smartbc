@@ -336,6 +336,9 @@ export type UpdatePropertyInput = {
   title?: string;
   description?: string | null;
   price?: number;
+  operation?: "rent" | "sale";
+  stay?: "short" | "long" | null;
+  availableFrom?: string | null;
   bedrooms?: number;
   bathrooms?: number;
   squareMeters?: number | null;
@@ -372,6 +375,10 @@ export async function updateProperty(
   if (input.title !== undefined) payload.title = input.title.trim();
   if (input.description !== undefined)
     payload.description = input.description?.trim() || null;
+  if (input.operation !== undefined) payload.operation = input.operation;
+  if (input.stay !== undefined) payload.stay = input.stay;
+  if (input.availableFrom !== undefined)
+    payload.available_from = input.availableFrom || null;
   if (input.price !== undefined) payload.price = input.price;
   if (input.bedrooms !== undefined) payload.bedrooms = input.bedrooms;
   if (input.bathrooms !== undefined) payload.bathrooms = input.bathrooms;
