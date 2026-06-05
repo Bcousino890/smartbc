@@ -59,11 +59,13 @@ interface AdminSidebarProps {
   currentRole?: string;
   /** Cantidad de visitas pendientes para el badge de Calendario. */
   pendingVisits?: number;
+  /** Mensajes directos no leídos para el badge de Mensajes. */
+  unreadMessages?: number;
   /** Callback para notificar al padre cuando el sidebar abre/cierra (mobile). */
   onOpenChange?: (open: boolean) => void;
 }
 
-export function AdminSidebar({ user, currentRole, pendingVisits = 0, onOpenChange }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, pendingVisits = 0, unreadMessages = 0, onOpenChange }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -141,6 +143,7 @@ export function AdminSidebar({ user, currentRole, pendingVisits = 0, onOpenChang
               const active =
                 pathname === href || pathname.startsWith(`${href}/`);
               const isCalendario = href === "/admin/calendario";
+              const isMensajes = href === "/admin/mensajes";
               return (
                 <li key={href}>
                   <Link
@@ -159,6 +162,11 @@ export function AdminSidebar({ user, currentRole, pendingVisits = 0, onOpenChang
                     {isCalendario && pendingVisits > 0 && (
                       <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
                         {pendingVisits}
+                      </span>
+                    )}
+                    {isMensajes && unreadMessages > 0 && (
+                      <span className="ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                        {unreadMessages > 99 ? "99+" : unreadMessages}
                       </span>
                     )}
                   </Link>

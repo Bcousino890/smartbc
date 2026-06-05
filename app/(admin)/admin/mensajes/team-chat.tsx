@@ -363,6 +363,8 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPropDropdown, setShowPropDropdown] = useState(false);
+  // Property references detected in the current draft (for inline preview)
+  const [draftRefs, setDraftRefs] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -442,6 +444,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
   useEffect(() => {
     if (!activeView) return;
     setDraft("");
+    setDraftRefs([]);
     setError(null);
 
     if (activeView.type === "channel") {
@@ -452,6 +455,12 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
       setChannelMessages([]);
       setDmMessages([]);
       fetchDmMessages(activeView.conversationId);
+      // Mark the conversation as read (fire-and-forget)
+      fetch("/api/admin/team/direct/mark-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeView.conversationId }),
+      }).catch(() => {});
     } else {
       // Pending new conversation — clear messages
       setChannelMessages([]);
@@ -468,6 +477,12 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
         fetchChannelMessages(activeView.id, true);
       } else if (!activeView.conversationId.startsWith("new:")) {
         fetchDmMessages(activeView.conversationId, true);
+        // Keep read receipt up-to-date while user is looking at the conversation
+        fetch("/api/admin/team/direct/mark-read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId: activeView.conversationId }),
+        }).catch(() => {});
       }
     }, 5000);
     return () => {
@@ -574,6 +589,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
   const handleSend = (e: React.FormEvent) => {
     if (!activeView) return;
     setShowPropDropdown(false);
+    setDraftRefs([]);
     if (activeView.type === "channel") return handleSendChannel(e);
     return handleSendDm(e);
   };
@@ -593,6 +609,14 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
     setDraft(value);
     // Show /propiedad dropdown when the user types "/propiedad " (with space)
     setShowPropDropdown(value === "/propiedad " || value.startsWith("/propiedad "));
+    // Detect property references in the draft for inline preview
+    // Only show preview if not in /propiedad dropdown mode
+    if (!value.startsWith("/propiedad ")) {
+      const refs = extractPropertyRefs(value);
+      setDraftRefs(refs);
+    } else {
+      setDraftRefs([]);
+    }
   };
 
   const handlePropSelect = (bcRef: string) => {
@@ -882,6 +906,14 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
               >
                 {showPropDropdown && (
                   <PropiedadDropdown onSelect={handlePropSelect} />
+                )}
+                {/* Inline property previews while typing */}
+                {!showPropDropdown && draftRefs.length > 0 && (
+                  <div className="absolute bottom-full left-3 right-3 z-40 mb-1 flex flex-col gap-1 pb-0.5">
+                    {draftRefs.map((ref) => (
+                      <PropertyPreviewCard key={ref} refStr={ref} />
+                    ))}
+                  </div>
                 )}
                 <input
                   type="text"

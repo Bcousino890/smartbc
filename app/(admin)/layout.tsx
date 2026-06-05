@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { isStaffRole } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
@@ -39,6 +40,59 @@ export default async function AdminLayout({
     // Silently default to 0 if the query fails (e.g. missing column from migration 0027)
   }
 
+  // Obtener mensajes directos no leídos para el badge del sidebar
+  // Wrapped in try-catch: migration 0030 may not be applied yet on the VPS
+  let unreadMessages: number = 0;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createAdminClient() as any;
+
+    // Get all conversations for this user
+    const { data: convs } = await sb
+      .from("team_direct_conversations")
+      .select("id")
+      .or(`participant_a.eq.${profile.id},participant_b.eq.${profile.id}`) as {
+      data: Array<{ id: string }> | null;
+    };
+
+    if (convs && convs.length > 0) {
+      const convIds = convs.map((c: { id: string }) => c.id);
+
+      // Get last read timestamps for this user
+      const { data: reads } = await sb
+        .from("team_conversation_reads")
+        .select("conversation_id, read_at")
+        .eq("user_id", profile.id)
+        .in("conversation_id", convIds) as {
+        data: Array<{ conversation_id: string; read_at: string }> | null;
+      };
+
+      const readMap = new Map<string, string>(
+        (reads ?? []).map((r: { conversation_id: string; read_at: string }) => [
+          r.conversation_id,
+          r.read_at,
+        ]),
+      );
+
+      // Count unread per conversation
+      await Promise.all(
+        convIds.map(async (convId: string) => {
+          const lastRead = readMap.get(convId);
+          let q = sb
+            .from("team_direct_messages")
+            .select("id", { count: "exact", head: true })
+            .eq("conversation_id", convId)
+            .neq("sender_id", profile.id);
+          if (lastRead) q = q.gt("created_at", lastRead);
+          const { count } = (await q) as { count: number | null };
+          if (count && count > 0) unreadMessages += count;
+        }),
+      );
+    }
+  } catch {
+    // Silently default to 0 if the query fails (e.g. missing migration 0030)
+  }
+
   return (
     <div className="relative min-h-screen bg-cream-50">
       {/* Soft warm background */}
@@ -56,7 +110,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} pendingVisits={pendingVisits ?? 0} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
