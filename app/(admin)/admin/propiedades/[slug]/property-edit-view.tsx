@@ -6,19 +6,31 @@ import {
   Check,
   ExternalLink,
   FileDown,
+  FileImage,
   Image as ImageIcon,
   Info,
   Link2,
   Loader2,
+  MapIcon,
+  Plus,
   Save,
   Send,
+  Trash2,
   User,
+  Video,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { updateProperty } from "@/app/(admin)/admin/propiedades/actions";
+import { useRef, useState, useTransition } from "react";
+import {
+  updateProperty,
+  addPropertyVideo,
+  uploadPropertyPlan,
+  deletePropertyMedia,
+  type MediaItem,
+} from "@/app/(admin)/admin/propiedades/actions";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import {
   type SmartLinkRow,
@@ -75,15 +87,31 @@ type SaveState =
 export function PropertyEditView({
   property,
   shares,
+  videos: initialVideos = [],
+  plans: initialPlans = [],
 }: {
   property: PropertyForEdit;
   shares: SmartLinkRow[];
+  videos?: MediaItem[];
+  plans?: MediaItem[];
 }) {
   const t = useT();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
   const [photosOpen, setPhotosOpen] = useState(false);
+
+  // Videos state
+  const [videos, setVideos] = useState<MediaItem[]>(initialVideos);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [addingVideo, setAddingVideo] = useState(false);
+
+  // Planos state
+  const [plans, setPlans] = useState<MediaItem[]>(initialPlans);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [uploadingPlan, setUploadingPlan] = useState(false);
+  const planInputRef = useRef<HTMLInputElement>(null);
 
   // Estado del form. Inicializamos con los valores actuales.
   const [title, setTitle] = useState(property.title);
@@ -129,6 +157,70 @@ export function PropertyEditView({
   const removeManualFeature = (f: string) => {
     setFeaturesManual((prev) => prev.filter((x) => x !== f));
   };
+
+  // ─── Video handlers ────────────────────────────────────────────────────
+  async function handleAddVideo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!videoUrl.trim()) return;
+    setAddingVideo(true);
+    setVideoError(null);
+    const res = await addPropertyVideo(property.slug, videoUrl.trim());
+    if (res.ok) {
+      setVideos((v) => [...v, res.item]);
+      setVideoUrl("");
+    } else {
+      setVideoError(res.error);
+    }
+    setAddingVideo(false);
+  }
+
+  async function handleDeleteVideo(item: MediaItem) {
+    if (!confirm("¿Eliminar este video?")) return;
+    await deletePropertyMedia(property.slug, item.id, item.storage_path);
+    setVideos((v) => v.filter((x) => x.id !== item.id));
+  }
+
+  // ─── Plan handlers ─────────────────────────────────────────────────────
+  async function handlePlanUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setPlanError(null);
+    setUploadingPlan(true);
+    for (const file of files) {
+      const fd = new FormData();
+      fd.set("slug", property.slug);
+      fd.set("file", file);
+      const res = await uploadPropertyPlan(fd);
+      if (res.ok) setPlans((p) => [...p, res.item]);
+      else { setPlanError(res.error); break; }
+    }
+    setUploadingPlan(false);
+    if (planInputRef.current) planInputRef.current.value = "";
+  }
+
+  async function handleDeletePlan(item: MediaItem) {
+    if (!confirm("¿Eliminar este plano?")) return;
+    await deletePropertyMedia(property.slug, item.id, item.storage_path);
+    setPlans((p) => p.filter((x) => x.id !== item.id));
+  }
+
+  function getEmbedUrl(url: string): string | null {
+    try {
+      const u = new URL(url);
+      if (u.hostname.includes("youtu.be")) {
+        return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+      }
+      if (u.hostname.includes("youtube.com")) {
+        const id = u.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.hostname.includes("vimeo.com")) {
+        const id = u.pathname.split("/").filter(Boolean).pop();
+        return id ? `https://player.vimeo.com/video/${id}` : null;
+      }
+    } catch {}
+    return null;
+  }
 
   const isScraped = property.source === "scrape";
 
@@ -603,6 +695,147 @@ export function PropertyEditView({
               })}
             </span>
           </button>
+        </Section>
+
+        {/* Videos */}
+        <Section
+          icon={<Video size={15} strokeWidth={1.75} />}
+          title="Videos"
+        >
+          <form onSubmit={handleAddVideo} className="flex gap-2">
+            <input
+              type="url"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=… o Vimeo"
+              className={cn(inputClass, "flex-1")}
+            />
+            <button
+              type="submit"
+              disabled={addingVideo || !videoUrl.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+            >
+              {addingVideo ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Plus size={13} strokeWidth={1.75} />
+              )}
+              Añadir
+            </button>
+          </form>
+          {videoError && (
+            <p className="mt-1 text-[12px] text-rose-700">{videoError}</p>
+          )}
+          {videos.length > 0 && (
+            <div className="mt-3 flex flex-col gap-3">
+              {videos.map((item) => {
+                const embed = getEmbedUrl(item.url);
+                return (
+                  <div
+                    key={item.id}
+                    className="relative overflow-hidden rounded-lg border border-ink/10 bg-white/85"
+                  >
+                    {embed ? (
+                      <iframe
+                        src={embed}
+                        className="aspect-video w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-ink/75 hover:text-gold"
+                      >
+                        <Video size={14} strokeWidth={1.75} />
+                        {item.url}
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteVideo(item)}
+                      className="absolute right-2 top-2 rounded-full bg-ink/70 p-1 text-white transition hover:bg-rose-700"
+                      title="Eliminar video"
+                    >
+                      <Trash2 size={13} strokeWidth={1.75} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {videos.length === 0 && (
+            <p className="mt-2 text-[12px] text-ink/45">
+              Sin videos aún. Añade un enlace de YouTube o Vimeo.
+            </p>
+          )}
+        </Section>
+
+        {/* Planos */}
+        <Section
+          icon={<FileImage size={15} strokeWidth={1.75} />}
+          title="Planos"
+        >
+          <input
+            type="file"
+            ref={planInputRef}
+            multiple
+            accept="image/*"
+            onChange={handlePlanUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => planInputRef.current?.click()}
+            disabled={uploadingPlan}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+          >
+            {uploadingPlan ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Plus size={13} strokeWidth={1.75} />
+            )}
+            Subir plano
+          </button>
+          {planError && (
+            <p className="mt-1 text-[12px] text-rose-700">{planError}</p>
+          )}
+          {plans.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+              {plans.map((item) => (
+                <div
+                  key={item.id}
+                  className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-ink/10 bg-ink/5"
+                >
+                  <Image
+                    src={item.url}
+                    alt={item.file_name}
+                    fill
+                    sizes="(max-width: 768px) 50vw, 33vw"
+                    className="object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePlan(item)}
+                    className="absolute right-1.5 top-1.5 rounded-full bg-ink/70 p-1 text-white opacity-0 transition hover:bg-rose-700 group-hover:opacity-100"
+                    title="Eliminar plano"
+                  >
+                    <Trash2 size={13} strokeWidth={1.75} />
+                  </button>
+                  <div className="absolute inset-x-0 bottom-0 truncate bg-ink/60 px-2 py-1 text-[11px] text-white opacity-0 transition group-hover:opacity-100">
+                    {item.file_name}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {plans.length === 0 && (
+            <p className="mt-2 text-[12px] text-ink/45">
+              Sin planos aún. Sube imágenes de la distribución.
+            </p>
+          )}
         </Section>
 
         {/* Barra inferior sticky con guardar */}
