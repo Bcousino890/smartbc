@@ -1,5 +1,5 @@
 import "server-only";
-import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 
@@ -40,7 +40,7 @@ export async function GET(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (await createClient()) as any;
+  const db = createAdminClient() as any;
 
   // Fetch target user's role
   const { data: profile, error: profileErr } = await db
@@ -127,7 +127,7 @@ export async function POST(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (await createClient()) as any;
+  const db = createAdminClient() as any;
 
   // Delete all existing overrides for this user
   const { error: deleteErr } = await db

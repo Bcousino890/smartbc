@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "../server";
+import { createAdminClient } from "../admin";
 import type { Database } from "../database.types";
 import type {
   ClientPreferencesRow,
@@ -68,7 +69,8 @@ export async function getVisitRequestsStats() {
 }
 
 export async function getStaff() {
-  const supabase = await createClient();
+  // Use admin client to bypass RLS policies on profiles table
+  const supabase = createAdminClient();
 
   // Try with all roles (requires migration 0025 enum values to exist)
   const { data, error } = await supabase
