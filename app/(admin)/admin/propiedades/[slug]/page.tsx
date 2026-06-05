@@ -54,6 +54,15 @@ export default async function PropertyDetailPage({
               is_cover: boolean;
             }>
           | null;
+        property_media:
+          | Array<{
+              id: string;
+              url: string;
+              file_name: string;
+              type: "video" | "plan";
+              storage_path: string;
+            }>
+          | null;
       })
     | null;
   if (!property) notFound();
@@ -66,12 +75,18 @@ export default async function PropertyDetailPage({
     .slice()
     .sort((a, b) => a.position - b.position);
 
+  const allMedia = property.property_media ?? [];
+  const videos = allMedia.filter((m) => m.type === "video");
+  const plans = allMedia.filter((m) => m.type === "plan");
+
   // SmartLinks de esta propiedad (con stats de aperturas).
   const shares = await getSharesForProperty(property.id);
 
   return (
     <PropertyEditView
       shares={shares}
+      videos={videos}
+      plans={plans}
       property={{
         id: property.id,
         slug: property.slug,
