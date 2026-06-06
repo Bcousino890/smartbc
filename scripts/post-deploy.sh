@@ -4,15 +4,21 @@
 # Se encarga de aplicar migraciones y otros cambios necesarios
 # Uso: Se debe llamar automáticamente desde el cron de deploy
 
-set -e
-
 echo "🚀 Post-deploy: Aplicando cambios..."
 echo ""
 
 # Detectar si estamos en Docker o no
-if command -v docker &> /dev/null; then
+if command -v docker &> /dev/null && docker ps | grep -q supabase-db; then
   DB_CMD="docker exec -i supabase-db psql -U postgres -d postgres"
   echo "✅ Docker disponible - usando contenedor supabase-db"
+elif command -v docker &> /dev/null; then
+  echo "⚠️  Contenedor supabase-db no está corriendo. Intentando iniciar..."
+  docker start supabase-db 2>/dev/null || echo "No se pudo iniciar. Usando psql local si está disponible."
+  if docker ps | grep -q supabase-db; then
+    DB_CMD="docker exec -i supabase-db psql -U postgres -d postgres"
+  else
+    DB_CMD="psql -U postgres -d postgres"
+  fi
 else
   DB_CMD="psql -U postgres -d postgres"
   echo "⚠️  Docker no disponible - usando psql local"
@@ -21,22 +27,26 @@ fi
 # Aplicar migraciones
 echo "📝 Aplicando migraciones SQL..."
 MIGRATION_COUNT=0
+ERROR_COUNT=0
 
 for migration in supabase/migrations/*.sql; do
   if [ -f "$migration" ]; then
     filename=$(basename "$migration")
     echo "  • $filename"
 
-    # Ejecutar migración
-    if $DB_CMD < "$migration" 2>/dev/null; then
+    # Ejecutar migración con timeout de 30s
+    if timeout 30 $DB_CMD < "$migration" 2>&1 | grep -q "ERROR\|error"; then
+      echo "    ⚠️  (puede ser normal si ya está aplicada)"
+      ((ERROR_COUNT++))
+    elif timeout 30 $DB_CMD < "$migration" > /dev/null 2>&1; then
       ((MIGRATION_COUNT++))
     else
-      echo "    ⚠️  (puede ser normal si ya está aplicada)"
+      echo "    ⚠️  (timeout o ya aplicada)"
     fi
   fi
 done
 
-echo "✅ $MIGRATION_COUNT migraciones procesadas"
+echo "✅ $MIGRATION_COUNT migraciones procesadas ($ERROR_COUNT mensajes de advertencia)"
 echo ""
 
 # Instalar dependencias si es necesario
@@ -48,8 +58,12 @@ fi
 # Build de Next.js
 if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
   echo "🔨 Compilando Next.js..."
-  npm run build
-  echo "✅ Build exitoso"
+  if npm run build; then
+    echo "✅ Build exitoso"
+  else
+    echo "❌ Error en build - revisa los logs arriba"
+    exit 1
+  fi
 fi
 
 echo ""
