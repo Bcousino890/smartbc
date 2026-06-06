@@ -15,6 +15,7 @@ import {
   Send,
   Settings,
   Sparkles,
+  Stethoscope,
   User,
   UserCog,
   Users,
@@ -52,6 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/sindicacion",   labelKey: "admin.nav.sindicacion",   icon: Radio },
   { href: "/admin/reportes",      labelKey: "admin.nav.reportes",      icon: BarChart3,    permissionResource: "reportes"      },
   { href: "/admin/usuarios",      labelKey: "admin.nav.usuarios",      icon: UserCog,      permissionResource: "usuarios"      },
+  { href: "/admin/diagnostico",   labelKey: "Diagnóstico",             icon: Stethoscope },
   { href: "/admin/configuracion", labelKey: "admin.nav.configuracion", icon: Settings,     permissionResource: "configuracion" },
 ];
 
