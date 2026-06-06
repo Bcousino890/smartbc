@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PermissionsDrawer } from "@/components/admin/permissions/permissions-drawer";
 
 const ROLE_BADGE: Record<InternalUserRole, string> = {
   owner:        "border-violet-200 bg-violet-50 text-violet-700",
@@ -482,67 +483,6 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   );
 }
 
-// ─── Permisos modal ───────────────────────────────────────────────────────
-
-interface PermissionsModalProps {
-  user: InternalUser;
-  onClose: () => void;
-}
-
-function PermissionsModal({ user, onClose }: PermissionsModalProps) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl bg-cream-50 p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-xl font-semibold text-ink">Permisos</h2>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
-          >
-            <X size={18} strokeWidth={2} />
-          </button>
-        </div>
-        <div className="flex flex-col items-center gap-4 py-4 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
-            <ShieldCheck size={24} strokeWidth={1.75} className="text-blue-500" />
-          </span>
-          <div>
-            <p className="font-medium text-ink">
-              {user.firstName} {user.lastName}
-            </p>
-            <span
-              className={cn(
-                "mt-1 inline-block rounded-md border px-2 py-0.5 text-[10px] font-medium",
-                ROLE_BADGE[user.roleKey],
-              )}
-            >
-              {ROLE_LABEL[user.roleKey]}
-            </span>
-          </div>
-          <p className="text-sm text-ink/60">
-            La gestión granular de permisos estará disponible próximamente.
-          </p>
-        </div>
-        <div className="mt-2 flex justify-center">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-ink/10 px-6 py-2.5 text-sm text-ink/65 transition hover:border-ink/20 hover:text-ink"
-          >
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Fila de usuario ─────────────────────────────────────────────────────
 
 interface UserRowProps {
@@ -770,9 +710,11 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
         />
       )}
       {permissionsUser && (
-        <PermissionsModal
+        <PermissionsDrawer
           user={permissionsUser}
+          canEdit={currentUserRole === "admin" || currentUserRole === "owner"}
           onClose={() => setPermissionsUser(null)}
+          onSaved={handleSuccess}
         />
       )}
 

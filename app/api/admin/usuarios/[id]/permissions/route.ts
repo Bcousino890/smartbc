@@ -1,21 +1,16 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { canAccess } from "@/lib/permissions";
+import {
+  canAccess,
+  PERMISSION_ACTIONS,
+  PERMISSION_RESOURCES,
+} from "@/lib/permissions";
 
-// Resources and actions shown in the permissions matrix
-const RESOURCES = [
-  "properties",
-  "particulares",
-  "clientes",
-  "solicitudes",
-  "mensajes",
-  "reportes",
-  "usuarios",
-  "configuracion",
-] as const;
-
-const ACTIONS = ["view", "edit", "create", "delete", "export"] as const;
+// Resources and actions shown in the permissions matrix.
+// Canonical set lives in lib/permissions.ts so canAccess() resolves every cell.
+const RESOURCES = PERMISSION_RESOURCES;
+const ACTIONS = PERMISSION_ACTIONS;
 
 type PermValue = true | false | "override_true" | "override_false";
 

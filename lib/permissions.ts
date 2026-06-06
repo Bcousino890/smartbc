@@ -1,86 +1,170 @@
 /**
  * Sistema de permisos para roles de agentes inmobiliarios.
  *
- * Recursos: particulares | properties | mensajes | usuarios | reportes | configuracion | visitas
- * Acciones: view | create | edit | delete | contact
+ * Modelo canónico (ÚNICO) usado por:
+ *   - canAccess() y las matrices PERMISSIONS_BY_ROLE de este archivo
+ *   - app/api/admin/usuarios/[id]/permissions/route.ts (RESOURCES / ACTIONS)
+ *   - La UI de gestión de permisos (components/admin/permissions/**)
+ *
+ * Recursos: properties | particulares | clientes | solicitudes | mensajes |
+ *           reportes | usuarios | configuracion | calendario
+ * Acciones: view | create | edit | delete | export
  */
 
 export type PermissionResource =
-  | "particulares"
   | "properties"
+  | "particulares"
+  | "clientes"
+  | "solicitudes"
   | "mensajes"
-  | "usuarios"
   | "reportes"
+  | "usuarios"
   | "configuracion"
-  | "visitas";
+  | "calendario";
 
-export type PermissionAction = "view" | "create" | "edit" | "delete" | "contact";
+export type PermissionAction = "view" | "create" | "edit" | "delete" | "export";
 
 type PermissionMatrix = Record<PermissionResource, Record<PermissionAction, boolean>>;
+
+// ─── Orden canónico (para iterar de forma estable en API y UI) ────────────────
+
+export const PERMISSION_RESOURCES: readonly PermissionResource[] = [
+  "properties",
+  "particulares",
+  "clientes",
+  "solicitudes",
+  "mensajes",
+  "reportes",
+  "usuarios",
+  "configuracion",
+  "calendario",
+] as const;
+
+export const PERMISSION_ACTIONS: readonly PermissionAction[] = [
+  "view",
+  "create",
+  "edit",
+  "delete",
+  "export",
+] as const;
+
+// ─── Etiquetas y descripciones en español (para la UI) ────────────────────────
+
+export const RESOURCE_LABELS: Record<PermissionResource, string> = {
+  properties:    "Propiedades",
+  particulares:  "Particulares",
+  clientes:      "Clientes",
+  solicitudes:   "Solicitudes y visitas",
+  mensajes:      "Mensajes",
+  reportes:      "Reportes",
+  usuarios:      "Usuarios",
+  configuracion: "Configuración",
+  calendario:    "Calendario",
+};
+
+export const RESOURCE_DESCRIPTIONS: Record<PermissionResource, string> = {
+  properties:    "Cartera de propiedades de la agencia.",
+  particulares:  "Captaciones y anuncios de particulares.",
+  clientes:      "Base de datos de clientes y leads.",
+  solicitudes:   "Solicitudes de información y visitas.",
+  mensajes:      "Bandeja de mensajes y conversaciones.",
+  reportes:      "Informes y métricas del negocio.",
+  usuarios:      "Equipo interno y gestión de cuentas.",
+  configuracion: "Ajustes generales de la cuenta.",
+  calendario:    "Agenda, citas y eventos.",
+};
+
+export const ACTION_LABELS: Record<PermissionAction, string> = {
+  view:   "Ver",
+  create: "Crear",
+  edit:   "Editar",
+  delete: "Eliminar",
+  export: "Exportar",
+};
+
+export const ACTION_DESCRIPTIONS: Record<PermissionAction, string> = {
+  view:   "Consultar y acceder a los registros.",
+  create: "Añadir nuevos registros.",
+  edit:   "Modificar registros existentes.",
+  delete: "Eliminar registros de forma permanente.",
+  export: "Descargar o exportar los datos.",
+};
 
 // ─── Matrices por rol ─────────────────────────────────────────────────────────
 
 const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
-  particulares:  { view: true,  create: false, edit: false, delete: false, contact: true  },
-  properties:    { view: true,  create: false, edit: false, delete: false, contact: false },
-  mensajes:      { view: true,  create: false, edit: false, delete: false, contact: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, contact: false },
-  reportes:      { view: false, create: false, edit: false, delete: false, contact: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, contact: false },
-  visitas:       { view: true,  create: false, edit: false, delete: false, contact: false },
+  properties:    { view: true,  create: false, edit: false, delete: false, export: false },
+  particulares:  { view: true,  create: false, edit: false, delete: false, export: false },
+  clientes:      { view: true,  create: false, edit: false, delete: false, export: false },
+  solicitudes:   { view: true,  create: false, edit: false, delete: false, export: false },
+  mensajes:      { view: true,  create: false, edit: false, delete: false, export: false },
+  reportes:      { view: false, create: false, edit: false, delete: false, export: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  calendario:    { view: true,  create: false, edit: false, delete: false, export: false },
 };
 
 const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
-  particulares:  { view: true,  create: false, edit: true,  delete: false, contact: true  },
-  properties:    { view: true,  create: true,  edit: true,  delete: false, contact: false },
-  mensajes:      { view: true,  create: false, edit: false, delete: false, contact: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, contact: false },
-  reportes:      { view: false, create: false, edit: false, delete: false, contact: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, contact: false },
-  visitas:       { view: true,  create: true,  edit: true,  delete: false, contact: false },
+  properties:    { view: true,  create: true,  edit: true,  delete: false, export: true  },
+  particulares:  { view: true,  create: true,  edit: true,  delete: false, export: false },
+  clientes:      { view: true,  create: true,  edit: true,  delete: false, export: false },
+  solicitudes:   { view: true,  create: true,  edit: true,  delete: false, export: false },
+  mensajes:      { view: true,  create: true,  edit: false, delete: false, export: false },
+  reportes:      { view: true,  create: false, edit: false, delete: false, export: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  calendario:    { view: true,  create: true,  edit: true,  delete: false, export: false },
 };
 
 const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
-  particulares:  { view: true, create: false, edit: true, delete: true,  contact: true  },
-  properties:    { view: true, create: true,  edit: true, delete: true,  contact: false },
-  mensajes:      { view: true, create: false, edit: false, delete: false, contact: false },
-  usuarios:      { view: true, create: true,  edit: true, delete: false, contact: false },
-  reportes:      { view: true, create: false, edit: false, delete: false, contact: false },
-  configuracion: { view: true, create: false, edit: true,  delete: false, contact: false },
-  visitas:       { view: true, create: true,  edit: true,  delete: true,  contact: false },
+  properties:    { view: true, create: true,  edit: true, delete: true,  export: true  },
+  particulares:  { view: true, create: true,  edit: true, delete: true,  export: true  },
+  clientes:      { view: true, create: true,  edit: true, delete: true,  export: true  },
+  solicitudes:   { view: true, create: true,  edit: true, delete: true,  export: true  },
+  mensajes:      { view: true, create: true,  edit: true, delete: false, export: false },
+  reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
+  usuarios:      { view: true, create: true,  edit: true, delete: false, export: false },
+  configuracion: { view: true, create: false, edit: true, delete: false, export: false },
+  calendario:    { view: true, create: true,  edit: true, delete: true,  export: false },
 };
 
 // Roles con acceso total (owner, admin) — todo permitido
 const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
-  particulares:  { view: true, create: true, edit: true, delete: true, contact: true  },
-  properties:    { view: true, create: true, edit: true, delete: true, contact: true  },
-  mensajes:      { view: true, create: true, edit: true, delete: true, contact: true  },
-  usuarios:      { view: true, create: true, edit: true, delete: true, contact: true  },
-  reportes:      { view: true, create: true, edit: true, delete: true, contact: true  },
-  configuracion: { view: true, create: true, edit: true, delete: true, contact: true  },
-  visitas:       { view: true, create: true, edit: true, delete: true, contact: true  },
+  properties:    { view: true, create: true, edit: true, delete: true, export: true },
+  particulares:  { view: true, create: true, edit: true, delete: true, export: true },
+  clientes:      { view: true, create: true, edit: true, delete: true, export: true },
+  solicitudes:   { view: true, create: true, edit: true, delete: true, export: true },
+  mensajes:      { view: true, create: true, edit: true, delete: true, export: true },
+  reportes:      { view: true, create: true, edit: true, delete: true, export: true },
+  usuarios:      { view: true, create: true, edit: true, delete: true, export: true },
+  configuracion: { view: true, create: true, edit: true, delete: true, export: true },
+  calendario:    { view: true, create: true, edit: true, delete: true, export: true },
 };
 
-// Advisor: similar a full access pero sin gestión de usuarios
+// Advisor: similar a full access pero sin gestión total de usuarios/config
 const ADVISOR_PERMISSIONS: PermissionMatrix = {
-  particulares:  { view: true, create: true,  edit: true,  delete: true,  contact: true  },
-  properties:    { view: true, create: true,  edit: true,  delete: true,  contact: true  },
-  mensajes:      { view: true, create: true,  edit: true,  delete: true,  contact: true  },
-  usuarios:      { view: true, create: false, edit: false, delete: false, contact: false },
-  reportes:      { view: true, create: false, edit: false, delete: false, contact: false },
-  configuracion: { view: true, create: false, edit: true,  delete: false, contact: false },
-  visitas:       { view: true, create: true,  edit: true,  delete: true,  contact: false },
+  properties:    { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  particulares:  { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  clientes:      { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  solicitudes:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  mensajes:      { view: true, create: true,  edit: true,  delete: false, export: false },
+  reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
+  usuarios:      { view: true, create: false, edit: false, delete: false, export: false },
+  configuracion: { view: true, create: false, edit: true,  delete: false, export: false },
+  calendario:    { view: true, create: true,  edit: true,  delete: true,  export: false },
 };
 
 // Sin acceso (client, viewer, roles desconocidos)
 const NO_ACCESS_PERMISSIONS: PermissionMatrix = {
-  particulares:  { view: false, create: false, edit: false, delete: false, contact: false },
-  properties:    { view: false, create: false, edit: false, delete: false, contact: false },
-  mensajes:      { view: false, create: false, edit: false, delete: false, contact: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, contact: false },
-  reportes:      { view: false, create: false, edit: false, delete: false, contact: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, contact: false },
-  visitas:       { view: false, create: false, edit: false, delete: false, contact: false },
+  properties:    { view: false, create: false, edit: false, delete: false, export: false },
+  particulares:  { view: false, create: false, edit: false, delete: false, export: false },
+  clientes:      { view: false, create: false, edit: false, delete: false, export: false },
+  solicitudes:   { view: false, create: false, edit: false, delete: false, export: false },
+  mensajes:      { view: false, create: false, edit: false, delete: false, export: false },
+  reportes:      { view: false, create: false, edit: false, delete: false, export: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  calendario:    { view: false, create: false, edit: false, delete: false, export: false },
 };
 
 // ─── Mapa de permisos por rol ─────────────────────────────────────────────────
