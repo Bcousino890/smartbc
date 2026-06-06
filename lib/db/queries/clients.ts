@@ -18,6 +18,8 @@ export type {
 
 export async function getClients(): Promise<ClientWithRelations[]> {
   const supabase = await createClient();
+
+  // Try full query with joins first
   const { data, error } = await supabase
     .from("profiles")
     .select(`
@@ -30,8 +32,21 @@ export async function getClients(): Promise<ClientWithRelations[]> {
     .eq("role", "client")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
-  return (data ?? []) as unknown as ClientWithRelations[];
+  if (!error) return (data ?? []) as unknown as ClientWithRelations[];
+
+  // Fallback: simple query without potentially-missing joins
+  console.error("getClients full query failed, using fallback:", error.message);
+  const { data: fallback, error: fallbackErr } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "client")
+    .order("created_at", { ascending: false });
+
+  if (fallbackErr) {
+    console.error("getClients fallback error:", fallbackErr.message);
+    return [];
+  }
+  return (fallback ?? []) as unknown as ClientWithRelations[];
 }
 
 export async function getVisitRequests(): Promise<VisitRequestWithRelations[]> {

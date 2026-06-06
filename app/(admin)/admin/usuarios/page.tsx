@@ -13,9 +13,9 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
 
 export default async function AdminUsuariosPage() {
   const [staffRows, clientRows, currentUser] = await Promise.all([
-    getStaff(),
-    getClients(),
-    getCurrentProfile(),
+    getStaff().catch((e) => { console.error("getStaff error:", e); return []; }),
+    getClients().catch((e) => { console.error("getClients error:", e); return []; }),
+    getCurrentProfile().catch(() => null),
   ]);
 
   const staffUsers = staffRows.map(profileRowToInternalUser);
