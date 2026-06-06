@@ -84,36 +84,59 @@ export async function getVisitRequestsStats() {
 }
 
 export async function getStaff() {
-  // Use admin client to bypass RLS policies on profiles table
-  const supabase = createAdminClient();
+  const allRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  const legacyRoles = ["owner", "admin", "advisor"];
 
-  // Try with all roles (requires migration 0025 enum values to exist)
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .in("role", ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"])
-    .order("created_at");
-
-  if (!error) {
-    return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
-  }
-
-  // If the enum values from migration 0025 don't exist yet, fall back to legacy roles
-  if (error.message?.includes("invalid input value for enum")) {
-    const { data: fallback, error: fallbackError } = await supabase
+  // Primary: session-based client — works for authenticated staff via RLS (migration 0032)
+  try {
+    const sessionClient = await createClient();
+    const { data, error } = await sessionClient
       .from("profiles")
       .select("*")
-      .in("role", ["owner", "admin", "advisor"])
+      .in("role", allRoles)
       .order("created_at");
 
-    if (fallbackError) {
-      console.error("getStaff fallback error:", fallbackError);
-      return [];
+    if (!error) {
+      return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
     }
+
+    if (error.message?.includes("invalid input value for enum")) {
+      const { data: fallback, error: fallbackErr } = await sessionClient
+        .from("profiles")
+        .select("*")
+        .in("role", legacyRoles)
+        .order("created_at");
+      if (!fallbackErr) {
+        return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+      }
+    }
+    console.error("getStaff session error:", error.message);
+  } catch (e) {
+    console.error("getStaff session client threw:", e);
+  }
+
+  // Fallback: admin client (requires SUPABASE_SERVICE_ROLE_KEY)
+  const adminClient = createAdminClient();
+  const { data: adminData, error: adminError } = await adminClient
+    .from("profiles")
+    .select("*")
+    .in("role", allRoles)
+    .order("created_at");
+
+  if (!adminError) {
+    return (adminData ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  }
+
+  if (adminError.message?.includes("invalid input value for enum")) {
+    const { data: fallback } = await adminClient
+      .from("profiles")
+      .select("*")
+      .in("role", legacyRoles)
+      .order("created_at");
     return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
   }
 
-  console.error("getStaff error:", error);
+  console.error("getStaff all attempts failed:", adminError);
   return [];
 }
 

@@ -240,7 +240,7 @@ export function visitRequestRowToLegacy(
 export function profileRowToInternalUser(
   row: Database["public"]["Tables"]["profiles"]["Row"]
 ): InternalUser {
-  const display = row.full_name?.trim() || row.email;
+  const display = row.full_name?.trim() || row.email || "";
   const [firstName, ...rest] = display.split(/\s+/);
   return {
     id: row.id,
