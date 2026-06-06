@@ -368,12 +368,14 @@ export type VisitRequestStatus =
   | "confirmed"
   | "rescheduled"
   | "rejected"
+  | "cancelled"
   | "completed";
 
 export type VisitRequest = {
   id: string;
   clientName: string;
   clientInitials: string;
+  clientEmail: string;
   propertyTitle: string;
   propertyReference: string;
   requestedDateLabel: string; // e.g. "24 May 2026, 11:00"
@@ -381,6 +383,7 @@ export type VisitRequest = {
   assignedAdvisor: string;
   status: VisitRequestStatus;
   receivedRelativeMinutes: number;
+  createdAt: string; // ISO timestamp
 };
 
 export type VisitRequestsStats = {

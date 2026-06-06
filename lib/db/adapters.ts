@@ -204,7 +204,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
 const VISIT_STATUS_MAP: Record<VisitStatus, VisitRequestStatus> = {
   pending: "pending",
   confirmed: "confirmed",
-  cancelled: "rejected",
+  cancelled: "cancelled",
   completed: "completed",
 };
 
@@ -224,6 +224,7 @@ export function visitRequestRowToLegacy(
     id: row.id,
     clientName,
     clientInitials: deriveInitials(clientName),
+    clientEmail: row.profiles?.email ?? "",
     propertyTitle: row.properties?.title ?? "—",
     propertyReference: row.properties?.external_id ?? row.properties?.slug ?? "",
     requestedDateLabel: VISIT_DATETIME_FMT.format(new Date(row.requested_at)),
@@ -231,6 +232,7 @@ export function visitRequestRowToLegacy(
     assignedAdvisor: "—",
     status: VISIT_STATUS_MAP[row.status],
     receivedRelativeMinutes: minutesSince(row.created_at),
+    createdAt: row.created_at,
   };
 }
 

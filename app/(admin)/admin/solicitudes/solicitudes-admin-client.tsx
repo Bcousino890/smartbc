@@ -1,23 +1,155 @@
 "use client";
 
-import {
-  CheckCircle2,
-  Search,
-  XCircle,
-} from "lucide-react";
-import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/provider";
-import { formatRelativeMinutes } from "@/lib/relative-time";
 import type { VisitRequest, VisitRequestStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { updateVisitStatus } from "./actions";
 
-const STATUS_STYLES: Record<VisitRequestStatus, string> = {
-  pending: "border-amber-200 bg-amber-50 text-amber-700",
-  confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  rescheduled: "border-blue-200 bg-blue-50 text-blue-700",
-  rejected: "border-rose-200 bg-rose-50 text-rose-700",
-  completed: "border-violet-200 bg-violet-50 text-violet-700",
+// ─── Status badge ────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<
+  VisitRequestStatus,
+  { label: string; cls: string }
+> = {
+  pending:     { label: "Pendiente",    cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  confirmed:   { label: "Confirmada",   cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  completed:   { label: "Completada",   cls: "border-blue-200 bg-blue-50 text-blue-700" },
+  cancelled:   { label: "Cancelada",    cls: "border-rose-200 bg-rose-50 text-rose-700" },
+  rescheduled: { label: "Reprogramada", cls: "border-purple-200 bg-purple-50 text-purple-700" },
+  rejected:    { label: "Rechazada",    cls: "border-rose-200 bg-rose-50 text-rose-700" },
 };
+
+function StatusBadge({ status }: { status: VisitRequestStatus }) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        cfg.cls,
+      )}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Tab types ────────────────────────────────────────────────────────────────
+
+type TabKey = "pending" | "confirmed" | "completed" | "cancelled";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "pending",   label: "Pendientes" },
+  { key: "confirmed", label: "Confirmadas" },
+  { key: "completed", label: "Completadas" },
+  { key: "cancelled", label: "Canceladas" },
+];
+
+// ─── Time ago helper ──────────────────────────────────────────────────────────
+
+function timeAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return "Hace un momento";
+  if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
+  if (diff < 604800) return `Hace ${Math.floor(diff / 86400)} días`;
+  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
+
+function VisitCard({ visit }: { visit: VisitRequest }) {
+  const [isPending, startTransition] = useTransition();
+  const [optimisticStatus, setOptimisticStatus] = useState<VisitRequestStatus | null>(null);
+
+  const displayStatus = optimisticStatus ?? visit.status;
+
+  function handleStatus(status: "confirmed" | "cancelled" | "completed") {
+    setOptimisticStatus(status);
+    startTransition(async () => {
+      const res = await updateVisitStatus(visit.id, status);
+      if (!res.ok) {
+        setOptimisticStatus(null);
+      }
+    });
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-gold/15 bg-cream-50/85 p-4 shadow-sm transition-shadow hover:shadow-md",
+        isPending && "opacity-70",
+      )}
+    >
+      {/* Cabecera: avatar + nombre + badge */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-amber-700">
+            {visit.clientInitials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-ink">{visit.clientName}</p>
+            <p className="truncate text-[12px] text-ink/55">{visit.clientEmail}</p>
+          </div>
+        </div>
+        <StatusBadge status={displayStatus} />
+      </div>
+
+      {/* Propiedad */}
+      <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2 text-[12px] text-ink/70">
+        🏠 {visit.propertyTitle}
+        {visit.propertyReference && (
+          <span className="ml-1 font-mono text-amber-700">{visit.propertyReference}</span>
+        )}
+      </div>
+
+      {/* Fecha solicitada */}
+      <p className="mt-1.5 text-[11px] text-ink/45">{visit.requestedDateLabel}</p>
+
+      {/* Timestamp relativo */}
+      <p className="mt-0.5 text-[11px] text-ink/35">{timeAgo(visit.createdAt)}</p>
+
+      {/* Acciones para pendientes */}
+      {displayStatus === "pending" && (
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => handleStatus("confirmed")}
+            className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 py-1.5 text-[12px] font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+          >
+            ✓ Confirmar
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => handleStatus("cancelled")}
+            className="flex-1 rounded-lg border border-rose-200 bg-rose-50 py-1.5 text-[12px] font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+          >
+            ✗ Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* Acción para confirmadas */}
+      {displayStatus === "confirmed" && (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => handleStatus("completed")}
+            className="w-full rounded-lg border border-blue-200 bg-blue-50 py-1.5 text-[12px] font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+          >
+            ✓ Marcar como completada
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main client component ────────────────────────────────────────────────────
 
 export function SolicitudesAdminClient({
   requests,
@@ -26,20 +158,49 @@ export function SolicitudesAdminClient({
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<TabKey>("pending");
+
+  const counts = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const base = q
+      ? requests.filter(
+          (r) =>
+            r.clientName.toLowerCase().includes(q) ||
+            r.propertyTitle.toLowerCase().includes(q) ||
+            r.propertyReference.toLowerCase().includes(q) ||
+            r.clientEmail.toLowerCase().includes(q),
+        )
+      : requests;
+
+    return {
+      pending:   base.filter((r) => r.status === "pending").length,
+      confirmed: base.filter((r) => r.status === "confirmed").length,
+      completed: base.filter((r) => r.status === "completed").length,
+      cancelled: base.filter((r) => r.status === "cancelled" || r.status === "rejected").length,
+    };
+  }, [requests, query]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return requests;
-    return requests.filter(
-      (r) =>
-        r.clientName.toLowerCase().includes(q) ||
-        r.propertyTitle.toLowerCase().includes(q) ||
-        r.propertyReference.toLowerCase().includes(q),
-    );
-  }, [requests, query]);
+    const bySearch = q
+      ? requests.filter(
+          (r) =>
+            r.clientName.toLowerCase().includes(q) ||
+            r.propertyTitle.toLowerCase().includes(q) ||
+            r.propertyReference.toLowerCase().includes(q) ||
+            r.clientEmail.toLowerCase().includes(q),
+        )
+      : requests;
+
+    return bySearch.filter((r) => {
+      if (activeTab === "cancelled") return r.status === "cancelled" || r.status === "rejected";
+      return r.status === activeTab;
+    });
+  }, [requests, query, activeTab]);
 
   return (
     <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+      {/* Buscador */}
       <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
         <Search size={15} strokeWidth={1.75} className="text-ink/45" />
         <input
@@ -51,106 +212,49 @@ export function SolicitudesAdminClient({
         />
       </label>
 
-      <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-separate border-spacing-y-1.5 text-left text-sm">
-          <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
-              <th className="px-3 pb-2">{t("solicitudes.table.client")}</th>
-              <th className="px-3 pb-2">{t("solicitudes.table.property")}</th>
-              <th className="px-3 pb-2">{t("solicitudes.table.requestedDate")}</th>
-              <th className="px-3 pb-2">{t("solicitudes.table.channel")}</th>
-              <th className="px-3 pb-2">{t("solicitudes.table.advisor")}</th>
-              <th className="px-3 pb-2">{t("solicitudes.table.received")}</th>
-              <th className="px-3 pb-2">{t("solicitudes.table.status")}</th>
-              <th className="px-3 pb-2 text-right">{t("solicitudes.table.actions")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-ink/55"
-                >
-                  {t("solicitudes.empty")}
-                </td>
-              </tr>
-            ) : (
-              filtered.map((r) => <RequestRow key={r.id} request={r} />)
+      {/* Tabs */}
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-[13px] font-medium transition",
+              activeTab === tab.key
+                ? "bg-gold text-white"
+                : "text-ink/55 hover:text-ink",
             )}
-          </tbody>
-        </table>
+          >
+            {tab.label}
+            <span
+              className={cn(
+                "ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
+                activeTab === tab.key
+                  ? "bg-white/25 text-white"
+                  : "bg-ink/5 text-ink/50",
+              )}
+            >
+              {counts[tab.key]}
+            </span>
+          </button>
+        ))}
       </div>
-    </section>
-  );
-}
 
-function RequestRow({ request }: { request: VisitRequest }) {
-  const t = useT();
-  const isPending = request.status === "pending";
-  return (
-    <tr className="bg-white/55 transition hover:bg-white/85">
-      <td className="rounded-l-xl px-3 py-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream-100 font-serif text-[10px] font-medium text-ink">
-            {request.clientInitials}
-          </span>
-          <span className="font-medium text-ink">{request.clientName}</span>
-        </div>
-      </td>
-      <td className="px-3 py-3">
-        <p className="font-medium text-ink">{request.propertyTitle}</p>
-        <p className="text-[11px] text-ink/55">
-          {t("agency.properties.ref", { ref: request.propertyReference })}
-        </p>
-      </td>
-      <td className="px-3 py-3 text-ink/75">{request.requestedDateLabel}</td>
-      <td className="px-3 py-3">
-        <span className="rounded-md border border-ink/10 bg-cream-100/80 px-2.5 py-1 text-[11px] font-medium text-ink/75">
-          {t(request.channelKey)}
-        </span>
-      </td>
-      <td className="px-3 py-3 text-ink/75">{request.assignedAdvisor}</td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">
-        {formatRelativeMinutes(request.receivedRelativeMinutes, t)}
-      </td>
-      <td className="px-3 py-3">
-        <span
-          className={cn(
-            "rounded-md border px-2.5 py-1 text-[11px] font-medium",
-            STATUS_STYLES[request.status],
-          )}
-        >
-          {t(`solicitudes.status.${request.status}`)}
-        </span>
-      </td>
-      <td className="rounded-r-xl px-3 py-3 text-right">
-        {isPending ? (
-          <div className="inline-flex items-center gap-1.5">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-emerald-700"
-            >
-              <CheckCircle2 size={12} strokeWidth={1.75} />
-              <span>{t("solicitudes.action.confirm")}</span>
-            </button>
-            <button
-              type="button"
-              aria-label={t("solicitudes.action.reject")}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100"
-            >
-              <XCircle size={13} strokeWidth={1.75} />
-            </button>
+      {/* Grid de cards */}
+      <div className="mt-5">
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-sm text-ink/55">
+            No hay solicitudes en esta categoría
           </div>
         ) : (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:bg-white"
-          >
-            {t("solicitudes.action.reschedule")}
-          </button>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((visit) => (
+              <VisitCard key={visit.id} visit={visit} />
+            ))}
+          </div>
         )}
-      </td>
-    </tr>
+      </div>
+    </section>
   );
 }
