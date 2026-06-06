@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Heart,
   Home,
+  LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
@@ -38,6 +39,7 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/admin",               labelKey: "admin.nav.dashboard",     icon: LayoutDashboard },
   { href: "/admin/agencias",      labelKey: "admin.nav.agencias",      icon: Building2 },
   { href: "/admin/propiedades",   labelKey: "admin.nav.propiedades",   icon: Home,         permissionResource: "properties"    },
   { href: "/admin/particulares",  labelKey: "admin.nav.particulares",  icon: User,         permissionResource: "particulares"  },
@@ -140,8 +142,10 @@ export function AdminSidebar({ user, currentRole, pendingVisits = 0, unreadMessa
         <nav className="mt-3 flex-1 overflow-y-auto px-3">
           <ul className="space-y-1">
             {visibleItems.map(({ href, labelKey, icon: Icon }) => {
+              // Para la ruta exacta "/admin" (dashboard) solo se activa con match exacto
               const active =
-                pathname === href || pathname.startsWith(`${href}/`);
+                pathname === href ||
+                (href !== "/admin" && pathname.startsWith(`${href}/`));
               const isCalendario = href === "/admin/calendario";
               const isMensajes = href === "/admin/mensajes";
               return (
