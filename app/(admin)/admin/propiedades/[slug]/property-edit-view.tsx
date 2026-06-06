@@ -166,8 +166,7 @@ export function PropertyEditView({
   };
 
   // ─── Video handlers ────────────────────────────────────────────────────
-  async function handleAddVideo(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleAddVideo() {
     if (!videoUrl.trim()) return;
     setAddingVideo(true);
     setVideoError(null);
@@ -776,16 +775,23 @@ export function PropertyEditView({
             onChange={handleVideoFileUpload}
             className="hidden"
           />
-          <form onSubmit={handleAddVideo} className="flex gap-2">
+          <div className="flex gap-2">
             <input
               type="url"
               value={videoUrl}
               onChange={(e) => setVideoUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAddVideo();
+                }
+              }}
               placeholder="https://www.youtube.com/watch?v=… o Vimeo"
               className={cn(inputClass, "flex-1")}
             />
             <button
-              type="submit"
+              type="button"
+              onClick={() => void handleAddVideo()}
               disabled={addingVideo || !videoUrl.trim()}
               className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
             >
@@ -796,7 +802,7 @@ export function PropertyEditView({
               )}
               Añadir
             </button>
-          </form>
+          </div>
           <button
             type="button"
             onClick={() => videoFileInputRef.current?.click()}
