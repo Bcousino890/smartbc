@@ -287,6 +287,8 @@ export type AdminClient = {
   phone?: string;
   location?: string; // e.g. "Madrid, España"
   avatarInitials: string;
+  /** ISO timestamp used to compute relative "last seen" time in the UI */
+  updatedAt?: string;
 
   // Custom filters the admin assigns to this client. They drive what the
   // client sees in their own portal.

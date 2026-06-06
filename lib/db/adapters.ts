@@ -176,6 +176,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     phone: row.phone ?? undefined,
     location: undefined,
     avatarInitials: initials,
+    updatedAt: row.updated_at,
     profileType,
     operation,
     stayType,

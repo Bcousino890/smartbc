@@ -178,13 +178,38 @@ function ClientDetailPanelInner({ client }: { client: AdminClient }) {
   );
 }
 
+// ─── Avatar helpers ───────────────────────────────────────────────────────────
+
+const AVATAR_COLORS_PANEL = [
+  "bg-gold/20 text-amber-800",
+  "bg-blue-100 text-blue-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-violet-100 text-violet-700",
+  "bg-rose-100 text-rose-700",
+  "bg-orange-100 text-orange-700",
+];
+
+function getPanelAvatarColor(name: string): string {
+  const code = name.charCodeAt(0) + (name.charCodeAt(1) || 0);
+  return AVATAR_COLORS_PANEL[code % AVATAR_COLORS_PANEL.length];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function ClientHeader({ client }: { client: AdminClient }) {
   const t = useT();
   const isActive = client.status === "active";
+  const fullName = `${client.firstName} ${client.lastName}`.trim();
+  const avatarColor = getPanelAvatarColor(fullName || client.email);
   return (
     <header className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-xs font-medium text-cream-50">
+        <span
+          className={cn(
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+            avatarColor,
+          )}
+        >
           {client.avatarInitials}
         </span>
         <div className="min-w-0">
