@@ -9,6 +9,17 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
  * GET /api/admin/debug/users
  */
 export async function GET() {
+  // Gate: solo owner/admin autenticado. getCurrentProfile() lee el propio
+  // perfil vía RLS (profiles_self_select), así que funciona aunque is_staff()
+  // todavía no reconozca el rol (el caso que estamos diagnosticando).
+  const gateProfile = await getCurrentProfile().catch(() => null);
+  if (!gateProfile || !["owner", "admin"].includes(gateProfile.role)) {
+    return Response.json(
+      { error: "No autorizado — solo Owner/Admin" },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const result: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
   };
