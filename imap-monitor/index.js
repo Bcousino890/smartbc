@@ -277,7 +277,8 @@ async function processEmails() {
         property_ref:     lead.property_ref    || '',
         property_address: lead.property_address || '',
         property_price:   lead.property_price  || '',
-        property_type:    detectPropertyType(lead.property_price),
+        property_type:         detectPropertyType(lead.property_price),
+        property_neighborhood: (lead.property_address || '').split(',')[1]?.trim() || lead.property_address || '',
       };
 
       let sent = false;

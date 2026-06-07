@@ -89,7 +89,7 @@
           "data": {
             "label": "WhatsApp → Lead (English)",
             "phoneNumber": "{{webhook.contact_phone}}",
-            "messageContent": "Hi {{webhook.contact_name}}, how are you? 👋\n\nYou reached out about the property at *{{webhook.property_address}}* ({{webhook.property_type}}). Tell me, what day would you like to visit? Can I call you on the phone?\n\nBest regards! 😊",
+            "messageContent": "Hi {{webhook.contact_name}}, how are you? 👋 You reached out about the property in *{{webhook.property_neighborhood}}* ({{webhook.property_type}}). What day would you like to visit? Can I give you a call?\n\nBest regards! 😊",
             "sourcePosition": "bottom",
             "targetPosition": "top",
             "channelConnectionId": null
@@ -105,7 +105,7 @@
           "data": {
             "label": "WhatsApp → Lead (Español)",
             "phoneNumber": "{{webhook.contact_phone}}",
-            "messageContent": "Hola {{webhook.contact_name}} qué tal? Nos consultaste por el piso *{{webhook.property_address}}* en {{webhook.property_type}}, cuéntame qué día te gustaría visitarlo, ¿te puedo llamar por teléfono?\n\n¡Un saludo! 😊",
+            "messageContent": "Hola {{webhook.contact_name}} qué tal? Nos consultaste por el piso en *{{webhook.property_neighborhood}}* en {{webhook.property_type}}, cuéntame qué día te gustaría visitarlo, ¿te puedo llamar por teléfono?\n\n¡Un saludo! 😊",
             "sourcePosition": "bottom",
             "targetPosition": "top",
             "channelConnectionId": null
