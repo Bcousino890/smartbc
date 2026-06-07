@@ -55,7 +55,7 @@ function formatNeighborhood(raw) {
   // Si ya contiene "barrio" o "distrito" → dejarlo tal cual
   if (/barrio|distrito/i.test(n)) return n;
   // Barrios que sin contexto parecen otra ciudad → añadir "barrio"
-  const needsPrefix = /^(salamanca|retiro|latina|arganzuela)$/i.test(n);
+  const needsPrefix = /^salamanca$/i.test(n);
   return needsPrefix ? `barrio ${n}` : n;
 }
 
