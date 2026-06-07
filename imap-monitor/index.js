@@ -47,6 +47,18 @@ function findPhone(text) {
   return null;
 }
 
+// ─── Barrio ───────────────────────────────────────────────────────────────────
+
+function formatNeighborhood(raw) {
+  if (!raw) return '';
+  const n = raw.trim();
+  // Si ya contiene "barrio" o "distrito" → dejarlo tal cual
+  if (/barrio|distrito/i.test(n)) return n;
+  // Barrios que sin contexto parecen otra ciudad → añadir "barrio"
+  const needsPrefix = /^(salamanca|retiro|latina|arganzuela)$/i.test(n);
+  return needsPrefix ? `barrio ${n}` : n;
+}
+
 // ─── Alquiler / Venta ─────────────────────────────────────────────────────────
 
 function parsePrice(priceStr) {
@@ -278,7 +290,7 @@ async function processEmails() {
         property_address: lead.property_address || '',
         property_price:   lead.property_price  || '',
         property_type:         detectPropertyType(lead.property_price),
-        property_neighborhood: (lead.property_address || '').split(',')[1]?.trim() || lead.property_address || '',
+        property_neighborhood: formatNeighborhood((lead.property_address || '').split(',')[1]?.trim() || lead.property_address || ''),
       };
 
       let sent = false;
