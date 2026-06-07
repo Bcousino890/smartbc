@@ -39,7 +39,8 @@
             "updateFields": {
               "name": "{{webhook.contact_name}}",
               "phone": "{{webhook.contact_phone}}",
-              "notes": "{{webhook.contact_notes}}"
+              "notes": "{{webhook.contact_notes}}",
+              "tags": ["Idealista", "{{webhook.property_type}}", "{{webhook.property_price}}"]
             },
             "errorHandling": "continue",
             "sourcePosition": "bottom",
