@@ -11,7 +11,7 @@
           "id": "node_wh",
           "data": {
             "label": "Nuevo Lead de Idealista",
-            "webhookToken": "a3f037ba3ab44a7b880cc644cc21fb8a",
+            "webhookToken": null,
             "useCustomPath": false,
             "contactMapping": { "strategy": "system" },
             "responseConfig": {
