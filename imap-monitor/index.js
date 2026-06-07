@@ -126,7 +126,7 @@ function extractLeadData(subject, html, text) {
 
   // 2. Phone — prefer the hidden attribute set by Idealista for click-to-call
   let lead_phone = null;
-  const phoneAttr = $('[appCallback_target_phone]').attr('appCallback_target_phone');
+  const phoneAttr = $('[appcallback_target_phone]').attr('appcallback_target_phone');
   if (phoneAttr) {
     lead_phone = normalizePhone(phoneAttr);
   } else {
@@ -168,7 +168,7 @@ function extractLeadData(subject, html, text) {
   // Address — the <a> linking to the specific listing (idealista.com/NNNNNNN)
   $('a').each((_, el) => {
     const href = $(el).attr('href') || '';
-    if (/idealista\.com\/\d{6,}/.test(href)) {
+    if (/idealista\.com/.test(href) && /\d{6,}/.test(href)) {
       const t = $(el).text().trim();
       if (t.length > 5) { property_address = t; return false; }
     }
