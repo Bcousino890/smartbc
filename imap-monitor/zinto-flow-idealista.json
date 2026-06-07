@@ -33,7 +33,7 @@
         {
           "id": "node_contact",
           "data": {
-            "label": "Crear Contacto Lead",
+            "label": "Crear / Actualizar Contacto",
             "operation": "create_contact",
             "showAdvanced": true,
             "updateFields": {
@@ -46,7 +46,6 @@
             "sourcePosition": "bottom",
             "targetPosition": "top",
             "skipEmptyValues": true,
-            "contactIdVariable": "{{contact.id}}",
             "deleteConfirmation": false
           },
           "type": "manage_contact",
@@ -56,65 +55,35 @@
           "positionAbsolute": { "x": 300, "y": 280 }
         },
         {
-          "id": "node_lang_detect",
+          "id": "node_build_msg",
           "data": {
-            "label": "Detectar Idioma del Mensaje",
-            "code": "// Detecta si el mensaje del lead está en inglés o en otro idioma\nconst msg = `{{webhook.lead_message}}`;\n\nconst englishWords = /\\b(hello|hi|good\\s(morning|afternoon|evening)|interested|available|apartment|flat|property|could\\s(you|i)|would\\s(like|be)|please|thank\\s(you|s)|dear|sir|madam|we\\s(are|would)|I\\s(am|would)|looking\\s(for|to))\\b/i;\nconst spanishChars  = /[áéíóúüñ¡¿]|\\b(hola|gracias|buenos|buenas|estoy|tengo|quisiera|quiero|disponible|saber|interesado|inmueble|pareja|médico|colombiano|sería|podría|además|también|aparte|muchas|necesitas|presenta|nominas)\\b/i;\n\nconst looksEnglish  = englishWords.test(msg);\nconst looksSpanish  = spanishChars.test(msg);\n\n// Si tiene indicadores de inglés Y no tiene de español → inglés\nconst lang = (looksEnglish && !looksSpanish) ? 'en' : 'es';\n\nreturn { lang };",
+            "label": "Detectar idioma y armar mensaje",
+            "code": "// Detecta idioma del mensaje y devuelve el texto de WhatsApp correcto\nconst leadMsg = `{{webhook.lead_message}}`;\nconst name    = `{{webhook.contact_name}}`;\nconst barrio  = `{{webhook.property_neighborhood}}`;\nconst tipo    = `{{webhook.property_type}}`;\nconst phone   = `{{webhook.contact_phone}}`;\n\nconst englishWords = /\\b(hello|hi|good\\s(morning|afternoon|evening)|interested|available|apartment|flat|property|could\\s(you|i)|would\\s(like|be)|please|thank\\s(you|s)|dear|sir|madam|we\\s(are|would)|I\\s(am|would)|looking\\s(for|to))\\b/i;\nconst spanishChars = /[áéíóúüñ¡¿]|\\b(hola|gracias|buenos|buenas|estoy|tengo|quisiera|quiero|disponible|saber|interesado|inmueble|pareja|médico|colombiano|sería|podría|además|también|aparte|muchas|necesitas|presenta|nominas)\\b/i;\n\nconst looksEnglish = englishWords.test(leadMsg);\nconst looksSpanish = spanishChars.test(leadMsg);\nconst lang = (looksEnglish && !looksSpanish) ? 'en' : 'es';\n\nlet message;\nif (lang === 'en') {\n  message = `Hi ${name}, how are you? 👋 You reached out about the property in *${barrio}* (${tipo}). What day would you like to visit? Can I give you a call?\\n\\nBest regards! 😊`;\n} else {\n  message = `Hola ${name} qué tal? Nos consultaste por el piso en *${barrio}* en ${tipo}, cuéntame qué día te gustaría visitarlo, ¿te puedo llamar por teléfono?\\n\\n¡Un saludo! 😊`;\n}\n\nreturn { lang, message, phone };",
             "timeout": 5000,
             "sourcePosition": "bottom",
             "targetPosition": "top"
           },
           "type": "code_execution",
+          "width": 420,
+          "height": 220,
+          "position": { "x": 280, "y": 560 },
+          "positionAbsolute": { "x": 280, "y": 560 }
+        },
+        {
+          "id": "node_msg",
+          "data": {
+            "label": "WhatsApp → Lead",
+            "phoneNumber": "{{webhook.contact_phone}}",
+            "messageContent": "{{code_execution.message}}",
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "channelConnectionId": null
+          },
+          "type": "contactNotification",
           "width": 380,
           "height": 200,
-          "position": { "x": 300, "y": 550 },
-          "positionAbsolute": { "x": 300, "y": 550 }
-        },
-        {
-          "id": "node_cond_lang",
-          "data": {
-            "label": "¿Mensaje en inglés?",
-            "condition": "{{code_execution.lang}} == 'en'",
-            "sourcePosition": "bottom",
-            "targetPosition": "top"
-          },
-          "type": "condition",
-          "width": 360,
-          "height": 120,
-          "position": { "x": 300, "y": 820 },
-          "positionAbsolute": { "x": 300, "y": 820 }
-        },
-        {
-          "id": "node_msg_en",
-          "data": {
-            "label": "WhatsApp → Lead (English)",
-            "phoneNumber": "{{webhook.contact_phone}}",
-            "messageContent": "Hi {{webhook.contact_name}}, how are you? 👋 You reached out about the property in *{{webhook.property_neighborhood}}* ({{webhook.property_type}}). What day would you like to visit? Can I give you a call?\n\nBest regards! 😊",
-            "sourcePosition": "bottom",
-            "targetPosition": "top",
-            "channelConnectionId": null
-          },
-          "type": "contactNotification",
-          "width": 380,
-          "height": 240,
-          "position": { "x": 700, "y": 1020 },
-          "positionAbsolute": { "x": 700, "y": 1020 }
-        },
-        {
-          "id": "node_msg_es",
-          "data": {
-            "label": "WhatsApp → Lead (Español)",
-            "phoneNumber": "{{webhook.contact_phone}}",
-            "messageContent": "Hola {{webhook.contact_name}} qué tal? Nos consultaste por el piso en *{{webhook.property_neighborhood}}* en {{webhook.property_type}}, cuéntame qué día te gustaría visitarlo, ¿te puedo llamar por teléfono?\n\n¡Un saludo! 😊",
-            "sourcePosition": "bottom",
-            "targetPosition": "top",
-            "channelConnectionId": null
-          },
-          "type": "contactNotification",
-          "width": 380,
-          "height": 240,
-          "position": { "x": -100, "y": 1020 },
-          "positionAbsolute": { "x": -100, "y": 1020 }
+          "position": { "x": 300, "y": 860 },
+          "positionAbsolute": { "x": 300, "y": 860 }
         }
       ],
       "edges": [
@@ -130,34 +99,16 @@
           "id": "e2",
           "type": "smoothstep",
           "source": "node_contact",
-          "target": "node_lang_detect",
+          "target": "node_build_msg",
           "animated": true,
           "targetHandle": "flow-in"
         },
         {
           "id": "e3",
           "type": "smoothstep",
-          "source": "node_lang_detect",
-          "target": "node_cond_lang",
+          "source": "node_build_msg",
+          "target": "node_msg",
           "animated": true,
-          "targetHandle": "flow-in"
-        },
-        {
-          "id": "e4_true",
-          "type": "smoothstep",
-          "source": "node_cond_lang",
-          "target": "node_msg_en",
-          "animated": true,
-          "sourceHandle": "condition-true",
-          "targetHandle": "flow-in"
-        },
-        {
-          "id": "e5_false",
-          "type": "smoothstep",
-          "source": "node_cond_lang",
-          "target": "node_msg_es",
-          "animated": true,
-          "sourceHandle": "condition-false",
           "targetHandle": "flow-in"
         }
       ],
