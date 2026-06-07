@@ -4,7 +4,7 @@
   "flows": [
     {
       "name": "Leads Idealista → CRM",
-      "description": "Recibe leads del monitor IMAP de Idealista. Crea/actualiza contacto, guarda las notas del mensaje y notifica al agente.",
+      "description": "Recibe leads del monitor IMAP de Idealista. Crea el contacto con notas y le envía un WhatsApp automático de bienvenida.",
       "status": "active",
       "nodes": [
         {
@@ -29,8 +29,8 @@
           "type": "webhookTrigger",
           "width": 280,
           "height": 152,
-          "position": { "x": 320, "y": 100 },
-          "positionAbsolute": { "x": 320, "y": 100 }
+          "position": { "x": 320, "y": 80 },
+          "positionAbsolute": { "x": 320, "y": 80 }
         },
         {
           "id": "node_idealista_create_contact",
@@ -53,24 +53,24 @@
           "type": "manage_contact",
           "width": 380,
           "height": 200,
-          "position": { "x": 260, "y": 320 },
-          "positionAbsolute": { "x": 260, "y": 320 }
+          "position": { "x": 260, "y": 300 },
+          "positionAbsolute": { "x": 260, "y": 300 }
         },
         {
-          "id": "node_idealista_notify_agent",
+          "id": "node_idealista_whatsapp_lead",
           "data": {
-            "label": "Notificar Agente — Nuevo Lead",
-            "phoneNumber": "",
-            "messageContent": "🏠 *Nuevo lead de Idealista*\n\n👤 *{{webhook.contact_name}}*\n📞 {{webhook.contact_phone}}\n📍 {{webhook.property_address}}\n💶 {{webhook.property_price}} | Ref: {{webhook.property_ref}}\n\n💬 _{{webhook.lead_message}}_",
+            "label": "WhatsApp al Lead",
+            "phoneNumber": "{{webhook.contact_phone}}",
+            "messageContent": "¡Hola {{webhook.contact_name}}! 👋\n\nGracias por tu interés en el inmueble *{{webhook.property_address}}* (Ref. {{webhook.property_ref}}).\n\nSoy Andrea de *BCousino Properties*. He visto tu mensaje y me encantaría ayudarte. ¿Cuándo te viene bien hablar para contarte más detalles y organizar una visita?\n\n¡Un saludo! 😊",
             "sourcePosition": "bottom",
             "targetPosition": "top",
             "channelConnectionId": null
           },
           "type": "contactNotification",
           "width": 380,
-          "height": 200,
-          "position": { "x": 260, "y": 590 },
-          "positionAbsolute": { "x": 260, "y": 590 }
+          "height": 240,
+          "position": { "x": 260, "y": 570 },
+          "positionAbsolute": { "x": 260, "y": 570 }
         }
       ],
       "edges": [
@@ -83,10 +83,10 @@
           "targetHandle": "flow-in"
         },
         {
-          "id": "edge_contact_to_notify",
+          "id": "edge_contact_to_whatsapp",
           "type": "smoothstep",
           "source": "node_idealista_create_contact",
-          "target": "node_idealista_notify_agent",
+          "target": "node_idealista_whatsapp_lead",
           "animated": true,
           "targetHandle": "flow-in"
         }
