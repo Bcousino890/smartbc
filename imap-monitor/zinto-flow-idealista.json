@@ -4,23 +4,21 @@
   "flows": [
     {
       "name": "Leads Idealista → CRM",
-      "description": "Recibe leads del monitor IMAP de Idealista. Crea el contacto con notas y le envía un WhatsApp automático de bienvenida.",
+      "description": "Recibe leads del monitor IMAP. Crea contacto con notas y responde al lead en su idioma (ES/EN) automáticamente.",
       "status": "active",
       "nodes": [
         {
-          "id": "node_idealista_webhook_trigger",
+          "id": "node_wh",
           "data": {
             "label": "Nuevo Lead de Idealista",
             "webhookToken": "a3f037ba3ab44a7b880cc644cc21fb8a",
             "useCustomPath": false,
-            "contactMapping": {
-              "strategy": "system"
-            },
+            "contactMapping": { "strategy": "system" },
             "responseConfig": {
               "mode": "async",
               "headers": {},
               "statusCode": 200,
-              "bodyTemplate": "{\"success\": true, \"message\": \"Lead recibido\"}"
+              "bodyTemplate": "{\"success\": true}"
             },
             "sourcePosition": "bottom",
             "targetPosition": "top",
@@ -29,11 +27,11 @@
           "type": "webhookTrigger",
           "width": 280,
           "height": 152,
-          "position": { "x": 320, "y": 80 },
-          "positionAbsolute": { "x": 320, "y": 80 }
+          "position": { "x": 340, "y": 60 },
+          "positionAbsolute": { "x": 340, "y": 60 }
         },
         {
-          "id": "node_idealista_create_contact",
+          "id": "node_contact",
           "data": {
             "label": "Crear Contacto Lead",
             "operation": "create_contact",
@@ -53,15 +51,44 @@
           "type": "manage_contact",
           "width": 380,
           "height": 200,
-          "position": { "x": 260, "y": 300 },
-          "positionAbsolute": { "x": 260, "y": 300 }
+          "position": { "x": 300, "y": 280 },
+          "positionAbsolute": { "x": 300, "y": 280 }
         },
         {
-          "id": "node_idealista_whatsapp_lead",
+          "id": "node_lang_detect",
           "data": {
-            "label": "WhatsApp al Lead",
+            "label": "Detectar Idioma del Mensaje",
+            "code": "// Detecta si el mensaje del lead está en inglés o en otro idioma\nconst msg = `{{webhook.lead_message}}`;\n\nconst englishWords = /\\b(hello|hi|good\\s(morning|afternoon|evening)|interested|available|apartment|flat|property|could\\s(you|i)|would\\s(like|be)|please|thank\\s(you|s)|dear|sir|madam|we\\s(are|would)|I\\s(am|would)|looking\\s(for|to))\\b/i;\nconst spanishChars  = /[áéíóúüñ¡¿]|\\b(hola|gracias|buenos|buenas|estoy|tengo|quisiera|quiero|disponible|saber|interesado|inmueble|pareja|médico|colombiano|sería|podría|además|también|aparte|muchas|necesitas|presenta|nominas)\\b/i;\n\nconst looksEnglish  = englishWords.test(msg);\nconst looksSpanish  = spanishChars.test(msg);\n\n// Si tiene indicadores de inglés Y no tiene de español → inglés\nconst lang = (looksEnglish && !looksSpanish) ? 'en' : 'es';\n\nreturn { lang };",
+            "timeout": 5000,
+            "sourcePosition": "bottom",
+            "targetPosition": "top"
+          },
+          "type": "code_execution",
+          "width": 380,
+          "height": 200,
+          "position": { "x": 300, "y": 550 },
+          "positionAbsolute": { "x": 300, "y": 550 }
+        },
+        {
+          "id": "node_cond_lang",
+          "data": {
+            "label": "¿Mensaje en inglés?",
+            "condition": "{{code_execution.lang}} == 'en'",
+            "sourcePosition": "bottom",
+            "targetPosition": "top"
+          },
+          "type": "condition",
+          "width": 360,
+          "height": 120,
+          "position": { "x": 300, "y": 820 },
+          "positionAbsolute": { "x": 300, "y": 820 }
+        },
+        {
+          "id": "node_msg_en",
+          "data": {
+            "label": "WhatsApp → Lead (English)",
             "phoneNumber": "{{webhook.contact_phone}}",
-            "messageContent": "¡Hola {{webhook.contact_name}}! 👋\n\nGracias por tu interés en el inmueble *{{webhook.property_address}}* (Ref. {{webhook.property_ref}}).\n\nSoy Andrea de *BCousino Properties*. He visto tu mensaje y me encantaría ayudarte. ¿Cuándo te viene bien hablar para contarte más detalles y organizar una visita?\n\n¡Un saludo! 😊",
+            "messageContent": "Hi {{webhook.contact_name}}! 👋\n\nThank you for your interest in *{{webhook.property_address}}* (Ref. {{webhook.property_ref}}).\n\nI'm Andrea from *BCousino Properties*. I'd love to give you more details and arrange a viewing. When would be a good time to chat?\n\nLooking forward to hearing from you! 😊",
             "sourcePosition": "bottom",
             "targetPosition": "top",
             "channelConnectionId": null
@@ -69,25 +96,67 @@
           "type": "contactNotification",
           "width": 380,
           "height": 240,
-          "position": { "x": 260, "y": 570 },
-          "positionAbsolute": { "x": 260, "y": 570 }
+          "position": { "x": 700, "y": 1020 },
+          "positionAbsolute": { "x": 700, "y": 1020 }
+        },
+        {
+          "id": "node_msg_es",
+          "data": {
+            "label": "WhatsApp → Lead (Español)",
+            "phoneNumber": "{{webhook.contact_phone}}",
+            "messageContent": "¡Hola {{webhook.contact_name}}! 👋\n\nGracias por tu interés en *{{webhook.property_address}}* (Ref. {{webhook.property_ref}}).\n\nSoy Andrea de *BCousino Properties*. Me encantaría contarte más detalles y organizar una visita. ¿Cuándo te viene bien que hablemos?\n\n¡Un saludo! 😊",
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "channelConnectionId": null
+          },
+          "type": "contactNotification",
+          "width": 380,
+          "height": 240,
+          "position": { "x": -100, "y": 1020 },
+          "positionAbsolute": { "x": -100, "y": 1020 }
         }
       ],
       "edges": [
         {
-          "id": "edge_trigger_to_contact",
+          "id": "e1",
           "type": "smoothstep",
-          "source": "node_idealista_webhook_trigger",
-          "target": "node_idealista_create_contact",
+          "source": "node_wh",
+          "target": "node_contact",
           "animated": true,
           "targetHandle": "flow-in"
         },
         {
-          "id": "edge_contact_to_whatsapp",
+          "id": "e2",
           "type": "smoothstep",
-          "source": "node_idealista_create_contact",
-          "target": "node_idealista_whatsapp_lead",
+          "source": "node_contact",
+          "target": "node_lang_detect",
           "animated": true,
+          "targetHandle": "flow-in"
+        },
+        {
+          "id": "e3",
+          "type": "smoothstep",
+          "source": "node_lang_detect",
+          "target": "node_cond_lang",
+          "animated": true,
+          "targetHandle": "flow-in"
+        },
+        {
+          "id": "e4_true",
+          "type": "smoothstep",
+          "source": "node_cond_lang",
+          "target": "node_msg_en",
+          "animated": true,
+          "sourceHandle": "condition-true",
+          "targetHandle": "flow-in"
+        },
+        {
+          "id": "e5_false",
+          "type": "smoothstep",
+          "source": "node_cond_lang",
+          "target": "node_msg_es",
+          "animated": true,
+          "sourceHandle": "condition-false",
           "targetHandle": "flow-in"
         }
       ],
