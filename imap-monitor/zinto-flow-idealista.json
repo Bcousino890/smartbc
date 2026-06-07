@@ -1,0 +1,99 @@
+{
+  "exportDate": "2026-06-07T14:00:00.000Z",
+  "version": "1.0",
+  "flows": [
+    {
+      "name": "Leads Idealista → CRM",
+      "description": "Recibe leads del monitor IMAP de Idealista. Crea/actualiza contacto, guarda las notas del mensaje y notifica al agente.",
+      "status": "active",
+      "nodes": [
+        {
+          "id": "node_idealista_webhook_trigger",
+          "data": {
+            "label": "Nuevo Lead de Idealista",
+            "webhookToken": "a3f037ba3ab44a7b880cc644cc21fb8a",
+            "useCustomPath": false,
+            "contactMapping": {
+              "strategy": "system"
+            },
+            "responseConfig": {
+              "mode": "async",
+              "headers": {},
+              "statusCode": 200,
+              "bodyTemplate": "{\"success\": true, \"message\": \"Lead recibido\"}"
+            },
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "filterConditions": []
+          },
+          "type": "webhookTrigger",
+          "width": 280,
+          "height": 152,
+          "position": { "x": 320, "y": 100 },
+          "positionAbsolute": { "x": 320, "y": 100 }
+        },
+        {
+          "id": "node_idealista_create_contact",
+          "data": {
+            "label": "Crear Contacto Lead",
+            "operation": "create_contact",
+            "showAdvanced": true,
+            "updateFields": {
+              "name": "{{webhook.contact_name}}",
+              "phone": "{{webhook.contact_phone}}",
+              "notes": "{{webhook.contact_notes}}"
+            },
+            "errorHandling": "continue",
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "skipEmptyValues": true,
+            "contactIdVariable": "{{contact.id}}",
+            "deleteConfirmation": false
+          },
+          "type": "manage_contact",
+          "width": 380,
+          "height": 200,
+          "position": { "x": 260, "y": 320 },
+          "positionAbsolute": { "x": 260, "y": 320 }
+        },
+        {
+          "id": "node_idealista_notify_agent",
+          "data": {
+            "label": "Notificar Agente — Nuevo Lead",
+            "phoneNumber": "",
+            "messageContent": "🏠 *Nuevo lead de Idealista*\n\n👤 *{{webhook.contact_name}}*\n📞 {{webhook.contact_phone}}\n📍 {{webhook.property_address}}\n💶 {{webhook.property_price}} | Ref: {{webhook.property_ref}}\n\n💬 _{{webhook.lead_message}}_",
+            "sourcePosition": "bottom",
+            "targetPosition": "top",
+            "channelConnectionId": null
+          },
+          "type": "contactNotification",
+          "width": 380,
+          "height": 200,
+          "position": { "x": 260, "y": 590 },
+          "positionAbsolute": { "x": 260, "y": 590 }
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_trigger_to_contact",
+          "type": "smoothstep",
+          "source": "node_idealista_webhook_trigger",
+          "target": "node_idealista_create_contact",
+          "animated": true,
+          "targetHandle": "flow-in"
+        },
+        {
+          "id": "edge_contact_to_notify",
+          "type": "smoothstep",
+          "source": "node_idealista_create_contact",
+          "target": "node_idealista_notify_agent",
+          "animated": true,
+          "targetHandle": "flow-in"
+        }
+      ],
+      "version": 1,
+      "createdAt": "2026-06-07T14:00:00.000Z",
+      "updatedAt": "2026-06-07T14:00:00.000Z"
+    }
+  ]
+}
