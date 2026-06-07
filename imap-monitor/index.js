@@ -27,17 +27,21 @@ function saveLeads(leads) {
 function normalizePhone(raw) {
   if (!raw) return null;
   const cleaned = raw.replace(/[\s\-\(\)\.]/g, '');
-  if (/^[67]\d{8}$/.test(cleaned)) return '+34' + cleaned;
+  // Ya tiene código de país → se deja tal cual
   if (cleaned.startsWith('+')) return cleaned;
+  // Empieza por 0034 → convertir a +34
   if (cleaned.startsWith('0034')) return '+' + cleaned.slice(2);
-  return raw.trim();
+  // 9 dígitos españoles que empiezan por 6 o 7 → añadir +34
+  if (/^[67]\d{8}$/.test(cleaned)) return '+34' + cleaned;
+  // Número desconocido → devolver limpio sin modificar
+  return cleaned;
 }
 
 function findPhone(text) {
-  // +34 6XX… / +34 7XX… (international)
-  const intlMatch = text.match(/\+34[\s\-]?[6-9]\d{2}[\s\-]?\d{2}[\s\-]?\d{2}[\s\-]?\d{2}/);
+  // Cualquier número internacional con + (ej: +34…, +57…, +1…)
+  const intlMatch = text.match(/\+\d{1,3}[\s\-]?\d[\d\s\-]{6,14}/);
   if (intlMatch) return normalizePhone(intlMatch[0]);
-  // 6XX XX XX XX / 7XX XX XX XX (local)
+  // Número español local 6XX/7XX XX XX XX (sin +)
   const localMatch = text.match(/\b[67]\d{2}[\s\-]?\d{2}[\s\-]?\d{2}[\s\-]?\d{2}\b/);
   if (localMatch) return normalizePhone(localMatch[0]);
   return null;
@@ -45,23 +49,44 @@ function findPhone(text) {
 
 // ─── Email parsing ────────────────────────────────────────────────────────────
 
+function stripEmojis(str) {
+  return str
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '')   // banderas
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '')   // caras
+    .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')   // símbolos
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')     // miscelánea
+    .trim();
+}
+
+function buildContactNotes(lead, dateStr) {
+  const lines = [
+    `[Lead Idealista - ${dateStr}]`,
+    lead.property_address ? `Inmueble: ${lead.property_address}` : null,
+    (lead.property_ref || lead.property_price)
+      ? `Ref: ${lead.property_ref || '-'} | Precio: ${lead.property_price || '-'}`
+      : null,
+    '',
+    'Mensaje del interesado:',
+    lead.lead_message || '(sin mensaje)',
+  ];
+  return lines.filter(l => l !== null).join('\n');
+}
+
 function extractLeadData(subject, html, text) {
   const $ = cheerio.load(html || '');
 
-  // 1. Lead name — subject: "Nuevo mensaje (con perfil) de NAME sobre tu inmueble"
+  // 1. Lead name — del asunto: "Nuevo mensaje (con perfil) de NAME sobre tu inmueble"
   let lead_name = null;
   const nameMatch = subject.match(/Nuevo mensaje.*?\bde\s+(.+?)\s+sobre\s+tu\s+inmueble/i);
-  if (nameMatch) lead_name = nameMatch[1].trim();
+  if (nameMatch) lead_name = stripEmojis(nameMatch[1]);
 
-  // Fallback: bold centred name in body (strip flag emojis)
+  // Fallback: nombre en negrita centrado en el cuerpo (font-size 16px + text-align: center)
   if (!lead_name) {
-    $('[style*="font-weight: 700"]').each((_, el) => {
-      const t = $(el).text()
-        .replace(/[\u{1F1E0}-\u{1F1FF}\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}]/gu, '')
-        .trim();
+    $('[style*="font-weight: 700"][style*="text-align: center"]').each((_, el) => {
+      const t = stripEmojis($(el).text());
       if (t && t.length < 60 && !/tienes|hola|calle|ref\.|código/i.test(t)) {
         lead_name = t;
-        return false; // break
+        return false;
       }
     });
   }
@@ -209,25 +234,41 @@ async function processEmails() {
       }
 
       const lead = extractLeadData(subject, parsed.html || '', parsed.text || '');
+      const timestamp = new Date().toISOString();
+      const dateStr = timestamp.slice(0, 10); // YYYY-MM-DD
 
-      console.log(`\n📧 New lead found: ${lead.lead_name || '(name unknown)'}`);
-      if (lead.lead_phone)       console.log(`   📞 Phone: ${lead.lead_phone}`);
-      if (lead.property_ref)     console.log(`   🏠 Ref: ${lead.property_ref}`);
-      if (lead.property_address) console.log(`   📍 Property: ${lead.property_address}`);
-      if (lead.property_price)   console.log(`   💶 Price: ${lead.property_price}`);
-      if (lead.lead_message)     console.log(`   💬 Message: ${lead.lead_message.substring(0, 100)}…`);
+      console.log(`\n📧 Nuevo lead: ${lead.lead_name || '(sin nombre)'}`);
+      if (lead.lead_phone)       console.log(`   📞 Teléfono : ${lead.lead_phone}`);
+      if (lead.property_ref)     console.log(`   🏠 Ref      : ${lead.property_ref}`);
+      if (lead.property_address) console.log(`   📍 Inmueble : ${lead.property_address}`);
+      if (lead.property_price)   console.log(`   💶 Precio   : ${lead.property_price}`);
+      if (lead.lead_message)     console.log(`   💬 Mensaje  : ${lead.lead_message.substring(0, 120)}…`);
+
+      // Payload para Zinto:
+      // - contact_name / contact_phone → el nodo manage_contact los usa para crear/actualizar el contacto
+      // - contact_notes → se guarda en las notas del contacto (incluye fecha, inmueble y mensaje)
+      // - lead_message → mensaje en crudo (útil para el AI assistant u otros nodos)
+      const payload = {
+        contact_name:     lead.lead_name     || '',
+        contact_phone:    lead.lead_phone    || '',
+        contact_notes:    buildContactNotes(lead, dateStr),
+        lead_message:     lead.lead_message  || '',
+        property_ref:     lead.property_ref  || '',
+        property_address: lead.property_address || '',
+        property_price:   lead.property_price   || '',
+      };
 
       let sent = false;
       try {
-        sent = await sendToZinto(lead);
-        if (sent) console.log(`   📤 Sent to Zinto: ${lead.lead_phone}`);
+        sent = await sendToZinto(payload);
+        if (sent) console.log(`   📤 Enviado a Zinto: ${lead.lead_phone}`);
       } catch (err) {
-        console.error(`   ❌ Webhook error: ${err.message}`);
+        console.error(`   ❌ Error webhook: ${err.message}`);
       }
 
       leads.push({
-        ...lead,
-        timestamp: new Date().toISOString(),
+        ...payload,
+        timestamp,
         status: sent ? 'sent_to_zinto' : 'webhook_failed',
         subject,
         uid: msg.uid,
