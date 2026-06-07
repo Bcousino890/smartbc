@@ -47,6 +47,27 @@ function findPhone(text) {
   return null;
 }
 
+// ─── Alquiler / Venta ─────────────────────────────────────────────────────────
+
+function parsePrice(priceStr) {
+  if (!priceStr) return null;
+  // "1.550 €" → 1550  |  "715.000 €" → 715000  |  "1.200,50 €" → 1200.50
+  const cleaned = priceStr
+    .replace(/[€\s]/g, '')   // quitar € y espacios
+    .replace(/\./g, '')      // quitar puntos de miles
+    .replace(',', '.');      // coma decimal → punto
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+function detectPropertyType(priceStr) {
+  const price = parsePrice(priceStr);
+  if (price === null) return 'consultar';
+  if (price < 30_000)  return 'alquiler';
+  if (price > 400_000) return 'venta';
+  return 'consultar';
+}
+
 // ─── Email parsing ────────────────────────────────────────────────────────────
 
 function stripEmojis(str) {
@@ -249,13 +270,14 @@ async function processEmails() {
       // - contact_notes → se guarda en las notas del contacto (incluye fecha, inmueble y mensaje)
       // - lead_message → mensaje en crudo (útil para el AI assistant u otros nodos)
       const payload = {
-        contact_name:     lead.lead_name     || '',
-        contact_phone:    lead.lead_phone    || '',
+        contact_name:     lead.lead_name       || '',
+        contact_phone:    lead.lead_phone      || '',
         contact_notes:    buildContactNotes(lead, dateStr),
-        lead_message:     lead.lead_message  || '',
-        property_ref:     lead.property_ref  || '',
+        lead_message:     lead.lead_message    || '',
+        property_ref:     lead.property_ref    || '',
         property_address: lead.property_address || '',
-        property_price:   lead.property_price   || '',
+        property_price:   lead.property_price  || '',
+        property_type:    detectPropertyType(lead.property_price),
       };
 
       let sent = false;
