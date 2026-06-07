@@ -4,13 +4,13 @@
   "flows": [
     {
       "name": "Leads Idealista → CRM",
-      "description": "Recibe leads del monitor IMAP. Crea contacto con notas y responde al lead en su idioma (ES/EN) automáticamente.",
+      "description": "Recibe leads del monitor IMAP. Crea contacto con notas y etiquetas, y responde al lead automáticamente por WhatsApp.",
       "status": "active",
       "nodes": [
         {
           "id": "node_wh",
           "data": {
-            "label": "Nuevo Lead de Idealista",
+            "label": "Nuevo Lead Idealista",
             "webhookToken": null,
             "useCustomPath": false,
             "contactMapping": { "strategy": "system" },
@@ -55,26 +55,11 @@
           "positionAbsolute": { "x": 300, "y": 280 }
         },
         {
-          "id": "node_build_msg",
-          "data": {
-            "label": "Detectar idioma y armar mensaje",
-            "code": "// Detecta idioma del mensaje y devuelve el texto de WhatsApp correcto\nconst leadMsg = `{{webhook.lead_message}}`;\nconst name    = `{{webhook.contact_name}}`;\nconst barrio  = `{{webhook.property_neighborhood}}`;\nconst tipo    = `{{webhook.property_type}}`;\nconst phone   = `{{webhook.contact_phone}}`;\n\nconst englishWords = /\\b(hello|hi|good\\s(morning|afternoon|evening)|interested|available|apartment|flat|property|could\\s(you|i)|would\\s(like|be)|please|thank\\s(you|s)|dear|sir|madam|we\\s(are|would)|I\\s(am|would)|looking\\s(for|to))\\b/i;\nconst spanishChars = /[áéíóúüñ¡¿]|\\b(hola|gracias|buenos|buenas|estoy|tengo|quisiera|quiero|disponible|saber|interesado|inmueble|pareja|médico|colombiano|sería|podría|además|también|aparte|muchas|necesitas|presenta|nominas)\\b/i;\n\nconst looksEnglish = englishWords.test(leadMsg);\nconst looksSpanish = spanishChars.test(leadMsg);\nconst lang = (looksEnglish && !looksSpanish) ? 'en' : 'es';\n\nlet message;\nif (lang === 'en') {\n  message = `Hi ${name}, how are you? 👋 You reached out about the property in *${barrio}* (${tipo}). What day would you like to visit? Can I give you a call?\\n\\nBest regards! 😊`;\n} else {\n  message = `Hola ${name} qué tal? Nos consultaste por el piso en *${barrio}* en ${tipo}, cuéntame qué día te gustaría visitarlo, ¿te puedo llamar por teléfono?\\n\\n¡Un saludo! 😊`;\n}\n\nreturn { lang, message, phone };",
-            "timeout": 5000,
-            "sourcePosition": "bottom",
-            "targetPosition": "top"
-          },
-          "type": "code_execution",
-          "width": 420,
-          "height": 220,
-          "position": { "x": 280, "y": 560 },
-          "positionAbsolute": { "x": 280, "y": 560 }
-        },
-        {
           "id": "node_msg",
           "data": {
             "label": "WhatsApp → Lead",
             "phoneNumber": "{{webhook.contact_phone}}",
-            "messageContent": "{{code_execution.message}}",
+            "messageContent": "Hola {{webhook.contact_name}} qué tal? 👋 Nos consultaste por el inmueble en *{{webhook.property_neighborhood}}* ({{webhook.property_type}}). ¿Cuándo te gustaría visitarlo? ¿Te puedo llamar por teléfono?\n\n¡Un saludo! 😊",
             "sourcePosition": "bottom",
             "targetPosition": "top",
             "channelConnectionId": null
@@ -82,8 +67,8 @@
           "type": "contactNotification",
           "width": 380,
           "height": 200,
-          "position": { "x": 300, "y": 860 },
-          "positionAbsolute": { "x": 300, "y": 860 }
+          "position": { "x": 300, "y": 550 },
+          "positionAbsolute": { "x": 300, "y": 550 }
         }
       ],
       "edges": [
@@ -99,14 +84,6 @@
           "id": "e2",
           "type": "smoothstep",
           "source": "node_contact",
-          "target": "node_build_msg",
-          "animated": true,
-          "targetHandle": "flow-in"
-        },
-        {
-          "id": "e3",
-          "type": "smoothstep",
-          "source": "node_build_msg",
           "target": "node_msg",
           "animated": true,
           "targetHandle": "flow-in"
