@@ -164,7 +164,7 @@ export function LoginForm() {
 
       <div className="mt-2.5 text-center">
         <a
-          href="#"
+          href="/auth/forgot-password"
           className="text-[13px] text-gold-dark underline-offset-4 transition hover:underline"
         >
           {t("login.forgot")}
