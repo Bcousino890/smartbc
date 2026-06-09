@@ -8,7 +8,7 @@ import { isStaffRole } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
 
 const ROLE_KEY_MAP: Record<string, string> = {
-  owner:        "admin.role",
+  owner:        "admin.role.owner",
   admin:        "admin.role",
   advisor:      "admin.role.advisor",
   agent_junior: "admin.role.agent_junior",

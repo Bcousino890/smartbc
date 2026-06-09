@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     firstName: string;
     lastName?: string;
     phone?: string;
-    role: "admin" | "advisor" | "client";
+    role: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
     assignedAdvisorId?: string;
   };
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const validRoles = ["admin", "advisor", "client"];
+  const validRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin", "client"];
   if (!validRoles.includes(role)) {
     return Response.json({ error: "Rol inválido" }, { status: 400 });
   }
@@ -53,31 +53,29 @@ export async function POST(req: Request) {
     );
   }
 
-  // Validar permisos
-  // Admin: puede crear admin, advisor, client
-  // Advisor: puede crear client solamente
-  // Client: no puede crear nada
-  if (currentProfile.role === "client") {
+  const isOwnerOrAdmin = ["owner", "admin", "agent_admin"].includes(currentProfile.role);
+  const isAdvisorOrAgent = ["advisor", "agent_junior", "agent_senior"].includes(currentProfile.role);
+
+  // Validar permisos: solo owner/admin/agent_admin pueden crear staff
+  if (!isOwnerOrAdmin && !isAdvisorOrAgent) {
     return Response.json(
       { error: "No tienes permisos para crear usuarios" },
       { status: 403 }
     );
   }
 
-  if (currentProfile.role === "advisor" && role !== "client") {
+  if (isAdvisorOrAgent && role !== "client") {
     return Response.json(
-      {
-        error:
-          "Los asesores solo pueden crear clientes",
-      },
+      { error: "Los asesores y agentes solo pueden crear clientes" },
       { status: 403 }
     );
   }
 
-  // Validaciones específicas por rol
-  if (role === "advisor" && !password) {
+  // Contraseña obligatoria para roles de staff (no clients — estos reciben invitación)
+  const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  if (staffRoles.includes(role) && !password) {
     return Response.json(
-      { error: "La contraseña es obligatoria para crear asesores" },
+      { error: "La contraseña es obligatoria para crear usuarios de tipo staff" },
       { status: 400 }
     );
   }
@@ -88,26 +86,8 @@ export async function POST(req: Request) {
   let userId: string = "";
   let authError: string | null = null;
 
-  if (role === "advisor") {
-    // Para asesores, crear con contraseña
-    const { data, error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: `${firstName} ${lastName}`.trim(),
-        first_name: firstName,
-        last_name: lastName,
-      },
-    });
-
-    if (error) {
-      authError = error.message;
-    } else {
-      userId = data.user?.id || "";
-    }
-  } else if (role === "client") {
-    // Para clientes, crear y enviar invitación
+  if (role === "client") {
+    // Clientes reciben email de invitación (sin contraseña)
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: {
         first_name: firstName,
@@ -122,7 +102,7 @@ export async function POST(req: Request) {
       userId = data.user?.id || "";
     }
   } else {
-    // Admin: similar a advisor
+    // Staff (owner, admin, advisor, agent_*): crear con contraseña confirmada
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,

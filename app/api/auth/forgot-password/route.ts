@@ -30,17 +30,17 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (profileError) {
-      console.error("[forgot-password] Error querying profiles:", profileError);
+      console.log("[forgot-password] Error querying profiles:", profileError);
     }
 
     if (profile) {
       userId = profile.id;
       userName = profile.full_name || "Usuario";
       userEmail = profile.email || normalizedEmail;
-      console.error("[forgot-password] Found user in profiles:", userId);
+      console.log("[forgot-password] Found user in profiles:", userId);
     } else {
       // Step 2: Fallback — search directly in auth.users via admin API
-      console.error("[forgot-password] User not found in profiles, falling back to auth.users for email:", normalizedEmail);
+      console.log("[forgot-password] User not found in profiles, falling back to auth.users for email:", normalizedEmail);
       try {
         const { data: authData, error: authError } = await db.auth.admin.listUsers({
           page: 1,
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
         });
 
         if (authError) {
-          console.error("[forgot-password] Error listing auth.users:", authError);
+          console.log("[forgot-password] Error listing auth.users:", authError);
         } else if (authData?.users) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const authUser = authData.users.find(
@@ -64,13 +64,13 @@ export async function POST(req: Request) {
               .eq("id", authUser.id)
               .maybeSingle();
             userName = profileById?.full_name || "Usuario";
-            console.error("[forgot-password] Found user in auth.users:", userId);
+            console.log("[forgot-password] Found user in auth.users:", userId);
           } else {
-            console.error("[forgot-password] User not found in auth.users either for email:", normalizedEmail);
+            console.log("[forgot-password] User not found in auth.users either for email:", normalizedEmail);
           }
         }
       } catch (authLookupError) {
-        console.error("[forgot-password] Exception in auth.users lookup:", authLookupError);
+        console.log("[forgot-password] Exception in auth.users lookup:", authLookupError);
       }
     }
 
@@ -86,20 +86,20 @@ export async function POST(req: Request) {
     const tokenData = await createPasswordResetToken(userId, 24);
 
     if (!tokenData) {
-      console.error("[forgot-password] Failed to create reset token for userId:", userId);
+      console.log("[forgot-password] Failed to create reset token for userId:", userId);
       return Response.json(
         { error: "Error creating reset token" },
         { status: 500 }
       );
     }
 
-    console.error("[forgot-password] Token created, expires at:", tokenData.expiresAt);
+    console.log("[forgot-password] Token created, expires at:", tokenData.expiresAt);
 
     // Build reset URL — prefer explicit NEXT_PUBLIC_APP_URL if set
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3137";
     const resetUrl = `${appUrl}/auth/reset-password?token=${tokenData.token}`;
 
-    console.error("[forgot-password] Sending email to:", userEmail, "| reset URL base:", appUrl);
+    console.log("[forgot-password] Sending email to:", userEmail, "| reset URL base:", appUrl);
 
     // Send email
     const emailResult = await sendPasswordResetEmail(
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     );
 
     if (!emailResult.success) {
-      console.error("[forgot-password] Failed to send password reset email:", emailResult.error);
+      console.log("[forgot-password] Failed to send password reset email:", emailResult.error);
       // Don't expose email service errors to client
       return Response.json(
         { ok: true, message: "If the email exists, you will receive a password reset link" },
@@ -117,14 +117,14 @@ export async function POST(req: Request) {
       );
     }
 
-    console.error("[forgot-password] Email sent successfully to:", userEmail);
+    console.log("[forgot-password] Email sent successfully to:", userEmail);
 
     return Response.json(
       { ok: true, message: "If the email exists, you will receive a password reset link" },
       { status: 200 }
     );
   } catch (error) {
-    console.error("[forgot-password] Unhandled error:", error);
+    console.log("[forgot-password] Unhandled error:", error);
     return Response.json(
       { error: "Error processing password reset request" },
       { status: 500 }

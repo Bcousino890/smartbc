@@ -42,7 +42,7 @@ const STATUS_BADGE: Record<InternalUserStatus, string> = {
 
 // ─── Modal crear usuario ──────────────────────────────────────────────────
 
-type ModalType = "admin" | "advisor" | "client";
+type ModalType = "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
 
 interface CreateUserModalProps {
   userRole: InternalUserRole;
@@ -112,14 +112,16 @@ function CreateUserModal({
     }
   };
 
-  const modalTitle =
-    modalType === "admin"
-      ? "Crear administrador"
-      : modalType === "advisor"
-        ? "Crear asesor"
-        : "Crear cliente";
-
-  const needsPassword = modalType === "admin" || modalType === "advisor";
+  const MODAL_TITLES: Record<ModalType, string> = {
+    admin: "Crear administrador",
+    advisor: "Crear asesor",
+    agent_junior: "Crear agente junior",
+    agent_senior: "Crear agente senior",
+    agent_admin: "Crear agente administrador",
+    client: "Crear cliente",
+  };
+  const modalTitle = MODAL_TITLES[modalType] ?? "Crear usuario";
+  const needsPassword = modalType !== "client";
 
   return (
     <div
@@ -146,11 +148,7 @@ function CreateUserModal({
               <Check size={24} strokeWidth={2} className="text-emerald-600" />
             </span>
             <p className="font-medium text-ink">
-              {modalType === "admin"
-                ? "Administrador creado exitosamente"
-                : modalType === "advisor"
-                  ? "Asesor creado exitosamente"
-                  : "Cliente creado exitosamente"}
+              {modalTitle.replace("Crear", "").trim()} creado exitosamente
             </p>
             <p className="text-sm text-ink/55">{email}</p>
           </div>
@@ -429,8 +427,12 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
                   onChange={(e) => setRole(e.target.value as InternalUserRole)}
                   className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
                 >
+                  <option value="owner">Propietario</option>
                   <option value="admin">Administrador</option>
                   <option value="advisor">Asesor</option>
+                  <option value="agent_admin">Agente Admin</option>
+                  <option value="agent_senior">Agente Senior</option>
+                  <option value="agent_junior">Agente Junior</option>
                 </select>
               </div>
             )}
@@ -795,7 +797,7 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
       )}
 
       {/* Sección 3: Agentes inmobiliarios (solo admin) */}
-      {isAdmin && agents.length > 0 && (
+      {isAdmin && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
           <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
             Agentes Inmobiliarios
@@ -812,6 +814,32 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
                 className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
               />
             </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCreateModal("agent_junior")}
+                className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
+              >
+                <Plus size={14} strokeWidth={1.75} />
+                <span>Junior</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateModal("agent_senior")}
+                className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
+              >
+                <Plus size={14} strokeWidth={1.75} />
+                <span>Senior</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateModal("agent_admin")}
+                className="flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100"
+              >
+                <Plus size={14} strokeWidth={1.75} />
+                <span>Admin</span>
+              </button>
+            </div>
           </div>
 
           <UsersTable
@@ -819,8 +847,8 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
             onEdit={setEditUser}
             onPermissions={setPermissionsUser}
             emptyIcon={<Users size={24} />}
-            emptyTitle={queryAgents ? "Sin resultados" : "No hay agentes"}
-            emptyDescription={queryAgents ? "Prueba con otro término de búsqueda." : undefined}
+            emptyTitle={queryAgents ? "Sin resultados" : "No hay agentes inmobiliarios"}
+            emptyDescription={queryAgents ? "Prueba con otro término de búsqueda." : "Añade el primer agente con los botones de arriba."}
           />
         </section>
       )}

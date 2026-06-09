@@ -55,15 +55,17 @@ export async function signInAction(
     return { error: "auth.error.noProfile" };
   }
 
+  const staffRolesForCheck = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   const requested = parsed.data.role;
-  if (requested === "admin" && profile.role === "client") {
+  if (requested === "admin" && !staffRolesForCheck.includes(profile.role)) {
     await supabase.auth.signOut();
     return { error: "auth.error.notAdmin" };
   }
 
   revalidatePath("/", "layout");
 
-  if (profile.role === "admin" || profile.role === "advisor") {
+  const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  if (staffRoles.includes(profile.role)) {
     redirect("/admin");
   }
   redirect("/inicio");

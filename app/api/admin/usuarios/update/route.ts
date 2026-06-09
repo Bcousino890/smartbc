@@ -8,7 +8,7 @@ export async function PATCH(req: Request) {
     firstName?: string;
     lastName?: string;
     phone?: string;
-    role?: "admin" | "advisor" | "client";
+    role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
   };
 
@@ -29,8 +29,8 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  if (currentProfile.role !== "admin") {
-    return Response.json({ error: "Solo admins pueden editar usuarios" }, { status: 403 });
+  if (!["owner", "admin", "agent_admin"].includes(currentProfile.role)) {
+    return Response.json({ error: "Solo owner/admin pueden editar usuarios" }, { status: 403 });
   }
 
   const supabase = createAdminClient();
