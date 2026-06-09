@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export async function GET() {
+  const profile = await getCurrentProfile();
+  if (!profile || !["owner", "admin"].includes(profile.role)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const db = createAdminClient() as any;
   const { data } = await db.from("app_settings").select("key, value");
   const settings: Record<string, unknown> = {};
