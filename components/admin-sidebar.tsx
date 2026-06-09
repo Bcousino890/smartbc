@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Building2,
+  Calendar,
   ClipboardList,
   Heart,
   Home,
@@ -12,6 +13,7 @@ import {
   Send,
   Settings,
   Sparkles,
+  Stethoscope,
   User,
   UserCog,
   Users,
@@ -31,28 +33,14 @@ const NAV_ITEMS = [
   { href: "/admin/publicacion", labelKey: "admin.nav.publicacion", icon: Send },
   { href: "/admin/idealista", labelKey: "admin.nav.idealista", icon: Sparkles },
   { href: "/admin/clientes", labelKey: "admin.nav.clientes", icon: Users },
-  {
-    href: "/admin/solicitudes",
-    labelKey: "admin.nav.solicitudes",
-    icon: ClipboardList,
-  },
-  {
-    href: "/admin/mensajes",
-    labelKey: "admin.nav.mensajes",
-    icon: MessageSquare,
-  },
-  {
-    href: "/admin/sindicacion",
-    labelKey: "admin.nav.sindicacion",
-    icon: Radio,
-  },
+  { href: "/admin/solicitudes", labelKey: "admin.nav.solicitudes", icon: ClipboardList },
+  { href: "/admin/calendario", labelKey: "admin.nav.calendario", icon: Calendar },
+  { href: "/admin/mensajes", labelKey: "admin.nav.mensajes", icon: MessageSquare },
+  { href: "/admin/sindicacion", labelKey: "admin.nav.sindicacion", icon: Radio },
   { href: "/admin/reportes", labelKey: "admin.nav.reportes", icon: BarChart3 },
   { href: "/admin/usuarios", labelKey: "admin.nav.usuarios", icon: UserCog },
-  {
-    href: "/admin/configuracion",
-    labelKey: "admin.nav.configuracion",
-    icon: Settings,
-  },
+  { href: "/admin/diagnostico", labelKey: "admin.nav.diagnostico", icon: Stethoscope },
+  { href: "/admin/configuracion", labelKey: "admin.nav.configuracion", icon: Settings },
 ] as const;
 
 export function AdminSidebar({ user }: { user: AdminUser }) {

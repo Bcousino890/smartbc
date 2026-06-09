@@ -38,10 +38,19 @@ export default async function AdminLayout({
   );
 }
 
+const ROLE_KEY_MAP: Record<string, string> = {
+  owner: "admin.role.owner",
+  admin: "admin.role",
+  advisor: "admin.role.advisor",
+  agent_admin: "admin.role.agent_admin",
+  agent_senior: "admin.role.agent_senior",
+  agent_junior: "admin.role.agent_junior",
+};
+
 function profileToAdminUser(
   fullName: string | null,
   email: string,
-  role: "admin" | "advisor" | "client"
+  role: string
 ): AdminUser {
   const display = fullName?.trim() || email;
   const parts = display.split(/\s+/);
@@ -54,6 +63,6 @@ function profileToAdminUser(
     firstName,
     lastName,
     initials,
-    roleKey: role === "advisor" ? "admin.role.advisor" : "admin.role",
+    roleKey: ROLE_KEY_MAP[role] ?? "admin.role",
   };
 }

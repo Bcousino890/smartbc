@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Email y rol son obligatorios" }, { status: 400 });
   }
 
-  const validRoles = ["admin", "advisor", "viewer"];
+  const validRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin", "client"];
   if (!validRoles.includes(role)) {
     return Response.json({ error: "Rol inválido" }, { status: 400 });
   }
