@@ -103,7 +103,7 @@ export async function POST(
   }
 
   const callerRole = currentProfile.role as string;
-  if (callerRole !== "admin" && callerRole !== "owner") {
+  if (!["owner", "admin", "agent_admin"].includes(callerRole)) {
     return Response.json(
       { error: "Solo admins pueden modificar permisos" },
       { status: 403 },

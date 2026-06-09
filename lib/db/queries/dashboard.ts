@@ -25,7 +25,7 @@ export async function getDashboardData() {
       db
         .from("properties")
         .select(
-          "id,title,zone,price,operation,status,bc_reference,cover_photo_url"
+          "id,slug,title,zone,price,operation,status,bc_reference,cover_photo_url"
         )
         .is("archived_at", null)
         .order("created_at", { ascending: false })
@@ -48,6 +48,7 @@ export async function getDashboardData() {
     },
     recentProperties: (recentProps.data ?? []) as Array<{
       id: string;
+      slug: string;
       title: string;
       zone: string | null;
       price: number | null;

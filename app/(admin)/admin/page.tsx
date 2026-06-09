@@ -129,7 +129,7 @@ export default async function AdminDashboardPage() {
               {recentProperties.map((prop) => (
                 <Link
                   key={prop.id}
-                  href={`/admin/propiedades/${prop.id}`}
+                  href={`/admin/propiedades/${prop.slug}`}
                   className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-gold/5"
                 >
                   {/* Miniatura */}
