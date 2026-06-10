@@ -251,6 +251,52 @@ export async function assignParticular(
   return { ok: true };
 }
 
+export type SetActiveResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Retira (o reactiva) un anuncio manualmente. Hasta ahora las bajas solo
+ * las detectaba el cron (404 en el portal); con esto un asesor puede
+ * archivar un anuncio ya gestionado para que aparezca en el tab "Retirados"
+ * sin esperar a que Idealista lo elimine. Conserva todos los datos.
+ */
+export async function setParticularActive(
+  particularId: string,
+  active: boolean,
+): Promise<SetActiveResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+  if (!particularId) return { ok: false, error: "id_required" };
+
+  const now = new Date().toISOString();
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any)
+    .from("particulares")
+    .update({
+      is_active: active,
+      taken_down_at: active ? null : now,
+      updated_at: now,
+    })
+    .eq("id", particularId);
+  if (error) return { ok: false, error: error.message };
+
+  // Historial: mismo formato que las bajas/reactivaciones del cron.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from("particulares_changes").insert({
+    particular_id: particularId,
+    change_type: active ? "reactivated" : "deleted",
+    old_value: null,
+    new_value: active ? { reactivated_at: now } : { taken_down_at: now },
+    changed_at: now,
+  });
+
+  revalidatePath("/admin/particulares");
+  return { ok: true };
+}
+
 export type BulkActionResult =
   | { ok: true; updated: number }
   | { ok: false; error: string };

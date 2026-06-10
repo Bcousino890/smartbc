@@ -28,6 +28,7 @@ import {
   assignParticular,
   createPropertyFromParticular,
   logParticularContact,
+  setParticularActive,
   updateParticularPhone,
 } from "./actions";
 import PriceHistoryChart from "./price-history-chart";
@@ -499,6 +500,7 @@ function ParticularModal({
   onClose,
   onPhoneUpdated,
   onAssigned,
+  onActiveChanged,
   canCreateProperty = true,
   staffOptions = [],
 }: {
@@ -506,6 +508,7 @@ function ParticularModal({
   onClose: () => void;
   onPhoneUpdated?: (newPhone: string | null) => void;
   onAssigned?: (advisorId: string | null, advisorName: string | null) => void;
+  onActiveChanged?: (active: boolean, takenDownAt: string | null) => void;
   canCreateProperty?: boolean;
   staffOptions?: StaffOption[];
 }) {
@@ -541,6 +544,28 @@ function ParticularModal({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<{ slug: string } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Retirar / reactivar manualmente (además de la baja automática del cron).
+  const [togglingActive, setTogglingActive] = useState(false);
+
+  async function handleToggleActive() {
+    const next = !currentRow.is_active;
+    setTogglingActive(true);
+    try {
+      const res = await setParticularActive(currentRow.id, next);
+      if (res.ok) {
+        const takenDownAt = next ? null : new Date().toISOString();
+        setCurrentRow((prev) => ({
+          ...prev,
+          is_active: next,
+          taken_down_at: takenDownAt,
+        }));
+        onActiveChanged?.(next, takenDownAt);
+      }
+    } finally {
+      setTogglingActive(false);
+    }
+  }
 
   // Cargar historial de precios cuando se abre el modal o cambia el row
   useEffect(() => {
@@ -711,7 +736,7 @@ function ParticularModal({
           <div>
             {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
             {!currentRow.is_active && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <span className="font-semibold">Anuncio retirado</span>
                 {currentRow.taken_down_at && (
                   <span className="text-red-500">
@@ -721,6 +746,13 @@ function ParticularModal({
                 <span className="ml-auto text-xs text-red-400">
                   Datos conservados — puede volver a estar disponible
                 </span>
+                <button
+                  onClick={handleToggleActive}
+                  disabled={togglingActive}
+                  className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                >
+                  {togglingActive ? "Guardando…" : "Reactivar"}
+                </button>
               </div>
             )}
             <p className="font-serif text-2xl font-semibold text-ink">
@@ -943,6 +975,18 @@ function ParticularModal({
               <ExternalLink size={14} strokeWidth={1.75} />
               Ver en {portalLabel}
             </a>
+            {/* Retirada manual: archiva el anuncio en el tab "Retirados" sin
+                esperar a que el cron detecte el 404 en el portal. */}
+            {currentRow.is_active && (
+              <button
+                onClick={handleToggleActive}
+                disabled={togglingActive}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+              >
+                <X size={14} strokeWidth={2} />
+                {togglingActive ? "Guardando…" : "Marcar como retirado"}
+              </button>
+            )}
             {canCreateProperty && (
               created ? (
                 <Link
@@ -1204,6 +1248,15 @@ export function ParticularesClient({
               prev.map((r) =>
                 r.id === selected.id
                   ? { ...r, assigned_to: advisorId, assigned_name: advisorName }
+                  : r,
+              ),
+            );
+          }}
+          onActiveChanged={(active, takenDownAt) => {
+            setAllRows((prev) =>
+              prev.map((r) =>
+                r.id === selected.id
+                  ? { ...r, is_active: active, taken_down_at: takenDownAt }
                   : r,
               ),
             );
