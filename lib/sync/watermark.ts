@@ -23,12 +23,23 @@ export async function downloadAndWatermark(params: {
   position: number;
 }): Promise<WatermarkResult> {
   try {
-    const res = await fetch(params.sourceUrl, {
-      headers: {
-        "User-Agent": "smartbc-bot/1.0 (contacto@bencousinopropiedades.com)",
-      },
-      cache: "no-store",
-    });
+    // Timeout por foto: si el servidor de origen se cuelga, no queremos que el
+    // import entero se quede esperando indefinidamente (era una causa de que
+    // "crear propiedad" tardase muchísimo y acabara reventando el cliente).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20_000);
+    let res: Response;
+    try {
+      res = await fetch(params.sourceUrl, {
+        headers: {
+          "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)",
+        },
+        cache: "no-store",
+        signal: ctrl.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       return { ok: false, error: `fetch_${res.status}` };
     }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import type { Operation, StayType } from "@/lib/types";
 
 export type CreatePropertyInput = {
@@ -336,6 +337,9 @@ export type UpdatePropertyInput = {
   title?: string;
   description?: string | null;
   price?: number;
+  operation?: "rent" | "sale";
+  stay?: "short" | "long" | null;
+  availableFrom?: string | null;
   bedrooms?: number;
   bathrooms?: number;
   squareMeters?: number | null;
@@ -372,6 +376,10 @@ export async function updateProperty(
   if (input.title !== undefined) payload.title = input.title.trim();
   if (input.description !== undefined)
     payload.description = input.description?.trim() || null;
+  if (input.operation !== undefined) payload.operation = input.operation;
+  if (input.stay !== undefined) payload.stay = input.stay;
+  if (input.availableFrom !== undefined)
+    payload.available_from = input.availableFrom || null;
   if (input.price !== undefined) payload.price = input.price;
   if (input.bedrooms !== undefined) payload.bedrooms = input.bedrooms;
   if (input.bathrooms !== undefined) payload.bathrooms = input.bathrooms;
@@ -557,5 +565,229 @@ export async function archiveProperty(
   }
 
   revalidatePath("/admin/propiedades");
+  return { ok: true };
+}
+
+// ─── Videos y Planos (property_media) ─────────────────────────────────────
+
+export type MediaItem = {
+  id: string;
+  url: string;
+  file_name: string;
+  type: "video" | "plan";
+  storage_path: string;
+};
+
+export type AddVideoResult = { ok: true; item: MediaItem } | { ok: false; error: string };
+export type UploadVideoResult = { ok: true; item: MediaItem } | { ok: false; error: string };
+export type DeleteMediaResult = { ok: true } | { ok: false; error: string };
+export type UploadPlanResult = { ok: true; item: MediaItem } | { ok: false; error: string };
+
+export async function addPropertyVideo(
+  slug: string,
+  videoUrl: string,
+): Promise<AddVideoResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!slug) return { ok: false, error: "slug_required" };
+  if (!videoUrl?.trim()) return { ok: false, error: "url_required" };
+
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(videoUrl.trim()); } catch {
+    return { ok: false, error: "URL inválida — usa un enlace de YouTube o Vimeo" };
+  }
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propLookup.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const admin = createAdminClient();
+  const { data, error } = await (admin as any)
+    .from("property_media")
+    .insert({
+      property_id: prop.id,
+      type: "video",
+      file_name: parsedUrl.hostname,
+      storage_path: parsedUrl.toString(),
+      url: parsedUrl.toString(),
+    })
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return {
+    ok: true,
+    item: { id: data.id, url: data.url, file_name: data.file_name, type: "video", storage_path: data.storage_path },
+  };
+}
+
+export async function uploadPropertyVideo(
+  formData: FormData,
+): Promise<UploadVideoResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const slug = String(formData.get("slug") ?? "").trim();
+  const file = formData.get("file");
+
+  if (!slug) return { ok: false, error: "slug_required" };
+  if (!(file instanceof File)) return { ok: false, error: "file_required" };
+  if (file.size === 0) return { ok: false, error: "file_empty" };
+  if (file.size > 200 * 1024 * 1024) return { ok: false, error: "Archivo muy grande (máx 200MB)" };
+
+  const allowedTypes = ["video/mp4", "video/quicktime", "video/webm"];
+  if (file.type && !allowedTypes.includes(file.type)) {
+    return { ok: false, error: "Formato no soportado. Usa MP4, MOV o WebM." };
+  }
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propLookup.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+  const storagePath = `${prop.id}/video/${Date.now()}-${safeName}`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const admin = createAdminClient();
+  const { error: uploadErr } = await (admin as any).storage
+    .from("properties-photos")
+    .upload(storagePath, arrayBuffer, { contentType: file.type || "video/mp4", upsert: false });
+
+  if (uploadErr) {
+    console.error("[uploadPropertyVideo] storage error:", uploadErr);
+    return { ok: false, error: uploadErr.message };
+  }
+
+  const { data: urlData } = (admin as any).storage
+    .from("properties-photos")
+    .getPublicUrl(storagePath);
+  const publicUrl = urlData.publicUrl;
+
+  const { data, error } = await (admin as any)
+    .from("property_media")
+    .insert({
+      property_id: prop.id,
+      type: "video",
+      file_name: file.name,
+      storage_path: storagePath,
+      url: publicUrl,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[uploadPropertyVideo] insert error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return {
+    ok: true,
+    item: { id: data.id, url: data.url, file_name: data.file_name, type: "video", storage_path: data.storage_path },
+  };
+}
+
+export async function uploadPropertyPlan(
+  formData: FormData,
+): Promise<UploadPlanResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const slug = String(formData.get("slug") ?? "").trim();
+  const file = formData.get("file");
+
+  if (!slug) return { ok: false, error: "slug_required" };
+  if (!(file instanceof File)) return { ok: false, error: "file_required" };
+  if (file.size === 0) return { ok: false, error: "file_empty" };
+  if (file.size > 20 * 1024 * 1024) return { ok: false, error: "Archivo muy grande (máx 20MB)" };
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propLookup.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+  const storagePath = `${prop.id}/plan/${Date.now()}-${safeName}`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const admin = createAdminClient();
+  const { error: uploadErr } = await (admin as any).storage
+    .from("properties-photos")
+    .upload(storagePath, arrayBuffer, { contentType: file.type || "image/jpeg", upsert: false });
+
+  if (uploadErr) {
+    console.error("[uploadPropertyPlan] storage error:", uploadErr);
+    return { ok: false, error: uploadErr.message };
+  }
+
+  const { data: urlData } = (admin as any).storage
+    .from("properties-photos")
+    .getPublicUrl(storagePath);
+  const publicUrl = urlData.publicUrl;
+
+  const { data, error } = await (admin as any)
+    .from("property_media")
+    .insert({
+      property_id: prop.id,
+      type: "plan",
+      file_name: file.name,
+      storage_path: storagePath,
+      url: publicUrl,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[uploadPropertyPlan] insert error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return {
+    ok: true,
+    item: { id: data.id, url: data.url, file_name: data.file_name, type: "plan", storage_path: data.storage_path },
+  };
+}
+
+export async function deletePropertyMedia(
+  slug: string,
+  mediaId: string,
+  storagePath: string,
+): Promise<DeleteMediaResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  // Si storagePath es una URL externa (youtube/vimeo), no borrar del storage
+  const isExternalUrl = storagePath.startsWith("http");
+  if (!isExternalUrl) {
+    await (supabase as any).storage.from("properties-photos").remove([storagePath]);
+  }
+
+  const { error } = await (supabase as any)
+    .from("property_media")
+    .delete()
+    .eq("id", mediaId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/propiedades/${slug}`);
   return { ok: true };
 }

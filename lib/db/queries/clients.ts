@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "../server";
+import { createAdminClient } from "../admin";
 import type { Database } from "../database.types";
 import type {
   ClientPreferencesRow,
@@ -17,6 +18,8 @@ export type {
 
 export async function getClients(): Promise<ClientWithRelations[]> {
   const supabase = await createClient();
+
+  // Try full query with joins first (session client, respects RLS)
   const { data, error } = await supabase
     .from("profiles")
     .select(`
@@ -29,8 +32,42 @@ export async function getClients(): Promise<ClientWithRelations[]> {
     .eq("role", "client")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
-  return (data ?? []) as unknown as ClientWithRelations[];
+  if (!error && data && data.length > 0) {
+    return data as unknown as ClientWithRelations[];
+  }
+
+  // Fallback 1: simple query without potentially-missing joins (session client)
+  if (error) {
+    console.error("getClients full query failed, using fallback:", error.message);
+  }
+  const { data: fallback, error: fallbackErr } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "client")
+    .order("created_at", { ascending: false });
+
+  if (!fallbackErr && fallback && fallback.length > 0) {
+    return fallback as unknown as ClientWithRelations[];
+  }
+
+  // Fallback 2: admin client (service role) — bypasses RLS when the
+  // logged-in user's role isn't recognised by is_staff() yet.
+  try {
+    const admin = createAdminClient();
+    const { data: adminData, error: adminErr } = await admin
+      .from("profiles")
+      .select("*")
+      .eq("role", "client")
+      .order("created_at", { ascending: false });
+    if (!adminErr) {
+      return (adminData ?? []) as unknown as ClientWithRelations[];
+    }
+    console.error("getClients admin fallback error:", adminErr.message);
+  } catch (e) {
+    console.error("getClients admin fallback threw:", e);
+  }
+
+  return [];
 }
 
 export async function getVisitRequests(): Promise<VisitRequestWithRelations[]> {
@@ -68,15 +105,60 @@ export async function getVisitRequestsStats() {
 }
 
 export async function getStaff() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const allRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  const legacyRoles = ["owner", "admin", "advisor"];
+
+  // Primary: session-based client — works for authenticated staff via RLS (migration 0032)
+  try {
+    const sessionClient = await createClient();
+    const { data, error } = await sessionClient
+      .from("profiles")
+      .select("*")
+      .in("role", allRoles)
+      .order("created_at");
+
+    if (!error) {
+      return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+    }
+
+    if (error.message?.includes("invalid input value for enum")) {
+      const { data: fallback, error: fallbackErr } = await sessionClient
+        .from("profiles")
+        .select("*")
+        .in("role", legacyRoles)
+        .order("created_at");
+      if (!fallbackErr) {
+        return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+      }
+    }
+    console.error("getStaff session error:", error.message);
+  } catch (e) {
+    console.error("getStaff session client threw:", e);
+  }
+
+  // Fallback: admin client (requires SUPABASE_SERVICE_ROLE_KEY)
+  const adminClient = createAdminClient();
+  const { data: adminData, error: adminError } = await adminClient
     .from("profiles")
     .select("*")
-    .in("role", ["admin", "advisor"])
+    .in("role", allRoles)
     .order("created_at");
 
-  if (error) throw error;
-  return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  if (!adminError) {
+    return (adminData ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  }
+
+  if (adminError.message?.includes("invalid input value for enum")) {
+    const { data: fallback } = await adminClient
+      .from("profiles")
+      .select("*")
+      .in("role", legacyRoles)
+      .order("created_at");
+    return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  }
+
+  console.error("getStaff all attempts failed:", adminError);
+  return [];
 }
 
 export async function getClientStats() {

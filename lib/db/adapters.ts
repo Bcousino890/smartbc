@@ -176,6 +176,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     phone: row.phone ?? undefined,
     location: undefined,
     avatarInitials: initials,
+    updatedAt: row.updated_at,
     profileType,
     operation,
     stayType,
@@ -204,7 +205,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
 const VISIT_STATUS_MAP: Record<VisitStatus, VisitRequestStatus> = {
   pending: "pending",
   confirmed: "confirmed",
-  cancelled: "rejected",
+  cancelled: "cancelled",
   completed: "completed",
 };
 
@@ -224,6 +225,7 @@ export function visitRequestRowToLegacy(
     id: row.id,
     clientName,
     clientInitials: deriveInitials(clientName),
+    clientEmail: row.profiles?.email ?? "",
     propertyTitle: row.properties?.title ?? "—",
     propertyReference: row.properties?.external_id ?? row.properties?.slug ?? "",
     requestedDateLabel: VISIT_DATETIME_FMT.format(new Date(row.requested_at)),
@@ -231,13 +233,14 @@ export function visitRequestRowToLegacy(
     assignedAdvisor: "—",
     status: VISIT_STATUS_MAP[row.status],
     receivedRelativeMinutes: minutesSince(row.created_at),
+    createdAt: row.created_at,
   };
 }
 
 export function profileRowToInternalUser(
   row: Database["public"]["Tables"]["profiles"]["Row"]
 ): InternalUser {
-  const display = row.full_name?.trim() || row.email;
+  const display = row.full_name?.trim() || row.email || "";
   const [firstName, ...rest] = display.split(/\s+/);
   return {
     id: row.id,
@@ -245,7 +248,7 @@ export function profileRowToInternalUser(
     lastName: rest.join(" "),
     email: row.email,
     initials: deriveInitials(display),
-    roleKey: (["owner", "admin", "advisor", "client", "viewer"].includes(row.role ?? "")
+    roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin"].includes(row.role ?? "")
       ? row.role
       : "advisor") as InternalUserRole,
     status: "active",

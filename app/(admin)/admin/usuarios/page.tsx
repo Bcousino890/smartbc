@@ -13,9 +13,9 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
 
 export default async function AdminUsuariosPage() {
   const [staffRows, clientRows, currentUser] = await Promise.all([
-    getStaff(),
-    getClients(),
-    getCurrentProfile(),
+    getStaff().catch((e) => { console.error("getStaff error:", e); return []; }),
+    getClients().catch((e) => { console.error("getClients error:", e); return []; }),
+    getCurrentProfile().catch(() => null),
   ]);
 
   const staffUsers = staffRows.map(profileRowToInternalUser);
@@ -31,12 +31,15 @@ export default async function AdminUsuariosPage() {
   }));
 
   const allUsers = [...staffUsers, ...clientUsers];
-  const currentUserRole: InternalUserRole =
-    currentUser?.role === "admin"
-      ? "admin"
-      : currentUser?.role === "advisor"
-        ? "advisor"
-        : "viewer";
+  const validRoles: InternalUserRole[] = [
+    "owner", "admin", "advisor", "client", "viewer",
+    "agent_junior", "agent_senior", "agent_admin",
+  ];
+  const currentUserRole: InternalUserRole = validRoles.includes(
+    currentUser?.role as InternalUserRole
+  )
+    ? (currentUser!.role as InternalUserRole)
+    : "viewer";
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col px-6 pb-10 lg:px-10">

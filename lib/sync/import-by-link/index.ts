@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { detectPortal } from "./detect-portal";
 import { fetchHtml } from "./fetch-html";
 import { extractClikalia, normalizeClikaliaUrl } from "./extractors/clikalia";
+import { extractUrbantechome } from "./extractors/urbantechome";
 import { extractFotocasa } from "./extractors/fotocasa";
 import { extractGeneric } from "./extractors/generic";
 import { extractIdealista } from "./extractors/idealista";
@@ -29,6 +30,26 @@ export async function extractFromUrl(
         reason: "URL inválida o esquema no soportado (solo http/https)",
       },
     };
+  }
+
+  // UrbantecHome es una SPA: los datos NO están en el HTML, vienen de su API
+  // pública. No descargamos HTML; el extractor consulta la API directamente.
+  if (detected.portal === "urbantechome") {
+    try {
+      return {
+        ok: true,
+        preview: await extractUrbantechome(detected.url.toString()),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          kind: "parse_failed",
+          reason:
+            err instanceof Error ? err.message : "urbantechome_extract_failed",
+        },
+      };
+    }
   }
 
   // Clikalia: forzamos la ficha en español para parsear los datos en el idioma

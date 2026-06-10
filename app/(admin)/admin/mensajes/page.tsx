@@ -2,17 +2,23 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { createClient } from "@/lib/db/server";
 import { deriveInitials } from "@/lib/db/adapters";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { AdminMensajesClient, type AdminConversation } from "./mensajes-admin-client";
+import { MensajesTabs } from "./mensajes-tabs";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminMensajesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; tab?: string }>;
 }) {
-  const { c: activeIdParam } = await searchParams;
+  const { c: activeIdParam, tab } = await searchParams;
   const supabase = await createClient();
+
+  // Get current user profile for team chat
+  const profile = await getCurrentProfile();
+  const currentUserId = profile?.id ?? "";
 
   // Conversaciones con info del cliente.
   const convResult = await supabase
@@ -78,6 +84,8 @@ export default async function AdminMensajesPage({
     await convTbl.update({ unread_count_advisor: 0 }).eq("id", activeId);
   }
 
+  const activeTab = tab === "equipo" ? "equipo" : "clientes";
+
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
       <AdminPageHeader
@@ -86,10 +94,12 @@ export default async function AdminMensajesPage({
       />
 
       <div className="mt-7">
-        <AdminMensajesClient
+        <MensajesTabs
+          activeTab={activeTab}
           conversations={conversations}
           activeId={activeId}
           messages={messages}
+          currentUserId={currentUserId}
         />
       </div>
 

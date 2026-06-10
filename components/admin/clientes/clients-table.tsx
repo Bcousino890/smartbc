@@ -4,14 +4,63 @@ import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
+  Eye,
   Filter,
+  Heart,
   Search,
   SlidersHorizontal,
+  Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient, ClientProfileType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  "bg-gold/20 text-amber-800",
+  "bg-blue-100 text-blue-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-violet-100 text-violet-700",
+  "bg-rose-100 text-rose-700",
+  "bg-orange-100 text-orange-700",
+];
+
+function getAvatarColor(name: string): string {
+  const code = name.charCodeAt(0) + (name.charCodeAt(1) || 0);
+  return AVATAR_COLORS[code % AVATAR_COLORS.length];
+}
+
+function timeAgo(date: string | null | undefined): string {
+  if (!date) return "—";
+  const d = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (d < 60) return "ahora";
+  if (d < 3600) return `hace ${Math.floor(d / 60)}m`;
+  if (d < 86400) return `hace ${Math.floor(d / 3600)}h`;
+  if (d < 604800) return `hace ${Math.floor(d / 86400)}d`;
+  return new Date(date).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+// ─── Profile badge colors ─────────────────────────────────────────────────────
+
+const PROFILE_BADGE: Record<ClientProfileType, string> = {
+  student: "border-violet-200 bg-violet-50 text-violet-700",
+  worker: "border-blue-200 bg-blue-50 text-blue-700",
+  company: "border-amber-200 bg-amber-50 text-amber-700",
+};
 
 const PROFILE_KEYS: Record<ClientProfileType, string> = {
   student: "clientes.profile.student",
@@ -21,6 +70,8 @@ const PROFILE_KEYS: Record<ClientProfileType, string> = {
 
 const PAGE_SIZE = 8;
 
+// ─── Table ────────────────────────────────────────────────────────────────────
+
 export function ClientsTable({
   clients,
   totalClients,
@@ -28,7 +79,7 @@ export function ClientsTable({
   onSelect,
 }: {
   clients: AdminClient[];
-  totalClients: number; // total registered (e.g. 468) — not the visible page count
+  totalClients: number; // total registered — not the visible page count
   selectedId?: string;
   onSelect: (id: string) => void;
 }) {
@@ -84,16 +135,25 @@ export function ClientsTable({
 
       {/* Table */}
       <div className="mt-5 flex-1 overflow-x-auto">
-        <table className="w-full min-w-[900px] border-separate border-spacing-y-1.5 text-left text-sm">
+        <table className="w-full min-w-[820px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
             <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
               <th className="px-3 pb-2">{t("clientes.table.client")}</th>
               <th className="px-3 pb-2">{t("clientes.table.profile")}</th>
-              <th className="px-3 pb-2">{t("clientes.table.operation")}</th>
-              <th className="px-3 pb-2">{t("clientes.table.preferences")}</th>
-              <th className="px-3 pb-2">{t("clientes.table.lastAccess")}</th>
               <th className="px-3 pb-2">{t("clientes.table.status")}</th>
-              <th className="px-3 pb-2">{t("clientes.table.advisor")}</th>
+              <th className="px-3 pb-2">{t("clientes.table.lastAccess")}</th>
+              <th className="px-3 pb-2 text-center">
+                <span className="inline-flex items-center gap-1">
+                  <Heart size={11} strokeWidth={1.75} />
+                  {t("clientes.table.favorites")}
+                </span>
+              </th>
+              <th className="px-3 pb-2 text-center">
+                <span className="inline-flex items-center gap-1">
+                  <Eye size={11} strokeWidth={1.75} />
+                  {t("clientes.table.visits")}
+                </span>
+              </th>
               <th className="px-3 pb-2 text-right">
                 {t("clientes.table.actions")}
               </th>
@@ -102,11 +162,13 @@ export function ClientsTable({
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td
-                  colSpan={8}
-                  className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-ink/55"
-                >
-                  {t("clientes.empty")}
+                <td colSpan={7}>
+                  <div className="flex flex-col items-center py-16 text-center">
+                    <Users size={32} className="mb-3 text-gold/40" />
+                    <p className="text-sm font-medium text-ink/55">
+                      {t("clientes.empty")}
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -138,6 +200,8 @@ export function ClientsTable({
   );
 }
 
+// ─── Row ──────────────────────────────────────────────────────────────────────
+
 function ClientRow({
   client,
   selected,
@@ -149,7 +213,20 @@ function ClientRow({
 }) {
   const t = useT();
   const isActive = client.status === "active";
-  const fullName = `${client.firstName} ${client.lastName}`;
+  const fullName = `${client.firstName} ${client.lastName}`.trim();
+  const initials = getInitials(fullName || client.email);
+  const avatarColor = getAvatarColor(fullName || client.email);
+
+  // Relative last-seen: prefer updatedAt from the row, fall back to legacy label fields
+  const lastSeen: string = (() => {
+    if (client.updatedAt) return timeAgo(client.updatedAt);
+    if (client.lastAccessLabelKey) {
+      return t(client.lastAccessLabelKey, {
+        time: client.lastAccessValue ?? "",
+      });
+    }
+    return client.lastAccessText ?? "—";
+  })();
 
   return (
     <tr
@@ -161,10 +238,16 @@ function ClientRow({
       )}
       onClick={() => onSelect(client.id)}
     >
+      {/* Client: avatar + name + email */}
       <td className="rounded-l-xl px-3 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-[10px] font-medium text-cream-50">
-            {client.avatarInitials}
+          <span
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+              avatarColor,
+            )}
+          >
+            {initials}
           </span>
           <div className="min-w-0">
             <p className="truncate font-medium text-ink">{fullName}</p>
@@ -172,27 +255,20 @@ function ClientRow({
           </div>
         </div>
       </td>
+
+      {/* Profile badge */}
       <td className="px-3 py-3">
-        <span className="rounded-md border border-ink/10 bg-cream-100/80 px-2.5 py-1 text-[11px] font-medium text-ink/75">
+        <span
+          className={cn(
+            "rounded-md border px-2.5 py-1 text-[11px] font-medium",
+            PROFILE_BADGE[client.profileType],
+          )}
+        >
           {t(PROFILE_KEYS[client.profileType])}
         </span>
       </td>
-      <td className="px-3 py-3 text-ink/75">
-        {t(
-          `filters.operation.${client.operation === "alquiler" ? "rent" : "sale"}`,
-        )}
-      </td>
-      <td className="px-3 py-3 text-ink/75">
-        <p>{client.preferredZone}</p>
-        <p className="text-[11px] text-ink/55">
-          {t(`card.stay.${client.stayType === "corta" ? "short" : "long"}`)}
-        </p>
-      </td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">
-        {client.lastAccessLabelKey
-          ? t(client.lastAccessLabelKey, { time: client.lastAccessValue ?? "" })
-          : (client.lastAccessText ?? "")}
-      </td>
+
+      {/* Status dot + label */}
       <td className="px-3 py-3">
         <span className="flex items-center gap-1.5 text-[12px] text-ink/75">
           <span
@@ -204,7 +280,41 @@ function ClientRow({
           {t(`clientes.status.${client.status}`)}
         </span>
       </td>
-      <td className="px-3 py-3 text-ink/75">{client.assignedAdvisor}</td>
+
+      {/* Last access relative */}
+      <td className="px-3 py-3 text-[12px] text-ink/65">{lastSeen}</td>
+
+      {/* Favorites count */}
+      <td className="px-3 py-3 text-center">
+        <span className="inline-flex items-center gap-1 text-[12px] text-ink/70">
+          <Heart
+            size={12}
+            strokeWidth={1.75}
+            className={
+              client.activity.favorites > 0
+                ? "fill-rose-400 text-rose-400"
+                : "text-ink/30"
+            }
+          />
+          {client.activity.favorites}
+        </span>
+      </td>
+
+      {/* Visits count */}
+      <td className="px-3 py-3 text-center">
+        <span className="inline-flex items-center gap-1 text-[12px] text-ink/70">
+          <Eye
+            size={12}
+            strokeWidth={1.75}
+            className={
+              client.activity.visitsRequested > 0 ? "text-gold" : "text-ink/30"
+            }
+          />
+          {client.activity.visitsRequested}
+        </span>
+      </td>
+
+      {/* Actions */}
       <td className="rounded-r-xl px-3 py-3 text-right">
         <button
           type="button"
@@ -222,6 +332,8 @@ function ClientRow({
   );
 }
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
 function Pagination({
   totalPages,
   currentPage,
@@ -229,7 +341,6 @@ function Pagination({
   totalPages: number;
   currentPage: number;
 }) {
-  // Build a small list: 1, 2, 3, ..., last
   const pages: (number | "...")[] = [];
   if (totalPages <= 5) {
     for (let i = 1; i <= totalPages; i++) pages.push(i);

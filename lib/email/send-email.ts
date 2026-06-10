@@ -69,7 +69,7 @@ function decryptPassword(encrypted: string, iv: string): string {
 }
 
 /**
- * Fetch email config from database
+ * Fetch email config from database, or fallback to environment variables
  */
 export async function getEmailConfig(): Promise<EmailConfig | null> {
   try {
@@ -81,21 +81,43 @@ export async function getEmailConfig(): Promise<EmailConfig | null> {
       .limit(1)
       .single();
 
-    if (error || !data) {
-      console.warn("No email config found:", error);
-      return null;
+    if (data) {
+      return {
+        smtpServer: data.smtp_server,
+        smtpPort: data.smtp_port,
+        smtpUser: data.smtp_user,
+        smtpPasswordEncrypted: data.smtp_password_encrypted,
+        smtpPasswordIv: data.smtp_password_iv,
+        useSsl: data.use_ssl,
+        fromEmail: data.from_email,
+        fromName: data.from_name,
+      };
     }
 
-    return {
-      smtpServer: data.smtp_server,
-      smtpPort: data.smtp_port,
-      smtpUser: data.smtp_user,
-      smtpPasswordEncrypted: data.smtp_password_encrypted,
-      smtpPasswordIv: data.smtp_password_iv,
-      useSsl: data.use_ssl,
-      fromEmail: data.from_email,
-      fromName: data.from_name,
-    };
+    // Fallback: try environment variables (for local development / staging)
+    const envSmtpServer = process.env.SMTP_SERVER;
+    const envSmtpPort = process.env.SMTP_PORT;
+    const envSmtpUser = process.env.SMTP_USER;
+    const envSmtpPass = process.env.SMTP_PASSWORD;
+    const envFromEmail = process.env.FROM_EMAIL;
+    const envUseSsl = process.env.SMTP_USE_SSL !== "false";
+
+    if (envSmtpServer && envSmtpPort && envSmtpUser && envSmtpPass && envFromEmail) {
+      console.log("[email] Using SMTP config from environment variables");
+      return {
+        smtpServer: envSmtpServer,
+        smtpPort: parseInt(envSmtpPort, 10),
+        smtpUser: envSmtpUser,
+        smtpPasswordEncrypted: "", // Not encrypted from env
+        smtpPasswordIv: "",
+        useSsl: envUseSsl,
+        fromEmail: envFromEmail,
+        fromName: process.env.FROM_NAME || "SmartBC",
+      };
+    }
+
+    console.warn("[email] No email config found in database or environment variables");
+    return null;
   } catch (error) {
     console.error("Error fetching email config:", error);
     return null;
@@ -123,11 +145,17 @@ export async function sendEmail(
       };
     }
 
-    // Decrypt the password
-    const decryptedPassword = decryptPassword(
-      config.smtpPasswordEncrypted,
-      config.smtpPasswordIv
-    );
+    // Decrypt the password (or use directly if from env vars)
+    const decryptedPassword = config.smtpPasswordEncrypted
+      ? decryptPassword(config.smtpPasswordEncrypted, config.smtpPasswordIv)
+      : process.env.SMTP_PASSWORD || "";
+
+    if (!decryptedPassword) {
+      return {
+        success: false,
+        error: "No SMTP password available",
+      };
+    }
 
     // Create transporter
     const transporter = nodemailer.createTransport({

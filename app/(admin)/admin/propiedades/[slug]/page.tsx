@@ -26,6 +26,7 @@ export default async function PropertyDetailPage({
         bedrooms: number;
         bathrooms: number;
         square_meters: number | null;
+        available_from: string | null;
         zone: string;
         address: string | null;
         features: string[] | null;
@@ -54,6 +55,15 @@ export default async function PropertyDetailPage({
               is_cover: boolean;
             }>
           | null;
+        property_media:
+          | Array<{
+              id: string;
+              url: string;
+              file_name: string;
+              type: "video" | "plan";
+              storage_path: string;
+            }>
+          | null;
       })
     | null;
   if (!property) notFound();
@@ -66,12 +76,18 @@ export default async function PropertyDetailPage({
     .slice()
     .sort((a, b) => a.position - b.position);
 
+  const allMedia = property.property_media ?? [];
+  const videos = allMedia.filter((m) => m.type === "video");
+  const plans = allMedia.filter((m) => m.type === "plan");
+
   // SmartLinks de esta propiedad (con stats de aperturas).
   const shares = await getSharesForProperty(property.id);
 
   return (
     <PropertyEditView
       shares={shares}
+      videos={videos}
+      plans={plans}
       property={{
         id: property.id,
         slug: property.slug,
@@ -84,6 +100,7 @@ export default async function PropertyDetailPage({
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
         square_meters: property.square_meters,
+        available_from: property.available_from,
         zone: property.zone,
         address: property.address,
         features: property.features ?? [],

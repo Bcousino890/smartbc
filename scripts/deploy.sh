@@ -29,7 +29,7 @@ rsync -az \
   "$REPO_DIR/" "$VPS:$APP_DIR/"
 
 echo "▶ [2/3] Instalando deps, compilando y reiniciando…"
-ssh "$VPS" "cd $APP_DIR && npm install && npm run build && pm2 restart $PM2_APP"
+ssh "$VPS" "cd $APP_DIR && npm install && NODE_OPTIONS='--max-old-space-size=4096' npm run build && pm2 restart $PM2_APP"
 
 echo "▶ [3/3] Aplicando migraciones de BD pendientes…"
 ssh "$VPS" "bash $APP_DIR/scripts/apply-migrations.sh"

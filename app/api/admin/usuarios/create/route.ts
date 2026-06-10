@@ -1,5 +1,4 @@
 import "server-only";
-import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
@@ -9,7 +8,7 @@ export async function POST(req: Request) {
     firstName: string;
     lastName?: string;
     phone?: string;
-    role: string;
+    role: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
     assignedAdvisorId?: string;
   };
@@ -57,6 +56,7 @@ export async function POST(req: Request) {
   const isOwnerOrAdmin = ["owner", "admin", "agent_admin"].includes(currentProfile.role);
   const isAdvisorOrAgent = ["advisor", "agent_junior", "agent_senior"].includes(currentProfile.role);
 
+  // Validar permisos: solo owner/admin/agent_admin pueden crear staff
   if (!isOwnerOrAdmin && !isAdvisorOrAgent) {
     return Response.json(
       { error: "No tienes permisos para crear usuarios" },
@@ -66,29 +66,28 @@ export async function POST(req: Request) {
 
   if (isAdvisorOrAgent && role !== "client") {
     return Response.json(
-      { error: "Los asesores solo pueden crear clientes" },
+      { error: "Los asesores y agentes solo pueden crear clientes" },
       { status: 403 }
     );
   }
 
+  // Contraseña obligatoria para roles de staff (no clients — estos reciben invitación)
   const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   if (staffRoles.includes(role) && !password) {
     return Response.json(
-      { error: "La contraseña es obligatoria para crear usuarios de staff" },
+      { error: "La contraseña es obligatoria para crear usuarios de tipo staff" },
       { status: 400 }
     );
   }
 
   const supabase = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userClient = (await createClient()) as any;
 
   // Crear usuario en auth
   let userId: string = "";
   let authError: string | null = null;
 
   if (role === "client") {
-    // Para clientes, enviar invitación por email
+    // Clientes reciben email de invitación (sin contraseña)
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: {
         first_name: firstName,
@@ -103,7 +102,7 @@ export async function POST(req: Request) {
       userId = data.user?.id || "";
     }
   } else {
-    // Staff: crear con contraseña
+    // Staff (owner, admin, advisor, agent_*): crear con contraseña confirmada
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -133,11 +132,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // Actualizar profile con rol, assigned_advisor_id y created_by
-  // Nota: la migración 0020 agrega la columna created_by, pero no todas las bases de datos pueden tenerla
-  // Si falla, continuamos de todas formas porque el usuario fue creado exitosamente en auth
-  const profileUpdate: any = {
+  // Actualizar profile con rol y email usando el cliente admin (service role) para bypassear RLS
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profileUpdate: Record<string, any> = {
     role,
+    email,
   };
 
   if (role === "client") {
@@ -147,17 +146,13 @@ export async function POST(req: Request) {
     }
   }
 
-  // Intentar agregar created_by si existe la columna
-  profileUpdate.created_by = currentProfile.id;
-
-  const { error: profileError } = await userClient
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: profileError } = await (supabase as any)
     .from("profiles")
     .update(profileUpdate)
     .eq("id", userId);
 
   if (profileError) {
-    // El usuario fue creado en auth pero falló la actualización en DB
-    // Por ahora retornamos el error, en prod podrías tener un cleanup
     return Response.json(
       { error: `Error actualizando perfil: ${profileError.message}` },
       { status: 500 }

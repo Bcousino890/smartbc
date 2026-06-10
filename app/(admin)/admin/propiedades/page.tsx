@@ -5,6 +5,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { propertyRowToAdminProperty } from "@/lib/db/adapters";
 import { getAgencies } from "@/lib/db/queries/agencies";
 import { getProperties } from "@/lib/db/queries/properties";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { PropertiesAdminClient } from "./properties-admin-client";
 
 // Datos en vivo: el catálogo tiene que reflejar altas/ediciones/imports al
@@ -13,12 +14,13 @@ import { PropertiesAdminClient } from "./properties-admin-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPropiedadesPage() {
-  const [rows, agencyRows] = await Promise.all([
+  const [rows, agencyRows, currentProfile] = await Promise.all([
     // Límite alto: el admin debe ver TODO el catálogo activo (cientos de pisos
     // de todas las agencias). Con un tope bajo, el total y el filtro de agencia
     // se quedaban cortos (faltaban agencias). Buscador/filtros operan en cliente.
     getProperties({ includeUnavailable: true }, 2000),
     getAgencies(),
+    getCurrentProfile(),
   ]);
   const properties = rows.map(propertyRowToAdminProperty);
   const agencies = ((agencyRows ?? []) as Array<{
@@ -67,7 +69,11 @@ export default async function AdminPropiedadesPage() {
         />
       </div>
 
-      <PropertiesAdminClient properties={properties} agencies={agencies} />
+      <PropertiesAdminClient
+        properties={properties}
+        agencies={agencies}
+        currentRole={currentProfile?.role}
+      />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

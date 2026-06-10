@@ -17,10 +17,9 @@ export default function ResetPasswordForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Validate token on mount
   useEffect(() => {
     if (!token) {
-      setError("Invalid or missing reset token");
+      setError("Enlace de recuperación inválido o faltante");
     }
   }, [token]);
 
@@ -28,19 +27,18 @@ export default function ResetPasswordForm() {
     e.preventDefault();
     setError("");
 
-    // Validate
     if (!password || !confirmPassword) {
-      setError("Please fill in all fields");
+      setError("Completa todos los campos");
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError("Las contraseñas no coinciden");
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+      setError("La contraseña debe tener al menos 6 caracteres");
       return;
     }
 
@@ -50,16 +48,13 @@ export default function ResetPasswordForm() {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          password,
-        }),
+        body: JSON.stringify({ token, password }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Error resetting password");
+        setError(data.error || "Error al restablecer la contraseña");
         return;
       }
 
@@ -67,12 +62,11 @@ export default function ResetPasswordForm() {
       setPassword("");
       setConfirmPassword("");
 
-      // Redirect to login after 3 seconds
       setTimeout(() => {
         router.push("/login");
       }, 3000);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Unknown error");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setLoading(false);
     }
@@ -86,17 +80,17 @@ export default function ResetPasswordForm() {
             <div className="flex items-center justify-center mb-4">
               <AlertCircle size={32} className="text-red-600" />
             </div>
-            <h1 className="text-2xl font-bold text-center text-ink mb-4">
-              Invalid Link
+            <h1 className="font-serif text-2xl font-medium text-center text-ink mb-4">
+              Enlace inválido
             </h1>
             <p className="text-center text-ink/55 mb-6">
-              This password reset link is invalid or has expired. Please request a new one.
+              Este enlace de recuperación es inválido o ha caducado. Solicita uno nuevo.
             </p>
             <a
-              href="/login"
-              className="block text-center bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink-soft transition font-medium"
+              href="/auth/forgot-password"
+              className="block text-center bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink/80 transition font-medium"
             >
-              Back to Login
+              Solicitar nuevo enlace
             </a>
           </div>
         </div>
@@ -108,11 +102,11 @@ export default function ResetPasswordForm() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cream-50 to-cream-100 p-4">
       <div className="max-w-md w-full">
         <div className="bg-white rounded-2xl border border-gold/15 shadow-lg p-8">
-          <h1 className="text-2xl font-bold text-center text-ink mb-2">
-            Reset Password
+          <h1 className="font-serif text-2xl font-medium text-center text-ink mb-2">
+            Nueva contraseña
           </h1>
           <p className="text-center text-ink/55 text-sm mb-6">
-            Enter your new password below
+            Introduce tu nueva contraseña a continuación.
           </p>
 
           {error && (
@@ -125,15 +119,14 @@ export default function ResetPasswordForm() {
           {success && (
             <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700 mb-4">
               <CheckCircle size={16} />
-              <span>Password reset successfully! Redirecting to login...</span>
+              <span>¡Contraseña restablecida correctamente! Redirigiendo al inicio de sesión…</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* New Password */}
             <label className="block">
               <span className="text-sm font-medium text-ink/65 mb-1.5 block">
-                New Password
+                Nueva contraseña
               </span>
               <div className="relative flex items-center">
                 <input
@@ -150,19 +143,14 @@ export default function ResetPasswordForm() {
                   className="absolute right-3 text-ink/55 hover:text-ink"
                   tabIndex={-1}
                 >
-                  {showPassword ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </label>
 
-            {/* Confirm Password */}
             <label className="block">
               <span className="text-sm font-medium text-ink/65 mb-1.5 block">
-                Confirm Password
+                Confirmar contraseña
               </span>
               <div className="relative flex items-center">
                 <input
@@ -179,30 +167,25 @@ export default function ResetPasswordForm() {
                   className="absolute right-3 text-ink/55 hover:text-ink"
                   tabIndex={-1}
                 >
-                  {showConfirmPassword ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </label>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading || success}
-              className="w-full mt-6 bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink-soft transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-6 bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink/80 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}
-              <span>{loading ? "Resetting..." : "Reset Password"}</span>
+              <span>{loading ? "Guardando…" : "Establecer contraseña"}</span>
             </button>
           </form>
 
           <p className="text-center text-ink/55 text-xs mt-6">
-            Remember your password?{" "}
+            ¿Recuerdas tu contraseña?{" "}
             <a href="/login" className="text-gold hover:underline font-medium">
-              Back to Login
+              Volver al inicio de sesión
             </a>
           </p>
         </div>

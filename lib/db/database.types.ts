@@ -12,7 +12,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type UserRole = "client" | "admin" | "advisor";
+export type UserRole = "client" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin";
 export type PropertyOperation = "rent" | "sale";
 export type PropertyStay = "short" | "long";
 export type PropertyStatus = "available" | "reserved" | "sold" | "archived";
@@ -510,6 +510,42 @@ export type Database = {
           details?: Json | null;
         };
         Update: Partial<Database["public"]["Tables"]["sync_logs"]["Insert"]>;
+      };
+      team_channels: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          emoji: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          emoji?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_channels"]["Insert"]>;
+      };
+      team_messages: {
+        Row: {
+          id: string;
+          channel_id: string;
+          user_id: string;
+          content: string;
+          reply_to: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          channel_id: string;
+          user_id: string;
+          content: string;
+          reply_to?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_messages"]["Insert"]>;
       };
     };
     Enums: {

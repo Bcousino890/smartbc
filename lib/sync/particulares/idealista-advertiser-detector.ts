@@ -17,53 +17,91 @@ function normalizePhoneNumber(phoneStr: string): string {
   return phoneStr.replace(/[\s\-()]/g, "");
 }
 
+// Validate that a normalized phone string is a real Spanish mobile/landline number.
+// Accepts: +34XXXXXXXXX or XXXXXXXXX where first digit is 6, 7, 8, or 9.
+function isValidSpanishPhone(normalized: string): boolean {
+  return /^(\+34)?[6789]\d{8}$/.test(normalized);
+}
+
 // Extract phone with confidence scoring
 // Priority: data attributes (high) > tel: links (medium) > text patterns (low)
+// Only returns HIGH or MEDIUM confidence results that pass Spanish format validation.
+// LOW confidence results are discarded entirely (too many false positives).
 function extractPhoneWithConfidence(
   html: string
 ): { phone: string | null; confidence: "high" | "medium" | "low" | null } {
-  let phone: string | null = null;
-  let confidence: "high" | "medium" | "low" | null = null;
 
   // HIGH CONFIDENCE: data attributes
   // Patrón 1: appcallback_target_phone="609808765" (sin +34, solo dígitos)
   let pm = html.match(/appcallback_target_phone="(\d{9,})"/);
   if (pm?.[1]) {
-    phone = `+34${pm[1]}`;
-    confidence = "high";
-    return { phone, confidence };
+    const phone = `+34${pm[1]}`;
+    if (isValidSpanishPhone(phone)) {
+      return { phone, confidence: "high" };
+    }
   }
 
   // HIGH CONFIDENCE: data-phone or data-contact-phone attributes
   pm = html.match(/data-(?:contact-)?phone\s*=\s*["']([+\d][\d\s\-]{6,})["']/);
   if (pm?.[1]) {
-    phone = normalizePhoneNumber(pm[1]);
-    confidence = "high";
-    return { phone, confidence };
+    const phone = normalizePhoneNumber(pm[1]);
+    if (isValidSpanishPhone(phone)) {
+      return { phone, confidence: "high" };
+    }
   }
 
   // HIGH CONFIDENCE: JSON data attributes with phone
   pm = html.match(/"phone"\s*:\s*"([+\d][\d\s\-]{6,15})"/);
   if (pm?.[1]) {
-    phone = normalizePhoneNumber(pm[1]);
-    confidence = "high";
-    return { phone, confidence };
+    const phone = normalizePhoneNumber(pm[1]);
+    if (isValidSpanishPhone(phone)) {
+      return { phone, confidence: "high" };
+    }
+  }
+
+  // HIGH CONFIDENCE: Fotocasa/generic JSON phone fields (from __NEXT_DATA__ and API responses)
+  const jsonPhonePatterns = [
+    /"userPhone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"mobilePhone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"ownerPhone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"phone_number"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"telephone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+  ];
+  for (const pattern of jsonPhonePatterns) {
+    pm = html.match(pattern);
+    if (pm?.[1]) {
+      const phone = normalizePhoneNumber(pm[1]);
+      if (isValidSpanishPhone(phone)) {
+        return { phone, confidence: "high" };
+      }
+    }
+  }
+
+  // HIGH CONFIDENCE: data-ga-phone attribute (Fotocasa)
+  pm = html.match(/data-ga-phone\s*=\s*["']([+\d][\d\s\-]{6,})["']/);
+  if (pm?.[1]) {
+    const phone = normalizePhoneNumber(pm[1]);
+    if (isValidSpanishPhone(phone)) {
+      return { phone, confidence: "high" };
+    }
   }
 
   // MEDIUM CONFIDENCE: href="tel:" links or telLink/callLink elements
   pm = html.match(/href="tel:([+\d][\d\s\-]{6,})"/);
   if (pm?.[1]) {
-    phone = normalizePhoneNumber(pm[1]);
-    confidence = "medium";
-    return { phone, confidence };
+    const phone = normalizePhoneNumber(pm[1]);
+    if (isValidSpanishPhone(phone)) {
+      return { phone, confidence: "medium" };
+    }
   }
 
   // MEDIUM CONFIDENCE: telLink or callLink data
   pm = html.match(/(?:telLink|callLink)\s*[=:]\s*["']([+\d][\d\s\-]{6,})["']/i);
   if (pm?.[1]) {
-    phone = normalizePhoneNumber(pm[1]);
-    confidence = "medium";
-    return { phone, confidence };
+    const phone = normalizePhoneNumber(pm[1]);
+    if (isValidSpanishPhone(phone)) {
+      return { phone, confidence: "medium" };
+    }
   }
 
   // MEDIUM CONFIDENCE: Other script inline patterns
@@ -75,33 +113,15 @@ function extractPhoneWithConfidence(
   for (const pattern of mediumPatterns) {
     pm = html.match(pattern);
     if (pm?.[1]) {
-      phone = normalizePhoneNumber(pm[1]);
-      confidence = "medium";
-      return { phone, confidence };
-    }
-  }
-
-  // LOW CONFIDENCE: Visible text patterns like "Llamar: 607 80 46 54"
-  // Look for Spanish patterns like "Llamar:", "Teléfono:", "Tel:"
-  const lowPatterns = [
-    /(?:Llamar|Teléfono|Tel|Contacto|Móvil)[:\s]+([+\d][\d\s\-()]{8,})/i,
-    /\b(\d{3}[\s\-]?\d{2}[\s\-]?\d{2}[\s\-]?\d{2})\b/, // Spanish format: XXX-XX-XX-XX
-    /\b(\+34[\s\-]?\d{1,3}[\s\-]?\d{2,3}[\s\-]?\d{2,3})\b/, // +34 Spanish variants
-  ];
-  for (const pattern of lowPatterns) {
-    pm = html.match(pattern);
-    if (pm?.[1]) {
-      const candidatePhone = normalizePhoneNumber(pm[1]);
-      // Validate it's a reasonable phone number (at least 9 digits for Spain)
-      const digitsOnly = candidatePhone.replace(/\D/g, "");
-      if (digitsOnly.length >= 9) {
-        phone = candidatePhone;
-        confidence = "low";
-        return { phone, confidence };
+      const phone = normalizePhoneNumber(pm[1]);
+      if (isValidSpanishPhone(phone)) {
+        return { phone, confidence: "medium" };
       }
     }
   }
 
+  // LOW CONFIDENCE patterns are intentionally not used: they produce too many
+  // false positives (codes, references, timestamps). Only HIGH/MEDIUM survive.
   return { phone: null, confidence: null };
 }
 
@@ -140,6 +160,21 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
   }
 
   if (!m) {
+    // Fotocasa: check for professional indicator in __NEXT_DATA__
+    // Fotocasa uses "isProfessional" or "professional" boolean fields
+    const fotocasaProfMatch =
+      html.match(/"isProfessional"\s*:\s*(true|false)/i) ||
+      html.match(/"professional"\s*:\s*(true|false)/i);
+    if (fotocasaProfMatch) {
+      const isProfessional = fotocasaProfMatch[1].toLowerCase() === "true";
+      return {
+        advertiser_type: isProfessional ? "professional" : "particular",
+        is_ad_professional: isProfessional,
+        phone,
+        phone_confidence: confidence,
+        contact_name,
+      };
+    }
     return { advertiser_type: "unknown", is_ad_professional: null, phone, phone_confidence: confidence, contact_name };
   }
   const name = m[2].trim();
@@ -214,8 +249,9 @@ export async function checkIdealistaAdvertiserType(
     const value = data?.isAdProfessional;
     const rawPhone = (data?.phone as string) || null;
 
-    // API responses are considered high confidence
-    const phone = rawPhone ? normalizePhoneNumber(rawPhone) : null;
+    // API responses are considered high confidence — still validate Spanish format
+    const normalizedRaw = rawPhone ? normalizePhoneNumber(rawPhone) : null;
+    const phone = normalizedRaw && isValidSpanishPhone(normalizedRaw) ? normalizedRaw : null;
     const phone_confidence = phone ? ("high" as const) : undefined;
 
     // Validar que sea boolean

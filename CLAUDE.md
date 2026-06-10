@@ -1,10 +1,19 @@
 # smartbc — Notas de infraestructura
 
-## Stack real
-- **Todo en VPS propio (Hetzner)**
-- **NO usa Supabase** — la base de datos (PostgreSQL) corre en el VPS
-- **NO usa Vercel** — el servidor Next.js corre en el VPS con PM2
-- Deploy: push a `main` → SSH al VPS → `git pull && npm run build && pm2 restart`
+## Stack real (IMPORTANTE — leer siempre antes de tocar infra)
+- **Todo en VPS propio (Hetzner). NADA en la nube de terceros.**
+- **NO usamos Supabase Cloud** ni su panel/MCP. La base de datos (PostgreSQL)
+  corre en el VPS dentro del contenedor Docker `supabase-db`.
+- **NO usamos Vercel.** El servidor Next.js corre en el VPS con PM2.
+- ⚠️ Aclaración: el código sí importa las librerías `@supabase/supabase-js` y
+  `@supabase/ssr`, pero apuntan al **stack self-hosted del VPS** (GoTrue +
+  PostgreSQL propios), NO a supabase.com. Por eso:
+  - NO sugerir herramientas/MCP de Supabase Cloud ni de Vercel.
+  - `SUPABASE_SERVICE_ROLE_KEY` / `NEXT_PUBLIC_SUPABASE_URL` apuntan al VPS.
+  - Las migraciones se aplican con psql dentro del contenedor `supabase-db`
+    (ver `scripts/post-deploy.sh` y el botón en `/admin/configuracion`).
+- Deploy: push a `main` → VPS hace `git pull && npm run build && pm2 restart`
+  (cron cada ~5 min). No tengo acceso SSH al VPS desde aquí.
 
 ## Ramas
 - Desarrollo: `claude/adoring-pasteur-3OgFB`

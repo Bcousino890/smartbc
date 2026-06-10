@@ -16,8 +16,10 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
+import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { createPropertyFromParticular, updateParticularPhone } from "./actions";
+import PriceHistoryChart from "./price-history-chart";
 
 export type ParticularChangeRow = {
   id: string;
@@ -238,15 +240,18 @@ function ParticularModal({
   row,
   onClose,
   onPhoneUpdated,
+  canCreateProperty = true,
 }: {
   row: ParticularRow;
   onClose: () => void;
   onPhoneUpdated?: (newPhone: string | null) => void;
+  canCreateProperty?: boolean;
 }) {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [currentRow, setCurrentRow] = useState(row);
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<Array<{ date: string; price: number }>>([]);
   const photos = currentRow.photos ?? [];
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(currentRow.phone);
@@ -255,6 +260,22 @@ function ParticularModal({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<{ slug: string } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Cargar historial de precios cuando se abre el modal o cambia el row
+  useEffect(() => {
+    fetch(`/api/admin/particulares/history?id=${currentRow.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const prices = (d.changes ?? []).filter((c: ParticularChangeRow) =>
+          ["price_up", "price_down", "price_change"].includes(c.change_type)
+        ).map((c: ParticularChangeRow) => ({
+          date: c.changed_at,
+          price: (c.new_value?.price as number) ?? 0,
+        })).sort((a: { date: string; price: number }, b: { date: string; price: number }) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setPriceHistory(prices);
+      })
+      .catch(() => setPriceHistory([]));
+  }, [currentRow.id]);
 
   async function handleCreateProperty() {
     setCreating(true);
@@ -365,24 +386,35 @@ function ParticularModal({
 
         {/* Contenido scrollable */}
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-          {/* Referencia + historial */}
-          <div className="flex items-center justify-between gap-2">
-            {currentRow.particular_reference ? (
-              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
-                {currentRow.particular_reference}
+          {/* Referencias (interna + externa) + historial */}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {currentRow.particular_reference && (
+                <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
+                  {currentRow.particular_reference}
+                </span>
+              )}
+              <span className="rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/60">
+                {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
-            ) : (
-              <span className="rounded-md border border-ink/10 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/40">
-                {currentRow.external_id}
-              </span>
-            )}
+            </div>
             <button
               onClick={() => setShowHistory((v) => !v)}
-              className="text-[11px] text-ink/50 underline hover:text-ink transition"
+              className="mt-2 text-[11px] text-ink/50 underline hover:text-ink transition"
             >
               {showHistory ? "Ocultar historial" : "Ver historial"}
             </button>
           </div>
+
+          {/* Gráfico de precios */}
+          {priceHistory.length > 0 && (
+            <div className="rounded-xl border border-gold/15 bg-gold/3 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Historial de precios
+              </p>
+              <PriceHistoryChart priceHistory={priceHistory} />
+            </div>
+          )}
 
           {/* Timeline de cambios */}
           {showHistory && (
@@ -564,23 +596,25 @@ function ParticularModal({
               <ExternalLink size={14} strokeWidth={1.75} />
               Ver en {portalLabel}
             </a>
-            {created ? (
-              <Link
-                href={`/admin/propiedades/${created.slug}`}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-              >
-                <Check size={14} strokeWidth={2} />
-                Propiedad creada · abrir ficha
-              </Link>
-            ) : (
-              <button
-                onClick={handleCreateProperty}
-                disabled={creating}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
-              >
-                <Plus size={14} strokeWidth={2} />
-                {creating ? "Creando…" : "Crear propiedad"}
-              </button>
+            {canCreateProperty && (
+              created ? (
+                <Link
+                  href={`/admin/propiedades/${created.slug}`}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  <Check size={14} strokeWidth={2} />
+                  Propiedad creada · abrir ficha
+                </Link>
+              ) : (
+                <button
+                  onClick={handleCreateProperty}
+                  disabled={creating}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+                >
+                  <Plus size={14} strokeWidth={2} />
+                  {creating ? "Creando…" : "Crear propiedad"}
+                </button>
+              )
             )}
           </div>
           {createError && (
@@ -623,7 +657,21 @@ async function copyToClipboard(text: string) {
 
 type RefreshState = "idle" | "loading" | "done" | "error";
 
-export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
+export function ParticularesClient({
+  rows,
+  currentRole,
+  hasMore = false,
+  currentOffset = 0,
+  pageSize = 100,
+  total = 0,
+}: {
+  rows: ParticularRow[];
+  currentRole?: string;
+  hasMore?: boolean;
+  currentOffset?: number;
+  pageSize?: number;
+  total?: number;
+}) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
   const [zone, setZone] = useState("");
@@ -633,10 +681,13 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
+  const [showRetired, setShowRetired] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
+  const [allRows, setAllRows] = useState(rows);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const zoneOptions = useMemo(
     () =>
@@ -651,7 +702,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
     const bMin = bedrooms ? Number(bedrooms) : null;
     const aMin = areaMin ? Number(areaMin) : null;
     const since = Date.now() - 24 * 60 * 60 * 1000;
-    return rows.filter((r) => {
+    return allRows.filter((r) => {
       if (q) {
         const hay =
           (r.zone?.toLowerCase().includes(q) ?? false) ||
@@ -672,9 +723,28 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
       ) {
         return false;
       }
+      if (!showRetired && !r.is_active) return false;
+      if (showRetired && r.is_active) return false;
       return true;
     });
-  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone, showRetired]);
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    try {
+      const nextOffset = currentOffset + pageSize;
+      const params = new URLSearchParams({ offset: String(nextOffset) });
+      const res = await fetch(`/api/admin/particulares/paginated?${params}`);
+      const data = await res.json();
+      if (res.ok && data.rows) {
+        setAllRows((prev) => [...prev, ...data.rows]);
+      }
+    } catch (error) {
+      console.error("Error loading more particulares:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -709,6 +779,7 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
           row={selected}
           onClose={() => setSelected(null)}
           onPhoneUpdated={handlePhoneUpdated}
+          canCreateProperty={!currentRole || canAccess(currentRole, "properties", "create")}
         />
       )}
 
@@ -802,6 +873,20 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
             }
           >
             Sin teléfono
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowRetired((v) => !v);
+              setQuery(""); // Reset query when toggling
+            }}
+            className={
+              showRetired
+                ? "rounded-lg border border-red-400 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-red-300"
+            }
+          >
+            Anuncios retirados
           </button>
           <button
             type="button"
@@ -973,6 +1058,18 @@ export function ParticularesClient({ rows }: { rows: ParticularRow[] }) {
               );
             })}
             </div>
+
+            {hasMore && (
+              <div className="flex justify-center pt-6">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="rounded-lg bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loadingMore ? "Cargando..." : `Cargar más (${allRows.length}/${total})`}
+                </button>
+              </div>
+            )}
 
           </>
         )}

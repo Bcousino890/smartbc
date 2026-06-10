@@ -3,34 +3,47 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminParticularesPage() {
+export default async function AdminParticularesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ offset?: string }>;
+}) {
   const supabase = createAdminClient();
+  const currentProfile = await getCurrentProfile();
+  const offset = Math.max(0, Number((await searchParams).offset) || 0);
+  const pageSize = 100;
+
   let queryResult = await supabase
     .from("particulares")
     .select(
       "id, portal, external_id, particular_reference, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
+      { count: "exact" }
     )
-    .order("is_active", { ascending: false })  // activos primero
-    .order("created_at", { ascending: false });
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + pageSize - 1);
 
-  // Fallback if particular_reference column doesn't exist (migration not applied)
+  // Fallback si la migración 0024 aún no se ha aplicado (columna no existe)
   if (queryResult.error && queryResult.error.message.includes("particular_reference")) {
     queryResult = await supabase
       .from("particulares")
       .select(
         "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active",
+        { count: "exact" }
       )
-      .order("is_active", { ascending: false })  // activos primero
-      .order("created_at", { ascending: false });
+      .order("is_active", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
   }
 
-  const { data } = queryResult;
-
-  const rows = (data ?? []) as unknown as ParticularRow[];
+  const rows = (queryResult.data ?? []) as unknown as ParticularRow[];
+  const total = queryResult.count ?? 0;
+  const hasMore = offset + pageSize < total;
 
   const stats = {
     total: rows.length,
@@ -77,7 +90,7 @@ export default async function AdminParticularesPage() {
         />
       </div>
 
-      <ParticularesClient rows={rows} />
+      <ParticularesClient rows={rows} currentRole={currentProfile?.role} hasMore={hasMore} currentOffset={offset} pageSize={pageSize} total={total} />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

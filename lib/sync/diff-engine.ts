@@ -70,25 +70,39 @@ function needsUpdate(
 async function processPhotos(
   agencySlug: string,
   normalized: NormalizedProperty,
+  rehost: boolean,
 ): Promise<{ urls: string[]; processed: number; failed: number }> {
-  const urls: string[] = [];
-  let processed = 0;
-  let failed = 0;
-  for (let i = 0; i < normalized.photos.length; i++) {
-    const photo = normalized.photos[i];
-    const result = await downloadAndWatermark({
-      sourceUrl: photo.url,
-      agencySlug,
-      externalId: normalized.external_id,
-      position: i,
-    });
-    if (result.ok) {
-      urls.push(result.photo.url);
-      processed++;
-    } else {
-      failed++;
-    }
+  // Sin re-alojado: guardamos las URLs de origen tal cual (el proxy las
+  // neutraliza). Instantáneo, para agencias con fotos limpias de CDN fiable.
+  if (!rehost) {
+    const urls = normalized.photos.map((p) => p.url);
+    return { urls, processed: urls.length, failed: 0 };
   }
+  // Lotes CONCURRENTES (no de una en una): con agencias de muchas fotos por
+  // ficha (UrbantecHome ~25), en serie el primer sync tardaba demasiado.
+  // Conservamos el ORDEN (resultados indexados por posición original).
+  const CONCURRENCY = 6;
+  const results: (string | null)[] = new Array(normalized.photos.length).fill(
+    null,
+  );
+  for (let start = 0; start < normalized.photos.length; start += CONCURRENCY) {
+    const batch = normalized.photos.slice(start, start + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (photo, j) => {
+        const i = start + j;
+        const result = await downloadAndWatermark({
+          sourceUrl: photo.url,
+          agencySlug,
+          externalId: normalized.external_id,
+          position: i,
+        });
+        if (result.ok) results[i] = result.photo.url;
+      }),
+    );
+  }
+  const urls = results.filter((u): u is string => u !== null);
+  const processed = urls.length;
+  const failed = normalized.photos.length - processed;
   return { urls, processed, failed };
 }
 
@@ -98,8 +112,9 @@ async function insertProperty(
   agencySlug: string,
   normalized: NormalizedProperty,
   counters: SyncCounters,
+  rehost: boolean,
 ): Promise<void> {
-  const { urls, processed } = await processPhotos(agencySlug, normalized);
+  const { urls, processed } = await processPhotos(agencySlug, normalized, rehost);
   counters.photosProcessed += processed;
   const coverUrl = urls[0] ?? null;
 
@@ -333,6 +348,7 @@ export async function runSyncForFeed(params: {
               params.agencySlug,
               normalized,
               counters,
+              params.scraper.rehostPhotos !== false,
             );
             counters.inserted++;
           } else if (needsUpdate(existing, normalized)) {

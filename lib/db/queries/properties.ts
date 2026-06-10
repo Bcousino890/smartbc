@@ -111,5 +111,14 @@ export async function getPropertyBySlugForAdmin(slug: string) {
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  if (!data) return null;
+
+  // Cargar videos y planos de property_media
+  const { data: media } = await (supabase as any)
+    .from("property_media")
+    .select("id, url, file_name, type, storage_path")
+    .eq("property_id", (data as any).id)
+    .in("type", ["video", "plan"]);
+
+  return { ...(data as object), property_media: media ?? [] };
 }

@@ -14,7 +14,7 @@ export default function ForgotPasswordPage() {
     setError("");
 
     if (!email) {
-      setError("Please enter your email address");
+      setError("Introduce tu correo electrónico");
       return;
     }
 
@@ -30,14 +30,14 @@ export default function ForgotPasswordPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Error processing request");
+        setError(data.error || "Error al procesar la solicitud");
         return;
       }
 
       setSubmitted(true);
       setEmail("");
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Unknown error");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setLoading(false);
     }
@@ -55,11 +55,11 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
-              <h1 className="text-2xl font-bold text-center text-ink mb-2">
-                Reset Password
+              <h1 className="font-serif text-2xl font-medium text-center text-ink mb-2">
+                Recuperar contraseña
               </h1>
               <p className="text-center text-ink/55 text-sm mb-6">
-                Enter your email address and we'll send you a link to reset your password.
+                Introduce tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
               </p>
 
               {error && (
@@ -72,13 +72,13 @@ export default function ForgotPasswordPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <label className="block">
                   <span className="text-sm font-medium text-ink/65 mb-1.5 block">
-                    Email Address
+                    Correo electrónico
                   </span>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
+                    placeholder="tu@correo.com"
                     className="w-full px-4 py-2 border border-ink/10 rounded-lg bg-white/85 text-ink focus:border-gold/55 focus:outline-none"
                     disabled={loading}
                   />
@@ -87,17 +87,17 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-6 bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink-soft transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full mt-6 bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink/80 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading && <Loader2 size={16} className="animate-spin" />}
-                  <span>{loading ? "Sending..." : "Send Reset Link"}</span>
+                  <span>{loading ? "Enviando…" : "Enviar enlace"}</span>
                 </button>
               </form>
 
               <p className="text-center text-ink/55 text-xs mt-6">
-                Remember your password?{" "}
+                ¿Recuerdas tu contraseña?{" "}
                 <a href="/login" className="text-gold hover:underline font-medium">
-                  Back to Login
+                  Volver al inicio de sesión
                 </a>
               </p>
             </>
@@ -109,31 +109,31 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
-              <h1 className="text-2xl font-bold text-center text-ink mb-2">
-                Check Your Email
+              <h1 className="font-serif text-2xl font-medium text-center text-ink mb-2">
+                Revisa tu correo
               </h1>
               <p className="text-center text-ink/55 text-sm mb-4">
-                We've sent a password reset link to <strong>{email}</strong>
+                Hemos enviado un enlace de recuperación a <strong>{email || "tu correo"}</strong>.
               </p>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700 mb-6">
                 <p>
-                  If you don't see the email, please check your spam folder or try again with a different email address.
+                  Si no ves el correo, comprueba la carpeta de spam o inténtalo con otra dirección.
                 </p>
               </div>
 
               <div className="space-y-3">
                 <button
                   onClick={() => setSubmitted(false)}
-                  className="w-full bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink-soft transition font-medium"
+                  className="w-full bg-ink text-cream-50 py-2 px-4 rounded-lg hover:bg-ink/80 transition font-medium"
                 >
-                  Try Another Email
+                  Intentar con otro correo
                 </button>
                 <a
                   href="/login"
                   className="block text-center border border-ink/15 text-ink py-2 px-4 rounded-lg hover:bg-ink/5 transition font-medium"
                 >
-                  Back to Login
+                  Volver al inicio de sesión
                 </a>
               </div>
             </>

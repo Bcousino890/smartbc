@@ -287,6 +287,8 @@ export type AdminClient = {
   phone?: string;
   location?: string; // e.g. "Madrid, España"
   avatarInitials: string;
+  /** ISO timestamp used to compute relative "last seen" time in the UI */
+  updatedAt?: string;
 
   // Custom filters the admin assigns to this client. They drive what the
   // client sees in their own portal.
@@ -368,12 +370,14 @@ export type VisitRequestStatus =
   | "confirmed"
   | "rescheduled"
   | "rejected"
+  | "cancelled"
   | "completed";
 
 export type VisitRequest = {
   id: string;
   clientName: string;
   clientInitials: string;
+  clientEmail: string;
   propertyTitle: string;
   propertyReference: string;
   requestedDateLabel: string; // e.g. "24 May 2026, 11:00"
@@ -381,6 +385,7 @@ export type VisitRequest = {
   assignedAdvisor: string;
   status: VisitRequestStatus;
   receivedRelativeMinutes: number;
+  createdAt: string; // ISO timestamp
 };
 
 export type VisitRequestsStats = {
@@ -418,7 +423,10 @@ export type InternalUserRole =
   | "admin"
   | "advisor"
   | "client"
-  | "viewer";
+  | "viewer"
+  | "agent_junior"
+  | "agent_senior"
+  | "agent_admin";
 
 export type InternalUserStatus = "active" | "invited" | "suspended";
 

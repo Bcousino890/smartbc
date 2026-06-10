@@ -1,7 +1,7 @@
 "use client";
 
-import { Bell } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { NotificationsBell } from "@/components/admin/notifications-bell";
 import { useT } from "@/lib/i18n/provider";
 
 export function AdminPageHeader({
@@ -33,13 +33,7 @@ export function AdminPageHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
-        <button
-          type="button"
-          aria-label={t("admin.notifications")}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-ink/10 bg-white/70 text-ink/65 transition hover:border-gold/40 hover:text-ink"
-        >
-          <Bell size={16} strokeWidth={1.75} />
-        </button>
+        <NotificationsBell />
         <LanguageSwitcher />
       </div>
     </header>
