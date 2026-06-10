@@ -59,6 +59,8 @@ type ParticularPayload = {
   owner_name: string | null;
   contact_name: string | null;
   zone: string | null;
+  address: string | null;
+  phone_confidence: "high" | "medium" | "low" | null;
   price: number | null;
   operation: "rent" | "sale" | null;
   bedrooms: number | null;
@@ -73,6 +75,41 @@ type ParticularPayload = {
   latitude: number | null;
   longitude: number | null;
 };
+
+// ─── Degradación elegante para la migración 0035 ─────────────────────────────
+// Las columnas `address` y `phone_confidence` se añaden en la migración 0035,
+// que puede NO estar aplicada todavía en el VPS (se aplica con psql en el
+// post-deploy). Si el insert/update falla por columna inexistente, reintenta
+// UNA vez la misma operación sin esas dos claves.
+
+const MIGRATION_0035_COLUMNS = ["address", "phone_confidence"] as const;
+
+function isMissing0035ColumnError(error: { message?: string } | null | undefined): boolean {
+  const msg = error?.message ?? "";
+  if (!/column|does not exist|schema cache/i.test(msg)) return false;
+  return MIGRATION_0035_COLUMNS.some((col) => msg.includes(col));
+}
+
+// `data` es laxo (any) por la misma razón que SupabaseLike: los genéricos del
+// SDK no aportan aquí y ya casteamos puntualmente donde hace falta.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseResult = { error: { message?: string } | null; data?: any };
+
+async function withMigration0035Fallback<T extends SupabaseResult>(
+  values: Record<string, unknown>,
+  run: (values: Record<string, unknown>) => PromiseLike<T>,
+): Promise<T> {
+  const first = await run(values);
+  if (first.error && isMissing0035ColumnError(first.error)) {
+    console.warn(
+      "[cron-particulares] Migración 0035 no aplicada — reintentando sin address/phone_confidence",
+    );
+    const stripped = { ...values };
+    for (const col of MIGRATION_0035_COLUMNS) delete stripped[col];
+    return run(stripped);
+  }
+  return first;
+}
 
 async function upsertParticular(
   supabase: SupabaseLike,
@@ -106,32 +143,41 @@ async function upsertParticular(
 
     // Actualizar con datos frescos. detected_at NO se toca.
     // Preservar phone existente si el nuevo scrape no lo encontró.
-    const { error } = await supabase
-      .from("particulares")
-      .update({
-        source_url: payload.source_url,
-        owner_name: payload.contact_name ?? payload.owner_name,
-        zone: payload.zone,
-        price: payload.price,
-        bedrooms: payload.bedrooms,
-        bathrooms: payload.bathrooms,
-        square_meters: payload.square_meters,
-        description: payload.description,
-        features: payload.features,
-        photos: payload.photos,
-        phone: resolvedPhone,
-        // Sin teléfono real extraído (validado formato español) → el anuncio
-        // solo se puede contactar por el chat del portal.
-        chat_only: !resolvedPhone,
-        latitude: payload.latitude,
-        longitude: payload.longitude,
-        advertiser_type: payload.advertiser_type,
-        is_ad_professional: payload.is_ad_professional,
-        is_active: true,
-        taken_down_at: null,
-        updated_at: now,
-      })
-      .eq("id", existing.id);
+    const updateValues: Record<string, unknown> = {
+      source_url: payload.source_url,
+      owner_name: payload.contact_name ?? payload.owner_name,
+      zone: payload.zone,
+      address: payload.address,
+      price: payload.price,
+      bedrooms: payload.bedrooms,
+      bathrooms: payload.bathrooms,
+      square_meters: payload.square_meters,
+      description: payload.description,
+      features: payload.features,
+      photos: payload.photos,
+      phone: resolvedPhone,
+      // Sin teléfono real extraído (validado formato español) → el anuncio
+      // solo se puede contactar por el chat del portal.
+      chat_only: !resolvedPhone,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      advertiser_type: payload.advertiser_type,
+      is_ad_professional: payload.is_ad_professional,
+      is_active: true,
+      taken_down_at: null,
+      updated_at: now,
+    };
+    // Confianza del teléfono: solo se escribe cuando el scrape nuevo trajo
+    // teléfono (análogo a resolvedPhone). Si se conserva el phone existente
+    // (payload.phone null), NO tocamos phone_confidence para no machacar la
+    // confianza guardada con null.
+    if (payload.phone) {
+      updateValues.phone_confidence = payload.phone_confidence;
+    }
+
+    const { error } = await withMigration0035Fallback(updateValues, (values) =>
+      supabase.from("particulares").update(values).eq("id", existing.id),
+    );
 
     if (error) {
       console.error("[cron-particulares] Error actualizando:", error);
@@ -201,34 +247,42 @@ async function upsertParticular(
 
   // Nuevo registro — insertar con detected_at = ahora.
   // El trigger trg_particulares_reference genera particular_reference automáticamente.
-  const { data: inserted, error } = await supabase
-    .from("particulares")
-    .insert({
-      portal: "idealista",
-      external_id: payload.external_id,
-      source_url: payload.source_url,
-      owner_name: payload.contact_name ?? payload.owner_name,
-      zone: payload.zone,
-      price: payload.price,
-      operation: payload.operation,
-      bedrooms: payload.bedrooms,
-      bathrooms: payload.bathrooms,
-      square_meters: payload.square_meters,
-      description: payload.description,
-      features: payload.features,
-      photos: payload.photos,
-      phone: payload.phone,
-      chat_only: !payload.phone,
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-      advertiser_type: payload.advertiser_type,
-      is_ad_professional: payload.is_ad_professional,
-      is_active: true,
-      detected_at: now,
-      updated_at: now,
-    })
-    .select("id, particular_reference")
-    .single();
+  const insertValues: Record<string, unknown> = {
+    portal: "idealista",
+    external_id: payload.external_id,
+    source_url: payload.source_url,
+    owner_name: payload.contact_name ?? payload.owner_name,
+    zone: payload.zone,
+    address: payload.address,
+    price: payload.price,
+    operation: payload.operation,
+    bedrooms: payload.bedrooms,
+    bathrooms: payload.bathrooms,
+    square_meters: payload.square_meters,
+    description: payload.description,
+    features: payload.features,
+    photos: payload.photos,
+    phone: payload.phone,
+    phone_confidence: payload.phone_confidence,
+    chat_only: !payload.phone,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+    advertiser_type: payload.advertiser_type,
+    is_ad_professional: payload.is_ad_professional,
+    is_active: true,
+    detected_at: now,
+    updated_at: now,
+  };
+
+  const { data: inserted, error } = await withMigration0035Fallback(
+    insertValues,
+    (values) =>
+      supabase
+        .from("particulares")
+        .insert(values)
+        .select("id, particular_reference")
+        .single(),
+  );
 
   if (error) {
     console.error("[cron-particulares] Error insertando:", error);
@@ -307,6 +361,7 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           owner_name: preview.title ?? null,
           contact_name: advertiserInfo?.contact_name ?? null,
           zone: preview.zone ?? null,
+          address: preview.address ?? null,
           price: preview.price ?? null,
           operation: (preview.operation as "rent" | "sale") ?? null,
           bedrooms: preview.bedrooms ?? null,
@@ -318,6 +373,7 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           advertiser_type: advertiserInfo?.advertiser_type ?? "unknown",
           is_ad_professional: advertiserInfo?.is_ad_professional ?? null,
           phone: advertiserInfo?.phone ?? null,
+          phone_confidence: advertiserInfo?.phone_confidence ?? null,
           latitude: preview.latitude ?? null,
           longitude: preview.longitude ?? null,
         });
