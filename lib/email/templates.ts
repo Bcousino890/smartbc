@@ -1,247 +1,123 @@
 /**
- * Email template utilities for SmartBC
+ * Plantillas de correo de marca para SmartBC — Benjamín Cousiño Propiedades.
+ *
+ * Genera HTML seguro para clientes de correo:
+ * - Layout basado en tablas (sin flexbox) con ancho máximo de 600px.
+ * - Solo estilos inline (sin CSS externo ni <style>).
+ * - Cabecera de marca, botón CTA opcional y pie de página estándar.
  */
 
-export interface EmailTemplate {
-  subject: string;
-  html: string;
+// Paleta de marca
+const INK = "#2a1f10"; // tinta oscura
+const CREAM = "#fbf8f3"; // crema de fondo
+const GOLD = "#c9a96e"; // acento dorado
+const MUTED = "#8a7c66"; // texto secundario
+const BORDER = "#e8dfd0"; // bordes suaves
+
+const SERIF_FONT = "Georgia, 'Times New Roman', Times, serif";
+const SANS_FONT = "Arial, Helvetica, sans-serif";
+
+export interface RenderEmailLayoutOptions {
+  /** Título principal del correo (se muestra como encabezado del contenido). */
+  title: string;
+  /** Cuerpo del correo en HTML (párrafos, etc.). Debe ser HTML de confianza. */
+  bodyHtml: string;
+  /** Texto del botón CTA (opcional; requiere ctaUrl). */
+  ctaLabel?: string;
+  /** URL del botón CTA (opcional; requiere ctaLabel). */
+  ctaUrl?: string;
 }
 
-const BRAND_COLOR_INK = "#2C1C0A";
-const BRAND_COLOR_GOLD = "#D4A573";
-const BRAND_COLOR_CREAM = "#F5E6D3";
+/**
+ * Escapa caracteres especiales de HTML en texto plano.
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-function baseTemplate(content: string, title?: string): string {
+/**
+ * Renderiza el layout de correo de marca completo (documento HTML).
+ */
+export function renderEmailLayout({
+  title,
+  bodyHtml,
+  ctaLabel,
+  ctaUrl,
+}: RenderEmailLayoutOptions): string {
+  const ctaBlock =
+    ctaLabel && ctaUrl
+      ? `
+              <!-- CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+                <tr>
+                  <td align="center" bgcolor="${GOLD}" style="border-radius: 8px;">
+                    <a href="${ctaUrl}" target="_blank" style="display: inline-block; padding: 14px 36px; font-family: ${SANS_FONT}; font-size: 16px; font-weight: bold; color: ${INK}; text-decoration: none; border-radius: 8px; background-color: ${GOLD};">${escapeHtml(ctaLabel)}</a>
+                  </td>
+                </tr>
+              </table>
+              <!-- Enlace alternativo en texto plano -->
+              ${renderFallbackUrl(ctaUrl)}`
+      : "";
+
+  return `<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: ${CREAM};">
+    <!-- Contenedor exterior -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${CREAM}" style="background-color: ${CREAM};">
+      <tr>
+        <td align="center" style="padding: 24px 12px;">
+          <!-- Contenedor principal 600px -->
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%;">
+            <!-- Cabecera de marca -->
+            <tr>
+              <td align="center" style="padding: 28px 24px 20px 24px;">
+                <span style="font-family: ${SERIF_FONT}; font-size: 24px; font-weight: bold; color: ${INK}; letter-spacing: 1px;">Benjam&iacute;n Cousi&ntilde;o Propiedades</span>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top: 12px;">
+                  <tr>
+                    <td width="60" height="3" bgcolor="${GOLD}" style="font-size: 0; line-height: 0;">&nbsp;</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Tarjeta de contenido -->
+            <tr>
+              <td bgcolor="#ffffff" style="background-color: #ffffff; border: 1px solid ${BORDER}; border-radius: 10px; padding: 36px 40px;">
+                <h1 style="margin: 0 0 18px 0; font-family: ${SERIF_FONT}; font-size: 22px; font-weight: bold; color: ${INK};">${escapeHtml(title)}</h1>
+                <div style="font-family: ${SANS_FONT}; font-size: 15px; line-height: 1.6; color: ${INK};">
+                  ${bodyHtml}
+                </div>${ctaBlock}
+              </td>
+            </tr>
+            <!-- Pie de página -->
+            <tr>
+              <td align="center" style="padding: 24px 24px 8px 24px;">
+                <p style="margin: 0 0 6px 0; font-family: ${SANS_FONT}; font-size: 12px; color: ${MUTED};">&copy; Benjam&iacute;n Cousi&ntilde;o Propiedades &middot; Madrid</p>
+                <p style="margin: 0; font-family: ${SANS_FONT}; font-size: 12px; color: ${MUTED};">Si no solicitaste este correo, puedes ignorarlo.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+/**
+ * Bloque auxiliar para mostrar una URL en texto plano como alternativa al CTA.
+ */
+export function renderFallbackUrl(url: string): string {
   return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: ${BRAND_COLOR_INK}; color: ${BRAND_COLOR_CREAM}; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
-          .header h1 { margin: 0; font-size: 24px; }
-          .header p { margin: 5px 0 0 0; font-size: 14px; opacity: 0.9; }
-          .content { background-color: #FDFBF8; padding: 30px; border: 1px solid #E8D9C8; border-radius: 0 0 8px 8px; }
-          .button { display: inline-block; background-color: ${BRAND_COLOR_INK}; color: ${BRAND_COLOR_CREAM}; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
-          .button-center { text-align: center; }
-          .footer { font-size: 12px; color: #999; margin-top: 20px; text-align: center; }
-          .warning { color: #C41E3A; font-size: 12px; margin-top: 10px; }
-          .divider { border: none; border-top: 1px solid #E8D9C8; margin: 20px 0; }
-          .inline-button { color: ${BRAND_COLOR_INK}; text-decoration: none; font-weight: bold; }
-          code { background-color: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
-          .highlight { background-color: #f5f5f5; padding: 10px; border-radius: 4px; border-left: 4px solid ${BRAND_COLOR_GOLD}; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>SmartBC</h1>
-            ${title ? `<p>${title}</p>` : ""}
-          </div>
-          <div class="content">
-            ${content}
-          </div>
-          <div class="footer">
-            <p>&copy; 2026 SmartBC - Benjamín Cousiño Propiedades. Todos los derechos reservados.</p>
-            <p>Este es un correo automático, por favor no respondas a esta dirección.</p>
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
-}
-
-/**
- * Welcome/Invitation email
- */
-export function getInvitationTemplate(
-  userName: string,
-  inviteUrl: string
-): EmailTemplate {
-  const content = `
-    <p>Hola <strong>${userName}</strong>,</p>
-
-    <p>¡Bienvenido a SmartBC! Has sido invitado a unirte a nuestro equipo de gestión de propiedades.</p>
-
-    <p>Para comenzar, necesitas configurar tu cuenta. Haz clic en el botón de abajo:</p>
-
-    <div class="button-center">
-      <a href="${inviteUrl}" class="button">Configurar Mi Cuenta</a>
-    </div>
-
-    <p>O copia y pega este enlace en tu navegador:</p>
-    <div class="highlight">
-      <code style="word-break: break-all;">${inviteUrl}</code>
-    </div>
-
-    <p class="warning">⏱️ Este enlace expirará en 7 días por razones de seguridad.</p>
-
-    <p>Una vez que hayas configurado tu cuenta, podrás:</p>
-    <ul>
-      <li>Acceder al portal de administración</li>
-      <li>Gestionar propiedades y agencias</li>
-      <li>Ver reportes y estadísticas</li>
-      <li>Colaborar con tu equipo</li>
-    </ul>
-
-    <hr class="divider">
-
-    <p style="font-size: 12px; color: #999;">
-      Si tienes preguntas o no solicitaste esta invitación, contacta con tu administrador.
-    </p>
-  `;
-
-  return {
-    subject: "Bienvenido a SmartBC - Configura tu cuenta",
-    html: baseTemplate(content, "Invitación para Unirse al Equipo"),
-  };
-}
-
-/**
- * Password reset email
- */
-export function getPasswordResetTemplate(
-  userName: string,
-  resetUrl: string
-): EmailTemplate {
-  const content = `
-    <p>Hola <strong>${userName}</strong>,</p>
-
-    <p>Recibimos una solicitud para restablecer tu contraseña en SmartBC. Si fuiste tú, puedes hacer clic en el botón de abajo:</p>
-
-    <div class="button-center">
-      <a href="${resetUrl}" class="button">Restablecer Contraseña</a>
-    </div>
-
-    <p>O copia y pega este enlace en tu navegador:</p>
-    <div class="highlight">
-      <code style="word-break: break-all;">${resetUrl}</code>
-    </div>
-
-    <p class="warning">⏱️ Este enlace expirará en 24 horas por razones de seguridad.</p>
-
-    <p>Si <strong>no solicitaste</strong> este cambio de contraseña:</p>
-    <ul>
-      <li>Puedes ignorar este correo de forma segura</li>
-      <li>Tu contraseña permanecerá sin cambios</li>
-      <li>Si crees que tu cuenta está comprometida, contacta con el administrador inmediatamente</li>
-    </ul>
-
-    <hr class="divider">
-
-    <p style="font-size: 12px; color: #999;">
-      Por seguridad, nunca compartiremos tu contraseña por correo. No respondas a este correo con tu contraseña.
-    </p>
-  `;
-
-  return {
-    subject: "Restablecer tu contraseña - SmartBC",
-    html: baseTemplate(content, "Solicitud de Restablecimiento de Contraseña"),
-  };
-}
-
-/**
- * Account verification email
- */
-export function getVerificationTemplate(
-  userName: string,
-  verificationUrl: string
-): EmailTemplate {
-  const content = `
-    <p>Hola <strong>${userName}</strong>,</p>
-
-    <p>Gracias por registrarte en SmartBC. Para completar tu registro, necesitas verificar tu dirección de correo.</p>
-
-    <div class="button-center">
-      <a href="${verificationUrl}" class="button">Verificar Mi Correo</a>
-    </div>
-
-    <p>O copia y pega este enlace:</p>
-    <div class="highlight">
-      <code style="word-break: break-all;">${verificationUrl}</code>
-    </div>
-
-    <p class="warning">⏱️ Este enlace expirará en 24 horas.</p>
-
-    <p>Una vez verificado, podrás acceder completamente a tu cuenta de SmartBC.</p>
-
-    <hr class="divider">
-
-    <p style="font-size: 12px; color: #999;">
-      Si no creaste esta cuenta, por favor ignora este correo.
-    </p>
-  `;
-
-  return {
-    subject: "Verifica tu correo electrónico - SmartBC",
-    html: baseTemplate(content, "Verificación de Correo Electrónico"),
-  };
-}
-
-/**
- * Generic notification email
- */
-export function getNotificationTemplate(
-  subject: string,
-  title: string,
-  content: string,
-  ctaUrl?: string,
-  ctaText?: string
-): EmailTemplate {
-  const body = `
-    ${content}
-
-    ${ctaUrl && ctaText ? `
-      <div class="button-center">
-        <a href="${ctaUrl}" class="button">${ctaText}</a>
-      </div>
-    ` : ""}
-
-    <hr class="divider">
-
-    <p style="font-size: 12px; color: #999;">
-      Este es un correo de notificación de SmartBC. Para cambiar tus preferencias de notificación, accede a tu perfil.
-    </p>
-  `;
-
-  return {
-    subject: subject,
-    html: baseTemplate(body, title),
-  };
-}
-
-/**
- * Test connection email
- */
-export function getTestEmailTemplate(serverDetails: {
-  server: string;
-  port: number;
-  ssl: boolean;
-  fromEmail: string;
-}): EmailTemplate {
-  const content = `
-    <p>¡Conexión SMTP Verificada!</p>
-
-    <p>Su configuración de correo SMTP está funcionando correctamente.</p>
-
-    <div class="highlight">
-      <strong>Detalles de Conexión:</strong><br>
-      Servidor: ${serverDetails.server}<br>
-      Puerto: ${serverDetails.port}<br>
-      SSL/TLS: ${serverDetails.ssl ? "Habilitado" : "Deshabilitado"}<br>
-      Remitente: ${serverDetails.fromEmail}
-    </div>
-
-    <p style="margin-top: 20px; color: #666; font-size: 12px;">
-      Este es un correo de prueba automático. Si lo ha recibido, su configuración de SMTP está correctamente configurada y lista para usar.
-    </p>
-  `;
-
-  return {
-    subject: "SmartBC - Prueba de Conexión SMTP",
-    html: baseTemplate(content, "Prueba de Conexión Exitosa"),
-  };
+    <p style="margin: 16px 0 6px 0; font-family: ${SANS_FONT}; font-size: 13px; color: ${MUTED};">Si el bot&oacute;n no funciona, copia y pega este enlace en tu navegador:</p>
+    <p style="margin: 0; padding: 10px 12px; background-color: ${CREAM}; border: 1px solid ${BORDER}; border-radius: 6px; font-family: ${SANS_FONT}; font-size: 12px; color: ${INK}; word-break: break-all;"><a href="${url}" target="_blank" style="color: ${INK}; text-decoration: underline;">${escapeHtml(url)}</a></p>`;
 }

@@ -140,13 +140,13 @@ export function ClientFichaView({
           </div>
 
           {/* Botón enviar mensaje */}
-          <button
-            type="button"
+          <Link
+            href="/admin/mensajes"
             className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
           >
             <Send size={14} strokeWidth={1.75} className="text-gold" />
             <span>{t("clientes.ficha.sendMessage")}</span>
-          </button>
+          </Link>
         </div>
 
         {/* Contacto */}

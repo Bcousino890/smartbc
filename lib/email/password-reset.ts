@@ -1,5 +1,6 @@
 import "server-only";
 import { sendEmail } from "./send-email";
+import { renderEmailLayout, escapeHtml } from "./templates";
 import { createAdminClient } from "@/lib/db/admin";
 import { randomBytes } from "node:crypto";
 
@@ -115,59 +116,16 @@ export async function sendPasswordResetEmail(
 ): Promise<{ success: boolean; error?: string }> {
   const result = await sendEmail({
     to: userEmail,
-    subject: "Restablece tu contraseña - SmartBC",
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2C1C0A; color: #F5E6D3; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
-            .content { background-color: #FDFBF8; padding: 30px; border: 1px solid #E8D9C8; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background-color: #2C1C0A; color: #F5E6D3; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .footer { font-size: 12px; color: #999; margin-top: 20px; text-align: center; }
-            .warning { color: #C41E3A; font-size: 12px; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>SmartBC</h1>
-              <p>Restablecimiento de Contraseña</p>
-            </div>
-            <div class="content">
-              <p>Hola <strong>${userName}</strong>,</p>
-
-              <p>Recibimos una solicitud para restablecer tu contraseña. Si fuiste tú, puedes hacer clic en el botón de abajo para continuar:</p>
-
-              <center>
-                <a href="${resetUrl}" class="button">Restablecer Contraseña</a>
-              </center>
-
-              <p>O copia y pega este enlace en tu navegador:</p>
-              <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 12px;">
-                ${resetUrl}
-              </p>
-
-              <p class="warning">Este enlace expirará en 24 horas por razones de seguridad.</p>
-
-              <p>Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
-
-              <hr style="border: none; border-top: 1px solid #E8D9C8; margin: 20px 0;">
-
-              <p style="font-size: 12px; color: #999;">
-                No respondes a este correo. Si tienes problemas, contacta con nuestro equipo de soporte.
-              </p>
-            </div>
-            <div class="footer">
-              <p>&copy; 2026 SmartBC. Todos los derechos reservados.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `,
+    subject: "Recupera tu contraseña - Benjamín Cousiño Propiedades",
+    html: renderEmailLayout({
+      title: "Recupera tu contraseña",
+      bodyHtml: `
+        <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>
+        <p style="margin: 0 0 14px 0;">Recibimos una solicitud para restablecer tu contrase&ntilde;a. Pulsa el bot&oacute;n de abajo para crear una nueva. Este enlace expirar&aacute; en 24 horas por razones de seguridad.</p>
+      `,
+      ctaLabel: "Restablecer contraseña",
+      ctaUrl: resetUrl,
+    }),
   });
 
   return result;
@@ -183,59 +141,17 @@ export async function sendInvitationEmail(
 ): Promise<{ success: boolean; error?: string }> {
   const result = await sendEmail({
     to: userEmail,
-    subject: "Bienvenido a SmartBC - Configura tu cuenta",
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2C1C0A; color: #F5E6D3; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
-            .content { background-color: #FDFBF8; padding: 30px; border: 1px solid #E8D9C8; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background-color: #2C1C0A; color: #F5E6D3; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .footer { font-size: 12px; color: #999; margin-top: 20px; text-align: center; }
-            .warning { color: #C41E3A; font-size: 12px; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>SmartBC</h1>
-              <p>Te invitamos a unirte a nuestro equipo</p>
-            </div>
-            <div class="content">
-              <p>Hola <strong>${userName}</strong>,</p>
-
-              <p>Has sido invitado a unirte al equipo de SmartBC. Para comenzar, necesitas configurar tu cuenta y establecer una contraseña:</p>
-
-              <center>
-                <a href="${inviteUrl}" class="button">Configurar Mi Cuenta</a>
-              </center>
-
-              <p>O copia y pega este enlace en tu navegador:</p>
-              <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 12px;">
-                ${inviteUrl}
-              </p>
-
-              <p class="warning">Este enlace expirará en 7 días por razones de seguridad.</p>
-
-              <p>Una vez que hayas configurado tu cuenta, podrás acceder a SmartBC y comenzar a colaborar con tu equipo.</p>
-
-              <hr style="border: none; border-top: 1px solid #E8D9C8; margin: 20px 0;">
-
-              <p style="font-size: 12px; color: #999;">
-                Si tienes preguntas, contacta con tu administrador o nuestro equipo de soporte.
-              </p>
-            </div>
-            <div class="footer">
-              <p>&copy; 2026 SmartBC. Todos los derechos reservados.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `,
+    subject: "Bienvenido a Benjamín Cousiño Propiedades - Configura tu cuenta",
+    html: renderEmailLayout({
+      title: "Configura tu cuenta",
+      bodyHtml: `
+        <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>
+        <p style="margin: 0 0 14px 0;">Has sido invitado a unirte al equipo de Benjam&iacute;n Cousi&ntilde;o Propiedades. Para comenzar, configura tu cuenta y establece una contrase&ntilde;a pulsando el bot&oacute;n de abajo. Este enlace expirar&aacute; en 7 d&iacute;as por razones de seguridad.</p>
+        <p style="margin: 0 0 14px 0;">Una vez configurada tu cuenta, podr&aacute;s acceder a la plataforma y comenzar a colaborar con tu equipo.</p>
+      `,
+      ctaLabel: "Configurar mi cuenta",
+      ctaUrl: inviteUrl,
+    }),
   });
 
   return result;
