@@ -6,8 +6,8 @@ const nextConfig: NextConfig = {
     serverActions: {
       // Por defecto Next limita el body de las server actions a 1MB, lo que
       // rompía "Subir video (.mp4)" y la subida de planos/fotos grandes.
-      // El límite de la app para videos es 200MB (ver uploadPropertyVideo).
-      bodySizeLimit: "210mb",
+      // El límite máximo de la app para videos es 5GB.
+      bodySizeLimit: "5gb",
     },
   },
   // Estos paquetes usan `require()` dinámico y APIs nativas (binarios de
