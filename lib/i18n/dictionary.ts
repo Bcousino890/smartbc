@@ -620,6 +620,7 @@ const es: Strings = {
   "clientes.ficha.preferences.pets": "Mascotas",
   "clientes.ficha.preferences.empty": "Sin preferencias configuradas.",
   "clientes.ficha.notes.title": "NOTAS INTERNAS",
+  "clientes.ficha.moreCount": "+{count} más",
 
   // Admin / Propiedades (catalog management)
   "adminParticulares.title": "Particulares",
@@ -1586,6 +1587,7 @@ const en: Strings = {
   "clientes.ficha.preferences.pets": "Pets",
   "clientes.ficha.preferences.empty": "No preferences configured.",
   "clientes.ficha.notes.title": "INTERNAL NOTES",
+  "clientes.ficha.moreCount": "+{count} more",
 
   "adminParticulares.title": "Private listings",
   "adminParticulares.subtitle":
