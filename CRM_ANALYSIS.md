@@ -77,47 +77,36 @@ El scraper obtiene esto pero **la BD no lo almacena**.
 
 ---
 
-## 3. EXTRACCIÓN DE TELÉFONO - YA EXISTE PERO SUB-UTILIZADA
+## 3. EXTRACCIÓN DE TELÉFONO - YA INTEGRADA, FALTA LA CONFIANZA
 
-### Estado Actual ✅
+### Estado Actual ✅ (corrección tras revisión a fondo)
 - **Función existe**: `detectAdvertiserFromHtml()` en `lib/sync/particulares/idealista-advertiser-detector.ts`
-- **Captura teléfono con confianza**: HIGH, MEDIUM, LOW
-- **Almacena en BD**: El campo `phone` existe en `particulares`
-- **Marca como verificado**: Campo `chat_only` boolean
+- **SÍ se llama**: `extractIdealista()` la ejecuta al final del extractor y el cron
+  (`app/api/cron/particulares/scrape/route.ts`) persiste `advertiserInfo.phone` en BD
+- **Captura teléfono con confianza**: HIGH, MEDIUM (LOW se descarta)
+- **Marca como chat-only**: Campo `chat_only` boolean cuando no hay teléfono válido
 
-### Lo Que Falta
-1. **No se llama desde el extractor Idealista**
-   - `listingToPreview()` (línea 120) **no ejecuta** `detectAdvertiserFromHtml()`
-   - Debería ser: pasar el HTML a esa función para extraer teléfono
+### Lo Que Falta Realmente
+1. **El nivel de confianza no se persiste**
+   - El detector devuelve `phone_confidence` pero el cron lo descarta
+   - Sin él, el asesor no sabe si un teléfono es fiable o dudoso
 
-2. **Falta metadata de confianza**
-   - Se guarda el teléfono pero **no el nivel de confianza**
-   - Debería haber: `phone_confidence: "high" | "medium" | null`
+2. **Falta la columna `phone_confidence`** (migración 0035, creada en esta rama)
 
-3. **Falta migración para guardar confianza**
-   - No hay columna para `phone_confidence` en la tabla
+3. **La UI no distingue** teléfonos verificados de detectados/manuales
 
-### Solución Recomendada
-1. **Llamar detectAdvertiserFromHtml() en el scraper**:
-   ```typescript
-   const advertiserCheck = detectAdvertiserFromHtml(html);
-   return {
-     ...preview,
-     phone: advertiserCheck.phone ?? preview.phone,
-     phone_confidence: advertiserCheck.phone_confidence,
-     chat_only: advertiserCheck.phone_confidence === null,
-   };
-   ```
+### Bug Adicional Descubierto: ZONA IMPRECISA
+En `listingToPreview()` la precedencia de zona era:
+```typescript
+zone = municipality ?? district ?? province  // → "Madrid" (inútil)
+```
+cuando debería priorizar el dato más específico:
+```typescript
+zone = district ?? municipality ?? province  // → "Retiro" ✓
+```
+Por eso muchos anuncios mostraban "Madrid" en vez del distrito real.
 
-2. **Crear migración** para columna `phone_confidence`:
-   ```sql
-   ALTER TABLE particulares 
-   ADD COLUMN IF NOT EXISTS phone_confidence TEXT CHECK (phone_confidence IN ('high', 'medium', NULL));
-   ```
-
-3. **Indicar en UI** qué teléfonos son de alta confianza (Idealista API) vs manual/medium
-
-**Impacto**: Contactar particulares directamente sin ir al portal de Idealista.
+**Impacto**: Contactar particulares directamente sabiendo qué teléfonos son fiables.
 
 ---
 
