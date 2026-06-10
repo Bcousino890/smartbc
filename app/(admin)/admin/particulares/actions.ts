@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export type UpdatePhoneResult =
   | { ok: true }
@@ -180,6 +181,41 @@ export async function createPropertyFromParticular(
   revalidatePath("/admin/propiedades");
   revalidatePath("/admin/agencias/portales-externos");
   return { ok: true, slug: ins.data.slug, alreadyExisted: false };
+}
+
+export type LogContactResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+export async function logParticularContact(
+  particularId: string,
+  contactType: "call" | "whatsapp" | "email" | "visit" | "note",
+  outcome: string | null,
+  notes: string | null,
+): Promise<LogContactResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: "no_profile" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("particulares_contacts")
+    .insert({
+      particular_id: particularId,
+      advisor_id: profile.id,
+      contact_type: contactType,
+      outcome: outcome || null,
+      notes: notes || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/particulares");
+  return { ok: true, id: data.id };
 }
 
 export type BulkActionResult =

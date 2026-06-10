@@ -16,7 +16,6 @@ import {
   parsePriceString,
 } from "../parse-utils";
 import { detectAdvertiserFromHtml } from "../../particulares/idealista-advertiser-detector";
-import type { AdvertiserCheckResult } from "../../particulares/idealista-advertiser-detector";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos que refleja el JSON embebido de Idealista. Basado en el schema real de
@@ -381,7 +380,7 @@ export async function extractIdealista(
   $: CheerioAPI,
   sourceUrl: string,
   options?: { proxyUrl?: string }
-): Promise<ImportPreview & { advertiserInfo?: AdvertiserCheckResult }> {
+): Promise<ImportPreview> {
   const embedded = findEmbeddedListing($);
   const preview = embedded
     ? listingToPreview(embedded, sourceUrl)

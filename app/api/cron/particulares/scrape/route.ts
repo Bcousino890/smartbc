@@ -282,14 +282,19 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
         const { preview } = extracted;
         const advertiserInfo = preview.advertiserInfo;
 
-        // Solo guardar particulares
-        if (advertiserInfo?.advertiser_type !== "particular") {
-          if (advertiserInfo?.advertiser_type === "professional") {
-            results.profesionales++;
-          } else {
-            results.unknown++;
-          }
+        // Solo guardar particulares y anunciantes desconocidos (posibles
+        // particulares en portales como Fotocasa que no exponen el flag
+        // isProfessional en el HTML servido al scraper).
+        // Los profesionales confirmados se descartan.
+        if (advertiserInfo?.advertiser_type === "professional") {
+          results.profesionales++;
           continue;
+        }
+        if (advertiserInfo?.advertiser_type === "unknown") {
+          results.unknown++;
+          // Guardar igualmente — "unknown" significa que no se pudo confirmar
+          // si es profesional, pero tampoco se confirmó que lo sea.
+          // Mejor guardar y filtrar manualmente que perder particulares válidos.
         }
 
         // Guardar en BD preservando detected_at y rastreando cambios
@@ -297,7 +302,7 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           external_id: preview.externalReference,
           source_url: url,
           owner_name: preview.title ?? null,
-          contact_name: advertiserInfo.contact_name ?? null,
+          contact_name: advertiserInfo?.contact_name ?? null,
           zone: preview.zone ?? null,
           price: preview.price ?? null,
           operation: (preview.operation as "rent" | "sale") ?? null,
@@ -307,9 +312,9 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           description: preview.description ?? null,
           features: preview.features ?? [],
           photos: (preview.photos ?? []) as Array<{ url: string; alt?: string }>,
-          advertiser_type: advertiserInfo.advertiser_type,
-          is_ad_professional: advertiserInfo.is_ad_professional ?? null,
-          phone: advertiserInfo.phone ?? null,
+          advertiser_type: advertiserInfo?.advertiser_type ?? "unknown",
+          is_ad_professional: advertiserInfo?.is_ad_professional ?? null,
+          phone: advertiserInfo?.phone ?? null,
           latitude: preview.latitude ?? null,
           longitude: preview.longitude ?? null,
         });

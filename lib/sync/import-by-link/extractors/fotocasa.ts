@@ -1,6 +1,5 @@
 import type { CheerioAPI } from "cheerio";
 import type { ImportPreview } from "../types";
-import type { AdvertiserCheckResult } from "../../particulares/idealista-advertiser-detector";
 import { detectAdvertiserFromHtml } from "../../particulares/idealista-advertiser-detector";
 import { extractFotocasaPhotos } from "../../scrapers/fotocasa";
 import {
@@ -45,7 +44,7 @@ function pickFromNext(value: unknown, keys: string[]): unknown {
 export function extractFotocasa(
   $: CheerioAPI,
   sourceUrl: string,
-): ImportPreview & { advertiserInfo?: AdvertiserCheckResult } {
+): ImportPreview {
   const warnings: string[] = [];
 
   const nextData = extractNextData($);

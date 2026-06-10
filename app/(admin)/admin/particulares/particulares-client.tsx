@@ -2,6 +2,8 @@
 
 import {
   Check,
+  ChevronDown,
+  ClipboardList,
   Copy,
   ExternalLink,
   Loader2,
@@ -18,7 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { createPropertyFromParticular, updateParticularPhone } from "./actions";
+import { createPropertyFromParticular, logParticularContact, updateParticularPhone } from "./actions";
 import PriceHistoryChart from "./price-history-chart";
 
 export type ParticularChangeRow = {
@@ -233,6 +235,241 @@ function ChangeHistory({ particularId }: { particularId: string }) {
         );
       })}
     </ol>
+  );
+}
+
+// ─── Contact Log ─────────────────────────────────────────────────────────────
+
+type ContactEntry = {
+  id: string;
+  contact_type: string;
+  outcome: string | null;
+  notes: string | null;
+  contacted_at: string;
+  advisor_id: string;
+  profiles: { first_name: string | null; last_name: string | null } | null;
+};
+
+const CONTACT_TYPE_LABELS: Record<string, string> = {
+  call: "Llamada",
+  whatsapp: "WhatsApp",
+  email: "Email",
+  visit: "Visita",
+  note: "Nota",
+};
+
+const OUTCOME_LABELS: Record<string, { label: string; color: string }> = {
+  no_answer: { label: "No contesta", color: "bg-ink/10 text-ink/60" },
+  interested: { label: "Interesado", color: "bg-emerald-100 text-emerald-700" },
+  not_interested: { label: "No interesado", color: "bg-red-100 text-red-700" },
+  callback_requested: { label: "Pide que llame", color: "bg-amber-100 text-amber-700" },
+  appointment_set: { label: "Cita fijada", color: "bg-blue-100 text-blue-700" },
+  converted: { label: "Convertido", color: "bg-emerald-200 text-emerald-800" },
+  other: { label: "Otro", color: "bg-ink/10 text-ink/60" },
+};
+
+function ContactLog({ particularId }: { particularId: string }) {
+  const [contacts, setContacts] = useState<ContactEntry[] | null>(null);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [contactType, setContactType] = useState<"call" | "whatsapp" | "email" | "visit" | "note">("call");
+  const [outcome, setOutcome] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/admin/particulares/contacts?id=${particularId}`)
+      .then((r) => r.json())
+      .then((d) => setContacts(d.contacts ?? []))
+      .catch(() => setContacts([]))
+      .finally(() => setLoadingContacts(false));
+  }, [particularId]);
+
+  async function handleSubmit() {
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      const res = await logParticularContact(
+        particularId,
+        contactType,
+        outcome || null,
+        notes || null,
+      );
+      if (res.ok) {
+        setSaveSuccess(true);
+        setShowForm(false);
+        setOutcome("");
+        setNotes("");
+        // Refresh the contact list
+        fetch(`/api/admin/particulares/contacts?id=${particularId}`)
+          .then((r) => r.json())
+          .then((d) => setContacts(d.contacts ?? []))
+          .catch(() => {});
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        setSaveError((res as { ok: false; error: string }).error);
+      }
+    } catch {
+      setSaveError("network_error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fmt = new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <div>
+      {/* Header + toggle button */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-ink/40">
+          Registro de contactos
+          {contacts && contacts.length > 0 && (
+            <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] text-gold-dark">
+              {contacts.length}
+            </span>
+          )}
+        </p>
+        <button
+          onClick={() => { setShowForm((v) => !v); setSaveError(null); }}
+          className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-[12px] font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
+        >
+          <ClipboardList size={13} strokeWidth={1.75} />
+          Registrar contacto
+          <ChevronDown size={12} strokeWidth={2} className={cn("transition-transform", showForm && "rotate-180")} />
+        </button>
+      </div>
+
+      {/* Inline form */}
+      {showForm && (
+        <div className="mb-4 rounded-xl border border-gold/20 bg-gold/3 p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-ink/50 mb-1">
+                Tipo de contacto
+              </label>
+              <select
+                value={contactType}
+                onChange={(e) => setContactType(e.target.value as typeof contactType)}
+                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+              >
+                <option value="call">Llamada</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">Email</option>
+                <option value="visit">Visita</option>
+                <option value="note">Nota interna</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-ink/50 mb-1">
+                Resultado
+              </label>
+              <select
+                value={outcome}
+                onChange={(e) => setOutcome(e.target.value)}
+                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+              >
+                <option value="">Sin especificar</option>
+                <option value="no_answer">No contesta</option>
+                <option value="interested">Interesado</option>
+                <option value="not_interested">No interesado</option>
+                <option value="callback_requested">Pide que llame</option>
+                <option value="appointment_set">Cita fijada</option>
+                <option value="converted">Convertido</option>
+                <option value="other">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-ink/50 mb-1">
+              Notas (opcional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Resumen de la conversación, próximos pasos…"
+              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none resize-none"
+            />
+          </div>
+          {saveError && (
+            <p className="text-xs text-red-600">Error al guardar ({saveError}). Inténtalo de nuevo.</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowForm(false); setSaveError(null); }}
+              className="flex-1 rounded-lg border border-ink/15 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-ink/5"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex-1 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+            >
+              {saving ? "Guardando…" : "Guardar contacto"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success feedback */}
+      {saveSuccess && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
+          <Check size={14} strokeWidth={2} />
+          Contacto registrado correctamente
+        </div>
+      )}
+
+      {/* Contact history list */}
+      {loadingContacts ? (
+        <p className="text-xs text-ink/40 py-2">Cargando contactos…</p>
+      ) : !contacts || contacts.length === 0 ? (
+        <p className="text-xs text-ink/40 py-2">Sin contactos registrados todavía.</p>
+      ) : (
+        <ol className="relative border-l border-ink/10 pl-4 space-y-3">
+          {contacts.map((c) => {
+            const outcomeMeta = c.outcome ? OUTCOME_LABELS[c.outcome] : null;
+            const advisorName = c.profiles
+              ? [c.profiles.first_name, c.profiles.last_name].filter(Boolean).join(" ")
+              : null;
+            return (
+              <li key={c.id} className="flex items-start gap-2">
+                <span className="absolute -left-1.5 mt-0.5 h-3 w-3 rounded-full border-2 border-white bg-gold/50" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
+                      {CONTACT_TYPE_LABELS[c.contact_type] ?? c.contact_type}
+                    </span>
+                    {outcomeMeta && (
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", outcomeMeta.color)}>
+                        {outcomeMeta.label}
+                      </span>
+                    )}
+                    {advisorName && (
+                      <span className="text-[10px] text-ink/45">{advisorName}</span>
+                    )}
+                  </div>
+                  {c.notes && (
+                    <p className="mt-1 text-[11px] text-ink/65 leading-relaxed">{c.notes}</p>
+                  )}
+                  <p className="mt-0.5 text-[10px] text-ink/40">{fmt.format(new Date(c.contacted_at))}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -517,6 +754,11 @@ function ParticularModal({
             )}
           </div>
 
+          {/* Registro de contactos CRM */}
+          <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
+            <ContactLog particularId={currentRow.id} />
+          </div>
+
           {/* Mapa — exacto si hay coords, fallback por zona/dirección */}
           {(currentRow.latitude && currentRow.longitude) || currentRow.zone ? (
             <div>
@@ -682,18 +924,32 @@ export function ParticularesClient({
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
   const [showRetired, setShowRetired] = useState(false);
+  const [allRows, setAllRows] = useState(rows);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
-  const [allRows, setAllRows] = useState(rows);
-  const [loadingMore, setLoadingMore] = useState(false);
 
   const zoneOptions = useMemo(
     () =>
-      Array.from(new Set(rows.map((r) => r.zone).filter(Boolean))).sort() as string[],
-    [rows],
+      Array.from(new Set(allRows.map((r) => r.zone).filter(Boolean))).sort() as string[],
+    [allRows],
   );
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    try {
+      const nextOffset = currentOffset + pageSize;
+      const res = await fetch(`/api/admin/particulares/paginated?offset=${nextOffset}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAllRows((prev) => [...prev, ...(data.rows ?? [])]);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -703,6 +959,8 @@ export function ParticularesClient({
     const aMin = areaMin ? Number(areaMin) : null;
     const since = Date.now() - 24 * 60 * 60 * 1000;
     return allRows.filter((r) => {
+      if (!showRetired && !r.is_active) return false;
+      if (showRetired && r.is_active) return false;
       if (q) {
         const hay =
           (r.zone?.toLowerCase().includes(q) ?? false) ||
@@ -723,28 +981,9 @@ export function ParticularesClient({
       ) {
         return false;
       }
-      if (!showRetired && !r.is_active) return false;
-      if (showRetired && r.is_active) return false;
       return true;
     });
   }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone, showRetired]);
-
-  async function handleLoadMore() {
-    setLoadingMore(true);
-    try {
-      const nextOffset = currentOffset + pageSize;
-      const params = new URLSearchParams({ offset: String(nextOffset) });
-      const res = await fetch(`/api/admin/particulares/paginated?${params}`);
-      const data = await res.json();
-      if (res.ok && data.rows) {
-        setAllRows((prev) => [...prev, ...data.rows]);
-      }
-    } catch (error) {
-      console.error("Error loading more particulares:", error);
-    } finally {
-      setLoadingMore(false);
-    }
-  }
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -876,20 +1115,6 @@ export function ParticularesClient({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setShowRetired((v) => !v);
-              setQuery(""); // Reset query when toggling
-            }}
-            className={
-              showRetired
-                ? "rounded-lg border border-red-400 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700"
-                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-red-300"
-            }
-          >
-            Anuncios retirados
-          </button>
-          <button
-            type="button"
             onClick={handleRefreshPhones}
             disabled={refreshState === "loading"}
             className={cn(
@@ -913,16 +1138,29 @@ export function ParticularesClient({
               <><RefreshCw size={13} strokeWidth={1.75} /> Actualizar teléfonos</>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowRetired((v) => !v)}
+            className={
+              showRetired
+                ? "rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-red-200"
+            }
+          >
+            {showRetired ? "Retirados" : "Retirados"}
+          </button>
           <span className="ml-auto text-[11px] text-ink/55">
-            {filtered.length} de {rows.length} anuncios · {rows.filter(r => r.phone).length} con teléfono
+            {filtered.length} de {allRows.length} anuncios · {allRows.filter(r => r.phone).length} con teléfono
+            {total > allRows.length && <> · {total} total</>}
           </span>
         </div>
 
         {/* Grid */}
         {filtered.length === 0 ? (
           <div className="mt-6 rounded-xl border border-gold/15 bg-white/40 px-4 py-12 text-center text-ink/55">
-            No hay anuncios de particulares todavía. El scraper los detecta
-            automáticamente cada hora.
+            {showRetired
+              ? "No hay anuncios retirados."
+              : "No hay anuncios de particulares todavía. El scraper los detecta automáticamente cada hora."}
           </div>
         ) : (
           <>
@@ -1060,17 +1298,21 @@ export function ParticularesClient({
             </div>
 
             {hasMore && (
-              <div className="flex justify-center pt-6">
+              <div className="mt-6 flex justify-center">
                 <button
+                  type="button"
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="rounded-lg bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-xl border border-gold/30 bg-white px-6 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/60 hover:bg-gold/5 disabled:opacity-60"
                 >
-                  {loadingMore ? "Cargando..." : `Cargar más (${allRows.length}/${total})`}
+                  {loadingMore ? (
+                    <><Loader2 size={14} className="animate-spin" /> Cargando…</>
+                  ) : (
+                    `Cargar más (${allRows.length} de ${total})`
+                  )}
                 </button>
               </div>
             )}
-
           </>
         )}
       </section>

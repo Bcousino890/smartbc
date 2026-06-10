@@ -95,8 +95,8 @@ export async function POST(req: Request) {
 
     console.log("[forgot-password] Token created, expires at:", tokenData.expiresAt);
 
-    // Build reset URL — prefer explicit NEXT_PUBLIC_APP_URL if set
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3137";
+    // Build reset URL — use NEXT_PUBLIC_PORTAL_URL (the public domain) or fallback to APP_URL
+    const appUrl = process.env.NEXT_PUBLIC_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3137";
     const resetUrl = `${appUrl}/auth/reset-password?token=${tokenData.token}`;
 
     console.log("[forgot-password] Sending email to:", userEmail, "| reset URL base:", appUrl);
