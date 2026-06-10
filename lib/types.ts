@@ -241,6 +241,8 @@ export type AgencyPropertyRow = {
   bedrooms: number;
   bathrooms: number;
   price: number; // monthly for rent, total for sale
+  squareMeters: number | null;
+  status: "available" | "reserved" | "rented" | "sold" | "draft";
   lastUpdateMinutes: number;
   coverPhotoUrl?: string | null;
 };

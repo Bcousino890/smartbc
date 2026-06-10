@@ -120,6 +120,9 @@ async function upsertParticular(
         features: payload.features,
         photos: payload.photos,
         phone: resolvedPhone,
+        // Sin teléfono real extraído (validado formato español) → el anuncio
+        // solo se puede contactar por el chat del portal.
+        chat_only: !resolvedPhone,
         latitude: payload.latitude,
         longitude: payload.longitude,
         advertiser_type: payload.advertiser_type,
@@ -215,6 +218,7 @@ async function upsertParticular(
       features: payload.features,
       photos: payload.photos,
       phone: payload.phone,
+      chat_only: !payload.phone,
       latitude: payload.latitude,
       longitude: payload.longitude,
       advertiser_type: payload.advertiser_type,

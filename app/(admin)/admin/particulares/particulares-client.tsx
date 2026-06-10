@@ -13,16 +13,25 @@ import {
   Plus,
   RefreshCw,
   Search,
+  UserCheck,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { formatPrice } from "@/lib/format";
+import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { createPropertyFromParticular, logParticularContact, updateParticularPhone } from "./actions";
+import {
+  assignParticular,
+  createPropertyFromParticular,
+  logParticularContact,
+  updateParticularPhone,
+} from "./actions";
 import PriceHistoryChart from "./price-history-chart";
+
+export type StaffOption = { id: string; name: string };
 
 export type ParticularChangeRow = {
   id: string;
@@ -55,6 +64,13 @@ export type ParticularRow = {
   created_at: string | null;
   taken_down_at: string | null;
   is_active: boolean;
+  // Gestión interna (enriquecido en el servidor — ver lib/db/queries/particulares.ts)
+  assigned_to?: string | null;
+  assigned_name?: string | null;
+  last_contact_at?: string | null;
+  last_contact_by?: string | null;
+  last_contact_type?: string | null;
+  contact_count?: number;
 };
 
 const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
@@ -470,21 +486,44 @@ function ParticularModal({
   row,
   onClose,
   onPhoneUpdated,
+  onAssigned,
   canCreateProperty = true,
+  staffOptions = [],
 }: {
   row: ParticularRow;
   onClose: () => void;
   onPhoneUpdated?: (newPhone: string | null) => void;
+  onAssigned?: (advisorId: string | null, advisorName: string | null) => void;
   canCreateProperty?: boolean;
+  staffOptions?: StaffOption[];
 }) {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [currentRow, setCurrentRow] = useState(row);
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [priceHistory, setPriceHistory] = useState<Array<{ date: string; price: number }>>([]);
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
   const photos = currentRow.photos ?? [];
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(currentRow.phone);
+
+  async function handleAssign(advisorId: string) {
+    setAssigning(true);
+    setAssignError(null);
+    const value = advisorId || null;
+    const res = await assignParticular(currentRow.id, value);
+    if (res.ok) {
+      const name = value
+        ? (staffOptions.find((s) => s.id === value)?.name ?? null)
+        : null;
+      setCurrentRow((prev) => ({ ...prev, assigned_to: value, assigned_name: name }));
+      onAssigned?.(value, name);
+    } else {
+      setAssignError(res.error);
+    }
+    setAssigning(false);
+  }
 
   // Estado de la conversión particular → propiedad (en Portales externos).
   const [creating, setCreating] = useState(false);
@@ -747,6 +786,42 @@ function ParticularModal({
             )}
           </div>
 
+          {/* Asignación — quién gestiona este anuncio (evita doble trabajo) */}
+          <div className="rounded-xl border border-blue-200/60 bg-blue-50/40 p-4">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+              <UserCheck size={13} strokeWidth={2} className="text-blue-600" />
+              Asignado a
+            </p>
+            <div className="flex items-center gap-2">
+              <select
+                value={currentRow.assigned_to ?? ""}
+                onChange={(e) => handleAssign(e.target.value)}
+                disabled={assigning || staffOptions.length === 0}
+                className="flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none disabled:opacity-60"
+              >
+                <option value="">Sin asignar</option>
+                {staffOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              {assigning && <Loader2 size={16} className="animate-spin text-ink/40" />}
+            </div>
+            {assignError && (
+              <p className="mt-1.5 text-xs text-red-600">
+                No se pudo guardar la asignación ({assignError}). ¿Está aplicada la migración 0034?
+              </p>
+            )}
+            {currentRow.last_contact_by && (
+              <p className="mt-2 text-[12px] text-ink/55">
+                Último contacto: <span className="font-medium text-ink/75">{currentRow.last_contact_by}</span>
+                {currentRow.last_contact_at &&
+                  ` · ${DATE_FMT.format(new Date(currentRow.last_contact_at))}`}
+              </p>
+            )}
+          </div>
+
           {/* Registro de contactos CRM */}
           <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
             <ContactLog particularId={currentRow.id} />
@@ -895,6 +970,8 @@ type RefreshState = "idle" | "loading" | "done" | "error";
 export function ParticularesClient({
   rows,
   currentRole,
+  currentUserId,
+  staffOptions = [],
   hasMore = false,
   currentOffset = 0,
   pageSize = 100,
@@ -902,6 +979,8 @@ export function ParticularesClient({
 }: {
   rows: ParticularRow[];
   currentRole?: string;
+  currentUserId?: string;
+  staffOptions?: StaffOption[];
   hasMore?: boolean;
   currentOffset?: number;
   pageSize?: number;
@@ -916,6 +995,7 @@ export function ParticularesClient({
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
+  const [gestion, setGestion] = useState<"" | "unmanaged" | "contacted" | "assigned" | "mine">("");
   const [showRetired, setShowRetired] = useState(false);
   const [allRows, setAllRows] = useState(rows);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -925,11 +1005,33 @@ export function ParticularesClient({
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
   const { toast } = useToast();
 
-  const zoneOptions = useMemo(
-    () =>
-      Array.from(new Set(allRows.map((r) => r.zone).filter(Boolean))).sort() as string[],
-    [allRows],
-  );
+  // Zonas agrupadas por distrito canónico de Madrid. El scraper mezcla
+  // distritos y barrios en un solo campo `zone`; aquí lo ordenamos:
+  // cada zona "sucia" se normaliza a su distrito y el desplegable muestra
+  // optgroups Distrito → zonas, ordenados alfabéticamente ("Otras zonas"
+  // siempre al final).
+  const zoneGroups = useMemo(() => {
+    const groups = new Map<string, Set<string>>();
+    for (const r of allRows) {
+      if (!r.zone) continue;
+      const { district } = normalizeZone(r.zone);
+      if (!groups.has(district)) groups.set(district, new Set());
+      groups.get(district)!.add(r.zone);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => {
+        if (a[0] === OTHER_ZONE_LABEL) return 1;
+        if (b[0] === OTHER_ZONE_LABEL) return -1;
+        return a[0].localeCompare(b[0], "es");
+      })
+      .map(([district, zones]) => ({
+        district,
+        zones: Array.from(zones).sort((a, b) => a.localeCompare(b, "es")),
+      }));
+  }, [allRows]);
+
+  const activeCount = useMemo(() => allRows.filter((r) => r.is_active).length, [allRows]);
+  const retiredCount = allRows.length - activeCount;
 
   async function handleLoadMore() {
     setLoadingMore(true);
@@ -967,12 +1069,27 @@ export function ParticularesClient({
         if (!hay) return false;
       }
       if (operation && r.operation !== operation) return false;
-      if (zone && r.zone !== zone) return false;
+      // Zona: "d:<distrito>" filtra por distrito normalizado; "z:<zona>"
+      // filtra por la zona exacta tal cual vino del scraper.
+      if (zone) {
+        if (zone.startsWith("d:")) {
+          if (normalizeZone(r.zone).district !== zone.slice(2)) return false;
+        } else if (zone.startsWith("z:")) {
+          if (r.zone !== zone.slice(2)) return false;
+        } else if (r.zone !== zone) {
+          return false;
+        }
+      }
       if (pMin != null && (r.price ?? 0) < pMin) return false;
       if (pMax != null && (r.price ?? Infinity) > pMax) return false;
       if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
       if (onlyNoPhone && r.phone) return false;
+      // Gestión: evita doble trabajo — quién contactó / quién lo tiene asignado.
+      if (gestion === "unmanaged" && (r.assigned_to || (r.contact_count ?? 0) > 0)) return false;
+      if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
+      if (gestion === "assigned" && !r.assigned_to) return false;
+      if (gestion === "mine" && r.assigned_to !== currentUserId) return false;
       if (
         last24h &&
         !(r.created_at && new Date(r.created_at).getTime() >= since)
@@ -981,7 +1098,7 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone, showRetired]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone, gestion, currentUserId, showRetired]);
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -1006,6 +1123,12 @@ export function ParticularesClient({
 
   function handlePhoneUpdated(newPhone: string | null) {
     setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
+    // Reflejar también en el listado sin recargar.
+    setAllRows((prev) =>
+      prev.map((r) =>
+        selected && r.id === selected.id ? { ...r, phone: newPhone } : r,
+      ),
+    );
   }
 
   return (
@@ -1016,6 +1139,16 @@ export function ParticularesClient({
           row={selected}
           onClose={() => setSelected(null)}
           onPhoneUpdated={handlePhoneUpdated}
+          onAssigned={(advisorId, advisorName) => {
+            setAllRows((prev) =>
+              prev.map((r) =>
+                r.id === selected.id
+                  ? { ...r, assigned_to: advisorId, assigned_name: advisorName }
+                  : r,
+              ),
+            );
+          }}
+          staffOptions={staffOptions}
           canCreateProperty={!currentRole || canAccess(currentRole, "properties", "create")}
         />
       )}
@@ -1045,14 +1178,34 @@ export function ParticularesClient({
           <select
             value={zone}
             onChange={(e) => setZone(e.target.value)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="max-w-[220px] rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Zona: todas</option>
-            {zoneOptions.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
+            {zoneGroups.map(({ district, zones }) => (
+              <optgroup key={district} label={district}>
+                {zones.length > 1 && (
+                  <option value={`d:${district}`}>
+                    Todo {district}
+                  </option>
+                )}
+                {zones.map((z) => (
+                  <option key={z} value={zones.length > 1 ? `z:${z}` : `d:${district}`}>
+                    {z}
+                  </option>
+                ))}
+              </optgroup>
             ))}
+          </select>
+          <select
+            value={gestion}
+            onChange={(e) => setGestion(e.target.value as typeof gestion)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Gestión: todos</option>
+            <option value="unmanaged">Sin gestionar</option>
+            <option value="contacted">Ya contactados</option>
+            <option value="assigned">Asignados</option>
+            {currentUserId && <option value="mine">Asignados a mí</option>}
           </select>
           <input
             type="number"
@@ -1136,21 +1289,40 @@ export function ParticularesClient({
               <><RefreshCw size={13} strokeWidth={1.75} /> Actualizar teléfonos</>
             )}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowRetired((v) => !v)}
-            className={
-              showRetired
-                ? "rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700"
-                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-red-200"
-            }
-          >
-            {showRetired ? "Retirados" : "Retirados"}
-          </button>
           <span className="ml-auto text-[11px] text-ink/55">
             {filtered.length} de {allRows.length} anuncios · {allRows.filter(r => r.phone).length} con teléfono
             {total > allRows.length && <> · {total} total</>}
           </span>
+        </div>
+
+        {/* Apartados: Activos / Retirados. Los retirados se conservan en BD
+            con todos sus datos (precio, fotos, historial) — solo dejan de
+            estar publicados en el portal de origen. */}
+        <div className="mt-4 flex items-center gap-1 rounded-xl border border-ink/10 bg-white/60 p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setShowRetired(false)}
+            className={cn(
+              "rounded-lg px-4 py-1.5 text-[13px] font-medium transition",
+              !showRetired
+                ? "bg-ink text-cream-50 shadow-sm"
+                : "text-ink/60 hover:text-ink",
+            )}
+          >
+            Activos ({activeCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowRetired(true)}
+            className={cn(
+              "rounded-lg px-4 py-1.5 text-[13px] font-medium transition",
+              showRetired
+                ? "bg-red-600 text-white shadow-sm"
+                : "text-ink/60 hover:text-red-700",
+            )}
+          >
+            Retirados ({retiredCount})
+          </button>
         </div>
 
         {/* Grid */}
@@ -1229,7 +1401,7 @@ export function ParticularesClient({
                     {!r.phone && (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
                         <MessageSquare size={10} strokeWidth={1.75} />
-                        Contactar por chat
+                        Solo chat
                       </span>
                     )}
                   </div>
@@ -1252,6 +1424,31 @@ export function ParticularesClient({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {/* Gestión: quién lo tiene asignado y quién lo contactó.
+                        Evita que dos asesores trabajen el mismo anuncio. */}
+                    {(r.assigned_name || r.last_contact_by || (!r.is_active && r.taken_down_at)) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {r.assigned_name && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                            <UserCheck size={10} strokeWidth={2} />
+                            {r.assigned_name}
+                          </span>
+                        )}
+                        {r.last_contact_by && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                            <ClipboardList size={10} strokeWidth={2} />
+                            Contactado · {r.last_contact_by}
+                            {r.last_contact_at &&
+                              ` · ${DATE_FMT.format(new Date(r.last_contact_at))}`}
+                          </span>
+                        )}
+                        {!r.is_active && r.taken_down_at && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                            Retirado · {DATE_FMT.format(new Date(r.taken_down_at))}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {r.phone && (
                       <button
                         onClick={(e) => {

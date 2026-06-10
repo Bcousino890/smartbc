@@ -201,6 +201,43 @@ export function canAccess(
   return resourcePerms[action as PermissionAction] ?? false;
 }
 
+// ─── Permisos efectivos (rol + excepciones por usuario) ──────────────────────
+
+export type PermissionOverride = {
+  resource: string;
+  action: string;
+  allowed: boolean;
+};
+
+export type EffectivePermissions = Record<
+  PermissionResource,
+  Record<PermissionAction, boolean>
+>;
+
+/**
+ * Combina la matriz del rol con las excepciones por usuario guardadas en
+ * `user_permission_overrides`. Una excepción siempre gana sobre el default
+ * del rol (tanto para conceder como para denegar).
+ */
+export function applyOverrides(
+  role: string,
+  overrides: PermissionOverride[],
+): EffectivePermissions {
+  const matrix = PERMISSIONS_BY_ROLE[role] ?? NO_ACCESS_PERMISSIONS;
+  const effective = {} as EffectivePermissions;
+  for (const resource of PERMISSION_RESOURCES) {
+    effective[resource] = { ...matrix[resource] };
+  }
+  for (const o of overrides) {
+    const res = o.resource as PermissionResource;
+    const act = o.action as PermissionAction;
+    if (effective[res] && act in effective[res]) {
+      effective[res][act] = o.allowed;
+    }
+  }
+  return effective;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Roles de agente inmobiliario (los 3 nuevos) */

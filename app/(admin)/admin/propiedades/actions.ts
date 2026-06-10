@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { shareSlug } from "@/lib/share-slug";
 import type { Operation, StayType } from "@/lib/types";
 
 export type CreatePropertyInput = {
@@ -435,19 +436,34 @@ export async function updateProperty(
     return { ok: false, error: "nothing_to_update" };
   }
 
-  const propsTbl = supabase.from("properties") as unknown as {
-    update: (payload: Record<string, unknown>) => {
-      eq: (column: string, value: string) => Promise<{
-        error: { message: string } | null;
-      }>;
-    };
-  };
-
-  const res = await propsTbl.update(payload).eq("slug", input.slug);
-  if (res.error) return { ok: false, error: res.error.message };
+  // Usamos el admin client (service role) tras validar staff: con el cliente
+  // de sesión, una política RLS que no reconozca el rol hace que el UPDATE
+  // afecte 0 filas SIN error → el admin cree que guardó pero el SmartLink
+  // sigue mostrando datos viejos. Con .select() confirmamos que la fila
+  // realmente se actualizó.
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: updated, error: updateErr } = await (admin as any)
+    .from("properties")
+    .update(payload)
+    .eq("slug", input.slug)
+    .select("id, slug, bc_reference");
+  if (updateErr) return { ok: false, error: updateErr.message };
+  if (!updated || updated.length === 0) {
+    return { ok: false, error: "property_not_found" };
+  }
 
   revalidatePath("/admin/propiedades");
   revalidatePath(`/admin/propiedades/${input.slug}`);
+  // Rutas públicas: el SmartLink se comparte tanto con el slug plano como
+  // con la referencia BC delante (bc0871-…). Revalidamos ambas para que
+  // los cambios se vean al instante en "Ver como cliente" / SmartLink.
+  revalidatePath(`/compartir/${input.slug}`);
+  const bcRef = (updated[0] as { bc_reference: string | null }).bc_reference;
+  if (bcRef) {
+    revalidatePath(`/compartir/${shareSlug(input.slug, bcRef)}`);
+  }
+  revalidatePath(`/og/property/${input.slug}`);
   return { ok: true };
 }
 

@@ -86,7 +86,7 @@ export async function getAgencyProperties(agencyId: string) {
   const { data, error } = await supabase
     .from("properties")
     .select(
-      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at, cover_photo_url",
+      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at, cover_photo_url, square_meters, status",
     )
     .eq("agency_id", agencyId)
     .is("archived_at", null)
@@ -108,5 +108,7 @@ export async function getAgencyProperties(agencyId: string) {
     price: number;
     updated_at: string;
     cover_photo_url: string | null;
+    square_meters: number | null;
+    status: "available" | "reserved" | "rented" | "sold" | "draft";
   }>;
 }

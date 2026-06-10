@@ -108,35 +108,11 @@ export async function getStaff() {
   const allRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   const legacyRoles = ["owner", "admin", "advisor"];
 
-  // Primary: session-based client — works for authenticated staff via RLS (migration 0032)
-  try {
-    const sessionClient = await createClient();
-    const { data, error } = await sessionClient
-      .from("profiles")
-      .select("*")
-      .in("role", allRoles)
-      .order("created_at");
-
-    if (!error) {
-      return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
-    }
-
-    if (error.message?.includes("invalid input value for enum")) {
-      const { data: fallback, error: fallbackErr } = await sessionClient
-        .from("profiles")
-        .select("*")
-        .in("role", legacyRoles)
-        .order("created_at");
-      if (!fallbackErr) {
-        return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
-      }
-    }
-    console.error("getStaff session error:", error.message);
-  } catch (e) {
-    console.error("getStaff session client threw:", e);
-  }
-
-  // Fallback: admin client (requires SUPABASE_SERVICE_ROLE_KEY)
+  // Usamos directamente el admin client (service role). La página de
+  // usuarios ya está protegida por el layout (solo staff llega aquí).
+  // Con el cliente de sesión, una RLS que no reconozca el rol del usuario
+  // logueado NO da error: simplemente filtra filas y devuelve solo el
+  // propio perfil → "no se ven los usuarios ya creados".
   const adminClient = createAdminClient();
   const { data: adminData, error: adminError } = await adminClient
     .from("profiles")
@@ -148,6 +124,8 @@ export async function getStaff() {
     return (adminData ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
   }
 
+  // Enum sin los roles agent_* (migración 0025 pendiente): reintenta solo
+  // con los roles legacy.
   if (adminError.message?.includes("invalid input value for enum")) {
     const { data: fallback } = await adminClient
       .from("profiles")
@@ -157,8 +135,21 @@ export async function getStaff() {
     return (fallback ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
   }
 
-  console.error("getStaff all attempts failed:", adminError);
-  return [];
+  console.error("getStaff admin query failed:", adminError.message);
+
+  // Último recurso: cliente de sesión (por si falta SUPABASE_SERVICE_ROLE_KEY).
+  try {
+    const sessionClient = await createClient();
+    const { data } = await sessionClient
+      .from("profiles")
+      .select("*")
+      .in("role", legacyRoles)
+      .order("created_at");
+    return (data ?? []) as unknown as Array<Database["public"]["Tables"]["profiles"]["Row"]>;
+  } catch (e) {
+    console.error("getStaff all attempts failed:", e);
+    return [];
+  }
 }
 
 export async function getClientStats() {

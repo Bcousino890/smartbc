@@ -35,6 +35,8 @@ export default async function AgencyDetailPage({
     bedrooms: p.bedrooms,
     bathrooms: p.bathrooms,
     price: Number(p.price),
+    squareMeters: p.square_meters,
+    status: p.status,
     lastUpdateMinutes: minutesSince(p.updated_at),
     coverPhotoUrl: p.cover_photo_url ?? null,
   }));
