@@ -28,6 +28,14 @@ type RawVisit = {
   property_id: string;
   requested_at: string;
   status: string;
+  propertyTitle: string | null;
+  propertySlug: string | null;
+};
+
+type FavoriteRef = {
+  id: string;
+  slug: string | null;
+  title: string | null;
 };
 
 const VISIT_DATE_FMT = new Intl.DateTimeFormat("es-ES", {
@@ -35,6 +43,12 @@ const VISIT_DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   month: "short",
   year: "numeric",
 });
+
+// Intl.format(new Date(x)) lanza RangeError con fechas inválidas — parseo seguro.
+function formatVisitDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : VISIT_DATE_FMT.format(d);
+}
 
 const VISIT_STATUS_STYLES: Record<
   string,
@@ -60,11 +74,11 @@ const VISIT_STATUS_STYLES: Record<
 
 export function ClientFichaView({
   client,
-  favoritePropertyIds,
+  favorites,
   visits,
 }: {
   client: AdminClient;
-  favoritePropertyIds: string[];
+  favorites: FavoriteRef[];
   visits: RawVisit[];
 }) {
   const t = useT();
@@ -140,13 +154,13 @@ export function ClientFichaView({
           </div>
 
           {/* Botón enviar mensaje */}
-          <button
-            type="button"
+          <Link
+            href="/admin/mensajes"
             className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
           >
             <Send size={14} strokeWidth={1.75} className="text-gold" />
             <span>{t("clientes.ficha.sendMessage")}</span>
-          </button>
+          </Link>
         </div>
 
         {/* Contacto */}
@@ -219,7 +233,7 @@ export function ClientFichaView({
 
         {/* Columna derecha */}
         <div className="flex flex-col gap-5">
-          <FavoritesCard propertyIds={favoritePropertyIds} />
+          <FavoritesCard favorites={favorites} />
           <VisitsCard visits={visits} />
         </div>
       </div>
@@ -344,7 +358,7 @@ function NotesCard({ client }: { client: AdminClient }) {
   );
 }
 
-function FavoritesCard({ propertyIds }: { propertyIds: string[] }) {
+function FavoritesCard({ favorites }: { favorites: FavoriteRef[] }) {
   const t = useT();
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
@@ -352,43 +366,46 @@ function FavoritesCard({ propertyIds }: { propertyIds: string[] }) {
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
           {t("clientes.ficha.favorites.title")}
         </h2>
-        {propertyIds.length > 0 && (
+        {favorites.length > 0 && (
           <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[11px] font-semibold text-gold-dark">
-            {propertyIds.length}
+            {favorites.length}
           </span>
         )}
       </div>
 
-      {propertyIds.length === 0 ? (
+      {favorites.length === 0 ? (
         <p className="mt-3 text-[13px] text-ink/55">
           {t("clientes.ficha.favorites.empty")}
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
-          {propertyIds.slice(0, 8).map((propId) => (
+          {favorites.slice(0, 8).map((fav) => (
             <li
-              key={propId}
+              key={fav.id}
               className="flex items-center justify-between gap-3 rounded-xl border border-gold/10 bg-white/55 px-3 py-2.5 transition hover:border-gold/30 hover:bg-white/80"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
                   <Heart size={14} strokeWidth={1.75} />
                 </span>
                 <p className="truncate text-[13px] font-medium text-ink">
-                  {propId.slice(0, 20)}…
+                  {fav.title ?? `${fav.id.slice(0, 20)}…`}
                 </p>
               </div>
-              <Link
-                href={`/admin/propiedades/${propId}`}
-                className="shrink-0 text-[11px] font-medium text-gold-dark transition hover:text-gold hover:underline"
-              >
-                {t("clientes.ficha.favorites.viewProperty")}
-              </Link>
+              {/* La ruta de admin usa slug; sin slug no hay link válido. */}
+              {fav.slug && (
+                <Link
+                  href={`/admin/propiedades/${fav.slug}`}
+                  className="shrink-0 text-[11px] font-medium text-gold-dark transition hover:text-gold hover:underline"
+                >
+                  {t("clientes.ficha.favorites.viewProperty")}
+                </Link>
+              )}
             </li>
           ))}
-          {propertyIds.length > 8 && (
+          {favorites.length > 8 && (
             <li className="pt-1 text-center text-[12px] text-ink/45">
-              +{propertyIds.length - 8} más
+              {t("clientes.ficha.moreCount", { count: favorites.length - 8 })}
             </li>
           )}
         </ul>
@@ -432,11 +449,20 @@ function VisitsCard({ visits }: { visits: RawVisit[] }) {
                     <Calendar size={14} strokeWidth={1.75} />
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-[12px] font-medium text-ink">
-                      {visit.property_id.slice(0, 20)}…
-                    </p>
+                    {visit.propertySlug ? (
+                      <Link
+                        href={`/admin/propiedades/${visit.propertySlug}`}
+                        className="block truncate text-[12px] font-medium text-ink hover:underline"
+                      >
+                        {visit.propertyTitle ?? `${visit.property_id.slice(0, 20)}…`}
+                      </Link>
+                    ) : (
+                      <p className="truncate text-[12px] font-medium text-ink">
+                        {visit.propertyTitle ?? `${visit.property_id.slice(0, 20)}…`}
+                      </p>
+                    )}
                     <p className="text-[11px] text-ink/50">
-                      {VISIT_DATE_FMT.format(new Date(visit.requested_at))}
+                      {formatVisitDate(visit.requested_at)}
                     </p>
                   </div>
                 </div>
@@ -456,7 +482,7 @@ function VisitsCard({ visits }: { visits: RawVisit[] }) {
           })}
           {visits.length > 10 && (
             <li className="pt-1 text-center text-[12px] text-ink/45">
-              +{visits.length - 10} más
+              {t("clientes.ficha.moreCount", { count: visits.length - 10 })}
             </li>
           )}
         </ul>

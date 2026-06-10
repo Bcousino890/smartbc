@@ -270,7 +270,9 @@ export async function markParticularAsVerified(
   const { error, data } = await (supabase as any)
     .from("particulares")
     .update({
-      phone_verified: true,
+      // Columnas reales según 0023_particulares_phone_fields.sql
+      phone_manually_verified: true,
+      phone_verified_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .in("id", particularIds)
@@ -294,13 +296,14 @@ export async function rescrapeParticularPhones(
     return { ok: false, error: "no_ids" };
   }
 
-  // Mark as needing re-scrape by resetting phone and phone_verified
+  // Mark as needing re-scrape by resetting phone and verification fields
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error, data } = await (supabase as any)
     .from("particulares")
     .update({
       phone: null,
-      phone_verified: false,
+      phone_manually_verified: false,
+      phone_verified_at: null,
       updated_at: new Date().toISOString(),
     })
     .in("id", particularIds)

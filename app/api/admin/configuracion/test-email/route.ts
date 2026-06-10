@@ -1,6 +1,7 @@
 import "server-only";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const nodemailer = require('nodemailer');
+import { renderEmailLayout, escapeHtml } from "@/lib/email/templates";
 
 export async function POST(req: Request) {
   try {
@@ -36,15 +37,17 @@ export async function POST(req: Request) {
       const testEmailResult = await transporter.sendMail({
         from: `${fromName || "SmartBC"} <${fromEmail}>`,
         to: fromEmail, // Send test email to the configured from_email
-        subject: "SmartBC - Test Email Connection",
-        html: `
-          <h2>Conexión SMTP Verificada</h2>
-          <p>Su configuración de correo SMTP está funcionando correctamente.</p>
-          <p><strong>Remitente:</strong> ${fromEmail}</p>
-          <p><strong>Servidor:</strong> ${smtpServer}:${smtpPort}</p>
-          <p><strong>SSL/TLS:</strong> ${useSsl ? "Habilitado" : "Deshabilitado"}</p>
-          <p style="margin-top: 20px; color: #666; font-size: 12px;">Este es un correo de prueba. Si lo recibe, su configuración está correcta.</p>
-        `,
+        subject: "Prueba de conexión SMTP - Benjamín Cousiño Propiedades",
+        html: renderEmailLayout({
+          title: "Conexión SMTP verificada",
+          bodyHtml: `
+            <p style="margin: 0 0 14px 0;">Tu configuraci&oacute;n de correo SMTP est&aacute; funcionando correctamente.</p>
+            <p style="margin: 0 0 6px 0;"><strong>Remitente:</strong> ${escapeHtml(String(fromEmail))}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Servidor:</strong> ${escapeHtml(String(smtpServer))}:${escapeHtml(String(smtpPort))}</p>
+            <p style="margin: 0 0 14px 0;"><strong>SSL/TLS:</strong> ${useSsl ? "Habilitado" : "Deshabilitado"}</p>
+            <p style="margin: 0;">Este es un correo de prueba. Si lo recibes, tu configuraci&oacute;n est&aacute; correcta.</p>
+          `,
+        }),
       });
 
       return Response.json({

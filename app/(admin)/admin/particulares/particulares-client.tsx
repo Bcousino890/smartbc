@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ui/toast";
 import { extractFloor } from "@/lib/floor";
 import { formatPrice } from "@/lib/format";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
@@ -293,8 +294,7 @@ function ContactLog({ particularId }: { particularId: string }) {
   const [outcome, setOutcome] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch(`/api/admin/particulares/contacts?id=${particularId}`)
@@ -306,8 +306,6 @@ function ContactLog({ particularId }: { particularId: string }) {
 
   async function handleSubmit() {
     setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
     try {
       const res = await logParticularContact(
         particularId,
@@ -316,7 +314,7 @@ function ContactLog({ particularId }: { particularId: string }) {
         notes || null,
       );
       if (res.ok) {
-        setSaveSuccess(true);
+        toast("Contacto registrado correctamente", "success");
         setShowForm(false);
         setOutcome("");
         setNotes("");
@@ -325,12 +323,14 @@ function ContactLog({ particularId }: { particularId: string }) {
           .then((r) => r.json())
           .then((d) => setContacts(d.contacts ?? []))
           .catch(() => {});
-        setTimeout(() => setSaveSuccess(false), 3000);
       } else {
-        setSaveError((res as { ok: false; error: string }).error);
+        toast(
+          `Error al guardar (${(res as { ok: false; error: string }).error}). Inténtalo de nuevo.`,
+          "error",
+        );
       }
     } catch {
-      setSaveError("network_error");
+      toast("Error al guardar (network_error). Inténtalo de nuevo.", "error");
     } finally {
       setSaving(false);
     }
@@ -357,7 +357,7 @@ function ContactLog({ particularId }: { particularId: string }) {
           )}
         </p>
         <button
-          onClick={() => { setShowForm((v) => !v); setSaveError(null); }}
+          onClick={() => setShowForm((v) => !v)}
           className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-[12px] font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
         >
           <ClipboardList size={13} strokeWidth={1.75} />
@@ -418,12 +418,9 @@ function ContactLog({ particularId }: { particularId: string }) {
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none resize-none"
             />
           </div>
-          {saveError && (
-            <p className="text-xs text-red-600">Error al guardar ({saveError}). Inténtalo de nuevo.</p>
-          )}
           <div className="flex gap-2">
             <button
-              onClick={() => { setShowForm(false); setSaveError(null); }}
+              onClick={() => setShowForm(false)}
               className="flex-1 rounded-lg border border-ink/15 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-ink/5"
             >
               Cancelar
@@ -431,19 +428,15 @@ function ContactLog({ particularId }: { particularId: string }) {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="flex-1 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
             >
-              {saving ? "Guardando…" : "Guardar contacto"}
+              {saving ? (
+                <><Loader2 size={14} className="animate-spin" /> Guardando…</>
+              ) : (
+                "Guardar contacto"
+              )}
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Success feedback */}
-      {saveSuccess && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
-          <Check size={14} strokeWidth={2} />
-          Contacto registrado correctamente
         </div>
       )}
 
@@ -1012,6 +1005,7 @@ export function ParticularesClient({
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
+  const { toast } = useToast();
 
   // Zonas agrupadas por distrito canónico de Madrid. El scraper mezcla
   // distritos y barrios en un solo campo `zone`; aquí lo ordenamos:
@@ -1059,7 +1053,11 @@ export function ParticularesClient({
       if (res.ok) {
         const data = await res.json();
         setAllRows((prev) => [...prev, ...(data.rows ?? [])]);
+      } else {
+        toast("No se pudieron cargar más anuncios. Inténtalo de nuevo.", "error");
       }
+    } catch {
+      toast("No se pudieron cargar más anuncios. Inténtalo de nuevo.", "error");
     } finally {
       setLoadingMore(false);
     }

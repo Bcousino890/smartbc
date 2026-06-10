@@ -29,9 +29,12 @@ export default async function ClientFichaPage({
     client_tag_assignments: row.client_tag_assignments ?? [],
   } as Parameters<typeof clientRowToAdminClient>[0]);
 
-  // Datos raw para la ficha
+  // Datos raw para la ficha. Las rutas de admin de propiedades usan SLUG
+  // (/admin/propiedades/[slug]), no el UUID, así que traemos el slug/título
+  // de la propiedad embebidos en la query.
+  type PropertyRef = { slug: string; title: string } | null;
   const rawFavorites = (
-    row.favorites as Array<{ property_id: string }> | null
+    row.favorites as Array<{ property_id: string; properties: PropertyRef }> | null
   ) ?? [];
   const rawVisits = (
     row.visit_requests as Array<{
@@ -39,14 +42,26 @@ export default async function ClientFichaPage({
       property_id: string;
       requested_at: string;
       status: string;
+      properties: PropertyRef;
     }> | null
   ) ?? [];
 
   return (
     <ClientFichaView
       client={adapted}
-      favoritePropertyIds={rawFavorites.map((f) => f.property_id)}
-      visits={rawVisits}
+      favorites={rawFavorites.map((f) => ({
+        id: f.property_id,
+        slug: f.properties?.slug ?? null,
+        title: f.properties?.title ?? null,
+      }))}
+      visits={rawVisits.map((v) => ({
+        id: v.id,
+        property_id: v.property_id,
+        requested_at: v.requested_at,
+        status: v.status,
+        propertyTitle: v.properties?.title ?? null,
+        propertySlug: v.properties?.slug ?? null,
+      }))}
     />
   );
 }

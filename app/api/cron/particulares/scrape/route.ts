@@ -294,12 +294,11 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           results.profesionales++;
           continue;
         }
-        if (advertiserInfo?.advertiser_type === "unknown") {
-          results.unknown++;
-          // Guardar igualmente — "unknown" significa que no se pudo confirmar
-          // si es profesional, pero tampoco se confirmó que lo sea.
-          // Mejor guardar y filtrar manualmente que perder particulares válidos.
-        }
+        // "unknown" se guarda igualmente — significa que no se pudo confirmar
+        // si es profesional, pero tampoco se confirmó que lo sea.
+        // Mejor guardar y filtrar manualmente que perder particulares válidos.
+        // (Se cuenta tras el guardado para que processed = particulares +
+        // profesionales + unknown + errors, sin dobles conteos.)
 
         // Guardar en BD preservando detected_at y rastreando cambios
         const saved = await upsertParticular(supabase, {
@@ -325,6 +324,8 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
 
         if (!saved) {
           results.errors++;
+        } else if (advertiserInfo?.advertiser_type === "unknown") {
+          results.unknown++;
         } else {
           results.particulares++;
         }

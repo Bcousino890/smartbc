@@ -177,8 +177,8 @@ export async function getClientById(id: string) {
       *,
       client_preferences(*),
       client_tag_assignments(tag_id, client_tags(id, name, category, color)),
-      favorites(property_id),
-      visit_requests(id, property_id, requested_at, status)
+      favorites(property_id, properties(slug, title)),
+      visit_requests(id, property_id, requested_at, status, properties(slug, title))
     `)
     .eq("id", id)
     .eq("role", "client")

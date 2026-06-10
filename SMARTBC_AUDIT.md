@@ -1,335 +1,198 @@
-# SmartBC CRM — Auditoría Técnica Completa
+# SmartBC CRM — Auditoría Completa y Cambios Aplicados
 
-**Fecha:** 2026-06-09  
-**Rama auditada:** `main` (estado post-fixes)  
-**Stack:** Next.js 15 App Router · Self-hosted Supabase (GoTrue + PostgreSQL en VPS Hetzner) · PM2
-
----
-
-## Resumen Ejecutivo
-
-La auditoría identificó y corrigió 9 problemas críticos que impedían el correcto funcionamiento del panel de administración para roles `owner`, `agent_junior`, `agent_senior` y `agent_admin`. Todos los problemas de prioridad 1 y 2 han sido resueltos. TypeScript compila limpio. Las páginas de autenticación están en español.
+**Fecha:** 2026-06-10
+**Rama de desarrollo:** `claude/adoring-pasteur-3OgFB` → merge a `main`
+**Stack:** Next.js 15 (App Router) · Supabase self-hosted (GoTrue + PostgreSQL en contenedor Docker `supabase-db`) · VPS Hetzner · PM2
+**Importante:** NO se usa Vercel ni Supabase Cloud. Todo corre en el VPS propio.
 
 ---
 
-## Prioridad 1 — Errores de compilación / arranque
+## 1. Resumen Ejecutivo
 
-### ✅ RESUELTO: TypeScript compila sin errores
-- **Estado:** `npx tsc --noEmit` devuelve 0 errores.
-- **Notas:** Los errores que aparecen en `.next/types/` son artefactos stale del build anterior; se limpian con `rm -rf .next/types`.
+Se completó una auditoría integral del CRM SmartBC cubriendo el módulo de Particulares (captación de anuncios de Idealista/Fotocasa), seguridad de endpoints de administración, experiencia de usuario del panel admin y el flujo de recuperación de contraseña por email.
 
----
+Resultados principales:
 
-## Prioridad 2 — Auth, sesiones, roles, permisos, APIs, BD
+- **Particulares:** eliminado el tope de 1000 registros visibles, extracción de teléfonos funcionando en Idealista **y** Fotocasa con sistema de confianza, historial de contactos por particular (nueva tabla + UI), visibilidad de anuncios retirados y desglose por portal.
+- **Seguridad:** 5 endpoints de admin que estaban sin protección (o con protección insuficiente) ahora exigen rol de staff/admin.
+- **UX:** nueva ficha de cliente, nuevo dashboard con métricas en tiempo casi real, pestañas en solicitudes, filtros/ordenación en clientes y ~80 cadenas nuevas de i18n (ES/EN/FR/DE).
+- **Email:** corregida la causa raíz por la que los enlaces de recuperación de contraseña apuntaban a `localhost:3137`, y añadido fallback de configuración SMTP por variables de entorno.
 
-### ✅ CORREGIDO: `lib/db/auth-helpers.ts` — Roles de agente bloqueados
-
-**Problema:** `requireStaff()` y `requireAdmin()` solo aceptaban `"admin"` y `"advisor"`. Cualquier usuario con rol `owner`, `agent_junior`, `agent_senior` o `agent_admin` recibía `forbidden_not_staff` al intentar crear propiedades u otras operaciones de staff.
-
-**Solución aplicada:**
-```typescript
-// ANTES
-if (session.role !== "admin" && session.role !== "advisor") { ... }
-
-// DESPUÉS
-const STAFF_ROLES = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
-const ADMIN_ROLES = ["owner", "admin", "agent_admin"];
-if (!STAFF_ROLES.includes(session.role)) { ... }
-```
-
-**Archivo:** `lib/db/auth-helpers.ts`
+Todos los cambios están en código y compilando. **Queda pendiente aplicar en el VPS la migración 0033 y verificar variables de entorno SMTP** (ver sección 6).
 
 ---
 
-### ✅ CORREGIDO: `app/(auth)/actions.ts` — Redirección post-login incompleta
+## 2. Tabla de Cambios por Prioridad
 
-**Problema:** `signInAction` solo redirigía a `/admin` para roles `admin` y `advisor`. Los usuarios con roles `owner`, `agent_*` aterrizaban en `/inicio` y eran redirigidos en bucle por el middleware (que sí reconocía esos roles como staff).
-
-**Solución aplicada:**
-```typescript
-const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
-if (staffRoles.includes(profile.role)) {
-  redirect("/admin");
-}
-redirect("/inicio");
-```
-
-**Archivo:** `app/(auth)/actions.ts`
-
----
-
-### ✅ CORREGIDO: `app/api/admin/usuarios/create/route.ts` — Roles válidos incompletos
-
-**Problema:** `validRoles = ["admin", "advisor", "client"]` — rechazaba la creación de usuarios con roles `owner`, `agent_junior`, `agent_senior`, `agent_admin`.
-
-**Solución:** Extendido a todos los roles del enum `user_role` de PostgreSQL. Lógica de permisos simplificada: todos los staff usan contraseña, clientes reciben invitación por email.
-
-**Archivo:** `app/api/admin/usuarios/create/route.ts`
-
----
-
-### ✅ CORREGIDO: `app/api/admin/usuarios/invite/route.ts` — Lista de roles obsoleta
-
-**Problema:** `validRoles = ["admin", "advisor", "viewer"]` — inconsistente con el enum real de PostgreSQL.
-
-**Solución:** Extendido a `["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin", "client"]`.
-
-**Archivo:** `app/api/admin/usuarios/invite/route.ts`
+| Prioridad | Área | Cambio | Estado |
+|---|---|---|---|
+| P1 | Particulares | Paginación servidor (100/página) + botón "Cargar más"; eliminado límite de 1000 | ✅ Hecho |
+| P1 | Particulares | Extracción de teléfono en Fotocasa además de Idealista (patrones JSON específicos) | ✅ Hecho |
+| P1 | Particulares | Scoring de confianza de teléfonos (HIGH / MEDIUM / LOW-descartado) + validación de teléfono español | ✅ Hecho |
+| P1 | Particulares | Anuncios retirados (`taken_down_at`) visibles vía toggle, con datos completos | ✅ Hecho |
+| P1 | Particulares | Historial de interacciones de contacto: tabla `particulares_contacts` (migración 0033) + componente `ContactLog` | ✅ Hecho (migración pendiente en VPS) |
+| P1 | Particulares | Desglose por portal en el StatCard de total (idealista: N · fotocasa: N) | ✅ Hecho |
+| P1 | Particulares | El cron de scraping ya no descarta `advertiser_type = "unknown"`; solo descarta `"professional"` confirmado | ✅ Hecho |
+| P3 | Seguridad | `/api/admin/particulares` exigía nada → ahora rol staff (401/403) | ✅ Hecho |
+| P3 | Seguridad | `/api/admin/idealista/save-config` → solo admin (owner/admin) | ✅ Hecho |
+| P3 | Seguridad | `/api/admin/idealista/test-connection` → solo admin | ✅ Hecho |
+| P3 | Seguridad | `/api/admin/idealista/publish-info` → advisor o superior | ✅ Hecho |
+| P3 | Seguridad | `/api/admin/calendario/events` → `getCurrentProfile()` + chequeo `STAFF_ROLES` en GET y POST | ✅ Hecho |
+| P4 | UX | Nueva ficha de cliente `/admin/clientes/[id]` | ✅ Hecho |
+| P4 | UX | Tabla de clientes: filtro activo/inactivo + ordenación (nombre/recientes/favoritos/visitas) | ✅ Hecho |
+| P4 | UX | Solicitudes: vista por pestañas + acción de cancelar | ✅ Hecho |
+| P4 | UX | Nuevo `/admin/dashboard` con 4 tarjetas de métricas + feed de actividad (revalida cada 30 s) | ✅ Hecho |
+| P4 | UX | i18n: ~80 cadenas nuevas en ES/EN/FR/DE | ✅ Hecho |
+| P5 | Email | Fix de URL en enlaces de recuperación de contraseña (`NEXT_PUBLIC_PORTAL_URL`) | ✅ Hecho |
+| P5 | Email | Fallback SMTP por variables de entorno cuando `email_config` (BD) está vacía | ✅ Hecho (verificar env en VPS) |
 
 ---
 
-### ✅ CORREGIDO: `app/api/admin/usuarios/[id]/permissions/route.ts` — POST solo permitía owner/admin
+## 3. Detalles Técnicos por Área
 
-**Problema:** La modificación de permisos por usuario estaba restringida a `owner` y `admin`, excluyendo a `agent_admin` que debería tener esa capacidad.
+### 3.1 Prioridad 1 — Módulo de Particulares
 
-**Solución:**
-```typescript
-// ANTES
-if (callerRole !== "admin" && callerRole !== "owner") { ... }
+#### Paginación sin tope de 1000 registros
+- **Problema:** la vista de particulares cargaba como máximo 1000 filas (límite por defecto de PostgREST/Supabase), ocultando registros antiguos sin aviso.
+- **Solución:** paginación por offset en el servidor a través del nuevo endpoint `GET /api/admin/particulares/paginated`, con páginas de **100 registros** y botón **"Cargar más"** en el cliente. El total real se obtiene con count exacto, no con el tamaño del array.
 
-// DESPUÉS
-if (!["owner", "admin", "agent_admin"].includes(callerRole)) { ... }
-```
+#### Extracción de teléfonos: Idealista + Fotocasa
+- **Problema:** la extracción de teléfono solo funcionaba para Idealista; los anuncios de Fotocasa quedaban sin teléfono.
+- **Solución:**
+  - Los extractores de ambos portales (`lib/sync/import-by-link/extractors/idealista.ts` y `fotocasa.ts`) ahora invocan `detectAdvertiserFromHtml` del detector compartido.
+  - Se añadieron patrones JSON específicos de Fotocasa: claves `"userPhone"`, `"mobilePhone"` y el atributo `data-ga-phone`, entre otros.
+- **Scoring de confianza:**
 
-**Archivo:** `app/api/admin/usuarios/[id]/permissions/route.ts`
+  | Nivel | Fuente | Acción |
+  |---|---|---|
+  | HIGH | Atributos de datos / JSON embebido del portal | Se guarda |
+  | MEDIUM | Enlaces `tel:` | Se guarda |
+  | LOW | Texto suelto / heurísticas débiles | **Se descarta** |
 
----
+- **Validación:** todo teléfono debe cumplir el patrón español `^(\+34)?[6789]\d{8}$` antes de persistirse.
 
-### ✅ CORREGIDO: `lib/db/queries/dashboard.ts` — Propiedades enlazadas por `id` en lugar de `slug`
+#### Anuncios retirados
+- Los particulares con `taken_down_at` ya no desaparecen: un toggle en la UI permite mostrarlos/ocultarlos, conservando todos sus datos (precio histórico, teléfono, etc.).
 
-**Problema:** La query del dashboard no incluía `slug` en los campos seleccionados, y el componente de propiedades recientes usaba `prop.id` para construir el enlace `/admin/propiedades/${prop.id}`. Las rutas de propiedades usan `slug`, no `id`, por lo que todos los enlaces del dashboard eran incorrectos (404).
+#### Historial de interacciones de contacto
+- **Nueva tabla:** `particulares_contacts` (migración `supabase/migrations/0033_particulares_contacts.sql`). ⚠️ **Pendiente de aplicar en el VPS.**
+- **UI:** componente `ContactLog` (en `app/(admin)/admin/particulares/particulares-client.tsx`) que registra interacciones de tipo **llamada / whatsapp / email / visita / nota**, con resultado (outcome) y notas libres.
+- **API:** `GET`/registro vía `/api/admin/particulares/contacts`.
 
-**Solución:** Añadido `slug` a la query y corregido el `href` del enlace.
+#### Desglose por portal
+- El StatCard de total muestra en el pie el desglose `idealista: N · fotocasa: N`.
 
-**Archivos:** `lib/db/queries/dashboard.ts`, `app/(admin)/admin/page.tsx`
+#### Cron de scraping — anunciantes "unknown"
+- **Problema:** el cron descartaba todo anuncio con `advertiser_type = "unknown"`. Fotocasa con frecuencia no expone el flag de profesional, así que se perdían particulares legítimos.
+- **Solución:** solo se descartan anuncios con `"professional"` **confirmado**; los `"unknown"` se conservan.
 
----
+### 3.2 Prioridad 3 — Seguridad de endpoints
 
-### ✅ CORREGIDO: `app/(admin)/layout.tsx` — ROLE_KEY_MAP incompleto
+| Endpoint | Antes | Ahora |
+|---|---|---|
+| `/api/admin/particulares` | **Completamente abierto** (sin auth) | Chequeo de rol staff; responde 401 sin sesión y 403 sin rol |
+| `/api/admin/idealista/save-config` | Sin restricción de rol adecuada | Solo admin (`owner`/`admin`) |
+| `/api/admin/idealista/test-connection` | Sin restricción de rol adecuada | Solo admin |
+| `/api/admin/idealista/publish-info` | Sin restricción de rol adecuada | Advisor o superior |
+| `/api/admin/calendario/events` | `auth.getUser()` pelado (cualquier usuario autenticado, incluso clientes) | `getCurrentProfile()` + chequeo `STAFF_ROLES` en GET y POST |
 
-**Problema:** El mapa de traducciones del rol en el sidebar solo tenía `admin` y `advisor`. Todos los demás roles mostraban "Administrador" en la UI.
+### 3.3 Prioridad 4 — UX del panel admin
 
-**Solución:** Añadidos todos los roles:
-```typescript
-const ROLE_KEY_MAP: Record<string, string> = {
-  owner: "admin.role.owner",
-  admin: "admin.role",
-  advisor: "admin.role.advisor",
-  agent_admin: "admin.role.agent_admin",
-  agent_senior: "admin.role.agent_senior",
-  agent_junior: "admin.role.agent_junior",
-};
-```
+- **Ficha de cliente** `/admin/clientes/[id]`: datos de contacto, actividad, favoritos, historial de visitas, preferencias y notas internas.
+- **Tabla de clientes:** filtro activo/inactivo y ordenación por nombre, actividad reciente, favoritos o visitas.
+- **Solicitudes:** vista por pestañas (pendientes / confirmadas / completadas / canceladas) y nueva acción de **cancelar** solicitud.
+- **Dashboard** `/admin/dashboard`:
+  - 4 tarjetas: anuncios activos, nuevos en 7 días (con tendencia), total de clientes, solicitudes pendientes.
+  - Feed de actividad reciente.
+  - Revalidación cada **30 segundos**.
+- **i18n:** ~80 cadenas nuevas en español, inglés, francés y alemán (`lib/i18n/dictionary.ts`).
 
-**Archivo:** `app/(admin)/layout.tsx`
+### 3.4 Prioridad 5 — Recuperación de contraseña por email
 
----
-
-### ✅ CORREGIDO: `lib/i18n/dictionary.ts` — Traducciones de roles faltantes
-
-**Problema:** Las claves de traducción `admin.role.owner`, `admin.role.advisor`, `admin.role.agent_*`, `admin.nav.diagnostico`, `admin.nav.calendario` e `admin.nav.idealista` (FR/DE) no existían en ninguno de los 4 idiomas.
-
-**Solución:** Añadidas en los 4 idiomas (es/en/fr/de):
-- `admin.role.owner` → "Propietario" / "Owner" / "Propriétaire" / "Inhaber"
-- `admin.role.advisor` → "Asesor" / "Advisor" / "Conseiller" / "Berater"
-- `admin.role.agent_admin` → "Agente Admin" / "Agent Admin" / "Agent Admin" / "Agent Admin"
-- `admin.role.agent_senior` → "Agente Senior" / "Senior Agent" / "Agent Senior" / "Senior Agent"
-- `admin.role.agent_junior` → "Agente Junior" / "Junior Agent" / "Agent Junior" / "Junior Agent"
-- `admin.nav.diagnostico` → "Diagnóstico" / "Diagnostics" / "Diagnostic" / "Diagnose"
-- `admin.nav.calendario` → "Calendario" / "Calendar" / "Calendrier" / "Kalender"
-- `admin.nav.idealista` → "Idealista" (FR y DE faltaban)
-
-**Archivo:** `lib/i18n/dictionary.ts`
-
----
-
-### ✅ CORREGIDO: `components/admin-sidebar.tsx` — Calendario y Diagnóstico faltaban en el nav
-
-**Problema:** Los ítems de navegación para `/admin/calendario` y `/admin/diagnostico` no existían en el sidebar. Los usuarios no podían acceder a estas páginas desde la navegación principal.
-
-**Solución:** Añadidos los ítems con sus iconos (`Calendar`, `Stethoscope`) y soporte de badges para visitas pendientes (Calendario) y mensajes no leídos (Mensajes).
-
-**Archivo:** `components/admin-sidebar.tsx`
+- **Causa raíz:** `NEXT_PUBLIC_APP_URL` no estaba definida en producción, por lo que los enlaces de reseteo se generaban contra `localhost:3137`.
+- **Fix:** la ruta `app/api/auth/forgot-password/route.ts` ahora usa **`NEXT_PUBLIC_PORTAL_URL`** (`https://portal.bcousinoprop.com`) como primera opción para construir el enlace.
+- **Fallback SMTP:** `lib/email/send-email.ts` ahora cae a variables de entorno cuando la tabla `email_config` de la BD está vacía: `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `FROM_EMAIL`.
+- **SMTP configurado:** `c1362346.ferozo.com`, puerto `465` con SSL. Las credenciales están en `.env.local` (gitignored) — **no se incluyen en este documento por seguridad**.
 
 ---
 
-## Prioridad 3 — Flujos incompletos
+## 4. Archivos Clave Modificados / Creados
 
-### ✅ CORREGIDO: Páginas de autenticación en inglés
+### Particulares (P1)
+- `app/api/admin/particulares/paginated/route.ts` — **nuevo**, paginación servidor (100/página)
+- `app/api/admin/particulares/contacts/route.ts` — **nuevo**, historial de contactos
+- `app/api/admin/particulares/route.ts` — guard de staff añadido (también P3)
+- `app/(admin)/admin/particulares/particulares-client.tsx` — botón "Cargar más", toggle de retirados, componente `ContactLog`, desglose por portal
+- `lib/sync/import-by-link/extractors/fotocasa.ts` — extracción de teléfono (patrones `userPhone`, `mobilePhone`, `data-ga-phone`)
+- `lib/sync/import-by-link/extractors/idealista.ts` — usa el detector compartido
+- `lib/sync/particulares/idealista-advertiser-detector.ts` — scoring de confianza, validación de teléfono español, manejo de `unknown`
+- `supabase/migrations/0033_particulares_contacts.sql` — **nueva migración** (pendiente en VPS)
 
-**Problema:** `app/auth/forgot-password/page.tsx` y `app/auth/reset-password/reset-password-form.tsx` estaban completamente en inglés (mensajes, etiquetas, validaciones).
+### Seguridad (P3)
+- `app/api/admin/idealista/save-config/route.ts`
+- `app/api/admin/idealista/test-connection/route.ts`
+- `app/api/admin/idealista/publish-info/route.ts`
+- `app/api/admin/calendario/events/route.ts`
 
-**Solución:** Reescritas completamente en español, manteniendo el diseño del sistema (font-serif, paleta cream/ink/gold, rounded-2xl).
+### UX (P4)
+- `app/(admin)/admin/clientes/[id]/page.tsx` y `app/(admin)/admin/clientes/[id]/client-ficha-view.tsx` — **nueva ficha de cliente**
+- `app/(admin)/admin/clientes/clientes-admin-client.tsx` — filtros y ordenación
+- `app/(admin)/admin/solicitudes/solicitudes-admin-client.tsx` — pestañas + cancelar
+- `app/(admin)/admin/dashboard/page.tsx` y `app/(admin)/admin/dashboard/dashboard-activity.tsx` — **nuevo dashboard**
+- `lib/i18n/dictionary.ts` — ~80 cadenas nuevas ES/EN/FR/DE
 
-**Archivos:** `app/auth/forgot-password/page.tsx`, `app/auth/reset-password/reset-password-form.tsx`
-
----
-
-### ✅ VERIFICADO: Reportes migrados a datos reales
-
-La página de reportes (`/admin/reportes`) usa datos reales de la BD a través de `lib/db/queries/reports.ts`. Propiedades totales, clientes, visitas del mes, SmartLink opens, distribución por zona y por operación.
-
----
-
-### ⚠️ PENDIENTE: Configuración usa mock como estado inicial
-
-**Archivo:** `app/(admin)/admin/configuracion/page.tsx` (línea 24)
-
-```typescript
-const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
-```
-
-**Impacto:** Baja. Los valores reales de la BD se cargan via `GET /api/admin/settings` en el `useEffect` y reemplazan el estado mock. El usuario ve brevemente los valores mock hasta que carga la BD. No hay riesgo de escritura accidental.
-
-**Recomendación futura:** Pasar los settings como prop desde el Server Component para eliminar el flash de datos mock.
-
----
-
-### ⚠️ PENDIENTE: Agencias muestra datos mock
-
-**Archivos:** `lib/mock-agencies.ts`, `app/(admin)/admin/agencias/page.tsx`
-
-La función `getAgenciesStats()` importada de `lib/mock-agencies` calcula estadísticas a partir de los datos reales de agencias (pasados como parámetro), no devuelve datos hardcodeados. Sin embargo, el archivo `lib/mock-agencies.ts` aún contiene el array `mockAgencies` con agencias ficticias que no se usan en la página principal (pero sí alimentan `lib/mock-agency-details.ts` para el detalle de agencia).
-
-**Impacto:** La página de listado de agencias (`/admin/agencias`) usa datos reales de la BD. El detalle de agencia (`/admin/agencias/[id]`) puede mezclar datos reales con mock para algunos campos como contactos y condiciones.
+### Email (P5)
+- `app/api/auth/forgot-password/route.ts` — usa `NEXT_PUBLIC_PORTAL_URL`
+- `lib/email/send-email.ts` — fallback SMTP por variables de entorno
 
 ---
 
-## Prioridad 4 — UX/UI, responsividad, calidad de código
+## 5. Recordatorio de Infraestructura (NO cambiar el rumbo)
 
-### ✅ Sidebar mobile responsive
-
-El sidebar tiene hamburger menu para mobile con overlay oscuro y animación de slide-in. Funciona en pantallas pequeñas.
-
-### ✅ Sidebar respeta permisos
-
-El sidebar filtra ítems de nav según el rol del usuario a través de `canAccess(role, resource, "view")`.
-
-### ✅ Badges de notificación en sidebar
-
-- Visitas pendientes con badge dorado en el ítem de Calendario
-- Mensajes no leídos con badge rojo en el ítem de Mensajes
-
-### ✅ Toast global
-
-Sistema de notificaciones toast global en `components/ui/toast.tsx`.
-
-### ✅ EmptyState y Skeleton
-
-Componentes de UI genéricos para estados vacíos y loading skeletons.
+- Todo corre en el **VPS Hetzner propio**. **No** hay Supabase Cloud ni Vercel.
+- PostgreSQL vive en el contenedor Docker **`supabase-db`** del VPS; GoTrue self-hosted.
+- `SUPABASE_SERVICE_ROLE_KEY` y `NEXT_PUBLIC_SUPABASE_URL` apuntan al VPS.
+- Servidor Next.js gestionado con **PM2**.
+- Deploy automático: push a `main` → cron del VPS (cada ~5 min) ejecuta `git pull && npm run build && pm2 restart`.
 
 ---
 
-## Seguridad — Revisión de APIs
+## 6. ⚠️ Pendiente de Deploy — Checklist
 
-### Endpoints auditados
+Estos pasos deben ejecutarse **en el VPS** (no hay acceso SSH desde este entorno):
 
-| Endpoint | Auth | Rol requerido | Estado |
-|----------|------|---------------|--------|
-| `POST /api/admin/usuarios/create` | ✅ `getCurrentProfile` | owner/admin/agent_admin/advisor/agent_* | ✅ OK |
-| `POST /api/admin/usuarios/invite` | ✅ `getCurrentProfile` | implícito por rol | ✅ OK |
-| `GET /api/admin/usuarios/[id]/permissions` | ✅ `getCurrentProfile` | owner/admin/agent_admin o self | ✅ OK |
-| `POST /api/admin/usuarios/[id]/permissions` | ✅ `getCurrentProfile` | owner/admin/agent_admin | ✅ OK |
-| `GET /api/admin/settings` | ❌ Sin auth | — | ⚠️ Expone config |
-| `POST /api/admin/settings` | ✅ `getCurrentProfile` | owner/admin | ✅ OK |
-| `POST /api/admin/debug/users` | ✅ `getCurrentProfile` | owner/admin | ✅ OK |
-| `GET /api/admin/search/property` | Requiere verificar | — | ⚠️ Revisar |
-| `GET /api/admin/calendario/events` | Requiere verificar | — | ⚠️ Revisar |
-
-### ⚠️ `GET /api/admin/settings` sin autenticación
-
-**Problema:** El endpoint GET de settings no verifica autenticación, exponiendo la configuración de la empresa (nombre, NIF, email, colores) a cualquier visitante sin sesión.
-
-**Recomendación:**
-```typescript
-// Añadir al inicio del GET handler:
-const profile = await getCurrentProfile();
-if (!profile || !["owner", "admin"].includes(profile.role)) {
-  return Response.json({ error: "Unauthorized" }, { status: 401 });
-}
-```
+- [ ] **Aplicar la migración `0033_particulares_contacts.sql`** con `psql` dentro del contenedor Docker `supabase-db`. Dos opciones:
+  - Ejecutar `scripts/post-deploy.sh` (aplica migraciones pendientes), o
+  - Usar el botón de migraciones en `/admin/configuracion`.
+- [ ] **Verificar variables de entorno en el `.env` del VPS:**
+  - `SMTP_SERVER` (= `c1362346.ferozo.com`)
+  - `SMTP_PORT` (= `465`)
+  - `SMTP_USER`
+  - `SMTP_PASSWORD`
+  - `FROM_EMAIL`
+  - `EMAIL_ENCRYPTION_KEY`
+  - `NEXT_PUBLIC_PORTAL_URL` (= `https://portal.bcousinoprop.com`)
+- [ ] **Deploy:** hacer push a `main` y esperar al cron del VPS (~5 min) que ejecuta `git pull && npm run build && pm2 restart`.
 
 ---
 
-## Base de Datos — Migraciones
+## 7. Verificación Post-Deploy
 
-### Migraciones aplicadas (según `/supabase/migrations/`)
+Una vez aplicado todo en el VPS, comprobar:
 
-| # | Nombre | Descripción |
-|---|--------|-------------|
-| 0025 | `agent_roles_permissions` | Enum user_role con roles de agente, función is_staff() actualizada |
-| 0026 | `team_chat` | Tablas para chat de equipo (team_channels, team_messages) |
-| 0027 | `calendar_integration` | Tabla visit_events para calendario |
-| 0028 | `team_direct_messages` | Mensajes directos entre staff |
-| 0029 | `user_permission_overrides` | Overrides de permisos por usuario |
-| 0030 | `app_settings` | Tabla app_settings (clave-valor) |
-| 0031 | `team_dm_read_receiver` | Campo read_by_receiver en DMs |
-| 0032 | `fix_staff_rls` | Actualiza is_staff() y is_admin() en PostgreSQL para incluir roles de agente |
-
-### ⚠️ CRÍTICO: Migración 0032 debe aplicarse en producción
-
-**Problema:** Las funciones RLS de PostgreSQL `is_staff()` e `is_admin()` no incluyen los roles de agente si la migración 0032 no ha sido aplicada. Esto significa que aunque el código de Next.js los trate correctamente, las políticas RLS a nivel de base de datos seguirán bloqueando operaciones.
-
-**Verificación:**
-```sql
-SELECT routine_definition 
-FROM information_schema.routines 
-WHERE routine_name = 'is_staff';
-```
-
-La función debe incluir: `'owner', 'admin', 'advisor', 'agent_junior', 'agent_senior', 'agent_admin'`.
-
-**Cómo aplicar:** Panel de configuración → Gestión de migraciones → "Aplicar migraciones pendientes".
+1. **Migración 0033:** abrir un particular en `/admin/particulares` y registrar una interacción (llamada/whatsapp/email/visita/nota). Si la tabla no existe, el `ContactLog` fallará — revisar que la migración se aplicó.
+2. **Paginación:** en `/admin/particulares`, verificar que el total mostrado supera 1000 (si corresponde) y que el botón "Cargar más" trae páginas de 100.
+3. **Teléfonos Fotocasa:** comprobar que nuevos anuncios de Fotocasa capturados por el cron tienen teléfono cuando el portal lo expone.
+4. **Anuncios retirados:** activar el toggle de retirados y confirmar que aparecen registros con `taken_down_at`.
+5. **Seguridad:** sin sesión, `GET /api/admin/particulares` debe devolver **401**; con sesión de cliente (no staff), **403**. Repetir con los endpoints de Idealista y calendario.
+6. **Dashboard:** `/admin/dashboard` muestra las 4 tarjetas con datos reales y el feed de actividad; los números se actualizan en ~30 s.
+7. **Ficha de cliente:** `/admin/clientes/[id]` carga contacto, favoritos, visitas y notas.
+8. **Solicitudes:** las pestañas filtran correctamente y la acción de cancelar mueve la solicitud a "canceladas".
+9. **Recuperación de contraseña:** solicitar reseteo desde el portal y confirmar que:
+   - el email llega (SMTP Ferozo operativo), y
+   - el enlace apunta a `https://portal.bcousinoprop.com/...` (no a `localhost:3137`).
+10. **i18n:** cambiar de idioma (ES/EN/FR/DE) y verificar que las vistas nuevas no muestran claves sin traducir.
 
 ---
 
-## Middleware — Verificado
-
-**Archivo:** `middleware.ts`
-
-El middleware tiene correctamente definido `STAFF_ROLES` con todos los roles:
-```typescript
-const STAFF_ROLES = new Set([
-  "owner", "admin", "advisor",
-  "agent_junior", "agent_senior", "agent_admin",
-]);
-```
-
-Redirige `/admin` → `/login` si no hay sesión, y redirige a `/admin` si staff accede a rutas de cliente. ✅
-
----
-
-## Checklist de Stop Conditions
-
-- [x] TypeScript compila sin errores (`npx tsc --noEmit`)
-- [x] Lint/type-check pasan
-- [x] Flujo de login funcional para todos los roles staff
-- [x] Flujo de creación de usuarios funcional para todos los roles
-- [x] Dashboard muestra datos reales con enlaces correctos
-- [x] Sidebar en español con todos los ítems de navegación
-- [x] Páginas de auth (forgot/reset password) en español
-- [x] Traducciones de roles de agente añadidas (4 idiomas)
-- [x] SMARTBC_AUDIT.md completado
-- [ ] Migración 0032 verificada en producción (requiere acceso al VPS)
-- [ ] `GET /api/admin/settings` protegido con auth (pendiente fix)
-- [ ] Detalle de agencia migrado de mock a BD (trabajo futuro)
-- [ ] Configuración: eliminar flash de mock data (trabajo futuro)
-
----
-
-## Archivos Modificados en Este Audit
-
-```
-lib/db/auth-helpers.ts                          - Roles staff/admin completos
-app/(auth)/actions.ts                           - Redirect post-login para todos los roles staff
-app/api/admin/usuarios/create/route.ts         - validRoles + lógica de permisos
-app/api/admin/usuarios/invite/route.ts         - validRoles actualizado
-app/api/admin/usuarios/[id]/permissions/route.ts - POST permite agent_admin
-lib/db/queries/dashboard.ts                    - Añadido slug a la query
-app/(admin)/admin/page.tsx                     - Enlace propiedad usa slug
-app/(admin)/layout.tsx                         - ROLE_KEY_MAP completo
-components/admin-sidebar.tsx                   - Calendario + Diagnóstico + mobile responsive
-lib/i18n/dictionary.ts                         - Traducciones de roles + nav keys (4 idiomas)
-app/auth/forgot-password/page.tsx              - Reescrita en español
-app/auth/reset-password/reset-password-form.tsx - Reescrita en español
-```
+*Documento generado el 2026-06-10 como cierre de la auditoría CRM de SmartBC.*
