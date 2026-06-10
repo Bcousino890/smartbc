@@ -62,6 +62,10 @@ export type ParticularRow = {
   chat_only: boolean | null;
   latitude: number | null;
   longitude: number | null;
+  // Campos de la migración 0035 — pueden venir undefined/null si aún no está aplicada
+  address?: string | null;
+  phone_confidence?: "high" | "medium" | "low" | null;
+  advertiser_type?: string | null;
   created_at: string | null;
   taken_down_at: string | null;
   is_active: boolean;
@@ -188,6 +192,13 @@ function EditPhoneModal({
       </div>
     </div>
   );
+}
+
+// Texto de búsqueda para el mapa de fallback (sin coordenadas): la dirección
+// exacta es más precisa que la zona. Solo añadimos ", Madrid" si falta.
+function mapFallbackQuery(row: ParticularRow): string {
+  const base = row.address ?? row.zone ?? "";
+  return /madrid/i.test(base) ? base : `${base}, Madrid`;
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -717,12 +728,23 @@ function ParticularModal({
                 ? `${formatPrice(currentRow.price)}${currentRow.operation === "rent" ? "/mes" : ""}`
                 : "Precio no disponible"}
             </p>
-            {currentRow.zone && (
+            {/* Dirección exacta si existe (migración 0035); si no, la zona como antes */}
+            {currentRow.address ? (
+              <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
+                <MapPin size={13} strokeWidth={1.75} className="text-gold" />
+                <span>
+                  {currentRow.address}
+                  {currentRow.zone && currentRow.zone !== currentRow.address && (
+                    <span className="text-ink/40"> · {currentRow.zone}</span>
+                  )}
+                </span>
+              </div>
+            ) : currentRow.zone ? (
               <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
                 <MapPin size={13} strokeWidth={1.75} className="text-gold" />
                 {currentRow.zone}
               </div>
-            )}
+            ) : null}
             <p className="mt-1 text-sm text-ink/50">
               {[
                 currentRow.bedrooms != null ? `${currentRow.bedrooms} hab` : null,
@@ -752,6 +774,18 @@ function ParticularModal({
                 >
                   <Phone size={16} strokeWidth={2} />
                   Llamar · {formatPhone(currentRow.phone!)}
+                  {/* Confianza de la extracción automática del teléfono (migración 0035).
+                      Sin confianza (añadido a mano) no se muestra badge. */}
+                  {currentRow.phone_confidence === "high" && (
+                    <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Verificado
+                    </span>
+                  )}
+                  {currentRow.phone_confidence === "medium" && (
+                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Detectado
+                    </span>
+                  )}
                 </a>
                 <button
                   onClick={() => setShowEditPhone(true)}
@@ -828,8 +862,8 @@ function ParticularModal({
             <ContactLog particularId={currentRow.id} />
           </div>
 
-          {/* Mapa — exacto si hay coords, fallback por zona/dirección */}
-          {(currentRow.latitude && currentRow.longitude) || currentRow.zone ? (
+          {/* Mapa — exacto si hay coords, fallback por dirección (más precisa) o zona */}
+          {(currentRow.latitude && currentRow.longitude) || currentRow.address || currentRow.zone ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Ubicación
@@ -851,14 +885,16 @@ function ParticularModal({
                       width="100%"
                       height="100%"
                       style={{ border: "none" }}
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent((currentRow.zone ?? "") + ", Madrid")}&output=embed&zoom=15`}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(mapFallbackQuery(currentRow))}&output=embed&zoom=15`}
                       allowFullScreen
                       loading="lazy"
                     />
                   </div>
                   <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-[11px] text-ink/50">
                     <MapPin size={11} strokeWidth={1.75} className="text-gold" />
-                    Zona aproximada · {currentRow.zone}
+                    {currentRow.address
+                      ? <>Dirección · {currentRow.address}</>
+                      : <>Zona aproximada · {currentRow.zone}</>}
                   </div>
                 </div>
               )}
@@ -998,6 +1034,8 @@ export function ParticularesClient({
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
   const [gestion, setGestion] = useState<"" | "unmanaged" | "contacted" | "assigned" | "mine">("");
+  // Tipo de anunciante (migración 0035): null/undefined cuenta como "unknown"
+  const [advertiser, setAdvertiser] = useState<"" | "particular" | "professional" | "unknown">("");
   const [showRetired, setShowRetired] = useState(false);
   const [allRows, setAllRows] = useState(rows);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1077,6 +1115,7 @@ export function ParticularesClient({
       if (q) {
         const hay =
           (r.zone?.toLowerCase().includes(q) ?? false) ||
+          (r.address?.toLowerCase().includes(q) ?? false) ||
           (r.description?.toLowerCase().includes(q) ?? false) ||
           r.external_id.toLowerCase().includes(q);
         if (!hay) return false;
@@ -1109,6 +1148,8 @@ export function ParticularesClient({
       if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
       if (gestion === "assigned" && !r.assigned_to) return false;
       if (gestion === "mine" && r.assigned_to !== currentUserId) return false;
+      // Anunciante: sin dato (migración 0035 no aplicada) se trata como "unknown".
+      if (advertiser && (r.advertiser_type ?? "unknown") !== advertiser) return false;
       if (
         last24h &&
         !(r.created_at && new Date(r.created_at).getTime() >= since)
@@ -1117,7 +1158,7 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, gestion, currentUserId, showRetired]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, gestion, advertiser, currentUserId, showRetired]);
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -1225,6 +1266,16 @@ export function ParticularesClient({
             <option value="contacted">Ya contactados</option>
             <option value="assigned">Asignados</option>
             {currentUserId && <option value="mine">Asignados a mí</option>}
+          </select>
+          <select
+            value={advertiser}
+            onChange={(e) => setAdvertiser(e.target.value as typeof advertiser)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Anunciante: todos</option>
+            <option value="particular">Particular</option>
+            <option value="professional">Profesional</option>
+            <option value="unknown">Desconocido</option>
           </select>
           <input
             type="number"
@@ -1442,6 +1493,12 @@ export function ParticularesClient({
                       <MapPin size={12} strokeWidth={1.75} className="text-gold" />
                       <span>{r.zone ?? "Madrid"}</span>
                     </div>
+                    {/* Dirección exacta (si el scraper la trae) — ayuda a ubicar el piso sin abrir el modal */}
+                    {r.address && (
+                      <p className="mt-0.5 truncate text-xs text-ink/50" title={r.address}>
+                        {r.address}
+                      </p>
+                    )}
                     <p className="mt-1 font-serif text-lg font-medium text-ink">
                       {r.price != null
                         ? `${formatPrice(r.price)}${r.operation === "rent" ? "/mes" : ""}`

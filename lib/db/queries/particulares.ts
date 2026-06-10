@@ -4,8 +4,15 @@ import { createAdminClient } from "../admin";
 /**
  * Listado de particulares enriquecido para el panel:
  *  - columnas base del anuncio
- *  - asignación (assigned_to → nombre del asesor)  [migración 0034]
- *  - último contacto registrado (quién/cuándo/cómo) [migración 0033]
+ *  - asignación (assigned_to → nombre del asesor)      [migración 0034]
+ *  - último contacto registrado (quién/cuándo/cómo)    [migración 0033]
+ *  - dirección y confianza del teléfono                [migración 0035]
+ *
+ * La página principal trae SOLO anuncios ACTIVOS paginados (`total` cuenta
+ * únicamente activos, que es lo que usa la paginación "cargar más"). Además,
+ * en cada petición se traen los RETIRADOS (is_active = false, hasta 500,
+ * ordenados por taken_down_at desc) y se devuelven fusionados al final de
+ * `rows`, para que el tab "Retirados" del cliente siempre los reciba.
  *
  * Cada extra degrada con elegancia si su migración aún no está aplicada
  * en el VPS: el listado nunca se rompe.
@@ -28,10 +35,15 @@ export async function getParticularesPage(offset: number, pageSize: number) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
 
-  // Intentos de más completo a más básico según migraciones aplicadas.
+  // Intentos de más completo a más básico según migraciones aplicadas:
+  // 0035 (address, phone_confidence) → 0034 (assigned_*) → 0024
+  // (particular_reference) → 0012 (advertiser_type) → base.
   const attempts = [
-    `${BASE_COLUMNS}, particular_reference, assigned_to, assigned_at`,
-    `${BASE_COLUMNS}, particular_reference`,
+    `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at`,
+    `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference`,
+    `${BASE_COLUMNS}, advertiser_type, particular_reference, assigned_to, assigned_at`,
+    `${BASE_COLUMNS}, advertiser_type, particular_reference`,
+    `${BASE_COLUMNS}, advertiser_type`,
     BASE_COLUMNS,
   ];
 
@@ -40,19 +52,32 @@ export async function getParticularesPage(offset: number, pageSize: number) {
   let total = 0;
   let lastError: { message: string } | null = null;
   for (const cols of attempts) {
+    // Página de ACTIVOS: `total` cuenta solo activos (paginación correcta).
     const res = await supabase
       .from("particulares")
       .select(cols, { count: "exact" })
-      .order("is_active", { ascending: false })
+      .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
-    if (!res.error) {
-      rows = res.data ?? [];
-      total = res.count ?? 0;
-      lastError = null;
-      break;
+    if (res.error) {
+      lastError = res.error;
+      continue;
     }
-    lastError = res.error;
+    rows = res.data ?? [];
+    total = res.count ?? 0;
+    lastError = null;
+
+    // RETIRADOS (mismas columnas): siempre se adjuntan al final para que el
+    // tab "Retirados" del cliente los reciba todos, sin límite.
+    const retired = await supabase
+      .from("particulares")
+      .select(cols)
+      .eq("is_active", false)
+      .order("taken_down_at", { ascending: false, nullsFirst: false });
+    if (!retired.error) {
+      rows = [...rows, ...(retired.data ?? [])];
+    }
+    break;
   }
   if (lastError) throw new Error(lastError.message);
 

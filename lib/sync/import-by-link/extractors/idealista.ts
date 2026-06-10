@@ -134,7 +134,9 @@ function listingToPreview(
 
   const description = listing.description ?? null;
 
-  const zone = listing.municipality ?? listing.district ?? listing.province ?? null;
+  // Zona: lo más específico primero (distrito > municipio > provincia).
+  // Ej.: en Madrid capital queremos "Retiro", no "Madrid".
+  const zone = listing.district ?? listing.municipality ?? listing.province ?? null;
   const addressParts = [listing.address, listing.municipality, listing.province].filter(Boolean);
   const address = addressParts.length ? addressParts.join(", ") : null;
 
