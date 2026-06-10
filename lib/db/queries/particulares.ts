@@ -8,11 +8,11 @@ import { createAdminClient } from "../admin";
  *  - último contacto registrado (quién/cuándo/cómo)    [migración 0033]
  *  - dirección y confianza del teléfono                [migración 0035]
  *
- * La página principal trae SOLO anuncios ACTIVOS paginados (`total` cuenta
- * únicamente activos, que es lo que usa la paginación "cargar más"). Además,
- * en cada petición se traen los RETIRADOS (is_active = false, hasta 500,
- * ordenados por taken_down_at desc) y se devuelven fusionados al final de
- * `rows`, para que el tab "Retirados" del cliente siempre los reciba.
+ * Trae TODOS los anuncios sin límite: primero los ACTIVOS (created_at desc)
+ * y a continuación los RETIRADOS (is_active = false, taken_down_at desc),
+ * fusionados en `rows`. Se pagina internamente por lotes de 1000 contra
+ * PostgREST, pero el llamador recibe el conjunto completo. `total` = nº de
+ * activos (lo usan las stats del panel).
  *
  * Cada extra degrada con elegancia si su migración aún no está aplicada
  * en el VPS: el listado nunca se rompe.
@@ -31,7 +31,28 @@ export type EnrichedParticularRow = Record<string, unknown> & {
   contact_count: number;
 };
 
-export async function getParticularesPage(offset: number, pageSize: number) {
+// Trae TODAS las filas de una consulta paginando por lotes de 1000 (PostgREST
+// limita las filas por request; con .range() iteramos hasta agotar).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAllRows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  buildQuery: (from: number, to: number) => any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ rows: any[]; error: { message: string } | null }> {
+  const BATCH = 1000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all: any[] = [];
+  for (let from = 0; ; from += BATCH) {
+    const res = await buildQuery(from, from + BATCH - 1);
+    if (res.error) return { rows: all, error: res.error };
+    const batch = res.data ?? [];
+    all.push(...batch);
+    if (batch.length < BATCH) break;
+  }
+  return { rows: all, error: null };
+}
+
+export async function getParticularesPage(_offset?: number, _pageSize?: number) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
 
@@ -52,30 +73,36 @@ export async function getParticularesPage(offset: number, pageSize: number) {
   let total = 0;
   let lastError: { message: string } | null = null;
   for (const cols of attempts) {
-    // Página de ACTIVOS: `total` cuenta solo activos (paginación correcta).
-    const res = await supabase
-      .from("particulares")
-      .select(cols, { count: "exact" })
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-    if (res.error) {
-      lastError = res.error;
+    // ACTIVOS: todos, sin límite (por lotes de 1000 para sortear el tope
+    // de filas por request de PostgREST).
+    const actives = await fetchAllRows((from, to) =>
+      supabase
+        .from("particulares")
+        .select(cols)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .range(from, to),
+    );
+    if (actives.error) {
+      lastError = actives.error;
       continue;
     }
-    rows = res.data ?? [];
-    total = res.count ?? 0;
+    rows = actives.rows;
+    total = actives.rows.length;
     lastError = null;
 
-    // RETIRADOS (mismas columnas): siempre se adjuntan al final para que el
-    // tab "Retirados" del cliente los reciba todos, sin límite.
-    const retired = await supabase
-      .from("particulares")
-      .select(cols)
-      .eq("is_active", false)
-      .order("taken_down_at", { ascending: false, nullsFirst: false });
+    // RETIRADOS (mismas columnas): también todos, sin límite, para que el
+    // tab "Retirados" del cliente muestre todo lo que hay en la BD.
+    const retired = await fetchAllRows((from, to) =>
+      supabase
+        .from("particulares")
+        .select(cols)
+        .eq("is_active", false)
+        .order("taken_down_at", { ascending: false, nullsFirst: false })
+        .range(from, to),
+    );
     if (!retired.error) {
-      rows = [...rows, ...(retired.data ?? [])];
+      rows = [...rows, ...retired.rows];
     }
     break;
   }

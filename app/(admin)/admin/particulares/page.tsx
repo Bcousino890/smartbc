@@ -17,16 +17,18 @@ export default async function AdminParticularesPage({
   searchParams: Promise<{ offset?: string }>;
 }) {
   const currentProfile = await getCurrentProfile();
-  const offset = Math.max(0, Number((await searchParams).offset) || 0);
+  await searchParams; // offset ya no se usa: se cargan TODOS los anuncios.
   const pageSize = 100;
+  const offset = 0;
 
   const [{ rows: enrichedRows, total }, staffOptions] = await Promise.all([
-    getParticularesPage(offset, pageSize),
+    getParticularesPage(),
     getStaffOptions().catch(() => []),
   ]);
 
   const rows = enrichedRows as unknown as ParticularRow[];
-  const hasMore = offset + pageSize < total;
+  // Sin paginación: el servidor ya devuelve activos + retirados completos.
+  const hasMore = false;
 
   // Las stats de cabecera se calculan solo sobre ACTIVOS: `rows` incluye
   // los retirados al final (para el tab "Retirados") y no deben inflarlas.
