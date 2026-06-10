@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
 
 export type UpdatePhoneResult =
   | { ok: true }
@@ -20,10 +21,20 @@ export async function updateParticularPhone(
 
   if (!particularId) return { ok: false, error: "id_required" };
 
+  // Normalizar SIEMPRE al formato canónico +34XXXXXXXXX. Si el asesor
+  // escribió algo que no es un teléfono español válido, rechazamos en vez
+  // de guardar basura. Vacío/null = borrar el teléfono (permitido).
+  const trimmed = phone?.trim() ?? "";
+  let normalized: string | null = null;
+  if (trimmed.length > 0) {
+    normalized = normalizeSpanishPhone(trimmed);
+    if (!normalized) return { ok: false, error: "invalid_phone" };
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("particulares")
-    .update({ phone, updated_at: new Date().toISOString() })
+    .update({ phone: normalized, updated_at: new Date().toISOString() })
     .eq("id", particularId);
 
   if (error) return { ok: false, error: error.message };

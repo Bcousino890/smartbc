@@ -152,6 +152,59 @@ export async function getStaff() {
   }
 }
 
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export async function getAllProfiles(): Promise<ProfileRow[]> {
+  // PostgREST limita las filas por request (tope típico: 1000), así que una
+  // sola query truncaría silenciosamente con muchos usuarios. Paginamos con
+  // .range() hasta agotar.
+  const PAGE_SIZE = 1000;
+
+  const fetchAll = async (
+    client:
+      | ReturnType<typeof createAdminClient>
+      | Awaited<ReturnType<typeof createClient>>,
+  ): Promise<ProfileRow[]> => {
+    const rows: ProfileRow[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await client
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      const batch = (data ?? []) as unknown as ProfileRow[];
+      rows.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
+    }
+    return rows;
+  };
+
+  // Admin client (service role) y SIN filtro de rol: cualquier perfil con un
+  // rol fuera de las listas cerradas de getStaff/getClients (viewer, roles
+  // nuevos del enum, valores inesperados…) también debe aparecer. Igual que
+  // en getStaff, el admin client evita que una RLS que no reconozca el rol
+  // del usuario logueado oculte filas sin dar error.
+  try {
+    const admin = createAdminClient();
+    return await fetchAll(admin);
+  } catch (e) {
+    console.error(
+      "getAllProfiles admin query failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
+  // Último recurso: cliente de sesión (por si falta SUPABASE_SERVICE_ROLE_KEY).
+  try {
+    const sessionClient = await createClient();
+    return await fetchAll(sessionClient);
+  } catch (e) {
+    console.error("getAllProfiles all attempts failed:", e);
+    return [];
+  }
+}
+
 export async function getClientStats() {
   const supabase = await createClient();
   const [total, withTags, visits] = await Promise.all([
