@@ -68,13 +68,12 @@ export async function getParticularesPage(offset: number, pageSize: number) {
     lastError = null;
 
     // RETIRADOS (mismas columnas): siempre se adjuntan al final para que el
-    // tab "Retirados" del cliente los reciba aunque haya cientos de activos.
+    // tab "Retirados" del cliente los reciba todos, sin límite.
     const retired = await supabase
       .from("particulares")
       .select(cols)
       .eq("is_active", false)
-      .order("taken_down_at", { ascending: false, nullsFirst: false })
-      .limit(500);
+      .order("taken_down_at", { ascending: false, nullsFirst: false });
     if (!retired.error) {
       rows = [...rows, ...(retired.data ?? [])];
     }
