@@ -62,6 +62,7 @@ export function PropertiesAdminClient({
   const [stayFilter, setStayFilter] = useState<"" | "larga" | "corta">("");
   const [bedroomsFilter, setBedroomsFilter] = useState<string>("");
   const [bathroomsFilter, setBathroomsFilter] = useState<string>("");
+  const [floorFilter, setFloorFilter] = useState<string>("");
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [minM2, setMinM2] = useState<string>("");
@@ -151,6 +152,10 @@ export function PropertiesAdminClient({
         }
       }
       if (bathroomsFilter && p.bathrooms < Number(bathroomsFilter)) return false;
+      // Planta mínima: sin dato de planta no se puede garantizar el mínimo
+      // que exige el cliente, así que esos anuncios quedan fuera.
+      if (floorFilter && (p.floor == null || p.floor < Number(floorFilter)))
+        return false;
       if (minPrice && p.price < Number(minPrice)) return false;
       if (maxPrice && p.price > Number(maxPrice)) return false;
       if (minM2 && p.squareMeters < Number(minM2)) return false;
@@ -168,6 +173,7 @@ export function PropertiesAdminClient({
     stayFilter,
     bedroomsFilter,
     bathroomsFilter,
+    floorFilter,
     minPrice,
     maxPrice,
     minM2,
@@ -193,6 +199,7 @@ export function PropertiesAdminClient({
     stayFilter,
     bedroomsFilter,
     bathroomsFilter,
+    floorFilter,
     minPrice,
     maxPrice,
     minM2,
@@ -208,6 +215,7 @@ export function PropertiesAdminClient({
       stayFilter ||
       bedroomsFilter ||
       bathroomsFilter ||
+      floorFilter ||
       minPrice ||
       maxPrice ||
       minM2 ||
@@ -225,6 +233,7 @@ export function PropertiesAdminClient({
     setStayFilter("");
     setBedroomsFilter("");
     setBathroomsFilter("");
+    setFloorFilter("");
     setMinPrice("");
     setMaxPrice("");
     setMinM2("");
@@ -472,6 +481,20 @@ export function PropertiesAdminClient({
             { value: "1", label: "1+" },
             { value: "2", label: "2+" },
             { value: "3", label: "3+" },
+          ]}
+        />
+        <FilterSelect
+          label="Planta"
+          value={floorFilter}
+          onChange={setFloorFilter}
+          options={[
+            { value: "", label: "Todas" },
+            { value: "1", label: "1ª o más" },
+            { value: "2", label: "2ª o más" },
+            { value: "3", label: "3ª o más" },
+            { value: "4", label: "4ª o más" },
+            { value: "5", label: "5ª o más" },
+            { value: "6", label: "6ª o más" },
           ]}
         />
         <PriceRange

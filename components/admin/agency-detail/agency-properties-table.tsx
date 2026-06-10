@@ -24,6 +24,7 @@ export function AgencyPropertiesTable({
   const [zoneFilter, setZoneFilter] = useState<string>("");
   const [bedroomsFilter, setBedroomsFilter] = useState<string>("");
   const [bathroomsFilter, setBathroomsFilter] = useState<string>("");
+  const [floorFilter, setFloorFilter] = useState<string>("");
   const [minM2, setMinM2] = useState<string>("");
   const [maxM2, setMaxM2] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -40,6 +41,7 @@ export function AgencyPropertiesTable({
       zoneFilter ||
       bedroomsFilter ||
       bathroomsFilter ||
+      floorFilter ||
       minM2 ||
       maxM2 ||
       query,
@@ -52,6 +54,7 @@ export function AgencyPropertiesTable({
     setZoneFilter("");
     setBedroomsFilter("");
     setBathroomsFilter("");
+    setFloorFilter("");
     setMinM2("");
     setMaxM2("");
   };
@@ -80,6 +83,10 @@ export function AgencyPropertiesTable({
         }
       }
       if (bathroomsFilter && p.bathrooms < Number(bathroomsFilter)) return false;
+      // Planta mínima: sin dato de planta no se puede garantizar el mínimo
+      // que exige el cliente, así que esos anuncios quedan fuera.
+      if (floorFilter && (p.floor == null || p.floor < Number(floorFilter)))
+        return false;
       if (minM2 && p.squareMeters && p.squareMeters < Number(minM2)) return false;
       if (maxM2 && p.squareMeters && p.squareMeters > Number(maxM2)) return false;
       return true;
@@ -92,6 +99,7 @@ export function AgencyPropertiesTable({
     zoneFilter,
     bedroomsFilter,
     bathroomsFilter,
+    floorFilter,
     minM2,
     maxM2,
   ]);
@@ -244,6 +252,20 @@ export function AgencyPropertiesTable({
               { value: "1", label: "1+" },
               { value: "2", label: "2+" },
               { value: "3", label: "3+" },
+            ]}
+          />
+          <FilterSelect
+            label="Planta"
+            value={floorFilter}
+            onChange={setFloorFilter}
+            options={[
+              { value: "", label: "Todas" },
+              { value: "1", label: "1ª o más" },
+              { value: "2", label: "2ª o más" },
+              { value: "3", label: "3ª o más" },
+              { value: "4", label: "4ª o más" },
+              { value: "5", label: "5ª o más" },
+              { value: "6", label: "6ª o más" },
             ]}
           />
           <RangeChip

@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/ui/toast";
+import { extractFloor } from "@/lib/floor";
 import { formatPrice } from "@/lib/format";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { canAccess } from "@/lib/permissions";
@@ -992,6 +993,7 @@ export function ParticularesClient({
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [bedrooms, setBedrooms] = useState("");
+  const [floorMin, setFloorMin] = useState("");
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
@@ -1033,6 +1035,16 @@ export function ParticularesClient({
   const activeCount = useMemo(() => allRows.filter((r) => r.is_active).length, [allRows]);
   const retiredCount = allRows.length - activeCount;
 
+  // Planta por anuncio, deducida de features/descripción (lib/floor.ts).
+  // Memoizada para no re-parsear los textos en cada cambio de filtro.
+  const floorById = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const r of allRows) {
+      map.set(r.id, extractFloor(r.features, r.description));
+    }
+    return map;
+  }, [allRows]);
+
   async function handleLoadMore() {
     setLoadingMore(true);
     try {
@@ -1056,6 +1068,7 @@ export function ParticularesClient({
     const pMin = priceMin ? Number(priceMin) : null;
     const pMax = priceMax ? Number(priceMax) : null;
     const bMin = bedrooms ? Number(bedrooms) : null;
+    const fMin = floorMin ? Number(floorMin) : null;
     const aMin = areaMin ? Number(areaMin) : null;
     const since = Date.now() - 24 * 60 * 60 * 1000;
     return allRows.filter((r) => {
@@ -1083,6 +1096,12 @@ export function ParticularesClient({
       if (pMin != null && (r.price ?? 0) < pMin) return false;
       if (pMax != null && (r.price ?? Infinity) > pMax) return false;
       if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
+      // Planta mínima: sin dato de planta no se puede garantizar el mínimo
+      // que exige el cliente, así que esos anuncios quedan fuera.
+      if (fMin != null) {
+        const fl = floorById.get(r.id);
+        if (fl == null || fl < fMin) return false;
+      }
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
       if (onlyNoPhone && r.phone) return false;
       // Gestión: evita doble trabajo — quién contactó / quién lo tiene asignado.
@@ -1098,7 +1117,7 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone, gestion, currentUserId, showRetired]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, gestion, currentUserId, showRetired]);
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -1233,6 +1252,19 @@ export function ParticularesClient({
             <option value="2">2+</option>
             <option value="3">3+</option>
             <option value="4">4+</option>
+          </select>
+          <select
+            value={floorMin}
+            onChange={(e) => setFloorMin(e.target.value)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Planta: todas</option>
+            <option value="1">1ª o más</option>
+            <option value="2">2ª o más</option>
+            <option value="3">3ª o más</option>
+            <option value="4">4ª o más</option>
+            <option value="5">5ª o más</option>
+            <option value="6">6ª o más</option>
           </select>
           <input
             type="number"
