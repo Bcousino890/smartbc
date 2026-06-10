@@ -3,6 +3,8 @@
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Copy,
   ExternalLink,
@@ -10,6 +12,7 @@ import {
   MapPin,
   MessageSquare,
   Phone,
+  PhoneOff,
   Plus,
   RefreshCw,
   Search,
@@ -17,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { extractFloor } from "@/lib/floor";
@@ -1048,6 +1052,9 @@ async function copyToClipboard(text: string) {
 
 type RefreshState = "idle" | "loading" | "done" | "error";
 
+// Anuncios por página (paginación client-side sobre el listado filtrado).
+const ANUNCIOS_POR_PAGINA = 60;
+
 export function ParticularesClient({
   rows,
   currentRole,
@@ -1087,7 +1094,17 @@ export function ParticularesClient({
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
+  // Verificación de teléfonos contra el portal (endpoint verify-phones).
+  const [verifying, setVerifying] = useState(false);
+  // Página actual de la paginación client-side (1-based).
+  const [page, setPage] = useState(1);
   const { toast } = useToast();
+  const router = useRouter();
+
+  // Sincronizar con los datos frescos del servidor tras router.refresh().
+  useEffect(() => {
+    setAllRows(rows);
+  }, [rows]);
 
   // Zonas agrupadas por distrito canónico de Madrid. El scraper mezcla
   // distritos y barrios en un solo campo `zone`; aquí lo ordenamos:
@@ -1203,6 +1220,54 @@ export function ParticularesClient({
       return true;
     });
   }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, gestion, advertiser, currentUserId, showRetired]);
+
+  // Al cambiar cualquier filtro o el tab Activos/Retirados, volver a la página 1.
+  useEffect(() => {
+    setPage(1);
+  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, onlyNoPhone, gestion, advertiser, showRetired]);
+
+  // Paginación client-side: el filtrado ya tiene todas las filas, aquí solo
+  // troceamos la página visible. `currentPage` se acota por si el filtrado
+  // reduce el total y la página guardada queda fuera de rango.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ANUNCIOS_POR_PAGINA));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () =>
+      filtered.slice(
+        (currentPage - 1) * ANUNCIOS_POR_PAGINA,
+        currentPage * ANUNCIOS_POR_PAGINA,
+      ),
+    [filtered, currentPage],
+  );
+  const showingFrom = filtered.length === 0 ? 0 : (currentPage - 1) * ANUNCIOS_POR_PAGINA + 1;
+  const showingTo = Math.min(currentPage * ANUNCIOS_POR_PAGINA, filtered.length);
+
+  // Verificar teléfonos contra el portal: revisa hasta 30 anuncios y
+  // actualiza teléfono / chat_only según lo que devuelva el endpoint.
+  async function handleVerifyPhones() {
+    setVerifying(true);
+    try {
+      const res = await fetch(
+        "/api/admin/particulares/verify-phones?mode=all&limit=30",
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        toast(
+          `Verificados ${data.checked} anuncios · ${data.withPhone} con teléfono · ${data.updated} actualizados`,
+          "success",
+        );
+        // Recargar los datos del servidor para reflejar los cambios.
+        router.refresh();
+      } else {
+        toast("No se pudieron verificar los teléfonos. Inténtalo de nuevo.", "error");
+      }
+    } catch {
+      toast("No se pudieron verificar los teléfonos (network_error). Inténtalo de nuevo.", "error");
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -1425,6 +1490,23 @@ export function ParticularesClient({
               <><RefreshCw size={13} strokeWidth={1.75} /> Actualizar teléfonos</>
             )}
           </button>
+          <button
+            type="button"
+            onClick={handleVerifyPhones}
+            disabled={verifying}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium transition",
+              verifying
+                ? "border border-emerald-300 bg-emerald-50 text-emerald-700 opacity-80 cursor-wait"
+                : "border border-ink/10 bg-white/85 text-ink/70 hover:border-emerald-300 hover:bg-emerald-50",
+            )}
+          >
+            {verifying ? (
+              <><Loader2 size={13} className="animate-spin" /> Verificando…</>
+            ) : (
+              <><Phone size={13} strokeWidth={1.75} /> Verificar teléfonos</>
+            )}
+          </button>
           <span className="ml-auto text-[11px] text-ink/55">
             {filtered.length} de {allRows.length} anuncios · {allRows.filter(r => r.phone).length} con teléfono
             {total > allRows.length && <> · {total} total</>}
@@ -1471,7 +1553,7 @@ export function ParticularesClient({
         ) : (
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((r) => {
+              {paginated.map((r) => {
               const cover = r.photos?.[0]?.url;
               return (
                 <button
@@ -1508,8 +1590,9 @@ export function ParticularesClient({
                         </span>
                       </span>
                     )}
-                    {/* Teléfono visible + copiar */}
-                    {r.phone && (
+                    {/* Etiqueta de teléfono: verde con número (copiar al pulsar),
+                        ámbar "Solo chat" o gris "Sin teléfono" */}
+                    {r.phone ? (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1530,14 +1613,22 @@ export function ParticularesClient({
                           <>
                             <Phone size={10} strokeWidth={2} />
                             {formatPhone(r.phone)}
+                            {/* Check pequeño cuando la extracción es de confianza alta */}
+                            {r.phone_confidence === "high" && (
+                              <Check size={10} strokeWidth={2.5} className="text-emerald-200" />
+                            )}
                           </>
                         )}
                       </button>
-                    )}
-                    {!r.phone && (
+                    ) : r.chat_only ? (
                       <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
                         <MessageSquare size={10} strokeWidth={1.75} />
                         Solo chat
+                      </span>
+                    ) : (
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-ink/55 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        <PhoneOff size={10} strokeWidth={1.75} />
+                        Sin teléfono
                       </span>
                     )}
                   </div>
@@ -1632,6 +1723,37 @@ export function ParticularesClient({
                 </button>
               );
             })}
+            </div>
+
+            {/* Paginación client-side: todos los anuncios están cargados,
+                solo se trocea la vista en páginas de 60 */}
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="flex items-center gap-1.5 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-gold/60 hover:bg-gold/5 disabled:opacity-40 disabled:hover:border-gold/30 disabled:hover:bg-white"
+                >
+                  <ChevronLeft size={14} strokeWidth={2} />
+                  Anterior
+                </button>
+                <span className="text-sm font-medium text-ink/70">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="flex items-center gap-1.5 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-gold/60 hover:bg-gold/5 disabled:opacity-40 disabled:hover:border-gold/30 disabled:hover:bg-white"
+                >
+                  Siguiente
+                  <ChevronRight size={14} strokeWidth={2} />
+                </button>
+              </div>
+              <p className="text-[11px] text-ink/50">
+                Mostrando {showingFrom}–{showingTo} de {filtered.length} anuncios
+              </p>
             </div>
 
             {hasMore && (
