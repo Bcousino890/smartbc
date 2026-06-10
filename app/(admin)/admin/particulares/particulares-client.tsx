@@ -681,6 +681,7 @@ export function ParticularesClient({
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
+  const [showRetired, setShowRetired] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
@@ -722,9 +723,11 @@ export function ParticularesClient({
       ) {
         return false;
       }
+      if (!showRetired && !r.is_active) return false;
+      if (showRetired && r.is_active) return false;
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone, showRetired]);
 
   async function handleLoadMore() {
     setLoadingMore(true);
@@ -870,6 +873,20 @@ export function ParticularesClient({
             }
           >
             Sin teléfono
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowRetired((v) => !v);
+              setQuery(""); // Reset query when toggling
+            }}
+            className={
+              showRetired
+                ? "rounded-lg border border-red-400 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-red-300"
+            }
+          >
+            Anuncios retirados
           </button>
           <button
             type="button"
