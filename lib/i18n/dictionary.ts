@@ -351,6 +351,15 @@ const es: Strings = {
     "Selecciona una conversación para empezar a leer y responder.",
   "adminMensajes.input.placeholder": "Escribe tu respuesta...",
   "adminMensajes.input.send": "Responder",
+
+  // Dashboard
+  "dashboard.title": "Dashboard",
+  "dashboard.subtitle": "Vista general de tu CRM en tiempo real.",
+  "dashboard.stats.activeListings": "ANUNCIOS ACTIVOS",
+  "dashboard.stats.newListings7d": "NUEVOS (7 DÍAS)",
+  "dashboard.stats.totalClients": "CLIENTES TOTALES",
+  "dashboard.stats.pendingRequests30d": "SOLICITUDES PENDIENTES (30 DÍAS)",
+
   "admin.nav.usuarios": "Usuarios",
   "admin.nav.configuracion": "Configuración",
   "admin.realtime.footer": "Datos actualizados en tiempo real",
@@ -1317,6 +1326,15 @@ const en: Strings = {
   "adminMensajes.empty": "Pick a conversation to read and reply.",
   "adminMensajes.input.placeholder": "Type your reply...",
   "adminMensajes.input.send": "Reply",
+
+  // Dashboard
+  "dashboard.title": "Dashboard",
+  "dashboard.subtitle": "Real-time overview of your CRM.",
+  "dashboard.stats.activeListings": "ACTIVE LISTINGS",
+  "dashboard.stats.newListings7d": "NEW (7 DAYS)",
+  "dashboard.stats.totalClients": "TOTAL CLIENTS",
+  "dashboard.stats.pendingRequests30d": "PENDING REQUESTS (30 DAYS)",
+
   "admin.nav.usuarios": "Users",
   "admin.nav.configuracion": "Settings",
   "admin.realtime.footer": "Data updated in real time",
@@ -2267,6 +2285,15 @@ const fr: Strings = {
     "Sélectionnez une conversation pour lire et répondre.",
   "adminMensajes.input.placeholder": "Écrivez votre réponse...",
   "adminMensajes.input.send": "Répondre",
+
+  // Dashboard
+  "dashboard.title": "Tableau de bord",
+  "dashboard.subtitle": "Vue d'ensemble en temps réel de votre CRM.",
+  "dashboard.stats.activeListings": "ANNONCES ACTIVES",
+  "dashboard.stats.newListings7d": "NOUVELLES (7 JOURS)",
+  "dashboard.stats.totalClients": "CLIENTS TOTAUX",
+  "dashboard.stats.pendingRequests30d": "DEMANDES EN ATTENTE (30 JOURS)",
+
   "admin.nav.usuarios": "Utilisateurs",
   "admin.nav.configuracion": "Configuration",
   "admin.realtime.footer": "Données mises à jour en temps réel",
@@ -3188,6 +3215,15 @@ const de: Strings = {
     "Wähle eine Unterhaltung, um zu lesen und zu antworten.",
   "adminMensajes.input.placeholder": "Antwort schreiben...",
   "adminMensajes.input.send": "Antworten",
+
+  // Dashboard
+  "dashboard.title": "Dashboard",
+  "dashboard.subtitle": "Echtzeit-Übersicht Ihres CRM.",
+  "dashboard.stats.activeListings": "AKTIVE ANGEBOTE",
+  "dashboard.stats.newListings7d": "NEU (7 TAGE)",
+  "dashboard.stats.totalClients": "GESAMTE KUNDEN",
+  "dashboard.stats.pendingRequests30d": "AUSSTEHENDE ANFRAGEN (30 TAGE)",
+
   "admin.nav.usuarios": "Benutzer",
   "admin.nav.configuracion": "Einstellungen",
   "admin.realtime.footer": "Daten in Echtzeit aktualisiert",
