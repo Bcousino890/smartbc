@@ -28,18 +28,22 @@ export default async function AdminParticularesPage({
   const rows = enrichedRows as unknown as ParticularRow[];
   const hasMore = offset + pageSize < total;
 
+  // Las stats de cabecera se calculan solo sobre ACTIVOS: `rows` incluye
+  // los retirados al final (para el tab "Retirados") y no deben inflarlas.
+  const activeRows = rows.filter((r) => r.is_active);
+
   const stats = {
-    total: rows.length,
-    rent: rows.filter((r) => r.operation === "rent").length,
-    sale: rows.filter((r) => r.operation === "sale").length,
-    last24h: rows.filter(
+    total: activeRows.length,
+    rent: activeRows.filter((r) => r.operation === "rent").length,
+    sale: activeRows.filter((r) => r.operation === "sale").length,
+    last24h: activeRows.filter(
       (r) =>
         r.created_at &&
         Date.now() - new Date(r.created_at).getTime() < 24 * 60 * 60 * 1000,
     ).length,
   };
 
-  const portalCounts = rows.reduce((acc, r) => {
+  const portalCounts = activeRows.reduce((acc, r) => {
     acc[r.portal] = (acc[r.portal] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
