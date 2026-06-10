@@ -2,14 +2,18 @@
 
 import {
   Archive,
+  Check,
   ChevronDown,
+  Copy,
   Eye,
   Image as ImageIcon,
   Link as LinkIcon,
   Loader2,
+  MessageCircle,
   Pencil,
   Plus,
   Search,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -22,6 +26,7 @@ import {
 } from "@/components/admin/new-property-modal";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@/components/ui/toast";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
@@ -47,6 +52,7 @@ export function PropertiesAdminClient({
   currentRole?: string;
 }) {
   const t = useT();
+  const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [operationFilter, setOperationFilter] = useState<"" | "alquiler" | "venta">("");
   const [statusFilter, setStatusFilter] = useState<"" | "available" | "reserved" | "sold" | "rented" | "draft">("");
@@ -55,11 +61,15 @@ export function PropertiesAdminClient({
   const [agencyFilter, setAgencyFilter] = useState<string>("");
   const [stayFilter, setStayFilter] = useState<"" | "larga" | "corta">("");
   const [bedroomsFilter, setBedroomsFilter] = useState<string>("");
+  const [bathroomsFilter, setBathroomsFilter] = useState<string>("");
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
+  const [minM2, setMinM2] = useState<string>("");
+  const [maxM2, setMaxM2] = useState<string>("");
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Opciones únicas para los selects de zona y agencia, derivadas del
@@ -132,9 +142,19 @@ export function PropertiesAdminClient({
       if (subzoneFilter && p.subzone !== subzoneFilter) return false;
       if (agencyFilter && p.agencyId !== agencyFilter) return false;
       if (stayFilter && p.stayType !== stayFilter) return false;
-      if (bedroomsFilter && p.bedrooms < Number(bedroomsFilter)) return false;
+      if (bedroomsFilter) {
+        // "3" = exactamente 3 · "3plus" = 3 o más
+        if (bedroomsFilter.endsWith("plus")) {
+          if (p.bedrooms < Number(bedroomsFilter.replace("plus", ""))) return false;
+        } else if (p.bedrooms !== Number(bedroomsFilter)) {
+          return false;
+        }
+      }
+      if (bathroomsFilter && p.bathrooms < Number(bathroomsFilter)) return false;
       if (minPrice && p.price < Number(minPrice)) return false;
       if (maxPrice && p.price > Number(maxPrice)) return false;
+      if (minM2 && p.squareMeters < Number(minM2)) return false;
+      if (maxM2 && p.squareMeters > Number(maxM2)) return false;
       return true;
     });
   }, [
@@ -147,8 +167,11 @@ export function PropertiesAdminClient({
     agencyFilter,
     stayFilter,
     bedroomsFilter,
+    bathroomsFilter,
     minPrice,
     maxPrice,
+    minM2,
+    maxM2,
   ]);
 
   // Paginación: solo renderizamos una página de la tabla (DOM acotado).
@@ -169,8 +192,11 @@ export function PropertiesAdminClient({
     agencyFilter,
     stayFilter,
     bedroomsFilter,
+    bathroomsFilter,
     minPrice,
     maxPrice,
+    minM2,
+    maxM2,
   ]);
 
   const hasActiveFilters = Boolean(
@@ -181,8 +207,11 @@ export function PropertiesAdminClient({
       agencyFilter ||
       stayFilter ||
       bedroomsFilter ||
+      bathroomsFilter ||
       minPrice ||
       maxPrice ||
+      minM2 ||
+      maxM2 ||
       query,
   );
 
@@ -195,8 +224,74 @@ export function PropertiesAdminClient({
     setAgencyFilter("");
     setStayFilter("");
     setBedroomsFilter("");
+    setBathroomsFilter("");
     setMinPrice("");
     setMaxPrice("");
+    setMinM2("");
+    setMaxM2("");
+  };
+
+  // --- Selección múltiple para copiar URLs y enviarlas a clientes ---
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((p) => selected.has(p.id));
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllFiltered = () => {
+    setSelected((prev) => {
+      if (allFilteredSelected) {
+        // Deseleccionar solo las filtradas (conserva selecciones de otros filtros)
+        const next = new Set(prev);
+        filtered.forEach((p) => next.delete(p.id));
+        return next;
+      }
+      const next = new Set(prev);
+      filtered.forEach((p) => next.add(p.id));
+      return next;
+    });
+  };
+
+  const selectedProps = useMemo(
+    () => properties.filter((p) => selected.has(p.id)),
+    [properties, selected],
+  );
+
+  const shareUrl = (id: string) =>
+    `${typeof window !== "undefined" ? window.location.origin : ""}/compartir/${id}`;
+
+  const copyToClipboard = async (text: string, okMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(okMessage, "success");
+    } catch {
+      toast("No se pudo copiar al portapapeles", "error");
+    }
+  };
+
+  const copyUrls = () => {
+    const text = selectedProps.map((p) => shareUrl(p.id)).join("\n");
+    copyToClipboard(
+      text,
+      `${selectedProps.length} URL${selectedProps.length === 1 ? "" : "s"} copiada${selectedProps.length === 1 ? "" : "s"}`,
+    );
+  };
+
+  // Formato listo para pegar en WhatsApp/email: título · precio · enlace
+  const copyForClients = () => {
+    const text = selectedProps
+      .map((p) => {
+        const price = `${formatPrice(p.price)} €${p.operation === "alquiler" ? "/mes" : ""}`;
+        return `🏠 ${p.title}\n💶 ${price} · ${p.zone}\n🔗 ${shareUrl(p.id)}`;
+      })
+      .join("\n\n");
+    copyToClipboard(text, "Mensaje copiado, listo para enviar");
   };
 
   return (
@@ -357,11 +452,26 @@ export function PropertiesAdminClient({
           onChange={setBedroomsFilter}
           options={[
             { value: "", label: "Todos" },
+            { value: "1", label: "Exacto 1" },
+            { value: "2", label: "Exacto 2" },
+            { value: "3", label: "Exacto 3" },
+            { value: "4", label: "Exacto 4" },
+            { value: "1plus", label: "1 o más" },
+            { value: "2plus", label: "2 o más" },
+            { value: "3plus", label: "3 o más" },
+            { value: "4plus", label: "4 o más" },
+            { value: "5plus", label: "5 o más" },
+          ]}
+        />
+        <FilterSelect
+          label="Baños"
+          value={bathroomsFilter}
+          onChange={setBathroomsFilter}
+          options={[
+            { value: "", label: "Todos" },
             { value: "1", label: "1+" },
             { value: "2", label: "2+" },
             { value: "3", label: "3+" },
-            { value: "4", label: "4+" },
-            { value: "5", label: "5+" },
           ]}
         />
         <PriceRange
@@ -369,6 +479,13 @@ export function PropertiesAdminClient({
           max={maxPrice}
           onMin={setMinPrice}
           onMax={setMaxPrice}
+        />
+        <RangeChip
+          label="M²"
+          min={minM2}
+          max={maxM2}
+          onMin={setMinM2}
+          onMax={setMaxM2}
         />
         {hasActiveFilters && (
           <button
@@ -379,10 +496,52 @@ export function PropertiesAdminClient({
             Limpiar filtros
           </button>
         )}
-        <span className="ml-auto text-[11px] text-ink/55">
-          {filtered.length} de {properties.length}
+        <span
+          className={cn(
+            "ml-auto rounded-md border px-2.5 py-1 text-[11px] font-semibold",
+            hasActiveFilters
+              ? "border-gold/40 bg-gold/10 text-gold-dark"
+              : "border-ink/10 bg-white/70 text-ink/60",
+          )}
+        >
+          {hasActiveFilters
+            ? `${filtered.length} resultado${filtered.length === 1 ? "" : "s"} de ${properties.length}`
+            : `${properties.length} propiedades`}
         </span>
       </div>
+
+      {/* Barra de selección: copiar URLs para enviar a clientes */}
+      {selected.size > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-gold/35 bg-gold/10 px-3 py-2">
+          <span className="text-[12px] font-semibold text-gold-dark">
+            {selected.size} seleccionada{selected.size === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={copyUrls}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+          >
+            <Copy size={12} strokeWidth={1.75} className="text-gold" />
+            <span>Copiar URLs</span>
+          </button>
+          <button
+            type="button"
+            onClick={copyForClients}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 transition hover:bg-emerald-100"
+          >
+            <MessageCircle size={12} strokeWidth={1.75} />
+            <span>Copiar para WhatsApp</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
+          >
+            <X size={12} strokeWidth={1.75} />
+            <span>Limpiar selección</span>
+          </button>
+        </div>
+      )}
 
       <NewPropertyModal
         open={modalOpen}
@@ -394,6 +553,13 @@ export function PropertiesAdminClient({
         <table className="w-full min-w-[1200px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
             <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+              <th className="w-10 px-3 pb-2">
+                <SelectCheckbox
+                  checked={allFilteredSelected}
+                  onChange={toggleAllFiltered}
+                  ariaLabel="Seleccionar todas las propiedades filtradas"
+                />
+              </th>
               <th className="px-3 pb-2">{t("adminProps.table.property")}</th>
               <th className="px-3 pb-2">{t("adminProps.table.reference")}</th>
               <th className="px-3 pb-2">{t("adminProps.table.agency")}</th>
@@ -416,7 +582,7 @@ export function PropertiesAdminClient({
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={11}
                   className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-ink/55"
                 >
                   {t("adminProps.empty")}
@@ -428,6 +594,8 @@ export function PropertiesAdminClient({
                   key={p.id}
                   property={p}
                   canEdit={!currentRole || canAccess(currentRole, "properties", "edit")}
+                  selected={selected.has(p.id)}
+                  onToggleSelect={() => toggleOne(p.id)}
                 />
               ))
             )}
@@ -445,9 +613,13 @@ export function PropertiesAdminClient({
 function PropertyRow({
   property,
   canEdit = true,
+  selected = false,
+  onToggleSelect,
 }: {
   property: AdminProperty;
   canEdit?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const t = useT();
   const [photosOpen, setPhotosOpen] = useState(false);
@@ -456,8 +628,20 @@ function PropertyRow({
   const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
 
   return (
-    <tr className="bg-white/55 transition hover:bg-white/85">
+    <tr
+      className={cn(
+        "transition",
+        selected ? "bg-gold/10 hover:bg-gold/15" : "bg-white/55 hover:bg-white/85",
+      )}
+    >
       <td className="rounded-l-xl px-3 py-3">
+        <SelectCheckbox
+          checked={selected}
+          onChange={() => onToggleSelect?.()}
+          ariaLabel={`Seleccionar ${property.title}`}
+        />
+      </td>
+      <td className="px-3 py-3">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -635,6 +819,76 @@ function ArchiveButton({ slug }: { slug: string }) {
       )}
       <span>{t("adminProps.archive.action")}</span>
     </button>
+  );
+}
+
+// Checkbox de selección con estilo de marca (cuadrado dorado al marcar).
+function SelectCheckbox({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={onChange}
+      className={cn(
+        "flex h-[18px] w-[18px] items-center justify-center rounded border transition",
+        checked
+          ? "border-gold bg-gold text-ink"
+          : "border-ink/25 bg-white hover:border-gold/60",
+      )}
+    >
+      {checked && <Check size={12} strokeWidth={3} />}
+    </button>
+  );
+}
+
+// Chip de rango numérico genérico (mismo estilo que PriceRange).
+function RangeChip({
+  label,
+  min,
+  max,
+  onMin,
+  onMax,
+}: {
+  label: string;
+  min: string;
+  max: string;
+  onMin: (v: string) => void;
+  onMax: (v: string) => void;
+}) {
+  const sanitize = (v: string) => v.replace(/[^\d]/g, "");
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+        {label}
+      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={min}
+        onChange={(e) => onMin(sanitize(e.target.value))}
+        placeholder="mín"
+        className="w-12 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+      />
+      <span className="text-ink/35">–</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={max}
+        onChange={(e) => onMax(sanitize(e.target.value))}
+        placeholder="máx"
+        className="w-14 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+      />
+    </div>
   );
 }
 
