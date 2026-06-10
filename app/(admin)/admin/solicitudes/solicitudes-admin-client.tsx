@@ -1,155 +1,49 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/provider";
+import { formatRelativeMinutes } from "@/lib/relative-time";
 import type { VisitRequest, VisitRequestStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { updateVisitStatus } from "./actions";
 
-// ─── Status badge ────────────────────────────────────────────────────────────
+// ─── Status config ─────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<
-  VisitRequestStatus,
-  { label: string; cls: string }
-> = {
-  pending:     { label: "Pendiente",    cls: "border-amber-200 bg-amber-50 text-amber-700" },
-  confirmed:   { label: "Confirmada",   cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  completed:   { label: "Completada",   cls: "border-blue-200 bg-blue-50 text-blue-700" },
-  cancelled:   { label: "Cancelada",    cls: "border-rose-200 bg-rose-50 text-rose-700" },
-  rescheduled: { label: "Reprogramada", cls: "border-purple-200 bg-purple-50 text-purple-700" },
-  rejected:    { label: "Rechazada",    cls: "border-rose-200 bg-rose-50 text-rose-700" },
+type TabKey = "pending" | "confirmed" | "completed" | "rejected";
+
+const TAB_ORDER: TabKey[] = ["pending", "confirmed", "completed", "rejected"];
+
+const STATUS_BADGE: Record<VisitRequestStatus, string> = {
+  pending: "border-amber-200 bg-amber-50 text-amber-700",
+  confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  rescheduled: "border-blue-200 bg-blue-50 text-blue-700",
+  rejected: "border-rose-200 bg-rose-50 text-rose-700",
+  completed: "border-violet-200 bg-violet-50 text-violet-700",
 };
 
-function StatusBadge({ status }: { status: VisitRequestStatus }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium",
-        cfg.cls,
-      )}
-    >
-      {cfg.label}
-    </span>
-  );
-}
+const TAB_STATUS_MAP: Record<TabKey, VisitRequestStatus> = {
+  pending: "pending",
+  confirmed: "confirmed",
+  completed: "completed",
+  rejected: "rejected",
+};
 
-// ─── Tab types ────────────────────────────────────────────────────────────────
+const TAB_LABEL_KEY: Record<TabKey, string> = {
+  pending: "solicitudes.tab.pending",
+  confirmed: "solicitudes.tab.confirmed",
+  completed: "solicitudes.tab.completed",
+  rejected: "solicitudes.tab.rejected",
+};
 
-type TabKey = "pending" | "confirmed" | "completed" | "cancelled";
+const TAB_BADGE_CLASS: Record<TabKey, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  confirmed: "bg-emerald-100 text-emerald-700",
+  completed: "bg-violet-100 text-violet-700",
+  rejected: "bg-rose-100 text-rose-700",
+};
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "pending",   label: "Pendientes" },
-  { key: "confirmed", label: "Confirmadas" },
-  { key: "completed", label: "Completadas" },
-  { key: "cancelled", label: "Canceladas" },
-];
-
-// ─── Time ago helper ──────────────────────────────────────────────────────────
-
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60) return "Hace un momento";
-  if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
-  if (diff < 604800) return `Hace ${Math.floor(diff / 86400)} días`;
-  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
-}
-
-// ─── Card ─────────────────────────────────────────────────────────────────────
-
-function VisitCard({ visit }: { visit: VisitRequest }) {
-  const [isPending, startTransition] = useTransition();
-  const [optimisticStatus, setOptimisticStatus] = useState<VisitRequestStatus | null>(null);
-
-  const displayStatus = optimisticStatus ?? visit.status;
-
-  function handleStatus(status: "confirmed" | "cancelled" | "completed") {
-    setOptimisticStatus(status);
-    startTransition(async () => {
-      const res = await updateVisitStatus(visit.id, status);
-      if (!res.ok) {
-        setOptimisticStatus(null);
-      }
-    });
-  }
-
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-gold/15 bg-cream-50/85 p-4 shadow-sm transition-shadow hover:shadow-md",
-        isPending && "opacity-70",
-      )}
-    >
-      {/* Cabecera: avatar + nombre + badge */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-amber-700">
-            {visit.clientInitials}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-ink">{visit.clientName}</p>
-            <p className="truncate text-[12px] text-ink/55">{visit.clientEmail}</p>
-          </div>
-        </div>
-        <StatusBadge status={displayStatus} />
-      </div>
-
-      {/* Propiedad */}
-      <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2 text-[12px] text-ink/70">
-        🏠 {visit.propertyTitle}
-        {visit.propertyReference && (
-          <span className="ml-1 font-mono text-amber-700">{visit.propertyReference}</span>
-        )}
-      </div>
-
-      {/* Fecha solicitada */}
-      <p className="mt-1.5 text-[11px] text-ink/45">{visit.requestedDateLabel}</p>
-
-      {/* Timestamp relativo */}
-      <p className="mt-0.5 text-[11px] text-ink/35">{timeAgo(visit.createdAt)}</p>
-
-      {/* Acciones para pendientes */}
-      {displayStatus === "pending" && (
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => handleStatus("confirmed")}
-            className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 py-1.5 text-[12px] font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
-          >
-            ✓ Confirmar
-          </button>
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => handleStatus("cancelled")}
-            className="flex-1 rounded-lg border border-rose-200 bg-rose-50 py-1.5 text-[12px] font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
-          >
-            ✗ Cancelar
-          </button>
-        </div>
-      )}
-
-      {/* Acción para confirmadas */}
-      {displayStatus === "confirmed" && (
-        <div className="mt-3">
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() => handleStatus("completed")}
-            className="w-full rounded-lg border border-blue-200 bg-blue-50 py-1.5 text-[12px] font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
-          >
-            ✓ Marcar como completada
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main client component ────────────────────────────────────────────────────
+// ─── Main component ─────────────────────────────────────────────────────────
 
 export function SolicitudesAdminClient({
   requests,
@@ -157,104 +51,201 @@ export function SolicitudesAdminClient({
   requests: VisitRequest[];
 }) {
   const t = useT();
-  const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
 
-  const counts = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = q
-      ? requests.filter(
-          (r) =>
-            r.clientName.toLowerCase().includes(q) ||
-            r.propertyTitle.toLowerCase().includes(q) ||
-            r.propertyReference.toLowerCase().includes(q) ||
-            r.clientEmail.toLowerCase().includes(q),
-        )
-      : requests;
+  const counts: Record<TabKey, number> = {
+    pending: requests.filter((r) => r.status === "pending").length,
+    confirmed: requests.filter((r) => r.status === "confirmed").length,
+    completed: requests.filter((r) => r.status === "completed").length,
+    rejected: requests.filter((r) => r.status === "rejected").length,
+  };
 
-    return {
-      pending:   base.filter((r) => r.status === "pending").length,
-      confirmed: base.filter((r) => r.status === "confirmed").length,
-      completed: base.filter((r) => r.status === "completed").length,
-      cancelled: base.filter((r) => r.status === "cancelled" || r.status === "rejected").length,
-    };
-  }, [requests, query]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const bySearch = q
-      ? requests.filter(
-          (r) =>
-            r.clientName.toLowerCase().includes(q) ||
-            r.propertyTitle.toLowerCase().includes(q) ||
-            r.propertyReference.toLowerCase().includes(q) ||
-            r.clientEmail.toLowerCase().includes(q),
-        )
-      : requests;
-
-    return bySearch.filter((r) => {
-      if (activeTab === "cancelled") return r.status === "cancelled" || r.status === "rejected";
-      return r.status === activeTab;
-    });
-  }, [requests, query, activeTab]);
+  const filtered = requests.filter(
+    (r) => r.status === TAB_STATUS_MAP[activeTab],
+  );
 
   return (
-    <section className="mt-5 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      {/* Buscador */}
-      <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
-        <Search size={15} strokeWidth={1.75} className="text-ink/45" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("solicitudes.search.placeholder")}
-          className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
-        />
-      </label>
-
+    <section className="mt-5">
       {/* Tabs */}
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {TABS.map((tab) => (
+      <div className="flex flex-wrap gap-1.5 border-b border-gold/15 pb-0">
+        {TAB_ORDER.map((tab) => (
           <button
-            key={tab.key}
+            key={tab}
             type="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => setActiveTab(tab)}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-[13px] font-medium transition",
-              activeTab === tab.key
-                ? "bg-gold text-white"
-                : "text-ink/55 hover:text-ink",
+              "relative flex items-center gap-2 rounded-t-xl border border-b-0 px-4 py-2.5 text-[13px] font-medium transition",
+              activeTab === tab
+                ? "border-gold/20 bg-cream-50/90 text-ink shadow-[0_-4px_12px_-6px_rgba(40,28,10,0.10)]"
+                : "border-transparent text-ink/50 hover:text-ink/75",
             )}
           >
-            {tab.label}
-            <span
-              className={cn(
-                "ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
-                activeTab === tab.key
-                  ? "bg-white/25 text-white"
-                  : "bg-ink/5 text-ink/50",
-              )}
-            >
-              {counts[tab.key]}
-            </span>
+            {t(TAB_LABEL_KEY[tab])}
+            {counts[tab] > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
+                  activeTab === tab
+                    ? TAB_BADGE_CLASS[tab]
+                    : "bg-ink/8 text-ink/50",
+                )}
+              >
+                {counts[tab]}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* Grid de cards */}
-      <div className="mt-5">
+      {/* Cards */}
+      <div className="mt-4">
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-gold/15 bg-white/40 px-4 py-10 text-center text-sm text-ink/55">
-            No hay solicitudes en esta categoría
+          <div className="rounded-2xl border border-gold/15 bg-cream-50/60 py-14 text-center text-sm text-ink/45">
+            {t("solicitudes.empty")}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((visit) => (
-              <VisitCard key={visit.id} visit={visit} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((r) => (
+              <RequestCard key={r.id} request={r} />
             ))}
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+// ─── Card ───────────────────────────────────────────────────────────────────
+
+function RequestCard({ request }: { request: VisitRequest }) {
+  const t = useT();
+  const [isTransitioning, startTransition] = useTransition();
+  const [optimisticStatus, setOptimisticStatus] = useOptimistic(
+    request.status,
+  );
+
+  const isPendingStatus = optimisticStatus === "pending";
+
+  function handleConfirm() {
+    startTransition(async () => {
+      setOptimisticStatus("confirmed");
+      await updateVisitStatus(request.id, "confirmed");
+    });
+  }
+
+  function handleCancel() {
+    startTransition(async () => {
+      setOptimisticStatus("rejected");
+      await updateVisitStatus(request.id, "cancelled");
+    });
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-gold/15 bg-cream-50/85 p-4 shadow-[0_8px_25px_-10px_rgba(40,28,10,0.12)] transition-opacity",
+        isTransitioning && "opacity-60",
+      )}
+    >
+      {/* Header: avatar + nombre + email + badge */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-amber-800">
+            {request.clientInitials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-ink text-sm leading-tight">
+              {request.clientName}
+            </p>
+            {request.clientEmail && (
+              <p className="truncate text-[11px] text-ink/50 leading-tight mt-0.5">
+                {request.clientEmail}
+              </p>
+            )}
+          </div>
+        </div>
+        <StatusBadge status={optimisticStatus} />
+      </div>
+
+      {/* Propiedad */}
+      <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
+        {request.propertySlug ? (
+          <a
+            href={`/admin/propiedades/${request.propertySlug}`}
+            className="block group"
+          >
+            <p className="text-[12px] font-medium text-ink/75 group-hover:text-amber-800 transition-colors truncate">
+              📍 {request.propertyTitle}
+            </p>
+            {request.propertyReference && (
+              <p className="text-[11px] text-ink/40 mt-0.5">
+                {request.propertyReference}
+              </p>
+            )}
+          </a>
+        ) : (
+          <>
+            <p className="text-[12px] text-ink/70 truncate">
+              📍 {request.propertyTitle}
+            </p>
+            {request.propertyReference && (
+              <p className="text-[11px] text-ink/40 mt-0.5">
+                {request.propertyReference}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Fechas */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/50">
+        <span>🗓 {request.requestedDateLabel}</span>
+        <span className="text-ink/30">·</span>
+        <span>
+          {t("solicitudes.received")}{" "}
+          {formatRelativeMinutes(request.receivedRelativeMinutes, t)}
+        </span>
+      </div>
+
+      {/* Acciones para pendientes */}
+      {isPendingStatus && (
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isTransitioning}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+          >
+            <CheckCircle2 size={13} strokeWidth={2} />
+            {t("solicitudes.action.confirm")}
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={isTransitioning}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+          >
+            <XCircle size={13} strokeWidth={2} />
+            {t("solicitudes.action.cancel")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── StatusBadge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: VisitRequestStatus }) {
+  const t = useT();
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold",
+        STATUS_BADGE[status],
+      )}
+    >
+      {t(`solicitudes.status.${status}`)}
+    </span>
   );
 }

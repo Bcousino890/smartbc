@@ -176,7 +176,6 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     phone: row.phone ?? undefined,
     location: undefined,
     avatarInitials: initials,
-    updatedAt: row.updated_at,
     profileType,
     operation,
     stayType,
@@ -205,7 +204,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
 const VISIT_STATUS_MAP: Record<VisitStatus, VisitRequestStatus> = {
   pending: "pending",
   confirmed: "confirmed",
-  cancelled: "cancelled",
+  cancelled: "rejected",
   completed: "completed",
 };
 
@@ -225,22 +224,23 @@ export function visitRequestRowToLegacy(
     id: row.id,
     clientName,
     clientInitials: deriveInitials(clientName),
-    clientEmail: row.profiles?.email ?? "",
+    clientEmail: row.profiles?.email,
     propertyTitle: row.properties?.title ?? "—",
     propertyReference: row.properties?.external_id ?? row.properties?.slug ?? "",
+    propertySlug: row.properties?.slug,
     requestedDateLabel: VISIT_DATETIME_FMT.format(new Date(row.requested_at)),
+    createdDateLabel: VISIT_DATETIME_FMT.format(new Date(row.created_at)),
     channelKey: "solicitudes.channel.portal",
     assignedAdvisor: "—",
     status: VISIT_STATUS_MAP[row.status],
     receivedRelativeMinutes: minutesSince(row.created_at),
-    createdAt: row.created_at,
   };
 }
 
 export function profileRowToInternalUser(
   row: Database["public"]["Tables"]["profiles"]["Row"]
 ): InternalUser {
-  const display = row.full_name?.trim() || row.email || "";
+  const display = row.full_name?.trim() || row.email;
   const [firstName, ...rest] = display.split(/\s+/);
   return {
     id: row.id,

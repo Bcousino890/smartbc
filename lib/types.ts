@@ -287,8 +287,6 @@ export type AdminClient = {
   phone?: string;
   location?: string; // e.g. "Madrid, España"
   avatarInitials: string;
-  /** ISO timestamp used to compute relative "last seen" time in the UI */
-  updatedAt?: string;
 
   // Custom filters the admin assigns to this client. They drive what the
   // client sees in their own portal.
@@ -370,22 +368,22 @@ export type VisitRequestStatus =
   | "confirmed"
   | "rescheduled"
   | "rejected"
-  | "cancelled"
   | "completed";
 
 export type VisitRequest = {
   id: string;
   clientName: string;
   clientInitials: string;
-  clientEmail: string;
+  clientEmail?: string;
   propertyTitle: string;
   propertyReference: string;
+  propertySlug?: string;
   requestedDateLabel: string; // e.g. "24 May 2026, 11:00"
+  createdDateLabel?: string;
   channelKey: string; // i18n: "solicitudes.channel.portal" | ".phone" | ".whatsapp"
   assignedAdvisor: string;
   status: VisitRequestStatus;
   receivedRelativeMinutes: number;
-  createdAt: string; // ISO timestamp
 };
 
 export type VisitRequestsStats = {
