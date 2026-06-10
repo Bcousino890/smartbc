@@ -1,11 +1,13 @@
 import { TrendingUp, Users, Home, Clock } from "lucide-react";
 import { createAdminClient } from "@/lib/db/admin";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
-import { DashboardActivity } from "./dashboard-activity";
+import { DashboardActivity, type ActivityItem } from "./dashboard-activity";
+import { DashboardQuickLinks } from "./dashboard-quick-links";
+import { DashboardTrend } from "./dashboard-trend";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 30; // Revalidate every 30 seconds
 
 export default async function DashboardPage() {
   const supabase = createAdminClient();
@@ -58,42 +60,44 @@ export default async function DashboardPage() {
         <StatCard
           icon={<Home size={20} strokeWidth={1.75} />}
           labelKey="dashboard.stats.activeListings"
+          helpKey="dashboard.stats.help"
           value={activParticulares.count ?? 0}
         />
         <StatCard
           icon={<TrendingUp size={20} strokeWidth={1.75} />}
           labelKey="dashboard.stats.newListings7d"
+          helpKey="dashboard.stats.help"
           value={newParticulares7d.count ?? 0}
-          footer={
-            trend !== 0 ? (
-              <p className={`text-[11px] ${trend > 0 ? "text-green-600" : "text-red-600"}`}>
-                {trend > 0 ? "↑" : "↓"} {Math.abs(trend)}% vs última semana
-              </p>
-            ) : undefined
-          }
+          footer={trend !== 0 ? <DashboardTrend trend={trend} /> : undefined}
         />
         <StatCard
           icon={<Users size={20} strokeWidth={1.75} />}
           labelKey="dashboard.stats.totalClients"
+          helpKey="dashboard.stats.help"
           value={totalClients.count ?? 0}
         />
         <StatCard
           icon={<Clock size={20} strokeWidth={1.75} />}
           labelKey="dashboard.stats.pendingRequests30d"
+          helpKey="dashboard.stats.help"
           value={pendingSolicitudes.count ?? 0}
         />
       </div>
 
-      {/* Recent Activity */}
-      <div className="mt-10">
-        <h2 className="text-lg font-semibold text-ink mb-4">Actividad Reciente</h2>
-        <DashboardActivity activity={recentActivity} />
+      {/* Recent activity + quick links */}
+      <div className="mt-8 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <DashboardActivity activity={recentActivity} className="lg:col-span-2" />
+        <DashboardQuickLinks />
       </div>
+
+      <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>
   );
 }
 
-async function getRecentActivity(supabase: any) {
+async function getRecentActivity(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<ActivityItem[]> {
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   // Fetch from 3 sources and combine
@@ -121,20 +125,39 @@ async function getRecentActivity(supabase: any) {
       .limit(3),
   ]);
 
-  const activity = [
-    ...(particulares.data ?? []).map((p: any) => ({
+  const particularRows = (particulares.data ?? []) as unknown as {
+    id: string;
+    portal: string;
+    external_id: string;
+    created_at: string;
+  }[];
+  const visitRows = (visits.data ?? []) as unknown as {
+    id: string;
+    property_id: string;
+    requested_at: string;
+    status: string;
+  }[];
+  const clientRows = (clients.data ?? []) as unknown as {
+    id: string;
+    full_name: string | null;
+    created_at: string;
+  }[];
+
+  const activity: ActivityItem[] = [
+    ...particularRows.map((p): ActivityItem => ({
       type: "particular",
-      description: `Nuevo anuncio: ${p.portal} (${p.external_id})`,
+      portal: p.portal,
+      externalId: p.external_id,
       timestamp: p.created_at,
     })),
-    ...(visits.data ?? []).map((v: any) => ({
+    ...visitRows.map((v): ActivityItem => ({
       type: "visit",
-      description: `Solicitud de visita (${v.status})`,
+      status: v.status,
       timestamp: v.requested_at,
     })),
-    ...(clients.data ?? []).map((c: any) => ({
+    ...clientRows.map((c): ActivityItem => ({
       type: "client",
-      description: `Nuevo cliente: ${c.full_name || "Sin nombre"}`,
+      name: c.full_name,
       timestamp: c.created_at,
     })),
   ];

@@ -1,76 +1,158 @@
 "use client";
 
-import { Home, Clock, Users } from "lucide-react";
+import { Clock, Home, Inbox, Users } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { useLanguage } from "@/lib/i18n/provider";
+import type { Lang } from "@/lib/i18n/dictionary";
+import { cn } from "@/lib/utils";
 
-interface Activity {
-  type: "particular" | "visit" | "client";
-  description: string;
-  timestamp: string;
-}
+export type ActivityItem =
+  | { type: "particular"; timestamp: string; portal: string; externalId: string }
+  | { type: "visit"; timestamp: string; status: string }
+  | { type: "client"; timestamp: string; name: string | null };
 
-export function DashboardActivity({ activity }: { activity: Activity[] }) {
+const DATE_LOCALES: Record<Lang, string> = {
+  es: "es-ES",
+  en: "en-GB",
+  fr: "fr-FR",
+  de: "de-DE",
+};
+
+const TYPE_STYLES: Record<
+  ActivityItem["type"],
+  {
+    icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+    iconClass: string;
+    chipClass: string;
+    badgeKey: string;
+  }
+> = {
+  particular: {
+    icon: Home,
+    iconClass: "bg-gold/15 text-gold",
+    chipClass: "border-gold/30 bg-gold/10 text-gold-dark",
+    badgeKey: "dashboard.activity.badge.listing",
+  },
+  visit: {
+    icon: Clock,
+    iconClass: "bg-blue-50 text-blue-600",
+    chipClass: "border-blue-200 bg-blue-50 text-blue-700",
+    badgeKey: "dashboard.activity.badge.visit",
+  },
+  client: {
+    icon: Users,
+    iconClass: "bg-emerald-50 text-emerald-600",
+    chipClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    badgeKey: "dashboard.activity.badge.client",
+  },
+};
+
+const KNOWN_VISIT_STATUSES = ["pending", "confirmed", "completed", "cancelled"];
+
+export function DashboardActivity({
+  activity,
+  className,
+}: {
+  activity: ActivityItem[];
+  className?: string;
+}) {
+  const { lang, t } = useLanguage();
+
   const getTimeAgo = (timestamp: string) => {
-    const now = new Date();
     const date = new Date(timestamp);
-    const diff = now.getTime() - date.getTime();
+    const diff = Date.now() - date.getTime();
 
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return "Hace unos segundos";
-    if (minutes < 60) return `Hace ${minutes}m`;
-    if (hours < 24) return `Hace ${hours}h`;
-    if (days < 7) return `Hace ${days}d`;
-    return date.toLocaleDateString("es-ES");
+    if (minutes < 1) return t("admin.relativeTime.justNow");
+    if (minutes < 60) return t("admin.relativeTime.minutesAgo", { n: minutes });
+    if (hours < 24) return t("admin.relativeTime.hoursAgo", { n: hours });
+    if (days < 7) return t("admin.relativeTime.daysAgo", { n: days });
+    return date.toLocaleDateString(DATE_LOCALES[lang]);
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
+  const getDescription = (item: ActivityItem) => {
+    switch (item.type) {
       case "particular":
-        return <Home size={18} className="text-gold" />;
+        return t("dashboard.activity.item.newListing", {
+          portal: item.portal,
+          id: item.externalId,
+        });
       case "visit":
-        return <Clock size={18} className="text-blue-500" />;
+        return t("dashboard.activity.item.visitRequest", {
+          status: KNOWN_VISIT_STATUSES.includes(item.status)
+            ? t(`clientes.ficha.visits.status.${item.status}`)
+            : item.status,
+        });
       case "client":
-        return <Users size={18} className="text-green-600" />;
-      default:
-        return null;
-    }
-  };
-
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case "particular":
-        return <span className="px-2 py-1 bg-gold/10 text-gold text-[11px] rounded">Anuncio</span>;
-      case "visit":
-        return <span className="px-2 py-1 bg-blue-100 text-blue-600 text-[11px] rounded">Visita</span>;
-      case "client":
-        return <span className="px-2 py-1 bg-green-100 text-green-700 text-[11px] rounded">Cliente</span>;
-      default:
-        return null;
+        return t("dashboard.activity.item.newClient", {
+          name: item.name || t("dashboard.activity.noName"),
+        });
     }
   };
 
   return (
-    <div className="rounded-lg border border-gold/20 bg-white/80 overflow-hidden">
+    <Card
+      as="section"
+      className={cn(
+        "overflow-hidden border-gold/20 bg-white/70 backdrop-blur",
+        className,
+      )}
+    >
+      <h2 className="px-5 pt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+        {t("dashboard.activity.title")}
+      </h2>
+
       {activity.length === 0 ? (
-        <div className="p-6 text-center text-ink/50">
-          <p>Sin actividad en los últimos 7 días</p>
+        <div className="flex flex-col items-center px-6 py-12 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gold/10 text-gold">
+            <Inbox size={20} strokeWidth={1.5} />
+          </span>
+          <p className="mt-3 text-sm text-ink/50">
+            {t("dashboard.activity.empty")}
+          </p>
         </div>
       ) : (
-        <div className="divide-y divide-gold/10">
-          {activity.map((item, idx) => (
-            <div key={idx} className="p-4 flex items-center gap-4 hover:bg-cream-50/50 transition">
-              <div className="flex-shrink-0">{getIcon(item.type)}</div>
-              <div className="flex-grow min-w-0">
-                <p className="text-sm text-ink truncate">{item.description}</p>
-                <p className="text-[11px] text-ink/50 mt-1">{getTimeAgo(item.timestamp)}</p>
+        <div className="mt-4 divide-y divide-gold/10 border-t border-gold/10">
+          {activity.map((item, idx) => {
+            const styles = TYPE_STYLES[item.type];
+            const Icon = styles.icon;
+            return (
+              <div
+                key={idx}
+                className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-cream-50/60"
+              >
+                <span
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                    styles.iconClass,
+                  )}
+                >
+                  <Icon size={16} strokeWidth={1.75} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-ink">
+                    {getDescription(item)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-ink/50">
+                    {getTimeAgo(item.timestamp)}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+                    styles.chipClass,
+                  )}
+                >
+                  {t(styles.badgeKey)}
+                </span>
               </div>
-              <div className="flex-shrink-0">{getTypeBadge(item.type)}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
