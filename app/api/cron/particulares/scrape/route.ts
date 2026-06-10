@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
+import { normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -400,11 +401,57 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
     const removed = await markStaleListingsInactive(supabase);
     (results as Record<string, number>).bajas = removed;
 
+    // Normalización de teléfonos heredados: reescribe a +34XXXXXXXXX los
+    // phones guardados con otro formato (sin prefijo, con espacios…).
+    // Idempotente y barato: tras la primera pasada quedan 0 pendientes.
+    const normalized = await normalizeStoredPhones(supabase);
+    (results as Record<string, number>).telefonos_normalizados = normalized;
+
     return results;
   } catch (error) {
     console.error("[cron-particulares] Error general:", error);
     throw error;
   }
+}
+
+// Reescribe al formato canónico +34XXXXXXXXX los teléfonos ya guardados que
+// no lo tengan (datos previos a la normalización del detector). Los valores
+// no normalizables (no son un teléfono español válido) se dejan intactos.
+async function normalizeStoredPhones(supabase: SupabaseLike): Promise<number> {
+  let normalized = 0;
+  const BATCH = 1000;
+  // Siempre re-consulta desde 0: al normalizar, las filas salen del filtro
+  // `not like '+34%'` y un offset incremental saltaría pendientes. Si una
+  // pasada no actualiza nada (solo quedan valores no normalizables), corta.
+  for (let pass = 0; pass < 50; pass++) {
+    const { data, error } = await supabase
+      .from("particulares")
+      .select("id, phone")
+      .not("phone", "is", null)
+      .not("phone", "like", "+34%")
+      .range(0, BATCH - 1);
+    if (error || !data || data.length === 0) break;
+
+    let updatedInPass = 0;
+    for (const row of data as Array<{ id: string; phone: string }>) {
+      const canonical = normalizeSpanishPhone(row.phone);
+      if (canonical && canonical !== row.phone) {
+        const { error: updErr } = await supabase
+          .from("particulares")
+          .update({ phone: canonical })
+          .eq("id", row.id);
+        if (!updErr) {
+          normalized++;
+          updatedInPass++;
+        }
+      }
+    }
+    if (updatedInPass === 0 || data.length < BATCH) break;
+  }
+  if (normalized > 0) {
+    console.log(`[cron-particulares] teléfonos normalizados a +34: ${normalized}`);
+  }
+  return normalized;
 }
 
 // Revisa hasta `limit` anuncios activos (los menos refrescados) y marca
