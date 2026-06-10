@@ -646,6 +646,18 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
     [users],
   );
   const clients = useMemo(() => users.filter((u) => u.roleKey === "client"), [users]);
+  // Resto de usuarios (viewer y cualquier rol no contemplado en las secciones
+  // anteriores): sin esto quedarían ocultos pese a existir en la BD.
+  const others = useMemo(
+    () =>
+      users.filter(
+        (u) =>
+          !["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin", "client"].includes(
+            u.roleKey,
+          ),
+      ),
+    [users],
+  );
 
   const filteredAdmins = useMemo(() => {
     const q = queryAdmins.trim().toLowerCase();
@@ -888,6 +900,23 @@ export function UsuariosClient({ users, currentUserRole }: UsuariosClientProps) 
           emptyDescription={queryClients ? "Prueba con otro término de búsqueda." : "Crea el primer cliente con el botón de arriba."}
         />
       </section>
+
+      {/* Sección 4: Otros usuarios (viewer / roles no contemplados arriba) */}
+      {others.length > 0 && (
+        <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
+          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
+            Otros usuarios
+          </h2>
+
+          <UsersTable
+            users={others}
+            onEdit={setEditUser}
+            onPermissions={setPermissionsUser}
+            emptyIcon={<Users size={24} />}
+            emptyTitle="No hay otros usuarios"
+          />
+        </section>
+      )}
     </>
   );
 }
