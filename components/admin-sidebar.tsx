@@ -27,7 +27,11 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { useT } from "@/lib/i18n/provider";
-import { canAccess } from "@/lib/permissions";
+import {
+  canAccess,
+  type EffectivePermissions,
+  type PermissionResource,
+} from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -41,19 +45,19 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin",               labelKey: "admin.nav.dashboard",     icon: LayoutDashboard },
-  { href: "/admin/agencias",      labelKey: "admin.nav.agencias",      icon: Building2 },
+  { href: "/admin/agencias",      labelKey: "admin.nav.agencias",      icon: Building2,    permissionResource: "properties"    },
   { href: "/admin/propiedades",   labelKey: "admin.nav.propiedades",   icon: Home,         permissionResource: "properties"    },
   { href: "/admin/particulares",  labelKey: "admin.nav.particulares",  icon: User,         permissionResource: "particulares"  },
-  { href: "/admin/publicacion",   labelKey: "admin.nav.publicacion",   icon: Send },
-  { href: "/admin/idealista",     labelKey: "admin.nav.idealista",     icon: Sparkles },
-  { href: "/admin/clientes",      labelKey: "admin.nav.clientes",      icon: Users },
-  { href: "/admin/solicitudes",   labelKey: "admin.nav.solicitudes",   icon: ClipboardList },
-  { href: "/admin/calendario",    labelKey: "admin.nav.calendario",    icon: Calendar },
+  { href: "/admin/publicacion",   labelKey: "admin.nav.publicacion",   icon: Send,         permissionResource: "properties"    },
+  { href: "/admin/idealista",     labelKey: "admin.nav.idealista",     icon: Sparkles,     permissionResource: "properties"    },
+  { href: "/admin/clientes",      labelKey: "admin.nav.clientes",      icon: Users,        permissionResource: "clientes"      },
+  { href: "/admin/solicitudes",   labelKey: "admin.nav.solicitudes",   icon: ClipboardList, permissionResource: "solicitudes"  },
+  { href: "/admin/calendario",    labelKey: "admin.nav.calendario",    icon: Calendar,     permissionResource: "calendario"    },
   { href: "/admin/mensajes",      labelKey: "admin.nav.mensajes",      icon: MessageSquare, permissionResource: "mensajes"     },
-  { href: "/admin/sindicacion",   labelKey: "admin.nav.sindicacion",   icon: Radio },
+  { href: "/admin/sindicacion",   labelKey: "admin.nav.sindicacion",   icon: Radio,        permissionResource: "properties"    },
   { href: "/admin/reportes",      labelKey: "admin.nav.reportes",      icon: BarChart3,    permissionResource: "reportes"      },
   { href: "/admin/usuarios",      labelKey: "admin.nav.usuarios",      icon: UserCog,      permissionResource: "usuarios"      },
-  { href: "/admin/diagnostico",   labelKey: "admin.nav.diagnostico",   icon: Stethoscope },
+  { href: "/admin/diagnostico",   labelKey: "admin.nav.diagnostico",   icon: Stethoscope,  permissionResource: "configuracion" },
   { href: "/admin/configuracion", labelKey: "admin.nav.configuracion", icon: Settings,     permissionResource: "configuracion" },
 ];
 
@@ -61,6 +65,11 @@ interface AdminSidebarProps {
   user: AdminUser;
   /** Rol del usuario actual. Usado para filtrar items según permisos. */
   currentRole?: string;
+  /**
+   * Permisos efectivos (rol + excepciones por usuario) calculados en el
+   * servidor. Si vienen, mandan sobre canAccess(rol).
+   */
+  permissions?: EffectivePermissions;
   /** Cantidad de visitas pendientes para el badge de Calendario. */
   pendingVisits?: number;
   /** Mensajes directos no leídos para el badge de Mensajes. */
@@ -69,7 +78,7 @@ interface AdminSidebarProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function AdminSidebar({ user, currentRole, pendingVisits = 0, unreadMessages = 0, onOpenChange }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, onOpenChange }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -85,10 +94,13 @@ export function AdminSidebar({ user, currentRole, pendingVisits = 0, unreadMessa
     onOpenChange?.(false);
   }
 
-  // Filtrar items de nav según los permisos del rol actual.
-  // Si el item no tiene permissionResource definido, siempre se muestra.
+  // Filtrar items de nav según permisos. Si llegan los permisos efectivos
+  // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
   const visibleItems = NAV_ITEMS.filter(({ permissionResource }) => {
     if (!permissionResource) return true;
+    if (permissions) {
+      return permissions[permissionResource as PermissionResource]?.view ?? true;
+    }
     if (!currentRole) return true;
     return canAccess(currentRole, permissionResource, "view");
   });

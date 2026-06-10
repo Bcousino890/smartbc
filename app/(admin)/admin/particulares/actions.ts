@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
+import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
@@ -216,6 +217,38 @@ export async function logParticularContact(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/particulares");
   return { ok: true, id: data.id };
+}
+
+export type AssignParticularResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Asigna (o desasigna con null) un particular a un asesor. Evita que dos
+ * personas trabajen el mismo anuncio sin saberlo.
+ */
+export async function assignParticular(
+  particularId: string,
+  advisorId: string | null,
+): Promise<AssignParticularResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any)
+    .from("particulares")
+    .update({
+      assigned_to: advisorId,
+      assigned_at: advisorId ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", particularId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/particulares");
+  return { ok: true };
 }
 
 export type BulkActionResult =

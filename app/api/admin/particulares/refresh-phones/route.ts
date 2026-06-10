@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { detectAdvertiserFromHtml } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 
@@ -12,7 +13,7 @@ const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || !["admin", "advisor"].includes(profile.role)) {
+  if (!profile || !canAccess(profile.role, "particulares", "edit")) {
     return Response.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -49,11 +50,24 @@ export async function POST(req: Request) {
       if (info.phone) {
         await db
           .from("particulares")
-          .update({ phone: info.phone, updated_at: now })
+          .update({ phone: info.phone, chat_only: false, updated_at: now })
           .eq("id", row.id)
           .is("phone", null);
+        await db.from("particulares_changes").insert({
+          particular_id: row.id,
+          change_type: "phone_added",
+          old_value: null,
+          new_value: { phone: info.phone },
+          changed_at: now,
+        });
         updated++;
       } else {
+        // Re-verificado sin teléfono real → solo se puede contactar por chat.
+        await db
+          .from("particulares")
+          .update({ chat_only: true, updated_at: now })
+          .eq("id", row.id)
+          .is("phone", null);
         still_missing++;
       }
     } catch {

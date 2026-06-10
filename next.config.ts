@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverActions: {
+      // Por defecto Next limita el body de las server actions a 1MB, lo que
+      // rompía "Subir video (.mp4)" y la subida de planos/fotos grandes.
+      // El límite de la app para videos es 200MB (ver uploadPropertyVideo).
+      bodySizeLimit: "210mb",
+    },
+  },
   // Estos paquetes usan `require()` dinámico y APIs nativas (binarios de
   // Chromium) que Next.js no puede bundlear. Los marcamos como externos
   // del server runtime para que se carguen tal cual en Node.js.

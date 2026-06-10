@@ -4,6 +4,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { getEffectivePermissions } from "@/lib/db/queries/permissions";
 import { isStaffRole } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
 
@@ -17,6 +18,10 @@ export default async function AdminLayout({
   if (!isStaffRole(profile.role)) redirect("/inicio");
 
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
+
+  // Permisos efectivos = defaults del rol + excepciones por usuario
+  // (user_permission_overrides). El sidebar oculta los módulos sin "view".
+  const permissions = await getEffectivePermissions(profile.id, profile.role);
 
   // Obtener visitas pendientes para el badge del sidebar
   // Wrapped in try-catch: migration 0027 may not be applied yet on the VPS
@@ -102,7 +107,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
