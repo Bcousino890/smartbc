@@ -18,6 +18,7 @@ import type {
   VisitRequest,
   VisitRequestStatus,
 } from "@/lib/types";
+import { extractFloor } from "@/lib/floor";
 import type {
   Database,
   PropertyStatus,
@@ -334,6 +335,11 @@ export function propertyRowToClientProperty(
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
     bcReference: row.bc_reference ?? null,
+    floor: extractFloor(
+      [...(row.features ?? []), ...(row.features_manual ?? [])],
+      row.title,
+      row.description,
+    ),
   };
 }
 
@@ -367,6 +373,11 @@ export function propertyRowToAdminProperty(
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters ?? 0,
     price: Number(row.price),
+    floor: extractFloor(
+      [...(row.features ?? []), ...(row.features_manual ?? [])],
+      row.title,
+      row.description,
+    ),
     publishedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     featured: false,
     coverPhotoUrl: row.cover_photo_url,

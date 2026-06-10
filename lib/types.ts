@@ -97,6 +97,9 @@ export type Property = {
   // distinta del `external_id` del portal de origen. Se muestra al cliente
   // en SmartLink para que pueda mencionarla al contactar con BC.
   bcReference?: string | null;
+  // Nº de planta deducido de features/título/descripción (ver lib/floor.ts).
+  // null si el anuncio no lo menciona. Ático = ATICO_FLOOR.
+  floor?: number | null;
 };
 
 export type Filters = {
@@ -106,6 +109,7 @@ export type Filters = {
   maxPrice?: number;
   bathrooms?: number;
   minSquareMeters?: number;
+  minFloor?: number;
   zone?: string;
   subzone?: string;
   operation?: Operation;
@@ -243,6 +247,9 @@ export type AgencyPropertyRow = {
   price: number; // monthly for rent, total for sale
   squareMeters: number | null;
   status: "available" | "reserved" | "rented" | "sold" | "draft";
+  // Nº de planta deducido de features/descripción (ver lib/floor.ts).
+  // Opcional: los mocks legacy no lo informan.
+  floor?: number | null;
   lastUpdateMinutes: number;
   coverPhotoUrl?: string | null;
 };
@@ -351,6 +358,9 @@ export type AdminProperty = {
   bathrooms: number;
   squareMeters: number;
   price: number;
+  // Nº de planta deducido de features/título/descripción (ver lib/floor.ts).
+  // Opcional: los mocks legacy no lo informan.
+  floor?: number | null;
   publishedLabel: string; // free-form date
   featured?: boolean;
   coverPhotoUrl?: string | null;

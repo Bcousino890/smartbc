@@ -5,6 +5,7 @@ import {
   getAgencyBySlug,
   getAgencyProperties,
 } from "@/lib/db/queries/agencies";
+import { extractFloor } from "@/lib/floor";
 import { getAgencyDetail } from "@/lib/mock-agency-details";
 import type { AgencyPropertyRow } from "@/lib/types";
 
@@ -37,6 +38,11 @@ export default async function AgencyDetailPage({
     price: Number(p.price),
     squareMeters: p.square_meters,
     status: p.status,
+    floor: extractFloor(
+      [...(p.features ?? []), ...(p.features_manual ?? [])],
+      p.title,
+      p.description,
+    ),
     lastUpdateMinutes: minutesSince(p.updated_at),
     coverPhotoUrl: p.cover_photo_url ?? null,
   }));

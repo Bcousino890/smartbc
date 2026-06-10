@@ -158,6 +158,10 @@ function filterProperties(list: Property[], filters: Filters) {
     if (filters.bathrooms && p.bathrooms < filters.bathrooms) return false;
     if (filters.minSquareMeters && p.squareMeters < filters.minSquareMeters)
       return false;
+    // Planta mínima: sin dato de planta no se puede garantizar el mínimo,
+    // así que esos anuncios quedan fuera.
+    if (filters.minFloor && (p.floor == null || p.floor < filters.minFloor))
+      return false;
     if (filters.maxPrice && p.price > filters.maxPrice) return false;
     if (filters.zone && p.zone !== filters.zone) return false;
     if (filters.subzone && p.subzone !== filters.subzone) return false;

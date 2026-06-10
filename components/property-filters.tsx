@@ -3,6 +3,7 @@
 import {
   Bath,
   Bed,
+  Building2,
   Calendar,
   Euro,
   MapPin,
@@ -41,6 +42,9 @@ export function PropertyFilters({ initial, onApply, zoneTree }: Props) {
   const [minSquareMeters, setMinSquareMeters] = useState<string>(
     initial?.minSquareMeters ? String(initial.minSquareMeters) : "",
   );
+  const [minFloor, setMinFloor] = useState<string>(
+    initial?.minFloor ? String(initial.minFloor) : "",
+  );
   const [zone, setZone] = useState<string>(initial?.zone ?? "");
   const [subzone, setSubzone] = useState<string>(initial?.subzone ?? "");
   const [operation, setOperation] = useState<Operation>(
@@ -62,6 +66,7 @@ export function PropertyFilters({ initial, onApply, zoneTree }: Props) {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       bathrooms: bathrooms ? Number(bathrooms) : undefined,
       minSquareMeters: minSquareMeters ? Number(minSquareMeters) : undefined,
+      minFloor: minFloor ? Number(minFloor) : undefined,
       zone: zone || undefined,
       subzone: subzone || undefined,
       operation,
@@ -170,6 +175,26 @@ export function PropertyFilters({ initial, onApply, zoneTree }: Props) {
               { value: "100", label: areaOption(100) },
               { value: "150", label: areaOption(150) },
               { value: "200", label: areaOption(200) },
+            ]}
+          />
+        </FieldGroup>
+
+        <FieldGroup
+          label={t("filters.floor")}
+          icon={<Building2 size={16} strokeWidth={1.5} />}
+        >
+          <SelectInput
+            value={minFloor}
+            onChange={setMinFloor}
+            placeholder={t("common.any")}
+            options={[
+              { value: "", label: t("common.any") },
+              { value: "1", label: t("filters.floor.min", { n: 1 }) },
+              { value: "2", label: t("filters.floor.min", { n: 2 }) },
+              { value: "3", label: t("filters.floor.min", { n: 3 }) },
+              { value: "4", label: t("filters.floor.min", { n: 4 }) },
+              { value: "5", label: t("filters.floor.min", { n: 5 }) },
+              { value: "6", label: t("filters.floor.min", { n: 6 }) },
             ]}
           />
         </FieldGroup>
