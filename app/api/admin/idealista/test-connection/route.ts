@@ -1,7 +1,16 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export async function POST() {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!["owner", "admin"].includes(profile.role)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const supabase = createAdminClient();
 

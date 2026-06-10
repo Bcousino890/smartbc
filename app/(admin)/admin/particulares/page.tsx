@@ -56,6 +56,11 @@ export default async function AdminParticularesPage({
     ).length,
   };
 
+  const portalCounts = rows.reduce((acc, r) => {
+    acc[r.portal] = (acc[r.portal] ?? 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
       <AdminPageHeader
@@ -69,6 +74,16 @@ export default async function AdminParticularesPage({
           labelKey="adminParticulares.stats.total"
           helpKey="adminParticulares.stats.help"
           value={stats.total}
+          footer={
+            Object.keys(portalCounts).length > 0 ? (
+              <p className="text-[11px] text-ink/50">
+                {Object.entries(portalCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([portal, count]) => `${portal}: ${count}`)
+                  .join(" · ")}
+              </p>
+            ) : undefined
+          }
         />
         <StatCard
           icon={<Home size={20} strokeWidth={1.75} />}

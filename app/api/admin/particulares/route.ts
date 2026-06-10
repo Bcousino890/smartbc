@@ -1,8 +1,17 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { type NextRequest } from "next/server";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export async function GET(req: NextRequest) {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!["owner", "admin", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(profile.role)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

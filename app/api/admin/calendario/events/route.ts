@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/db/server";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+
+const STAFF_ROLES = ["owner", "admin", "advisor", "agent_admin", "agent_senior", "agent_junior"];
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profile = await getCurrentProfile();
+  if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!STAFF_ROLES.includes(profile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const supabase = await createClient();
 
   const { searchParams } = new URL(request.url);
   const year = parseInt(searchParams.get("year") ?? String(new Date().getFullYear()));
@@ -50,14 +54,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profile = await getCurrentProfile();
+  if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!STAFF_ROLES.includes(profile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const supabase = await createClient();
 
   const body = await request.json();
   const { client_id, property_id, assigned_to, requested_at, status, notes } = body;

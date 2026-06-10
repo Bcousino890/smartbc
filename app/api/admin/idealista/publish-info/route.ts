@@ -1,6 +1,15 @@
 import "server-only";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export async function POST(req: Request) {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!["owner", "admin", "advisor"].includes(profile.role)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const { token, feedKey, sandbox } = await req.json();
 
