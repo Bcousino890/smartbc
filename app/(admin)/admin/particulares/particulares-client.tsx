@@ -660,9 +660,17 @@ type RefreshState = "idle" | "loading" | "done" | "error";
 export function ParticularesClient({
   rows,
   currentRole,
+  hasMore = false,
+  currentOffset = 0,
+  pageSize = 100,
+  total = 0,
 }: {
   rows: ParticularRow[];
   currentRole?: string;
+  hasMore?: boolean;
+  currentOffset?: number;
+  pageSize?: number;
+  total?: number;
 }) {
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
@@ -677,6 +685,8 @@ export function ParticularesClient({
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
+  const [allRows, setAllRows] = useState(rows);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const zoneOptions = useMemo(
     () =>
@@ -691,7 +701,7 @@ export function ParticularesClient({
     const bMin = bedrooms ? Number(bedrooms) : null;
     const aMin = areaMin ? Number(areaMin) : null;
     const since = Date.now() - 24 * 60 * 60 * 1000;
-    return rows.filter((r) => {
+    return allRows.filter((r) => {
       if (q) {
         const hay =
           (r.zone?.toLowerCase().includes(q) ?? false) ||
@@ -714,7 +724,24 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [rows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, areaMin, last24h, onlyNoPhone]);
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    try {
+      const nextOffset = currentOffset + pageSize;
+      const params = new URLSearchParams({ offset: String(nextOffset) });
+      const res = await fetch(`/api/admin/particulares/paginated?${params}`);
+      const data = await res.json();
+      if (res.ok && data.rows) {
+        setAllRows((prev) => [...prev, ...data.rows]);
+      }
+    } catch (error) {
+      console.error("Error loading more particulares:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function handleRefreshPhones() {
     setRefreshState("loading");
@@ -1014,6 +1041,18 @@ export function ParticularesClient({
               );
             })}
             </div>
+
+            {hasMore && (
+              <div className="flex justify-center pt-6">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="rounded-lg bg-gold px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loadingMore ? "Cargando..." : `Cargar más (${allRows.length}/${total})`}
+                </button>
+              </div>
+            )}
 
           </>
         )}
