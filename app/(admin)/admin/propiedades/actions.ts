@@ -676,14 +676,17 @@ export async function uploadPropertyVideo(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
   const storagePath = `${prop.id}/video/${Date.now()}-${safeName}`;
 
-  const arrayBuffer = await file.arrayBuffer();
   const admin = createAdminClient();
   const { error: uploadErr } = await (admin as any).storage
     .from("properties-photos")
-    .upload(storagePath, arrayBuffer, { contentType: file.type || "video/mp4", upsert: false });
+    .upload(storagePath, file, { contentType: file.type || "video/mp4", upsert: false });
 
   if (uploadErr) {
     console.error("[uploadPropertyVideo] storage error:", uploadErr);
+    const msg = uploadErr.message ?? "";
+    if (/too large|size/i.test(msg)) {
+      return { ok: false, error: "El vídeo es demasiado grande. El límite del servidor es 50MB. Súbelo a YouTube/Vimeo y pega el enlace." };
+    }
     return { ok: false, error: uploadErr.message };
   }
 
@@ -742,11 +745,10 @@ export async function uploadPropertyPlan(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
   const storagePath = `${prop.id}/plan/${Date.now()}-${safeName}`;
 
-  const arrayBuffer = await file.arrayBuffer();
   const admin = createAdminClient();
   const { error: uploadErr } = await (admin as any).storage
     .from("properties-photos")
-    .upload(storagePath, arrayBuffer, { contentType: file.type || "image/jpeg", upsert: false });
+    .upload(storagePath, file, { contentType: file.type || "image/jpeg", upsert: false });
 
   if (uploadErr) {
     console.error("[uploadPropertyPlan] storage error:", uploadErr);
