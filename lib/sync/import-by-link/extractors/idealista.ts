@@ -376,6 +376,70 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Multimedia extra: plano y vídeo de la ficha.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Plano: Idealista lo sirve como imagen de la galería con alt/title
+// "Imagen Plano de piso en …" (o tag "plan" en multimedia.images del JSON
+// embebido). Capturamos la URL en alta calidad.
+function extractFloorPlanUrl(
+  $: CheerioAPI,
+  embedded: IdealistaListing | null,
+): string | null {
+  // 1) JSON embebido: imágenes con tag de plano.
+  for (const img of embedded?.multimedia?.images ?? []) {
+    if (!img.url || !img.tag) continue;
+    if (/^plan/i.test(img.tag) || /plano/i.test(img.tag)) {
+      if (isIdealistaImageUrl(img.url)) return toIdealistaHighQuality(img.url);
+    }
+  }
+
+  // 2) DOM: <img alt="Imagen Plano de…"> o title="…Plano…". La URL real
+  //    puede estar en src o data-service (lazy load).
+  let found: string | null = null;
+  $("img").each((_, el) => {
+    if (found) return;
+    const $el = $(el);
+    const label = `${$el.attr("alt") ?? ""} ${$el.attr("title") ?? ""}`;
+    if (!/\bplano\b/i.test(label)) return;
+    const candidates = [
+      $el.attr("src"),
+      $el.attr("data-service"),
+      $el.attr("data-src"),
+      $el.attr("data-original"),
+    ];
+    for (const c of candidates) {
+      if (c && isIdealistaImageUrl(c)) {
+        found = toIdealistaHighQuality(c);
+        return;
+      }
+    }
+  });
+  return found;
+}
+
+// Vídeo: <video><source src="https://stXv.idealista.com/.../hd_XXX.mp4">.
+// Preferimos la variante HD (media min-width) si existe; si no, la primera.
+function extractVideoUrl($: CheerioAPI): string | null {
+  let hd: string | null = null;
+  let any: string | null = null;
+  $("video source").each((_, el) => {
+    const src = $(el).attr("src");
+    if (!src || !/\.mp4(\?|$)/i.test(src)) return;
+    if (!any) any = src;
+    if (!hd && $(el).attr("media")) hd = src;
+  });
+  if (hd || any) return hd ?? any;
+
+  // Fallback: URL de vídeo del CDN de Idealista en el HTML raw (por si el
+  // <video> se monta por JS y solo está la URL inline).
+  const m = $.html().match(
+    /https?:\/\/st\d*v\.idealista\.com\/[^\s"'<>]+\.mp4/i,
+  );
+  return m?.[0] ?? null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Entry point del extractor de Idealista.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function extractIdealista(
@@ -396,5 +460,7 @@ export async function extractIdealista(
   return {
     ...preview,
     advertiserInfo,
+    floorPlanUrl: extractFloorPlanUrl($, embedded),
+    videoUrl: extractVideoUrl($),
   };
 }

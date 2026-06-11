@@ -51,6 +51,10 @@ export type ImportPreview = {
   warnings: string[];
   // Tipo de anunciante (solo Idealista). particular / professional / unknown.
   advertiserInfo?: AdvertiserCheckResult;
+  // Multimedia extra de la ficha (si el portal los expone en el HTML):
+  // plano de la vivienda y vídeo. null/undefined = no detectado.
+  floorPlanUrl?: string | null;
+  videoUrl?: string | null;
 };
 
 export type ImportExtractError =

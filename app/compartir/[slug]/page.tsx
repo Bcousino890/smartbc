@@ -109,6 +109,11 @@ export default async function PublicSharePage({
         zone: string;
         latitude: number | null;
         longitude: number | null;
+        property_media?: Array<{
+          url: string;
+          file_name?: string | null;
+          type?: string | null;
+        }> | null;
       })
     | null;
   if (!row) {
@@ -140,5 +145,16 @@ export default async function PublicSharePage({
     property.longitude = coords.lng;
   }
 
-  return <PublicPropertyView property={property} />;
+  // Videos y planos subidos desde /admin/publicacion (tabla property_media).
+  const media = row.property_media ?? [];
+  const videos = media
+    .filter((m) => m.type === "video" && m.url)
+    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+  const plans = media
+    .filter((m) => m.type === "plan" && m.url)
+    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+
+  return (
+    <PublicPropertyView property={property} videos={videos} plans={plans} />
+  );
 }

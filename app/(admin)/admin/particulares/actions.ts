@@ -190,6 +190,45 @@ export async function createPropertyFromParticular(
     );
   }
 
+  // 5) Copiar plano y vídeo del anuncio (si los tiene) a property_media para
+  // que aparezcan en el SmartLink. Select aparte y best-effort: las columnas
+  // son de la migración 0036 y pueden no estar aplicadas aún en el VPS.
+  const mediaRes = await supabase
+    .from("particulares")
+    .select("floor_plan_url, video_url")
+    .eq("id", particularId)
+    .maybeSingle();
+  const partMedia = mediaRes.data as unknown as {
+    floor_plan_url: string | null;
+    video_url: string | null;
+  } | null;
+  if (!mediaRes.error && partMedia) {
+    const mediaRows: Array<Record<string, unknown>> = [];
+    if (partMedia.video_url) {
+      mediaRows.push({
+        property_id: ins.data.id,
+        type: "video",
+        file_name: "video-anuncio.mp4",
+        storage_path: `external/particular/${part.id}/video`,
+        url: partMedia.video_url,
+      });
+    }
+    if (partMedia.floor_plan_url) {
+      mediaRows.push({
+        property_id: ins.data.id,
+        type: "plan",
+        file_name: "plano-anuncio.jpg",
+        storage_path: `external/particular/${part.id}/plan`,
+        url: partMedia.floor_plan_url,
+      });
+    }
+    if (mediaRows.length > 0) {
+      const adminClient = createAdminClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (adminClient as any).from("property_media").insert(mediaRows);
+    }
+  }
+
   revalidatePath("/admin/propiedades");
   revalidatePath("/admin/agencias/portales-externos");
   return { ok: true, slug: ins.data.slug, alreadyExisted: false };

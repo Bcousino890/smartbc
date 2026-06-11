@@ -44,7 +44,17 @@ function WhatsAppIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function PublicPropertyView({ property }: { property: Property }) {
+export function PublicPropertyView({
+  property,
+  videos,
+  plans,
+}: {
+  property: Property;
+  // Videos y planos subidos por el admin (tabla property_media). Opcionales
+  // para no romper otros usos del componente (p. ej. /c/[token]).
+  videos?: Array<{ url: string; file_name?: string | null }>;
+  plans?: Array<{ url: string; file_name?: string | null }>;
+}) {
   const isRent = property.operation === "alquiler";
   const price = formatPrice(property.price);
   // Enlace canónico al propio SmartLink (property.id es el slug) y referencia
@@ -163,6 +173,49 @@ export function PublicPropertyView({ property }: { property: Property }) {
             <div className="mt-4 space-y-3 text-sm leading-relaxed text-ink/75 md:text-base">
               {property.longDescription.split(/\n\n+/).map((p, i) => (
                 <p key={i}>{p}</p>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Vídeo de la propiedad (subido desde /admin/publicacion) */}
+        {videos && videos.length > 0 && (
+          <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+            <h2 className="font-serif text-2xl font-medium text-ink">
+              {videos.length > 1 ? "Vídeos" : "Vídeo"}
+            </h2>
+            <div className="mt-4 space-y-4">
+              {videos.map((v) => (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video
+                  key={v.url}
+                  controls
+                  preload="metadata"
+                  controlsList="nodownload"
+                  className="w-full rounded-xl"
+                  src={v.url}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Plano de la vivienda (subido desde /admin/publicacion) */}
+        {plans && plans.length > 0 && (
+          <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+            <h2 className="font-serif text-2xl font-medium text-ink">
+              {plans.length > 1 ? "Planos" : "Plano"}
+            </h2>
+            <div className="mt-4 space-y-4">
+              {plans.map((p) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={p.url}
+                  src={p.url}
+                  alt="Plano de la vivienda"
+                  className="w-full rounded-xl"
+                  loading="lazy"
+                />
               ))}
             </div>
           </section>

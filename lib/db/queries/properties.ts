@@ -89,12 +89,29 @@ export async function getPropertyBySlugPublic(slug: string) {
     if (error) throw error;
     return data;
   };
+  // Carga videos y planos de property_media. Tolerante a fallos: si la
+  // tabla no existe (migración 0016 sin aplicar) devolvemos lista vacía
+  // en lugar de tumbar el SmartLink entero.
+  const withMedia = async (row: Record<string, unknown>) => {
+    try {
+      const { data: media, error } = await (supabase as any)
+        .from("property_media")
+        .select("id, url, file_name, type, storage_path")
+        .eq("property_id", row.id)
+        .in("type", ["video", "plan"]);
+      return { ...row, property_media: error ? [] : (media ?? []) };
+    } catch {
+      return { ...row, property_media: [] };
+    }
+  };
   // Exacto: links viejos (sin prefijo) y el propio slug almacenado.
   const exact = await fetchBy(slug);
-  if (exact) return exact;
+  if (exact) return withMedia(exact as Record<string, unknown>);
   // URLs nuevas con la referencia delante ("bc0871-{slug}"): quitamos el prefijo.
   const stripped = storedSlugFromShare(slug);
-  return stripped !== slug ? await fetchBy(stripped) : null;
+  if (stripped === slug) return null;
+  const byStripped = await fetchBy(stripped);
+  return byStripped ? withMedia(byStripped as Record<string, unknown>) : null;
 }
 
 // Variante para el admin: trae la propiedad por slug incluso si está

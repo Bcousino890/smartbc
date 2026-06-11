@@ -78,15 +78,25 @@ type ParticularPayload = {
   phone: string | null;
   latitude: number | null;
   longitude: number | null;
+  floor_plan_url: string | null;
+  video_url: string | null;
 };
 
-// ─── Degradación elegante para la migración 0035 ─────────────────────────────
-// Las columnas `address` y `phone_confidence` se añaden en la migración 0035,
-// que puede NO estar aplicada todavía en el VPS (se aplica con psql en el
-// post-deploy). Si el insert/update falla por columna inexistente, reintenta
-// UNA vez la misma operación sin esas dos claves.
+// ─── Degradación elegante para migraciones 0035/0036 ─────────────────────────
+// Las columnas `address`/`phone_confidence` (0035) y `has_floor_plan`/
+// `floor_plan_url`/`has_video`/`video_url` (0036) pueden NO estar aplicadas
+// todavía en el VPS (se aplican con psql en el post-deploy). Si el
+// insert/update falla por columna inexistente, reintenta UNA vez la misma
+// operación sin esas claves.
 
-const MIGRATION_0035_COLUMNS = ["address", "phone_confidence"] as const;
+const MIGRATION_0035_COLUMNS = [
+  "address",
+  "phone_confidence",
+  "has_floor_plan",
+  "floor_plan_url",
+  "has_video",
+  "video_url",
+] as const;
 
 function isMissing0035ColumnError(error: { message?: string } | null | undefined): boolean {
   const msg = error?.message ?? "";
@@ -123,9 +133,11 @@ async function upsertParticular(
 
   // Buscar si ya existe (activo o no). Incluimos todos los campos necesarios
   // para detectar cambios: price, photos count, description, phone.
+  // select("*") a propósito: incluye columnas de migraciones nuevas (0035/
+  // 0036) sin romper si aún no están aplicadas en el VPS.
   const { data: existing } = await supabase
     .from("particulares")
-    .select("id, price, is_active, phone, photos, description")
+    .select("*")
     .eq("external_id", payload.external_id)
     .maybeSingle();
 
@@ -144,6 +156,9 @@ async function upsertParticular(
     const existingPhotoCount = Array.isArray(existing.photos) ? existing.photos.length : 0;
     const newPhotoCount = payload.photos.length;
     const photoCountChanged = newPhotoCount !== existingPhotoCount && newPhotoCount > 0;
+    // Multimedia nueva: el anuncio ganó plano o vídeo desde el último scrape.
+    const floorPlanAdded = !existing.has_floor_plan && !!payload.floor_plan_url;
+    const videoAdded = !existing.has_video && !!payload.video_url;
 
     // Actualizar con datos frescos. detected_at NO se toca.
     // Preservar phone existente si el nuevo scrape no lo encontró.
@@ -167,6 +182,12 @@ async function upsertParticular(
       longitude: payload.longitude,
       advertiser_type: payload.advertiser_type,
       is_ad_professional: payload.is_ad_professional,
+      // Plano/vídeo: si el scrape nuevo no los trajo, conservar lo guardado
+      // (no degradar un anuncio que sí los tenía por un HTML incompleto).
+      has_floor_plan: !!payload.floor_plan_url || !!existing.has_floor_plan,
+      floor_plan_url: payload.floor_plan_url ?? existing.floor_plan_url ?? null,
+      has_video: !!payload.video_url || !!existing.has_video,
+      video_url: payload.video_url ?? existing.video_url ?? null,
       is_active: true,
       taken_down_at: null,
       updated_at: now,
@@ -237,6 +258,24 @@ async function upsertParticular(
         changed_at: now,
       });
     }
+    if (floorPlanAdded) {
+      changesToInsert.push({
+        particular_id: existing.id,
+        change_type: "floor_plan_added",
+        old_value: null,
+        new_value: { floor_plan_url: payload.floor_plan_url },
+        changed_at: now,
+      });
+    }
+    if (videoAdded) {
+      changesToInsert.push({
+        particular_id: existing.id,
+        change_type: "video_added",
+        old_value: null,
+        new_value: { video_url: payload.video_url },
+        changed_at: now,
+      });
+    }
 
     if (changesToInsert.length > 0) {
       await supabase.from("particulares_changes").insert(changesToInsert);
@@ -273,6 +312,10 @@ async function upsertParticular(
     longitude: payload.longitude,
     advertiser_type: payload.advertiser_type,
     is_ad_professional: payload.is_ad_professional,
+    has_floor_plan: !!payload.floor_plan_url,
+    floor_plan_url: payload.floor_plan_url,
+    has_video: !!payload.video_url,
+    video_url: payload.video_url,
     is_active: true,
     detected_at: now,
     updated_at: now,
@@ -398,6 +441,8 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           phone_confidence: phoneConfidence,
           latitude: preview.latitude ?? null,
           longitude: preview.longitude ?? null,
+          floor_plan_url: preview.floorPlanUrl ?? null,
+          video_url: preview.videoUrl ?? null,
         });
 
         if (!saved) {
