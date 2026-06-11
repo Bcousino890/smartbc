@@ -473,11 +473,87 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
     const normalized = await normalizeStoredPhones(supabase);
     (results as Record<string, number>).telefonos_normalizados = normalized;
 
+    // Backfill de teléfonos ocultos tras "Ver teléfono": cada hora revisa
+    // un lote de activos SIN teléfono (los menos revisados primero) llamando
+    // solo al endpoint AJAX de contacto (barato: sin re-descargar la ficha).
+    // Con ~50/hora se cubre todo el stock en <1 día y de ahí en adelante
+    // cada anuncio sin teléfono se re-verifica continuamente, captando los
+    // teléfonos que los propietarios añaden después de publicar.
+    const found = await backfillPhonesViaAjax(supabase, 50);
+    (results as Record<string, number>).telefonos_encontrados = found;
+
     return results;
   } catch (error) {
     console.error("[cron-particulares] Error general:", error);
     throw error;
   }
+}
+
+// Revisa anuncios activos sin teléfono llamando SOLO al endpoint AJAX de
+// contacto de Idealista (el del botón "Ver teléfono") — sin re-descargar la
+// ficha completa. Los menos revisados primero (updated_at asc); cada anuncio
+// procesado refresca su updated_at para rotar al final de la cola, tenga o
+// no teléfono. Si aparece teléfono → guardar normalizado + historial.
+async function backfillPhonesViaAjax(
+  supabase: SupabaseLike,
+  limit: number,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("particulares")
+    .select("id, source_url")
+    .eq("is_active", true)
+    .is("phone", null)
+    .order("updated_at", { ascending: true })
+    .limit(limit);
+  if (error || !data || data.length === 0) return 0;
+
+  let found = 0;
+  for (const row of data as Array<{ id: string; source_url: string }>) {
+    const now = new Date().toISOString();
+    const adId = row.source_url.match(/\/inmueble\/(\d+)/)?.[1];
+    if (!adId) {
+      await supabase
+        .from("particulares")
+        .update({ updated_at: now })
+        .eq("id", row.id);
+      continue;
+    }
+
+    try {
+      const ajax = await fetchIdealistaPhoneViaAjax(adId, {
+        proxyUrl: process.env.SMARTPROXY_URL,
+      });
+      const values: Record<string, unknown> = ajax.phone
+        ? {
+            phone: ajax.phone,
+            phone_confidence: ajax.phone_confidence,
+            chat_only: false,
+            updated_at: now,
+          }
+        : { chat_only: true, updated_at: now };
+
+      const { error: updErr } = await withMigration0035Fallback(
+        values,
+        (v) => supabase.from("particulares").update(v).eq("id", row.id),
+      );
+      if (!updErr && ajax.phone) {
+        found++;
+        await supabase.from("particulares_changes").insert({
+          particular_id: row.id,
+          change_type: "phone_added",
+          old_value: null,
+          new_value: { phone: ajax.phone },
+          changed_at: now,
+        });
+      }
+    } catch (err) {
+      console.warn(`[cron-particulares] backfill teléfono ${adId}:`, err);
+    }
+  }
+  if (found > 0) {
+    console.log(`[cron-particulares] teléfonos encontrados vía AJAX: ${found}`);
+  }
+  return found;
 }
 
 // Reescribe al formato canónico +34XXXXXXXXX los teléfonos ya guardados que

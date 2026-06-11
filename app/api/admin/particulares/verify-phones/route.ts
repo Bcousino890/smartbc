@@ -114,17 +114,23 @@ async function verifyByScraping(
   supabase: SupabaseLike,
   mode: "all" | "missing",
   limit: number,
+  onlyId?: string | null,
 ): Promise<VerifyResponse> {
   // Activos, los menos verificados primero (updated_at asc). En "missing"
-  // solo los que no tienen teléfono.
+  // solo los que no tienen teléfono. Con `onlyId`, ese anuncio concreto
+  // (botón "Verificar teléfono" del modal).
   let query = supabase
     .from("particulares")
     .select("id, source_url, phone")
-    .eq("is_active", true)
     .order("updated_at", { ascending: true })
     .limit(limit);
-  if (mode === "missing") {
-    query = query.is("phone", null);
+  if (onlyId) {
+    query = query.eq("id", onlyId);
+  } else {
+    query = query.eq("is_active", true);
+    if (mode === "missing") {
+      query = query.is("phone", null);
+    }
   }
 
   const { data, error } = await query;
@@ -226,6 +232,16 @@ async function verifyByScraping(
       if (phone || !row.phone) {
         result.updated++;
       }
+      // Historial: teléfono descubierto en un anuncio que no lo tenía.
+      if (phone && !row.phone) {
+        await supabase.from("particulares_changes").insert({
+          particular_id: row.id,
+          change_type: "phone_added",
+          old_value: null,
+          new_value: { phone },
+          changed_at: now,
+        });
+      }
     } catch (err) {
       console.error(
         `[verify-phones] Error procesando ${row.source_url}:`,
@@ -321,6 +337,8 @@ export async function POST(req: Request) {
     100,
     Math.max(1, Number.parseInt(searchParams.get("limit") ?? "30", 10) || 30),
   );
+  // Verificación de UN anuncio concreto (botón del modal en el admin).
+  const onlyId = searchParams.get("id");
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -334,7 +352,12 @@ export async function POST(req: Request) {
     const result =
       modeParam === "normalize"
         ? await normalizeStoredPhones(supabase)
-        : await verifyByScraping(supabase, modeParam as "all" | "missing", limit);
+        : await verifyByScraping(
+            supabase,
+            modeParam as "all" | "missing",
+            limit,
+            onlyId,
+          );
 
     return Response.json(result, { status: result.ok ? 200 : 500 });
   } catch (error) {

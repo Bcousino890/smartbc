@@ -825,6 +825,40 @@ function ParticularModal({
     setShowEditPhone(false);
   }
 
+  // Verificación bajo demanda de ESTE anuncio: re-scrapea la ficha y llama
+  // al endpoint AJAX "Ver teléfono" de Idealista. Si aparece teléfono, se
+  // guarda y se refleja al instante.
+  const [verifyingThis, setVerifyingThis] = useState(false);
+  const [verifyThisResult, setVerifyThisResult] = useState<string | null>(null);
+
+  async function handleVerifyThisPhone() {
+    setVerifyingThis(true);
+    setVerifyThisResult(null);
+    try {
+      const res = await fetch(
+        `/api/admin/particulares/verify-phones?id=${currentRow.id}`,
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (data?.ok && data.withPhone > 0) {
+        // El endpoint guardó el teléfono pero no lo devuelve por anuncio;
+        // recargamos para traer el dato fresco de la BD.
+        setVerifyThisResult("✓ Teléfono encontrado — actualizando…");
+        window.location.reload();
+      } else if (data?.ok) {
+        setVerifyThisResult(
+          "El anuncio no expone teléfono en el portal (solo chat).",
+        );
+      } else {
+        setVerifyThisResult("No se pudo verificar — reintenta en un momento.");
+      }
+    } catch {
+      setVerifyThisResult("No se pudo verificar — reintenta en un momento.");
+    } finally {
+      setVerifyingThis(false);
+    }
+  }
+
   return (
     <>
       {showEditPhone && (
@@ -1042,6 +1076,20 @@ function ParticularModal({
                   <Phone size={14} strokeWidth={1.75} />
                   Agregar teléfono
                 </button>
+                <button
+                  onClick={handleVerifyThisPhone}
+                  disabled={verifyingThis}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5 disabled:opacity-60"
+                >
+                  {verifyingThis ? (
+                    <><Loader2 size={14} className="animate-spin" /> Consultando el portal…</>
+                  ) : (
+                    <><RefreshCw size={14} strokeWidth={1.75} /> Verificar teléfono ahora</>
+                  )}
+                </button>
+                {verifyThisResult && (
+                  <p className="text-center text-[11px] text-ink/55">{verifyThisResult}</p>
+                )}
               </div>
             )}
           </div>
