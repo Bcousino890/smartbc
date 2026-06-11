@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  ArrowDown,
+  ArrowUp,
+  Camera,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -8,6 +11,7 @@ import {
   ClipboardList,
   Copy,
   ExternalLink,
+  History,
   Loader2,
   MapPin,
   MessageSquare,
@@ -15,13 +19,25 @@ import {
   PhoneOff,
   Plus,
   RefreshCw,
+  Ruler,
   Search,
+  Sparkles,
   UserCheck,
+  Video,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useToast } from "@/components/ui/toast";
 import { extractFloor } from "@/lib/floor";
 import { formatPrice } from "@/lib/format";
@@ -35,7 +51,6 @@ import {
   setParticularActive,
   updateParticularPhone,
 } from "./actions";
-import PriceHistoryChart from "./price-history-chart";
 
 export type StaffOption = { id: string; name: string };
 
@@ -71,6 +86,12 @@ export type ParticularRow = {
   address?: string | null;
   phone_confidence?: "high" | "medium" | "low" | null;
   advertiser_type?: string | null;
+  // Campos de la migración 0036 (plano + vídeo) — pueden venir undefined/null
+  has_floor_plan?: boolean | null;
+  floor_plan_url?: string | null;
+  has_video?: boolean | null;
+  video_url?: string | null;
+  detected_at?: string | null;
   created_at: string | null;
   taken_down_at: string | null;
   is_active: boolean;
@@ -208,67 +229,279 @@ function mapFallbackQuery(row: ParticularRow): string {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-const CHANGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  new_listing:       { label: "Alta del anuncio",    color: "bg-emerald-100 text-emerald-700" },
-  price_up:          { label: "Subida de precio",    color: "bg-red-100 text-red-700" },
-  price_down:        { label: "Bajada de precio",    color: "bg-emerald-100 text-emerald-700" },
-  price_change:      { label: "Cambio de precio",    color: "bg-amber-100 text-amber-700" },
-  photo_count_change:{ label: "Cambio de fotos",     color: "bg-blue-100 text-blue-700" },
-  photo_added:       { label: "Fotos añadidas",      color: "bg-blue-100 text-blue-700" },
-  phone_added:       { label: "Teléfono añadido",    color: "bg-emerald-100 text-emerald-700" },
-  description_updated:{ label: "Descripción actualizada", color: "bg-ink/10 text-ink/60" },
-  reactivated:       { label: "Anuncio reactivado",  color: "bg-emerald-100 text-emerald-700" },
-  deleted:           { label: "Anuncio retirado",    color: "bg-red-100 text-red-700" },
+// Fecha del timeline: "10 jun 2026, 12:35"
+const HISTORY_DATE_FMT = new Intl.DateTimeFormat("es-ES", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+// Eje X del gráfico de precios: "10 jun"
+const CHART_DATE_FMT = new Intl.DateTimeFormat("es-ES", {
+  day: "numeric",
+  month: "short",
+});
+
+function asPrice(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function euros(v: unknown): string {
+  const n = asPrice(v);
+  return n != null ? `${formatPrice(n)} €` : "—";
+}
+
+type TimelineEntry = {
+  key: string;
+  date: string; // ISO
+  title: string;
+  icon: ReactNode;
+  iconClass: string;
 };
 
-function ChangeHistory({ particularId }: { particularId: string }) {
+// Traducción de cada change_type del cron a una línea legible del timeline.
+function changeToEntry(c: ParticularChangeRow): TimelineEntry {
+  const base = { key: c.id, date: c.changed_at };
+  switch (c.change_type) {
+    case "new_listing": {
+      const price = asPrice(c.new_value?.price);
+      return {
+        ...base,
+        title: price != null ? `Alta del anuncio · ${formatPrice(price)} €` : "Alta del anuncio",
+        icon: <Sparkles size={12} strokeWidth={2} />,
+        iconClass: "bg-gold/20 text-gold-dark",
+      };
+    }
+    case "price_up":
+      return {
+        ...base,
+        title: `El precio subió de ${euros(c.old_value?.price)} a ${euros(c.new_value?.price)}`,
+        icon: <ArrowUp size={12} strokeWidth={2.5} />,
+        iconClass: "bg-red-100 text-red-600",
+      };
+    case "price_down":
+      return {
+        ...base,
+        title: `El precio bajó de ${euros(c.old_value?.price)} a ${euros(c.new_value?.price)}`,
+        icon: <ArrowDown size={12} strokeWidth={2.5} />,
+        iconClass: "bg-emerald-100 text-emerald-600",
+      };
+    case "phone_added":
+      return {
+        ...base,
+        title: `Teléfono añadido: ${String(c.new_value?.phone ?? "—")}`,
+        icon: <Phone size={12} strokeWidth={2} />,
+        iconClass: "bg-emerald-100 text-emerald-600",
+      };
+    case "phone_changed":
+      return {
+        ...base,
+        title: `El teléfono cambió de ${String(c.old_value?.phone ?? "—")} a ${String(c.new_value?.phone ?? "—")}`,
+        icon: <Phone size={12} strokeWidth={2} />,
+        iconClass: "bg-blue-100 text-blue-600",
+      };
+    case "photo_count_change":
+      return {
+        ...base,
+        title: `Las fotos pasaron de ${String(c.old_value?.count ?? "—")} a ${String(c.new_value?.count ?? "—")}`,
+        icon: <Camera size={12} strokeWidth={2} />,
+        iconClass: "bg-blue-100 text-blue-600",
+      };
+    case "deleted":
+      return {
+        ...base,
+        title: "Anuncio retirado",
+        icon: <X size={12} strokeWidth={2.5} />,
+        iconClass: "bg-red-100 text-red-600",
+      };
+    case "reactivated":
+      return {
+        ...base,
+        title: "Anuncio reactivado",
+        icon: <RefreshCw size={12} strokeWidth={2} />,
+        iconClass: "bg-emerald-100 text-emerald-600",
+      };
+    case "video_added":
+      return {
+        ...base,
+        title: "Vídeo añadido al anuncio",
+        icon: <Video size={12} strokeWidth={2} />,
+        iconClass: "bg-violet-100 text-violet-600",
+      };
+    case "floor_plan_added":
+      return {
+        ...base,
+        title: "Plano añadido al anuncio",
+        icon: <Ruler size={12} strokeWidth={2} />,
+        iconClass: "bg-violet-100 text-violet-600",
+      };
+    default:
+      return {
+        ...base,
+        title: "Actualización",
+        icon: <History size={12} strokeWidth={2} />,
+        iconClass: "bg-ink/10 text-ink/60",
+      };
+  }
+}
+
+// Historial de cambios del anuncio: timeline (particulares_changes) + gráfico
+// de evolución del precio cuando ha habido al menos un cambio real.
+function ChangeHistory({ row }: { row: ParticularRow }) {
   const [changes, setChanges] = useState<ParticularChangeRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/admin/particulares/history?id=${particularId}`)
+    setLoading(true);
+    fetch(`/api/admin/particulares/changes?id=${row.id}`)
       .then((r) => r.json())
       .then((d) => setChanges(d.changes ?? []))
       .catch(() => setChanges([]))
       .finally(() => setLoading(false));
-  }, [particularId]);
+  }, [row.id]);
 
-  if (loading) return <p className="text-xs text-ink/40 py-2">Cargando historial…</p>;
-  if (!changes || changes.length === 0) return <p className="text-xs text-ink/40 py-2">Sin historial de cambios.</p>;
+  // Timeline (más reciente arriba). Si el cron aún no registró el alta
+  // (anuncios anteriores al tipo "new_listing"), se sintetiza al final con
+  // la fecha de detección del anuncio.
+  const entries = useMemo<TimelineEntry[]>(() => {
+    if (!changes) return [];
+    const sorted = [...changes].sort(
+      (a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime(),
+    );
+    const items = sorted.map(changeToEntry);
+    const hasAlta = sorted.some((c) => c.change_type === "new_listing");
+    const altaDate = row.detected_at ?? row.created_at;
+    if (!hasAlta && altaDate) {
+      items.push({
+        key: "alta-sintetizada",
+        date: altaDate,
+        title: "Alta del anuncio",
+        icon: <Sparkles size={12} strokeWidth={2} />,
+        iconClass: "bg-gold/20 text-gold-dark",
+      });
+    }
+    return items;
+  }, [changes, row.detected_at, row.created_at]);
+
+  // Serie de precios: alta → cambios de precio en orden cronológico → precio
+  // actual como último punto.
+  const pricePoints = useMemo(() => {
+    if (!changes) return [] as Array<{ date: string; price: number }>;
+    const asc = [...changes].sort(
+      (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime(),
+    );
+    const pts: Array<{ date: string; price: number }> = [];
+    for (const c of asc) {
+      if (!["new_listing", "price_up", "price_down"].includes(c.change_type)) continue;
+      const price = asPrice(c.new_value?.price);
+      if (price != null) pts.push({ date: c.changed_at, price });
+    }
+    if (row.price != null) {
+      pts.push({ date: new Date().toISOString(), price: row.price });
+    }
+    return pts;
+  }, [changes, row.price]);
+
+  // Solo merece gráfico si el precio cambió de verdad (≥2 valores distintos).
+  const showChart = new Set(pricePoints.map((p) => p.price)).size >= 2;
+  const chartData = useMemo(
+    () =>
+      pricePoints.map((p) => ({
+        label: CHART_DATE_FMT.format(new Date(p.date)),
+        price: p.price,
+      })),
+    [pricePoints],
+  );
 
   return (
-    <ol className="relative border-l border-ink/10 pl-4 space-y-3">
-      {changes.map((c) => {
-        const meta = CHANGE_TYPE_LABELS[c.change_type] ?? { label: c.change_type, color: "bg-ink/10 text-ink/60" };
-        const fmt = new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-        return (
-          <li key={c.id} className="flex items-start gap-2">
-            <span className="absolute -left-1.5 mt-0.5 h-3 w-3 rounded-full border-2 border-white bg-gold/50" />
-            <div className="min-w-0">
-              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", meta.color)}>
-                {meta.label}
+    <div>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+        Historial de cambios
+      </p>
+      {loading ? (
+        <p className="flex items-center gap-1.5 text-xs text-ink/40 py-2">
+          <Loader2 size={12} className="animate-spin" />
+          Cargando historial…
+        </p>
+      ) : entries.length === 0 ? (
+        <p className="text-xs text-ink/40 py-2">Sin historial de cambios.</p>
+      ) : (
+        <ol className="space-y-3">
+          {entries.map((e) => (
+            <li key={e.key} className="flex items-start gap-2.5">
+              <span
+                className={cn(
+                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                  e.iconClass,
+                )}
+              >
+                {e.icon}
               </span>
-              {(c.change_type === "price_up" || c.change_type === "price_down" || c.change_type === "price_change") && c.old_value && c.new_value && (
-                <span className="ml-2 text-[11px] text-ink/55">
-                  {formatPrice(c.old_value.price as number)} → {formatPrice(c.new_value.price as number)} €
-                </span>
-              )}
-              {c.change_type === "photo_count_change" && c.old_value && c.new_value && (
-                <span className="ml-2 text-[11px] text-ink/55">
-                  {c.old_value.count as number} → {c.new_value.count as number} fotos
-                </span>
-              )}
-              {c.change_type === "phone_added" && c.new_value && (
-                <span className="ml-2 text-[11px] text-ink/55">
-                  {String(c.new_value.phone ?? "")}
-                </span>
-              )}
-              <p className="mt-0.5 text-[10px] text-ink/40">{fmt.format(new Date(c.changed_at))}</p>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-ink">{e.title}</p>
+                <p className="mt-0.5 text-[10px] text-ink/40">
+                  {HISTORY_DATE_FMT.format(new Date(e.date))}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* Evolución del precio (alta → cambios → precio actual) */}
+      {!loading && showChart && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            Cambio de precio
+          </p>
+          <div className="rounded-lg border border-ink/10 bg-white p-3">
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(10, 10, 10, 0.06)" />
+                <XAxis
+                  dataKey="label"
+                  stroke="rgba(10, 10, 10, 0.4)"
+                  style={{ fontSize: "11px" }}
+                  tickLine={false}
+                />
+                <YAxis
+                  stroke="rgba(10, 10, 10, 0.4)"
+                  style={{ fontSize: "11px" }}
+                  width={64}
+                  domain={["auto", "auto"]}
+                  tickFormatter={(v) => formatPrice(Number(v))}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "rgba(251, 248, 243, 0.95)",
+                    border: "1px solid rgba(10, 10, 10, 0.1)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                  }}
+                  formatter={(value: unknown) => [
+                    typeof value === "number" ? `${formatPrice(value)} €` : "—",
+                    "Precio",
+                  ]}
+                  labelFormatter={(label) => `Fecha: ${label}`}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="price"
+                  stroke="#c9a96e"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#c9a96e", strokeWidth: 0 }}
+                  isAnimationActive={false}
+                  name="Precio"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -519,8 +752,6 @@ function ParticularModal({
   const [photoIdx, setPhotoIdx] = useState(0);
   const [currentRow, setCurrentRow] = useState(row);
   const [showEditPhone, setShowEditPhone] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [priceHistory, setPriceHistory] = useState<Array<{ date: string; price: number }>>([]);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const photos = currentRow.photos ?? [];
@@ -570,22 +801,6 @@ function ParticularModal({
       setTogglingActive(false);
     }
   }
-
-  // Cargar historial de precios cuando se abre el modal o cambia el row
-  useEffect(() => {
-    fetch(`/api/admin/particulares/history?id=${currentRow.id}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const prices = (d.changes ?? []).filter((c: ParticularChangeRow) =>
-          ["price_up", "price_down", "price_change"].includes(c.change_type)
-        ).map((c: ParticularChangeRow) => ({
-          date: c.changed_at,
-          price: (c.new_value?.price as number) ?? 0,
-        })).sort((a: { date: string; price: number }, b: { date: string; price: number }) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setPriceHistory(prices);
-      })
-      .catch(() => setPriceHistory([]));
-  }, [currentRow.id]);
 
   async function handleCreateProperty() {
     setCreating(true);
@@ -696,7 +911,7 @@ function ParticularModal({
 
         {/* Contenido scrollable */}
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-          {/* Referencias (interna + externa) + historial */}
+          {/* Referencias (interna + externa) */}
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               {currentRow.particular_reference && (
@@ -708,33 +923,7 @@ function ParticularModal({
                 {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
             </div>
-            <button
-              onClick={() => setShowHistory((v) => !v)}
-              className="mt-2 text-[11px] text-ink/50 underline hover:text-ink transition"
-            >
-              {showHistory ? "Ocultar historial" : "Ver historial"}
-            </button>
           </div>
-
-          {/* Gráfico de precios */}
-          {priceHistory.length > 0 && (
-            <div className="rounded-xl border border-gold/15 bg-gold/3 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
-                Historial de precios
-              </p>
-              <PriceHistoryChart priceHistory={priceHistory} />
-            </div>
-          )}
-
-          {/* Timeline de cambios */}
-          {showHistory && (
-            <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
-                Historial de cambios
-              </p>
-              <ChangeHistory particularId={currentRow.id} />
-            </div>
-          )}
 
           {/* Precio + zona */}
           <div>
@@ -898,6 +1087,11 @@ function ParticularModal({
             <ContactLog particularId={currentRow.id} />
           </div>
 
+          {/* Historial de cambios (particulares_changes) + evolución del precio */}
+          <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
+            <ChangeHistory row={currentRow} />
+          </div>
+
           {/* Mapa — exacto si hay coords, fallback por dirección (más precisa) o zona */}
           {(currentRow.latitude && currentRow.longitude) || currentRow.address || currentRow.zone ? (
             <div>
@@ -936,6 +1130,38 @@ function ParticularModal({
               )}
             </div>
           ) : null}
+
+          {/* Vídeo del anuncio (migración 0036) */}
+          {currentRow.video_url && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Vídeo
+              </p>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                controls
+                preload="none"
+                className="w-full rounded-lg"
+                src={currentRow.video_url}
+              />
+            </div>
+          )}
+
+          {/* Plano de la vivienda (migración 0036) */}
+          {currentRow.floor_plan_url && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                Plano
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={currentRow.floor_plan_url}
+                alt="Plano de la vivienda"
+                className="w-full rounded-lg border border-ink/10 bg-white"
+                loading="lazy"
+              />
+            </div>
+          )}
 
           {/* Características */}
           {currentRow.features && currentRow.features.length > 0 && (
@@ -1658,9 +1884,22 @@ export function ParticularesClient({
                         .join(" · ")}
                     </p>
                     {/* Gestión: quién lo tiene asignado y quién lo contactó.
-                        Evita que dos asesores trabajen el mismo anuncio. */}
-                    {(r.assigned_name || r.last_contact_by || (!r.is_active && r.taken_down_at)) && (
+                        Evita que dos asesores trabajen el mismo anuncio.
+                        + extras multimedia (vídeo / plano, migración 0036). */}
+                    {(r.assigned_name || r.last_contact_by || (!r.is_active && r.taken_down_at) || r.has_video || r.video_url || r.has_floor_plan || r.floor_plan_url) && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
+                        {(r.has_video || r.video_url) && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink/60">
+                            <Video size={10} strokeWidth={2} />
+                            Vídeo
+                          </span>
+                        )}
+                        {(r.has_floor_plan || r.floor_plan_url) && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink/60">
+                            <Ruler size={10} strokeWidth={2} />
+                            Plano
+                          </span>
+                        )}
                         {r.assigned_name && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
                             <UserCheck size={10} strokeWidth={2} />

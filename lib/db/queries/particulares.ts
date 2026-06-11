@@ -7,6 +7,7 @@ import { createAdminClient } from "../admin";
  *  - asignación (assigned_to → nombre del asesor)      [migración 0034]
  *  - último contacto registrado (quién/cuándo/cómo)    [migración 0033]
  *  - dirección y confianza del teléfono                [migración 0035]
+ *  - plano y vídeo del anuncio                         [migración 0036]
  *
  * Trae TODOS los anuncios sin límite: primero los ACTIVOS (created_at desc)
  * y a continuación los RETIRADOS (is_active = false, taken_down_at desc),
@@ -19,7 +20,12 @@ import { createAdminClient } from "../admin";
  */
 
 const BASE_COLUMNS =
-  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, created_at, is_active";
+  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, detected_at, created_at, is_active";
+
+// Columnas de la migración 0036 (plano + vídeo). Pueden no existir aún en el
+// VPS — por eso van en intentos separados (degradación elegante).
+const MEDIA_COLUMNS_0036 =
+  "has_floor_plan, floor_plan_url, has_video, video_url";
 
 export type EnrichedParticularRow = Record<string, unknown> & {
   id: string;
@@ -57,9 +63,10 @@ export async function getParticularesPage(_offset?: number, _pageSize?: number) 
   const supabase = createAdminClient() as any;
 
   // Intentos de más completo a más básico según migraciones aplicadas:
-  // 0035 (address, phone_confidence) → 0034 (assigned_*) → 0024
-  // (particular_reference) → 0012 (advertiser_type) → base.
+  // 0036 (plano/vídeo) → 0035 (address, phone_confidence) → 0034 (assigned_*)
+  // → 0024 (particular_reference) → 0012 (advertiser_type) → base.
   const attempts = [
+    `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference`,
     `${BASE_COLUMNS}, advertiser_type, particular_reference, assigned_to, assigned_at`,
