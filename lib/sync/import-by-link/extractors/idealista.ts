@@ -38,6 +38,8 @@ type IdealistaListing = {
   district?: string;
   latitude?: number;
   longitude?: number;
+  // Idealista anida a veces las coordenadas bajo `ubication`.
+  ubication?: { latitude?: number; longitude?: number };
   floor?: string;
   exterior?: boolean;
   hasLift?: boolean;
@@ -440,6 +442,114 @@ function extractVideoUrl($: CheerioAPI): string | null {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Ubicación precisa: coordenadas + dirección exacta (calle + número).
+//
+// Idealista marca en el portal solo la ZONA (p.ej. "Retiro") cuando el
+// anunciante oculta la dirección, pero casi siempre embebe unas coordenadas
+// (el centro del mapa de la ficha) que son MUCHO más cercanas al piso real
+// que el centro del distrito. Y cuando el anunciante muestra la dirección
+// completa, esta aparece en el título ("Piso en venta en Calle X, 81") y en
+// el bloque de ubicación. Extraemos ambas cosas para clavar el puntito.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Coordenadas válidas dentro de España (incluye Canarias y Baleares).
+function isSpainCoord(lat: number, lng: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= 27 &&
+    lat <= 44 &&
+    lng >= -19 &&
+    lng <= 5 &&
+    // Descartar 0,0 y valores triviales.
+    Math.abs(lat) > 0.01
+  );
+}
+
+// Escanea el HTML crudo buscando coordenadas con varios patrones (la
+// estructura del JSON de Idealista varía). Devuelve el primer par plausible.
+function extractCoordsFromHtml(
+  rawHtml: string,
+): { latitude: number; longitude: number } | null {
+  const tryPair = (
+    lat: string | undefined,
+    lng: string | undefined,
+  ): { latitude: number; longitude: number } | null => {
+    if (!lat || !lng) return null;
+    const la = parseFloat(lat);
+    const ln = parseFloat(lng);
+    return isSpainCoord(la, ln) ? { latitude: la, longitude: ln } : null;
+  };
+
+  // 1) "latitude": 40.12, "longitude": -3.45  (orden lat→lng)
+  let m = rawHtml.match(
+    /"latitude"\s*:\s*"?(-?\d{1,2}\.\d{3,})"?\s*,\s*"longitude"\s*:\s*"?(-?\d{1,3}\.\d{3,})"?/,
+  );
+  let r = tryPair(m?.[1], m?.[2]);
+  if (r) return r;
+
+  // 2) "longitude": -3.45, "latitude": 40.12  (orden lng→lat)
+  m = rawHtml.match(
+    /"longitude"\s*:\s*"?(-?\d{1,3}\.\d{3,})"?\s*,\s*"latitude"\s*:\s*"?(-?\d{1,2}\.\d{3,})"?/,
+  );
+  r = tryPair(m?.[2], m?.[1]);
+  if (r) return r;
+
+  // 3) Static map / params: center=40.12,-3.45  ó  center=40.12%2C-3.45
+  m = rawHtml.match(
+    /center=(-?\d{1,2}\.\d{3,})(?:%2C|,)(-?\d{1,3}\.\d{3,})/i,
+  );
+  r = tryPair(m?.[1], m?.[2]);
+  if (r) return r;
+
+  // 4) data-lat="40.12" ... data-lng="-3.45"
+  m = rawHtml.match(
+    /data-lat(?:itude)?\s*=\s*["'](-?\d{1,2}\.\d{3,})["'][\s\S]{0,80}?data-l(?:ng|on|ongitude)\s*=\s*["'](-?\d{1,3}\.\d{3,})["']/i,
+  );
+  r = tryPair(m?.[1], m?.[2]);
+  if (r) return r;
+
+  return null;
+}
+
+// Palabras que identifican una vía (calle, avenida…). Si el texto las
+// contiene, es una dirección de calle (no un nombre de barrio/zona).
+const STREET_KEYWORDS =
+  /\b(calle|c\/|avda?\.?|avenida|paseo|p\.?º|plaza|pl\.|camino|carretera|ctra\.?|ronda|traves[ií]a|v[ií]a|glorieta|bulevar|gran\s+v[ií]a|cuesta|costanilla|callej[oó]n)\b/i;
+
+// Extrae la dirección exacta (calle + número) del título cuando el anunciante
+// la muestra. Idealista titula "Piso en venta en Calle de X, 81". Si el título
+// solo trae la zona ("…en Valdebebas - Valdefuentes, Madrid") devuelve null.
+function extractExactAddressFromTitle(title: string | null): string | null {
+  if (!title) return null;
+  // Texto tras el último " en " (la parte de la ubicación del título).
+  const idx = title.toLowerCase().lastIndexOf(" en ");
+  const tail = idx >= 0 ? title.slice(idx + 4).trim() : title.trim();
+  if (!STREET_KEYWORDS.test(tail)) return null;
+  // Es una vía. Devolvemos tal cual (incluye número si el título lo trae).
+  return tail;
+}
+
+// Dirección exacta desde el bloque de ubicación del DOM (primera línea, que
+// Idealista muestra como "Calle de X, 81" cuando la dirección es pública).
+function extractExactAddressFromDom($: CheerioAPI): string | null {
+  const candidates = [
+    "#mapWrapper .address",
+    ".address",
+    "#headerMap .main-info__title-minor",
+    ".main-info__title-minor",
+  ];
+  for (const sel of candidates) {
+    const txt = $(sel).first().text().trim();
+    if (txt && STREET_KEYWORDS.test(txt)) {
+      // Primera línea / antes de la primera coma de zona.
+      return txt.split("\n")[0].trim();
+    }
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Entry point del extractor de Idealista.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function extractIdealista(
@@ -455,10 +565,53 @@ export async function extractIdealista(
   // Detectar particular vs profesional desde el HTML (campo
   // `adProfessionalName`). Más fiable que el endpoint AJAX (que DataDome
   // bloquea) y sin coste de request extra.
-  const advertiserInfo = detectAdvertiserFromHtml($.html());
+  const rawHtml = $.html();
+  const advertiserInfo = detectAdvertiserFromHtml(rawHtml);
+
+  // ── Coordenadas: lo más cercano posible al piso real ───────────────────────
+  // Prioridad: las del listing embebido (planas o anidadas en `ubication`) →
+  // las que escaneemos del HTML crudo. Cualquiera de estas es mejor que
+  // geocodificar el nombre de la zona.
+  let latitude = preview.latitude;
+  let longitude = preview.longitude;
+  if (latitude == null || longitude == null) {
+    const embLat = embedded?.latitude ?? embedded?.ubication?.latitude;
+    const embLng = embedded?.longitude ?? embedded?.ubication?.longitude;
+    if (embLat != null && embLng != null && isSpainCoord(embLat, embLng)) {
+      latitude = embLat;
+      longitude = embLng;
+    }
+  }
+  if (latitude == null || longitude == null) {
+    const scanned = extractCoordsFromHtml(rawHtml);
+    if (scanned) {
+      latitude = scanned.latitude;
+      longitude = scanned.longitude;
+    }
+  }
+
+  // ── Dirección exacta (calle + número) si el anunciante la muestra ──────────
+  // Si el listing ya trajo una dirección con pinta de calle, la respetamos;
+  // si no, intentamos sacarla del título y del DOM. Nunca inventamos: si solo
+  // hay zona, dejamos la dirección como estaba (posiblemente null).
+  let address = preview.address;
+  const looksLikeStreet = address ? STREET_KEYWORDS.test(address) : false;
+  if (!looksLikeStreet) {
+    const exact =
+      extractExactAddressFromTitle(preview.title) ??
+      extractExactAddressFromDom($);
+    if (exact) {
+      // Completar con municipio/zona para que el geocoder acierte.
+      const tail = [preview.zone, "Madrid"].filter(Boolean).join(", ");
+      address = tail ? `${exact}, ${tail}` : exact;
+    }
+  }
 
   return {
     ...preview,
+    address,
+    latitude,
+    longitude,
     advertiserInfo,
     floorPlanUrl: extractFloorPlanUrl($, embedded),
     videoUrl: extractVideoUrl($),

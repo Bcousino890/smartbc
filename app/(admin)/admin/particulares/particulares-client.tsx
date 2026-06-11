@@ -231,6 +231,14 @@ function mapFallbackQuery(row: ParticularRow): string {
   return /madrid/i.test(base) ? base : `${base}, Madrid`;
 }
 
+// ¿La dirección es una calle concreta (vía + idealmente número), no solo una
+// zona/barrio? Determina si podemos clavar el puntito exacto.
+const STREET_RE =
+  /\b(calle|c\/|avda?\.?|avenida|paseo|p\.?º|plaza|pl\.|camino|carretera|ctra\.?|ronda|traves[ií]a|v[ií]a|glorieta|bulevar|gran\s+v[ií]a|cuesta|costanilla|callej[oó]n)\b/i;
+function isExactStreet(address: string | null | undefined): boolean {
+  return !!address && STREET_RE.test(address);
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 // Fecha del timeline: "10 jun 2026, 12:35"
@@ -1148,44 +1156,59 @@ function ParticularModal({
             <ChangeHistory row={currentRow} />
           </div>
 
-          {/* Mapa — exacto si hay coords, fallback por dirección (más precisa) o zona */}
-          {(currentRow.latitude && currentRow.longitude) || currentRow.address || currentRow.zone ? (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
-                Ubicación
-              </p>
-              {currentRow.latitude && currentRow.longitude ? (
-                <div className="relative h-48 w-full overflow-hidden rounded-lg border border-ink/10 bg-gray-100">
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    style={{ border: "none" }}
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${currentRow.longitude - 0.003},${currentRow.latitude - 0.003},${currentRow.longitude + 0.003},${currentRow.latitude + 0.003}&layer=mapnik&marker=${currentRow.latitude},${currentRow.longitude}`}
-                    allowFullScreen
-                  />
-                </div>
-              ) : (
+          {/* Mapa — prioridad: dirección exacta (puntito en el portal/número) →
+              coordenadas de Idealista (lo más cercano al real) → zona. Compacto
+              (h-36) para que no domine el modal. */}
+          {(() => {
+            const hasExact = isExactStreet(currentRow.address);
+            const hasCoords =
+              currentRow.latitude != null && currentRow.longitude != null;
+            if (!hasExact && !hasCoords && !currentRow.address && !currentRow.zone) {
+              return null;
+            }
+            return (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                  Ubicación
+                </p>
                 <div className="overflow-hidden rounded-lg border border-ink/10">
-                  <div className="relative h-48 w-full bg-gray-100">
+                  <div className="relative h-36 w-full bg-gray-100">
                     <iframe
                       width="100%"
                       height="100%"
                       style={{ border: "none" }}
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(mapFallbackQuery(currentRow))}&output=embed&zoom=15`}
+                      src={
+                        hasExact
+                          ? // Dirección con calle/número → pin exacto en Google.
+                            `https://maps.google.com/maps?q=${encodeURIComponent(
+                              mapFallbackQuery(currentRow),
+                            )}&output=embed&zoom=17`
+                          : hasCoords
+                            ? // Coordenadas de Idealista → marcador en OSM.
+                              `https://www.openstreetmap.org/export/embed.html?bbox=${currentRow.longitude! - 0.002},${currentRow.latitude! - 0.002},${currentRow.longitude! + 0.002},${currentRow.latitude! + 0.002}&layer=mapnik&marker=${currentRow.latitude},${currentRow.longitude}`
+                            : // Solo zona.
+                              `https://maps.google.com/maps?q=${encodeURIComponent(
+                                mapFallbackQuery(currentRow),
+                              )}&output=embed&zoom=14`
+                      }
                       allowFullScreen
                       loading="lazy"
                     />
                   </div>
                   <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-[11px] text-ink/50">
                     <MapPin size={11} strokeWidth={1.75} className="text-gold" />
-                    {currentRow.address
-                      ? <>Dirección · {currentRow.address}</>
-                      : <>Zona aproximada · {currentRow.zone}</>}
+                    {hasExact ? (
+                      <>Dirección exacta · {currentRow.address}</>
+                    ) : hasCoords ? (
+                      <>Ubicación aproximada (Idealista){currentRow.zone ? ` · ${currentRow.zone}` : ""}</>
+                    ) : (
+                      <>Zona aproximada · {currentRow.zone}</>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          ) : null}
+              </div>
+            );
+          })()}
 
           {/* Vídeo del anuncio (migración 0036) */}
           {currentRow.video_url && (
