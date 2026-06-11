@@ -67,10 +67,52 @@ if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
 fi
 
 
+# Directorio base del proyecto
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# ─── Tarea única: Verificación inicial de todos los particulares ──────────────
+# Se ejecuta solo una vez la primera vez que se depliegue. Busca en TODOS los
+# anuncios activos (sin límite en etapas) para detectar teléfonos que existen
+# pero no fueron extraídos en el scrape inicial.
+INITIAL_VERIFY_FLAG="$APP_DIR/.initial-phone-verify-done"
+
+if [ ! -f "$INITIAL_VERIFY_FLAG" ]; then
+  echo "🔍 Ejecutando verificación inicial de teléfonos en todos los particulares..."
+  echo "   Esto puede tomar unos minutos (~1980 anuncios)..."
+
+  # Esperar 10 segundos a que PM2 inicie el server después del build
+  sleep 10
+
+  # Llamar al endpoint con modo 'all' sin límite (batches de 100 internamente)
+  # Repetir hasta que no queden más anuncios por verificar
+  VERIFIED=0
+  for batch in {1..30}; do
+    RESPONSE=$(curl -s -X POST \
+      -H "Authorization: Bearer ${CRON_SECRET:-placeholder}" \
+      "http://localhost:3000/api/admin/particulares/verify-phones?mode=all&limit=100" 2>&1)
+
+    CHECKED=$(echo "$RESPONSE" | grep -o '"checked":[0-9]*' | cut -d: -f2 || echo "0")
+    VERIFIED=$((VERIFIED + CHECKED))
+
+    if [ "$CHECKED" = "0" ] || [ "$CHECKED" -lt "100" ]; then
+      break
+    fi
+
+    echo "   📊 Batch $batch: $CHECKED verificados (total: $VERIFIED)"
+    sleep 2  # Pequeña pausa entre batches para no sobrecargar
+  done
+
+  echo "✅ Verificación inicial completada: $VERIFIED anuncios verificados"
+
+  # Marcar que ya se hizo la verificación inicial
+  touch "$INITIAL_VERIFY_FLAG"
+else
+  echo "ℹ️  Verificación inicial ya completada anteriormente (saltando)"
+fi
+
 # ─── Configurar cron de verificación de teléfonos (cada 2 días) ─────────────
 # Se agrega automáticamente si no existe ya en el crontab.
 # Requiere que CRON_SECRET esté definido en el entorno del cron de deploy.
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "📅 Verificando cron de teléfonos de particulares..."
 
 CRON_ENTRY="0 0 */2 * * CRON_SECRET=\$CRON_SECRET APP_URL=\${APP_URL:-http://localhost:3000} $APP_DIR/scripts/verify-particulares-phones.sh missing 100 >> $APP_DIR/logs/cron-verify-phones.log 2>&1"
