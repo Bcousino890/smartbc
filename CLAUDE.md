@@ -18,3 +18,17 @@
 ## Ramas
 - Desarrollo: `claude/adoring-pasteur-3OgFB`
 - Producción: `main`
+
+## Upload de archivos (Vídeos, Planos)
+- **Límites en la app:** vídeos ≤500MB, planos ≤100MB
+- **Almacenamiento:** bucket Supabase `properties-photos` (self-hosted en VPS)
+- ⚠️ **Si uploads fallan por tamaño:** el contenedor `storage` del VPS tiene un
+  límite `FILE_SIZE_LIMIT` (default ~50MB). Para aumentar:
+  1. SSH al VPS → `docker-compose.yml` de Supabase
+  2. Localiza el servicio `storage` y agrega/edita:
+     ```yaml
+     environment:
+       FILE_SIZE_LIMIT: 536870912   # 512MB en bytes
+     ```
+  3. `docker compose up -d storage` (reinicia el contenedor)
+  4. O usa YouTube/Vimeo + enlace (que ya funciona en SmartLinks)
