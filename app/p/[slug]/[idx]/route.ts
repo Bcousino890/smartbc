@@ -52,9 +52,18 @@ export async function GET(
   // Ordenamos por posición y elegimos la foto del índice solicitado. Si la
   // posición concreta no existe (porque se borró una foto), devolvemos 404
   // para que el cliente no caiga en un loop esperando una imagen rota.
+  // Deduplicamos por url (igual que el adapter de la galería): si hay filas
+  // duplicadas en property_photos, los índices del proxy deben casar con los que
+  // ve el cliente, no contar la foto repetida.
+  const seenUrls = new Set<string>();
   const photos = (row.property_photos ?? [])
     .slice()
-    .sort((a, b) => a.position - b.position);
+    .sort((a, b) => a.position - b.position)
+    .filter((p) => {
+      if (seenUrls.has(p.url)) return false;
+      seenUrls.add(p.url);
+      return true;
+    });
   const photo = photos[position];
   if (!photo) {
     return new NextResponse("not_found", { status: 404 });

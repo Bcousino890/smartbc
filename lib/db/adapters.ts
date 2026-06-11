@@ -282,16 +282,31 @@ function hashStrings(parts: string[]): string {
   return (h >>> 0).toString(36);
 }
 
+// Quita fotos repetidas (misma url) conservando el orden por posición. Defiende
+// la galería de filas duplicadas en property_photos: un re-import con carrera o
+// doble submit podía dejar 2 filas por posición, y se veía "cada foto dos veces".
+function dedupePhotosByUrl<T extends { url: string }>(photos: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const p of photos) {
+    if (seen.has(p.url)) continue;
+    seen.add(p.url);
+    out.push(p);
+  }
+  return out;
+}
+
 export function propertyRowToClientProperty(
   row: PropertyRow & {
     agencies?: { name: string; slug: string } | null;
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   },
 ): Property {
-  const sortedPhotos =
+  const sortedPhotos = dedupePhotosByUrl(
     row.property_photos
       ?.slice()
-      .sort((a, b) => a.position - b.position) ?? [];
+      .sort((a, b) => a.position - b.position) ?? [],
+  );
   // URLs neutras vía el proxy /p/{slug}/{idx} — no exponemos rutas de
   // Storage internas (que delatan el portal de origen, ej. `synced/level/…`).
   // El proxy cachea 24h, así que añadimos `?v=` con un hash que cambia cuando
@@ -349,11 +364,11 @@ export function propertyRowToAdminProperty(
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   }
 ): AdminProperty {
-  const sortedPhotos =
+  const sortedPhotos = dedupePhotosByUrl(
     row.property_photos
       ?.slice()
-      .sort((a, b) => a.position - b.position)
-      .map((p) => ({ url: p.url, isCover: p.is_cover })) ?? [];
+      .sort((a, b) => a.position - b.position) ?? [],
+  ).map((p) => ({ url: p.url, isCover: p.is_cover }));
 
   return {
     id: row.slug,
