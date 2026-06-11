@@ -658,7 +658,7 @@ export async function uploadPropertyVideo(
   if (!slug) return { ok: false, error: "slug_required" };
   if (!(file instanceof File)) return { ok: false, error: "file_required" };
   if (file.size === 0) return { ok: false, error: "file_empty" };
-  if (file.size > 200 * 1024 * 1024) return { ok: false, error: "Archivo muy grande (máx 200MB)" };
+  if (file.size > 500 * 1024 * 1024) return { ok: false, error: "Archivo muy grande (máx 500MB)" };
 
   const allowedTypes = ["video/mp4", "video/quicktime", "video/webm"];
   if (file.type && !allowedTypes.includes(file.type)) {
@@ -676,6 +676,8 @@ export async function uploadPropertyVideo(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
   const storagePath = `${prop.id}/video/${Date.now()}-${safeName}`;
 
+  // Upload directo del archivo (streaming, sin cargar en memoria).
+  // El cliente de Supabase maneja archivos grandes de forma eficiente.
   const admin = createAdminClient();
   const { error: uploadErr } = await (admin as any).storage
     .from("properties-photos")
@@ -684,10 +686,10 @@ export async function uploadPropertyVideo(
   if (uploadErr) {
     console.error("[uploadPropertyVideo] storage error:", uploadErr);
     const msg = uploadErr.message ?? "";
-    if (/too large|size/i.test(msg)) {
-      return { ok: false, error: "El vídeo es demasiado grande. El límite del servidor es 50MB. Súbelo a YouTube/Vimeo y pega el enlace." };
+    if (/too large|size|exceeds/i.test(msg)) {
+      return { ok: false, error: "Vídeo demasiado grande. Reduce el tamaño, comprime el MP4, o súbelo a YouTube/Vimeo y pega el enlace." };
     }
-    return { ok: false, error: uploadErr.message };
+    return { ok: false, error: uploadErr.message || "Error al subir vídeo" };
   }
 
   const { data: urlData } = (admin as any).storage
@@ -732,7 +734,7 @@ export async function uploadPropertyPlan(
   if (!slug) return { ok: false, error: "slug_required" };
   if (!(file instanceof File)) return { ok: false, error: "file_required" };
   if (file.size === 0) return { ok: false, error: "file_empty" };
-  if (file.size > 20 * 1024 * 1024) return { ok: false, error: "Archivo muy grande (máx 20MB)" };
+  if (file.size > 100 * 1024 * 1024) return { ok: false, error: "Archivo muy grande (máx 100MB)" };
 
   const propLookup = await supabase
     .from("properties")
@@ -745,6 +747,7 @@ export async function uploadPropertyPlan(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
   const storagePath = `${prop.id}/plan/${Date.now()}-${safeName}`;
 
+  // Upload directo del archivo (streaming, sin cargar en memoria).
   const admin = createAdminClient();
   const { error: uploadErr } = await (admin as any).storage
     .from("properties-photos")
