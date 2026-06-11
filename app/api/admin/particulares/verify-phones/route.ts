@@ -339,11 +339,45 @@ export async function POST(req: Request) {
   );
   // Verificación de UN anuncio concreto (botón del modal en el admin).
   const onlyId = searchParams.get("id");
+  // Modo diagnóstico: ?debug=1&id=<uuid> devuelve lo que respondió cada
+  // endpoint AJAX de Idealista (status + trozo del cuerpo) SIN guardar nada.
+  const debug = searchParams.get("debug") === "1";
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+
+  // ── Diagnóstico de un anuncio: ver qué devuelven los endpoints AJAX ──
+  if (debug && onlyId) {
+    const { data } = await supabase
+      .from("particulares")
+      .select("id, source_url, phone")
+      .eq("id", onlyId)
+      .maybeSingle();
+    const sourceUrl = (data as { source_url?: string } | null)?.source_url;
+    const adId = sourceUrl?.match(/\/inmueble\/(\d+)/)?.[1];
+    if (!adId) {
+      return Response.json(
+        { ok: false, error: "no_ad_id", sourceUrl },
+        { status: 200 },
+      );
+    }
+    const ajax = await fetchIdealistaPhoneViaAjax(adId, {
+      proxyUrl: process.env.SMARTPROXY_URL,
+      debug: true,
+    });
+    return Response.json(
+      {
+        ok: true,
+        adId,
+        sourceUrl,
+        phoneFound: ajax.phone,
+        attempts: ajax.debug ?? [],
+      },
+      { status: 200 },
+    );
+  }
 
   try {
     console.log(

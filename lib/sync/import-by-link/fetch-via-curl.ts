@@ -1,6 +1,9 @@
 import "server-only";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const execFileAsync = promisify(execFile);
 
@@ -122,4 +125,102 @@ export async function fetchViaCurl(
     }
   }
   return last;
+}
+
+// ─── Fetch en dos pasos con cookie-jar (para los AJAX detrás de DataDome) ─────
+// Idealista solo entrega el teléfono ("Ver teléfono") si la llamada AJAX
+// lleva la cookie de DataDome emitida al cargar la ficha. Este helper:
+//   1) carga la URL de la ficha guardando cookies en un jar temporal,
+//   2) llama a la URL AJAX reutilizando ese jar (misma sesión/IP del proxy).
+// Devuelve el cuerpo (JSON) del segundo request y su código HTTP.
+
+export type CookieJarFetchResult = {
+  ok: boolean;
+  status: number;
+  body: string;
+  reason?: string;
+};
+
+export async function fetchAjaxWithCookieJar(
+  pageUrl: string,
+  ajaxUrl: string,
+  userAgent: string,
+  options?: {
+    proxyUrl?: string;
+    ajaxHeaders?: string[];
+    timeoutSec?: number;
+  },
+): Promise<CookieJarFetchResult> {
+  const timeoutSec = options?.timeoutSec ?? 20;
+  const dir = await mkdtemp(join(tmpdir(), "idealista-jar-"));
+  const jar = join(dir, "cookies.txt");
+
+  const proxyArgs = options?.proxyUrl
+    ? ["--proxytunnel", "-x", options.proxyUrl]
+    : [];
+
+  try {
+    // Paso 1: cargar la ficha para obtener las cookies (incl. DataDome).
+    // Descartamos el cuerpo (-o /dev/null); solo nos interesa el jar.
+    await execFileAsync(
+      "curl",
+      [
+        "-sS",
+        "-L",
+        "-A",
+        userAgent,
+        "--max-time",
+        String(timeoutSec),
+        "-c",
+        jar,
+        "-o",
+        "/dev/null",
+        ...proxyArgs,
+        pageUrl,
+      ],
+      { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
+    ).catch(() => null); // si falla, intentamos el AJAX igual (jar vacío)
+
+    // Paso 2: llamar al AJAX reutilizando (y refrescando) el jar.
+    const headerArgs: string[] = [];
+    for (const h of options?.ajaxHeaders ?? []) headerArgs.push("-H", h);
+
+    const { stdout } = await execFileAsync(
+      "curl",
+      [
+        "-sS",
+        "-L",
+        "-A",
+        userAgent,
+        "--max-time",
+        String(timeoutSec),
+        "-b",
+        jar,
+        "-c",
+        jar,
+        "-w",
+        "\\n__HTTP_CODE__:%{http_code}",
+        ...headerArgs,
+        ...proxyArgs,
+        ajaxUrl,
+      ],
+      { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
+    );
+
+    const marker = stdout.lastIndexOf("\n__HTTP_CODE__:");
+    const body = marker === -1 ? stdout : stdout.slice(0, marker);
+    const status =
+      marker === -1
+        ? 0
+        : Number.parseInt(
+            stdout.slice(marker + "\n__HTTP_CODE__:".length).trim(),
+            10,
+          );
+    return { ok: status >= 200 && status < 300, status, body };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "error curl";
+    return { ok: false, status: 0, body: "", reason };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
