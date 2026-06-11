@@ -10,7 +10,7 @@
 set -e
 
 # Configuración
-API_URL="${API_URL:-http://localhost:3000}"
+API_URL="${APP_URL:-${API_URL:-http://localhost:3000}}"
 CRON_SECRET="${CRON_SECRET:-}"
 MODE="${1:-missing}"
 LIMIT="${2:-100}"

@@ -66,6 +66,27 @@ if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
   fi
 fi
 
+
+# ─── Configurar cron de verificación de teléfonos (cada 2 días) ─────────────
+# Se agrega automáticamente si no existe ya en el crontab.
+# Requiere que CRON_SECRET esté definido en el entorno del cron de deploy.
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo "📅 Verificando cron de teléfonos de particulares..."
+
+CRON_ENTRY="0 0 */2 * * CRON_SECRET=\$CRON_SECRET APP_URL=\${APP_URL:-http://localhost:3000} $APP_DIR/scripts/verify-particulares-phones.sh missing 100 >> $APP_DIR/logs/cron-verify-phones.log 2>&1"
+CRON_MARKER="verify-particulares-phones.sh"
+
+if crontab -l 2>/dev/null | grep -q "$CRON_MARKER"; then
+  echo "  ✅ Cron de teléfonos ya configurado (sin cambios)"
+else
+  # Agregar la nueva entrada al crontab existente
+  (crontab -l 2>/dev/null; echo "$CRON_ENTRY") | crontab -
+  echo "  ✅ Cron de teléfonos agregado (cada 2 días a las 00:00 UTC)"
+fi
+
+# Crear carpeta de logs si no existe
+mkdir -p "$APP_DIR/logs"
+
 echo ""
 echo "✨ Post-deploy completado"
 echo ""
@@ -74,3 +95,4 @@ echo "  ✅ Crear usuarios admin/asesor"
 echo "  ✅ Configurar SMTP"
 echo "  ✅ Usar matriz de permisos"
 echo "  ✅ Enviar emails de reset"
+echo "  ✅ Verificación automática de teléfonos (cron cada 2 días)"
