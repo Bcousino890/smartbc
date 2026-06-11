@@ -100,6 +100,9 @@ type VerifyResponse = {
   withPhone: number;
   chatOnly: number;
   errors: number;
+  // Teléfono encontrado (solo en verificación de un anuncio concreto, para
+  // que el cliente actualice la UI sin recargar).
+  foundPhone?: string | null;
 };
 
 type ParticularRow = {
@@ -207,6 +210,7 @@ async function verifyByScraping(
           updated_at: now,
         };
         result.withPhone++;
+        result.foundPhone = phone;
       } else if (!row.phone) {
         // Sin teléfono ahora ni antes → solo contactable por chat del portal.
         values = { chat_only: true, updated_at: now };

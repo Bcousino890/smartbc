@@ -104,11 +104,15 @@ export type ParticularRow = {
   contact_count?: number;
 };
 
+// timeZone fijo a Madrid: sin él, el servidor (VPS en UTC) y el navegador
+// (hora local) formatean la hora distinto y React lanza el error de
+// hidratación #418 ("text content does not match").
 const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   day: "2-digit",
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "Europe/Madrid",
 });
 
 function formatPhone(phone: string): string {
@@ -236,12 +240,14 @@ const HISTORY_DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "Europe/Madrid",
 });
 
 // Eje X del gráfico de precios: "10 jun"
 const CHART_DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   day: "numeric",
   month: "short",
+  timeZone: "Europe/Madrid",
 });
 
 function asPrice(v: unknown): number | null {
@@ -591,6 +597,7 @@ function ContactLog({ particularId }: { particularId: string }) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Madrid",
   });
 
   return (
@@ -840,11 +847,12 @@ function ParticularModal({
         { method: "POST" },
       );
       const data = await res.json();
-      if (data?.ok && data.withPhone > 0) {
-        // El endpoint guardó el teléfono pero no lo devuelve por anuncio;
-        // recargamos para traer el dato fresco de la BD.
-        setVerifyThisResult("✓ Teléfono encontrado — actualizando…");
-        window.location.reload();
+      if (data?.ok && data.foundPhone) {
+        // Actualización en el sitio (sin recargar): refresca el modal y la
+        // tarjeta de la lista vía onPhoneUpdated.
+        setCurrentRow((prev) => ({ ...prev, phone: data.foundPhone, chat_only: false }));
+        onPhoneUpdated?.(data.foundPhone);
+        setVerifyThisResult("✓ Teléfono encontrado y guardado.");
       } else if (data?.ok) {
         setVerifyThisResult(
           "El anuncio no expone teléfono en el portal (solo chat).",
