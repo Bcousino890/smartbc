@@ -6,19 +6,18 @@ const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 const ALLOWED_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
 export async function POST(req: Request) {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    return Response.json({ error: "No autorizado" }, { status: 401 });
-  }
-
   try {
+    const profile = await getCurrentProfile();
+    if (!profile) {
+      return Response.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const propertyId = formData.get("propertyId") as string | null;
     const slug = formData.get("slug") as string | null;
 
     if (!file) return Response.json({ error: "file_required" }, { status: 400 });
-    if (!propertyId && !slug) return Response.json({ error: "propertyId_required" }, { status: 400 });
+    if (!slug) return Response.json({ error: "slug_required" }, { status: 400 });
     if (file.size === 0) return Response.json({ error: "file_empty" }, { status: 400 });
     if (file.size > MAX_VIDEO_SIZE) {
       return Response.json(
@@ -32,14 +31,18 @@ export async function POST(req: Request) {
 
     const admin = createAdminClient() as any;
 
-    // Resolver propertyId desde slug si solo viene slug
-    let propId = propertyId;
-    if (!propId && slug) {
-      const { data } = await admin.from("properties").select("id").eq("slug", slug).maybeSingle();
-      propId = data?.id ?? null;
-    }
-    if (!propId) return Response.json({ error: "property_not_found" }, { status: 404 });
+    // Resolver propertyId desde slug
+    const { data: propData, error: propErr } = await admin
+      .from("properties")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
 
+    if (propErr || !propData) {
+      return Response.json({ error: "property_not_found" }, { status: 404 });
+    }
+
+    const propId = propData.id;
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
     const storagePath = `${propId}/video/${Date.now()}-${safeName}`;
 
@@ -91,6 +94,6 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("[upload-video] unexpected error:", err);
-    return Response.json({ error: "Error interno" }, { status: 500 });
+    return Response.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

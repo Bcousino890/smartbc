@@ -204,7 +204,8 @@ export function PropertyEditView({
     const xhr = new XMLHttpRequest();
     xhr.upload.addEventListener("progress", (ev) => {
       if (!ev.lengthComputable) return;
-      const pct = Math.round((ev.loaded / ev.total) * 100);
+      // Limita al 95% durante el upload (deja espacio para procesamiento del servidor)
+      const pct = Math.min(95, Math.round((ev.loaded / ev.total) * 95));
       setUploadProgress(pct);
       const elapsed = (Date.now() - uploadStartRef.current) / 1000;
       if (elapsed > 0.5 && ev.loaded > 0) {
@@ -220,11 +221,14 @@ export function PropertyEditView({
       }
     });
     xhr.addEventListener("load", () => {
-      setUploadingVideo(false);
-      setUploadProgress(0);
-      setUploadEta(null);
       if (videoFileInputRef.current) videoFileInputRef.current.value = "";
       if (xhr.status >= 200 && xhr.status < 300) {
+        setUploadProgress(100);
+        setTimeout(() => {
+          setUploadingVideo(false);
+          setUploadProgress(0);
+          setUploadEta(null);
+        }, 300);
         try {
           const data = JSON.parse(xhr.responseText);
           if (data.ok && data.item) {
@@ -236,6 +240,9 @@ export function PropertyEditView({
           setVideoError("Respuesta inesperada del servidor");
         }
       } else {
+        setUploadingVideo(false);
+        setUploadProgress(0);
+        setUploadEta(null);
         try {
           const data = JSON.parse(xhr.responseText);
           setVideoError(data.error || `Error ${xhr.status}`);
