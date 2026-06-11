@@ -28,7 +28,6 @@ import {
   updateProperty,
   addPropertyVideo,
   uploadPropertyPlan,
-  uploadPropertyVideo,
   deletePropertyMedia,
   type MediaItem,
 } from "@/app/(admin)/admin/propiedades/actions";
@@ -109,6 +108,9 @@ export function PropertyEditView({
   const [videoError, setVideoError] = useState<string | null>(null);
   const [addingVideo, setAddingVideo] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0); // 0-100
+  const [uploadEta, setUploadEta] = useState<string | null>(null); // "1m 23s"
+  const uploadStartRef = useRef<number>(0);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Planos state
@@ -186,23 +188,71 @@ export function PropertyEditView({
     setVideos((v) => v.filter((x) => x.id !== item.id));
   }
 
-  async function handleVideoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleVideoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setVideoError(null);
     setUploadingVideo(true);
+    setUploadProgress(0);
+    setUploadEta(null);
+    uploadStartRef.current = Date.now();
+
     const fd = new FormData();
     fd.set("slug", property.slug);
     fd.set("file", file);
-    const res = await uploadPropertyVideo(fd);
-    if (res.ok) {
-      setVideos((v) => [...v, res.item]);
-    } else {
-      setVideoError(res.error);
-    }
-    setUploadingVideo(false);
-    // Limpia el input para permitir subir el mismo archivo de nuevo
-    if (videoFileInputRef.current) videoFileInputRef.current.value = "";
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", (ev) => {
+      if (!ev.lengthComputable) return;
+      const pct = Math.round((ev.loaded / ev.total) * 100);
+      setUploadProgress(pct);
+      const elapsed = (Date.now() - uploadStartRef.current) / 1000;
+      if (elapsed > 0.5 && ev.loaded > 0) {
+        const rate = ev.loaded / elapsed; // bytes/s
+        const remaining = (ev.total - ev.loaded) / rate; // seconds
+        if (remaining >= 60) {
+          const m = Math.floor(remaining / 60);
+          const s = Math.round(remaining % 60);
+          setUploadEta(`${m}m ${s}s`);
+        } else {
+          setUploadEta(`${Math.round(remaining)}s`);
+        }
+      }
+    });
+    xhr.addEventListener("load", () => {
+      setUploadingVideo(false);
+      setUploadProgress(0);
+      setUploadEta(null);
+      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (data.ok && data.item) {
+            setVideos((v) => [...v, data.item]);
+          } else {
+            setVideoError(data.error || "Error al subir vídeo");
+          }
+        } catch {
+          setVideoError("Respuesta inesperada del servidor");
+        }
+      } else {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          setVideoError(data.error || `Error ${xhr.status}`);
+        } catch {
+          setVideoError(`Error ${xhr.status} al subir`);
+        }
+      }
+    });
+    xhr.addEventListener("error", () => {
+      setUploadingVideo(false);
+      setUploadProgress(0);
+      setUploadEta(null);
+      setVideoError("Error de red al subir el vídeo");
+      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
+    });
+    xhr.open("POST", "/api/admin/properties/upload-video");
+    xhr.send(fd);
   }
 
   // ─── Plan handlers ─────────────────────────────────────────────────────
@@ -803,19 +853,31 @@ export function PropertyEditView({
               Añadir
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => videoFileInputRef.current?.click()}
-            disabled={uploadingVideo}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
-          >
-            {uploadingVideo ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
+          {uploadingVideo ? (
+            <div className="mt-2 rounded-lg border border-gold/30 bg-gold/5 p-3">
+              <div className="mb-1.5 flex items-center justify-between text-[12px] text-ink/70">
+                <span className="font-medium">Subiendo vídeo…</span>
+                <span className="tabular-nums">
+                  {uploadProgress}%{uploadEta ? ` · ${uploadEta} restante` : ""}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-ink/10">
+                <div
+                  className="h-full rounded-full bg-gold transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => videoFileInputRef.current?.click()}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+            >
               <Plus size={13} strokeWidth={1.75} />
-            )}
-            Subir video (.mp4)
-          </button>
+              Subir video (.mp4)
+            </button>
+          )}
           {videoError && (
             <p className="mt-1 text-[12px] text-rose-700">{videoError}</p>
           )}
