@@ -14,6 +14,7 @@ import Image from "next/image";
 import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { formatPrice } from "@/lib/format";
 import { shareSlug } from "@/lib/share-slug";
+import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import type { Property } from "@/lib/types";
 
 // URL pública de "SmartLink": vista limpia de la propiedad, sin login.
@@ -185,17 +186,45 @@ export function PublicPropertyView({
               {videos.length > 1 ? "Vídeos" : "Vídeo"}
             </h2>
             <div className="mt-4 space-y-4">
-              {videos.map((v) => (
-                // eslint-disable-next-line jsx-a11y/media-has-caption
-                <video
-                  key={v.url}
-                  controls
-                  preload="metadata"
-                  controlsList="nodownload"
-                  className="w-full rounded-xl"
-                  src={v.url}
-                />
-              ))}
+              {videos.map((v) => {
+                const videoInfo = detectVideoType(v.url);
+                if (videoInfo.type === "youtube" && videoInfo.id) {
+                  return (
+                    <iframe
+                      key={v.url}
+                      src={getYoutubeEmbedUrl(videoInfo.id)}
+                      className="w-full rounded-xl aspect-video"
+                      allowFullScreen
+                      loading="lazy"
+                      title="YouTube video player"
+                    />
+                  );
+                }
+                if (videoInfo.type === "vimeo" && videoInfo.id) {
+                  return (
+                    <iframe
+                      key={v.url}
+                      src={getVimeoEmbedUrl(videoInfo.id)}
+                      className="w-full rounded-xl aspect-video"
+                      allowFullScreen
+                      loading="lazy"
+                      title="Vimeo video player"
+                    />
+                  );
+                }
+                // Direct video file (MP4, WebM, etc.)
+                return (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <video
+                    key={v.url}
+                    controls
+                    preload="metadata"
+                    controlsList="nodownload"
+                    className="w-full rounded-xl"
+                    src={v.url}
+                  />
+                );
+              })}
             </div>
           </section>
         )}

@@ -15,7 +15,7 @@ import {
   parseBedrooms,
   parsePriceString,
 } from "../parse-utils";
-import { detectAdvertiserFromHtml } from "../../particulares/idealista-advertiser-detector";
+import { detectAdvertiserFromHtml, fetchIdealistaPhoneViaAjax } from "../../particulares/idealista-advertiser-detector";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos que refleja el JSON embebido de Idealista. Basado en el schema real de
@@ -534,7 +534,8 @@ function extractExactAddressFromTitle(title: string | null): string | null {
 // dirección exacta (calle + número) en la sección de ubicación cuando es pública,
 // frecuentemente en la primera línea antes de zona/distrito.
 function extractExactAddressFromDom($: CheerioAPI): string | null {
-  // 1) Selectores específicos del bloque de ubicación
+  // 1) Selectores específicos del bloque de ubicación. Idealista varía la
+  // estructura según el dispositivo/región, así que intentamos múltiples.
   const candidates = [
     "#mapWrapper .address",
     ".address",
@@ -543,6 +544,12 @@ function extractExactAddressFromDom($: CheerioAPI): string | null {
     "[data-location]",
     ".main-info__ubicacion",
     ".location-data",
+    // Selectores adicionales para variantes modernas de Idealista
+    "[data-location-address]",
+    ".location__address",
+    ".address-block",
+    ".property-address",
+    "h2.info-data, h2.main-info__title",
   ];
   for (const sel of candidates) {
     const txt = $(sel).first().text().trim();
@@ -554,7 +561,11 @@ function extractExactAddressFromDom($: CheerioAPI): string | null {
   // 2) Búsqueda amplia: cualquier elemento que contenga una calle + número
   // (patrón: "Calle X, NN" donde NN es número de 1-4 dígitos).
   const fullText = $("body").text();
-  const streetPattern = new RegExp(
+
+  // Intentamos dos variantes de regex:
+  // - Versión estricta: "Calle Nombre, NN" (con coma antes del número)
+  // - Versión flexible: "Calle Nombre NN" (sin coma)
+  const strictPattern = new RegExp(
     `\\b(${[
       'calle|c/',
       'avda?',
@@ -575,10 +586,37 @@ function extractExactAddressFromDom($: CheerioAPI): string | null {
       'cuesta',
       'costanilla',
       'callej[oó]n',
-    ].join('|')})\\s+[^,]{3,40},?\\s+\\d{1,4}(?:\\s|,|$)`,
+    ].join('|')})\\s+[^,\\d]{2,50},\\s*\\d{1,4}(?:\\s|$|,)`,
     'i'
   );
-  const match = fullText.match(streetPattern);
+
+  // Pattern flexible que acepta también "Calle Nombre NN" sin coma
+  const flexiblePattern = new RegExp(
+    `\\b(${[
+      'calle|c/',
+      'avda?',
+      'avenida',
+      'paseo',
+      "p\\.?º",
+      'plaza',
+      'pl\\.',
+      'camino',
+      'carretera',
+      'ctra\\.?',
+      'ronda',
+      'traves[ií]a',
+      'v[ií]a',
+      'glorieta',
+      'bulevar',
+      'gran\\s+v[ía]a',
+      'cuesta',
+      'costanilla',
+      'callej[oó]n',
+    ].join('|')})\\s+[^,\\d]{2,50}\\s+\\d{1,4}(?:\\s|$|,)`,
+    'i'
+  );
+
+  let match = fullText.match(strictPattern) || fullText.match(flexiblePattern);
   if (match) {
     // Tomar la línea que contiene el match (antes del primer salto de línea)
     const idx = fullText.indexOf(match[0]);
@@ -607,7 +645,30 @@ export async function extractIdealista(
   // `adProfessionalName`). Más fiable que el endpoint AJAX (que DataDome
   // bloquea) y sin coste de request extra.
   const rawHtml = $.html();
-  const advertiserInfo = detectAdvertiserFromHtml(rawHtml);
+  let advertiserInfo = detectAdvertiserFromHtml(rawHtml);
+
+  // Si no encontramos teléfono en el HTML (común en Idealista moderno donde
+  // el teléfono está tras "Ver teléfono"), intentamos obtenerlo vía AJAX
+  // usando el mismo bypass de DataDome (TLS fingerprint de curl + UA WhatsApp).
+  if (!advertiserInfo.phone && embedded?.propertyCode) {
+    try {
+      const ajaxResult = await fetchIdealistaPhoneViaAjax(
+        embedded.propertyCode,
+        { proxyUrl: options?.proxyUrl }
+      );
+      if (ajaxResult.phone) {
+        advertiserInfo = {
+          ...advertiserInfo,
+          phone: ajaxResult.phone,
+          phone_confidence: ajaxResult.phone_confidence,
+          contact_name: ajaxResult.contact_name ?? advertiserInfo.contact_name,
+        };
+      }
+    } catch {
+      // Silenciosamente ignoramos errores de AJAX (DataDome bloqueos, timeouts).
+      // El extractor sigue adelante sin el teléfono extra.
+    }
+  }
 
   // ── Coordenadas: lo más cercano posible al piso real ───────────────────────
   // Prioridad: las del listing embebido (planas o anidadas en `ubication`) →

@@ -43,6 +43,7 @@ import { extractFloor } from "@/lib/floor";
 import { formatPrice } from "@/lib/format";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { canAccess } from "@/lib/permissions";
+import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { cn } from "@/lib/utils";
 import {
   assignParticular,
@@ -1216,13 +1217,41 @@ function ParticularModal({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
                 Vídeo
               </p>
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <video
-                controls
-                preload="none"
-                className="w-full rounded-lg"
-                src={currentRow.video_url}
-              />
+              {(() => {
+                const videoInfo = detectVideoType(currentRow.video_url);
+                if (videoInfo.type === "youtube" && videoInfo.id) {
+                  return (
+                    <iframe
+                      src={getYoutubeEmbedUrl(videoInfo.id)}
+                      className="w-full rounded-lg aspect-video"
+                      allowFullScreen
+                      loading="lazy"
+                      title="YouTube video player"
+                    />
+                  );
+                }
+                if (videoInfo.type === "vimeo" && videoInfo.id) {
+                  return (
+                    <iframe
+                      src={getVimeoEmbedUrl(videoInfo.id)}
+                      className="w-full rounded-lg aspect-video"
+                      allowFullScreen
+                      loading="lazy"
+                      title="Vimeo video player"
+                    />
+                  );
+                }
+                // Direct video file (MP4, WebM, etc.)
+                return (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <video
+                    controls
+                    preload="none"
+                    className="w-full rounded-lg"
+                    src={currentRow.video_url}
+                  />
+                );
+              })()}
             </div>
           )}
 
