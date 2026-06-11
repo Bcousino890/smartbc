@@ -143,6 +143,10 @@ function extractPhoneWithConfidence(
     /phoneNumber\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
     /telefono\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/i,
     /contactPhone\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
+    // Idealista-specific data structures
+    /adPhoneNumberNormalized\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/,
+    /ownerPhone\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/i,
+    /contactPhoneNumber\s*:\s*['"]([+\d][\d\s\-]{6,15})['"]/i,
   ];
   for (const pattern of mediumPatterns) {
     pm = html.match(pattern);

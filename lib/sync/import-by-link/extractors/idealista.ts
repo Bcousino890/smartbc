@@ -530,22 +530,63 @@ function extractExactAddressFromTitle(title: string | null): string | null {
   return tail;
 }
 
-// Dirección exacta desde el bloque de ubicación del DOM (primera línea, que
-// Idealista muestra como "Calle de X, 81" cuando la dirección es pública).
+// Dirección exacta desde el bloque de ubicación del DOM. Idealista muestra la
+// dirección exacta (calle + número) en la sección de ubicación cuando es pública,
+// frecuentemente en la primera línea antes de zona/distrito.
 function extractExactAddressFromDom($: CheerioAPI): string | null {
+  // 1) Selectores específicos del bloque de ubicación
   const candidates = [
     "#mapWrapper .address",
     ".address",
     "#headerMap .main-info__title-minor",
     ".main-info__title-minor",
+    "[data-location]",
+    ".main-info__ubicacion",
+    ".location-data",
   ];
   for (const sel of candidates) {
     const txt = $(sel).first().text().trim();
     if (txt && STREET_KEYWORDS.test(txt)) {
-      // Primera línea / antes de la primera coma de zona.
       return txt.split("\n")[0].trim();
     }
   }
+
+  // 2) Búsqueda amplia: cualquier elemento que contenga una calle + número
+  // (patrón: "Calle X, NN" donde NN es número de 1-4 dígitos).
+  const fullText = $("body").text();
+  const streetPattern = new RegExp(
+    `\\b(${[
+      'calle|c/',
+      'avda?',
+      'avenida',
+      'paseo',
+      "p\\.?º",
+      'plaza',
+      'pl\\.',
+      'camino',
+      'carretera',
+      'ctra\\.?',
+      'ronda',
+      'traves[ií]a',
+      'v[ií]a',
+      'glorieta',
+      'bulevar',
+      'gran\\s+v[ií]a',
+      'cuesta',
+      'costanilla',
+      'callej[oó]n',
+    ].join('|')})\\s+[^,]{3,40},?\\s+\\d{1,4}(?:\\s|,|$)`,
+    'i'
+  );
+  const match = fullText.match(streetPattern);
+  if (match) {
+    // Tomar la línea que contiene el match (antes del primer salto de línea)
+    const idx = fullText.indexOf(match[0]);
+    let lineEnd = fullText.indexOf('\n', idx);
+    if (lineEnd === -1) lineEnd = fullText.length;
+    return fullText.slice(idx, lineEnd).trim();
+  }
+
   return null;
 }
 
