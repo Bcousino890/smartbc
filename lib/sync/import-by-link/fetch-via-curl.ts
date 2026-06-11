@@ -30,6 +30,12 @@ export type CurlFetchOptions = {
   // Reintentos: la primera conexión vía proxy a veces falla con error TLS
   // transitorio ("unexpected eof"). Reintentar lo resuelve.
   retries?: number;
+  // Cabeceras extra ("Nombre: valor"). Necesarias para los endpoints AJAX
+  // de Idealista (Referer + X-Requested-With).
+  headers?: string[];
+  // Los endpoints AJAX devuelven JSON corto (<200 chars); con esto no se
+  // rechaza el body por "HTML vacío".
+  allowSmallBody?: boolean;
 };
 
 async function curlOnce(
@@ -37,6 +43,8 @@ async function curlOnce(
   userAgent: string,
   timeoutSec: number,
   proxyUrl?: string,
+  headers?: string[],
+  allowSmallBody?: boolean,
 ): Promise<CurlFetchResult> {
   const args = [
     "-sS",
@@ -48,6 +56,9 @@ async function curlOnce(
     "-w",
     "\\n__HTTP_CODE__:%{http_code}",
   ];
+  for (const h of headers ?? []) {
+    args.push("-H", h);
+  }
   if (proxyUrl) {
     // --proxytunnel fuerza CONNECT para HTTPS a través del proxy.
     args.push("--proxytunnel", "-x", proxyUrl);
@@ -71,7 +82,8 @@ async function curlOnce(
     if (code < 200 || code >= 300) {
       return { ok: false, status: code, reason: `HTTP ${code}` };
     }
-    if (!html || html.length < 200) {
+    const minLength = allowSmallBody ? 2 : 200;
+    if (!html || html.length < minLength) {
       return { ok: false, status: code, reason: "HTML vacío" };
     }
     return { ok: true, html };
@@ -95,7 +107,14 @@ export async function fetchViaCurl(
     reason: "no se ejecutó",
   };
   for (let attempt = 0; attempt <= retries; attempt++) {
-    last = await curlOnce(url, userAgent, timeoutSec, options?.proxyUrl);
+    last = await curlOnce(
+      url,
+      userAgent,
+      timeoutSec,
+      options?.proxyUrl,
+      options?.headers,
+      options?.allowSmallBody,
+    );
     if (last.ok) return last;
     // Reintentar solo en errores transitorios (TLS/red), no en 403/404.
     if (last.status === 403 || last.status === 429 || last.status === 404) {

@@ -233,6 +233,89 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
   return { advertiser_type: "professional", is_ad_professional: true, phone, phone_confidence: confidence, contact_name };
 }
 
+// ─── Fallback AJAX: teléfonos detrás del botón "Ver teléfono" ────────────────
+// Muchos anuncios NO incluyen el teléfono en el HTML inicial: solo se revela
+// al pulsar "Ver teléfono", que dispara una llamada AJAX. Este fallback llama
+// a esos endpoints VÍA CURL (mismo truco que el HTML: el TLS fingerprint de
+// curl + UA de WhatsApp pasa DataDome; el fetch de Node es rechazado con 403).
+
+const WHATSAPP_UA_FOR_AJAX = "WhatsApp/2.23.20.0";
+
+function idealistaPhoneEndpoints(adId: string): string[] {
+  return [
+    // Variante móvil: históricamente la más permisiva.
+    `https://www.idealista.com/ajax/listingController/adContactInfoForMobileDevices.ajax?adId=${adId}`,
+    // Variante desktop (la que dispara "Ver teléfono" en la web).
+    `https://www.idealista.com/ajax/listingController/adContactInfoForDetail.ajax?adId=${adId}`,
+  ];
+}
+
+export type AjaxPhoneResult = {
+  phone: string | null;
+  phone_confidence: "high" | null;
+  contact_name: string | null;
+};
+
+/**
+ * Intenta obtener el teléfono de un anuncio de Idealista llamando a los
+ * endpoints AJAX de contacto (los del botón "Ver teléfono"), vía curl con
+ * UA de WhatsApp + proxy. Devuelve el teléfono normalizado a +34XXXXXXXXX
+ * (confianza high: viene de la API oficial) o null si no hay/no se pudo.
+ */
+export async function fetchIdealistaPhoneViaAjax(
+  adId: string,
+  options?: { proxyUrl?: string },
+): Promise<AjaxPhoneResult> {
+  // Import dinámico para no arrastrar child_process a contextos que solo
+  // usan normalizeSpanishPhone/detectAdvertiserFromHtml.
+  const { fetchViaCurl } = await import(
+    "@/lib/sync/import-by-link/fetch-via-curl"
+  );
+
+  for (const endpoint of idealistaPhoneEndpoints(adId)) {
+    const res = await fetchViaCurl(endpoint, WHATSAPP_UA_FOR_AJAX, {
+      proxyUrl: options?.proxyUrl,
+      allowSmallBody: true,
+      timeoutSec: 12,
+      headers: [
+        "X-Requested-With: XMLHttpRequest",
+        "Accept: application/json, text/javascript, */*; q=0.01",
+        `Referer: https://www.idealista.com/inmueble/${adId}/`,
+      ],
+    });
+    if (!res.ok) continue;
+
+    const body = res.html;
+    // Campos de teléfono conocidos en las respuestas de estos endpoints
+    // (la estructura varía: phone1.number, formattedPhone, phone…).
+    const patterns = [
+      /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+      /"formattedPhone(?:Number)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+      /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+      /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+      /"phoneNumber"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    ];
+    let phone: string | null = null;
+    for (const pattern of patterns) {
+      const m = body.match(pattern);
+      if (m?.[1]) {
+        // Descartar la referencia del anuncio si se cuela como candidato.
+        phone = acceptPhoneCandidate(m[1], adId.slice(-9));
+        if (phone) break;
+      }
+    }
+
+    const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
+    const contact_name = cn?.[1]?.trim() ?? null;
+
+    if (phone) {
+      return { phone, phone_confidence: "high", contact_name };
+    }
+  }
+
+  return { phone: null, phone_confidence: null, contact_name: null };
+}
+
 const IDEALISTA_CONTACT_INFO_URL = "https://www.idealista.com/ajax/listingcontroller/adContactInfoForDetail.ajax";
 
 export async function checkIdealistaAdvertiserType(

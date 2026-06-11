@@ -74,7 +74,10 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Se ejecuta solo una vez la primera vez que se depliegue. Busca en TODOS los
 # anuncios activos (sin límite en etapas) para detectar teléfonos que existen
 # pero no fueron extraídos en el scrape inicial.
-INITIAL_VERIFY_FLAG="$APP_DIR/.initial-phone-verify-done"
+# v2: re-ejecutar la verificación completa tras añadir el fallback AJAX
+# "Ver teléfono" (la v1 corrió sin él y marcó como "solo chat" anuncios que
+# SÍ tienen teléfono detrás del botón).
+INITIAL_VERIFY_FLAG="$APP_DIR/.initial-phone-verify-v2-done"
 
 if [ ! -f "$INITIAL_VERIFY_FLAG" ]; then
   echo "🔍 Ejecutando verificación inicial de teléfonos en todos los particulares..."

@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import {
   detectAdvertiserFromHtml,
+  fetchIdealistaPhoneViaAjax,
   normalizeSpanishPhone,
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
@@ -170,14 +171,32 @@ async function verifyByScraping(
       const info = detectAdvertiserFromHtml(res.html);
       // El detector ya devuelve el teléfono normalizado a +34XXXXXXXXX;
       // re-normalizamos por si acaso (idempotente).
-      const phone = normalizeSpanishPhone(info.phone);
+      let phone = normalizeSpanishPhone(info.phone);
+      let confidence = info.phone_confidence ?? null;
+
+      // Fallback "Ver teléfono": muchos anuncios NO traen el teléfono en el
+      // HTML — solo se revela vía AJAX al pulsar el botón. Si el HTML no dio
+      // teléfono, llamamos a los endpoints AJAX de contacto de Idealista
+      // (vía curl, mismo bypass de DataDome).
+      if (!phone) {
+        const adIdMatch = row.source_url.match(/\/inmueble\/(\d+)/);
+        if (adIdMatch?.[1]) {
+          const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], {
+            proxyUrl: process.env.SMARTPROXY_URL,
+          });
+          if (ajax.phone) {
+            phone = ajax.phone;
+            confidence = ajax.phone_confidence;
+          }
+        }
+      }
 
       let values: Record<string, unknown>;
       if (phone) {
         // Teléfono encontrado → guardar normalizado con su confianza.
         values = {
           phone,
-          phone_confidence: info.phone_confidence ?? null,
+          phone_confidence: confidence,
           chat_only: false,
           updated_at: now,
         };

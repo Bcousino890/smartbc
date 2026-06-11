@@ -2,7 +2,10 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
-import { normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import {
+  fetchIdealistaPhoneViaAjax,
+  normalizeSpanishPhone,
+} from "@/lib/sync/particulares/idealista-advertiser-detector";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -355,6 +358,24 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
         // (Se cuenta tras el guardado para que processed = particulares +
         // profesionales + unknown + errors, sin dobles conteos.)
 
+        // Fallback "Ver teléfono": si el HTML no trajo teléfono, intentar
+        // los endpoints AJAX de contacto de Idealista (el teléfono de muchos
+        // anuncios solo se revela vía AJAX al pulsar el botón).
+        let phone = advertiserInfo?.phone ?? null;
+        let phoneConfidence = advertiserInfo?.phone_confidence ?? null;
+        if (!phone) {
+          const adIdMatch = url.match(/\/inmueble\/(\d+)/);
+          if (adIdMatch?.[1]) {
+            const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], {
+              proxyUrl: process.env.SMARTPROXY_URL,
+            });
+            if (ajax.phone) {
+              phone = ajax.phone;
+              phoneConfidence = ajax.phone_confidence;
+            }
+          }
+        }
+
         // Guardar en BD preservando detected_at y rastreando cambios
         const saved = await upsertParticular(supabase, {
           external_id: preview.externalReference,
@@ -373,8 +394,8 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
           photos: (preview.photos ?? []) as Array<{ url: string; alt?: string }>,
           advertiser_type: advertiserInfo?.advertiser_type ?? "unknown",
           is_ad_professional: advertiserInfo?.is_ad_professional ?? null,
-          phone: advertiserInfo?.phone ?? null,
-          phone_confidence: advertiserInfo?.phone_confidence ?? null,
+          phone,
+          phone_confidence: phoneConfidence,
           latitude: preview.latitude ?? null,
           longitude: preview.longitude ?? null,
         });
