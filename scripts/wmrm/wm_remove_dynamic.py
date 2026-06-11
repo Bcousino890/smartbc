@@ -69,12 +69,16 @@ def remove(path, out, W_add, beta, wm, strokes):
     rec = J.copy()
     for _ in range(14):
         rec = np.where(sm, boxmean(rec, 3), J)
-    # Suavizar SOLO el color residual en la zona ancha de la marca (mata cualquier
-    # tinte), manteniendo la luminancia nítida.
+    # Matar el TINTE de color residual SOLO en una banda PEGADA a los trazos (no en
+    # toda la zona ancha de la marca: eso dejaba un velo borroso alrededor, muy
+    # visible en marcas claras sobre paredes lisas). Dilatamos los trazos ~8px,
+    # borde suave, y suavizamos el color ahí con radio corto. La luminancia se
+    # mantiene nítida.
+    band = (boxmean(strokes.astype(float), 8) > 0.04).astype(float)
+    wC = np.clip(boxmean(band, 3), 0, 1)[..., None]
     lum = rec.mean(2)
     chroma = rec - lum[..., None]
-    wC = np.clip(wm[..., 0], 0, 1)[..., None]
-    chroma_out = (1 - wC) * chroma + wC * boxmean(chroma, 10)
+    chroma_out = (1 - wC) * chroma + wC * boxmean(chroma, 5)
     final = lum[..., None] + chroma_out
     Image.fromarray(np.clip(final, 0, 255).astype(np.uint8)).save(out, quality=92)
 
