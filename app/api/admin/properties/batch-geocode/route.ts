@@ -13,12 +13,11 @@ export async function POST(req: Request) {
 
     const supabase = createAdminClient();
 
-    // Obtener todas las propiedades sin coordenadas
+    // Obtener todas las propiedades sin coordenadas (SIN LÍMITE)
     const { data: properties, error: queryErr } = await supabase
       .from("properties")
       .select("id, title, address, zone, latitude, longitude")
-      .is("latitude", null)
-      .limit(1000); // Procesar en lotes de 1000
+      .is("latitude", null);
 
     if (queryErr) {
       console.error("[batch-geocode] Query error:", queryErr);
