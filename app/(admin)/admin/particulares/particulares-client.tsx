@@ -1417,8 +1417,7 @@ export function ParticularesClient({
   const [floorMin, setFloorMin] = useState("");
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
-  const [onlyNoPhone, setOnlyNoPhone] = useState(false);
-  const [onlyWithPhone, setOnlyWithPhone] = useState(false);
+  const [phoneFilter, setPhoneFilter] = useState<"" | "no_phone" | "with_phone">("");
   const [gestion, setGestion] = useState<"" | "unmanaged" | "contacted" | "assigned" | "mine">("");
   // Tipo de anunciante (migración 0035): null/undefined cuenta como "unknown"
   const [advertiser, setAdvertiser] = useState<"" | "particular" | "professional" | "unknown">("");
@@ -1538,8 +1537,8 @@ export function ParticularesClient({
         if (fl == null || fl < fMin) return false;
       }
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
-      if (onlyNoPhone && r.phone) return false;
-      if (onlyWithPhone && !r.phone) return false;
+      if (phoneFilter === "no_phone" && r.phone) return false;
+      if (phoneFilter === "with_phone" && !r.phone) return false;
       // Gestión: evita doble trabajo — quién contactó / quién lo tiene asignado.
       if (gestion === "unmanaged" && (r.assigned_to || (r.contact_count ?? 0) > 0)) return false;
       if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
@@ -1555,12 +1554,12 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, onlyWithPhone, gestion, advertiser, currentUserId, showRetired]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, phoneFilter, gestion, advertiser, currentUserId, showRetired]);
 
   // Al cambiar cualquier filtro o el tab Activos/Retirados, volver a la página 1.
   useEffect(() => {
     setPage(1);
-  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, onlyNoPhone, onlyWithPhone, gestion, advertiser, showRetired]);
+  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, phoneFilter, gestion, advertiser, showRetired]);
 
   // Paginación client-side: el filtrado ya tiene todas las filas, aquí solo
   // troceamos la página visible. `currentPage` se acota por si el filtrado
@@ -1790,34 +1789,15 @@ export function ParticularesClient({
           >
             Últimas 24h
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOnlyNoPhone((v) => !v);
-              if (!onlyNoPhone) setOnlyWithPhone(false);
-            }}
-            className={
-              onlyNoPhone
-                ? "rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-700"
-                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-amber-300"
-            }
+          <select
+            value={phoneFilter}
+            onChange={(e) => setPhoneFilter(e.target.value as typeof phoneFilter)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
           >
-            Sin teléfono
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOnlyWithPhone((v) => !v);
-              if (!onlyWithPhone) setOnlyNoPhone(false);
-            }}
-            className={
-              onlyWithPhone
-                ? "rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-700"
-                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-emerald-300"
-            }
-          >
-            Con teléfono
-          </button>
+            <option value="">Teléfono: todos</option>
+            <option value="with_phone">Con teléfono</option>
+            <option value="no_phone">Sin teléfono</option>
+          </select>
           <button
             type="button"
             onClick={handleRefreshPhones}
