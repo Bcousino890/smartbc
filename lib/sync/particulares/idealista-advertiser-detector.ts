@@ -289,62 +289,114 @@ export async function fetchIdealistaPhoneViaAjax(
 
   const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
   const debug: AjaxPhoneResult["debug"] = options?.debug ? [] : undefined;
+  const endpoints = idealistaPhoneEndpoints(adId);
 
-  for (const endpoint of idealistaPhoneEndpoints(adId)) {
-    const res = await fetchAjaxWithCookieJar(
-      pageUrl,
-      endpoint,
-      WHATSAPP_UA_FOR_AJAX,
-      {
-        proxyUrl: options?.proxyUrl,
-        timeoutSec: 15,
-        ajaxHeaders: [
-          "X-Requested-With: XMLHttpRequest",
-          "Accept: application/json, text/javascript, */*; q=0.01",
-          `Referer: ${pageUrl}`,
-        ],
-      },
-    );
+  console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId}`);
+  console.log(`[idealista-phone-ajax] Intentando ${endpoints.length} endpoints`);
 
-    if (debug) {
-      debug.push({
+  for (let i = 0; i < endpoints.length; i++) {
+    const endpoint = endpoints[i];
+    console.log(`[idealista-phone-ajax] Endpoint ${i + 1}/${endpoints.length}: ${endpoint}`);
+
+    try {
+      const res = await fetchAjaxWithCookieJar(
+        pageUrl,
         endpoint,
-        status: res.status,
-        bodySnippet: (res.body ?? "").slice(0, 300),
-      });
-    }
+        WHATSAPP_UA_FOR_AJAX,
+        {
+          proxyUrl: options?.proxyUrl,
+          timeoutSec: 30,
+          ajaxHeaders: [
+            "X-Requested-With: XMLHttpRequest",
+            "Accept: application/json, text/javascript, */*; q=0.01",
+            `Referer: ${pageUrl}`,
+          ],
+        },
+      );
 
-    if (!res.ok || !res.body) continue;
-
-    const body = res.body;
-    // Campos de teléfono conocidos en las respuestas de estos endpoints
-    // (la estructura varía: phone1.number, formattedPhone, phone…).
-    const patterns = [
-      /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-      /"formattedPhone(?:Number)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-      /"nationalNumber"\s*:\s*"?([+\d][\d\s\-]{6,18})"?/,
-      /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-      /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-      /"phoneNumber"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-    ];
-    let phone: string | null = null;
-    for (const pattern of patterns) {
-      const m = body.match(pattern);
-      if (m?.[1]) {
-        // Descartar la referencia del anuncio si se cuela como candidato.
-        phone = acceptPhoneCandidate(m[1], adId.slice(-9));
-        if (phone) break;
+      if (debug) {
+        debug.push({
+          endpoint,
+          status: res.status,
+          bodySnippet: (res.body ?? "").slice(0, 300),
+        });
       }
-    }
 
-    const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
-    const contact_name = cn?.[1]?.trim() ?? null;
+      console.log(`[idealista-phone-ajax] HTTP ${res.status} from ${endpoint}`);
 
-    if (phone) {
-      return { phone, phone_confidence: "high", contact_name, debug };
+      if (!res.ok) {
+        console.log(`[idealista-phone-ajax] Response not OK (status=${res.status})`);
+        continue;
+      }
+
+      if (!res.body) {
+        console.log(`[idealista-phone-ajax] Response body is empty`);
+        continue;
+      }
+
+      const body = res.body;
+      console.log(`[idealista-phone-ajax] Body length: ${body.length} chars`);
+      console.log(`[idealista-phone-ajax] Body preview: ${body.slice(0, 200)}`);
+
+      // Campos de teléfono conocidos en las respuestas de estos endpoints
+      // (la estructura varía: phone1.number, formattedPhone, phone…).
+      const patterns = [
+        /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"formattedPhone(?:Number)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"nationalNumber"\s*:\s*"?([+\d][\d\s\-]{6,18})"?/,
+        /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"phoneNumber"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        // Patrones adicionales para diferentes versiones de API
+        /"contactPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"ownerPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"mobilePhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"phone1"\s*:\s*{\s*"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"mainPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"displayPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        // Patrones sin comillas para algunos campos
+        /phoneNumber\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+      ];
+      let phone: string | null = null;
+      let matchedPattern = -1;
+      for (let j = 0; j < patterns.length; j++) {
+        const pattern = patterns[j];
+        const m = body.match(pattern);
+        if (m?.[1]) {
+          console.log(`[idealista-phone-ajax] Patrón ${j + 1} coincide: ${m[1]}`);
+          // Descartar la referencia del anuncio si se cuela como candidato.
+          phone = acceptPhoneCandidate(m[1], adId.slice(-9));
+          if (phone) {
+            console.log(`[idealista-phone-ajax] ✓ Teléfono validado: ${phone}`);
+            matchedPattern = j;
+            break;
+          } else {
+            console.log(`[idealista-phone-ajax] ✗ Candidato rechazado: ${m[1]}`);
+          }
+        }
+      }
+
+      const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
+      const contact_name = cn?.[1]?.trim() ?? null;
+
+      if (phone) {
+        console.log(`[idealista-phone-ajax] ✓ ÉXITO: adId=${adId}, phone=${phone}, endpoint=${i + 1}`);
+        return { phone, phone_confidence: "high", contact_name, debug };
+      }
+
+      if (!phone && matchedPattern >= 0) {
+        console.log(`[idealista-phone-ajax] Patrón encontró candidato pero no es válido`);
+      } else if (!phone) {
+        console.log(`[idealista-phone-ajax] Ningún patrón coincidió en esta respuesta`);
+      }
+    } catch (err) {
+      console.error(`[idealista-phone-ajax] Error en endpoint ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
+      continue;
     }
   }
 
+  console.log(`[idealista-phone-ajax] ✗ FALLO: No se encontró teléfono para adId=${adId} tras intentar ${endpoints.length} endpoints`);
   return { phone: null, phone_confidence: null, contact_name: null, debug };
 }
 
