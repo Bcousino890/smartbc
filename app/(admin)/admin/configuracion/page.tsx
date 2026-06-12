@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { EmailConfigClient } from "./email-config-client";
+import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
 import { useT } from "@/lib/i18n/provider";
 import { mockAppSettings } from "@/lib/mock-admin-extras";
@@ -280,6 +281,11 @@ export default function AdminConfiguracionPage() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Logs Viewer */}
+      <div className="mt-7">
+        <LogsViewer />
       </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
