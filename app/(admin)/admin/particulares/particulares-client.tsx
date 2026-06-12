@@ -1418,6 +1418,7 @@ export function ParticularesClient({
   const [areaMin, setAreaMin] = useState("");
   const [last24h, setLast24h] = useState(false);
   const [onlyNoPhone, setOnlyNoPhone] = useState(false);
+  const [onlyWithPhone, setOnlyWithPhone] = useState(false);
   const [gestion, setGestion] = useState<"" | "unmanaged" | "contacted" | "assigned" | "mine">("");
   // Tipo de anunciante (migración 0035): null/undefined cuenta como "unknown"
   const [advertiser, setAdvertiser] = useState<"" | "particular" | "professional" | "unknown">("");
@@ -1538,6 +1539,7 @@ export function ParticularesClient({
       }
       if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
       if (onlyNoPhone && r.phone) return false;
+      if (onlyWithPhone && !r.phone) return false;
       // Gestión: evita doble trabajo — quién contactó / quién lo tiene asignado.
       if (gestion === "unmanaged" && (r.assigned_to || (r.contact_count ?? 0) > 0)) return false;
       if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
@@ -1553,12 +1555,12 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, gestion, advertiser, currentUserId, showRetired]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, onlyNoPhone, onlyWithPhone, gestion, advertiser, currentUserId, showRetired]);
 
   // Al cambiar cualquier filtro o el tab Activos/Retirados, volver a la página 1.
   useEffect(() => {
     setPage(1);
-  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, onlyNoPhone, gestion, advertiser, showRetired]);
+  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, onlyNoPhone, onlyWithPhone, gestion, advertiser, showRetired]);
 
   // Paginación client-side: el filtrado ya tiene todas las filas, aquí solo
   // troceamos la página visible. `currentPage` se acota por si el filtrado
@@ -1790,7 +1792,10 @@ export function ParticularesClient({
           </button>
           <button
             type="button"
-            onClick={() => setOnlyNoPhone((v) => !v)}
+            onClick={() => {
+              setOnlyNoPhone((v) => !v);
+              if (!onlyNoPhone) setOnlyWithPhone(false);
+            }}
             className={
               onlyNoPhone
                 ? "rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-700"
@@ -1798,6 +1803,20 @@ export function ParticularesClient({
             }
           >
             Sin teléfono
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOnlyWithPhone((v) => !v);
+              if (!onlyWithPhone) setOnlyNoPhone(false);
+            }}
+            className={
+              onlyWithPhone
+                ? "rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-700"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-emerald-300"
+            }
+          >
+            Con teléfono
           </button>
           <button
             type="button"
