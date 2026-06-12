@@ -651,23 +651,30 @@ export async function extractIdealista(
   // el teléfono está tras "Ver teléfono"), intentamos obtenerlo vía AJAX
   // usando el mismo bypass de DataDome (TLS fingerprint de curl + UA WhatsApp).
   if (!advertiserInfo.phone && embedded?.propertyCode) {
+    console.log(`[idealista-extractor] Iniciando AJAX para propertyCode=${embedded.propertyCode}`);
     try {
       const ajaxResult = await fetchIdealistaPhoneViaAjax(
         embedded.propertyCode,
         { proxyUrl: options?.proxyUrl }
       );
       if (ajaxResult.phone) {
+        console.log(`[idealista-extractor] ✓ AJAX devolvió teléfono: ${ajaxResult.phone}`);
         advertiserInfo = {
           ...advertiserInfo,
           phone: ajaxResult.phone,
           phone_confidence: ajaxResult.phone_confidence,
           contact_name: ajaxResult.contact_name ?? advertiserInfo.contact_name,
         };
+      } else {
+        console.log(`[idealista-extractor] ✗ AJAX no devolvió teléfono para propertyCode=${embedded.propertyCode}`);
       }
-    } catch {
+    } catch (err) {
       // Silenciosamente ignoramos errores de AJAX (DataDome bloqueos, timeouts).
       // El extractor sigue adelante sin el teléfono extra.
+      console.error(`[idealista-extractor] Error AJAX: ${err instanceof Error ? err.message : String(err)}`);
     }
+  } else if (!advertiserInfo.phone && !embedded?.propertyCode) {
+    console.log(`[idealista-extractor] No hay propertyCode embebido, no se puede hacer AJAX fallback`);
   }
 
   // ── Coordenadas: lo más cercano posible al piso real ───────────────────────

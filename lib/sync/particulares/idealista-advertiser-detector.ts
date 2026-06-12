@@ -194,6 +194,16 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
   const adReference = extractAdReference(html);
   const { phone, confidence } = extractPhoneWithConfidence(html, adReference);
 
+  // Log: información del HTML parsing
+  const advertiserType = m ? (m[2].trim().length > 0 ? "professional" : "particular") : "unknown";
+  console.log(`[idealista-html-parsing] Anunciante: ${advertiserType}${m ? ` (adProfessionalName="${m[2].trim()}")` : ""}`);
+
+  if (phone) {
+    console.log(`[idealista-html-parsing] ✓ Teléfono encontrado en HTML: ${phone} (confidence=${confidence})`);
+  } else {
+    console.log(`[idealista-html-parsing] ✗ Sin teléfono en HTML - necesitará fallback AJAX`);
+  }
+
   // Extraer nombre de contacto del particular. Idealista lo expone en el HTML
   // como `advertiserName: 'Beatriz'` en scripts inline, o como texto en el
   // bloque de contacto. Capturamos ambas variantes.
@@ -210,6 +220,10 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
     // Fallback: nombre en el bloque de contacto visible en el HTML
     const cn3 = html.match(/class="[^"]*advertiser-name[^"]*"[^>]*>([^<]{2,60})</);
     if (cn3?.[1]) contact_name = cn3[1].trim();
+  }
+
+  if (contact_name) {
+    console.log(`[idealista-html-parsing] Nombre de contacto: ${contact_name}`);
   }
 
   if (!m) {
