@@ -24,12 +24,10 @@ type SupabaseLike = any;
 // de N páginas recientes, subir PARTICULARES_MAX_PAGES y disparar el script
 // de backfill manualmente.
 const SEARCH_BASES = [
-  // Filtro nativo "Particular" de Idealista (segmento con_publicado_particular):
-  // cada página del listado trae ~30 anuncios SOLO de particulares, en vez del
-  // listado general donde ~90% son agencias (que el scraper descarga y descarta).
-  // Con el mismo número de páginas por run se capturan ~10x más particulares.
-  "https://www.idealista.com/venta-viviendas/madrid-madrid/con_publicado_particular/",
-  "https://www.idealista.com/alquiler-viviendas/madrid-madrid/con_publicado_particular/",
+  // Madrid provincia (no solo capital) - todas las viviendas
+  // El scraper filtra profesionales en el código, capturando solo particulares
+  "https://www.idealista.com/venta-viviendas/madrid-provincia/",
+  "https://www.idealista.com/alquiler-viviendas/madrid-provincia/",
 ];
 
 // Páginas por listado y por run. 2 listados (venta + alquiler) × 5 páginas

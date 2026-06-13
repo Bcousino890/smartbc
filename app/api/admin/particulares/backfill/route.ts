@@ -99,10 +99,10 @@ export async function POST(req: Request) {
       professionals: 0,
     };
 
-    // Construir URLs con filtro de particulares
+    // Construir URLs - Madrid provincia (todas las viviendas)
     const searchBases = [
-      "https://www.idealista.com/venta-viviendas/madrid-madrid/con_publicado_particular/",
-      "https://www.idealista.com/alquiler-viviendas/madrid-madrid/con_publicado_particular/",
+      "https://www.idealista.com/venta-viviendas/madrid-provincia/",
+      "https://www.idealista.com/alquiler-viviendas/madrid-provincia/",
     ];
 
     const propertyUrls = new Set<string>();
