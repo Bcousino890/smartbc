@@ -39,19 +39,21 @@ const MAX_PAGES = Number.parseInt(
   10,
 );
 
-// Idealista pagina con `/pagina-N.htm` en el path (la página 1 es la base).
-// Rango [fromPage, toPage] para poder hacer el backfill por tramos (un
-// request HTTP no aguanta miles de fichas — el script de backfill llama
-// con tramos pequeños).
-function buildSearchUrls(fromPage: number, toPage: number): string[] {
-  const urls: string[] = [];
-  const sort = "?ordenado-por=fecha-publicacion-desc";
-  for (const base of SEARCH_BASES) {
-    for (let page = fromPage; page <= toPage; page++) {
-      urls.push(page === 1 ? `${base}${sort}` : `${base}pagina-${page}.htm${sort}`);
-    }
-  }
-  return urls;
+// Bases de búsqueda según zona. Sin zona → Madrid provincia completo (modo
+// cron incremental por defecto). Con zona (p. ej. "madrid/centro/sol",
+// "madrid/barrio-de-salamanca/goya" o "pozuelo-de-alarcon") → solo esa zona.
+//
+// IMPORTANTE: Idealista solo pagina hasta ~60 páginas (≈1.800 anuncios) por
+// búsqueda. Más allá de eso las páginas vuelven vacías. Por eso el histórico
+// completo NO se puede capturar paginando madrid-provincia (toca el techo a
+// las ~1.800 fichas): hay que trocear la búsqueda por distrito/barrio/municipio
+// para que cada sub-búsqueda quede bajo el techo y entre todas cubran el 100%.
+function buildSearchBases(zone: string | null): string[] {
+  if (!zone) return SEARCH_BASES;
+  return [
+    `https://www.idealista.com/venta-viviendas/${zone}/`,
+    `https://www.idealista.com/alquiler-viviendas/${zone}/`,
+  ];
 }
 
 // ─── Upsert preservando historial ────────────────────────────────────────────
@@ -357,7 +359,12 @@ async function upsertParticular(
   return true;
 }
 
-async function scrapeMadridParticulares(fromPage: number, toPage: number) {
+async function scrapeMadridParticulares(
+  fromPage: number,
+  toPage: number,
+  zone: string | null = null,
+  scrapeOnly = false,
+) {
   // Inicializar cliente dentro de la función para evitar errores en build time
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -374,7 +381,7 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
 
   try {
     // Obtener listado de URLs de propiedades
-    const propertyUrls = await extractPropertyUrlsFromSearch(fromPage, toPage);
+    const propertyUrls = await extractPropertyUrlsFromSearch(fromPage, toPage, zone);
 
     for (const url of propertyUrls) {
       try {
@@ -462,27 +469,33 @@ async function scrapeMadridParticulares(fromPage: number, toPage: number) {
       results.processed++;
     }
 
-    // Detección de bajas: revisita los activos vistos hace más tiempo y
-    // marca como inactivos los que ya no existen en Idealista (404 = el
-    // particular retiró el anuncio: vendió, alquiló o fichó con agencia).
-    // Los activos que siguen vivos refrescan su updated_at.
-    const removed = await markStaleListingsInactive(supabase);
-    (results as Record<string, number>).bajas = removed;
+    // Pasadas de mantenimiento GLOBALES (no dependen de la zona): solo en modo
+    // cron normal. En el backfill por zona (scrapeOnly) se omiten — se llaman
+    // cientos de veces seguidas y repetirlas en cada zona malgastaría proxy y
+    // tiempo. El cron horario habitual ya las ejecuta sobre todo el stock.
+    if (!scrapeOnly) {
+      // Detección de bajas: revisita los activos vistos hace más tiempo y
+      // marca como inactivos los que ya no existen en Idealista (404 = el
+      // particular retiró el anuncio: vendió, alquiló o fichó con agencia).
+      // Los activos que siguen vivos refrescan su updated_at.
+      const removed = await markStaleListingsInactive(supabase);
+      (results as Record<string, number>).bajas = removed;
 
-    // Normalización de teléfonos heredados: reescribe a +34XXXXXXXXX los
-    // phones guardados con otro formato (sin prefijo, con espacios…).
-    // Idempotente y barato: tras la primera pasada quedan 0 pendientes.
-    const normalized = await normalizeStoredPhones(supabase);
-    (results as Record<string, number>).telefonos_normalizados = normalized;
+      // Normalización de teléfonos heredados: reescribe a +34XXXXXXXXX los
+      // phones guardados con otro formato (sin prefijo, con espacios…).
+      // Idempotente y barato: tras la primera pasada quedan 0 pendientes.
+      const normalized = await normalizeStoredPhones(supabase);
+      (results as Record<string, number>).telefonos_normalizados = normalized;
 
-    // Backfill de teléfonos ocultos tras "Ver teléfono": cada hora revisa
-    // un lote de activos SIN teléfono (los menos revisados primero) llamando
-    // solo al endpoint AJAX de contacto (barato: sin re-descargar la ficha).
-    // Con ~50/hora se cubre todo el stock en <1 día y de ahí en adelante
-    // cada anuncio sin teléfono se re-verifica continuamente, captando los
-    // teléfonos que los propietarios añaden después de publicar.
-    const found = await backfillPhonesViaAjax(supabase, 50);
-    (results as Record<string, number>).telefonos_encontrados = found;
+      // Backfill de teléfonos ocultos tras "Ver teléfono": cada hora revisa
+      // un lote de activos SIN teléfono (los menos revisados primero) llamando
+      // solo al endpoint AJAX de contacto (barato: sin re-descargar la ficha).
+      // Con ~50/hora se cubre todo el stock en <1 día y de ahí en adelante
+      // cada anuncio sin teléfono se re-verifica continuamente, captando los
+      // teléfonos que los propietarios añaden después de publicar.
+      const found = await backfillPhonesViaAjax(supabase, 50);
+      (results as Record<string, number>).telefonos_encontrados = found;
+    }
 
     return results;
   } catch (error) {
@@ -663,29 +676,51 @@ const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 async function extractPropertyUrlsFromSearch(
   fromPage: number,
   toPage: number,
+  zone: string | null,
 ): Promise<string[]> {
   const seen = new Set<string>();
+  const sort = "?ordenado-por=fecha-publicacion-desc";
 
-  for (const searchUrl of buildSearchUrls(fromPage, toPage)) {
-    // Vía curl con UA WhatsApp + proxy residencial — pasa DataDome (el TLS
-    // de undici no, y la IP del datacenter se quema sin el proxy).
-    const res = await fetchViaCurl(searchUrl, WHATSAPP_UA, {
-      proxyUrl: process.env.SMARTPROXY_URL,
-    });
-    if (!res.ok) {
-      console.warn(
-        `[cron-particulares] listado ${searchUrl} -> ${res.reason}`,
-      );
-      continue;
-    }
+  for (const base of buildSearchBases(zone)) {
+    let foundInBase = 0;
+    for (let page = fromPage; page <= toPage; page++) {
+      const searchUrl =
+        page === 1 ? `${base}${sort}` : `${base}pagina-${page}.htm${sort}`;
 
-    // Extraer IDs de propiedades del HTML y normalizar a URL canónica.
-    const matches = res.html.matchAll(/\/inmueble\/(\d+)/g);
-    for (const match of matches) {
-      if (match[1]) {
-        seen.add(`https://www.idealista.com/inmueble/${match[1]}/`);
+      // Vía curl con UA WhatsApp + proxy residencial — pasa DataDome (el TLS
+      // de undici no, y la IP del datacenter se quema sin el proxy).
+      const res = await fetchViaCurl(searchUrl, WHATSAPP_UA, {
+        proxyUrl: process.env.SMARTPROXY_URL,
+      });
+      if (!res.ok) {
+        console.warn(`[cron-particulares] listado ${searchUrl} -> ${res.reason}`);
+        // 404 = no hay más páginas en esta búsqueda → parar (no malgastar proxy).
+        if (res.status === 404) break;
+        continue;
+      }
+
+      // Extraer IDs de propiedades del HTML y normalizar a URL canónica.
+      const matches = res.html.matchAll(/\/inmueble\/(\d+)/g);
+      let matchesInPage = 0;
+      for (const match of matches) {
+        matchesInPage++;
+        if (match[1]) {
+          seen.add(`https://www.idealista.com/inmueble/${match[1]}/`);
+        }
+      }
+      foundInBase += matchesInPage;
+
+      // Página sin ningún anuncio = techo de paginación de Idealista alcanzado
+      // (o slug de zona inexistente si es la página 1). Parar esta búsqueda
+      // para no seguir pidiendo páginas vacías y quemar proxy en balde.
+      if (matchesInPage === 0) {
+        console.log(
+          `[cron-particulares] ${base} pagina-${page}: 0 anuncios, fin de paginación`,
+        );
+        break;
       }
     }
+    console.log(`[cron-particulares] ${base} → ${foundInBase} anuncios`);
   }
 
   return Array.from(seen);
@@ -697,27 +732,42 @@ export async function POST(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // Rango de páginas opcional vía query (?fromPage=1&toPage=3) para el
-  // backfill por tramos. Por defecto usa [1, MAX_PAGES] (modo cron normal).
+  // Parámetros opcionales vía query:
+  //  - fromPage/toPage: rango de páginas (backfill por tramos).
+  //  - zone: scrapear solo una zona (distrito/barrio/municipio) en vez de todo
+  //    Madrid provincia. Ej: ?zone=madrid/centro/sol o ?zone=pozuelo-de-alarcon
+  //  - scrapeOnly=true: omitir las pasadas de mantenimiento (bajas/teléfonos),
+  //    pensado para el backfill masivo por zona.
   const { searchParams } = new URL(req.url);
+  const zone = searchParams.get("zone");
+  const scrapeOnly = searchParams.get("scrapeOnly") === "true";
   const fromPage = Math.max(
     1,
     Number.parseInt(searchParams.get("fromPage") ?? "1", 10) || 1,
   );
+  // Con zona, por defecto paginamos hasta el techo de Idealista (~60). Sin
+  // zona, el modo cron normal usa MAX_PAGES (incremental).
+  const defaultToPage = zone ? 60 : MAX_PAGES;
   const toPage = Math.max(
     fromPage,
-    Number.parseInt(searchParams.get("toPage") ?? String(MAX_PAGES), 10) ||
-      MAX_PAGES,
+    Number.parseInt(searchParams.get("toPage") ?? String(defaultToPage), 10) ||
+      defaultToPage,
   );
 
   try {
     console.log(
-      `[cron-particulares] Iniciando scraping páginas ${fromPage}-${toPage}`,
+      `[cron-particulares] Iniciando scraping ${zone ? `zona=${zone} ` : ""}páginas ${fromPage}-${toPage}`,
     );
-    const results = await scrapeMadridParticulares(fromPage, toPage);
+    const results = await scrapeMadridParticulares(
+      fromPage,
+      toPage,
+      zone,
+      scrapeOnly,
+    );
     return Response.json({
       ok: true,
       timestamp: new Date().toISOString(),
+      zone: zone ?? null,
       pages: { fromPage, toPage },
       results,
     });
