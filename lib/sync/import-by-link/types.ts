@@ -14,6 +14,7 @@ export type ImportPortal =
   | "clikalia"
   | "urbantechome"
   | "yaencontre"
+  | "ukio"
   | "generic";
 
 export type ImportPhoto = {
