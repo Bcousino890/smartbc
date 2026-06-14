@@ -31,7 +31,7 @@ export default async function AdminImportByLinkPage() {
             <p className="mt-1 text-sm text-ink/60">
               Pega el enlace público de la propiedad y la traemos
               automáticamente. Funciona con enlaces de Idealista, Fotocasa,
-              webs sobre Inmoweb y otros portales (con extractor genérico).
+              yaencontre, webs sobre Inmoweb y otros portales (con extractor genérico).
             </p>
           </div>
         </div>

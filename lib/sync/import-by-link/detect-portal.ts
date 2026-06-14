@@ -28,6 +28,10 @@ const RULES: { match: (host: string) => boolean; portal: ImportPortal }[] = [
     match: (h) => /(^|\.)urbantechome\.[a-z.]+$/i.test(h),
     portal: "urbantechome",
   },
+  {
+    match: (h) => /(^|\.)yaencontre\.[a-z.]+$/i.test(h),
+    portal: "yaencontre",
+  },
 ];
 
 export function detectPortal(rawUrl: string): {
