@@ -28,13 +28,24 @@ export async function updateParticularPhone(
   let normalized: string | null = null;
   if (trimmed.length > 0) {
     normalized = normalizeSpanishPhone(trimmed);
-    if (!normalized) return { ok: false, error: "invalid_phone" };
+    if (!normalized)
+      return {
+        ok: false,
+        error:
+          "Número inválido. Usa formato 600 123 456 o +34 600 123 456 (9 dígitos, empieza por 6/7/8/9)",
+      };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("particulares")
-    .update({ phone: normalized, updated_at: new Date().toISOString() })
+    .update({
+      phone: normalized,
+      updated_at: new Date().toISOString(),
+      phone_manually_verified: normalized !== null,
+      phone_verified_at: normalized !== null ? new Date().toISOString() : null,
+      phone_confidence: normalized !== null ? "high" : null,
+    })
     .eq("id", particularId);
 
   if (error) return { ok: false, error: error.message };

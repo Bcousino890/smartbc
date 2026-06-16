@@ -21,7 +21,9 @@ export function normalizeSpanishPhone(
   raw: string | null | undefined,
 ): string | null {
   if (!raw) return null;
-  const cleaned = raw.replace(/[\s\-().]/g, "");
+  // Strip spaces, hyphens, parens, dots, forward slashes, middle-dots (·),
+  // en/em dashes, asterisks — all common copy-paste artifacts from web pages.
+  const cleaned = raw.replace(/[\s\-()./·–—*]/g, "");
 
   let national: string | null = null;
   if (/^\+34[6789]\d{8}$/.test(cleaned)) {
@@ -120,8 +122,18 @@ function extractPhoneWithConfidence(
     }
   }
 
-  // MEDIUM CONFIDENCE: href="tel:" links or telLink/callLink elements
-  pm = html.match(/href="tel:([+\d][\d\s\-]{6,})"/);
+  // MEDIUM CONFIDENCE: href="tel:" links (single or double quotes)
+  pm = html.match(/href=["']tel:([+\d][\d\s\-]{6,})["']/);
+  if (pm?.[1]) {
+    const phone = acceptPhoneCandidate(pm[1], excludeReference);
+    if (phone) {
+      return { phone, confidence: "medium" };
+    }
+  }
+
+  // MEDIUM CONFIDENCE: WhatsApp deeplinks (wa.me/34XXXXXXXXX or wa.me/XXXXXXXXX)
+  // Idealista "chat only" listings expose the phone here instead of href=tel.
+  pm = html.match(/wa\.me\/(?:34)?([6789]\d{8})/);
   if (pm?.[1]) {
     const phone = acceptPhoneCandidate(pm[1], excludeReference);
     if (phone) {
@@ -361,14 +373,16 @@ export async function fetchIdealistaPhoneViaAjax(
         /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"phoneNumber"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        // Patrones adicionales para diferentes versiones de API
         /"contactPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"ownerPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"mobilePhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"phone1"\s*:\s*{\s*"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        // phone1/phone2 nested structure: {"phone1":{"number":"6XXXXXXXX",...}}
+        /"phone\d?"\s*:\s*\{[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"mainPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"displayPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        // Patrones sin comillas para algunos campos
+        // WhatsApp deeplink in JSON body (some listings expose only wa.me)
+        /wa\.me\/(?:34)?([6789]\d{8})/,
+        // Unquoted JS-style fields
         /phoneNumber\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
       ];

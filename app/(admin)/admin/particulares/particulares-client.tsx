@@ -200,7 +200,7 @@ function EditPhoneModal({
 
           {error && (
             <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              No se pudo guardar ({error}). Inténtalo de nuevo.
+              {error}
             </div>
           )}
         </div>
