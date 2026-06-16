@@ -188,6 +188,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     students: prefs?.students ?? 0,
     workers: prefs?.workers ?? 1,
     pets: prefs?.pets ?? false,
+    universities: prefs?.universities ?? undefined,
     lastAccessText: undefined,
     status: "active" as ClientStatus,
     assignedAdvisor: "—",

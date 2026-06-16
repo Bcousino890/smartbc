@@ -44,6 +44,7 @@ type FiltersState = {
   students: number;
   workers: number;
   pets: boolean;
+  universities: string;
 };
 
 function snapshotFromClient(client: AdminClient): FiltersState {
@@ -59,6 +60,7 @@ function snapshotFromClient(client: AdminClient): FiltersState {
     students: client.students,
     workers: client.workers,
     pets: client.pets,
+    universities: client.universities || "",
   };
 }
 
@@ -74,7 +76,8 @@ function statesEqual(a: FiltersState, b: FiltersState): boolean {
     a.occupants === b.occupants &&
     a.students === b.students &&
     a.workers === b.workers &&
-    a.pets === b.pets
+    a.pets === b.pets &&
+    a.universities === b.universities
   );
 }
 
@@ -142,6 +145,7 @@ function ClientDetailPanelInner({ client }: { client: AdminClient }) {
         students: state.students,
         workers: state.workers,
         pets: state.pets,
+        universities: state.universities,
       });
       if (result.ok) {
         setFeedback("saved");
@@ -458,6 +462,15 @@ function CustomFiltersBlock({
                 label: t("clientes.detail.filters.pets.no"),
               },
             ]}
+          />
+        </FilterRow>
+        <FilterRow label="Universidades cercanas">
+          <input
+            type="text"
+            value={state.universities}
+            onChange={(e) => patch("universities", e.target.value)}
+            placeholder="Ej: UAM, IE, CUNEF"
+            className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
           />
         </FilterRow>
       </div>

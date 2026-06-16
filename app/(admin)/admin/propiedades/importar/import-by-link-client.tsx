@@ -198,7 +198,7 @@ export function ImportByLinkClient({
           </button>
         </div>
         <p className="text-xs text-ink/45">
-          Funciona con enlaces de Idealista, Fotocasa, webs de agencias sobre
+          Funciona con enlaces de Idealista, Fotocasa, yaencontre, Ukio, webs de agencias sobre
           Inmoweb y otros portales.
         </p>
       </div>

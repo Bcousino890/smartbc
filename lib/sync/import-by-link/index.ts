@@ -8,6 +8,8 @@ import { extractFotocasa } from "./extractors/fotocasa";
 import { extractGeneric } from "./extractors/generic";
 import { extractIdealista } from "./extractors/idealista";
 import { extractInmoweb } from "./extractors/inmoweb";
+import { extractYaencontre } from "./extractors/yaencontre";
+import { extractUkio } from "./extractors/ukio";
 import { dedupKey } from "../scrapers/image-utils";
 import type { ImportExtractResult, ImportPreview } from "./types";
 
@@ -115,6 +117,10 @@ export async function extractFromUrl(
       return { ok: true, preview: dedupePreviewPhotos(extractInmoweb($, finalUrl)) };
     case "clikalia":
       return { ok: true, preview: dedupePreviewPhotos(extractClikalia($, finalUrl)) };
+    case "yaencontre":
+      return { ok: true, preview: dedupePreviewPhotos(extractYaencontre($, finalUrl)) };
+    case "ukio":
+      return { ok: true, preview: dedupePreviewPhotos(extractUkio($, finalUrl)) };
     case "mobilia":
     case "generic":
     default:

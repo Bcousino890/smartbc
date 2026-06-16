@@ -13,6 +13,8 @@ export type ImportPortal =
   | "mobilia"
   | "clikalia"
   | "urbantechome"
+  | "yaencontre"
+  | "ukio"
   | "generic";
 
 export type ImportPhoto = {
