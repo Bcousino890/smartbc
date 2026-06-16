@@ -490,10 +490,13 @@ async function scrapeMadridParticulares(
       // Backfill de teléfonos ocultos tras "Ver teléfono": cada hora revisa
       // un lote de activos SIN teléfono (los menos revisados primero) llamando
       // solo al endpoint AJAX de contacto (barato: sin re-descargar la ficha).
-      // Con ~50/hora se cubre todo el stock en <1 día y de ahí en adelante
-      // cada anuncio sin teléfono se re-verifica continuamente, captando los
-      // teléfonos que los propietarios añaden después de publicar.
-      const found = await backfillPhonesViaAjax(supabase, 50);
+      // Proceso de dos fases: primero particulares chat_only (más probable que
+      // tengan teléfono oculto), luego sin teléfono en general. Con ~150/hora
+      // total se cubre todo el stock en <1 día y de ahí en adelante cada anuncio
+      // se re-verifica continuamente, captando teléfonos añadidos tras publicar.
+      const foundChatOnly = await backfillPhonesViaAjax(supabase, 75, true);
+      const foundNoPhone = await backfillPhonesViaAjax(supabase, 75, false);
+      const found = foundChatOnly + foundNoPhone;
       (results as Record<string, number>).telefonos_encontrados = found;
     }
 
@@ -509,17 +512,27 @@ async function scrapeMadridParticulares(
 // ficha completa. Los menos revisados primero (updated_at asc); cada anuncio
 // procesado refresca su updated_at para rotar al final de la cola, tenga o
 // no teléfono. Si aparece teléfono → guardar normalizado + historial.
+// Si chatOnlyFirst=true, solo revisa chat_only. Si false, revisa sin teléfono.
 async function backfillPhonesViaAjax(
   supabase: SupabaseLike,
   limit: number,
+  chatOnlyFirst = false,
 ): Promise<number> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("particulares")
     .select("id, source_url")
     .eq("is_active", true)
     .is("phone", null)
     .order("updated_at", { ascending: true })
     .limit(limit);
+
+  if (chatOnlyFirst) {
+    query = query.eq("chat_only", true);
+  } else {
+    query = query.is("chat_only", null).or("chat_only.eq.false");
+  }
+
+  const { data, error } = await query;
   if (error || !data || data.length === 0) return 0;
 
   let found = 0;
