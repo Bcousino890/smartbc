@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageFooter } from "@/components/ui/page-footer";
+import { SuggestedPropertiesBlock } from "@/components/admin/clientes/suggested-properties-block";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -234,6 +235,10 @@ export function ClientFichaView({
         {/* Columna derecha */}
         <div className="flex flex-col gap-5">
           <FavoritesCard favorites={favorites} />
+          <SuggestedPropertiesBlock
+            clientId={client.id}
+            clientName={`${client.firstName} ${client.lastName}`}
+          />
           <VisitsCard visits={visits} />
         </div>
       </div>
