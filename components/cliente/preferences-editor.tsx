@@ -167,8 +167,8 @@ export function PreferencesEditor({
             >
               <option value="">Seleccionar...</option>
               {MADRID_ZONES.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}
+                <option key={zone} value={zone}>
+                  {zone}
                 </option>
               ))}
             </select>

@@ -27,11 +27,13 @@ export async function GET(
     const { clientId } = await params;
 
     // Validate that the client exists and belongs to this staff
-    const { data: client, error: clientError } = await supabase
+    const { data: clientData, error: clientError } = await supabase
       .from("profiles")
       .select("id, role")
       .eq("id", clientId)
       .maybeSingle();
+
+    const client = clientData as any;
 
     if (clientError || !client || client.role !== "client") {
       return NextResponse.json(

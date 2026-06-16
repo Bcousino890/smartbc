@@ -191,9 +191,7 @@ function PropertyCard({
           <div className="text-xl font-bold text-ink">
             {property.price.toLocaleString("es-ES")}€
           </div>
-          {property.stayType === "corta" && (
-            <div className="text-xs text-ink/60 mt-1">/ mes</div>
-          )}
+          <div className="text-xs text-ink/60 mt-1">/ mes</div>
         </div>
 
         {/* Match reasons */}

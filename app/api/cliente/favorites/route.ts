@@ -29,8 +29,9 @@ export async function GET() {
       );
     }
 
+    const typedData = (data as any) || [];
     return NextResponse.json({
-      favorites: data?.map(f => f.property_id) || [],
+      favorites: typedData.map((f: any) => f.property_id) || [],
     });
   } catch (error) {
     console.error("Error fetching favorites:", error);
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase.from("favorites").insert({
       client_id: user.id,
       property_id: propertyId,
-    });
+    } as any);
 
     if (error) {
       console.error("Database error:", error);

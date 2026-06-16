@@ -277,8 +277,8 @@ export function CreateClientDialog() {
               >
                 <option value="">Seleccionar zona...</option>
                 {MADRID_ZONES.map((zone) => (
-                  <option key={zone.id} value={zone.id}>
-                    {zone.name}
+                  <option key={zone} value={zone}>
+                    {zone}
                   </option>
                 ))}
               </select>

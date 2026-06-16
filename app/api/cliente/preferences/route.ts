@@ -64,12 +64,12 @@ export async function POST(req: NextRequest) {
 
     // Insert or update
     const { error } = existing
-      ? await supabase
-          .from("client_preferences")
+      ? await (supabase
+          .from("client_preferences") as any)
           .update(payload)
           .eq("client_id", user.id)
-      : await supabase
-          .from("client_preferences")
+      : await (supabase
+          .from("client_preferences") as any)
           .insert(payload);
 
     if (error) {
@@ -126,18 +126,19 @@ export async function GET() {
       });
     }
 
+    const typedData = data as any;
     return NextResponse.json({
       preferences: {
-        operation: data.operation === "sale" ? "venta" : "alquiler",
-        stayType: data.stay === "long" ? "larga" : "corta",
-        preferredZone: data.zones?.[0] || "",
-        budgetMin: data.min_price || 0,
-        budgetMax: data.max_price || 0,
-        universities: data.universities || "",
-        occupants: data.occupants || 1,
-        students: data.students || 0,
-        workers: data.workers || 0,
-        pets: data.pets || false,
+        operation: typedData.operation === "sale" ? "venta" : "alquiler",
+        stayType: typedData.stay === "long" ? "larga" : "corta",
+        preferredZone: typedData.zones?.[0] || "",
+        budgetMin: typedData.min_price || 0,
+        budgetMax: typedData.max_price || 0,
+        universities: typedData.universities || "",
+        occupants: typedData.occupants || 1,
+        students: typedData.students || 0,
+        workers: typedData.workers || 0,
+        pets: typedData.pets || false,
       },
     });
   } catch (error) {

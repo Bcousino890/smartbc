@@ -22,23 +22,27 @@ export default async function InicioPage() {
   }
 
   // Get client profile
-  const { data: profile, error: profileError } = await supabase
+  const { data: profileData, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .eq("role", "client")
     .maybeSingle();
 
-  if (profileError || !profile) {
+  if (profileError || !profileData) {
     redirect("/login");
   }
 
+  const profile = profileData as any;
+
   // Get client preferences
-  const { data: prefs, error: prefsError } = await supabase
+  const { data: prefsData, error: prefsError } = await supabase
     .from("client_preferences")
     .select("*")
     .eq("client_id", user.id)
     .maybeSingle();
+
+  const prefs = prefsData as any;
 
   const preferences = {
     operation: (prefs?.operation === "sale" ? "venta" : "alquiler") as Operation,

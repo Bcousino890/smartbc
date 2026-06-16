@@ -112,13 +112,11 @@ export async function createNewClient(
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .insert({
-      first_name: input.firstName,
-      last_name: input.lastName,
+      full_name: `${input.firstName} ${input.lastName}`,
       email: input.email,
       phone: input.phone || null,
       role: "client",
-      status: "active",
-    })
+    } as any)
     .select("id")
     .single();
 
@@ -129,11 +127,13 @@ export async function createNewClient(
     };
   }
 
+  const typedProfile = profile as any;
+
   // Create preferences
   const { error: prefsError } = await supabase
     .from("client_preferences")
     .insert({
-      client_id: profile.id,
+      client_id: typedProfile.id,
       operation: input.operation === "alquiler" ? "rent" : "sale",
       stay: input.stayType === "corta" ? "short" : "long",
       zones: input.preferredZone ? [input.preferredZone] : [],
@@ -144,12 +144,12 @@ export async function createNewClient(
       workers: input.workers,
       pets: input.pets,
       universities: input.universities || null,
-    });
+    } as any);
 
   if (prefsError) {
     return { ok: false, error: prefsError.message };
   }
 
   revalidatePath("/admin/clientes");
-  return { ok: true, clientId: profile.id };
+  return { ok: true, clientId: typedProfile.id };
 }
