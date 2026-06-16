@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CreateClientDialog } from "@/components/admin/clientes/create-client-dialog";
 import { ClientDetailPanel } from "@/components/admin/clientes/client-detail-panel";
 import { ClientsTable } from "@/components/admin/clientes/clients-table";
 import type { AdminClient } from "@/lib/types";
@@ -22,14 +23,20 @@ export function ClientesAdminClient({
   );
 
   return (
-    <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-      <ClientsTable
-        clients={clients}
-        totalClients={totalClients}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
-      <ClientDetailPanel client={selected} />
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-ink">Clientes</h2>
+        <CreateClientDialog />
+      </div>
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <ClientsTable
+          clients={clients}
+          totalClients={totalClients}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+        <ClientDetailPanel client={selected} />
+      </div>
     </div>
   );
 }

@@ -311,6 +311,7 @@ export type AdminClient = {
   students: number;
   workers: number;
   pets: boolean;
+  universities?: string;
 
   // Last access label rendered in the table.
   lastAccessLabelKey?: string;
