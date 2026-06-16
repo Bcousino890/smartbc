@@ -34,11 +34,13 @@ export async function getSuggestedProperties(
   const supabase = await createClient();
 
   // 1. Obtener preferencias del cliente
-  const { data: prefs, error: prefsError } = await supabase
+  const { data: prefsData, error: prefsError } = await supabase
     .from("client_preferences")
     .select("*")
     .eq("client_id", clientId)
     .maybeSingle();
+
+  const prefs = prefsData as any;
 
   if (prefsError || !prefs) {
     console.error("Error fetching client preferences:", prefsError?.message);
@@ -52,7 +54,7 @@ export async function getSuggestedProperties(
   // - Precio dentro del rango
   // - Zona (si se especifica)
 
-  let query = supabase
+  let query = (supabase
     .from("properties")
     .select(
       `
@@ -69,7 +71,7 @@ export async function getSuggestedProperties(
       latitude,
       longitude
     `,
-    )
+    ) as any)
     .eq("operation", prefs.operation)
     .eq("stay", prefs.stay)
     .eq("status", "available");
@@ -88,12 +90,14 @@ export async function getSuggestedProperties(
     query = query.in("zone", zones);
   }
 
-  const { data: properties, error: propsError } = await query.limit(50);
+  const { data: propertiesData, error: propsError } = await query.limit(50);
 
   if (propsError) {
     console.error("Error fetching properties:", propsError.message);
     return [];
   }
+
+  const properties = (propertiesData || []) as any[];
 
   if (!properties || properties.length === 0) {
     return [];
@@ -101,7 +105,7 @@ export async function getSuggestedProperties(
 
   // 3. Calcular score de matching para cada propiedad
   const suggestions: SuggestedProperty[] = properties
-    .map((prop) => {
+    .map((prop: any) => {
       const reasons: string[] = [];
       let score = 0;
 
