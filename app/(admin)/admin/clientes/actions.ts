@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import type { Operation, StayType } from "@/lib/types";
 
 export type SaveClientPreferencesInput = {
@@ -108,32 +109,47 @@ export async function createNewClient(
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth as CreateClientResult;
 
-  // Create profile with role='client'
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .insert({
-      full_name: `${input.firstName} ${input.lastName}`,
-      email: input.email,
-      phone: input.phone || null,
-      role: "client",
-    } as any)
-    .select("id")
-    .single();
+  const adminClient = createAdminClient();
 
-  if (profileError || !profile) {
+  // Crear usuario en auth (esto dispara el trigger handle_new_user, que crea
+  // la fila en profiles) y enviar invitación por email para que fije su contraseña.
+  const { data, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+    input.email,
+    {
+      data: {
+        full_name: `${input.firstName} ${input.lastName}`,
+        first_name: input.firstName,
+        last_name: input.lastName,
+        phone: input.phone,
+      },
+    },
+  );
+
+  if (inviteError || !data?.user) {
     return {
       ok: false,
-      error: profileError?.message || "Error creating profile",
+      error: inviteError?.message || "Error creating profile",
     };
   }
 
-  const typedProfile = profile as any;
+  const clientId = data.user.id;
+
+  if (input.phone) {
+    const { error: phoneError } = await (adminClient as any)
+      .from("profiles")
+      .update({ phone: input.phone })
+      .eq("id", clientId);
+
+    if (phoneError) {
+      return { ok: false, error: phoneError.message };
+    }
+  }
 
   // Create preferences
-  const { error: prefsError } = await supabase
+  const { error: prefsError } = await adminClient
     .from("client_preferences")
     .insert({
-      client_id: typedProfile.id,
+      client_id: clientId,
       operation: input.operation === "alquiler" ? "rent" : "sale",
       stay: input.stayType === "corta" ? "short" : "long",
       zones: input.preferredZone ? [input.preferredZone] : [],
@@ -151,5 +167,5 @@ export async function createNewClient(
   }
 
   revalidatePath("/admin/clientes");
-  return { ok: true, clientId: typedProfile.id };
+  return { ok: true, clientId };
 }
