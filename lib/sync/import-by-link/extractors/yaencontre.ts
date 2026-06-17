@@ -37,7 +37,7 @@ export function extractYaencontre(
   const photos: Array<{ url: string; alt?: string }> = [];
 
   // Buscar JSON-LD de tipo SingleFamilyResidence (Yaencontre usa este schema)
-  const jsonLd = findJsonLdByType($, "SingleFamilyResidence");
+  const jsonLd = findJsonLdByType($, ["SingleFamilyResidence"]);
   if (jsonLd && typeof jsonLd === "object") {
     const ld = jsonLd as Record<string, unknown>;
 
@@ -215,7 +215,7 @@ export function extractYaencontre(
   }
 
   // External ID desde el URL
-  const externalReference = externalIdFromUrl(sourceUrl);
+  const externalReference = externalIdFromUrl("yaencontre", sourceUrl);
 
   // Zona: extraer del breadcrumb o de la dirección
   if (!zone) {

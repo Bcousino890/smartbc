@@ -54,7 +54,7 @@ export function extractUkio(
   };
 
   // Buscar JSON-LD de tipo Apartment
-  const jsonLd = findJsonLdByType($, "Apartment");
+  const jsonLd = findJsonLdByType($, ["Apartment"]);
   if (jsonLd && typeof jsonLd === "object") {
     const ld = jsonLd as Record<string, unknown>;
 
@@ -255,7 +255,7 @@ export function extractUkio(
   }
 
   // External ID desde el URL
-  const externalReference = externalIdFromUrl(sourceUrl);
+  const externalReference = externalIdFromUrl("ukio", sourceUrl);
 
   // Características especiales de Ukio si existen
   const ukioFeatures = $(".features li, .amenities li").each((_, el) => {

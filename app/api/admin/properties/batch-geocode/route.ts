@@ -13,11 +13,22 @@ export async function POST(req: Request) {
 
     const supabase = createAdminClient();
 
+    type PropRow = {
+      id: string;
+      title: string | null;
+      address: string | null;
+      zone: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    };
+
     // Obtener todas las propiedades sin coordenadas (SIN LÍMITE)
-    const { data: properties, error: queryErr } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: propertiesRaw, error: queryErr } = await (supabase as any)
       .from("properties")
       .select("id, title, address, zone, latitude, longitude")
       .is("latitude", null);
+    const properties = propertiesRaw as PropRow[] | null;
 
     if (queryErr) {
       console.error("[batch-geocode] Query error:", queryErr);
@@ -48,7 +59,8 @@ export async function POST(req: Request) {
 
         if (coords) {
           // Actualizar BD
-          const { error: updateErr } = await supabase
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: updateErr } = await (supabase as any)
             .from("properties")
             .update({
               latitude: coords.lat,
