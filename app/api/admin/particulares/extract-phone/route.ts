@@ -39,37 +39,38 @@ export async function POST(req: Request) {
     const html = await res.text();
     const $ = load(html);
 
+    // Detect if DataDome blocked the initial fetch
+    const datadomeBlocked = html.includes("datadome") && html.length < 5000;
+    const htmlLength = html.length;
+
     // Extract using the same logic as the importer
     const preview = await extractIdealista($, url);
 
-    // If still no phone, try AJAX fallback with curl (more reliable than fetch)
+    // Always try AJAX fallback in debug mode — even if phone found in HTML,
+    // run it to expose what DataDome returns (for diagnostics)
     let phone = preview.advertiserInfo?.phone;
     let phoneConfidence = preview.advertiserInfo?.phone_confidence;
     let contactName = preview.advertiserInfo?.contact_name;
+    let ajaxDebug: Array<{ endpoint: string; status: number; bodySnippet: string }> | undefined;
 
-    if (!phone) {
-      const adId = url.match(/inmueble\/(\d+)/)?.[1];
-      if (adId) {
-        console.log(`[test-extractor] No phone found in HTML, trying AJAX fallback for adId=${adId}`);
-        try {
-          const ajaxResult = await fetchIdealistaPhoneViaAjax(adId, { debug: true });
-          if (ajaxResult.phone) {
-            console.log(`[test-extractor] AJAX succeeded: ${ajaxResult.phone}`);
-            phone = ajaxResult.phone;
-            phoneConfidence = ajaxResult.phone_confidence;
-            contactName = ajaxResult.contact_name;
-          } else {
-            console.log(`[test-extractor] AJAX returned no phone (may be hidden or unavailable)`);
-          }
-        } catch (ajaxErr) {
-          console.error(`[test-extractor] AJAX fallback error: ${ajaxErr instanceof Error ? ajaxErr.message : String(ajaxErr)}`);
+    const adId = url.match(/inmueble\/(\d+)/)?.[1];
+    if (adId) {
+      try {
+        const ajaxResult = await fetchIdealistaPhoneViaAjax(adId, { debug: true });
+        ajaxDebug = ajaxResult.debug;
+        if (ajaxResult.phone && !phone) {
+          phone = ajaxResult.phone;
+          phoneConfidence = ajaxResult.phone_confidence;
+          contactName = ajaxResult.contact_name ?? contactName;
         }
+      } catch (ajaxErr) {
+        console.error(`[test-extractor] AJAX error: ${ajaxErr instanceof Error ? ajaxErr.message : String(ajaxErr)}`);
       }
     }
 
     return Response.json({
       ok: true,
-      adId: preview.advertiserInfo?.contact_name || url.match(/inmueble\/(\d+)/)?.[1],
+      adId,
       advertiserType: preview.advertiserInfo?.advertiser_type,
       phone,
       phoneConfidence,
@@ -77,6 +78,12 @@ export async function POST(req: Request) {
       title: preview.title,
       address: preview.address,
       price: preview.price,
+      // Debug info
+      debug: {
+        htmlLength,
+        datadomeBlocked,
+        ajax: ajaxDebug ?? [],
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

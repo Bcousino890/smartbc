@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Search, Loader2, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type AjaxDebugEntry = { endpoint: string; status: number; bodySnippet: string };
+
 type ExtractionResult = {
   ok: boolean;
   adId?: string;
@@ -15,6 +17,11 @@ type ExtractionResult = {
   address?: string;
   price?: number;
   error?: string;
+  debug?: {
+    htmlLength: number;
+    datadomeBlocked: boolean;
+    ajax: AjaxDebugEntry[];
+  };
 };
 
 export function TestPhoneExtractor() {
@@ -149,6 +156,36 @@ export function TestPhoneExtractor() {
                 <div className="text-xs text-ink/70">
                   <span className="font-medium">Precio:</span> €{result.price}
                 </div>
+              )}
+
+              {result.debug && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink/50 hover:text-ink/70">
+                    Debug AJAX ({result.debug.ajax.length} endpoints)
+                    {result.debug.datadomeBlocked && " — ⚠️ DataDome detectado"}
+                    {" · HTML: "}{result.debug.htmlLength.toLocaleString()} chars
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {result.debug.ajax.map((entry, i) => (
+                      <div key={i} className="rounded bg-ink/5 p-2 text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "font-mono font-bold",
+                            entry.status === 200 ? "text-emerald-700" : "text-red-600"
+                          )}>
+                            {entry.status}
+                          </span>
+                          <span className="truncate text-ink/60">{entry.endpoint}</span>
+                        </div>
+                        {entry.bodySnippet && (
+                          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-ink/70">
+                            {entry.bodySnippet}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           ) : (
