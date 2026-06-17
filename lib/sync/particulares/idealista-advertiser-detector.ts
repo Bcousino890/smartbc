@@ -170,6 +170,24 @@ function extractPhoneWithConfidence(
     }
   }
 
+  // MEDIUM CONFIDENCE: Visible text patterns in particulares listings
+  // Idealista shows contact info in readable text for many particulares.
+  // Patterns like "Llamar: 607-80-46-54" or "Móvil: +34 607 80 46 54" are common.
+  // Only accept if it matches Spanish phone format (starts 6/7/8/9).
+  const textPatterns = [
+    /(?:Llamar|Teléfono|Tel\.|T\.?\s|Contacto|Móvil|Tfno\.?)\s*[:]?\s*([+\d][\d\s\-()]{8,})/i,
+    /(?:El número|El teléfono|Su teléfono|Mi teléfono|Numero de contacto)\s*[:]?\s*([+\d][\d\s\-()]{8,})/i,
+  ];
+  for (const pattern of textPatterns) {
+    pm = html.match(pattern);
+    if (pm?.[1]) {
+      const phone = acceptPhoneCandidate(pm[1], excludeReference);
+      if (phone) {
+        return { phone, confidence: "medium" };
+      }
+    }
+  }
+
   // LOW CONFIDENCE patterns are intentionally not used: they produce too many
   // false positives (codes, references, timestamps). Only HIGH/MEDIUM survive.
   return { phone: null, confidence: null };
@@ -380,6 +398,8 @@ export async function fetchIdealistaPhoneViaAjax(
         /"phone\d?"\s*:\s*\{[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"mainPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"displayPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        // Particulares: sometimes just "6XXXXXXXX" in plain text fields
+        /[\s,:\[]([6789]\d{8})[\s,\]"\n]/,
         // WhatsApp deeplink in JSON body (some listings expose only wa.me)
         /wa\.me\/(?:34)?([6789]\d{8})/,
         // Unquoted JS-style fields
