@@ -650,11 +650,23 @@ export async function extractIdealista(
   // Si no encontramos teléfono en el HTML (común en Idealista moderno donde
   // el teléfono está tras "Ver teléfono"), intentamos obtenerlo vía AJAX
   // usando el mismo bypass de DataDome (TLS fingerprint de curl + UA WhatsApp).
-  if (!advertiserInfo.phone && embedded?.propertyCode) {
-    console.log(`[idealista-extractor] Iniciando AJAX para propertyCode=${embedded.propertyCode}`);
+  //
+  // El adId para el AJAX se obtiene en orden de prioridad:
+  //   1) propertyCode del JSON embebido (más fiable, ya validado por Idealista)
+  //   2) ID extraído de la URL de la ficha (/inmueble/XXXXXXXX/)
+  // Esto cubre el caso de listings "chat only" donde el JSON embebido puede
+  // estar ausente o incompleto pero la URL siempre lleva el ID.
+  const ajaxAdId =
+    embedded?.propertyCode ??
+    sourceUrl.match(/\/inmueble\/(\d+)/)?.[1] ??
+    null;
+
+  if (!advertiserInfo.phone && ajaxAdId) {
+    const idSource = embedded?.propertyCode ? "propertyCode" : "URL";
+    console.log(`[idealista-extractor] Iniciando AJAX para adId=${ajaxAdId} (fuente: ${idSource})`);
     try {
       const ajaxResult = await fetchIdealistaPhoneViaAjax(
-        embedded.propertyCode,
+        ajaxAdId,
         { proxyUrl: options?.proxyUrl }
       );
       if (ajaxResult.phone) {
@@ -666,15 +678,15 @@ export async function extractIdealista(
           contact_name: ajaxResult.contact_name ?? advertiserInfo.contact_name,
         };
       } else {
-        console.log(`[idealista-extractor] ✗ AJAX no devolvió teléfono para propertyCode=${embedded.propertyCode}`);
+        console.log(`[idealista-extractor] ✗ AJAX no devolvió teléfono para adId=${ajaxAdId}`);
       }
     } catch (err) {
       // Silenciosamente ignoramos errores de AJAX (DataDome bloqueos, timeouts).
       // El extractor sigue adelante sin el teléfono extra.
       console.error(`[idealista-extractor] Error AJAX: ${err instanceof Error ? err.message : String(err)}`);
     }
-  } else if (!advertiserInfo.phone && !embedded?.propertyCode) {
-    console.log(`[idealista-extractor] No hay propertyCode embebido, no se puede hacer AJAX fallback`);
+  } else if (!advertiserInfo.phone && !ajaxAdId) {
+    console.log(`[idealista-extractor] No se pudo extraer adId del HTML ni de la URL, no se puede hacer AJAX fallback`);
   }
 
   // ── Coordenadas: lo más cercano posible al piso real ───────────────────────

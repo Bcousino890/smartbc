@@ -86,6 +86,30 @@ function extractPhoneWithConfidence(
     }
   }
 
+  // HIGH CONFIDENCE: Idealista contactMethods JSON array.
+  // Aparece en el JSON embebido de la ficha como:
+  //   contactMethods: [{"type":"CHAT"},{"type":"PHONE","number":"6XXXXXXXX"}]
+  // Incluso en listados marcados como "chat only" el número puede estar aquí
+  // si el anunciante también aceptó ser contactado por teléfono en el pasado.
+  // Buscamos el número dentro de un objeto con "type":"PHONE".
+  {
+    const contactMethodsPhoneRe =
+      /"type"\s*:\s*"PHONE"[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,15})"/s;
+    pm = html.match(contactMethodsPhoneRe);
+    if (!pm?.[1]) {
+      // Orden inverso: "number" puede venir antes de "type"
+      const contactMethodsPhoneReAlt =
+        /"number"\s*:\s*"([+\d][\d\s\-]{6,15})"[^}]{0,80}"type"\s*:\s*"PHONE"/s;
+      pm = html.match(contactMethodsPhoneReAlt);
+    }
+    if (pm?.[1]) {
+      const phone = acceptPhoneCandidate(pm[1], excludeReference);
+      if (phone) {
+        return { phone, confidence: "high" };
+      }
+    }
+  }
+
   // HIGH CONFIDENCE: JSON data attributes with phone
   pm = html.match(/"phone"\s*:\s*"([+\d][\d\s\-]{6,15})"/);
   if (pm?.[1]) {
@@ -102,6 +126,11 @@ function extractPhoneWithConfidence(
     /"ownerPhone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
     /"phone_number"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
     /"telephone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    // Idealista-specific inline script fields
+    /"phoneFormatted"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"formattedPhone"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
+    /"adPhoneNumber"\s*:\s*"([+\d][\d\s\-]{6,15})"/,
   ];
   for (const pattern of jsonPhonePatterns) {
     pm = html.match(pattern);
@@ -133,7 +162,28 @@ function extractPhoneWithConfidence(
 
   // MEDIUM CONFIDENCE: WhatsApp deeplinks (wa.me/34XXXXXXXXX or wa.me/XXXXXXXXX)
   // Idealista "chat only" listings expose the phone here instead of href=tel.
+  // Variantes conocidas:
+  //   https://wa.me/34XXXXXXXXX        (número con prefijo país)
+  //   https://wa.me/XXXXXXXXX          (solo número nacional)
+  //   https://wa.me/?phone=34XXXXXXXXX (query param, algunas versiones del portal)
+  //   Versión URL-encoded: %2F en lugar de /
   pm = html.match(/wa\.me\/(?:34)?([6789]\d{8})/);
+  if (pm?.[1]) {
+    const phone = acceptPhoneCandidate(pm[1], excludeReference);
+    if (phone) {
+      return { phone, confidence: "medium" };
+    }
+  }
+  // Variante query-param: wa.me/?phone=34XXXXXXXXX
+  pm = html.match(/wa\.me\/\?phone=(?:34)?([6789]\d{8})/);
+  if (pm?.[1]) {
+    const phone = acceptPhoneCandidate(pm[1], excludeReference);
+    if (phone) {
+      return { phone, confidence: "medium" };
+    }
+  }
+  // Variante JSON con campo whatsappUrl o whatsappLink que contiene el número
+  pm = html.match(/"whatsapp(?:Url|Link|ContactUrl)?"\s*:\s*"[^"]*wa\.me\/(?:34)?([6789]\d{8})/i);
   if (pm?.[1]) {
     const phone = acceptPhoneCandidate(pm[1], excludeReference);
     if (phone) {
@@ -294,6 +344,9 @@ function idealistaPhoneEndpoints(adId: string): string[] {
     // Variante actual (REST): /es/ajax/ads/{id}/contact-phone-numbers
     `https://www.idealista.com/es/ajax/ads/${adId}/contact-phone-numbers`,
     `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`,
+    // Endpoint de contacto completo (incluye contactMethods con números de
+    // listados "chat only" que también tienen teléfono registrado).
+    `https://www.idealista.com/es/ajax/ads/${adId}/contact`,
     // Variante móvil: históricamente la más permisiva.
     `https://www.idealista.com/ajax/listingController/adContactInfoForMobileDevices.ajax?adId=${adId}`,
     // Variante desktop (la que dispara "Ver teléfono" en la web).
@@ -398,10 +451,17 @@ export async function fetchIdealistaPhoneViaAjax(
         /"phone\d?"\s*:\s*\{[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"mainPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /"displayPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        // contactMethods array: [{"type":"PHONE","number":"6XXXXXXXX"}, {"type":"CHAT"}]
+        // Aparece en el endpoint /es/ajax/ads/{id}/contact para listings "chat only"
+        // que también tienen número registrado.
+        /"type"\s*:\s*"PHONE"[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+        /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"[^}]{0,80}"type"\s*:\s*"PHONE"/,
         // Particulares: sometimes just "6XXXXXXXX" in plain text fields
         /[\s,:\[]([6789]\d{8})[\s,\]"\n]/,
         // WhatsApp deeplink in JSON body (some listings expose only wa.me)
         /wa\.me\/(?:34)?([6789]\d{8})/,
+        // WhatsApp deeplink in query-param form: wa.me/?phone=34XXXXXXXXX
+        /wa\.me\/\?phone=(?:34)?([6789]\d{8})/,
         // Unquoted JS-style fields
         /phoneNumber\s*:\s*"([+\d][\d\s\-]{6,18})"/,
         /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
