@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     const htmlLength = html.length;
 
     // Extract using the same logic as the importer
-    const preview = await extractIdealista($, url);
+    const preview = await extractIdealista($, url, { proxyUrl: process.env.SMARTPROXY_URL });
 
     // Always try AJAX fallback in debug mode — even if phone found in HTML,
     // run it to expose what DataDome returns (for diagnostics)
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const adId = url.match(/inmueble\/(\d+)/)?.[1];
     if (adId) {
       try {
-        const ajaxResult = await fetchIdealistaPhoneViaAjax(adId, { debug: true });
+        const ajaxResult = await fetchIdealistaPhoneViaAjax(adId, { debug: true, proxyUrl: process.env.SMARTPROXY_URL });
         ajaxDebug = ajaxResult.debug;
         if (ajaxResult.phone && !phone) {
           phone = ajaxResult.phone;
