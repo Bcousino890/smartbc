@@ -77,6 +77,37 @@ function extractPhoneWithConfidence(
     }
   }
 
+  // HIGH CONFIDENCE: Idealista CSS-hidden phones — el teléfono está en el HTML
+  // estático pero oculto visualmente con CSS (clase hidden-contact-phones).
+  // El número canónico está en href="tel:+34XXXXXXXXX" de los enlaces de llamada.
+  //
+  // Patrón A: clase hidden-contact-phones-formatted-phone con href tel:
+  // <a class="icon-phone-outline hidden-contact-phones-formatted-phone _mobilePhone" href="tel:+34696165042">
+  pm = html.match(/hidden-contact-phones-formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
+  if (!pm) {
+    pm = html.match(/href=["']tel:([+\d][\d\s\-]{6,})["'][^>]*hidden-contact-phones-formatted-phone/);
+  }
+  if (pm?.[1]) {
+    const phone = acceptPhoneCandidate(pm[1], excludeReference);
+    if (phone) {
+      return { phone, confidence: "high" };
+    }
+  }
+
+  // Patrón B: cualquier href tel: dentro del bloque #contact-phones-container
+  {
+    const containerMatch = html.match(/id=["']contact-phones-container["'][^]*?(?=<\/div>|<\/section>)/);
+    if (containerMatch) {
+      const telMatch = containerMatch[0].match(/href=["']tel:([+\d][\d\s\-]{6,})["']/);
+      if (telMatch?.[1]) {
+        const phone = acceptPhoneCandidate(telMatch[1], excludeReference);
+        if (phone) {
+          return { phone, confidence: "high" };
+        }
+      }
+    }
+  }
+
   // HIGH CONFIDENCE: data-phone or data-contact-phone attributes
   pm = html.match(/data-(?:contact-)?phone\s*=\s*["']([+\d][\d\s\-]{6,})["']/);
   if (pm?.[1]) {

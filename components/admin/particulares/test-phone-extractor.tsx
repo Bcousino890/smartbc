@@ -20,6 +20,9 @@ type ExtractionResult = {
   debug?: {
     htmlLength: number;
     datadomeBlocked: boolean;
+    hasPhoneContainer: boolean;
+    hasTelHref: boolean;
+    hasAppCallback: boolean;
     ajax: AjaxDebugEntry[];
   };
 };
@@ -162,8 +165,11 @@ export function TestPhoneExtractor() {
                 <details className="mt-2">
                   <summary className="cursor-pointer text-[11px] font-medium text-ink/50 hover:text-ink/70">
                     Debug AJAX ({result.debug.ajax.length} endpoints)
-                    {result.debug.datadomeBlocked && " — ⚠️ DataDome detectado"}
-                    {" · HTML: "}{result.debug.htmlLength.toLocaleString()} chars
+                    {result.debug.datadomeBlocked && " — ⚠️ DataDome"}
+                    {" · "}{result.debug.htmlLength.toLocaleString()} chars
+                    {" · "}{result.debug.hasPhoneContainer ? "✓container" : "✗container"}
+                    {" · "}{result.debug.hasTelHref ? "✓tel:" : "✗tel:"}
+                    {" · "}{result.debug.hasAppCallback ? "✓appcb" : "✗appcb"}
                   </summary>
                   <div className="mt-2 space-y-2">
                     {result.debug.ajax.map((entry, i) => (
