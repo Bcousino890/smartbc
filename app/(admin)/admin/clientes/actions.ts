@@ -99,6 +99,7 @@ export type CreateClientInput = {
   students: number;
   workers: number;
   pets: boolean;
+  notes?: string;
 };
 
 export type CreateClientResult =
@@ -167,6 +168,7 @@ export async function createNewClient(
       workers: input.workers,
       pets: input.pets,
       universities: input.universities || null,
+      notes: input.notes || null,
     } as any);
 
   if (prefsError) {
