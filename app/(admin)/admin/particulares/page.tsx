@@ -2,6 +2,7 @@ import { UserSearch, Home, Tag, Clock } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
+import { TestPhoneExtractor } from "@/components/admin/particulares/test-phone-extractor";
 import {
   getParticularesPage,
   getStaffOptions,
@@ -92,6 +93,10 @@ export default async function AdminParticularesPage({
           helpKey="adminParticulares.stats.help"
           value={stats.last24h}
         />
+      </div>
+
+      <div className="mt-7">
+        <TestPhoneExtractor />
       </div>
 
       <ParticularesClient
