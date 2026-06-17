@@ -12,6 +12,19 @@ export const MADRID_ZONES = [
   "Malasaña",
 ] as const;
 
+// Zonas con subzonas/barrios específicos
+export const MADRID_ZONES_WITH_SUBZONES: Record<string, string[]> = {
+  "Salamanca": ["Recoletos", "Castellana", "Goya", "Lagasca", "Velázquez", "Serrano"],
+  "Chamberí": ["Ríos Rosas", "Vallehermoso", "Gaztambide", "Martínez Campos"],
+  "Justicia": ["Gran Vía", "Paseo del Prado", "Plaza Mayor", "Sol"],
+  "Retiro": ["Lista", "Ibiza", "O'Donnell", "Pacífico"],
+  "Chamartín": ["Hispano América", "Prosperidad", "Castilla", "Soria"],
+  "Centro": ["Plaza Mayor", "La Latina", "Barrio Ópera", "Cortes"],
+  "Almagro": ["Vallehermoso", "Ríos Rosas", "Donoso Cortés"],
+  "Recoletos": ["Paseo del Prado", "Retiro", "Jerónimos"],
+  "Malasaña": ["Tribunal", "Bilbao", "San Bernardo", "Gran Vía"],
+};
+
 const DEFAULT_CONTACT: PropertyContact = {
   phone: "+34 915 123 456",
   email: "info@bencousinopropiedades.com",

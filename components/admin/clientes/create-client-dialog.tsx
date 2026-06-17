@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Plus, Loader2, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { createNewClient } from "@/app/(admin)/admin/clientes/actions";
 import { useT } from "@/lib/i18n/provider";
-import { MADRID_ZONES } from "@/lib/mock-properties";
-import type { Operation, StayType } from "@/lib/types";
+import { MADRID_ZONES, MADRID_ZONES_WITH_SUBZONES } from "@/lib/mock-properties";
+import type { Operation, StayType, ClientProfileType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const inputCls =
@@ -19,9 +19,12 @@ type FormState = {
   lastName: string;
   email: string;
   phone: string;
+  profileType: ClientProfileType;
+  sector: string;
   operation: Operation;
   stayType: StayType;
-  preferredZone: string;
+  preferredZones: string[]; // múltiples zonas
+  selectedSubzones: Record<string, string[]>; // zona -> [subzonas]
   budgetMin: number;
   budgetMax: number;
   universities: string;
@@ -36,9 +39,12 @@ const initialState: FormState = {
   lastName: "",
   email: "",
   phone: "",
+  profileType: "worker",
+  sector: "Madrid",
   operation: "alquiler",
   stayType: "larga",
-  preferredZone: "",
+  preferredZones: [],
+  selectedSubzones: {},
   budgetMin: 500,
   budgetMax: 2000,
   universities: "",
@@ -77,8 +83,8 @@ export function CreateClientDialog() {
       setError("Email inválido");
       return;
     }
-    if (!form.preferredZone) {
-      setError("Zona preferida es requerida");
+    if (form.preferredZones.length === 0) {
+      setError("Selecciona al menos una zona");
       return;
     }
     if (form.budgetMin < 0 || form.budgetMax < 0) {
@@ -92,9 +98,12 @@ export function CreateClientDialog() {
         lastName: form.lastName,
         email: form.email,
         phone: form.phone || undefined,
+        profileType: form.profileType,
+        sector: form.sector,
         operation: form.operation,
         stayType: form.stayType,
-        preferredZone: form.preferredZone,
+        preferredZones: form.preferredZones,
+        selectedSubzones: form.selectedSubzones,
         budgetMin: form.budgetMin,
         budgetMax: form.budgetMax,
         universities: form.universities || undefined,
@@ -215,6 +224,52 @@ export function CreateClientDialog() {
             />
           </div>
 
+          {/* Perfil y Sector */}
+          <div className="border-t border-ink/10 pt-4">
+            <h3 className="text-sm font-semibold text-ink mb-4">
+              Perfil del cliente
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-ink/70 mb-1">
+                  Perfil *
+                </label>
+                <select
+                  value={form.profileType}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      profileType: e.target.value as ClientProfileType,
+                    })
+                  }
+                  className={selectCls}
+                  disabled={isPending}
+                >
+                  <option value="student">Estudiante</option>
+                  <option value="worker">Trabajador</option>
+                  <option value="company">Empresa</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink/70 mb-1">
+                  Sector *
+                </label>
+                <select
+                  value={form.sector}
+                  onChange={(e) =>
+                    setForm({ ...form, sector: e.target.value })
+                  }
+                  className={selectCls}
+                  disabled={isPending}
+                >
+                  <option value="Madrid">Madrid</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Preferencias de búsqueda */}
           <div className="border-t border-ink/10 pt-4">
             <h3 className="text-sm font-semibold text-ink mb-4">
@@ -265,24 +320,78 @@ export function CreateClientDialog() {
 
             <div className="mt-4">
               <label className="block text-xs font-medium text-ink/70 mb-1">
-                Zona preferida *
+                Zonas preferidas * (seleccionar una o más)
               </label>
-              <select
-                value={form.preferredZone}
-                onChange={(e) =>
-                  setForm({ ...form, preferredZone: e.target.value })
-                }
-                className={selectCls}
-                disabled={isPending}
-              >
-                <option value="">Seleccionar zona...</option>
+              <div className="space-y-2">
                 {MADRID_ZONES.map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone}
-                  </option>
+                  <label key={zone} className="flex items-center gap-2 p-2 rounded hover:bg-ink/5">
+                    <input
+                      type="checkbox"
+                      checked={form.preferredZones.includes(zone)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setForm({
+                            ...form,
+                            preferredZones: [...form.preferredZones, zone],
+                            selectedSubzones: {
+                              ...form.selectedSubzones,
+                              [zone]: [],
+                            },
+                          });
+                        } else {
+                          const { [zone]: _, ...rest } = form.selectedSubzones;
+                          setForm({
+                            ...form,
+                            preferredZones: form.preferredZones.filter(z => z !== zone),
+                            selectedSubzones: rest,
+                          });
+                        }
+                      }}
+                      disabled={isPending}
+                      className="cursor-pointer"
+                    />
+                    <span className="text-sm text-ink">{zone}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
+
+            {/* Subzonas por zona seleccionada */}
+            {form.preferredZones.length > 0 && (
+              <div className="mt-4 space-y-3 p-3 bg-ink/5 rounded-lg">
+                <p className="text-xs font-medium text-ink/70">Subzonas (opcional)</p>
+                {form.preferredZones.map((zone) => (
+                  <div key={zone}>
+                    <p className="text-xs font-semibold text-ink mb-2">{zone}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(MADRID_ZONES_WITH_SUBZONES[zone] ?? []).map((subzone) => (
+                        <label key={subzone} className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={(form.selectedSubzones[zone] ?? []).includes(subzone)}
+                            onChange={(e) => {
+                              const current = form.selectedSubzones[zone] ?? [];
+                              setForm({
+                                ...form,
+                                selectedSubzones: {
+                                  ...form.selectedSubzones,
+                                  [zone]: e.target.checked
+                                    ? [...current, subzone]
+                                    : current.filter(s => s !== subzone),
+                                },
+                              });
+                            }}
+                            disabled={isPending}
+                            className="cursor-pointer"
+                          />
+                          <span className="text-ink/70">{subzone}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div>

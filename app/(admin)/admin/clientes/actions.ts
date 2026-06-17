@@ -86,9 +86,12 @@ export type CreateClientInput = {
   lastName: string;
   email: string;
   phone?: string;
+  profileType: "student" | "worker" | "company";
+  sector: string;
   operation: Operation;
   stayType: StayType;
-  preferredZone: string;
+  preferredZones: string[]; // múltiples zonas
+  selectedSubzones: Record<string, string[]>; // zona -> subzonas
   budgetMin: number;
   budgetMax: number;
   universities?: string;
@@ -145,14 +148,18 @@ export async function createNewClient(
     }
   }
 
-  // Create preferences
+  // Create preferences with all selected zones and subzones
+  const zonesArray = input.preferredZones || [];
+  const subzonesByZone = input.selectedSubzones || {};
+  const allSubzones = Object.values(subzonesByZone).flat();
+
   const { error: prefsError } = await adminClient
     .from("client_preferences")
     .insert({
       client_id: clientId,
       operation: input.operation === "alquiler" ? "rent" : "sale",
       stay: input.stayType === "corta" ? "short" : "long",
-      zones: input.preferredZone ? [input.preferredZone] : [],
+      zones: [...zonesArray, ...allSubzones], // Include both zones and subzones in the array
       min_price: input.budgetMin,
       max_price: input.budgetMax,
       occupants: input.occupants,
@@ -164,6 +171,50 @@ export async function createNewClient(
 
   if (prefsError) {
     return { ok: false, error: prefsError.message };
+  }
+
+  // Create tag for profile type (Estudiante/Trabajador/Empresa)
+  const profileTypeTagName = {
+    student: "Estudiante",
+    worker: "Trabajador",
+    company: "Empresa",
+  }[input.profileType];
+
+  if (profileTypeTagName) {
+    // Get or create the tag
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingTag } = await (adminClient as any)
+      .from("client_tags")
+      .select("id")
+      .eq("name", profileTypeTagName)
+      .maybeSingle();
+
+    let tagId = existingTag?.id;
+
+    if (!tagId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newTag } = await (adminClient as any)
+        .from("client_tags")
+        .insert({ name: profileTypeTagName })
+        .select("id")
+        .single();
+
+      if (newTag) {
+        tagId = newTag.id;
+      }
+    }
+
+    // Assign tag to client
+    if (tagId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (adminClient as any)
+        .from("client_tag_assignments")
+        .insert({
+          client_id: clientId,
+          tag_id: tagId,
+          assigned_by: null,
+        });
+    }
   }
 
   revalidatePath("/admin/clientes");
