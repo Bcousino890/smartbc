@@ -6,12 +6,14 @@ import {
   Check,
   Globe,
   Palette,
+  RefreshCw,
   Save,
   Sliders,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
+import { DeployButton } from "./deploy-button";
 import { EmailConfigClient } from "./email-config-client";
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
@@ -282,6 +284,20 @@ export default function AdminConfiguracionPage() {
           </button>
         </div>
       </div>
+
+      {/* Deploy */}
+      <section className="mt-7 rounded-2xl border border-sky-200 bg-sky-50/60 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.10)]">
+        <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/80">
+          <RefreshCw size={14} strokeWidth={2} className="text-sky-600" />
+          <span>Despliegue del servidor</span>
+        </header>
+        <p className="mt-2 text-xs text-ink/55">
+          Fuerza un <code className="rounded bg-ink/8 px-1 py-0.5 font-mono text-[11px]">git pull</code> y reconstrucción inmediata sin esperar el cron de 5 min. El build tarda ~2 min; los logs de PM2 confirmarán cuando esté listo.
+        </p>
+        <div className="mt-4">
+          <DeployButton />
+        </div>
+      </section>
 
       {/* Logs Viewer */}
       <div className="mt-7">
