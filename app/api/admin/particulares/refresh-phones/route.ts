@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { detectAdvertiserFromHtml } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,13 +37,14 @@ export async function POST(req: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
+  const proxyUrl = await getProxyUrl();
   let updated = 0;
   let still_missing = 0;
 
   for (const row of rows ?? []) {
     try {
       const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
-        proxyUrl: process.env.SMARTPROXY_URL,
+        proxyUrl,
       });
       if (!res.ok) { still_missing++; continue; }
 

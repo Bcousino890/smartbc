@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { fetchIdealistaPhoneViaAjax } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
     }
 
     const { fromPage = 1, toPage = 100 } = await req.json();
+    const proxyUrl = await getProxyUrl();
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -116,7 +118,7 @@ export async function POST(req: Request) {
         console.log(`[backfill-particulares] Scraping: ${url}`);
 
         const res = await fetchViaCurl(url, WHATSAPP_UA, {
-          proxyUrl: process.env.SMARTPROXY_URL,
+          proxyUrl,
         });
 
         if (!res.ok) {
@@ -163,7 +165,7 @@ export async function POST(req: Request) {
           const adIdMatch = url.match(/\/inmueble\/(\d+)/);
           if (adIdMatch?.[1]) {
             const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], {
-              proxyUrl: process.env.SMARTPROXY_URL,
+              proxyUrl,
             });
             if (ajax.phone) {
               phone = ajax.phone;

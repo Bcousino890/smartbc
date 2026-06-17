@@ -4,10 +4,13 @@ import {
   Bell,
   Building2,
   Check,
+  Eye,
+  EyeOff,
   Globe,
   Palette,
   RefreshCw,
   Save,
+  Shield,
   Sliders,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -25,6 +28,7 @@ import { cn } from "@/lib/utils";
 export default function AdminConfiguracionPage() {
   const t = useT();
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
+  const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -39,6 +43,9 @@ export default function AdminConfiguracionPage() {
           ...(data.defaults ? { defaults: data.defaults as AppSettings["defaults"] } : {}),
           ...(data.notifications ? { notifications: data.notifications as AppSettings["notifications"] } : {}),
         }));
+        if (typeof data["scraping.proxyUrl"] === "string") {
+          setScrapingProxyUrl(data["scraping.proxyUrl"]);
+        }
       })
       .catch(() => {
         // Si falla la carga, se mantienen los valores mock
@@ -56,6 +63,7 @@ export default function AdminConfiguracionPage() {
           branding: settings.branding,
           defaults: settings.defaults,
           notifications: settings.notifications,
+          "scraping.proxyUrl": scrapingProxyUrl,
         }),
       });
       setSaved(true);
@@ -248,6 +256,27 @@ export default function AdminConfiguracionPage() {
               onChange={() => toggleNotification("propertyUpdates")}
             />
           </ul>
+        </SettingsSection>
+
+        {/* Scraping */}
+        <SettingsSection
+          icon={<Shield size={16} strokeWidth={1.75} />}
+          titleKey="config.scraping.title"
+        >
+          <div className="space-y-3">
+            <p className="text-xs text-ink/55">
+              Proxy residencial para evitar bloqueos DataDome en Idealista. Formato:{" "}
+              <code className="rounded bg-ink/8 px-1 py-0.5 font-mono text-[11px]">
+                http://usuario:contraseña@host:puerto
+              </code>
+            </p>
+            <PasswordField
+              label="URL del proxy"
+              value={scrapingProxyUrl}
+              onChange={setScrapingProxyUrl}
+              placeholder="http://smart-b04nrjtamr8a_area-ES_city-MADRID:…@eu.smartproxy.net:3120"
+            />
+          </div>
         </SettingsSection>
 
         {/* Migrations Manager */}
@@ -463,6 +492,41 @@ function SelectField({
             </option>
           ))}
         </select>
+      </div>
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <label className="flex flex-col gap-1.5 md:col-span-2">
+      <span className="text-[11px] font-medium text-ink/65">{label}</span>
+      <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 bg-transparent font-mono text-sm text-ink placeholder:font-sans placeholder:text-ink/35 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          className="shrink-0 text-ink/40 hover:text-ink/70 transition"
+        >
+          {show ? <EyeOff size={14} strokeWidth={1.75} /> : <Eye size={14} strokeWidth={1.75} />}
+        </button>
       </div>
     </label>
   );

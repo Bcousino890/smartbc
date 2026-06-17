@@ -2,6 +2,7 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { extractIdealista } from "@/lib/sync/import-by-link/extractors/idealista";
 import { fetchIdealistaPhoneViaAjax } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 import { load } from "cheerio";
 
 export async function POST(req: Request) {
@@ -20,6 +21,8 @@ export async function POST(req: Request) {
     if (!url.includes("idealista.com/inmueble/")) {
       return Response.json({ error: "Invalid Idealista URL" }, { status: 400 });
     }
+
+    const proxyUrl = await getProxyUrl();
 
     // Fetch the page
     const res = await fetch(url, {
@@ -44,7 +47,7 @@ export async function POST(req: Request) {
     const htmlLength = html.length;
 
     // Extract using the same logic as the importer
-    const preview = await extractIdealista($, url, { proxyUrl: process.env.SMARTPROXY_URL });
+    const preview = await extractIdealista($, url, { proxyUrl });
 
     // Always try AJAX fallback in debug mode — even if phone found in HTML,
     // run it to expose what DataDome returns (for diagnostics)
@@ -56,7 +59,7 @@ export async function POST(req: Request) {
     const adId = url.match(/inmueble\/(\d+)/)?.[1];
     if (adId) {
       try {
-        const ajaxResult = await fetchIdealistaPhoneViaAjax(adId, { debug: true, proxyUrl: process.env.SMARTPROXY_URL });
+        const ajaxResult = await fetchIdealistaPhoneViaAjax(adId, { debug: true, proxyUrl });
         ajaxDebug = ajaxResult.debug;
         if (ajaxResult.phone && !phone) {
           phone = ajaxResult.phone;

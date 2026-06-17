@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { invalidateProxyCache } from "@/lib/sync/proxy-config";
 
 export async function GET() {
   const profile = await getCurrentProfile();
@@ -30,6 +31,10 @@ export async function POST(req: Request) {
     await db
       .from("app_settings")
       .upsert({ key, value }, { onConflict: "key" });
+  }
+
+  if ("scraping.proxyUrl" in body) {
+    invalidateProxyCache();
   }
 
   return Response.json({ ok: true });

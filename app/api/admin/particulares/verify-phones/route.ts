@@ -7,6 +7,7 @@ import {
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 min — hasta 100 fichas por llamada
@@ -119,6 +120,7 @@ async function verifyByScraping(
   limit: number,
   onlyId?: string | null,
 ): Promise<VerifyResponse> {
+  const proxyUrl = await getProxyUrl();
   // Activos, los menos verificados primero (updated_at asc). En "missing"
   // solo los que no tienen teléfono. Con `onlyId`, ese anuncio concreto
   // (botón "Verificar teléfono" del modal).
@@ -167,7 +169,7 @@ async function verifyByScraping(
 
     try {
       const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
-        proxyUrl: process.env.SMARTPROXY_URL,
+        proxyUrl,
       });
       if (!res.ok) {
         console.warn(
@@ -191,7 +193,7 @@ async function verifyByScraping(
         const adIdMatch = row.source_url.match(/\/inmueble\/(\d+)/);
         if (adIdMatch?.[1]) {
           const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], {
-            proxyUrl: process.env.SMARTPROXY_URL,
+            proxyUrl,
           });
           if (ajax.phone) {
             phone = ajax.phone;
@@ -352,6 +354,8 @@ export async function POST(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
+  const proxyUrl = await getProxyUrl();
+
   // ── Diagnóstico de un anuncio: ver qué devuelven los endpoints AJAX ──
   if (debug && onlyId) {
     const { data } = await supabase
@@ -368,7 +372,7 @@ export async function POST(req: Request) {
       );
     }
     const ajax = await fetchIdealistaPhoneViaAjax(adId, {
-      proxyUrl: process.env.SMARTPROXY_URL,
+      proxyUrl,
       debug: true,
     });
     return Response.json(

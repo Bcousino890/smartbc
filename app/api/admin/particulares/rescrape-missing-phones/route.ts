@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { detectAdvertiserFromHtml } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes for up to 20 particulares
@@ -39,6 +40,7 @@ async function rescrapeParticularForPhone(
     source_url: string;
     phone: string | null;
   },
+  proxyUrl?: string,
 ): Promise<RescrapeResult> {
   const result: RescrapeResult = {
     particular_id: particular.id,
@@ -55,7 +57,7 @@ async function rescrapeParticularForPhone(
       `[rescrape-missing-phones] Fetching fresh HTML for ${particular.external_id}`,
     );
     const curlRes = await fetchViaCurl(particular.source_url, WHATSAPP_UA, {
-      proxyUrl: process.env.SMARTPROXY_URL,
+      proxyUrl,
     });
 
     if (!curlRes.ok) {
@@ -112,6 +114,7 @@ async function rescrapeParticularesWithMissingPhones(
   supabase: SupabaseLike,
   limit: number = 20,
 ): Promise<RescrapeSummary> {
+  const proxyUrl = await getProxyUrl();
   const now = new Date().toISOString();
 
   try {
@@ -155,7 +158,7 @@ async function rescrapeParticularesWithMissingPhones(
 
     // Rescrape each one
     for (const particular of particulares || []) {
-      const result = await rescrapeParticularForPhone(supabase, particular);
+      const result = await rescrapeParticularForPhone(supabase, particular, proxyUrl);
       results.push(result);
 
       if (result.success) {

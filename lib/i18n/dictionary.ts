@@ -936,6 +936,7 @@ const es: Strings = {
   "config.notifications.title": "Notificaciones",
   "config.notifications.visitRequests": "Solicitudes de visita",
   "config.notifications.newClients": "Nuevos clientes",
+  "config.scraping.title": "Scraping",
   "config.notifications.weeklyReport": "Reporte semanal",
   "config.notifications.propertyUpdates":
     "Actualizaciones del catálogo",
@@ -1906,6 +1907,7 @@ const en: Strings = {
   "config.defaults.personalShopperMonths":
     "Personal Shopper (months cost)",
   "config.notifications.title": "Notifications",
+  "config.scraping.title": "Scraping",
   "config.notifications.visitRequests": "Viewing requests",
   "config.notifications.newClients": "New clients",
   "config.notifications.weeklyReport": "Weekly report",
@@ -2849,6 +2851,7 @@ const fr: Strings = {
   "config.defaults.personalShopperMonths":
     "Personal Shopper (mois de coût)",
   "config.notifications.title": "Notifications",
+  "config.scraping.title": "Scraping",
   "config.notifications.visitRequests": "Demandes de visite",
   "config.notifications.newClients": "Nouveaux clients",
   "config.notifications.weeklyReport": "Rapport hebdomadaire",
@@ -3795,6 +3798,7 @@ const de: Strings = {
   "config.defaults.personalShopperMonths":
     "Personal Shopper (Kostenmonate)",
   "config.notifications.title": "Benachrichtigungen",
+  "config.scraping.title": "Scraping",
   "config.notifications.visitRequests": "Besichtigungsanfragen",
   "config.notifications.newClients": "Neue Kunden",
   "config.notifications.weeklyReport": "Wochenbericht",

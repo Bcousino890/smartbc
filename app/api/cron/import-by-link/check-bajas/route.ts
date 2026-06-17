@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 // Detección de bajas para propiedades importadas por link
 // (`/admin/propiedades/importar`). Cada run revisita una muestra de las
@@ -62,6 +63,7 @@ async function checkImportedListings(supabase: SupabaseLike) {
     .order("updated_at", { ascending: true })
     .limit(LIMIT);
 
+  const proxyUrl = await getProxyUrl();
   let archived = 0;
   let alive = 0;
   let uncertain = 0;
@@ -73,7 +75,7 @@ async function checkImportedListings(supabase: SupabaseLike) {
     // UA WhatsApp + proxy: pasa Idealista (DataDome). Para Fotocasa/Inmoweb
     // funciona también con curl directo; el proxy es defensivo.
     const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
-      proxyUrl: process.env.SMARTPROXY_URL,
+      proxyUrl,
     });
     const now = new Date().toISOString();
 

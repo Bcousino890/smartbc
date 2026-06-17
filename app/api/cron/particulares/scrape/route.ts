@@ -6,6 +6,7 @@ import {
   fetchIdealistaPhoneViaAjax,
   normalizeSpanishPhone,
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -419,7 +420,7 @@ async function scrapeMadridParticulares(
           const adIdMatch = url.match(/\/inmueble\/(\d+)/);
           if (adIdMatch?.[1]) {
             const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], {
-              proxyUrl: process.env.SMARTPROXY_URL,
+              proxyUrl: await getProxyUrl(),
             });
             if (ajax.phone) {
               phone = ajax.phone;
@@ -549,7 +550,7 @@ async function backfillPhonesViaAjax(
 
     try {
       const ajax = await fetchIdealistaPhoneViaAjax(adId, {
-        proxyUrl: process.env.SMARTPROXY_URL,
+        proxyUrl: await getProxyUrl(),
       });
       const values: Record<string, unknown> = ajax.phone
         ? {
@@ -645,7 +646,7 @@ async function markStaleListingsInactive(
 
   for (const row of (data ?? []) as Array<{ id: string; source_url: string }>) {
     const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
-      proxyUrl: process.env.SMARTPROXY_URL,
+      proxyUrl: await getProxyUrl(),
     });
 
     if (!res.ok && res.status === 404) {
@@ -703,7 +704,7 @@ async function extractPropertyUrlsFromSearch(
       // Vía curl con UA WhatsApp + proxy residencial — pasa DataDome (el TLS
       // de undici no, y la IP del datacenter se quema sin el proxy).
       const res = await fetchViaCurl(searchUrl, WHATSAPP_UA, {
-        proxyUrl: process.env.SMARTPROXY_URL,
+        proxyUrl: await getProxyUrl(),
       });
       if (!res.ok) {
         console.warn(`[cron-particulares] listado ${searchUrl} -> ${res.reason}`);

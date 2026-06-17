@@ -11,6 +11,7 @@ import { extractInmoweb } from "./extractors/inmoweb";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
 import { dedupKey } from "../scrapers/image-utils";
+import { getProxyUrl } from "../proxy-config";
 import type { ImportExtractResult, ImportPreview } from "./types";
 
 export type { ImportPreview, ImportPortal, ImportPhoto } from "./types";
@@ -110,7 +111,7 @@ export async function extractFromUrl(
 
   switch (detected.portal) {
     case "idealista":
-      return { ok: true, preview: dedupePreviewPhotos(await extractIdealista($, finalUrl, { proxyUrl: process.env.SMARTPROXY_URL })) };
+      return { ok: true, preview: dedupePreviewPhotos(await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() })) };
     case "fotocasa":
       return { ok: true, preview: dedupePreviewPhotos(extractFotocasa($, finalUrl)) };
     case "inmoweb":
