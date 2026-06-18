@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     "playwright",
     "playwright-extra",
+    "rebrowser-playwright",
     "puppeteer-extra-plugin-stealth",
     "puppeteer-extra-plugin",
     "merge-deep",
