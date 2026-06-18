@@ -141,9 +141,17 @@ export type CookieJarFetchResult = {
   reason?: string;
 };
 
+export type MultiAjaxResult = {
+  results: CookieJarFetchResult[];
+  // HTML of the listing page, captured during the cookie-jar page load.
+  // Callers can use this to extract DataDome auth codes without an extra fetch.
+  pageHtml: string | null;
+};
+
 // Like fetchAjaxWithCookieJar but loads the page only ONCE and tries all
 // ajaxUrls in sequence reusing the same cookie jar. Much faster than calling
 // fetchAjaxWithCookieJar separately for each endpoint (avoids N page loads).
+// Also returns the page HTML so callers can inspect it (e.g. for DataDome auth).
 export async function fetchMultipleAjaxWithCookieJar(
   pageUrl: string,
   ajaxUrls: string[],
@@ -153,21 +161,31 @@ export async function fetchMultipleAjaxWithCookieJar(
     ajaxHeaders?: string[];
     timeoutSec?: number;
   },
-): Promise<CookieJarFetchResult[]> {
+): Promise<MultiAjaxResult> {
   const timeoutSec = options?.timeoutSec ?? 20;
   const dir = await mkdtemp(join(tmpdir(), "idealista-jar-"));
   const jar = join(dir, "cookies.txt");
+  const htmlFile = join(dir, "page.html");
   const proxyArgs = options?.proxyUrl
     ? ["--proxytunnel", "-x", options.proxyUrl]
     : [];
 
   try {
-    // Load page once to seed the cookie jar
+    // Load page once: save cookies AND HTML for DataDome auth extraction
     await execFileAsync(
       "curl",
-      ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-c", jar, "-o", "/dev/null", ...proxyArgs, pageUrl],
+      ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-c", jar, "-o", htmlFile, ...proxyArgs, pageUrl],
       { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
     ).catch(() => null);
+
+    let pageHtml: string | null = null;
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const raw = await readFile(htmlFile, "utf8");
+      pageHtml = raw.length > 100 ? raw : null;
+    } catch {
+      pageHtml = null;
+    }
 
     const headerArgs: string[] = [];
     for (const h of options?.ajaxHeaders ?? []) headerArgs.push("-H", h);
@@ -188,9 +206,9 @@ export async function fetchMultipleAjaxWithCookieJar(
         results.push({ ok: false, status: 0, body: "", reason: err instanceof Error ? err.message : "error curl" });
       }
     }
-    return results;
+    return { results, pageHtml };
   } catch (err) {
-    return ajaxUrls.map(() => ({ ok: false, status: 0, body: "", reason: err instanceof Error ? err.message : "error curl" }));
+    return { results: ajaxUrls.map(() => ({ ok: false, status: 0, body: "", reason: err instanceof Error ? err.message : "error curl" })), pageHtml: null };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

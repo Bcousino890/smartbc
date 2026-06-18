@@ -393,17 +393,87 @@ export type AjaxPhoneResult = {
   debug?: Array<{ endpoint: string; status: number; bodySnippet: string }>;
 };
 
+// ─── DataDome pre-auth ───────────────────────────────────────────────────────
+// When the browser loads an Idealista listing, DataDome's JS snippet POSTs
+// to https://dd.idealista.com/is/ with browser fingerprint data and receives:
+//   {"status":200,"cookie":"datadome=VALUE; Max-Age=31536000; ..."}
+// We replicate this call using curl + residential proxy. With a clean
+// residential IP, DataDome often issues a valid cookie even with a minimal
+// payload (no canvas/WebGL fingerprint). The returned cookie is then sent
+// alongside the /contact-phones AJAX request, which validates it and returns
+// the phone number — exactly what the browser does after clicking "Ver teléfono".
+async function fetchDataDomeCookie(
+  auth: string,
+  adId: string,
+  proxyUrl?: string,
+): Promise<string | null> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execFileAsync = promisify(execFile);
+
+  const proxyArgs = proxyUrl ? ["--proxytunnel", "-x", proxyUrl] : [];
+
+  // Minimal jsData that looks like a real browser. DataDome validates this
+  // fingerprint against its ML model; residential IPs score well even with
+  // reduced data because they have clean behavioral history.
+  const jsData = JSON.stringify({
+    ttst: Math.floor(Math.random() * 800) + 200,
+    ifr: false,
+    cid: `${adId}-${Date.now()}`,
+    tst: Date.now(),
+  });
+
+  const body = `jsData=${encodeURIComponent(jsData)}&dv=4&eventCounters=%5B%5D&cid=&dd_cid=`;
+
+  console.log(`[datadome] POSTing to dd.idealista.com/is/ with auth=${auth.slice(0, 8)}...`);
+
+  try {
+    const { stdout } = await execFileAsync(
+      "curl",
+      [
+        "-sS",
+        "-X", "POST",
+        "-H", "Content-Type: application/x-www-form-urlencoded",
+        "-H", "Origin: https://www.idealista.com",
+        "-H", `Referer: https://www.idealista.com/inmueble/${adId}/`,
+        "-H", "Accept: */*",
+        "-H", "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
+        "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--data", body,
+        "--max-time", "12",
+        ...proxyArgs,
+        `https://dd.idealista.com/is/?auth=${auth}&dv=4&d=.idealista.com&new_sign_in_process=1`,
+      ],
+      { maxBuffer: 64 * 1024, timeout: 17000 },
+    );
+
+    console.log(`[datadome] Response: ${stdout.slice(0, 120)}`);
+
+    const json = JSON.parse(stdout) as { status: number; cookie?: string };
+    if (json.status === 200 && json.cookie) {
+      const match = json.cookie.match(/^datadome=([^;]+)/);
+      if (match?.[1]) {
+        const cookie = `datadome=${match[1]}`;
+        console.log(`[datadome] ✓ Cookie válida obtenida (${cookie.length} chars)`);
+        return cookie;
+      }
+    }
+    console.log(`[datadome] status=${json.status}, sin cookie válida`);
+    return null;
+  } catch (err) {
+    console.log(`[datadome] Error: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
 /**
  * Intenta obtener el teléfono de un anuncio de Idealista llamando a los
- * endpoints AJAX de contacto (los del botón "Ver teléfono"). Usa un flujo
- * de DOS pasos con cookie-jar: primero carga la ficha (para obtener la
- * cookie de DataDome) y luego llama al AJAX reutilizando esa sesión —
- * sin las cookies, DataDome rechaza la llamada y no devuelve teléfono.
- * Todo vía curl con UA de WhatsApp + proxy (mismo bypass del TLS JA3).
+ * endpoints AJAX de contacto (los del botón "Ver teléfono").
+ * Flujo de tres pasos:
+ *  1. Curl + cookie-jar (WhatsApp UA, cargar página una vez para todos los endpoints)
+ *  2. DataDome pre-auth: POST a dd.idealista.com → cookie DataDome → retry AJAX
+ *  3. Playwright + stealth + proxy (último recurso, lento pero fiable)
  * Devuelve el teléfono normalizado a +34XXXXXXXXX (confianza high) o null.
- *
- * `debug`: si es true, adjunta el status y un trozo del cuerpo de cada
- * endpoint en el campo `debug` del resultado (para diagnosticar bloqueos).
  */
 export async function fetchIdealistaPhoneViaAjax(
   adId: string,
@@ -411,7 +481,7 @@ export async function fetchIdealistaPhoneViaAjax(
 ): Promise<AjaxPhoneResult> {
   // Import dinámico para no arrastrar child_process a contextos que solo
   // usan normalizeSpanishPhone/detectAdvertiserFromHtml.
-  const { fetchMultipleAjaxWithCookieJar } = await import(
+  const { fetchMultipleAjaxWithCookieJar, fetchViaCurl } = await import(
     "@/lib/sync/import-by-link/fetch-via-curl"
   );
 
@@ -422,7 +492,7 @@ export async function fetchIdealistaPhoneViaAjax(
   console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);
 
   // Load the page once, then try all AJAX endpoints reusing the same cookie jar.
-  const responses = await fetchMultipleAjaxWithCookieJar(
+  const { results: responses, pageHtml } = await fetchMultipleAjaxWithCookieJar(
     pageUrl,
     endpoints,
     WHATSAPP_UA_FOR_AJAX,
@@ -490,7 +560,73 @@ export async function fetchIdealistaPhoneViaAjax(
     }
   }
 
-  console.log(`[idealista-phone-ajax] ✗ Curl fallido (${endpoints.length} endpoints). Intentando Playwright...`);
+  console.log(`[idealista-phone-ajax] ✗ Curl cookie-jar fallido (${endpoints.length} endpoints)`);
+
+  // ─── Step 2: DataDome pre-auth ───────────────────────────────────────────────
+  // The browser flow: page loads → DataDome JS POSTs to https://dd.idealista.com/is/
+  // → DataDome responds with {"status":200,"cookie":"datadome=VALUE;..."}
+  // → Browser uses this cookie for the /contact-phones AJAX call.
+  // We replicate this: extract the DataDome auth code from the page HTML, then
+  // POST to dd.idealista.com/is/ ourselves. With a clean residential proxy IP,
+  // DataDome often issues a valid cookie even with a minimal payload.
+  if (pageHtml) {
+    const authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    const ddAuth = authMatch?.[1];
+    console.log(`[idealista-phone-ajax] DataDome auth: ${ddAuth ? ddAuth.slice(0, 8) + "..." : "no encontrado en HTML"}`);
+
+    if (ddAuth) {
+      const ddCookie = await fetchDataDomeCookie(ddAuth, adId, options?.proxyUrl);
+      if (ddCookie) {
+        // Retry the primary phone endpoint with the validated DataDome cookie.
+        const primaryEndpoint = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+        console.log(`[idealista-phone-ajax] Reintentando con cookie DataDome: ${primaryEndpoint}`);
+        try {
+          const ddRes = await fetchViaCurl(primaryEndpoint, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", {
+            proxyUrl: options?.proxyUrl,
+            headers: [
+              `Cookie: ${ddCookie}`,
+              "X-Requested-With: XMLHttpRequest",
+              "Accept: application/json, text/javascript, */*; q=0.01",
+              `Referer: ${pageUrl}`,
+              "Accept-Language: es-ES,es;q=0.9",
+            ],
+            allowSmallBody: true,
+            timeoutSec: 15,
+          });
+
+          if (debug) {
+            debug.push({
+              endpoint: `datadome-auth:${primaryEndpoint}`,
+              status: ddRes.ok ? 200 : ("status" in ddRes ? ddRes.status : 0),
+              bodySnippet: ddRes.ok ? ddRes.html.slice(0, 300) : `${("reason" in ddRes ? ddRes.reason : "failed")}`,
+            });
+          }
+
+          if (ddRes.ok && ddRes.html) {
+            const body = ddRes.html;
+            console.log(`[idealista-phone-ajax] DataDome AJAX response: ${body.slice(0, 150)}`);
+            let phone: string | null = null;
+            for (const pattern of phonePatterns) {
+              const m = body.match(pattern);
+              if (m?.[1]) {
+                phone = acceptPhoneCandidate(m[1], adId.slice(-9));
+                if (phone) break;
+              }
+            }
+            const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
+            if (phone) {
+              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía DataDome pre-auth: ${phone}`);
+              return { phone, phone_confidence: "high", contact_name: cn?.[1]?.trim() ?? null, debug };
+            }
+          }
+        } catch (ddErr) {
+          console.log(`[idealista-phone-ajax] DataDome retry error: ${ddErr instanceof Error ? ddErr.message : String(ddErr)}`);
+        }
+      }
+    }
+  }
+
+  console.log(`[idealista-phone-ajax] DataDome pre-auth fallido. Intentando Playwright...`);
 
   try {
     const { fetchIdealistaPhoneViaPlaywright } = await import(
