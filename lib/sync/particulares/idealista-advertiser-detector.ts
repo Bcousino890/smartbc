@@ -570,16 +570,29 @@ export async function fetchIdealistaPhoneViaAjax(
   // POST to dd.idealista.com/is/ ourselves. With a clean residential proxy IP,
   // DataDome often issues a valid cookie even with a minimal payload.
   if (pageHtml) {
-    const authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    console.log(`[idealista-phone-ajax] Paso 2: Buscando DataDome auth code en HTML (${pageHtml.length} chars)...`);
+    // Try multiple patterns for the auth code location
+    let authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    if (!authMatch) {
+      authMatch = pageHtml.match(/auth=([A-Za-z0-9_-]{10,})/);
+    }
+    if (!authMatch) {
+      authMatch = pageHtml.match(/"?auth"?\s*:\s*"([A-Za-z0-9_-]{10,})"/);
+    }
     const ddAuth = authMatch?.[1];
-    console.log(`[idealista-phone-ajax] DataDome auth: ${ddAuth ? ddAuth.slice(0, 8) + "..." : "no encontrado en HTML"}`);
 
     if (ddAuth) {
+      console.log(`[idealista-phone-ajax] DataDome auth encontrado: ${ddAuth.slice(0, 12)}...`);
+      if (debug) {
+        debug.push({ endpoint: "datadome-auth", status: 0, bodySnippet: `auth=${ddAuth.slice(0, 20)}...` });
+      }
+
       const ddCookie = await fetchDataDomeCookie(ddAuth, adId, options?.proxyUrl);
       if (ddCookie) {
+        console.log(`[idealista-phone-ajax] Cookie DataDome obtenida: ${ddCookie.slice(0, 40)}...`);
         // Retry the primary phone endpoint with the validated DataDome cookie.
         const primaryEndpoint = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
-        console.log(`[idealista-phone-ajax] Reintentando con cookie DataDome: ${primaryEndpoint}`);
+        console.log(`[idealista-phone-ajax] Reintentando /contact-phones con cookie DataDome...`);
         try {
           const ddRes = await fetchViaCurl(primaryEndpoint, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", {
             proxyUrl: options?.proxyUrl,
@@ -594,17 +607,19 @@ export async function fetchIdealistaPhoneViaAjax(
             timeoutSec: 15,
           });
 
+          const ddStatus = ddRes.ok ? 200 : ("status" in ddRes ? ddRes.status : 0);
+          console.log(`[idealista-phone-ajax] DataDome AJAX response: HTTP ${ddStatus}`);
           if (debug) {
             debug.push({
-              endpoint: `datadome-auth:${primaryEndpoint}`,
-              status: ddRes.ok ? 200 : ("status" in ddRes ? ddRes.status : 0),
-              bodySnippet: ddRes.ok ? ddRes.html.slice(0, 300) : `${("reason" in ddRes ? ddRes.reason : "failed")}`,
+              endpoint: "datadome-cookie-retry",
+              status: ddStatus,
+              bodySnippet: ddRes.ok ? "ok" : ("reason" in ddRes ? ddRes.reason : "failed"),
             });
           }
 
-          if (ddRes.ok && ddRes.html) {
+          if (ddRes.ok && "html" in ddRes && ddRes.html) {
             const body = ddRes.html;
-            console.log(`[idealista-phone-ajax] DataDome AJAX response: ${body.slice(0, 150)}`);
+            console.log(`[idealista-phone-ajax] Response body: ${body.slice(0, 200)}`);
             let phone: string | null = null;
             for (const pattern of phonePatterns) {
               const m = body.match(pattern);
@@ -617,12 +632,33 @@ export async function fetchIdealistaPhoneViaAjax(
             if (phone) {
               console.log(`[idealista-phone-ajax] ✓ ÉXITO vía DataDome pre-auth: ${phone}`);
               return { phone, phone_confidence: "high", contact_name: cn?.[1]?.trim() ?? null, debug };
+            } else {
+              console.log(`[idealista-phone-ajax] DataDome cookie trabajó pero sin teléfono en response`);
             }
           }
         } catch (ddErr) {
-          console.log(`[idealista-phone-ajax] DataDome retry error: ${ddErr instanceof Error ? ddErr.message : String(ddErr)}`);
+          const errMsg = ddErr instanceof Error ? ddErr.message : String(ddErr);
+          console.log(`[idealista-phone-ajax] DataDome retry error: ${errMsg}`);
+          if (debug) {
+            debug.push({ endpoint: "datadome-cookie-retry-error", status: 0, bodySnippet: errMsg });
+          }
+        }
+      } else {
+        console.log(`[idealista-phone-ajax] No se pudo obtener cookie DataDome`);
+        if (debug) {
+          debug.push({ endpoint: "datadome-post-failed", status: 0, bodySnippet: "no cookie" });
         }
       }
+    } else {
+      console.log(`[idealista-phone-ajax] DataDome auth code no encontrado en HTML`);
+      if (debug) {
+        debug.push({ endpoint: "datadome-auth-not-found", status: 0, bodySnippet: "auth code missing" });
+      }
+    }
+  } else {
+    console.log(`[idealista-phone-ajax] pageHtml es null, saltando DataDome pre-auth`);
+    if (debug) {
+      debug.push({ endpoint: "datadome-skipped", status: 0, bodySnippet: "no html" });
     }
   }
 

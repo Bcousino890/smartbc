@@ -172,18 +172,28 @@ export async function fetchMultipleAjaxWithCookieJar(
 
   try {
     // Load page once: save cookies AND HTML for DataDome auth extraction
-    await execFileAsync(
-      "curl",
-      ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-c", jar, "-o", htmlFile, ...proxyArgs, pageUrl],
-      { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
-    ).catch(() => null);
+    try {
+      await execFileAsync(
+        "curl",
+        ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-c", jar, "-o", htmlFile, ...proxyArgs, pageUrl],
+        { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
+      );
+    } catch (pageErr) {
+      console.log(`[multi-ajax-cookie-jar] Curl page load failed: ${pageErr instanceof Error ? pageErr.message : String(pageErr)}`);
+    }
 
     let pageHtml: string | null = null;
     try {
       const { readFile } = await import("node:fs/promises");
       const raw = await readFile(htmlFile, "utf8");
-      pageHtml = raw.length > 100 ? raw : null;
-    } catch {
+      if (raw && raw.length > 100) {
+        pageHtml = raw;
+        console.log(`[multi-ajax-cookie-jar] Page HTML captured: ${raw.length} chars`);
+      } else {
+        console.log(`[multi-ajax-cookie-jar] Page HTML empty or too short: ${raw?.length ?? 0} chars`);
+      }
+    } catch (readErr) {
+      console.log(`[multi-ajax-cookie-jar] Failed to read page HTML: ${readErr instanceof Error ? readErr.message : String(readErr)}`);
       pageHtml = null;
     }
 
