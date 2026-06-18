@@ -26,9 +26,12 @@ export async function getProxyUrl(): Promise<string | undefined> {
 
     let appKey = appKeyData?.value as string | null;
 
+    // Strip surrounding quotes (e.g. if saved as '"value"' from JSON encoding)
+    if (appKey) appKey = appKey.replace(/^["']+|["']+$/g, "").trim();
+
     // If the stored value is a full Smartproxy URL, extract just the app_key param.
-    // This handles the case where the admin UI saved the full URL instead of the key.
-    if (appKey && appKey.includes("smartproxy.org")) {
+    // Handles the case where the admin UI saved the full API URL instead of just the key.
+    if (appKey && appKey.includes("app_key=")) {
       try {
         const u = new URL(appKey);
         const extracted = u.searchParams.get("app_key");
@@ -37,7 +40,9 @@ export async function getProxyUrl(): Promise<string | undefined> {
           appKey = extracted;
         }
       } catch {
-        // Not a valid URL, use as-is
+        // Extract via regex if URL parsing fails
+        const m = appKey.match(/app_key=([a-f0-9]{16,})/i);
+        if (m?.[1]) appKey = m[1];
       }
     }
 
@@ -58,7 +63,9 @@ export async function getProxyUrl(): Promise<string | undefined> {
       .eq("key", "scraping.proxyUrl")
       .maybeSingle();
 
-    const dbUrl = urlData?.value as string | null | undefined;
+    let dbUrl = urlData?.value as string | null | undefined;
+    // Strip surrounding quotes if present
+    if (dbUrl) dbUrl = dbUrl.replace(/^["']+|["']+$/g, "").trim();
     return dbUrl || process.env.SMARTPROXY_URL || undefined;
   } catch (err) {
     console.error(`[proxy-config] Error: ${err instanceof Error ? err.message : String(err)}`);
