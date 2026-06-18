@@ -76,3 +76,25 @@ export async function getProxyUrl(): Promise<string | undefined> {
 export function invalidateProxyCache() {
   // No-op now, but keeping for compatibility
 }
+
+/**
+ * Returns the STATIC residential proxy URL for browser automation (Playwright).
+ * Never returns a raw datacenter IP from the Smartproxy API — datacenter IPs
+ * get blocked by DataDome even with a perfect browser fingerprint.
+ * Returns the authenticated residential proxy (eu.smartproxy.net) or undefined.
+ */
+export async function getResidentialProxyUrl(): Promise<string | undefined> {
+  try {
+    const db = createAdminClient() as any;
+    const { data } = await db
+      .from("app_settings")
+      .select("value")
+      .eq("key", "scraping.proxyUrl")
+      .maybeSingle();
+    let url = data?.value as string | null | undefined;
+    if (url) url = url.replace(/^["']+|["']+$/g, "").trim();
+    return url || process.env.SMARTPROXY_RESIDENTIAL_URL || process.env.SMARTPROXY_URL || undefined;
+  } catch {
+    return process.env.SMARTPROXY_RESIDENTIAL_URL || process.env.SMARTPROXY_URL || undefined;
+  }
+}

@@ -672,8 +672,12 @@ export async function fetchIdealistaPhoneViaAjax(
     const { fetchIdealistaPhoneViaPlaywright } = await import(
       "@/lib/sync/particulares/fetch-phone-with-playwright"
     );
+    // Use residential proxy URL for Playwright (not dynamic datacenter IPs).
+    // Datacenter IPs trigger DataDome CAPTCHA even with perfect browser fingerprint.
+    const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+    const residentialProxy = await getResidentialProxyUrl();
     const pwResult = await fetchIdealistaPhoneViaPlaywright(adId, {
-      proxyUrl: options?.proxyUrl,
+      proxyUrl: residentialProxy ?? options?.proxyUrl,
     });
 
     if (debug) {
