@@ -67,24 +67,44 @@ export async function fetchIdealistaPhoneViaPlaywright(
   console.log(`[playwright-phone] Iniciando para adId=${adId}`);
 
   try {
-    // playwright-extra + stealth: patches navigator.webdriver, canvas, WebGL,
-    // plugins, chrome.runtime, etc. to pass DataDome's headless detection.
-    const { chromium } = await import("playwright-extra");
-    const stealthMod = await import("puppeteer-extra-plugin-stealth");
-    const stealth = (stealthMod as unknown as { default: () => unknown }).default();
-    (chromium as unknown as { use: (p: unknown) => void }).use(stealth);
+    // Try rebrowser-playwright first: patches CDP Runtime.Enable detection that
+    // DataDome uses to identify headless Chrome. Falls back to playwright-extra
+    // + stealth if rebrowser-playwright is not installed.
+    let chromium: { launch: (...args: unknown[]) => Promise<unknown> };
+    let usingRebrowser = false;
+    try {
+      const rb = await import("rebrowser-playwright");
+      chromium = rb.chromium as unknown as typeof chromium;
+      usingRebrowser = true;
+      console.log(`[playwright-phone] Using rebrowser-playwright (anti-CDP-detection)`);
+    } catch {
+      const { chromium: pwChromium } = await import("playwright-extra");
+      const stealthMod = await import("puppeteer-extra-plugin-stealth");
+      const stealth = (stealthMod as unknown as { default: () => unknown }).default();
+      (pwChromium as unknown as { use: (p: unknown) => void }).use(stealth);
+      chromium = pwChromium as unknown as typeof chromium;
+      console.log(`[playwright-phone] Using playwright-extra + stealth (rebrowser not available)`);
+    }
+    void usingRebrowser;
 
-    const proxyUrl = options?.proxyUrl ?? process.env.SMARTPROXY_URL;
+    // For Playwright we prefer the static residential proxy (eu.smartproxy.net)
+    // because it uses real ISP IPs. The dynamic IP-list API returns datacenter
+    // IPs (Hetzner) that DataDome flags even with a perfect browser fingerprint.
+    const rawProxyUrl = options?.proxyUrl ?? process.env.SMARTPROXY_URL;
+    const residentialProxyUrl = process.env.SMARTPROXY_RESIDENTIAL_URL
+      ?? (rawProxyUrl?.includes("smartproxy.net") && rawProxyUrl.includes("@") ? rawProxyUrl : undefined)
+      ?? rawProxyUrl;
+
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
-    if (proxyUrl) {
+    if (residentialProxyUrl) {
       try {
-        const u = new URL(proxyUrl);
+        const u = new URL(residentialProxyUrl);
         proxyConfig = {
           server: `${u.protocol}//${u.host}`,
           username: decodeURIComponent(u.username) || undefined,
           password: decodeURIComponent(u.password) || undefined,
         };
-        console.log(`[playwright-phone] Proxy: ${u.host}`);
+        console.log(`[playwright-phone] Proxy: ${u.host} (${u.username.slice(0, 20)}...)`);
       } catch {
         console.log(`[playwright-phone] Proxy URL inválida, sin proxy`);
       }
@@ -97,17 +117,29 @@ export async function fetchIdealistaPhoneViaPlaywright(
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
+        "--disable-web-security",
       ],
       proxy: proxyConfig,
     }) as unknown as Browser;
 
-    page = await (browser as unknown as { newPage: (opts: unknown) => Promise<Page> }).newPage({
+    // Use newContext for proper UA + locale (playwright-extra newPage doesn't support UA directly)
+    const ctx = await (browser as unknown as {
+      newContext: (opts: unknown) => Promise<{ newPage: () => Promise<Page> }>;
+    }).newContext({
       userAgent: BROWSER_UA,
+      locale: "es-ES",
+      extraHTTPHeaders: {
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        "Sec-Ch-Ua": '"Google Chrome";v="120", "Chromium";v="120", "Not=A?Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+      },
     });
-
-    await page.setExtraHTTPHeaders({
-      "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-    });
+    page = await ctx.newPage();
 
     // Phone AJAX capture state
     let phoneFromAjax: string | null = null;
@@ -131,24 +163,40 @@ export async function fetchIdealistaPhoneViaPlaywright(
       }
     });
 
-    // Navigate — DataDome's JS challenge runs as part of page load
-    console.log(`[playwright-phone] Navigating...`);
+    // Navigate — DataDome's JS challenge runs as part of page load.
+    // Use networkidle to wait for DataDome's c.js fingerprint POST to complete
+    // and for the page to redirect from the challenge page to the real listing.
+    console.log(`[playwright-phone] Navigating (networkidle wait)...`);
     let pageBlocked = false;
     try {
       const resp = await page.goto(pageUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: 45000,
+        waitUntil: "networkidle",
+        timeout: 60000,
       });
       const status = resp?.status() ?? 0;
       console.log(`[playwright-phone] Page status: ${status}`);
       if (status === 403 || status === 429) {
         pageBlocked = true;
-        console.log(`[playwright-phone] DataDome blocked page load (${status})`);
+        console.log(`[playwright-phone] DataDome hard-blocked page load (${status})`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // Timeout on domcontentloaded can happen — not necessarily a failure
       console.log(`[playwright-phone] goto: ${msg}`);
+    }
+
+    const title = await page.title().catch(() => "");
+    console.log(`[playwright-phone] Page title: "${title.slice(0, 60)}"`);
+
+    // If still on DataDome challenge page, wait extra time for redirect
+    if (title === "idealista.com" || title === "") {
+      console.log(`[playwright-phone] DataDome challenge page — waiting 8s for redirect...`);
+      await page.waitForTimeout(8000);
+      const newTitle = await page.title().catch(() => "");
+      console.log(`[playwright-phone] Title after extra wait: "${newTitle.slice(0, 60)}"`);
+      if (newTitle === "idealista.com" || newTitle === "") {
+        pageBlocked = true;
+        console.log(`[playwright-phone] DataDome CAPTCHA/block — fingerprint rejected`);
+      }
     }
 
     if (pageBlocked) {
@@ -160,8 +208,8 @@ export async function fetchIdealistaPhoneViaPlaywright(
       };
     }
 
-    // Allow DataDome challenge to complete (POST to dd.idealista.com sets cookie)
-    await page.waitForTimeout(3000);
+    // Short wait for any post-load JS
+    await page.waitForTimeout(2000);
 
     // Try to click "Ver teléfono" button with multiple selectors
     const selectors = [
