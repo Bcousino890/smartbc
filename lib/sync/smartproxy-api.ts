@@ -41,29 +41,42 @@ export async function getSmartproxyIP(appKey: string): Promise<SmartproxyIP | nu
     ]);
 
     const data = JSON.parse(stdout) as {
+      code?: number;
+      msg?: string;
+      data?: { list?: string[] };
+      // Legacy format (just in case)
       ips?: Array<{ ip: string; port: number | string }>;
       error?: string;
-      status?: string;
     };
 
-    if (data.error) {
-      console.log(`[smartproxy-api] Error: ${data.error}`);
+    if (data.error || (data.code && data.code !== 200)) {
+      console.log(`[smartproxy-api] Error: ${data.error ?? data.msg}`);
       return null;
     }
 
-    if (!data.ips || data.ips.length === 0) {
-      console.log(`[smartproxy-api] No IPs available`);
-      return null;
+    // Current format: { data: { list: ["ip:port", "ip:port", ...] } }
+    const list = data.data?.list;
+    if (list && list.length > 0) {
+      const randomIndex = Math.floor(Math.random() * list.length);
+      const [ip, port] = list[randomIndex].split(":");
+      if (ip && port) {
+        console.log(`[smartproxy-api] Got fresh IP (${randomIndex + 1}/${list.length}, pool=100): ${ip}:${port}`);
+        return { ip, port };
+      }
     }
 
-    // Select a random IP from the pool of 100 (Smartproxy returns multiple for distribution)
-    const randomIndex = Math.floor(Math.random() * data.ips.length);
-    const ipData = data.ips[randomIndex];
-    const ip = ipData.ip;
-    const port = String(ipData.port);
+    // Legacy format: { ips: [{ip, port}] }
+    if (data.ips && data.ips.length > 0) {
+      const randomIndex = Math.floor(Math.random() * data.ips.length);
+      const ipData = data.ips[randomIndex];
+      const ip = ipData.ip;
+      const port = String(ipData.port);
+      console.log(`[smartproxy-api] Got fresh IP legacy format (${randomIndex + 1}/${data.ips.length}): ${ip}:${port}`);
+      return { ip, port };
+    }
 
-    console.log(`[smartproxy-api] Got fresh IP (${randomIndex + 1}/${data.ips.length}, pool=100): ${ip}:${port}`);
-    return { ip, port };
+    console.log(`[smartproxy-api] No IPs available in response: ${stdout.slice(0, 100)}`);
+    return null;
   } catch (err) {
     console.error(`[smartproxy-api] Error fetching IP: ${err instanceof Error ? err.message : String(err)}`);
     return null;
