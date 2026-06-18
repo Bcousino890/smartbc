@@ -73,17 +73,27 @@ export async function fetchIdealistaPhoneViaPlaywright(
     let chromium: { launch: (...args: unknown[]) => Promise<unknown> };
     let usingRebrowser = false;
     try {
+      // Ensure rebrowser binaries are installed
       const rb = await import("rebrowser-playwright");
+      try {
+        const installer = await import("rebrowser-playwright/lib/installer");
+        await (installer as any).downloadBrowsersForNpmInstall?.();
+      } catch {
+        // Ignore if installer not available
+      }
       chromium = rb.chromium as unknown as typeof chromium;
       usingRebrowser = true;
       console.log(`[playwright-phone] Using rebrowser-playwright (anti-CDP-detection)`);
-    } catch {
+    } catch (rbErr) {
+      console.log(
+        `[playwright-phone] rebrowser-playwright not available: ${rbErr instanceof Error ? rbErr.message.slice(0, 80) : "unknown error"}`,
+      );
       const { chromium: pwChromium } = await import("playwright-extra");
       const stealthMod = await import("puppeteer-extra-plugin-stealth");
       const stealth = (stealthMod as unknown as { default: () => unknown }).default();
       (pwChromium as unknown as { use: (p: unknown) => void }).use(stealth);
       chromium = pwChromium as unknown as typeof chromium;
-      console.log(`[playwright-phone] Using playwright-extra + stealth (rebrowser not available)`);
+      console.log(`[playwright-phone] Using playwright-extra + stealth`);
     }
     void usingRebrowser;
 
