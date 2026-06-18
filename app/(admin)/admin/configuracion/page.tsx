@@ -29,7 +29,7 @@ export default function AdminConfiguracionPage() {
   const t = useT();
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
-  const [scrapingSmartproxyAppKey, setScrapingSmartproxyAppKey] = useState("");
+  const [scrapingAppKey, setScrapingAppKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -48,7 +48,12 @@ export default function AdminConfiguracionPage() {
           setScrapingProxyUrl(data["scraping.proxyUrl"]);
         }
         if (typeof data["scraping.smartproxy.app_key"] === "string") {
-          setScrapingSmartproxyAppKey(data["scraping.smartproxy.app_key"]);
+          let key = data["scraping.smartproxy.app_key"] as string;
+          // Extract app_key if full URL was saved
+          if (key.includes("app_key=")) {
+            try { const u = new URL(key); key = u.searchParams.get("app_key") ?? key; } catch {}
+          }
+          setScrapingAppKey(key);
         }
       })
       .catch(() => {
@@ -68,7 +73,7 @@ export default function AdminConfiguracionPage() {
           defaults: settings.defaults,
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
-          "scraping.smartproxy.app_key": scrapingSmartproxyAppKey,
+          "scraping.smartproxy.app_key": scrapingAppKey,
         }),
       });
       setSaved(true);
@@ -268,41 +273,25 @@ export default function AdminConfiguracionPage() {
           icon={<Shield size={16} strokeWidth={1.75} />}
           titleKey="config.scraping.title"
         >
-          <div className="space-y-4">
-            <div>
-              <p className="mb-3 text-xs font-medium text-ink/70">Rotación de IPs (Smartproxy API v3)</p>
-              <p className="mb-3 text-xs text-ink/55">
-                Obtiene IPs residenciales frescas automáticamente para cada request. Evita que DataDome queme una sola IP.
-                Genera el enlace API en{" "}
-                <a href="https://www.smartproxy.org/" target="_blank" rel="noopener noreferrer" className="text-gold-600 hover:underline">
-                  smartproxy.org
-                </a>
-              </p>
-              <div className="space-y-2">
-                <PasswordField
-                  label="App Key (Smartproxy)"
-                  value={scrapingSmartproxyAppKey}
-                  onChange={setScrapingSmartproxyAppKey}
-                  placeholder="9cf8f476185ea51d90a811dfedf19974"
-                />
-              </div>
-            </div>
-
-            <div className="border-t border-ink/10 pt-4">
-              <p className="mb-3 text-xs font-medium text-ink/70">URL Estática (Fallback)</p>
-              <p className="mb-3 text-xs text-ink/55">
-                Si la rotación API falla, usa esta URL como fallback. Formato:{" "}
-                <code className="rounded bg-ink/8 px-1 py-0.5 font-mono text-[11px]">
-                  http://usuario:contraseña@host:puerto
-                </code>
-              </p>
-              <PasswordField
-                label="URL del proxy"
-                value={scrapingProxyUrl}
-                onChange={setScrapingProxyUrl}
-                placeholder="http://smart-b04nrjtamr8a_area-ES_city-MADRID:…@eu.smartproxy.net:3120"
-              />
-            </div>
+          <div className="space-y-3">
+            <p className="text-xs text-ink/55">
+              Smartproxy API para rotación automática de 100 IPs residenciales. Pega el <strong>app_key</strong> o la URL completa del dashboard — se extrae automáticamente.
+            </p>
+            <PasswordField
+              label="Smartproxy App Key"
+              value={scrapingAppKey}
+              onChange={setScrapingAppKey}
+              placeholder="9cf8f476185ea51d90a811dfedf19974"
+            />
+            <p className="text-xs text-ink/55 pt-1">
+              URL de proxy estático (fallback si la API falla):
+            </p>
+            <PasswordField
+              label="URL del proxy (fallback)"
+              value={scrapingProxyUrl}
+              onChange={setScrapingProxyUrl}
+              placeholder="http://usuario:contraseña@eu.smartproxy.net:3120"
+            />
           </div>
         </SettingsSection>
 

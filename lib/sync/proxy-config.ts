@@ -24,7 +24,22 @@ export async function getProxyUrl(): Promise<string | undefined> {
       .eq("key", "scraping.smartproxy.app_key")
       .maybeSingle();
 
-    const appKey = appKeyData?.value as string | null;
+    let appKey = appKeyData?.value as string | null;
+
+    // If the stored value is a full Smartproxy URL, extract just the app_key param.
+    // This handles the case where the admin UI saved the full URL instead of the key.
+    if (appKey && appKey.includes("smartproxy.org")) {
+      try {
+        const u = new URL(appKey);
+        const extracted = u.searchParams.get("app_key");
+        if (extracted) {
+          console.log(`[proxy-config] Extracted app_key from URL`);
+          appKey = extracted;
+        }
+      } catch {
+        // Not a valid URL, use as-is
+      }
+    }
 
     if (appKey) {
       console.log(`[proxy-config] Attempting to get fresh IP from Smartproxy API...`);

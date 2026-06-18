@@ -29,7 +29,7 @@ export async function getSmartproxyIP(appKey: string): Promise<SmartproxyIP | nu
   try {
     // Llamada a la API de Smartproxy con app_key
     // Devuelve JSON con IPs disponibles: { "ips": [{"ip": "...", "port": ...}] }
-    const url = `https://www.smartproxy.org/web_v1/ip/get-ip-v3?app_key=${appKey}&pt=9&num=20&cc=ES&life=30&format=json&protocol=1`;
+    const url = `https://www.smartproxy.org/web_v1/ip/get-ip-v3?app_key=${appKey}&pt=9&num=100&cc=ES&life=30&format=json&protocol=1`;
 
     const { stdout } = await execFileAsync("curl", [
       "-sS",
@@ -56,13 +56,13 @@ export async function getSmartproxyIP(appKey: string): Promise<SmartproxyIP | nu
       return null;
     }
 
-    // Select a random IP from the pool (Smartproxy returns multiple for distribution)
+    // Select a random IP from the pool of 100 (Smartproxy returns multiple for distribution)
     const randomIndex = Math.floor(Math.random() * data.ips.length);
     const ipData = data.ips[randomIndex];
     const ip = ipData.ip;
     const port = String(ipData.port);
 
-    console.log(`[smartproxy-api] Got fresh IP (${randomIndex + 1}/${data.ips.length}): ${ip}:${port}`);
+    console.log(`[smartproxy-api] Got fresh IP (${randomIndex + 1}/${data.ips.length}, pool=100): ${ip}:${port}`);
     return { ip, port };
   } catch (err) {
     console.error(`[smartproxy-api] Error fetching IP: ${err instanceof Error ? err.message : String(err)}`);
@@ -72,8 +72,7 @@ export async function getSmartproxyIP(appKey: string): Promise<SmartproxyIP | nu
 
 /**
  * Construye la URL de proxy a partir de una IP de Smartproxy.
- * Formato: http://username:password@ip:port (pero sin user/pass porque Smartproxy usa app_key)
- * Smartproxy deja pasar directamente con la IP, no necesita autenticación adicional.
+ * Formato: http://ip:port (Smartproxy no requiere autenticación adicional)
  */
 export function buildProxyUrl(smartproxy: SmartproxyIP): string {
   return `http://${smartproxy.ip}:${smartproxy.port}`;

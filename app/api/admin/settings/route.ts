@@ -27,7 +27,17 @@ export async function POST(req: Request) {
   const body = await req.json();
   const db = createAdminClient() as any;
 
-  for (const [key, value] of Object.entries(body)) {
+  for (let [key, value] of Object.entries(body)) {
+    // If the app_key field contains a full Smartproxy URL, extract just the key
+    if (key === "scraping.smartproxy.app_key" && typeof value === "string" && value.includes("app_key=")) {
+      try {
+        const u = new URL(value);
+        const extracted = u.searchParams.get("app_key");
+        if (extracted) value = extracted;
+      } catch {
+        // Not a URL, use as-is
+      }
+    }
     await db
       .from("app_settings")
       .upsert({ key, value }, { onConflict: "key" });
