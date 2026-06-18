@@ -369,6 +369,7 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
 // curl + UA de WhatsApp pasa DataDome; el fetch de Node es rechazado con 403).
 
 const WHATSAPP_UA_FOR_AJAX = "WhatsApp/2.23.20.0";
+const BROWSER_UA_FOR_PAGE = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 function idealistaPhoneEndpoints(adId: string): string[] {
   return [
@@ -492,12 +493,15 @@ export async function fetchIdealistaPhoneViaAjax(
   console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);
 
   // Load the page once, then try all AJAX endpoints reusing the same cookie jar.
+  // IMPORTANT: use BROWSER_UA for initial page load (to get DataDome scripts + auth code)
+  // but WHATSAPP_UA for AJAX endpoints (more permissive for AJAX even without full DataDome validation).
   const { results: responses, pageHtml } = await fetchMultipleAjaxWithCookieJar(
     pageUrl,
     endpoints,
     WHATSAPP_UA_FOR_AJAX,
     {
       proxyUrl: options?.proxyUrl,
+      pageUserAgent: BROWSER_UA_FOR_PAGE, // Use real browser UA to fetch DataDome scripts
       timeoutSec: 30,
       ajaxHeaders: [
         "X-Requested-With: XMLHttpRequest",
@@ -668,8 +672,12 @@ export async function fetchIdealistaPhoneViaAjax(
     const { fetchIdealistaPhoneViaPlaywright } = await import(
       "@/lib/sync/particulares/fetch-phone-with-playwright"
     );
+    // Use residential proxy URL for Playwright (not dynamic datacenter IPs).
+    // Datacenter IPs trigger DataDome CAPTCHA even with perfect browser fingerprint.
+    const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+    const residentialProxy = await getResidentialProxyUrl();
     const pwResult = await fetchIdealistaPhoneViaPlaywright(adId, {
-      proxyUrl: options?.proxyUrl,
+      proxyUrl: residentialProxy ?? options?.proxyUrl,
     });
 
     if (debug) {
