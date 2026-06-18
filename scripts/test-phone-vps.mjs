@@ -13,6 +13,10 @@ const execFileAsync = promisify(execFile);
 const adId = process.argv[2] ?? "111741746";
 const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
 
+// WhatsApp UA bypasses DataDome entirely (no challenge, no cookie needed).
+// Browser UA gets blocked by DataDome when using datacenter IPs (Hetzner).
+// Strategy: use WhatsApp UA for page load AND for AJAX calls.
+// The DataDome pre-auth path is only viable with true residential IPs.
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 
@@ -42,30 +46,48 @@ try {
   console.log(`❌ Error Smartproxy: ${e.message}`);
 }
 
-// 2. Cargar página con Browser UA (para que DataDome inyecte su script)
-console.log(`\n🌐 Step 2: Cargando página con Browser UA + proxy...`);
+// 2. Cargar página con WhatsApp UA (bypasea DataDome sin necesitar cookie).
+// Browser UA se bloquea desde IPs de datacenter (Hetzner) que devuelve la API.
+console.log(`\n🌐 Step 2: Cargando página con WhatsApp UA + proxy...`);
 const dir = await mkdtemp(join(tmpdir(), "idealista-test-"));
 const jar = join(dir, "cookies.txt");
 const htmlFile = join(dir, "page.html");
 const proxyArgs = proxyUrl ? ["--proxytunnel", "-x", proxyUrl] : [];
 
+// Try WhatsApp UA first (reliable), fall back to Browser UA without proxy
+let pageHtml = "";
 try {
   await execFileAsync("curl", [
-    "-sS", "-L", "-A", BROWSER_UA,
+    "-sS", "-L", "-A", WHATSAPP_UA,
     "--max-time", "20",
     "-c", jar, "-o", htmlFile,
     ...proxyArgs,
     pageUrl
   ], { maxBuffer: 20 * 1024 * 1024 });
+  pageHtml = await readFile(htmlFile, "utf8").catch(() => "");
+  console.log(`📄 WhatsApp UA: ${pageHtml.length} chars`);
 } catch (e) {
   console.log(`⚠️  curl page load warning: ${e.message}`);
 }
 
-const pageHtml = await readFile(htmlFile, "utf8").catch(() => "");
-console.log(`📄 HTML cargado: ${pageHtml.length} chars`);
+if (pageHtml.length < 1000) {
+  console.log("⚠️  WhatsApp UA falló, probando Browser UA sin proxy...");
+  try {
+    await execFileAsync("curl", [
+      "-sS", "-L", "-A", BROWSER_UA,
+      "--max-time", "20",
+      "-c", jar, "-o", htmlFile,
+      pageUrl
+    ], { maxBuffer: 20 * 1024 * 1024 });
+    pageHtml = await readFile(htmlFile, "utf8").catch(() => "");
+    console.log(`📄 Browser UA sin proxy: ${pageHtml.length} chars`);
+  } catch (e) {
+    console.log(`⚠️  curl fallback warning: ${e.message}`);
+  }
+}
 
 if (pageHtml.length < 1000) {
-  console.log("❌ HTML demasiado corto — posible bloqueo 403");
+  console.log("❌ HTML demasiado corto — bloqueo total");
   process.exit(1);
 }
 
@@ -109,46 +131,59 @@ if (ddAuth) {
   console.log(`   → dd.idealista.com en HTML: ${hasDDScript ? "SÍ" : "NO"}`);
 }
 
-// 5. Probar endpoints AJAX con cookie jar
-console.log(`\n🔄 Step 5: Probando endpoints AJAX con cookie jar...`);
+// 5. Probar endpoints AJAX con cookie jar (WhatsApp UA, mismo que cargó la página)
+console.log(`\n🔄 Step 5: Probando endpoints AJAX con cookie jar (WhatsApp UA)...`);
 const endpoints = [
   `https://www.idealista.com/es/ajax/ads/${adId}/contact-phone-numbers`,
   `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`,
+  `https://www.idealista.com/es/ajax/ads/${adId}/contact`,
   `https://www.idealista.com/ajax/listingController/adContactInfoForMobileDevices.ajax?adId=${adId}`,
   `https://www.idealista.com/ajax/listingController/adContactInfoForDetail.ajax?adId=${adId}`,
 ];
 
+async function tryAjax(endpoint, useProxy) {
+  const args = [
+    "-sS", "-L", "-A", WHATSAPP_UA,
+    "--max-time", "15",
+    "-b", jar, "-c", jar,
+    "-w", "\n__CODE__:%{http_code}",
+    "-H", "X-Requested-With: XMLHttpRequest",
+    "-H", "Accept: application/json, */*; q=0.01",
+    "-H", `Referer: ${pageUrl}`,
+  ];
+  if (useProxy) args.push(...proxyArgs);
+  args.push(endpoint);
+  const { stdout } = await execFileAsync("curl", args, { maxBuffer: 2 * 1024 * 1024 });
+  const codeMatch = stdout.match(/\n__CODE__:(\d+)$/);
+  const code = codeMatch ? parseInt(codeMatch[1]) : 0;
+  const body = codeMatch ? stdout.slice(0, stdout.lastIndexOf("\n__CODE__:")) : stdout;
+  return { code, body };
+}
+
 let ajaxPhone = null;
 for (const endpoint of endpoints) {
   try {
-    const { stdout } = await execFileAsync("curl", [
-      "-sS", "-L", "-A", WHATSAPP_UA,
-      "--max-time", "15",
-      "-b", jar, "-c", jar,
-      "-w", "\n__CODE__:%{http_code}",
-      "-H", "X-Requested-With: XMLHttpRequest",
-      "-H", "Accept: application/json, */*; q=0.01",
-      "-H", `Referer: ${pageUrl}`,
-      ...proxyArgs,
-      endpoint
-    ], { maxBuffer: 2 * 1024 * 1024 });
-
-    const codeMatch = stdout.match(/\n__CODE__:(\d+)$/);
-    const code = codeMatch ? parseInt(codeMatch[1]) : 0;
-    const body = codeMatch ? stdout.slice(0, stdout.lastIndexOf("\n__CODE__:")) : stdout;
     const name = endpoint.split("/").slice(-1)[0].split("?")[0];
+    // Try with proxy first, then without if 403/blocked
+    let { code, body } = await tryAjax(endpoint, !!proxyUrl);
+    console.log(`   [proxy=${!!proxyUrl}] ${name}: HTTP ${code} | ${body.slice(0, 150)}`);
 
-    console.log(`   ${name}: HTTP ${code} | ${body.slice(0, 120)}`);
+    if ((code === 403 || code === 0) && proxyUrl) {
+      // Retry without proxy — Hetzner IPs might be blocked for AJAX too
+      const r2 = await tryAjax(endpoint, false);
+      console.log(`   [no-proxy]          ${name}: HTTP ${r2.code} | ${r2.body.slice(0, 150)}`);
+      if (r2.code === 200) { code = r2.code; body = r2.body; }
+    }
 
     if (code === 200 && body.length > 2) {
-      // Try to extract phone from response
-      const pm = body.match(/"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/)
-        ?? body.match(/"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/)
+      const pm = body.match(/"(?:phoneNumberForMobileDialing|formattedPhone|number|phone|contactPhone)"\s*:\s*"([+\d][\d\s\-]{6,18})"/)
         ?? body.match(/([6789]\d{8})/);
       if (pm?.[1]) {
         ajaxPhone = pm[1].trim();
         console.log(`   ✅ TELÉFONO VÍA AJAX: ${ajaxPhone}`);
         break;
+      } else {
+        console.log(`   ⚠️  HTTP 200 pero sin teléfono en respuesta`);
       }
     }
   } catch (e) {
