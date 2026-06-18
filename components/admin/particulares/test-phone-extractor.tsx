@@ -23,6 +23,7 @@ type ExtractionResult = {
     hasPhoneContainer: boolean;
     hasTelHref: boolean;
     hasAppCallback: boolean;
+    telHrefs: string[];
     ajax: AjaxDebugEntry[];
   };
 };
@@ -168,7 +169,7 @@ export function TestPhoneExtractor() {
                     {result.debug.datadomeBlocked && " — ⚠️ DataDome"}
                     {" · "}{result.debug.htmlLength.toLocaleString()} chars
                     {" · "}{result.debug.hasPhoneContainer ? "✓container" : "✗container"}
-                    {" · "}{result.debug.hasTelHref ? "✓tel:" : "✗tel:"}
+                    {" · "}{result.debug.hasTelHref ? `✓tel:(${result.debug.telHrefs.slice(0,3).join(", ")})` : "✗tel:"}
                     {" · "}{result.debug.hasAppCallback ? "✓appcb" : "✗appcb"}
                   </summary>
                   <div className="mt-2 space-y-2">

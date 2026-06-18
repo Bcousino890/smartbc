@@ -50,6 +50,8 @@ export async function POST(req: Request) {
     const hasPhoneContainer = html.includes("contact-phones-container");
     const hasTelHref = /href=["']tel:/.test(html);
     const hasAppCallback = html.includes("appcallback_target_phone");
+    // Sample of ALL tel: hrefs found — to see if any is the property phone
+    const telHrefs = [...html.matchAll(/href=["']tel:([^"']{1,30})["']/g)].map(m => m[1]);
 
     // Primary extraction: importer path
     const preview = await extractIdealista($, url, { proxyUrl });
@@ -93,6 +95,7 @@ export async function POST(req: Request) {
         hasPhoneContainer,
         hasTelHref,
         hasAppCallback,
+        telHrefs,
         ajax: ajaxDebug ?? [],
       },
     });
