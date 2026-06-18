@@ -158,11 +158,13 @@ export async function fetchMultipleAjaxWithCookieJar(
   userAgent: string,
   options?: {
     proxyUrl?: string;
+    pageUserAgent?: string; // UA for initial page load (may be different from AJAX UA)
     ajaxHeaders?: string[];
     timeoutSec?: number;
   },
 ): Promise<MultiAjaxResult> {
   const timeoutSec = options?.timeoutSec ?? 20;
+  const pageUA = options?.pageUserAgent ?? userAgent; // Use custom UA for page load if provided
   const dir = await mkdtemp(join(tmpdir(), "idealista-jar-"));
   const jar = join(dir, "cookies.txt");
   const htmlFile = join(dir, "page.html");
@@ -172,14 +174,15 @@ export async function fetchMultipleAjaxWithCookieJar(
 
   try {
     // Load page once: save cookies AND HTML for DataDome auth extraction
+    // Use browser UA for page load (to get DataDome scripts), but AJAX will use WhatsApp UA
     try {
       await execFileAsync(
         "curl",
-        ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-c", jar, "-o", htmlFile, ...proxyArgs, pageUrl],
+        ["-sS", "-L", "-A", pageUA, "--max-time", String(timeoutSec), "-c", jar, "-o", htmlFile, ...proxyArgs, pageUrl],
         { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
       );
     } catch (pageErr) {
-      console.log(`[multi-ajax-cookie-jar] Curl page load failed: ${pageErr instanceof Error ? pageErr.message : String(pageErr)}`);
+      console.log(`[multi-ajax-cookie-jar] Curl page load failed (UA=${pageUA.slice(0,30)}...): ${pageErr instanceof Error ? pageErr.message : String(pageErr)}`);
     }
 
     let pageHtml: string | null = null;
