@@ -2,18 +2,14 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getFreshProxyUrl } from "./smartproxy-api";
 
-let cachedUrl: string | null | undefined = undefined;
-let cachedTs = 0;
-const CACHE_TTL_MS = 30_000; // 30 seconds (reduced for fresh IPs)
-
 /**
  * Returns a FRESH proxy URL from Smartproxy API (rotated residential IP).
  * Falls back to: DB app_settings["scraping.proxyUrl"] → SMARTPROXY_URL env var → undefined
  *
  * For Smartproxy API rotation:
- * - Reads credentials from app_settings["scraping.smartproxy.username/password"]
- * - Calls Smartproxy API to get a fresh IP each time
- * - Each IP is a different residential IP (rotated to avoid burning one IP)
+ * - Reads app_key from app_settings["scraping.smartproxy.app_key"]
+ * - Calls Smartproxy API v3 endpoint to get a fresh residential IP each time
+ * - Each IP is DIFFERENT (automatic rotation to avoid IP burning)
  *
  * If API fails, falls back to static URL in DB.
  */
@@ -22,26 +18,19 @@ export async function getProxyUrl(): Promise<string | undefined> {
     const db = createAdminClient() as any;
 
     // Try to get fresh IP from Smartproxy API
-    const { data: usernameData } = await db
+    const { data: appKeyData } = await db
       .from("app_settings")
       .select("value")
-      .eq("key", "scraping.smartproxy.username")
+      .eq("key", "scraping.smartproxy.app_key")
       .maybeSingle();
 
-    const { data: passwordData } = await db
-      .from("app_settings")
-      .select("value")
-      .eq("key", "scraping.smartproxy.password")
-      .maybeSingle();
+    const appKey = appKeyData?.value as string | null;
 
-    const username = usernameData?.value as string | null;
-    const password = passwordData?.value as string | null;
-
-    if (username && password) {
+    if (appKey) {
       console.log(`[proxy-config] Attempting to get fresh IP from Smartproxy API...`);
-      const freshUrl = await getFreshProxyUrl(username, password);
+      const freshUrl = await getFreshProxyUrl(appKey);
       if (freshUrl) {
-        console.log(`[proxy-config] ✓ Got fresh IP: ${freshUrl.split("@")[1]}`);
+        console.log(`[proxy-config] ✓ Got fresh IP: ${freshUrl.split("//")[1]}`);
         return freshUrl;
       }
       console.log(`[proxy-config] Smartproxy API failed, falling back to static URL`);
@@ -63,6 +52,5 @@ export async function getProxyUrl(): Promise<string | undefined> {
 }
 
 export function invalidateProxyCache() {
-  cachedUrl = undefined;
-  cachedTs = 0;
+  // No-op now, but keeping for compatibility
 }
