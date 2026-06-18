@@ -29,6 +29,8 @@ export default function AdminConfiguracionPage() {
   const t = useT();
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
+  const [scrapingSmartproxyUsername, setScrapingSmartproxyUsername] = useState("");
+  const [scrapingSmartproxyPassword, setScrapingSmartproxyPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -45,6 +47,12 @@ export default function AdminConfiguracionPage() {
         }));
         if (typeof data["scraping.proxyUrl"] === "string") {
           setScrapingProxyUrl(data["scraping.proxyUrl"]);
+        }
+        if (typeof data["scraping.smartproxy.username"] === "string") {
+          setScrapingSmartproxyUsername(data["scraping.smartproxy.username"]);
+        }
+        if (typeof data["scraping.smartproxy.password"] === "string") {
+          setScrapingSmartproxyPassword(data["scraping.smartproxy.password"]);
         }
       })
       .catch(() => {
@@ -64,6 +72,8 @@ export default function AdminConfiguracionPage() {
           defaults: settings.defaults,
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
+          "scraping.smartproxy.username": scrapingSmartproxyUsername,
+          "scraping.smartproxy.password": scrapingSmartproxyPassword,
         }),
       });
       setSaved(true);
@@ -263,19 +273,44 @@ export default function AdminConfiguracionPage() {
           icon={<Shield size={16} strokeWidth={1.75} />}
           titleKey="config.scraping.title"
         >
-          <div className="space-y-3">
-            <p className="text-xs text-ink/55">
-              Proxy residencial para evitar bloqueos DataDome en Idealista. Formato:{" "}
-              <code className="rounded bg-ink/8 px-1 py-0.5 font-mono text-[11px]">
-                http://usuario:contraseña@host:puerto
-              </code>
-            </p>
-            <PasswordField
-              label="URL del proxy"
-              value={scrapingProxyUrl}
-              onChange={setScrapingProxyUrl}
-              placeholder="http://smart-b04nrjtamr8a_area-ES_city-MADRID:…@eu.smartproxy.net:3120"
-            />
+          <div className="space-y-4">
+            <div>
+              <p className="mb-3 text-xs font-medium text-ink/70">Rotación de IPs (Smartproxy API)</p>
+              <p className="mb-3 text-xs text-ink/55">
+                Obtiene IPs frescas automáticamente para evitar que DataDome las queme. Más robusto que URL estática.
+              </p>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={scrapingSmartproxyUsername}
+                  onChange={(e) => setScrapingSmartproxyUsername(e.target.value)}
+                  placeholder="Usuario Smartproxy (ej: smart-b04nrjtamr8a)"
+                  className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/55 focus:outline-none"
+                />
+                <PasswordField
+                  label="Contraseña Smartproxy"
+                  value={scrapingSmartproxyPassword}
+                  onChange={setScrapingSmartproxyPassword}
+                  placeholder="ZLOutsGkCC5kgmwS"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-ink/10 pt-4">
+              <p className="mb-3 text-xs font-medium text-ink/70">URL Estática (Fallback)</p>
+              <p className="mb-3 text-xs text-ink/55">
+                Si la rotación API falla, usa esta URL. Formato:{" "}
+                <code className="rounded bg-ink/8 px-1 py-0.5 font-mono text-[11px]">
+                  http://usuario:contraseña@host:puerto
+                </code>
+              </p>
+              <PasswordField
+                label="URL del proxy"
+                value={scrapingProxyUrl}
+                onChange={setScrapingProxyUrl}
+                placeholder="http://smart-b04nrjtamr8a_area-ES_city-MADRID:…@eu.smartproxy.net:3120"
+              />
+            </div>
           </div>
         </SettingsSection>
 
