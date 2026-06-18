@@ -411,7 +411,7 @@ export async function fetchIdealistaPhoneViaAjax(
 ): Promise<AjaxPhoneResult> {
   // Import dinámico para no arrastrar child_process a contextos que solo
   // usan normalizeSpanishPhone/detectAdvertiserFromHtml.
-  const { fetchAjaxWithCookieJar } = await import(
+  const { fetchMultipleAjaxWithCookieJar } = await import(
     "@/lib/sync/import-by-link/fetch-via-curl"
   );
 
@@ -419,123 +419,119 @@ export async function fetchIdealistaPhoneViaAjax(
   const debug: AjaxPhoneResult["debug"] = options?.debug ? [] : undefined;
   const endpoints = idealistaPhoneEndpoints(adId);
 
-  console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId}`);
-  console.log(`[idealista-phone-ajax] Intentando ${endpoints.length} endpoints`);
+  console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);
 
-  for (let i = 0; i < endpoints.length; i++) {
+  // Load the page once, then try all AJAX endpoints reusing the same cookie jar.
+  const responses = await fetchMultipleAjaxWithCookieJar(
+    pageUrl,
+    endpoints,
+    WHATSAPP_UA_FOR_AJAX,
+    {
+      proxyUrl: options?.proxyUrl,
+      timeoutSec: 30,
+      ajaxHeaders: [
+        "X-Requested-With: XMLHttpRequest",
+        "Accept: application/json, text/javascript, */*; q=0.01",
+        `Referer: ${pageUrl}`,
+      ],
+    },
+  );
+
+  const phonePatterns = [
+    /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"formattedPhone(?:Number)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"nationalNumber"\s*:\s*"?([+\d][\d\s\-]{6,18})"?/,
+    /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"phoneNumber"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"contactPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"ownerPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"mobilePhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"phone\d?"\s*:\s*\{[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"mainPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"displayPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"type"\s*:\s*"PHONE"[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"[^}]{0,80}"type"\s*:\s*"PHONE"/,
+    /[\s,:\[]([6789]\d{8})[\s,\]"\n]/,
+    /wa\.me\/(?:34)?([6789]\d{8})/,
+    /wa\.me\/\?phone=(?:34)?([6789]\d{8})/,
+    /phoneNumber\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+  ];
+
+  for (let i = 0; i < responses.length; i++) {
+    const res = responses[i];
     const endpoint = endpoints[i];
-    console.log(`[idealista-phone-ajax] Endpoint ${i + 1}/${endpoints.length}: ${endpoint}`);
 
-    try {
-      const res = await fetchAjaxWithCookieJar(
-        pageUrl,
-        endpoint,
-        WHATSAPP_UA_FOR_AJAX,
-        {
-          proxyUrl: options?.proxyUrl,
-          timeoutSec: 30,
-          ajaxHeaders: [
-            "X-Requested-With: XMLHttpRequest",
-            "Accept: application/json, text/javascript, */*; q=0.01",
-            `Referer: ${pageUrl}`,
-          ],
-        },
-      );
+    if (debug) {
+      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 300) });
+    }
 
-      if (debug) {
-        debug.push({
-          endpoint,
-          status: res.status,
-          bodySnippet: (res.body ?? "").slice(0, 300),
-        });
+    console.log(`[idealista-phone-ajax] ${endpoint.split("/").slice(-2).join("/")} → HTTP ${res.status}`);
+
+    if (!res.ok || !res.body) continue;
+
+    const body = res.body;
+    let phone: string | null = null;
+    for (const pattern of phonePatterns) {
+      const m = body.match(pattern);
+      if (m?.[1]) {
+        phone = acceptPhoneCandidate(m[1], adId.slice(-9));
+        if (phone) break;
       }
+    }
 
-      console.log(`[idealista-phone-ajax] HTTP ${res.status} from ${endpoint}`);
+    const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
+    const contact_name = cn?.[1]?.trim() ?? null;
 
-      if (!res.ok) {
-        console.log(`[idealista-phone-ajax] Response not OK (status=${res.status})`);
-        continue;
-      }
-
-      if (!res.body) {
-        console.log(`[idealista-phone-ajax] Response body is empty`);
-        continue;
-      }
-
-      const body = res.body;
-      console.log(`[idealista-phone-ajax] Body length: ${body.length} chars`);
-      console.log(`[idealista-phone-ajax] Body preview: ${body.slice(0, 200)}`);
-
-      // Campos de teléfono conocidos en las respuestas de estos endpoints
-      // (la estructura varía: phone1.number, formattedPhone, phone…).
-      const patterns = [
-        /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"formattedPhone(?:Number)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"nationalNumber"\s*:\s*"?([+\d][\d\s\-]{6,18})"?/,
-        /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"phoneNumber"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"contactPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"ownerPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"mobilePhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        // phone1/phone2 nested structure: {"phone1":{"number":"6XXXXXXXX",...}}
-        /"phone\d?"\s*:\s*\{[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"mainPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"displayPhone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        // contactMethods array: [{"type":"PHONE","number":"6XXXXXXXX"}, {"type":"CHAT"}]
-        // Aparece en el endpoint /es/ajax/ads/{id}/contact para listings "chat only"
-        // que también tienen número registrado.
-        /"type"\s*:\s*"PHONE"[^}]{0,80}"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"[^}]{0,80}"type"\s*:\s*"PHONE"/,
-        // Particulares: sometimes just "6XXXXXXXX" in plain text fields
-        /[\s,:\[]([6789]\d{8})[\s,\]"\n]/,
-        // WhatsApp deeplink in JSON body (some listings expose only wa.me)
-        /wa\.me\/(?:34)?([6789]\d{8})/,
-        // WhatsApp deeplink in query-param form: wa.me/?phone=34XXXXXXXXX
-        /wa\.me\/\?phone=(?:34)?([6789]\d{8})/,
-        // Unquoted JS-style fields
-        /phoneNumber\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-        /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-      ];
-      let phone: string | null = null;
-      let matchedPattern = -1;
-      for (let j = 0; j < patterns.length; j++) {
-        const pattern = patterns[j];
-        const m = body.match(pattern);
-        if (m?.[1]) {
-          console.log(`[idealista-phone-ajax] Patrón ${j + 1} coincide: ${m[1]}`);
-          // Descartar la referencia del anuncio si se cuela como candidato.
-          phone = acceptPhoneCandidate(m[1], adId.slice(-9));
-          if (phone) {
-            console.log(`[idealista-phone-ajax] ✓ Teléfono validado: ${phone}`);
-            matchedPattern = j;
-            break;
-          } else {
-            console.log(`[idealista-phone-ajax] ✗ Candidato rechazado: ${m[1]}`);
-          }
-        }
-      }
-
-      const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
-      const contact_name = cn?.[1]?.trim() ?? null;
-
-      if (phone) {
-        console.log(`[idealista-phone-ajax] ✓ ÉXITO: adId=${adId}, phone=${phone}, endpoint=${i + 1}`);
-        return { phone, phone_confidence: "high", contact_name, debug };
-      }
-
-      if (!phone && matchedPattern >= 0) {
-        console.log(`[idealista-phone-ajax] Patrón encontró candidato pero no es válido`);
-      } else if (!phone) {
-        console.log(`[idealista-phone-ajax] Ningún patrón coincidió en esta respuesta`);
-      }
-    } catch (err) {
-      console.error(`[idealista-phone-ajax] Error en endpoint ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
-      continue;
+    if (phone) {
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía curl: adId=${adId}, phone=${phone}`);
+      return { phone, phone_confidence: "high", contact_name, debug };
     }
   }
 
-  console.log(`[idealista-phone-ajax] ✗ FALLO: No se encontró teléfono para adId=${adId} tras intentar ${endpoints.length} endpoints`);
+  console.log(`[idealista-phone-ajax] ✗ Curl fallido (${endpoints.length} endpoints). Intentando Playwright...`);
+
+  try {
+    const { fetchIdealistaPhoneViaPlaywright } = await import(
+      "@/lib/sync/particulares/fetch-phone-with-playwright"
+    );
+    const pwResult = await fetchIdealistaPhoneViaPlaywright(adId, {
+      proxyUrl: options?.proxyUrl,
+    });
+
+    if (debug) {
+      debug.push({
+        endpoint: `playwright://inmueble/${adId}/`,
+        status: pwResult.phone ? 200 : (pwResult.error?.includes("blocked") ? 403 : 0),
+        bodySnippet: pwResult.error
+          ? `Error: ${pwResult.error}`
+          : pwResult.phone
+            ? `phone=${pwResult.phone}`
+            : "sin teléfono",
+      });
+    }
+
+    if (pwResult.phone) {
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía Playwright: adId=${adId}, phone=${pwResult.phone}`);
+      return {
+        phone: pwResult.phone,
+        phone_confidence: "high",
+        contact_name: pwResult.contactName ?? null,
+        debug,
+      };
+    }
+
+    console.log(`[idealista-phone-ajax] Playwright: ${pwResult.error ?? "sin teléfono"}`);
+  } catch (pwErr) {
+    const msg = pwErr instanceof Error ? pwErr.message : String(pwErr);
+    console.error(`[idealista-phone-ajax] Playwright error: ${msg}`);
+    if (debug) {
+      debug.push({ endpoint: "playwright://error", status: 0, bodySnippet: msg });
+    }
+  }
+
+  console.log(`[idealista-phone-ajax] ✗ FALLO TOTAL: No se encontró teléfono para adId=${adId}`);
   return { phone: null, phone_confidence: null, contact_name: null, debug };
 }
 

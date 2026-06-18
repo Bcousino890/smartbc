@@ -55,6 +55,14 @@ if [ -f "package.json" ]; then
   npm ci --production 2>&1 | grep -E "^added|^up to date" || true
 fi
 
+# Instalar Chromium para Playwright (extracción de teléfonos de Idealista).
+# playwright ahora está en dependencies, así que node_modules/.bin/playwright existe.
+# La instalación es idempotente: si Chromium ya está en ~/.cache/ms-playwright, tarda < 1s.
+if [ -f "node_modules/.bin/playwright" ]; then
+  echo "🌐 Verificando Chromium para Playwright..."
+  node_modules/.bin/playwright install chromium --with-deps 2>&1 | tail -3 || echo "⚠️  Chromium install falló (la extracción de teléfonos usará solo curl)"
+fi
+
 # Build de Next.js
 if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
   echo "🔨 Compilando Next.js..."

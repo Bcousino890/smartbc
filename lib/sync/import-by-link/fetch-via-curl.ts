@@ -141,6 +141,61 @@ export type CookieJarFetchResult = {
   reason?: string;
 };
 
+// Like fetchAjaxWithCookieJar but loads the page only ONCE and tries all
+// ajaxUrls in sequence reusing the same cookie jar. Much faster than calling
+// fetchAjaxWithCookieJar separately for each endpoint (avoids N page loads).
+export async function fetchMultipleAjaxWithCookieJar(
+  pageUrl: string,
+  ajaxUrls: string[],
+  userAgent: string,
+  options?: {
+    proxyUrl?: string;
+    ajaxHeaders?: string[];
+    timeoutSec?: number;
+  },
+): Promise<CookieJarFetchResult[]> {
+  const timeoutSec = options?.timeoutSec ?? 20;
+  const dir = await mkdtemp(join(tmpdir(), "idealista-jar-"));
+  const jar = join(dir, "cookies.txt");
+  const proxyArgs = options?.proxyUrl
+    ? ["--proxytunnel", "-x", options.proxyUrl]
+    : [];
+
+  try {
+    // Load page once to seed the cookie jar
+    await execFileAsync(
+      "curl",
+      ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-c", jar, "-o", "/dev/null", ...proxyArgs, pageUrl],
+      { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
+    ).catch(() => null);
+
+    const headerArgs: string[] = [];
+    for (const h of options?.ajaxHeaders ?? []) headerArgs.push("-H", h);
+
+    const results: CookieJarFetchResult[] = [];
+    for (const ajaxUrl of ajaxUrls) {
+      try {
+        const { stdout } = await execFileAsync(
+          "curl",
+          ["-sS", "-L", "-A", userAgent, "--max-time", String(timeoutSec), "-b", jar, "-c", jar, "-w", "\\n__HTTP_CODE__:%{http_code}", ...headerArgs, ...proxyArgs, ajaxUrl],
+          { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
+        );
+        const marker = stdout.lastIndexOf("\n__HTTP_CODE__:");
+        const body = marker === -1 ? stdout : stdout.slice(0, marker);
+        const status = marker === -1 ? 0 : Number.parseInt(stdout.slice(marker + "\n__HTTP_CODE__:".length).trim(), 10);
+        results.push({ ok: status >= 200 && status < 300, status, body });
+      } catch (err) {
+        results.push({ ok: false, status: 0, body: "", reason: err instanceof Error ? err.message : "error curl" });
+      }
+    }
+    return results;
+  } catch (err) {
+    return ajaxUrls.map(() => ({ ok: false, status: 0, body: "", reason: err instanceof Error ? err.message : "error curl" }));
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function fetchAjaxWithCookieJar(
   pageUrl: string,
   ajaxUrl: string,
