@@ -45,10 +45,10 @@ export async function signInAction(
 
   const { data } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
-  const profile = data as { role: UserRole } | null;
+  const profile = data as { role: UserRole; country?: string } | null;
 
   if (!profile) {
     await supabase.auth.signOut();
@@ -66,7 +66,8 @@ export async function signInAction(
 
   const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   if (staffRoles.includes(profile.role)) {
-    redirect("/admin");
+    const country = profile.country ?? "es";
+    redirect(`/${country}/admin`);
   }
   redirect("/inicio");
 }
