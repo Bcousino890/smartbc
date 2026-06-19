@@ -98,7 +98,7 @@ export async function solveDatadomeWithCapSolver(
         console.error(`[capsolver] Poll error ${pollData.errorId}: ${pollData.errorDescription}`);
         return {
           token: null,
-          error: `Poll error ${pollData.errorId}`,
+          error: `Poll error ${pollData.errorId}: ${pollData.errorDescription || "unknown"}`,
         };
       }
 

@@ -309,6 +309,63 @@ export async function fetchIdealistaPhoneViaPlaywright(
       await page.waitForTimeout(500);
     }
 
+    // If AJAX was blocked by DataDome (even after clicking), attempt CapSolver
+    if (!phoneFromAjax && !clicked) {
+      console.log(`[playwright-phone] AJAX blocked or not available. Attempting CapSolver to resolve CAPTCHA...`);
+      const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
+      const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+
+      try {
+        const proxyUrl = await getResidentialProxyUrl();
+        const solverResult = await solveDatadomeWithCapSolver(pageUrl, BROWSER_UA, { proxyUrl });
+
+        if (solverResult.token) {
+          console.log(`[playwright-phone] CAPTCHA solved, applying token and retrying AJAX...`);
+          await page
+            .context()
+            .addCookies([
+              {
+                name: "datadome",
+                value: solverResult.token,
+                domain: ".idealista.com",
+                path: "/",
+                expires: Date.now() / 1000 + 3600,
+              },
+            ])
+            .catch(() => {});
+
+          // Reload to apply cookie
+          await page.reload({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+
+          // Reset AJAX capture and try clicking again
+          phoneFromAjax = null;
+          ajaxCaptured = false;
+
+          for (const sel of selectors) {
+            try {
+              const el = page.locator(sel).first();
+              const visible = await el.isVisible({ timeout: 2000 }).catch(() => false);
+              if (visible) {
+                await el.click({ timeout: 5000 });
+                console.log(`[playwright-phone] Clicked after CapSolver: ${sel}`);
+                break;
+              }
+            } catch {}
+          }
+
+          // Wait for AJAX after CapSolver
+          for (let i = 0; i < 20 && !ajaxCaptured; i++) {
+            await page.waitForTimeout(500);
+          }
+        } else {
+          console.log(`[playwright-phone] CapSolver failed: ${solverResult.error}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[playwright-phone] CapSolver fallback error: ${msg}`);
+      }
+    }
+
     // DOM fallback: check if phone was injected into the page after clicking
     if (!phoneFromAjax) {
       const domPhone = await page.evaluate(() => {
