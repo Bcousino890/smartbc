@@ -30,6 +30,7 @@ export default function AdminConfiguracionPage() {
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
   const [scrapingAppKey, setScrapingAppKey] = useState("");
+  const [scrapingCapSolverKey, setScrapingCapSolverKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -55,6 +56,9 @@ export default function AdminConfiguracionPage() {
           }
           setScrapingAppKey(key);
         }
+        if (typeof data["scraping.capsolver.api_key"] === "string") {
+          setScrapingCapSolverKey(data["scraping.capsolver.api_key"]);
+        }
       })
       .catch(() => {
         // Si falla la carga, se mantienen los valores mock
@@ -74,6 +78,7 @@ export default function AdminConfiguracionPage() {
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
           "scraping.smartproxy.app_key": scrapingAppKey,
+          "scraping.capsolver.api_key": scrapingCapSolverKey,
         }),
       });
       setSaved(true);
@@ -283,7 +288,16 @@ export default function AdminConfiguracionPage() {
               onChange={setScrapingAppKey}
               placeholder="9cf8f476185ea51d90a811dfedf19974"
             />
-            <p className="text-xs text-ink/55 pt-1">
+            <p className="text-xs text-ink/55 pt-3">
+              CapSolver API Key para resolver CAPTCHAs de DataDome automáticamente:
+            </p>
+            <PasswordField
+              label="CapSolver API Key"
+              value={scrapingCapSolverKey}
+              onChange={setScrapingCapSolverKey}
+              placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            />
+            <p className="text-xs text-ink/55 pt-3">
               URL de proxy estático (fallback si la API falla):
             </p>
             <PasswordField
