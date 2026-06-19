@@ -67,35 +67,15 @@ export async function fetchIdealistaPhoneViaPlaywright(
   console.log(`[playwright-phone] Iniciando para adId=${adId}`);
 
   try {
-    // Try rebrowser-playwright first: patches CDP Runtime.Enable detection that
-    // DataDome uses to identify headless Chrome. Falls back to playwright-extra
-    // + stealth if rebrowser-playwright is not installed.
+    // Use playwright-extra + stealth plugin to reduce headless detection.
+    // (rebrowser-playwright was removed — incompatible with Ubuntu 26.04 on the VPS.)
     let chromium: { launch: (...args: unknown[]) => Promise<unknown> };
-    let usingRebrowser = false;
-    try {
-      // Ensure rebrowser binaries are installed
-      const rb = await import("rebrowser-playwright");
-      try {
-        const installer = await import("rebrowser-playwright/lib/installer");
-        await (installer as any).downloadBrowsersForNpmInstall?.();
-      } catch {
-        // Ignore if installer not available
-      }
-      chromium = rb.chromium as unknown as typeof chromium;
-      usingRebrowser = true;
-      console.log(`[playwright-phone] Using rebrowser-playwright (anti-CDP-detection)`);
-    } catch (rbErr) {
-      console.log(
-        `[playwright-phone] rebrowser-playwright not available: ${rbErr instanceof Error ? rbErr.message.slice(0, 80) : "unknown error"}`,
-      );
-      const { chromium: pwChromium } = await import("playwright-extra");
-      const stealthMod = await import("puppeteer-extra-plugin-stealth");
-      const stealth = (stealthMod as unknown as { default: () => unknown }).default();
-      (pwChromium as unknown as { use: (p: unknown) => void }).use(stealth);
-      chromium = pwChromium as unknown as typeof chromium;
-      console.log(`[playwright-phone] Using playwright-extra + stealth`);
-    }
-    void usingRebrowser;
+    const { chromium: pwChromium } = await import("playwright-extra");
+    const stealthMod = await import("puppeteer-extra-plugin-stealth");
+    const stealth = (stealthMod as unknown as { default: () => unknown }).default();
+    (pwChromium as unknown as { use: (p: unknown) => void }).use(stealth);
+    chromium = pwChromium as unknown as typeof chromium;
+    console.log(`[playwright-phone] Using playwright-extra + stealth`);
 
     // For Playwright we prefer the static residential proxy (eu.smartproxy.net)
     // because it uses real ISP IPs. The dynamic IP-list API returns datacenter
