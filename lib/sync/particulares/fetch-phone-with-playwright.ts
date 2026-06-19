@@ -210,12 +210,83 @@ export async function fetchIdealistaPhoneViaPlaywright(
     }
 
     if (pageBlocked) {
-      return {
-        phone: null,
-        phoneConfidence: null,
-        contactName: null,
-        error: "DataDome blocked page load",
-      };
+      // Try CapSolver to solve DataDome CAPTCHA
+      console.log(`[playwright-phone] Attempting DataDome CAPTCHA solution via CapSolver...`);
+      const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
+      const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+
+      try {
+        const proxyUrl = await getResidentialProxyUrl();
+        const solverResult = await solveDatadomeWithCapSolver(pageUrl, BROWSER_UA, { proxyUrl });
+
+        if (solverResult.token) {
+          // Use token as cookie. DataDome typically uses "dd" or similar cookie name
+          // CapSolver returns the raw token; we store it as a datadome cookie
+          await page
+            .context()
+            .addCookies([
+              {
+                name: "datadome",
+                value: solverResult.token,
+                domain: ".idealista.com",
+                path: "/",
+                expires: Date.now() / 1000 + 3600, // 1 hour
+              },
+            ])
+            .catch(() => {
+              // If cookie fails, continue anyway
+            });
+
+          console.log(`[playwright-phone] CAPTCHA token applied, reloading page...`);
+          // Reload with CAPTCHA token
+          await page.reload({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+          const reloadTitle = await page.title().catch(() => "");
+          console.log(`[playwright-phone] Title after reload: "${reloadTitle.slice(0, 60)}"`);
+
+          // If page still blocked after token, give up
+          if (reloadTitle === "idealista.com" || reloadTitle === "") {
+            console.log(`[playwright-phone] Page still blocked after token, giving up`);
+            return {
+              phone: null,
+              phoneConfidence: null,
+              contactName: null,
+              error: "DataDome CAPTCHA not resolved",
+            };
+          }
+
+          // Page loaded, continue to extract phone
+          pageBlocked = false;
+        } else {
+          console.log(
+            `[playwright-phone] CapSolver failed: ${solverResult.error}, giving up`,
+          );
+          return {
+            phone: null,
+            phoneConfidence: null,
+            contactName: null,
+            error: `CapSolver failed: ${solverResult.error}`,
+          };
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[playwright-phone] CapSolver error: ${msg}`);
+        return {
+          phone: null,
+          phoneConfidence: null,
+          contactName: null,
+          error: `CapSolver error: ${msg}`,
+        };
+      }
+
+      // If pageBlocked still true after trying CapSolver, fail
+      if (pageBlocked) {
+        return {
+          phone: null,
+          phoneConfidence: null,
+          contactName: null,
+          error: "DataDome blocked page load",
+        };
+      }
     }
 
     // Short wait for any post-load JS
