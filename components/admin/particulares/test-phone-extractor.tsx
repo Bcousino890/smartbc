@@ -163,31 +163,24 @@ export function TestPhoneExtractor() {
               )}
 
               {result.debug && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink/50 hover:text-ink/70">
-                    Debug AJAX ({result.debug.ajax.length} endpoints)
-                    {result.debug.datadomeBlocked && " — ⚠️ DataDome"}
-                    {" · "}{result.debug.htmlLength.toLocaleString()} chars
-                    {" · "}{result.debug.hasPhoneContainer ? "✓container" : "✗container"}
-                    {" · "}{result.debug.hasTelHref ? `✓tel:(${result.debug.telHrefs.slice(0,3).join(", ")})` : "✗tel:"}
-                    {" · "}{result.debug.hasAppCallback ? "✓appcb" : "✗appcb"}
+                <details className="mt-2 group">
+                  <summary className="cursor-pointer select-none text-[10px] font-medium text-ink/40 hover:text-ink/60 group-open:text-ink/70 transition">
+                    📊 Debug AJAX ({result.debug.ajax.length} endpoints) {result.debug.datadomeBlocked && "⚠️"}
                   </summary>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 max-h-[240px] overflow-y-auto rounded-lg bg-ink/3 p-2 space-y-1">
                     {result.debug.ajax.map((entry, i) => (
-                      <div key={i} className="rounded bg-ink/5 p-2 text-[11px]">
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "font-mono font-bold",
-                            entry.status === 200 ? "text-emerald-700" : "text-red-600"
-                          )}>
-                            {entry.status}
-                          </span>
-                          <span className="truncate text-ink/60">{entry.endpoint}</span>
-                        </div>
-                        {entry.bodySnippet && (
-                          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-ink/70">
-                            {entry.bodySnippet}
-                          </pre>
+                      <div key={i} className="text-[10px] font-mono text-ink/60 hover:text-ink/80 transition">
+                        <span className={cn(
+                          "font-bold mr-2",
+                          entry.status === 200 ? "text-emerald-600" : "text-red-600"
+                        )}>
+                          {entry.status}
+                        </span>
+                        <span className="truncate">{entry.endpoint.split("/").pop()}</span>
+                        {entry.bodySnippet && entry.bodySnippet.length > 0 && (
+                          <div className="mt-0.5 text-[9px] text-ink/40 truncate max-w-[280px]">
+                            {entry.bodySnippet.slice(0, 60)}...
+                          </div>
                         )}
                       </div>
                     ))}
