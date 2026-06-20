@@ -46,19 +46,6 @@ export async function signInAction(
 
   // HARDCODED ADMIN: bypass DB for this email, always allow in
   if (user.email?.toLowerCase() === "benjamincousino1@gmail.com") {
-    // Try to create profile in background (don't block login)
-    try {
-      const adminClient = createAdminClient();
-      await adminClient.from("profiles").insert({
-        id: user.id,
-        email: user.email,
-        full_name: "Benjamin Cousino",
-        role: "admin",
-        country: "es",
-      });
-    } catch {
-      // Ignore - user still gets in
-    }
     revalidatePath("/", "layout");
     redirect("/es/admin");
   }
