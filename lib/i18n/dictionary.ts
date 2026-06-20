@@ -770,6 +770,17 @@ const es: Strings = {
   "adminProps.new.field.description": "Descripción larga",
   "adminProps.new.field.description.placeholder":
     "Detalles de la propiedad, vecindario, vistas, particularidades…",
+  "adminProps.new.section.photos": "Fotos",
+  "adminProps.new.photos.hint":
+    "Arrastra las fotos aquí o pulsa para elegir. La primera será la portada.",
+  "adminProps.new.photos.add": "Añadir fotos",
+  "adminProps.new.photos.cover": "Portada",
+  "adminProps.new.photos.remove": "Quitar foto",
+  "adminProps.new.photos.count": "{n} foto(s) seleccionada(s)",
+  "adminProps.new.photos.uploading": "Subiendo fotos…",
+  "adminProps.new.photos.invalidType": "Solo se admiten imágenes.",
+  "adminProps.new.photos.uploadFailed":
+    "La propiedad se creó, pero algunas fotos no se subieron.",
   "adminProps.new.create": "Crear propiedad",
   "adminProps.new.creating": "Creando…",
   "adminProps.new.error.titleRequired": "El título es obligatorio.",
@@ -1748,6 +1759,17 @@ const en: Strings = {
   "adminProps.new.field.description": "Long description",
   "adminProps.new.field.description.placeholder":
     "Details about the property, neighborhood, views…",
+  "adminProps.new.section.photos": "Photos",
+  "adminProps.new.photos.hint":
+    "Drag photos here or click to choose. The first one is the cover.",
+  "adminProps.new.photos.add": "Add photos",
+  "adminProps.new.photos.cover": "Cover",
+  "adminProps.new.photos.remove": "Remove photo",
+  "adminProps.new.photos.count": "{n} photo(s) selected",
+  "adminProps.new.photos.uploading": "Uploading photos…",
+  "adminProps.new.photos.invalidType": "Only images are allowed.",
+  "adminProps.new.photos.uploadFailed":
+    "The property was created, but some photos failed to upload.",
   "adminProps.new.create": "Create property",
   "adminProps.new.creating": "Creating…",
   "adminProps.new.error.titleRequired": "Title is required.",
