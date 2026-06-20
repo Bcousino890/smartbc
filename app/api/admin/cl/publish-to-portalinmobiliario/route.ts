@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
-import { publishPropertyToPortalinmobiliario } from "@/lib/sync/portalinmobiliario/publisher";
+import { publishPropertyToML } from "@/lib/sync/portalinmobiliario/ml-publisher";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import type { MlPropertyInput } from "@/lib/sync/portalinmobiliario/ml-publisher";
 
 export async function POST(request: Request) {
   try {
@@ -13,72 +14,84 @@ export async function POST(request: Request) {
     const userCountry = (profile as any).country ?? "es";
     if (userCountry !== "cl") {
       return NextResponse.json(
-        { error: "This endpoint is only for Chile users" },
+        { error: "Only Chile users can publish to Portalinmobiliario" },
         { status: 403 }
       );
     }
 
     const { propertyId } = await request.json();
     if (!propertyId) {
-      return NextResponse.json(
-        { error: "propertyId is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
     }
 
     const db = createAdminClient() as any;
 
-    // Fetch property from database
     const { data: property, error } = await db
       .from("properties")
-      .select("id, title, description, price, address, bedrooms, bathrooms, square_meters")
+      .select("id, title, description, price, address, bedrooms, bathrooms, square_meters, operation, country")
       .eq("id", propertyId)
       .eq("country", "cl")
       .maybeSingle();
 
     if (error || !property) {
-      return NextResponse.json(
-        { error: "Property not found or not accessible" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Propiedad no encontrada" }, { status: 404 });
     }
 
-    // Fetch property photos
     const { data: photos } = await db
       .from("property_photos")
       .select("url")
       .eq("property_id", propertyId)
       .order("position", { ascending: true });
 
-    const imageUrls = (photos || []).map((p: any) => p.url);
+    const imageUrls: string[] = (photos || []).map((p: any) => p.url);
 
-    // Publish to Portalinmobiliario
-    const result = await publishPropertyToPortalinmobiliario({
+    if (imageUrls.length < 4) {
+      return NextResponse.json(
+        { error: `Se necesitan al menos 4 fotos (tienes ${imageUrls.length})` },
+        { status: 400 }
+      );
+    }
+
+    const input: MlPropertyInput = {
       title: property.title,
-      description: property.description || "",
+      description: property.description ?? "",
       price: property.price,
-      address: property.address || "",
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      squareMeters: property.square_meters,
+      currency: "UF",
+      operation: property.operation === "rent" ? "rent" : "sale",
       propertyType: "apartment",
+      address: property.address ?? "",
+      commune: "",
+      region: "",
+      bedrooms: property.bedrooms ?? 0,
+      bathrooms: property.bathrooms ?? 0,
+      totalAreaM2: property.square_meters,
       imageUrls,
-    });
+      listingType: "gold_special",
+    };
+
+    const result = await publishPropertyToML(input);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    // TODO: Save Portalinmobiliario ID to properties table for tracking
-    // once the API integration is complete
+    // Save ML item ID for tracking
+    await db
+      .from("properties")
+      .update({
+        portalinmobiliario_id: result.itemId,
+        portalinmobiliario_published_at: new Date().toISOString(),
+        portalinmobiliario_sync_status: "synced",
+      })
+      .eq("id", propertyId);
 
     return NextResponse.json({
       success: true,
-      portaliId: result.portaliId,
-      url: result.url,
+      itemId: result.itemId,
+      url: result.permalink,
     });
   } catch (err) {
-    console.error("[publish-portalinmobiliario]", err);
+    console.error("[publish-to-portalinmobiliario]", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 }
