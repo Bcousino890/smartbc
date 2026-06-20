@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import type { UserRole } from "@/lib/db/database.types";
 
 const credentialsSchema = z.object({
@@ -43,12 +44,42 @@ export async function signInAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "auth.error.invalidCredentials" };
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("profiles")
     .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
-  const profile = data as { role: UserRole; country?: string } | null;
+  let profile = data as { role: UserRole; country?: string } | null;
+
+  // If profile doesn't exist, create it automatically
+  if (!profile) {
+    const adminEmail = "benjamincousino1@gmail.com";
+    const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
+    const initialRole = isAdmin ? "admin" : (parsed.data.role === "admin" ? "admin" : "client");
+
+    // Use admin client to bypass RLS
+    const adminClient = createAdminClient();
+
+    const { data: newProfile, error: createError } = await adminClient
+      .from("profiles")
+      .insert({
+        id: user.id,
+        email: user.email,
+        role: initialRole,
+        full_name: user.user_metadata?.full_name || user.email,
+        country: "es",
+      })
+      .select("role, country")
+      .single();
+
+    if (createError) {
+      console.error("Profile creation failed:", createError);
+      await supabase.auth.signOut();
+      return { error: "auth.error.noProfile" };
+    }
+
+    profile = newProfile as { role: UserRole; country?: string } | null;
+  }
 
   if (!profile) {
     await supabase.auth.signOut();
