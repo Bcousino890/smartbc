@@ -56,7 +56,7 @@ export async function signInAction(
     const adminEmail = "benjamincousino1@gmail.com";
     const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
 
-    // Direct insert (simple and reliable)
+    // Direct insert with admin client
     const adminClient = createAdminClient();
     const { data: newProfile, error: insertError } = await adminClient
       .from("profiles")
@@ -66,33 +66,20 @@ export async function signInAction(
         full_name: user.user_metadata?.full_name || user.email,
         role: isAdmin ? "admin" : "client",
         country: "es",
-      }, { count: "exact" })
+      })
       .select("role, country")
-      .maybeSingle();
+      .single();
 
-    // If insert succeeded, use the new profile
+    // Use created profile or fallback
     if (!insertError && newProfile) {
       profile = newProfile;
-    } else if (!insertError) {
-      // Insert succeeded but returned nothing - fetch it
-      const { data: fetched } = await adminClient
-        .from("profiles")
-        .select("role, country")
-        .eq("id", user.id)
-        .maybeSingle();
-      profile = fetched;
     } else {
-      // Insert failed - still allow login but create minimal profile
+      // Fallback: allow login with in-memory profile
       profile = {
-        role: isAdmin ? "admin" : "client",
+        role: isAdmin ? ("admin" as UserRole) : ("client" as UserRole),
         country: "es",
       };
     }
-  }
-
-  if (!profile) {
-    await supabase.auth.signOut();
-    return { error: "auth.error.noProfile" };
   }
 
   if (!profile) {
