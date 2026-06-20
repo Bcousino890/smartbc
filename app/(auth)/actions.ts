@@ -44,64 +44,39 @@ export async function signInAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "auth.error.invalidCredentials" };
 
-  const adminEmail = "benjamincousino1@gmail.com";
-  const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
+  // HARDCODED ADMIN: bypass DB for this email, always allow in
+  if (user.email?.toLowerCase() === "benjamincousino1@gmail.com") {
+    // Try to create profile in background (don't block login)
+    try {
+      const adminClient = createAdminClient();
+      await adminClient.from("profiles").insert({
+        id: user.id,
+        email: user.email,
+        full_name: "Benjamin Cousino",
+        role: "admin",
+        country: "es",
+      });
+    } catch {
+      // Ignore - user still gets in
+    }
+    revalidatePath("/", "layout");
+    redirect("/es/admin");
+  }
 
-  // Try to get profile from DB
-  const { data: existingProfile } = await supabase
+  // All other users: check profile
+  const { data: profile } = await supabase
     .from("profiles")
     .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
 
-  let profile = existingProfile as { role: UserRole; country?: string } | null;
-
-  // If profile doesn't exist in DB, create it with admin client
   if (!profile) {
-    const adminClient = createAdminClient();
-
-    // Attempt insert
-    const { data: inserted, error: insertError } = await adminClient
-      .from("profiles")
-      .insert({
-        id: user.id,
-        email: user.email,
-        full_name: user.user_metadata?.full_name || user.email,
-        role: isAdmin ? "admin" : "client",
-        country: "es",
-      })
-      .select("role, country")
-      .maybeSingle();
-
-    if (!insertError && inserted) {
-      profile = inserted;
-    } else {
-      // Insert failed or returned nothing
-      // Create in-memory profile for immediate use
-      profile = {
-        role: isAdmin ? ("admin" as UserRole) : ("client" as UserRole),
-        country: "es",
-      };
-
-      // Also attempt async profile creation in background (don't wait)
-      adminClient
-        .from("profiles")
-        .insert({
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || user.email,
-          role: isAdmin ? "admin" : "client",
-          country: "es",
-        })
-        .catch(() => {
-          // Silently fail - user already has in-memory profile
-        });
-    }
+    await supabase.auth.signOut();
+    return { error: "auth.error.noProfile" };
   }
 
   revalidatePath("/", "layout");
 
-  // Redirect based on profile role (always has one now, either from DB or memory)
   const staffRoles = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   if (staffRoles.includes(profile.role)) {
     redirect(`/${profile.country ?? "es"}/admin`);
