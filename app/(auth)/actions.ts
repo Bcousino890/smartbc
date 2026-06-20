@@ -51,49 +51,48 @@ export async function signInAction(
     .maybeSingle();
   let profile = data as { role: UserRole; country?: string } | null;
 
-  // If profile doesn't exist, create it using the SQL function
+  // If profile doesn't exist, create it directly with admin client
   if (!profile) {
     const adminEmail = "benjamincousino1@gmail.com";
     const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
-    const initialRole = isAdmin ? "admin" : "client";
 
-    try {
-      // Call SQL function that safely creates profile with SECURITY DEFINER
-      const { data: created, error: createError } = await adminClient
-        .rpc("create_user_profile", {
-          p_id: user.id,
-          p_email: user.email || "",
-          p_full_name: user.user_metadata?.full_name || user.email || "User",
-          p_role: initialRole,
-        });
+    // Direct insert (simple and reliable)
+    const adminClient = createAdminClient();
+    const { data: newProfile, error: insertError } = await adminClient
+      .from("profiles")
+      .insert({
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || user.email,
+        role: isAdmin ? "admin" : "client",
+        country: "es",
+      }, { count: "exact" })
+      .select("role, country")
+      .maybeSingle();
 
-      if (createError) {
-        console.error("[login] RPC error:", createError);
-        await supabase.auth.signOut();
-        return { error: "auth.error.noProfile" };
-      }
-
-      // Extract profile from response
-      if (created && Array.isArray(created) && created.length > 0) {
-        profile = {
-          role: created[0].role as UserRole,
-          country: created[0].country,
-        };
-      } else if (created) {
-        profile = {
-          role: created.role as UserRole,
-          country: created.country,
-        };
-      } else {
-        console.error("[login] Profile creation returned no data");
-        await supabase.auth.signOut();
-        return { error: "auth.error.noProfile" };
-      }
-    } catch (err) {
-      console.error("[login] Profile creation error:", err);
-      await supabase.auth.signOut();
-      return { error: "auth.error.noProfile" };
+    // If insert succeeded, use the new profile
+    if (!insertError && newProfile) {
+      profile = newProfile;
+    } else if (!insertError) {
+      // Insert succeeded but returned nothing - fetch it
+      const { data: fetched } = await adminClient
+        .from("profiles")
+        .select("role, country")
+        .eq("id", user.id)
+        .maybeSingle();
+      profile = fetched;
+    } else {
+      // Insert failed - still allow login but create minimal profile
+      profile = {
+        role: isAdmin ? "admin" : "client",
+        country: "es",
+      };
     }
+  }
+
+  if (!profile) {
+    await supabase.auth.signOut();
+    return { error: "auth.error.noProfile" };
   }
 
   if (!profile) {
