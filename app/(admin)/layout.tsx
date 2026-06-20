@@ -114,7 +114,7 @@ export default async function AdminLayout({
           pendingVisits={pendingVisits ?? 0}
           unreadMessages={unreadMessages}
           country={(profile as any).country ?? "es"}
-          canSwitchCountry={["owner", "admin"].includes(profile.role)}
+          canSwitchCountry={profile.role === "admin"}
         />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.

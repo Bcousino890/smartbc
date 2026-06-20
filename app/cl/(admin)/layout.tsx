@@ -18,8 +18,8 @@ export default async function AdminLayout({
   if (!isStaffRole(profile.role)) redirect("/inicio");
 
   // Redirect to the appropriate country dashboard
-  // Multi-country users (owner/admin) can access both dashboards freely
-  const canSwitchCountry = profile.role === "owner" || profile.role === "admin";
+  // Multi-country users (admin) can access both dashboards freely
+  const canSwitchCountry = profile.role === "admin";
   const userCountry = (profile as any).country ?? 'es';
   if (!canSwitchCountry && userCountry !== 'cl') {
     redirect("/es/admin");
@@ -115,7 +115,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} country="cl" canSwitchCountry={profile.role === "owner" || profile.role === "admin"} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} country="cl" canSwitchCountry={canSwitchCountry} />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}

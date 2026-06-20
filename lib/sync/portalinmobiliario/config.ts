@@ -44,7 +44,7 @@ export async function getPortalinmobiliarioSettings() {
     }
 
     return (data || []).reduce(
-      (acc, row: any) => {
+      (acc: Record<string, any>, row: any) => {
         acc[row.key] = row.value;
         return acc;
       },
