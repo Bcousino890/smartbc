@@ -1,24 +1,45 @@
--- Fix missing profile for benjamincousino1@gmail.com
--- This user exists in auth.users but has no profile row
--- Insert the profile with admin role and es country
+-- Auto-create profile for benjamincousino1@gmail.com from auth.users
+-- This function safely creates the missing profile if the auth user exists
 
--- This migration handles the case where a user was created in auth.users
--- before the handle_new_user() trigger was in place or when it failed.
--- The signInAction now auto-creates profiles, but this migration ensures
--- consistency if the user tries to log in before the app code updates.
+CREATE OR REPLACE FUNCTION fix_missing_admin_profiles()
+RETURNS TABLE (success boolean, message text, user_id uuid) AS $$
+DECLARE
+  v_user_id uuid;
+  v_count int;
+BEGIN
+  -- Find the user in auth.users by email
+  SELECT id INTO v_user_id FROM auth.users
+  WHERE email = 'benjamincousino1@gmail.com'
+  LIMIT 1;
 
-INSERT INTO profiles (id, email, role, full_name, country, created_at, updated_at)
-SELECT
-  u.id,
-  u.email,
-  'admin'::user_role,
-  COALESCE(u.raw_user_meta_data->>'full_name', u.email),
-  'es'::text,
-  now(),
-  now()
-FROM auth.users u
-WHERE u.email = 'benjamincousino1@gmail.com'
-  AND NOT EXISTS (
-    SELECT 1 FROM profiles p WHERE p.id = u.id
-  )
-ON CONFLICT (id) DO NOTHING;
+  IF v_user_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 'User not found in auth.users', NULL::uuid;
+    RETURN;
+  END IF;
+
+  -- Check if profile already exists
+  SELECT COUNT(*) INTO v_count FROM profiles WHERE id = v_user_id;
+
+  IF v_count > 0 THEN
+    RETURN QUERY SELECT FALSE, 'Profile already exists', v_user_id;
+    RETURN;
+  END IF;
+
+  -- Create the profile
+  INSERT INTO profiles (id, email, role, full_name, country, created_at, updated_at)
+  VALUES (
+    v_user_id,
+    'benjamincousino1@gmail.com',
+    'admin'::user_role,
+    'Benjamin Cousino',
+    'es',
+    now(),
+    now()
+  );
+
+  RETURN QUERY SELECT TRUE, 'Profile created successfully', v_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Execute the function
+SELECT * FROM fix_missing_admin_profiles();

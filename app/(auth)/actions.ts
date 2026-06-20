@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/db/server";
-import { createAdminClient } from "@/lib/db/admin";
 import type { UserRole } from "@/lib/db/database.types";
 
 const credentialsSchema = z.object({
@@ -44,42 +43,12 @@ export async function signInAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "auth.error.invalidCredentials" };
 
-  let { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
-  let profile = data as { role: UserRole; country?: string } | null;
-
-  // If profile doesn't exist, create it (handles case where auth user was created before trigger)
-  if (!profile) {
-    // Hardcoded admin emails (since env vars are loaded at build time)
-    const ADMIN_EMAILS = ["benjamincousino1@gmail.com"];
-    const shouldBeAdmin = ADMIN_EMAILS.includes(user.email?.toLowerCase() || "");
-    const initialRole = shouldBeAdmin ? "admin" : "client";
-
-    // Use admin client to bypass RLS when creating profile
-    const adminClient = createAdminClient();
-    const { data: newProfile, error: createError } = await adminClient
-      .from("profiles")
-      .insert({
-        id: user.id,
-        email: user.email,
-        role: initialRole,
-        full_name: user.user_metadata?.full_name || user.email,
-        country: "es",
-      })
-      .select("role, country")
-      .single();
-
-    if (createError) {
-      console.error("Failed to create profile:", createError);
-      await supabase.auth.signOut();
-      return { error: "auth.error.noProfile" };
-    }
-
-    profile = newProfile as { role: UserRole; country?: string } | null;
-  }
+  const profile = data as { role: UserRole; country?: string } | null;
 
   if (!profile) {
     await supabase.auth.signOut();
