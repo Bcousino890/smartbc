@@ -57,20 +57,16 @@ export async function signInAction(
     const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
     const initialRole = isAdmin ? "admin" : (parsed.data.role === "admin" ? "admin" : "client");
 
-    // Use admin client to bypass RLS
+    // Use admin client to bypass RLS and call the SQL function
     const adminClient = createAdminClient();
 
     const { data: newProfile, error: createError } = await adminClient
-      .from("profiles")
-      .insert({
-        id: user.id,
-        email: user.email,
-        role: initialRole,
-        full_name: user.user_metadata?.full_name || user.email,
-        country: "es",
-      })
-      .select("role, country")
-      .single();
+      .rpc("create_user_profile", {
+        p_id: user.id,
+        p_email: user.email,
+        p_full_name: user.user_metadata?.full_name || user.email,
+        p_role: initialRole,
+      });
 
     if (createError) {
       console.error("Profile creation failed:", createError);
@@ -78,7 +74,15 @@ export async function signInAction(
       return { error: "auth.error.noProfile" };
     }
 
-    profile = newProfile as { role: UserRole; country?: string } | null;
+    if (newProfile && newProfile.length > 0) {
+      profile = {
+        role: newProfile[0].role as UserRole,
+        country: newProfile[0].country,
+      };
+    } else {
+      await supabase.auth.signOut();
+      return { error: "auth.error.noProfile" };
+    }
   }
 
   if (!profile) {
