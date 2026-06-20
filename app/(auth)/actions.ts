@@ -55,7 +55,7 @@ export async function signInAction(
     return { error: "auth.error.noProfile" };
   }
 
-  const staffRolesForCheck = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  const staffRolesForCheck = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   const requested = parsed.data.role;
   if (requested === "admin" && !staffRolesForCheck.includes(profile.role)) {
     await supabase.auth.signOut();
@@ -64,7 +64,7 @@ export async function signInAction(
 
   revalidatePath("/", "layout");
 
-  const staffRoles = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  const staffRoles = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   if (staffRoles.includes(profile.role)) {
     const country = profile.country ?? "es";
     redirect(`/${country}/admin`);
