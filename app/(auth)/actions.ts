@@ -51,35 +51,46 @@ export async function signInAction(
     .maybeSingle();
   let profile = data as { role: UserRole; country?: string } | null;
 
-  // If profile doesn't exist, create it automatically
+  // If profile doesn't exist, create it using the SQL function
   if (!profile) {
     const adminEmail = "benjamincousino1@gmail.com";
     const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
-    const initialRole = isAdmin ? "admin" : (parsed.data.role === "admin" ? "admin" : "client");
+    const initialRole = isAdmin ? "admin" : "client";
 
-    // Use admin client to bypass RLS and call the SQL function
-    const adminClient = createAdminClient();
+    try {
+      // Call SQL function that safely creates profile with SECURITY DEFINER
+      const { data: created, error: createError } = await adminClient
+        .rpc("create_user_profile", {
+          p_id: user.id,
+          p_email: user.email || "",
+          p_full_name: user.user_metadata?.full_name || user.email || "User",
+          p_role: initialRole,
+        });
 
-    const { data: newProfile, error: createError } = await adminClient
-      .rpc("create_user_profile", {
-        p_id: user.id,
-        p_email: user.email,
-        p_full_name: user.user_metadata?.full_name || user.email,
-        p_role: initialRole,
-      });
+      if (createError) {
+        console.error("[login] RPC error:", createError);
+        await supabase.auth.signOut();
+        return { error: "auth.error.noProfile" };
+      }
 
-    if (createError) {
-      console.error("Profile creation failed:", createError);
-      await supabase.auth.signOut();
-      return { error: "auth.error.noProfile" };
-    }
-
-    if (newProfile && newProfile.length > 0) {
-      profile = {
-        role: newProfile[0].role as UserRole,
-        country: newProfile[0].country,
-      };
-    } else {
+      // Extract profile from response
+      if (created && Array.isArray(created) && created.length > 0) {
+        profile = {
+          role: created[0].role as UserRole,
+          country: created[0].country,
+        };
+      } else if (created) {
+        profile = {
+          role: created.role as UserRole,
+          country: created.country,
+        };
+      } else {
+        console.error("[login] Profile creation returned no data");
+        await supabase.auth.signOut();
+        return { error: "auth.error.noProfile" };
+      }
+    } catch (err) {
+      console.error("[login] Profile creation error:", err);
       await supabase.auth.signOut();
       return { error: "auth.error.noProfile" };
     }
