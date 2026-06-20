@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import type { UserRole } from "@/lib/db/database.types";
 
 const credentialsSchema = z.object({
@@ -52,12 +53,14 @@ export async function signInAction(
 
   // If profile doesn't exist, create it (handles case where auth user was created before trigger)
   if (!profile) {
-    // Check if this email should be an admin
-    const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase());
-    const shouldBeAdmin = adminEmails.includes(user.email?.toLowerCase() || "");
+    // Hardcoded admin emails (since env vars are loaded at build time)
+    const ADMIN_EMAILS = ["benjamincousino1@gmail.com"];
+    const shouldBeAdmin = ADMIN_EMAILS.includes(user.email?.toLowerCase() || "");
     const initialRole = shouldBeAdmin ? "admin" : "client";
 
-    const { data: newProfile, error: createError } = await supabase
+    // Use admin client to bypass RLS when creating profile
+    const adminClient = createAdminClient();
+    const { data: newProfile, error: createError } = await adminClient
       .from("profiles")
       .insert({
         id: user.id,
@@ -70,6 +73,7 @@ export async function signInAction(
       .single();
 
     if (createError) {
+      console.error("Failed to create profile:", createError);
       await supabase.auth.signOut();
       return { error: "auth.error.noProfile" };
     }
