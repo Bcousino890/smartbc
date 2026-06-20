@@ -44,21 +44,24 @@ export async function signInAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "auth.error.invalidCredentials" };
 
-  let { data, error } = await supabase
+  // Get profile or create fallback
+  const adminClient = createAdminClient();
+  const adminEmail = "benjamincousino1@gmail.com";
+  const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
+
+  // Try to get existing profile
+  const { data: existingProfile } = await supabase
     .from("profiles")
     .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
-  let profile = data as { role: UserRole; country?: string } | null;
 
-  // If profile doesn't exist, create it directly with admin client
+  let profile = existingProfile as { role: UserRole; country?: string } | null;
+
+  // If no profile, create one
   if (!profile) {
-    const adminEmail = "benjamincousino1@gmail.com";
-    const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
-
-    // Direct insert with admin client
-    const adminClient = createAdminClient();
-    const { data: newProfile, error: insertError } = await adminClient
+    // Try to insert
+    await adminClient
       .from("profiles")
       .insert({
         id: user.id,
@@ -67,40 +70,30 @@ export async function signInAction(
         role: isAdmin ? "admin" : "client",
         country: "es",
       })
-      .select("role, country")
       .single();
 
-    // Use created profile or fallback
-    if (!insertError && newProfile) {
-      profile = newProfile;
-    } else {
-      // Fallback: allow login with in-memory profile
-      profile = {
-        role: isAdmin ? ("admin" as UserRole) : ("client" as UserRole),
-        country: "es",
-      };
-    }
-  }
+    // Fetch it (or use fallback if insert failed)
+    const { data: created } = await adminClient
+      .from("profiles")
+      .select("role, country")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  if (!profile) {
-    await supabase.auth.signOut();
-    return { error: "auth.error.noProfile" };
-  }
-
-  const staffRolesForCheck = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
-  const requested = parsed.data.role;
-  if (requested === "admin" && !staffRolesForCheck.includes(profile.role)) {
-    await supabase.auth.signOut();
-    return { error: "auth.error.notAdmin" };
+    profile = created || {
+      role: isAdmin ? ("admin" as UserRole) : ("client" as UserRole),
+      country: "es",
+    };
   }
 
   revalidatePath("/", "layout");
 
+  // Always allow login, redirect based on role
   const staffRoles = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
-  if (staffRoles.includes(profile.role)) {
+  if (profile && staffRoles.includes(profile.role)) {
     const country = profile.country ?? "es";
     redirect(`/${country}/admin`);
   }
+
   redirect("/inicio");
 }
 
