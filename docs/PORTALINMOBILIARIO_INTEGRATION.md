@@ -117,32 +117,204 @@ Based on Portalinmobiliario requirements:
 }
 ```
 
+---
+
+## 🇨🇱 Chile: Integración vía MercadoLibre API
+
+**Buenas noticias**: Portalinmobiliario.com está integrado con MercadoLibre y sus propiedades
+se publican en ambas plataformas simultáneamente. La API de MercadoLibre Chile tiene
+documentación pública específica para inmuebles.
+
+### Documentación oficial
+
+- **Guía para inmuebles (Chile)**: https://developers.mercadolibre.cl/es_ar/guia-para-inmuebles
+- **Introducción a la guía**: https://developers.mercadolibre.cl/es_ar/introduccion-guia-de-inmuebles
+- **Portal desarrolladores Chile**: https://developers.mercadolibre.cl
+
+### Flujo de autenticación OAuth 2.0
+
+```
+1. Crear app en: https://developers.mercadolibre.cl → "Mis aplicaciones"
+2. Obtener: APP_ID + SECRET_KEY
+3. Redirigir al usuario a:
+   https://auth.mercadolibre.cl/authorization
+     ?response_type=code
+     &client_id={APP_ID}
+     &redirect_uri={TU_REDIRECT_URI}
+
+4. Intercambiar el code por access_token:
+   POST https://api.mercadolibre.com/oauth/token
+   grant_type=authorization_code
+   &client_id={APP_ID}
+   &client_secret={SECRET_KEY}
+   &code={CODE}
+   &redirect_uri={TU_REDIRECT_URI}
+
+5. Respuesta:
+   { "access_token": "...", "token_type": "Bearer", "expires_in": 21600,
+     "refresh_token": "...", "user_id": 123456789 }
+
+6. Usar en todas las llamadas:
+   Authorization: Bearer {access_token}
+```
+
+> El `access_token` expira en 6 horas. Guardar el `refresh_token` y renovar automáticamente.
+
+### Site ID para Chile
+
+```
+MLC  →  Chile  (mercadolibre.cl)
+```
+
+Todos los endpoints de inmuebles usan `site_id=MLC`.
+
+### Publicar propiedad: endpoint principal
+
+```
+POST https://api.mercadolibre.com/items
+Authorization: Bearer {access_token}
+Content-Type: application/json
+```
+
+**Payload mínimo para inmueble en Chile**:
+```json
+{
+  "site_id": "MLC",
+  "title": "Departamento 3D 2B en Las Condes",
+  "category_id": "MLC1459",
+  "price": 95000000,
+  "currency_id": "CLP",
+  "available_quantity": 1,
+  "buying_mode": "classified",
+  "listing_type_id": "gold_special",
+  "condition": "not_specified",
+  "description": { "plain_text": "Descripción completa..." },
+  "pictures": [
+    { "source": "https://tu-dominio.com/foto1.jpg" },
+    { "source": "https://tu-dominio.com/foto2.jpg" }
+  ],
+  "attributes": [
+    { "id": "BEDROOMS", "value_name": "3" },
+    { "id": "BATHROOMS", "value_name": "2" },
+    { "id": "TOTAL_AREA", "value_name": "85" },
+    { "id": "COVERED_AREA", "value_name": "75" },
+    { "id": "OPERATION", "value_name": "Venta" },
+    { "id": "PROPERTY_TYPE", "value_name": "Departamento" },
+    { "id": "FULL_ADDRESS", "value_name": "Av. Apoquindo 5000, Las Condes, Santiago" },
+    { "id": "PARKING_LOTS", "value_name": "1" }
+  ],
+  "sale_terms": [
+    { "id": "OPERATION", "value_name": "Venta" }
+  ]
+}
+```
+
+### Categorías de inmuebles MLC
+
+| Tipo propiedad     | category_id |
+|--------------------|-------------|
+| Departamento       | MLC1459     |
+| Casa               | MLC1545     |
+| Oficina            | MLC1467     |
+| Local comercial    | MLC1468     |
+| Terreno/Lote       | MLC1578     |
+| Bodega             | MLC101719   |
+| Estacionamiento    | MLC101720   |
+
+### Tipos de publicación (listing_type_id)
+
+| Tipo         | Equivalente          | Descripción                          |
+|--------------|----------------------|--------------------------------------|
+| `free`       | Gratuita             | Visibilidad muy baja                 |
+| `bronze`     | Básica               | Visibilidad normal                   |
+| `silver`     | Plata                | Mayor posicionamiento                |
+| `gold`       | Oro                  | Posicionamiento destacado            |
+| `gold_special` | Oro especial       | Máxima visibilidad (recomendado)     |
+| `gold_premium` | Oro premium        | Posicionamiento exclusivo             |
+
+### Operación: Venta vs Arriendo
+
+El campo `OPERATION` dentro de `attributes` define si es venta o arriendo:
+
+```json
+{ "id": "OPERATION", "value_name": "Venta" }
+// o
+{ "id": "OPERATION", "value_name": "Arriendo" }
+```
+
+> En Chile se usa "Arriendo" (no "Alquiler" como en Argentina)
+
+### Imagen mínimas requeridas
+
+| Tipo propiedad                        | Mínimo |
+|---------------------------------------|--------|
+| Departamento / Casa / Oficina / Lote  | 12     |
+| Local / Bodega / Sitio                | 6      |
+| Estacionamiento                       | 4      |
+
+Dimensiones: mínimo 800×600px (recomendado 1200×900px o superior)
+
+### Endpoints clave
+
+```
+GET  /sites/MLC/categories/tree/MLC1459     → Ver atributos de la categoría
+GET  /categories/MLC1459/attributes         → Lista completa de atributos
+GET  /items/{ITEM_ID}                       → Estado del anuncio
+PUT  /items/{ITEM_ID}                       → Actualizar anuncio
+DELETE /items/{ITEM_ID}                     → Archivar anuncio
+
+POST /items/{ITEM_ID}/descriptions          → Agregar/actualizar descripción
+POST /pictures/items/upload                 → Subir foto (multipart/form-data)
+```
+
+### Variables de entorno a configurar
+
+```env
+# MercadoLibre Chile
+ML_APP_ID=your_app_id
+ML_SECRET_KEY=your_secret_key
+ML_ACCESS_TOKEN=token_del_usuario_agencia
+ML_REFRESH_TOKEN=refresh_token_del_usuario
+ML_USER_ID=user_id_del_vendedor
+```
+
+Guardar en `app_settings` de la DB (clave: `ml.chile.access_token`, etc.)
+
+### Pasos para activar
+
+1. **Crear app en MercadoLibre Chile**: https://developers.mercadolibre.cl → "Mis aplicaciones" → "Crear app"
+2. **Configurar redirect URI**: `https://tudominio.cl/api/cl/ml-callback`
+3. **Completar flujo OAuth**: el usuario de la agencia autoriza la app
+4. **Guardar tokens** en `app_settings` table
+5. **Implementar** `lib/sync/portalinmobiliario/publisher.ts` con los endpoints reales
+
+---
+
 ## MercadoLibre Alternative (If Portalinmobiliario Refuses API)
 
-If Portalinmobiliario doesn't grant certified integrator access:
+Si Portalinmobiliario no otorga acceso como integrador certificado, usar directamente
+**MercadoLibre Real Estate API** (misma empresa, mismas propiedades aparecen en ambas plataformas):
 
-1. Use MercadoLibre Real Estate API instead
-2. MercadoLibre OAuth flow:
-   ```
-   1. Redirect to: https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI
-   2. Exchange code for access_token at: https://api.mercadolibre.com/oauth/token
-   3. Use Bearer token in all API calls
-   ```
-3. Pros: Publicly documented, no gatekeeping
-4. Cons: May not show listings on Portalinmobiliario directly (might only be on MercadoLibre)
+1. Usar API de MercadoLibre Chile: `api.mercadolibre.com` con `site_id=MLC`
+2. Propiedades publicadas vía MercadoLibre **aparecen automáticamente en Portalinmobiliario**
+3. Pros: Públicamente documentado, sin aprobación especial, portal Chile oficial
+4. Documentación: https://developers.mercadolibre.cl/es_ar/guia-para-inmuebles
 
 ## References
 
-- MercadoLibre Developers: https://developers.mercadolibre.com.ar/en_us/real-estate-experience
+- MercadoLibre Chile - Guía inmuebles: https://developers.mercadolibre.cl/es_ar/guia-para-inmuebles
+- MercadoLibre Chile - Introducción: https://developers.mercadolibre.cl/es_ar/introduccion-guia-de-inmuebles
+- MercadoLibre Developers (AR): https://developers.mercadolibre.com.ar/en_us/real-estate-experience
 - MercadoLibre Authentication: https://developers.mercadolibre.com.ar/en_us/authentication-and-authorization
 - Portalinmobiliario Help Center: https://portalinmobiliario.zendesk.com/hc/es
 - Portalinmobiliario Blog (Seguidor guides): https://www.portalinmobiliario.com/h/blog
 
 ## Architecture Decision
 
-We're implementing Portalinmobiliario-specific integration (not MercadoLibre) because:
-1. Portalinmobiliario is the primary property portal in Chile
-2. User explicitly requested "solo Portalinmobiliario.com si toda" (only Portalinmobiliario for everything)
-3. If API access is denied, we can fall back to Seguidor UI automation or export features
+Publicar vía **MercadoLibre Chile API** es la vía recomendada porque:
+1. Tiene API pública con documentación oficial en español
+2. Propiedades aparecen automáticamente también en Portalinmobiliario.com
+3. OAuth estándar, sin aprobación especial requerida
+4. Mismo grupo empresarial que Portalinmobiliario
 
-For Spain, we continue using Idealista (no change).
+Para España se sigue usando Idealista (sin cambios).
