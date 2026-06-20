@@ -76,12 +76,23 @@ interface AdminSidebarProps {
   unreadMessages?: number;
   /** Callback para notificar al padre cuando el sidebar abre/cierra (mobile). */
   onOpenChange?: (open: boolean) => void;
+  /** País activo del dashboard: 'es' o 'cl' */
+  country?: string;
+  /** Si el usuario puede cambiar de país (selector de banderas) */
+  canSwitchCountry?: boolean;
 }
 
-export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, onOpenChange }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, onOpenChange, country = "es", canSwitchCountry = false }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Build nav prefix based on country
+  const prefix = country === "cl" ? "/cl/admin" : "/es/admin";
+  const navItems = NAV_ITEMS.map(item => ({
+    ...item,
+    href: item.href.replace("/admin", prefix),
+  }));
 
   function toggleMobile() {
     const next = !mobileOpen;
@@ -96,7 +107,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
   // Filtrar items de nav según permisos. Si llegan los permisos efectivos
   // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
-  const visibleItems = NAV_ITEMS.filter(({ permissionResource }) => {
+  const visibleItems = navItems.filter(({ permissionResource }) => {
     if (!permissionResource) return true;
     if (permissions) {
       return permissions[permissionResource as PermissionResource]?.view ?? true;
@@ -149,6 +160,37 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
           />
         </div>
 
+        {canSwitchCountry && (
+          <div className="mt-5 flex items-center gap-2 px-6">
+            <Link
+              href="/es/admin"
+              title="España"
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                country === "es"
+                  ? "border-gold/60 bg-gold/15 text-gold"
+                  : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
+              )}
+            >
+              <span className="text-base leading-none">🇪🇸</span>
+              <span>España</span>
+            </Link>
+            <Link
+              href="/cl/admin"
+              title="Chile"
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                country === "cl"
+                  ? "border-gold/60 bg-gold/15 text-gold"
+                  : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
+              )}
+            >
+              <span className="text-base leading-none">🇨🇱</span>
+              <span>Chile</span>
+            </Link>
+          </div>
+        )}
+
         <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
           {t("admin.section.label")}
         </p>
@@ -156,10 +198,10 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
         <nav className="mt-3 flex-1 overflow-y-auto px-3">
           <ul className="space-y-1">
             {visibleItems.map(({ href, labelKey, icon: Icon }) => {
-              // Para la ruta exacta "/admin" (dashboard) solo se activa con match exacto
+              const dashboardHref = `${prefix}`;
               const active =
                 pathname === href ||
-                (href !== "/admin" && pathname.startsWith(`${href}/`));
+                (href !== dashboardHref && pathname.startsWith(`${href}/`));
               const isCalendario = href === "/admin/calendario";
               const isMensajes = href === "/admin/mensajes";
               return (
