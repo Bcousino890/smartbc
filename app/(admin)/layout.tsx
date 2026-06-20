@@ -107,7 +107,15 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} />
+        <AdminSidebar
+          user={adminUser}
+          currentRole={profile.role}
+          permissions={permissions}
+          pendingVisits={pendingVisits ?? 0}
+          unreadMessages={unreadMessages}
+          country={(profile as any).country ?? "es"}
+          canSwitchCountry={["owner", "admin"].includes(profile.role)}
+        />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
