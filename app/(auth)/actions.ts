@@ -69,25 +69,32 @@ export async function signInAction(
   // emails de la allowlist; cualquier otro entra como `client`. Gated tras el
   // signInWithPassword de arriba, así que requiere conocer la contraseña.
   if (!profile) {
-    const adminDb = createAdminClient();
-    const emailLc = (user.email ?? "").toLowerCase();
-    const role: UserRole = ADMIN_EMAILS.includes(emailLc) ? "admin" : "client";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: provisionErr } = await (adminDb.from("profiles") as any).upsert(
-      {
-        id: user.id,
-        email: user.email,
-        role,
-        full_name: user.user_metadata?.full_name || user.email,
-        country: "es",
-      },
-      { onConflict: "id" },
-    );
-    if (provisionErr) {
+    try {
+      const adminDb = createAdminClient();
+      const emailLc = (user.email ?? "").toLowerCase();
+      const role: UserRole = ADMIN_EMAILS.includes(emailLc) ? "admin" : "client";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: provisionErr } = await (adminDb.from("profiles") as any).upsert(
+        {
+          id: user.id,
+          email: user.email,
+          role,
+          full_name: user.user_metadata?.full_name || user.email,
+          country: "es",
+        },
+        { onConflict: "id" },
+      );
+      if (provisionErr) {
+        await supabase.auth.signOut();
+        // Mensaje de diagnóstico temporal (se ve en el form): revela por qué
+        // falla la creación del perfil. Volver a "auth.error.noProfile" después.
+        return { error: `PROV_FAIL upsert: ${provisionErr.message}` };
+      }
+      profile = { role, country: "es" };
+    } catch (e) {
       await supabase.auth.signOut();
-      return { error: "auth.error.noProfile" };
+      return { error: `PROV_FAIL throw: ${e instanceof Error ? e.message : String(e)}` };
     }
-    profile = { role, country: "es" };
   }
 
   revalidatePath("/", "layout");
