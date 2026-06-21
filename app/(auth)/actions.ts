@@ -53,26 +53,26 @@ export async function signInAction(
     redirect("/es/admin");
   }
 
-  // All other users: check profile.
-  // Cast explícito: el cliente de servidor infiere `data` como `never` para este
-  // select, así que tipamos el resultado según el esquema real de la BD.
+  // Comprobar perfil. Solo se selecciona `role` (NO `country`): PostgREST no
+  // tiene la columna `country` en su schema cache, y seleccionarla hacía fallar
+  // la consulta en silencio (se interpretaba como "sin perfil").
   const { data } = await supabase
     .from("profiles")
-    .select("role, country")
+    .select("role")
     .eq("id", user.id)
     .maybeSingle();
-  let profile = data as { role: UserRole; country: string | null } | null;
+  let profile = data as { role: UserRole } | null;
 
-  // Auto-provisión: si el usuario se autenticó pero no tiene perfil (el trigger
-  // on_auth_user_created no llegó a crearlo, o quedó atrás por las migraciones),
-  // lo creamos aquí con el service role. El rol admin se concede SOLO a los
-  // emails de la allowlist; cualquier otro entra como `client`. Gated tras el
-  // signInWithPassword de arriba, así que requiere conocer la contraseña.
-  if (!profile) {
+  const emailLc = (user.email ?? "").toLowerCase();
+  const isAllowlistedAdmin = ADMIN_EMAILS.includes(emailLc);
+
+  // Auto-provisión/ascenso (con service role, gated tras signInWithPassword):
+  // crea el perfil si falta, o lo asciende a admin si el email está en la
+  // allowlist y aún no lo es. Sin `country` (PostgREST no la conoce).
+  if (!profile || (isAllowlistedAdmin && profile.role !== "admin")) {
     try {
       const adminDb = createAdminClient();
-      const emailLc = (user.email ?? "").toLowerCase();
-      const role: UserRole = ADMIN_EMAILS.includes(emailLc) ? "admin" : "client";
+      const role: UserRole = isAllowlistedAdmin ? "admin" : (profile?.role ?? "client");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: provisionErr } = await (adminDb.from("profiles") as any).upsert(
         {
@@ -80,28 +80,30 @@ export async function signInAction(
           email: user.email,
           role,
           full_name: user.user_metadata?.full_name || user.email,
-          country: "es",
         },
         { onConflict: "id" },
       );
       if (provisionErr) {
         await supabase.auth.signOut();
-        // Mensaje de diagnóstico temporal (se ve en el form): revela por qué
-        // falla la creación del perfil. Volver a "auth.error.noProfile" después.
         return { error: `PROV_FAIL upsert: ${provisionErr.message}` };
       }
-      profile = { role, country: "es" };
+      profile = { role };
     } catch (e) {
       await supabase.auth.signOut();
       return { error: `PROV_FAIL throw: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
 
+  if (!profile) {
+    await supabase.auth.signOut();
+    return { error: "auth.error.noProfile" };
+  }
+
   revalidatePath("/", "layout");
 
   const staffRoles = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
   if (staffRoles.includes(profile.role)) {
-    redirect(`/${profile.country ?? "es"}/admin`);
+    redirect("/es/admin");
   }
   redirect("/inicio");
 }
