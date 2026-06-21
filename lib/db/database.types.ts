@@ -35,6 +35,7 @@ export type Database = {
           avatar_url: string | null;
           assigned_advisor_id: string | null;
           personal_shopper_terms_accepted_at: string | null;
+          country: string;
           created_at: string;
           updated_at: string;
         };
@@ -47,6 +48,7 @@ export type Database = {
           avatar_url?: string | null;
           assigned_advisor_id?: string | null;
           personal_shopper_terms_accepted_at?: string | null;
+          country?: string;
           created_at?: string;
           updated_at?: string;
         };

@@ -50,12 +50,15 @@ export async function signInAction(
     redirect("/es/admin");
   }
 
-  // All other users: check profile
-  const { data: profile } = await supabase
+  // All other users: check profile.
+  // Cast explícito: el cliente de servidor infiere `data` como `never` para este
+  // select, así que tipamos el resultado según el esquema real de la BD.
+  const { data } = await supabase
     .from("profiles")
     .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
+  const profile = data as { role: UserRole; country: string | null } | null;
 
   if (!profile) {
     await supabase.auth.signOut();
