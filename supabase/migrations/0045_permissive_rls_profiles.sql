@@ -1,27 +1,29 @@
--- NUCLEAR OPTION: Temporarily disable RLS on profiles to allow auto-creation
--- This ensures profile creation ALWAYS works during login
+-- (Reescrita) Originalmente era la "NUCLEAR OPTION": políticas permisivas con
+-- USING/WITH CHECK (true) en profiles → CUALQUIERA (incluso anónimo con la anon
+-- key) podía INSERTAR/EDITAR/BORRAR cualquier perfil: escalar su cuenta a admin
+-- o borrar perfiles ajenos. Agujero grave.
+--
+-- Se mantiene SELECT abierto para no romper las lecturas del panel/login
+-- (endurecer a self+staff en un follow-up), pero las ESCRITURAS quedan
+-- restringidas al propio usuario o al service role (el admin client bypassa RLS
+-- de todas formas). Idempotente: DROP antes de cada CREATE.
 
--- Disable RLS on profiles table (temporarily)
-ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
-
--- Now re-enable it with PERMISSIVE policies that allow everything
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- Create permissive policies that allow all operations
--- (this is safe because real authorization happens at app level)
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+DROP POLICY IF EXISTS "profiles_insert" ON profiles;
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
+DROP POLICY IF EXISTS "profiles_delete" ON profiles;
 
-DROP POLICY IF EXISTS "profiles_self_select" ON profiles;
-DROP POLICY IF EXISTS "profiles_staff_select" ON profiles;
-DROP POLICY IF EXISTS "profiles_self_update" ON profiles;
-DROP POLICY IF EXISTS "profiles_admin_all" ON profiles;
-DROP POLICY IF EXISTS "profiles_admin_insert" ON profiles;
-DROP POLICY IF EXISTS "profiles_self_insert" ON profiles;
-DROP POLICY IF EXISTS "profiles_insert_own" ON profiles;
-DROP POLICY IF EXISTS "profiles_insert_admin" ON profiles;
-
--- PERMISSIVE policies - allow everything
--- Service role (admin client) always works anyway, but be explicit
+-- SELECT: abierto por ahora (lecturas del panel y del login). TODO: endurecer.
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (true);
-CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (true);
-CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (true);
-CREATE POLICY "profiles_delete" ON profiles FOR DELETE USING (true);
+
+-- INSERT/UPDATE: solo el propio usuario o el service role.
+CREATE POLICY "profiles_insert" ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id OR auth.jwt() ->> 'role' = 'service_role');
+CREATE POLICY "profiles_update" ON profiles FOR UPDATE
+  USING (auth.uid() = id OR auth.jwt() ->> 'role' = 'service_role');
+
+-- DELETE: solo el service role (el admin client). Nadie borra perfiles por sesión.
+CREATE POLICY "profiles_delete" ON profiles FOR DELETE
+  USING (auth.jwt() ->> 'role' = 'service_role');

@@ -46,13 +46,17 @@ CREATE TRIGGER on_auth_user_created
 DROP POLICY IF EXISTS "profiles_admin_insert" ON profiles;
 DROP POLICY IF EXISTS "profiles_self_insert" ON profiles;
 
--- 5. Create correct RLS policies for INSERT
+-- 5. Create correct RLS policies for INSERT (idempotente: DROP antes de CREATE
+-- para no fallar si una aplicación previa a medias —p. ej. el botón de
+-- /admin/configuracion— ya creó la policy).
 -- Anyone can insert their own profile (for auth trigger and login flow)
+DROP POLICY IF EXISTS "profiles_insert_own" ON profiles;
 CREATE POLICY "profiles_insert_own" ON profiles
   FOR INSERT
   WITH CHECK (auth.uid() = id);
 
 -- Service role (admin client) can always insert (bypasses RLS anyway, but explicit)
+DROP POLICY IF EXISTS "profiles_insert_admin" ON profiles;
 CREATE POLICY "profiles_insert_admin" ON profiles
   FOR INSERT
   WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
