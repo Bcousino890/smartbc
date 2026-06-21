@@ -2,21 +2,18 @@ import "server-only";
 import { storedSlugFromShare } from "../../share-slug";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
-import { getUserCountryForQuery } from "./user-country";
 import type { PropertyFilters, PropertyRow } from "../row-types";
 
 export type { PropertyFilters, PropertyRow };
 
 export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   let query = supabase
     .from("properties")
     .select(
       "*, agencies(name, slug), property_photos(url, is_cover, position)",
     )
-    .eq("country", country)
     .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -41,12 +38,10 @@ export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
 
 export async function getPropertyBySlug(slug: string) {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   const { data, error } = await supabase
     .from("properties")
     .select("*, property_photos(*), agencies(name, slug, logo_url)")
-    .eq("country", country)
     .eq("slug", slug)
     .is("archived_at", null)
     .maybeSingle();
@@ -126,14 +121,12 @@ export async function getPropertyBySlugPublic(slug: string) {
 // poder ver y reactivar propiedades archivadas).
 export async function getPropertyBySlugForAdmin(slug: string) {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   const { data, error } = await supabase
     .from("properties")
     .select(
       "*, property_photos(url, alt, position, is_cover), agencies(id, name, slug, logo_url)",
     )
-    .eq("country", country)
     .eq("slug", slug)
     .maybeSingle();
 

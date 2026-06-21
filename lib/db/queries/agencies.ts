@@ -1,6 +1,5 @@
 import "server-only";
 import { createClient } from "../server";
-import { getUserCountryForQuery } from "./user-country";
 import type {
   AgencyPartnershipRow,
   AgencyRow,
@@ -11,12 +10,10 @@ export type { AgencyPartnershipRow, AgencyRow, AgencyWithStats };
 
 export async function getAgencies() {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   const { data, error } = await supabase
     .from("agencies")
     .select("*, agency_partnerships(*)")
-    .eq("country", country)
     .order("name");
 
   if (error) throw error;
@@ -25,19 +22,16 @@ export async function getAgencies() {
 
 export async function getAgenciesWithStats(): Promise<AgencyWithStats[]> {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   const [agenciesResult, propertiesResult] = await Promise.all([
     supabase
       .from("agencies")
       .select("*, agency_partnerships(*)")
-      .eq("country", country)
-      .order("name"),
+        .order("name"),
     supabase
       .from("properties")
       .select("agency_id, operation")
-      .eq("country", country)
-      .is("archived_at", null),
+        .is("archived_at", null),
   ]);
 
   if (agenciesResult.error) throw agenciesResult.error;
@@ -69,12 +63,10 @@ export async function getAgenciesWithStats(): Promise<AgencyWithStats[]> {
 
 export async function getAgencyBySlug(slug: string) {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   const { data, error } = await supabase
     .from("agencies")
     .select("*, agency_partnerships(*)")
-    .eq("country", country)
     .eq("slug", slug)
     .maybeSingle();
 
@@ -93,14 +85,12 @@ export async function getAgencyBySlug(slug: string) {
 
 export async function getAgencyProperties(agencyId: string) {
   const supabase = await createClient();
-  const country = await getUserCountryForQuery();
 
   const { data, error } = await supabase
     .from("properties")
     .select(
       "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at, cover_photo_url, square_meters, status, features, features_manual, description",
     )
-    .eq("country", country)
     .eq("agency_id", agencyId)
     .is("archived_at", null)
     .order("updated_at", { ascending: false })
