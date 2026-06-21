@@ -7,6 +7,9 @@ import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import type { UserRole } from "@/lib/db/database.types";
 
+// Emails que reciben rol admin si se auto-crea su perfil al iniciar sesión.
+const ADMIN_EMAILS = ["fabri@bcousinoprop.com"];
+
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -58,11 +61,33 @@ export async function signInAction(
     .select("role, country")
     .eq("id", user.id)
     .maybeSingle();
-  const profile = data as { role: UserRole; country: string | null } | null;
+  let profile = data as { role: UserRole; country: string | null } | null;
 
+  // Auto-provisión: si el usuario se autenticó pero no tiene perfil (el trigger
+  // on_auth_user_created no llegó a crearlo, o quedó atrás por las migraciones),
+  // lo creamos aquí con el service role. El rol admin se concede SOLO a los
+  // emails de la allowlist; cualquier otro entra como `client`. Gated tras el
+  // signInWithPassword de arriba, así que requiere conocer la contraseña.
   if (!profile) {
-    await supabase.auth.signOut();
-    return { error: "auth.error.noProfile" };
+    const adminDb = createAdminClient();
+    const emailLc = (user.email ?? "").toLowerCase();
+    const role: UserRole = ADMIN_EMAILS.includes(emailLc) ? "admin" : "client";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: provisionErr } = await (adminDb.from("profiles") as any).upsert(
+      {
+        id: user.id,
+        email: user.email,
+        role,
+        full_name: user.user_metadata?.full_name || user.email,
+        country: "es",
+      },
+      { onConflict: "id" },
+    );
+    if (provisionErr) {
+      await supabase.auth.signOut();
+      return { error: "auth.error.noProfile" };
+    }
+    profile = { role, country: "es" };
   }
 
   revalidatePath("/", "layout");
