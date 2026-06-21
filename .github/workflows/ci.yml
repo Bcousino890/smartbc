@@ -28,5 +28,15 @@ jobs:
       - name: TypeScript (compila el proyecto entero)
         run: npx tsc --noEmit
 
+      - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
+        run: npm run build
+        env:
+          # Valores ficticios: el build solo necesita que existan para instanciar
+          # los clientes. Las llamadas a red durante el prerender son tolerantes
+          # y no rompen el build. Esto replica exactamente lo que hace el VPS.
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-key
+
       - name: Migraciones (sin errores que rompan el deploy)
         run: python3 scripts/lint-migrations.py
