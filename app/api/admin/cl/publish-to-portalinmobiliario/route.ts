@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     const { data: property, error } = await db
       .from("properties")
-      .select("id, title, description, price, address, bedrooms, bathrooms, square_meters, operation, country")
+      .select("id, title, description, price, address, bedrooms, bathrooms, square_meters, covered_area_m2, parking_lots, operation, country, commune, region, property_type, currency")
       .eq("id", propertyId)
       .eq("country", "cl")
       .maybeSingle();
@@ -52,19 +52,22 @@ export async function POST(request: Request) {
       );
     }
 
+    const mlCurrency = (property.currency === "clp" ? "CLP" : property.currency === "usd" ? "USD" : "UF") as "CLP" | "UF" | "USD";
     const input: MlPropertyInput = {
       title: property.title,
       description: property.description ?? "",
       price: property.price,
-      currency: "UF",
+      currency: mlCurrency,
       operation: property.operation === "rent" ? "rent" : "sale",
-      propertyType: "apartment",
+      propertyType: property.property_type ?? "apartment",
       address: property.address ?? "",
-      commune: "",
-      region: "",
+      commune: property.commune ?? "",
+      region: property.region ?? "",
       bedrooms: property.bedrooms ?? 0,
       bathrooms: property.bathrooms ?? 0,
-      totalAreaM2: property.square_meters,
+      totalAreaM2: property.square_meters ?? undefined,
+      coveredAreaM2: property.covered_area_m2 ?? undefined,
+      parkingLots: property.parking_lots ?? undefined,
       imageUrls,
       listingType: "gold_special",
     };

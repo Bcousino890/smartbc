@@ -17,8 +17,14 @@ export type CreatePropertyInput = {
   bedrooms: number;
   bathrooms: number;
   squareMeters?: number;
+  coveredAreaM2?: number;
+  parkingLots?: number;
   zone: string;
   address?: string;
+  commune?: string;
+  region?: string;
+  propertyType?: string;
+  currency?: string;
   description?: string;
   externalReference?: string;
 };
@@ -91,8 +97,14 @@ export async function createProperty(
       bedrooms: input.bedrooms,
       bathrooms: input.bathrooms,
       square_meters: input.squareMeters ?? null,
+      covered_area_m2: input.coveredAreaM2 ?? null,
+      parking_lots: input.parkingLots ?? null,
       zone: input.zone.trim(),
       address: input.address?.trim() || null,
+      commune: input.commune?.trim() || null,
+      region: input.region?.trim() || null,
+      property_type: input.propertyType || null,
+      currency: input.currency || null,
       description: input.description?.trim() || null,
     })
     .select("id, slug")

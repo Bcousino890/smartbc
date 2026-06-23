@@ -8,10 +8,26 @@ import {
   uploadPropertyPhoto,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { Modal } from "@/components/ui/modal";
-import { MADRID_ZONES } from "@/lib/mock-properties";
+import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO } from "@/lib/mock-properties";
 import { useT } from "@/lib/i18n/provider";
 import type { Operation, StayType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const PROPERTY_TYPE_OPTIONS = [
+  { value: "apartment", label: "Departamento" },
+  { value: "house", label: "Casa" },
+  { value: "office", label: "Oficina" },
+  { value: "commercial", label: "Local comercial" },
+  { value: "land", label: "Terreno" },
+  { value: "warehouse", label: "Bodega" },
+  { value: "parking", label: "Estacionamiento" },
+] as const;
+
+const CURRENCY_OPTIONS_CL = [
+  { value: "uf", label: "UF (Unidad de Fomento)" },
+  { value: "clp", label: "CLP (Pesos chilenos)" },
+  { value: "usd", label: "USD (Dólares)" },
+] as const;
 
 export type AgencyOption = { slug: string; name: string };
 
@@ -23,15 +39,19 @@ export function NewPropertyModal({
   open,
   onClose,
   agencies,
+  country = "es",
 }: {
   open: boolean;
   onClose: () => void;
   agencies: AgencyOption[];
+  country?: string;
 }) {
   const t = useT();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
+
+  const isCL = country === "cl";
 
   const [title, setTitle] = useState("");
   const [agencySlug, setAgencySlug] = useState<string>(agencies[0]?.slug ?? "");
@@ -42,8 +62,16 @@ export function NewPropertyModal({
   const [bedrooms, setBedrooms] = useState<number>(2);
   const [bathrooms, setBathrooms] = useState<number>(1);
   const [squareMeters, setSquareMeters] = useState<number>(0);
+  const [coveredAreaM2, setCoveredAreaM2] = useState<number>(0);
+  const [parkingLots, setParkingLots] = useState<number>(0);
   const [externalReference, setExternalReference] = useState("");
   const [description, setDescription] = useState("");
+  // Chile / ML VIS fields
+  const [address, setAddress] = useState("");
+  const [commune, setCommune] = useState("");
+  const [region, setRegion] = useState<string>(CHILE_REGIONS[0]);
+  const [propertyType, setPropertyType] = useState<string>(PROPERTY_TYPE_OPTIONS[0].value);
+  const [currency, setCurrency] = useState<string>(CURRENCY_OPTIONS_CL[0].value);
   const [photos, setPhotos] = useState<StagedPhoto[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -60,8 +88,15 @@ export function NewPropertyModal({
       setBedrooms(2);
       setBathrooms(1);
       setSquareMeters(0);
+      setCoveredAreaM2(0);
+      setParkingLots(0);
       setExternalReference("");
       setDescription("");
+      setAddress("");
+      setCommune("");
+      setRegion(CHILE_REGIONS[0]);
+      setPropertyType(PROPERTY_TYPE_OPTIONS[0].value);
+      setCurrency(CURRENCY_OPTIONS_CL[0].value);
       setFeedback({ kind: "idle" });
       setUploadingPhotos(false);
       setDragActive(false);
@@ -99,7 +134,11 @@ export function NewPropertyModal({
   };
 
   const canSubmit =
-    title.trim().length > 0 && agencySlug.length > 0 && price > 0 && !isPending;
+    title.trim().length > 0 &&
+    agencySlug.length > 0 &&
+    price > 0 &&
+    !isPending &&
+    (!isCL || commune.trim().length > 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +155,14 @@ export function NewPropertyModal({
         bedrooms,
         bathrooms,
         squareMeters: squareMeters || undefined,
-        zone,
+        coveredAreaM2: isCL && coveredAreaM2 > 0 ? coveredAreaM2 : undefined,
+        parkingLots: isCL && parkingLots > 0 ? parkingLots : undefined,
+        zone: isCL ? (commune.trim() || region) : zone,
+        address: isCL ? address.trim() || undefined : undefined,
+        commune: isCL ? commune.trim() || undefined : undefined,
+        region: isCL ? region : undefined,
+        propertyType: isCL ? propertyType : undefined,
+        currency: isCL ? currency : undefined,
         description: description.trim() || undefined,
         externalReference: externalReference.trim() || undefined,
       });
@@ -164,10 +210,27 @@ export function NewPropertyModal({
       title={t("adminProps.new.title")}
       subtitle={t("adminProps.new.subtitle")}
     >
+      {isCL && (
+        <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3">
+          <p className="text-[11px] font-semibold text-gold-dark">
+            ★ = Campo requerido por PortalInmobiliario.com
+          </p>
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <Section title={t("adminProps.new.section.basic")}>
-          <Field label={t("adminProps.new.field.title")} required wide>
-            <TextInput value={title} onChange={setTitle} autoFocus />
+          <Field label={isCL ? `${t("adminProps.new.field.title")} (máx. 60 car.) ★` : t("adminProps.new.field.title")} required wide>
+            <TextInput
+              value={title}
+              onChange={(v) => setTitle(isCL ? v.slice(0, 60) : v)}
+              autoFocus
+              placeholder={isCL ? `${title.length}/60 caracteres` : undefined}
+            />
+            {isCL && title.length > 50 && (
+              <p className={cn("mt-1 text-[10px]", title.length >= 60 ? "text-red-600" : "text-amber-600")}>
+                {title.length}/60 caracteres
+              </p>
+            )}
           </Field>
           <Field label={t("adminProps.new.field.agency")} required>
             {agencies.length === 0 ? (
@@ -188,6 +251,19 @@ export function NewPropertyModal({
               </select>
             )}
           </Field>
+          {isCL && (
+            <Field label="Tipo de propiedad ★" required>
+              <select
+                value={propertyType}
+                onChange={(e) => setPropertyType(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              >
+                {PROPERTY_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label={t("adminProps.new.field.reference")}>
             <TextInput
               value={externalReference}
@@ -198,14 +274,14 @@ export function NewPropertyModal({
         </Section>
 
         <Section title={t("adminProps.new.section.deal")}>
-          <Field label={t("adminProps.new.field.operation")}>
+          <Field label={`${t("adminProps.new.field.operation")}${isCL ? " ★" : ""}`}>
             <select
               value={operation}
               onChange={(e) => setOperation(e.target.value as Operation)}
               className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
             >
-              <option value="alquiler">{t("filters.operation.rent")}</option>
-              <option value="venta">{t("filters.operation.sale")}</option>
+              <option value="alquiler">{isCL ? "Arriendo" : t("filters.operation.rent")}</option>
+              <option value="venta">{isCL ? "Venta" : t("filters.operation.sale")}</option>
             </select>
           </Field>
           {operation === "alquiler" && (
@@ -220,9 +296,24 @@ export function NewPropertyModal({
               </select>
             </Field>
           )}
+          {isCL && (
+            <Field label="Moneda ★" required>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              >
+                {CURRENCY_OPTIONS_CL.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field
             label={
-              operation === "alquiler"
+              isCL
+                ? `Precio ★`
+                : operation === "alquiler"
                 ? t("adminProps.new.field.priceRent")
                 : t("adminProps.new.field.priceSale")
             }
@@ -233,50 +324,88 @@ export function NewPropertyModal({
         </Section>
 
         <Section title={t("adminProps.new.section.layout")}>
-          <Field label={t("adminProps.new.field.bedrooms")}>
+          <Field label={`${t("adminProps.new.field.bedrooms")}${isCL ? " ★" : ""}`}>
             <NumberInput value={bedrooms} onChange={setBedrooms} min={0} />
           </Field>
-          <Field label={t("adminProps.new.field.bathrooms")}>
+          <Field label={`${t("adminProps.new.field.bathrooms")}${isCL ? " ★" : ""}`}>
             <NumberInput value={bathrooms} onChange={setBathrooms} min={0} />
           </Field>
-          <Field label={t("adminProps.new.field.squareMeters")}>
-            <NumberInput
-              value={squareMeters}
-              onChange={setSquareMeters}
-              min={0}
-            />
+          <Field label={`${t("adminProps.new.field.squareMeters")}${isCL ? " (sup. total)" : ""}`}>
+            <NumberInput value={squareMeters} onChange={setSquareMeters} min={0} />
           </Field>
+          {isCL && (
+            <>
+              <Field label="Sup. útil m²">
+                <NumberInput value={coveredAreaM2} onChange={setCoveredAreaM2} min={0} />
+              </Field>
+              <Field label="Estacionamientos">
+                <NumberInput value={parkingLots} onChange={setParkingLots} min={0} />
+              </Field>
+            </>
+          )}
         </Section>
 
         <Section title={t("adminProps.new.section.location")}>
-          <Field label={t("adminProps.new.field.zone")} wide>
-            <select
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
-            >
-              {MADRID_ZONES.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {isCL ? (
+            <>
+              <Field label="Región ★" required>
+                <select
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                >
+                  {CHILE_REGIONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Comuna ★" required>
+                <input
+                  type="text"
+                  list="cl-communes"
+                  value={commune}
+                  onChange={(e) => setCommune(e.target.value)}
+                  placeholder="Ej: Las Condes, Providencia…"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                />
+                <datalist id="cl-communes">
+                  {CHILE_COMMUNES_SANTIAGO.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Dirección ★" wide>
+                <TextInput value={address} onChange={setAddress} placeholder="Av. Apoquindo 1234, piso 8" />
+              </Field>
+            </>
+          ) : (
+            <Field label={t("adminProps.new.field.zone")} wide>
+              <select
+                value={zone}
+                onChange={(e) => setZone(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              >
+                {MADRID_ZONES.map((z) => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
+            </Field>
+          )}
         </Section>
 
         <Section title={t("adminProps.new.section.description")}>
-          <Field label={t("adminProps.new.field.description")} wide>
+          <Field label={`${t("adminProps.new.field.description")}${isCL ? " ★" : ""}`} wide>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-              placeholder={t("adminProps.new.field.description.placeholder")}
+              placeholder={isCL ? "Describe la propiedad en detalle (requerido por PortalInmobiliario)" : t("adminProps.new.field.description.placeholder")}
             />
           </Field>
         </Section>
 
-        <Section title={t("adminProps.new.section.photos")}>
+        <Section title={`${t("adminProps.new.section.photos")}${isCL ? " (mín. 4 ★)" : ""}`}>
           <div className="space-y-3 sm:col-span-3">
             <button
               type="button"

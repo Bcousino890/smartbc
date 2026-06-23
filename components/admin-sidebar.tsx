@@ -5,6 +5,7 @@ import {
   Building2,
   Calendar,
   ClipboardList,
+  Globe2,
   Heart,
   Home,
   LayoutDashboard,
@@ -41,24 +42,27 @@ type NavItem = {
   icon: React.ElementType;
   /** Recurso de permisos asociado. Si se define, se comprueba canAccess(role, resource, "view") */
   permissionResource?: string;
+  /** Si se define, el item solo se muestra para ese país (ej: "cl" o "es") */
+  onlyCountry?: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/admin",               labelKey: "admin.nav.dashboard",     icon: LayoutDashboard },
-  { href: "/admin/agencias",      labelKey: "admin.nav.agencias",      icon: Building2,    permissionResource: "properties"    },
-  { href: "/admin/propiedades",   labelKey: "admin.nav.propiedades",   icon: Home,         permissionResource: "properties"    },
-  { href: "/admin/particulares",  labelKey: "admin.nav.particulares",  icon: User,         permissionResource: "particulares"  },
-  { href: "/admin/publicacion",   labelKey: "admin.nav.publicacion",   icon: Send,         permissionResource: "properties"    },
-  { href: "/admin/idealista",     labelKey: "admin.nav.idealista",     icon: Sparkles,     permissionResource: "properties"    },
-  { href: "/admin/clientes",      labelKey: "admin.nav.clientes",      icon: Users,        permissionResource: "clientes"      },
-  { href: "/admin/solicitudes",   labelKey: "admin.nav.solicitudes",   icon: ClipboardList, permissionResource: "solicitudes"  },
-  { href: "/admin/calendario",    labelKey: "admin.nav.calendario",    icon: Calendar,     permissionResource: "calendario"    },
-  { href: "/admin/mensajes",      labelKey: "admin.nav.mensajes",      icon: MessageSquare, permissionResource: "mensajes"     },
-  { href: "/admin/sindicacion",   labelKey: "admin.nav.sindicacion",   icon: Radio,        permissionResource: "properties"    },
-  { href: "/admin/reportes",      labelKey: "admin.nav.reportes",      icon: BarChart3,    permissionResource: "reportes"      },
-  { href: "/admin/usuarios",      labelKey: "admin.nav.usuarios",      icon: UserCog,      permissionResource: "usuarios"      },
-  { href: "/admin/diagnostico",   labelKey: "admin.nav.diagnostico",   icon: Stethoscope,  permissionResource: "configuracion" },
-  { href: "/admin/configuracion", labelKey: "admin.nav.configuracion", icon: Settings,     permissionResource: "configuracion" },
+  { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
+  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties"    },
+  { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
+  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares"  },
+  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
+  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/portalinmobiliario", labelKey: "admin.nav.portalinmobiliario", icon: Globe2,        permissionResource: "properties",   onlyCountry: "cl" },
+  { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
+  { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
+  { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
+  { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
+  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties"    },
+  { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
+  { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
+  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion" },
+  { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 
 interface AdminSidebarProps {
@@ -105,9 +109,10 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
     onOpenChange?.(false);
   }
 
-  // Filtrar items de nav según permisos. Si llegan los permisos efectivos
+  // Filtrar items de nav según permisos y país. Si llegan los permisos efectivos
   // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
-  const visibleItems = navItems.filter(({ permissionResource }) => {
+  const visibleItems = navItems.filter(({ permissionResource, onlyCountry }) => {
+    if (onlyCountry && onlyCountry !== country) return false;
     if (!permissionResource) return true;
     if (permissions) {
       return permissions[permissionResource as PermissionResource]?.view ?? true;

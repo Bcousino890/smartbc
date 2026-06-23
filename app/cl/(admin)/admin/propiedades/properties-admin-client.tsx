@@ -570,6 +570,7 @@ export function PropertiesAdminClient({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         agencies={agencies}
+        country="cl"
       />
 
       <div className="mt-5 overflow-x-auto">
