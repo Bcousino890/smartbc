@@ -168,33 +168,46 @@ export function buildOAuthUrl(redirectUri: string): string {
 export async function exchangeCodeForTokens(
   code: string,
   redirectUri: string
-): Promise<MercadoLibreTokens | null> {
+): Promise<{ tokens: MercadoLibreTokens } | { error: string }> {
   const [clientSecret, appId] = await Promise.all([getMlClientSecret(), getMlAppId()]);
 
   if (!clientSecret) {
     console.error("[ml-config] client_secret not configured");
-    return null;
+    return { error: "client_secret_missing" };
   }
 
-  const res = await fetch(ML_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: appId,
-      client_secret: clientSecret,
-      code,
-      redirect_uri: redirectUri,
-    }),
-  });
+  try {
+    const res = await fetch(ML_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: appId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
 
-  if (!res.ok) {
     const text = await res.text();
-    console.error(`[ml-config] Token exchange failed ${res.status}: ${text.slice(0, 200)}`);
-    return null;
-  }
 
-  const tokens = (await res.json()) as MercadoLibreTokens;
-  await saveMlTokens(tokens);
-  return tokens;
+    if (!res.ok) {
+      console.error(`[ml-config] Token exchange failed ${res.status}: ${text.slice(0, 300)}`);
+      let reason = `status_${res.status}`;
+      try {
+        const json = JSON.parse(text);
+        if (json.message) reason = json.message;
+        else if (json.error) reason = json.error;
+      } catch {}
+      return { error: reason };
+    }
+
+    const tokens = JSON.parse(text) as MercadoLibreTokens;
+    await saveMlTokens(tokens);
+    return { tokens };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ml-config] Token exchange threw: ${msg}`);
+    return { error: msg };
+  }
 }

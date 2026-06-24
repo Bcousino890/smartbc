@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { exchangeCodeForTokens } from "@/lib/sync/portalinmobiliario/ml-config";
 
 const REDIRECT_URI = "https://portal.bcousinoprop.com/api/cl/ml-callback";
+const BASE_URL = "https://portal.bcousinoprop.com";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,12 +10,9 @@ export async function GET(request: Request) {
   const error = searchParams.get("error");
 
   if (error) {
-    console.error(`[ml-callback] OAuth error: ${error}`);
+    console.error(`[ml-callback] OAuth error from ML: ${error}`);
     return NextResponse.redirect(
-      new URL(
-        `/cl/admin/configuracion?ml_error=${encodeURIComponent(error)}`,
-        request.url
-      )
+      `${BASE_URL}/cl/admin/configuracion?ml_error=${encodeURIComponent(error)}`
     );
   }
 
@@ -22,20 +20,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No code received" }, { status: 400 });
   }
 
-  const tokens = await exchangeCodeForTokens(code, REDIRECT_URI);
+  const result = await exchangeCodeForTokens(code, REDIRECT_URI);
 
-  if (!tokens) {
+  if ("error" in result) {
+    console.error(`[ml-callback] Token exchange failed: ${result.error}`);
     return NextResponse.redirect(
-      new URL(
-        "/cl/admin/configuracion?ml_error=token_exchange_failed",
-        request.url
-      )
+      `${BASE_URL}/cl/admin/configuracion?ml_error=${encodeURIComponent(result.error)}`
     );
   }
 
-  console.log(`[ml-callback] ✓ OAuth success. user_id=${tokens.user_id}`);
+  console.log(`[ml-callback] ✓ OAuth success. user_id=${result.tokens.user_id}`);
 
   return NextResponse.redirect(
-    new URL("/cl/admin/configuracion?ml_connected=1", request.url)
+    `${BASE_URL}/cl/admin/configuracion?ml_connected=1`
   );
 }

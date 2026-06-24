@@ -14,6 +14,7 @@ import {
   Sliders,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { DeployButton } from "./deploy-button";
@@ -27,6 +28,9 @@ import { cn } from "@/lib/utils";
 
 export default function AdminConfiguracionPage() {
   const t = useT();
+  const searchParams = useSearchParams();
+  const mlError = searchParams.get("ml_error");
+  const mlConnected = searchParams.get("ml_connected");
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
   const [scrapingAppKey, setScrapingAppKey] = useState("");
@@ -308,6 +312,22 @@ export default function AdminConfiguracionPage() {
           titleKey="config.mercadolibre.title"
         >
           <div className="space-y-3">
+            {mlConnected === "1" && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700 font-medium">
+                ✓ Conectado a MercadoLibre con éxito
+              </div>
+            )}
+            {mlError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                <p className="font-semibold">Error al conectar con MercadoLibre</p>
+                <p className="mt-0.5 font-mono text-xs break-all">{mlError}</p>
+                <p className="mt-1 text-xs text-red-600">
+                  {mlError === "client_secret_missing"
+                    ? "Guarda el Client Secret abajo y vuelve a intentarlo."
+                    : "Verifica que el Client Secret y el App ID sean correctos, y que el Redirect URI en tu app ML sea exactamente: https://portal.bcousinoprop.com/api/cl/ml-callback"}
+                </p>
+              </div>
+            )}
             <p className="text-xs text-ink/55">
               Credenciales para publicar propiedades en PortalInmobiliario.com. Obtén el <strong>Client Secret</strong> de tu aplicación ML en <a href="https://developers.mercadolibre.cl" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">developers.mercadolibre.cl</a>.
             </p>
@@ -317,6 +337,9 @@ export default function AdminConfiguracionPage() {
               onChange={setMlClientSecret}
               placeholder="ej: f36c1f2a7d8b9e4c..."
             />
+            <p className="text-[11px] text-ink/45">
+              Redirect URI a configurar en ML Developer: <code className="bg-ink/8 px-1 py-0.5 rounded font-mono">https://portal.bcousinoprop.com/api/cl/ml-callback</code>
+            </p>
           </div>
         </SettingsSection>
 
