@@ -31,6 +31,7 @@ export type Captacion = {
   assigned_at: string | null;
   status: "pending" | "completed" | "converted_to_property" | "rejected";
   scrape_status: "pending" | "scraped" | "failed" | "not_available" | null;
+  scrape_error: string | null;
   notes: string | null;
   updated_at: string;
 };

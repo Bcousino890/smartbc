@@ -311,16 +311,28 @@ export function CaptacionesClient({ captaciones, userRole }: CaptacionesClientPr
                     <h3 className="font-medium text-ink line-clamp-1">
                       {c.title || "Sin título"}
                     </h3>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-ink/55">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/55">
                       {c.commune && (
                         <span className="flex items-center gap-1">
                           <MapPin size={11} />
                           {c.commune}
                         </span>
                       )}
-                      {c.bedrooms && <span>{c.bedrooms} dorm</span>}
+                      {c.bedrooms && <span>{c.bedrooms}d</span>}
                       {c.price && <span>{formatPrice(c)}</span>}
+                      {c.scrape_status === "scraped" && (
+                        <span className="text-emerald-600 flex items-center gap-0.5">
+                          <Check size={10} />
+                          Scrapeado
+                        </span>
+                      )}
+                      {c.scrape_status === "failed" && (
+                        <span className="text-red-600 text-[10px]">❌ Error scrape</span>
+                      )}
                     </div>
+                    <p className="mt-0.5 text-[10px] text-ink/40">
+                      Hace {new Date(c.created_at).toLocaleDateString("es-CL")}
+                    </p>
                   </div>
 
                   <div className="flex-shrink-0 text-right">

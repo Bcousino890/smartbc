@@ -21,12 +21,129 @@ export type ScrapedCaptacion = {
 };
 
 function detectSite(url: string): string {
-  if (url.includes("portalinmobiliario.com")) return "portalinmobiliario";
-  if (url.includes("mercadolibre.cl")) return "mercadolibre";
+  if (url.includes("portalinmobiliario.com") || url.includes("mercadolibre.cl"))
+    return "mercadolibre";
   if (url.includes("toctoc.com")) return "toctoc";
   if (url.includes("yapo.cl")) return "yapo";
   if (url.includes("bienesraiceschile.cl")) return "bienesraiceschile";
   return "other";
+}
+
+function extractMLId(url: string): string | null {
+  // URLs like: https://www.portalinmobiliario.com/MLC-3982845844-casa-en-arriendo
+  // or: https://articulo.mercadolibre.cl/MLC-3982845844
+  const match = url.match(/MLC-?(\d+)/i);
+  if (match) {
+    return `MLC${match[1]}`;
+  }
+  return null;
+}
+
+async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
+  const itemRes = await fetch(`https://api.mercadolibre.com/items/${itemId}`, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+
+  if (!itemRes.ok) throw new Error(`ML API error: ${itemRes.status}`);
+
+  const item = (await itemRes.json()) as any;
+
+  let desc: any = {};
+  try {
+    const descRes = await fetch(`https://api.mercadolibre.com/items/${itemId}/description`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (descRes.ok) desc = await descRes.json();
+  } catch {
+    // ignore if description fails
+  }
+
+  // Title
+  const title = item.title || null;
+
+  // Price & currency
+  let price: number | null = null;
+  let currency: "uf" | "clp" | null = null;
+  if (item.price) {
+    price = Math.round(item.price);
+    // MercadoLibre Chile uses CLP by default
+    if (item.currency_id === "CLF") currency = "uf";
+    else if (item.currency_id === "UYU") currency = "clp";
+    else currency = "clp";
+  }
+
+  // Description
+  const description = desc.plain_text ? desc.plain_text.slice(0, 500) : null;
+
+  // Attributes (bedrooms, bathrooms, m², etc.)
+  let bedrooms: number | null = null;
+  let bathrooms: number | null = null;
+  let square_meters: number | null = null;
+
+  if (item.attributes && Array.isArray(item.attributes)) {
+    for (const attr of item.attributes) {
+      if (attr.name === "BEDROOMS" || attr.name === "Dormitorios") {
+        bedrooms = parseInt(attr.value_name || attr.value);
+      } else if (attr.name === "BATHROOMS" || attr.name === "Baños") {
+        bathrooms = parseInt(attr.value_name || attr.value);
+      } else if (attr.name === "TOTAL_AREA" || attr.name === "Superficie total") {
+        square_meters = parseInt(attr.value_name || attr.value);
+      }
+    }
+  }
+
+  // Location
+  let region: string | null = null;
+  let commune: string | null = null;
+  if (item.location) {
+    // location has: city, state (región), country
+    commune = item.location.city || null;
+    region = item.location.state || null;
+  }
+  if (item.address) {
+    commune = item.address.city || commune;
+    region = item.address.state || region;
+  }
+
+  // Photos
+  const photoUrls: string[] = [];
+  if (item.pictures && Array.isArray(item.pictures)) {
+    for (const pic of item.pictures.slice(0, 30)) {
+      if (pic.url) {
+        // Get the largest resolution
+        const large = pic.url.replace(/-[A-Z]+\./, "-O.");
+        photoUrls.push(large);
+      }
+    }
+  }
+
+  // Geolocation
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  if (item.geolocation) {
+    latitude = item.geolocation.latitude || null;
+    longitude = item.geolocation.longitude || null;
+  }
+
+  const address_scraped =
+    item.address?.address_line || item.address?.city || null;
+
+  return {
+    title,
+    description,
+    price,
+    currency: currency ?? undefined,
+    bedrooms,
+    bathrooms,
+    square_meters,
+    region,
+    commune,
+    address_scraped,
+    latitude,
+    longitude,
+    cover_photo_url: photoUrls[0] || null,
+    photo_urls: photoUrls,
+  };
 }
 
 function parsePrice(text: string): { price: number | null; currency: "uf" | "clp" | null } {
@@ -71,119 +188,12 @@ function extractLatLng(html: string): { lat: number | null; lng: number | null }
     if (match) {
       const lat = parseFloat(match[1]);
       const lng = parseFloat(match[2]);
-      // Chile is roughly lat -17 to -56, lng -65 to -76
       if (lat >= -56 && lat <= -17 && lng >= -76 && lng <= -65) {
         return { lat, lng };
       }
     }
   }
   return { lat: null, lng: null };
-}
-
-function scrapePortalinmobiliario(
-  $: cheerio.CheerioAPI,
-  html: string
-): Partial<ScrapedCaptacion> {
-  // Title
-  const title =
-    $("h1.title-h1-re, h1[class*='title'], .property-title, h1").first().text().trim() || null;
-
-  // Price — portalinmobiliario uses specific price sections
-  let priceText =
-    $("[class*='price-tag'] .price-tag-fraction, .price-section .price-tag-fraction").first().text() ||
-    $("[class*='price']").first().text() ||
-    $(".price").first().text();
-  const currencyEl =
-    $("[class*='price-tag'] .price-tag-symbol, .price-section .price-tag-symbol").first().text();
-  if (currencyEl) priceText = currencyEl + priceText;
-  const { price, currency } = parsePrice(priceText);
-
-  // Description
-  const description =
-    $(".description-content p, [class*='description'] p, .description").first().text().trim() || null;
-
-  // Specs
-  let bedrooms: number | null = null;
-  let bathrooms: number | null = null;
-  let square_meters: number | null = null;
-
-  $("[class*='attribute'], [class*='specs'] li, .specs-list li, li.attribute").each((_, el) => {
-    const text = $(el).text().toLowerCase().trim();
-    if (text.includes("dormitorio") || text.includes("habitacion") || text.includes("recámara")) {
-      const m = text.match(/(\d+)/);
-      if (m) bedrooms = parseInt(m[1]);
-    } else if (text.includes("baño")) {
-      const m = text.match(/(\d+)/);
-      if (m) bathrooms = parseInt(m[1]);
-    } else if (text.includes("m²") || text.includes("m2") || text.includes("superficie")) {
-      const m = text.match(/(\d+)/);
-      if (m) square_meters = parseInt(m[1]);
-    }
-  });
-
-  // Also try JSON-LD
-  const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
-  if (jsonLdMatch) {
-    try {
-      const ld = JSON.parse(jsonLdMatch[1]);
-      if (ld.numberOfRooms && !bedrooms) bedrooms = parseInt(ld.numberOfRooms);
-      if (ld.numberOfBathroomsTotal && !bathrooms) bathrooms = parseInt(ld.numberOfBathroomsTotal);
-      if (ld.floorSize?.value && !square_meters) square_meters = parseInt(ld.floorSize.value);
-      if (ld.geo?.latitude && ld.geo?.longitude) {
-        // override with structured data
-      }
-    } catch {}
-  }
-
-  // Location
-  const locationText =
-    $("[class*='location'] address, [class*='address'], .property-location, address").first().text().trim() || null;
-  const breadcrumbItems = $("[class*='breadcrumb'] li, nav[aria-label*='breadcrumb'] li")
-    .map((_, el) => $(el).text().trim())
-    .get()
-    .filter(Boolean);
-
-  let commune: string | null = null;
-  let region: string | null = null;
-  if (breadcrumbItems.length >= 2) {
-    commune = breadcrumbItems[breadcrumbItems.length - 1] || null;
-    region = breadcrumbItems[breadcrumbItems.length - 2] || null;
-  }
-  if (!commune && locationText) {
-    const parts = locationText.split(",").map((s) => s.trim());
-    commune = parts[parts.length - 1] || null;
-  }
-
-  // Coordinates from page source
-  const { lat, lng } = extractLatLng(html);
-
-  // Photos
-  const photoUrls: string[] = [];
-  $("img[class*='gallery'], img[class*='photo'], .carousel img, .gallery img, figure img").each((_, el) => {
-    const src = $(el).attr("data-src") || $(el).attr("src") || "";
-    if (src && src.startsWith("http") && !src.includes("placeholder") && !src.includes("logo")) {
-      // Get largest resolution available
-      const large = src.replace(/-[SWJN]\d+x\d+/, "").replace(/-\d+x\d+/, "");
-      if (!photoUrls.includes(large)) photoUrls.push(large);
-    }
-  });
-
-  return {
-    title,
-    description,
-    price,
-    currency: currency ?? undefined,
-    bedrooms,
-    bathrooms,
-    square_meters,
-    region,
-    commune,
-    address_scraped: locationText,
-    latitude: lat,
-    longitude: lng,
-    cover_photo_url: photoUrls[0] || null,
-    photo_urls: photoUrls.slice(0, 30),
-  };
 }
 
 function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCaptacion> {
@@ -201,7 +211,6 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
 
   const { lat, lng } = extractLatLng(html);
 
-  // Photos — look for og:image and regular img src with property keywords
   const photoUrls: string[] = [];
   const ogImage = $("meta[property='og:image']").attr("content");
   if (ogImage) photoUrls.push(ogImage);
@@ -231,6 +240,38 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
 export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion> {
   const site = detectSite(url);
 
+  try {
+    // Try ML API first
+    if (site === "mercadolibre") {
+      const mlId = extractMLId(url);
+      if (mlId) {
+        const partial = await scrapeML(mlId);
+        return {
+          title: partial.title ?? null,
+          description: partial.description ?? null,
+          price: partial.price ?? null,
+          currency: partial.currency ?? null,
+          bedrooms: partial.bedrooms ?? null,
+          bathrooms: partial.bathrooms ?? null,
+          square_meters: partial.square_meters ?? null,
+          region: partial.region ?? null,
+          commune: partial.commune ?? null,
+          zone: partial.zone ?? null,
+          address_scraped: partial.address_scraped ?? null,
+          latitude: partial.latitude ?? null,
+          longitude: partial.longitude ?? null,
+          cover_photo_url: partial.cover_photo_url ?? null,
+          photo_urls: partial.photo_urls ?? [],
+          source_site: site,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn(`[scraper] ML API failed for ${url}:`, err);
+    // Fall through to web scraping
+  }
+
+  // Fallback: web scraping
   const headers: Record<string, string> = {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -248,22 +289,14 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
   let html: string;
   try {
     const res = await fetch(url, { headers, signal: controller.signal, redirect: "follow" });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     html = await res.text();
   } finally {
     clearTimeout(timeout);
   }
 
   const $ = cheerio.load(html);
-
-  let partial: Partial<ScrapedCaptacion>;
-  if (site === "portalinmobiliario" || site === "mercadolibre") {
-    partial = scrapePortalinmobiliario($, html);
-  } else {
-    partial = scrapeGeneric($, html);
-  }
+  const partial = scrapeGeneric($, html);
 
   return {
     title: partial.title ?? null,

@@ -61,6 +61,7 @@ export function CaptacionDetailClient({
   const [updatingData, setUpdatingData] = useState(false);
   const [loggingAttempt, setLoggingAttempt] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [rescrapingAttempt, setRescrapeingAttempt] = useState(false);
   const [formData, setFormData] = useState({
     owner_phone: captacion.owner_phone || "",
     owner_name: captacion.owner_name || "",
@@ -132,6 +133,28 @@ export function CaptacionDetailClient({
     }
   }
 
+  async function handleRescrape() {
+    setError("");
+    setRescrapeingAttempt(true);
+    try {
+      const res = await fetch("/api/admin/cl/captaciones/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: captacion.source_url, captacion_id: captacion.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Error al scrapear");
+        return;
+      }
+      setTimeout(() => window.location.reload(), 1000);
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setRescrapeingAttempt(false);
+    }
+  }
+
   const allPhotos = photos.length > 0 ? photos : (captacion.cover_photo_url ? [{ id: "0", url: captacion.cover_photo_url, position: 0 }] : []);
 
   return (
@@ -176,20 +199,42 @@ export function CaptacionDetailClient({
                 →
               </button>
             )}
-            <a
-              href={captacion.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] text-white hover:bg-black/70"
-            >
-              <ExternalLink size={11} />
-              Ver original
-            </a>
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              {!isCaptadora && (
+                <button
+                  onClick={handleRescrape}
+                  disabled={rescrapingAttempt}
+                  className="flex items-center gap-1 rounded-full bg-blue-600/80 px-2.5 py-1 text-[11px] text-white transition hover:bg-blue-700 disabled:opacity-50"
+                  title="Obtener datos nuevamente del link"
+                >
+                  {rescrapingAttempt ? (
+                    <>
+                      <Loader2 size={10} className="animate-spin" />
+                      Scrapeando...
+                    </>
+                  ) : (
+                    <>
+                      <Navigation size={11} />
+                      Re-scrapear
+                    </>
+                  )}
+                </button>
+              )}
+              <a
+                href={captacion.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] text-white hover:bg-black/70"
+              >
+                <ExternalLink size={11} />
+                Ver original
+              </a>
+            </div>
           </div>
         )}
 
         <div className="p-5">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 mb-3">
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-ink leading-snug">{captacion.title || "Sin título"}</h1>
               {!captacion.cover_photo_url && (
@@ -216,6 +261,24 @@ export function CaptacionDetailClient({
               {captacion.status === "converted_to_property" && "Convertida"}
               {captacion.status === "rejected" && "Rechazada"}
             </span>
+          </div>
+
+          {/* Scrape status and meta */}
+          <div className="mb-3 flex items-center gap-2 text-[11px] text-ink/50">
+            {captacion.scrape_status === "scraped" && (
+              <span className="flex items-center gap-1 text-emerald-600">
+                <Check size={12} />
+                Datos obtenidos del link
+              </span>
+            )}
+            {captacion.scrape_status === "failed" && (
+              <span className="text-red-600">
+                ⚠ Error al obtener datos: {captacion.scrape_error || "desconocido"}
+              </span>
+            )}
+            {captacion.scrape_status === "pending" && (
+              <span className="text-amber-600">Obteniendo datos del link...</span>
+            )}
           </div>
 
           {/* Stats grid */}
