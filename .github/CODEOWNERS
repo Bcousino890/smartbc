@@ -1,0 +1,4 @@
+# Dueño del código: todos los PRs requieren la aprobación de @fabriirguez
+# (efectivo cuando en la protección de rama de `main` se marca
+# "Require review from Code Owners").
+* @fabriirguez

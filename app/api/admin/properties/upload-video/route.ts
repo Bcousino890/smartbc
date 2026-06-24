@@ -94,6 +94,11 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("[upload-video] unexpected error:", err);
-    return Response.json({ error: "Error interno del servidor" }, { status: 500 });
+    const detail =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return Response.json(
+      { error: `Error interno del servidor — ${detail}` },
+      { status: 500 }
+    );
   }
 }
