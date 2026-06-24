@@ -252,6 +252,7 @@ export const STAFF_ROLES = [
   "agent_junior",
   "agent_senior",
   "agent_admin",
+  "captadora",
 ] as const;
 
 /** Comprueba si un rol es un rol de agente inmobiliario */

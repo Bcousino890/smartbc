@@ -78,6 +78,8 @@ interface AdminSidebarProps {
   pendingVisits?: number;
   /** Mensajes directos no leídos para el badge de Mensajes. */
   unreadMessages?: number;
+  /** Notificaciones CRM no leídas (captaciones completadas, etc.) */
+  unreadNotifications?: number;
   /** Callback para notificar al padre cuando el sidebar abre/cierra (mobile). */
   onOpenChange?: (open: boolean) => void;
   /** País activo del dashboard: 'es' o 'cl' */
@@ -86,7 +88,7 @@ interface AdminSidebarProps {
   canSwitchCountry?: boolean;
 }
 
-export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, onOpenChange, country = "es", canSwitchCountry = false }: AdminSidebarProps) {
+export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, unreadNotifications = 0, onOpenChange, country = "es", canSwitchCountry = false }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -207,8 +209,9 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
               const active =
                 pathname === href ||
                 (href !== dashboardHref && pathname.startsWith(`${href}/`));
-              const isCalendario = href === "/admin/calendario";
-              const isMensajes = href === "/admin/mensajes";
+              const isCalendario = href.endsWith("/admin/calendario");
+              const isMensajes = href.endsWith("/admin/mensajes");
+              const isCaptaciones = href.endsWith("/admin/captaciones");
               return (
                 <li key={href}>
                   <Link
@@ -232,6 +235,11 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                     {isMensajes && unreadMessages > 0 && (
                       <span className="ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
                         {unreadMessages > 99 ? "99+" : unreadMessages}
+                      </span>
+                    )}
+                    {isCaptaciones && unreadNotifications > 0 && (
+                      <span className="ml-auto rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                        {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </span>
                     )}
                   </Link>

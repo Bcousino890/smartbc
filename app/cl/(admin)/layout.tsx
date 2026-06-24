@@ -45,6 +45,20 @@ export default async function AdminLayout({
     // Silently default to 0 if the query fails (e.g. missing column from migration 0027)
   }
 
+  // Obtener notificaciones CRM no leídas (captaciones completadas, etc.)
+  let unreadNotifications: number = 0;
+  try {
+    const db = createAdminClient() as any;
+    const { count } = await db
+      .from("crm_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", profile.id)
+      .eq("read", false);
+    unreadNotifications = count ?? 0;
+  } catch {
+    // Migration 0050 may not be applied yet
+  }
+
   // Obtener mensajes directos no leídos para el badge del sidebar
   // Wrapped in try-catch: migration 0030 may not be applied yet on the VPS
   let unreadMessages: number = 0;
@@ -115,7 +129,7 @@ export default async function AdminLayout({
       />
 
       <div className="relative z-10">
-        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} country="cl" canSwitchCountry={canSwitchCountry} />
+        <AdminSidebar user={adminUser} currentRole={profile.role} permissions={permissions} pendingVisits={pendingVisits ?? 0} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} country="cl" canSwitchCountry={canSwitchCountry} />
         {/* En mobile no hay margen izquierdo (el sidebar está oculto).
             En desktop (lg+) añadimos ml-[260px] para dejar espacio al sidebar fijo.
             En mobile añadimos pt-16 para que el contenido no quede tapado por el botón hamburger (h-10 + top-4 = 56px). */}
