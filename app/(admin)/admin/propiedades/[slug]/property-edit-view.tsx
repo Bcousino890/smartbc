@@ -28,6 +28,7 @@ import {
   updateProperty,
   addPropertyVideo,
   uploadPropertyPlan,
+  uploadPropertyVideo,
   deletePropertyMedia,
   type MediaItem,
 } from "@/app/(admin)/admin/propiedades/actions";
@@ -108,9 +109,6 @@ export function PropertyEditView({
   const [videoError, setVideoError] = useState<string | null>(null);
   const [addingVideo, setAddingVideo] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number>(0); // 0-100
-  const [uploadEta, setUploadEta] = useState<string | null>(null); // "1m 23s"
-  const uploadStartRef = useRef<number>(0);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Planos state
@@ -188,78 +186,28 @@ export function PropertyEditView({
     setVideos((v) => v.filter((x) => x.id !== item.id));
   }
 
-  function handleVideoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleVideoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setVideoError(null);
     setUploadingVideo(true);
-    setUploadProgress(0);
-    setUploadEta(null);
-    uploadStartRef.current = Date.now();
 
+    // Subimos por Server Action (no por Route Handler): el límite de body de
+    // Next (bodySizeLimit: 5gb) SOLO aplica a Server Actions. El Route Handler
+    // cortaba el body de los vídeos grandes y fallaba con "Failed to parse body
+    // as FormData". Mismo camino probado que los planos.
     const fd = new FormData();
     fd.set("slug", property.slug);
     fd.set("file", file);
+    const res = await uploadPropertyVideo(fd);
 
-    const xhr = new XMLHttpRequest();
-    xhr.upload.addEventListener("progress", (ev) => {
-      if (!ev.lengthComputable) return;
-      // Limita al 95% durante el upload (deja espacio para procesamiento del servidor)
-      const pct = Math.min(95, Math.round((ev.loaded / ev.total) * 95));
-      setUploadProgress(pct);
-      const elapsed = (Date.now() - uploadStartRef.current) / 1000;
-      if (elapsed > 0.5 && ev.loaded > 0) {
-        const rate = ev.loaded / elapsed; // bytes/s
-        const remaining = (ev.total - ev.loaded) / rate; // seconds
-        if (remaining >= 60) {
-          const m = Math.floor(remaining / 60);
-          const s = Math.round(remaining % 60);
-          setUploadEta(`${m}m ${s}s`);
-        } else {
-          setUploadEta(`${Math.round(remaining)}s`);
-        }
-      }
-    });
-    xhr.addEventListener("load", () => {
-      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setUploadProgress(100);
-        setTimeout(() => {
-          setUploadingVideo(false);
-          setUploadProgress(0);
-          setUploadEta(null);
-        }, 300);
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (data.ok && data.item) {
-            setVideos((v) => [...v, data.item]);
-          } else {
-            setVideoError(data.error || "Error al subir vídeo");
-          }
-        } catch {
-          setVideoError("Respuesta inesperada del servidor");
-        }
-      } else {
-        setUploadingVideo(false);
-        setUploadProgress(0);
-        setUploadEta(null);
-        try {
-          const data = JSON.parse(xhr.responseText);
-          setVideoError(data.error || `Error ${xhr.status}`);
-        } catch {
-          setVideoError(`Error ${xhr.status} al subir`);
-        }
-      }
-    });
-    xhr.addEventListener("error", () => {
-      setUploadingVideo(false);
-      setUploadProgress(0);
-      setUploadEta(null);
-      setVideoError("Error de red al subir el vídeo");
-      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
-    });
-    xhr.open("POST", "/api/admin/properties/upload-video");
-    xhr.send(fd);
+    setUploadingVideo(false);
+    if (videoFileInputRef.current) videoFileInputRef.current.value = "";
+    if (res.ok) {
+      setVideos((v) => [...v, res.item]);
+    } else {
+      setVideoError(res.error);
+    }
   }
 
   // ─── Plan handlers ─────────────────────────────────────────────────────
@@ -861,19 +809,9 @@ export function PropertyEditView({
             </button>
           </div>
           {uploadingVideo ? (
-            <div className="mt-2 rounded-lg border border-gold/30 bg-gold/5 p-3">
-              <div className="mb-1.5 flex items-center justify-between text-[12px] text-ink/70">
-                <span className="font-medium">Subiendo vídeo…</span>
-                <span className="tabular-nums">
-                  {uploadProgress}%{uploadEta ? ` · ${uploadEta} restante` : ""}
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-ink/10">
-                <div
-                  className="h-full rounded-full bg-gold transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/5 p-3 text-[12px] text-ink/70">
+              <Loader2 size={14} className="animate-spin text-gold" />
+              <span className="font-medium">Subiendo vídeo… no cierres esta página</span>
             </div>
           ) : (
             <button
