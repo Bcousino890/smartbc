@@ -48,20 +48,19 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
-  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties"    },
+  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties",   onlyCountry: "es" },
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
   { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares"  },
   { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
   { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
-  { href: "/admin/portalinmobiliario", labelKey: "admin.nav.portalinmobiliario", icon: Globe2,        permissionResource: "properties",   onlyCountry: "cl" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
-  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties"    },
+  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties",   onlyCountry: "es" },
   { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
-  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion" },
+  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion", onlyCountry: "es" },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 
