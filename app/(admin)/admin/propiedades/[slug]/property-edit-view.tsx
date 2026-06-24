@@ -199,14 +199,24 @@ export function PropertyEditView({
     const fd = new FormData();
     fd.set("slug", property.slug);
     fd.set("file", file);
-    const res = await uploadPropertyVideo(fd);
-
-    setUploadingVideo(false);
-    if (videoFileInputRef.current) videoFileInputRef.current.value = "";
-    if (res.ok) {
-      setVideos((v) => [...v, res.item]);
-    } else {
-      setVideoError(res.error);
+    try {
+      const res = await uploadPropertyVideo(fd);
+      if (res.ok) {
+        setVideos((v) => [...v, res.item]);
+      } else {
+        setVideoError(res.error);
+      }
+    } catch (err) {
+      // Si el Server Action lanza (vídeo demasiado grande para el Storage del
+      // VPS, timeout, etc.) reseteamos el estado para no dejar el spinner
+      // colgado y sugerimos el enlace de YouTube/Vimeo como alternativa.
+      setVideoError(
+        (err instanceof Error ? `No se pudo subir (${err.message}). ` : "No se pudo subir el vídeo. ") +
+          "Si el vídeo es grande, pega un enlace de YouTube/Vimeo.",
+      );
+    } finally {
+      setUploadingVideo(false);
+      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
     }
   }
 
