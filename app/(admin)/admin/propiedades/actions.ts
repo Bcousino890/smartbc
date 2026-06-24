@@ -691,15 +691,30 @@ export async function uploadPropertyVideo(
   // Upload directo del archivo (streaming, sin cargar en memoria).
   // El cliente de Supabase maneja archivos grandes de forma eficiente.
   const admin = createAdminClient();
-  const { error: uploadErr } = await (admin as any).storage
-    .from("properties-photos")
-    .upload(storagePath, file, { contentType: file.type || "video/mp4", upsert: false });
+  let uploadErr: { message?: string } | null = null;
+  try {
+    const res = await (admin as any).storage
+      .from("properties-photos")
+      .upload(storagePath, file, { contentType: file.type || "video/mp4", upsert: false });
+    uploadErr = res.error;
+  } catch (e) {
+    // La librería de Storage LANZA (en vez de devolver { error }) cuando el
+    // contenedor 'storage' del VPS rechaza el archivo —típicamente por superar
+    // FILE_SIZE_LIMIT, que devuelve un 413 no-JSON— o ante un fallo de red.
+    // Lo devolvemos como texto para que el detalle no quede oculto por Next.
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[uploadPropertyVideo] storage threw:", e);
+    return {
+      ok: false,
+      error: `Storage rechazó el vídeo (${detail}). Casi seguro es el límite de tamaño del Storage del VPS (FILE_SIZE_LIMIT). Sube ese límite en el contenedor 'storage' o usa un enlace de YouTube/Vimeo.`,
+    };
+  }
 
   if (uploadErr) {
     console.error("[uploadPropertyVideo] storage error:", uploadErr);
     const msg = uploadErr.message ?? "";
-    if (/too large|size|exceeds/i.test(msg)) {
-      return { ok: false, error: "Vídeo demasiado grande. Reduce el tamaño, comprime el MP4, o súbelo a YouTube/Vimeo y pega el enlace." };
+    if (/too large|size|exceeds|payload|413/i.test(msg)) {
+      return { ok: false, error: `Vídeo demasiado grande para el Storage del VPS (${msg}). Sube el FILE_SIZE_LIMIT del contenedor 'storage' o usa YouTube/Vimeo.` };
     }
     return { ok: false, error: uploadErr.message || "Error al subir vídeo" };
   }
