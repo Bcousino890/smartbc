@@ -12,7 +12,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type UserRole = "client" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin";
+export type UserRole = "client" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "captadora";
 export type PropertyOperation = "rent" | "sale";
 export type PropertyStay = "short" | "long";
 export type PropertyStatus = "available" | "reserved" | "sold" | "archived";
