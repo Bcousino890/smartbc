@@ -8,6 +8,7 @@ export type Captacion = {
   source_url: string;
   source_site: string | null;
   title: string | null;
+  description: string | null;
   price: number | null;
   currency: string;
   bedrooms: number | null;
@@ -17,6 +18,10 @@ export type Captacion = {
   region: string | null;
   commune: string | null;
   zone: string | null;
+  subzone: string | null;
+  address_scraped: string | null;
+  latitude: number | null;
+  longitude: number | null;
   owner_phone: string | null;
   owner_name: string | null;
   owner_contact: string | null;
@@ -25,6 +30,7 @@ export type Captacion = {
   assigned_to: string | null;
   assigned_at: string | null;
   status: "pending" | "completed" | "converted_to_property" | "rejected";
+  scrape_status: "pending" | "scraped" | "failed" | "not_available" | null;
   notes: string | null;
   updated_at: string;
 };
@@ -87,6 +93,18 @@ export async function getCaptacionesForCaptadora(userId: string) {
     .from("captaciones")
     .select("*")
     .eq("assigned_to", userId)
+    .eq("country", "cl")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data as Captacion[];
+}
+
+export async function getCaptacionesAll() {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("captaciones")
+    .select("*")
     .eq("country", "cl")
     .order("created_at", { ascending: false });
 
