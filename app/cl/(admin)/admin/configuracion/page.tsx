@@ -30,6 +30,7 @@ export default function AdminConfiguracionPage() {
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
   const [scrapingAppKey, setScrapingAppKey] = useState("");
+  const [mlClientSecret, setMlClientSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -55,6 +56,11 @@ export default function AdminConfiguracionPage() {
           }
           setScrapingAppKey(key);
         }
+        if (typeof data["ml.chile.client_secret"] === "string") {
+          let secret = data["ml.chile.client_secret"] as string;
+          secret = secret.replace(/^["']+|["']+$/g, "").trim();
+          setMlClientSecret(secret || "");
+        }
       })
       .catch(() => {
         // Si falla la carga, se mantienen los valores mock
@@ -74,6 +80,7 @@ export default function AdminConfiguracionPage() {
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
           "scraping.smartproxy.app_key": scrapingAppKey,
+          "ml.chile.client_secret": mlClientSecret,
         }),
       });
       setSaved(true);
@@ -291,6 +298,24 @@ export default function AdminConfiguracionPage() {
               value={scrapingProxyUrl}
               onChange={setScrapingProxyUrl}
               placeholder="http://usuario:contraseña@eu.smartproxy.net:3120"
+            />
+          </div>
+        </SettingsSection>
+
+        {/* MercadoLibre Chile */}
+        <SettingsSection
+          icon={<Globe size={16} strokeWidth={1.75} />}
+          titleKey="config.mercadolibre.title"
+        >
+          <div className="space-y-3">
+            <p className="text-xs text-ink/55">
+              Credenciales para publicar propiedades en PortalInmobiliario.com. Obtén el <strong>Client Secret</strong> de tu aplicación ML en <a href="https://developers.mercadolibre.cl" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">developers.mercadolibre.cl</a>.
+            </p>
+            <PasswordField
+              label="MercadoLibre Client Secret"
+              value={mlClientSecret}
+              onChange={setMlClientSecret}
+              placeholder="ej: f36c1f2a7d8b9e4c..."
             />
           </div>
         </SettingsSection>
