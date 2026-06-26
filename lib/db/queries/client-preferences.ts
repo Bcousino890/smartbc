@@ -24,7 +24,7 @@ export type ClientPreferencesChile = {
 // Obtener preferencias de un cliente
 export async function getClientPreferences(userId: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("client_preferences")
     .select("*")
     .eq("user_id", userId)
@@ -41,7 +41,7 @@ export async function updateClientPreferencesChile(
 ) {
   const supabase = await createClient();
 
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
 
   if (preferences.countryId !== undefined) {
     updateData.country_id = preferences.countryId;
@@ -111,7 +111,7 @@ export async function updateClientPreferencesChile(
     updateData.budget_max = preferences.budgetMax;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("client_preferences")
     .update(updateData)
     .eq("user_id", userId)
@@ -150,7 +150,7 @@ export async function createClientPreferencesChile(
     budget_max: preferences?.budgetMax || null,
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("client_preferences")
     .insert(insertData)
     .select()

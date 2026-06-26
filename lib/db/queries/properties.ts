@@ -266,12 +266,12 @@ export async function getPropertiesChile(filters: ChilePropertyFilters = {}) {
 // Helper para obtener el ID del país Chile
 async function getChileCountryId(): Promise<string> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("countries")
     .select("id")
     .eq("code", "CL")
     .single();
 
   if (error) throw new Error("Chile country not found");
-  return data.id;
+  return (data as { id: string }).id;
 }
