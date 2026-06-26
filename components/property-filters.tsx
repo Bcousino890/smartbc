@@ -3,6 +3,7 @@
 import {
   Bath,
   Bed,
+  Building2,
   Calendar,
   Euro,
   MapPin,
@@ -19,9 +20,11 @@ import { cn } from "@/lib/utils";
 type Props = {
   initial?: Filters;
   onApply: (filters: Filters) => void;
+  // Distrito → subzonas disponibles (derivado de las propiedades cargadas).
+  zoneTree?: Record<string, string[]>;
 };
 
-export function PropertyFilters({ initial, onApply }: Props) {
+export function PropertyFilters({ initial, onApply, zoneTree }: Props) {
   const t = useT();
   const [bedrooms, setBedrooms] = useState<string>(
     initial?.bedrooms ? String(initial.bedrooms) : "",
@@ -39,10 +42,20 @@ export function PropertyFilters({ initial, onApply }: Props) {
   const [minSquareMeters, setMinSquareMeters] = useState<string>(
     initial?.minSquareMeters ? String(initial.minSquareMeters) : "",
   );
+  const [minFloor, setMinFloor] = useState<string>(
+    initial?.minFloor ? String(initial.minFloor) : "",
+  );
   const [zone, setZone] = useState<string>(initial?.zone ?? "");
+  const [subzone, setSubzone] = useState<string>(initial?.subzone ?? "");
   const [operation, setOperation] = useState<Operation>(
     initial?.operation ?? "alquiler",
   );
+
+  // Distritos a mostrar (los de los datos si hay árbol; si no, lista estática).
+  const districts = zoneTree
+    ? Object.keys(zoneTree).sort((a, b) => a.localeCompare(b, "es"))
+    : [...MADRID_ZONES];
+  const subzonesForZone = (zone && zoneTree?.[zone]) || [];
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,7 +66,9 @@ export function PropertyFilters({ initial, onApply }: Props) {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       bathrooms: bathrooms ? Number(bathrooms) : undefined,
       minSquareMeters: minSquareMeters ? Number(minSquareMeters) : undefined,
+      minFloor: minFloor ? Number(minFloor) : undefined,
       zone: zone || undefined,
+      subzone: subzone || undefined,
       operation,
     });
   }
@@ -115,17 +130,17 @@ export function PropertyFilters({ initial, onApply }: Props) {
           label={t("filters.price")}
           icon={<Euro size={16} strokeWidth={1.5} />}
         >
-          <SelectInput
+          {/* Input numérico libre: BC pidió poder escribir el precio
+              exacto en lugar de elegir entre opciones fijas. */}
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={100}
             value={maxPrice}
-            onChange={setMaxPrice}
+            onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder={t("common.any")}
-            options={[
-              { value: "", label: t("common.any") },
-              { value: "2000", label: priceOption(2000) },
-              { value: "3500", label: priceOption(3500) },
-              { value: "5000", label: priceOption(5000) },
-              { value: "8000", label: priceOption(8000) },
-            ]}
+            className="w-full appearance-none bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </FieldGroup>
 
@@ -165,18 +180,54 @@ export function PropertyFilters({ initial, onApply }: Props) {
         </FieldGroup>
 
         <FieldGroup
+          label={t("filters.floor")}
+          icon={<Building2 size={16} strokeWidth={1.5} />}
+        >
+          <SelectInput
+            value={minFloor}
+            onChange={setMinFloor}
+            placeholder={t("common.any")}
+            options={[
+              { value: "", label: t("common.any") },
+              { value: "1", label: t("filters.floor.min", { n: 1 }) },
+              { value: "2", label: t("filters.floor.min", { n: 2 }) },
+              { value: "3", label: t("filters.floor.min", { n: 3 }) },
+              { value: "4", label: t("filters.floor.min", { n: 4 }) },
+              { value: "5", label: t("filters.floor.min", { n: 5 }) },
+              { value: "6", label: t("filters.floor.min", { n: 6 }) },
+            ]}
+          />
+        </FieldGroup>
+
+        <FieldGroup
           label={t("filters.zone")}
           icon={<MapPin size={16} strokeWidth={1.5} />}
         >
           <SelectInput
             value={zone}
-            onChange={setZone}
+            onChange={(v) => {
+              setZone(v);
+              setSubzone(""); // al cambiar de distrito, reiniciar subzona
+            }}
             placeholder={t("filters.zone.all")}
             options={[
               { value: "", label: t("filters.zone.all") },
-              ...MADRID_ZONES.map((z) => ({ value: z, label: z })),
+              ...districts.map((z) => ({ value: z, label: z })),
             ]}
           />
+          {subzonesForZone.length > 0 && (
+            <div className="mt-2">
+              <SelectInput
+                value={subzone}
+                onChange={setSubzone}
+                placeholder={t("filters.subzone.all")}
+                options={[
+                  { value: "", label: t("filters.subzone.all") },
+                  ...subzonesForZone.map((s) => ({ value: s, label: s })),
+                ]}
+              />
+            </div>
+          )}
         </FieldGroup>
 
         <FieldGroup label={t("filters.operation")}>

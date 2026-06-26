@@ -41,6 +41,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         bedrooms: 3,
         bathrooms: 3,
         price: 6500,
+        squareMeters: 180,
+        status: "available",
         lastUpdateMinutes: 10,
       },
       {
@@ -52,6 +54,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         bedrooms: 4,
         bathrooms: 3,
         price: 1850000,
+        squareMeters: 220,
+        status: "available",
         lastUpdateMinutes: 25,
       },
       {
@@ -63,6 +67,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         bedrooms: 2,
         bathrooms: 2,
         price: 2900,
+        squareMeters: 125,
+        status: "reserved",
         lastUpdateMinutes: 60,
       },
       {
@@ -74,6 +80,8 @@ export const mockAgencyDetails: Record<string, AgencyDetail> = {
         bedrooms: 3,
         bathrooms: 2,
         price: 1295000,
+        squareMeters: 165,
+        status: "available",
         lastUpdateMinutes: 120,
       },
     ],
@@ -242,6 +250,8 @@ function makeFallbackProperties(prefix: string): AgencyPropertyRow[] {
       bedrooms: 2,
       bathrooms: 2,
       price: 3200,
+      squareMeters: 110,
+      status: "available",
       lastUpdateMinutes: 15,
     },
     {
@@ -253,6 +263,8 @@ function makeFallbackProperties(prefix: string): AgencyPropertyRow[] {
       bedrooms: 3,
       bathrooms: 2,
       price: 1450000,
+      squareMeters: 155,
+      status: "available",
       lastUpdateMinutes: 45,
     },
   ];

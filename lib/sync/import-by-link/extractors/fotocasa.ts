@@ -1,5 +1,6 @@
 import type { CheerioAPI } from "cheerio";
 import type { ImportPreview } from "../types";
+import { detectAdvertiserFromHtml } from "../../particulares/idealista-advertiser-detector";
 import { extractFotocasaPhotos } from "../../scrapers/fotocasa";
 import {
   collectUrlStrings,
@@ -157,6 +158,9 @@ export function extractFotocasa(
 
   const photos = extractFotocasaPhotos($, sourceUrl);
 
+  // Extraer información de contacto (teléfono, tipo de anunciante) del HTML
+  const advertiserInfo = detectAdvertiserFromHtml($.html());
+
   if (!title) warnings.push("título no detectado");
   if (price === null) warnings.push("precio no detectado");
   if (photos.length === 0)
@@ -183,5 +187,6 @@ export function extractFotocasa(
     photos,
     rawAttributes: {},
     warnings,
+    advertiserInfo,
   };
 }

@@ -1,11 +1,19 @@
 "use client";
 
-import { Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  GripVertical,
+  Image as ImageIcon,
+  Loader2,
+  Star,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   deletePropertyPhoto,
+  reorderPropertyPhotos,
   uploadPropertyPhoto,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { Modal } from "@/components/ui/modal";
@@ -85,6 +93,57 @@ export function PropertyPhotosModal({
     });
   };
 
+  // Persiste un nuevo orden (la 1ª pasa a ser la portada del SmartLink).
+  const persistOrder = (next: PropertyPhoto[]) => {
+    setPhotos(next);
+    setError(null);
+    startTransition(async () => {
+      const res = await reorderPropertyPhotos(
+        slug,
+        next.map((p) => p.url),
+      );
+      if (!res.ok) setError(res.error);
+      router.refresh();
+    });
+  };
+
+  // Reordenar arrastrando: reordenamos en LOCAL mientras se arrastra y solo
+  // guardamos al soltar (evita una llamada al servidor por cada movimiento).
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const orderRef = useRef(photos);
+  orderRef.current = photos;
+
+  const reorderLocal = (from: number, to: number) => {
+    if (from === to) return;
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      orderRef.current = next;
+      return next;
+    });
+  };
+
+  const persistCurrentOrder = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await reorderPropertyPhotos(
+        slug,
+        orderRef.current.map((p) => p.url),
+      );
+      if (!res.ok) setError(res.error);
+      router.refresh();
+    });
+  };
+
+  const makePrincipal = (index: number) => {
+    if (index === 0) return;
+    const next = [...photos];
+    const [item] = next.splice(index, 1);
+    next.unshift(item);
+    persistOrder(next);
+  };
+
   return (
     <Modal
       open={open}
@@ -148,16 +207,35 @@ export function PropertyPhotosModal({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {photos.map((photo) => (
-                <PhotoCard
-                  key={photo.url}
-                  photo={photo}
-                  onDelete={() => handleDelete(photo.url)}
-                  isPending={isPending}
-                />
-              ))}
-            </div>
+            <>
+              <p className="mb-3 text-[12px] text-ink/55">
+                {t("adminProps.photos.reorderHint")}
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {photos.map((photo, index) => (
+                  <PhotoCard
+                    key={photo.url}
+                    photo={photo}
+                    index={index}
+                    isDragging={dragIndex === index}
+                    onDelete={() => handleDelete(photo.url)}
+                    onMakePrincipal={() => makePrincipal(index)}
+                    onDragStart={() => setDragIndex(index)}
+                    onDragEnter={() => {
+                      if (dragIndex !== null && dragIndex !== index) {
+                        reorderLocal(dragIndex, index);
+                        setDragIndex(index);
+                      }
+                    }}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      persistCurrentOrder();
+                    }}
+                    isPending={isPending}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
     </Modal>
@@ -166,28 +244,60 @@ export function PropertyPhotosModal({
 
 function PhotoCard({
   photo,
+  index,
+  isDragging,
   onDelete,
+  onMakePrincipal,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
   isPending,
 }: {
   photo: PropertyPhoto;
+  index: number;
+  isDragging: boolean;
   onDelete: () => void;
+  onMakePrincipal: () => void;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragEnd: () => void;
   isPending: boolean;
 }) {
   const t = useT();
+  const isPrincipal = index === 0;
   return (
-    <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gold/15 bg-cream-100">
+    <div
+      draggable={!isPending}
+      onDragStart={onDragStart}
+      onDragEnter={onDragEnter}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnd={onDragEnd}
+      className={cn(
+        "group relative aspect-[4/3] cursor-grab overflow-hidden rounded-xl border border-gold/15 bg-cream-100 active:cursor-grabbing",
+        isDragging && "opacity-40 ring-2 ring-gold",
+      )}
+    >
       <Image
         src={photo.url}
         alt=""
         fill
         sizes="(max-width: 640px) 50vw, 33vw"
-        className="object-cover"
+        className="pointer-events-none object-cover"
       />
-      {photo.isCover && (
-        <span className="absolute left-2 top-2 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
-          {t("adminProps.photos.cover")}
+
+      {/* Asa de arrastre (señal visual) */}
+      <span className="absolute left-1.5 top-1.5 rounded-md bg-cream-50/85 p-1 text-ink/55 opacity-0 transition group-hover:opacity-100">
+        <GripVertical size={13} strokeWidth={1.75} />
+      </span>
+
+      {isPrincipal && (
+        <span className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+          <Star size={10} strokeWidth={2} fill="currentColor" />
+          {t("adminProps.photos.principal")}
         </span>
       )}
+
+      {/* Borrar (arriba derecha) */}
       <button
         type="button"
         onClick={onDelete}
@@ -197,6 +307,19 @@ function PhotoCard({
       >
         <Trash2 size={13} strokeWidth={1.75} />
       </button>
+
+      {/* Hacer principal (solo si no lo es ya) */}
+      {!isPrincipal && (
+        <button
+          type="button"
+          onClick={onMakePrincipal}
+          disabled={isPending}
+          className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1 rounded-md bg-cream-50/95 px-2 py-1 text-[10px] font-semibold text-ink opacity-0 transition group-hover:opacity-100 hover:bg-white disabled:opacity-40"
+        >
+          <Star size={11} strokeWidth={2} className="text-gold" />
+          {t("adminProps.photos.makePrincipal")}
+        </button>
+      )}
     </div>
   );
 }

@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/admin";
 import type { UserRole } from "@/lib/db/database.types";
+
+// Emails que reciben rol admin si se auto-crea su perfil al iniciar sesión.
+const ADMIN_EMAILS = ["fabri@bcousinoprop.com"];
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -43,28 +47,63 @@ export async function signInAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "auth.error.invalidCredentials" };
 
+  // HARDCODED ADMIN: bypass DB for this email, always allow in
+  if (user.email?.toLowerCase() === "benjamincousino1@gmail.com") {
+    revalidatePath("/", "layout");
+    redirect("/es/admin");
+  }
+
+  // Comprobar perfil. Solo se selecciona `role` (NO `country`): PostgREST no
+  // tiene la columna `country` en su schema cache, y seleccionarla hacía fallar
+  // la consulta en silencio (se interpretaba como "sin perfil").
   const { data } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
-  const profile = data as { role: UserRole } | null;
+  let profile = data as { role: UserRole } | null;
+
+  const emailLc = (user.email ?? "").toLowerCase();
+  const isAllowlistedAdmin = ADMIN_EMAILS.includes(emailLc);
+
+  // Auto-provisión/ascenso (con service role, gated tras signInWithPassword):
+  // crea el perfil si falta, o lo asciende a admin si el email está en la
+  // allowlist y aún no lo es. Sin `country` (PostgREST no la conoce).
+  if (!profile || (isAllowlistedAdmin && profile.role !== "admin")) {
+    try {
+      const adminDb = createAdminClient();
+      const role: UserRole = isAllowlistedAdmin ? "admin" : (profile?.role ?? "client");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: provisionErr } = await (adminDb.from("profiles") as any).upsert(
+        {
+          id: user.id,
+          email: user.email,
+          role,
+          full_name: user.user_metadata?.full_name || user.email,
+        },
+        { onConflict: "id" },
+      );
+      if (provisionErr) {
+        await supabase.auth.signOut();
+        return { error: `PROV_FAIL upsert: ${provisionErr.message}` };
+      }
+      profile = { role };
+    } catch (e) {
+      await supabase.auth.signOut();
+      return { error: `PROV_FAIL throw: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
 
   if (!profile) {
     await supabase.auth.signOut();
     return { error: "auth.error.noProfile" };
   }
 
-  const requested = parsed.data.role;
-  if (requested === "admin" && profile.role === "client") {
-    await supabase.auth.signOut();
-    return { error: "auth.error.notAdmin" };
-  }
-
   revalidatePath("/", "layout");
 
-  if (profile.role === "admin" || profile.role === "advisor") {
-    redirect("/admin");
+  const staffRoles = ["admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
+  if (staffRoles.includes(profile.role)) {
+    redirect("/es/admin");
   }
   redirect("/inicio");
 }

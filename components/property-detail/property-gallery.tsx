@@ -148,8 +148,10 @@ function Lightbox({
         </button>
       </header>
 
+      {/* min-h-0: sin esto las fotos verticales expanden el contenedor flex
+          más allá del viewport y se ven cortadas (max-h-full no aplica). */}
       <div
-        className="relative flex flex-1 items-center justify-center px-4 pb-8"
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button

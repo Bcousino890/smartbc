@@ -1,0 +1,36 @@
+name: Test Idealista Phone Extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'URLs to test (comma-separated, or leave empty for defaults)'
+        required: false
+        default: ''
+
+jobs:
+  test-phone-extraction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run phone extraction test
+        run: |
+          if [ -z "${{ inputs.urls }}" ]; then
+            node scripts/test-idealista-phone-extraction.js
+          else
+            node scripts/test-idealista-phone-extraction.js $(echo "${{ inputs.urls }}" | tr ',' '\n')
+          fi
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "✅ Phone extraction test completed"
+          echo "Check the logs above for details on which listings have phones detected."

@@ -10,6 +10,7 @@ export type { AgencyPartnershipRow, AgencyRow, AgencyWithStats };
 
 export async function getAgencies() {
   const supabase = await createClient();
+
   const { data, error } = await supabase
     .from("agencies")
     .select("*, agency_partnerships(*)")
@@ -26,11 +27,11 @@ export async function getAgenciesWithStats(): Promise<AgencyWithStats[]> {
     supabase
       .from("agencies")
       .select("*, agency_partnerships(*)")
-      .order("name"),
+        .order("name"),
     supabase
       .from("properties")
       .select("agency_id, operation")
-      .is("archived_at", null),
+        .is("archived_at", null),
   ]);
 
   if (agenciesResult.error) throw agenciesResult.error;
@@ -62,6 +63,7 @@ export async function getAgenciesWithStats(): Promise<AgencyWithStats[]> {
 
 export async function getAgencyBySlug(slug: string) {
   const supabase = await createClient();
+
   const { data, error } = await supabase
     .from("agencies")
     .select("*, agency_partnerships(*)")
@@ -83,15 +85,19 @@ export async function getAgencyBySlug(slug: string) {
 
 export async function getAgencyProperties(agencyId: string) {
   const supabase = await createClient();
+
   const { data, error } = await supabase
     .from("properties")
     .select(
-      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at",
+      "id, slug, title, external_id, operation, zone, bedrooms, bathrooms, price, updated_at, cover_photo_url, square_meters, status, features, features_manual, description",
     )
     .eq("agency_id", agencyId)
     .is("archived_at", null)
     .order("updated_at", { ascending: false })
-    .limit(20);
+    // Antes 20: en Portales externos (pisos manuales/propios) hay que poder
+    // verlos TODOS para encontrar uno concreto. El buscador de la tabla filtra
+    // sobre este conjunto, así que cargamos un máximo generoso.
+    .limit(500);
   if (error) throw error;
   return (data ?? []) as Array<{
     id: string;
@@ -104,5 +110,11 @@ export async function getAgencyProperties(agencyId: string) {
     bathrooms: number;
     price: number;
     updated_at: string;
+    cover_photo_url: string | null;
+    square_meters: number | null;
+    status: "available" | "reserved" | "rented" | "sold" | "draft";
+    features: string[] | null;
+    features_manual: string[] | null;
+    description: string | null;
   }>;
 }

@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PropiedadesPage() {
   const [rows, user] = await Promise.all([
-    getProperties({ includeUnavailable: false }, 100),
+    // Límite alto para que el cliente vea TODO el catálogo sindicado (cientos
+    // de pisos de las agencias), no solo los 100 más recientes. El filtrado
+    // se hace en cliente sobre este conjunto.
+    getProperties({ includeUnavailable: false }, 2000),
     getCurrentUser(),
   ]);
   const properties = rows.map(propertyRowToClientProperty);

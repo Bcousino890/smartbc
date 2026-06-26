@@ -4,13 +4,12 @@ import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Search,
-  SlidersHorizontal,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useT } from "@/lib/i18n/provider";
-import type { AdminClient, ClientProfileType } from "@/lib/types";
+import type { AdminClient, ClientProfileType, ClientStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const PROFILE_KEYS: Record<ClientProfileType, string> = {
@@ -18,6 +17,9 @@ const PROFILE_KEYS: Record<ClientProfileType, string> = {
   worker: "clientes.profile.worker",
   company: "clientes.profile.company",
 };
+
+type StatusFilter = "all" | ClientStatus;
+type SortKey = "recent" | "name" | "favorites" | "visits";
 
 const PAGE_SIZE = 8;
 
@@ -28,31 +30,63 @@ export function ClientsTable({
   onSelect,
 }: {
   clients: AdminClient[];
-  totalClients: number; // total registered (e.g. 468) — not the visible page count
+  totalClients: number;
   selectedId?: string;
   onSelect: (id: string) => void;
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("recent");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter(
-      (c) =>
-        `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.preferredZone.toLowerCase().includes(q),
-    );
-  }, [clients, query]);
+    let result = clients;
+
+    // Filtro por búsqueda
+    if (q) {
+      result = result.filter(
+        (c) =>
+          `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q) ||
+          c.preferredZone.toLowerCase().includes(q),
+      );
+    }
+
+    // Filtro por estado
+    if (statusFilter !== "all") {
+      result = result.filter((c) => c.status === statusFilter);
+    }
+
+    // Ordenación
+    const sorted = [...result];
+    if (sortKey === "name") {
+      sorted.sort((a, b) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`),
+      );
+    } else if (sortKey === "favorites") {
+      sorted.sort((a, b) => b.activity.favorites - a.activity.favorites);
+    } else if (sortKey === "visits") {
+      sorted.sort((a, b) => b.activity.visitsRequested - a.activity.visitsRequested);
+    }
+    // "recent" mantiene el orden original (por created_at desc desde la BD)
+
+    return sorted;
+  }, [clients, query, statusFilter, sortKey]);
 
   const totalPages = Math.max(1, Math.ceil(totalClients / PAGE_SIZE));
   const visibleFrom = filtered.length === 0 ? 0 : 1;
   const visibleTo = Math.min(filtered.length, PAGE_SIZE);
 
+  const STATUS_TABS: { value: StatusFilter; labelKey: string }[] = [
+    { value: "all", labelKey: "clientes.filter.all" },
+    { value: "active", labelKey: "clientes.filter.active" },
+    { value: "inactive", labelKey: "clientes.filter.inactive" },
+  ];
+
   return (
     <section className="flex flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      {/* Top: search + actions */}
+      {/* Top: search + filters */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
           <Search size={15} strokeWidth={1.75} className="text-ink/45" />
@@ -64,21 +98,38 @@ export function ClientsTable({
             className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
+
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] font-medium text-ink/70 transition hover:border-gold/40 hover:text-ink"
+          {/* Tabs de estado */}
+          <div className="flex rounded-lg border border-ink/10 bg-white/70 p-0.5">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setStatusFilter(tab.value)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                  statusFilter === tab.value
+                    ? "bg-ink text-cream-50 shadow-sm"
+                    : "text-ink/60 hover:text-ink",
+                )}
+              >
+                {t(tab.labelKey)}
+              </button>
+            ))}
+          </div>
+
+          {/* Selector de ordenación */}
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] font-medium text-ink/70 transition hover:border-gold/40 focus:border-gold/55 focus:outline-none"
           >
-            <Filter size={14} strokeWidth={1.75} />
-            <span>{t("clientes.filters")}</span>
-          </button>
-          <button
-            type="button"
-            aria-label={t("clientes.viewSettings")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink/10 bg-white/70 text-ink/70 transition hover:border-gold/40 hover:text-ink"
-          >
-            <SlidersHorizontal size={14} strokeWidth={1.75} />
-          </button>
+            <option value="recent">{t("clientes.sort.recent")}</option>
+            <option value="name">{t("clientes.sort.name")}</option>
+            <option value="favorites">{t("clientes.sort.favorites")}</option>
+            <option value="visits">{t("clientes.sort.visits")}</option>
+          </select>
         </div>
       </div>
 
@@ -191,7 +242,7 @@ function ClientRow({
       <td className="px-3 py-3 text-[12px] text-ink/65">
         {client.lastAccessLabelKey
           ? t(client.lastAccessLabelKey, { time: client.lastAccessValue ?? "" })
-          : (client.lastAccessText ?? "")}
+          : (client.lastAccessText ?? "—")}
       </td>
       <td className="px-3 py-3">
         <span className="flex items-center gap-1.5 text-[12px] text-ink/75">
@@ -206,17 +257,14 @@ function ClientRow({
       </td>
       <td className="px-3 py-3 text-ink/75">{client.assignedAdvisor}</td>
       <td className="rounded-r-xl px-3 py-3 text-right">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(client.id);
-          }}
+        <Link
+          href={`/admin/clientes/${client.id}`}
+          onClick={(e) => e.stopPropagation()}
           className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
         >
           <span>{t("clientes.table.viewDetails")}</span>
           <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
-        </button>
+        </Link>
       </td>
     </tr>
   );
@@ -229,7 +277,6 @@ function Pagination({
   totalPages: number;
   currentPage: number;
 }) {
-  // Build a small list: 1, 2, 3, ..., last
   const pages: (number | "...")[] = [];
   if (totalPages <= 5) {
     for (let i = 1; i <= totalPages; i++) pages.push(i);

@@ -11,12 +11,14 @@ import type {
   ClientProfileType,
   ClientStatus,
   InternalUser,
+  InternalUserRole,
   Operation,
   Property,
   StayType,
   VisitRequest,
   VisitRequestStatus,
 } from "@/lib/types";
+import { extractFloor } from "@/lib/floor";
 import type {
   Database,
   PropertyStatus,
@@ -107,8 +109,13 @@ export function agencyDetailFromDb(
       ...fallback.contact,
       name: contactName,
       initials: deriveInitials(contactName, fallback.contact.initials),
-      phone: dbAgency.contact_phone ?? fallback.contact.phone,
-      email: dbAgency.contact_email ?? fallback.contact.email,
+      // Email/teléfono/dirección salen SOLO de BD (vacío si no hay). NO se
+      // hereda el contacto del mock de otra agencia: antes una agencia con el
+      // email vacío mostraba el de Level (carmen@levelrealestate.es). La
+      // dirección no está modelada en BD, así que no se inventa.
+      phone: dbAgency.contact_phone ?? "",
+      email: dbAgency.contact_email ?? "",
+      address: "",
     },
   };
 }
@@ -181,6 +188,7 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     students: prefs?.students ?? 0,
     workers: prefs?.workers ?? 1,
     pets: prefs?.pets ?? false,
+    universities: (prefs as any)?.universities ?? undefined,
     lastAccessText: undefined,
     status: "active" as ClientStatus,
     assignedAdvisor: "—",
@@ -218,9 +226,12 @@ export function visitRequestRowToLegacy(
     id: row.id,
     clientName,
     clientInitials: deriveInitials(clientName),
+    clientEmail: row.profiles?.email,
     propertyTitle: row.properties?.title ?? "—",
     propertyReference: row.properties?.external_id ?? row.properties?.slug ?? "",
+    propertySlug: row.properties?.slug,
     requestedDateLabel: VISIT_DATETIME_FMT.format(new Date(row.requested_at)),
+    createdDateLabel: VISIT_DATETIME_FMT.format(new Date(row.created_at)),
     channelKey: "solicitudes.channel.portal",
     assignedAdvisor: "—",
     status: VISIT_STATUS_MAP[row.status],
@@ -239,10 +250,51 @@ export function profileRowToInternalUser(
     lastName: rest.join(" "),
     email: row.email,
     initials: deriveInitials(display),
-    roleKey: row.role === "admin" ? "admin" : "advisor",
+    roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin"].includes(row.role ?? "")
+      ? row.role
+      : "advisor") as InternalUserRole,
     status: "active",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
   };
+}
+
+// Títulos placeholder que algunos datos antiguos guardaron en BD ("Titulo",
+// "Title", "Propiedad", string vacío…). Cuando vienen así, generamos uno
+// descriptivo basado en tipo + zona para evitar mostrar "Titulo" al cliente.
+const GENERIC_TITLE_RE = /^(t[ií]tulos?|titles?|propiedad|sin t[ií]tulo|untitled|—|-)$/i;
+
+function displayPropertyTitle(row: PropertyRow): string {
+  const raw = row.title?.trim() ?? "";
+  if (raw && !GENERIC_TITLE_RE.test(raw)) return raw;
+  const typ = row.property_type?.trim();
+  const typeLabel =
+    typ && typ.length > 0
+      ? typ.charAt(0).toUpperCase() + typ.slice(1).toLowerCase()
+      : "Vivienda";
+  return `${typeLabel} en ${row.zone}`;
+}
+
+// Hash corto y estable de una lista de strings (para versionar las URLs de
+// fotos del proxy y poder invalidar su caché al reordenar/añadir/borrar).
+function hashStrings(parts: string[]): string {
+  const s = parts.join("|");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+// Quita fotos repetidas (misma url) conservando el orden por posición. Defiende
+// la galería de filas duplicadas en property_photos: un re-import con carrera o
+// doble submit podía dejar 2 filas por posición, y se veía "cada foto dos veces".
+function dedupePhotosByUrl<T extends { url: string }>(photos: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const p of photos) {
+    if (seen.has(p.url)) continue;
+    seen.add(p.url);
+    out.push(p);
+  }
+  return out;
 }
 
 export function propertyRowToClientProperty(
@@ -251,15 +303,35 @@ export function propertyRowToClientProperty(
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   },
 ): Property {
-  const sortedPhotos =
+  const sortedPhotos = dedupePhotosByUrl(
     row.property_photos
       ?.slice()
-      .sort((a, b) => a.position - b.position) ?? [];
-  const cover = row.cover_photo_url ?? sortedPhotos[0]?.url;
+      .sort((a, b) => a.position - b.position) ?? [],
+  );
+  // URLs neutras vía el proxy /p/{slug}/{idx} — no exponemos rutas de
+  // Storage internas (que delatan el portal de origen, ej. `synced/level/…`).
+  // El proxy cachea 24h, así que añadimos `?v=` con un hash que cambia cuando
+  // las fotos pueden haber cambiado:
+  //  - el ORDEN/URLs de las fotos (reordenar/añadir/borrar), y
+  //  - `last_synced_at`: clave cuando se REPROCESA una foto en la MISMA ruta
+  //    (ej. re-importar con la marca de agua ya quitada). Sin esto, la URL del
+  //    proxy no cambiaba y el navegador servía la versión vieja cacheada.
+  // Es seguro: el diff-engine solo toca `last_synced_at` cuando hay cambios
+  // reales (needsUpdate), así que un sync que no toca nada preserva la caché.
+  const freshness =
+    (row as { last_synced_at?: string | null }).last_synced_at ??
+    (row as { updated_at?: string | null }).updated_at ??
+    "";
+  const orderHash = hashStrings([...sortedPhotos.map((p) => p.url), freshness]);
+  const photoUrls = sortedPhotos.map(
+    (_, i) => `/p/${row.slug}/${i}?v=${orderHash}`,
+  );
+  const cover = photoUrls[0];
   return {
     id: row.slug,
-    title: row.title,
+    title: displayPropertyTitle(row),
     zone: row.zone,
+    subzone: row.subzone ?? null,
     city: "Madrid",
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
@@ -269,16 +341,21 @@ export function propertyRowToClientProperty(
     operation: row.operation === "rent" ? "alquiler" : "venta",
     image: cover ?? undefined,
     description: row.description ?? undefined,
-    photos: sortedPhotos.map((p) => p.url),
+    photos: photoUrls,
     longDescription: row.description ?? undefined,
-    latitude:
-      typeof (row as Record<string, unknown>).latitude === "number"
-        ? ((row as Record<string, unknown>).latitude as number)
-        : undefined,
-    longitude:
-      typeof (row as Record<string, unknown>).longitude === "number"
-        ? ((row as Record<string, unknown>).longitude as number)
-        : undefined,
+    propertyTypeLabel: row.property_type ?? null,
+    // Features auto-extraídas del scraper + manuales del admin, deduplicadas.
+    featuresText: Array.from(
+      new Set([...(row.features ?? []), ...(row.features_manual ?? [])]),
+    ),
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    bcReference: row.bc_reference ?? null,
+    floor: extractFloor(
+      [...(row.features ?? []), ...(row.features_manual ?? [])],
+      row.title,
+      row.description,
+    ),
   };
 }
 
@@ -288,25 +365,35 @@ export function propertyRowToAdminProperty(
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   }
 ): AdminProperty {
-  const sortedPhotos =
+  const sortedPhotos = dedupePhotosByUrl(
     row.property_photos
       ?.slice()
-      .sort((a, b) => a.position - b.position)
-      .map((p) => ({ url: p.url, isCover: p.is_cover })) ?? [];
+      .sort((a, b) => a.position - b.position) ?? [],
+  ).map((p) => ({ url: p.url, isCover: p.is_cover }));
 
   return {
     id: row.slug,
     reference: row.external_id ?? row.id.slice(0, 8).toUpperCase(),
+    bcReference: row.bc_reference ?? null,
+    propertyReference: (row as any).property_reference ?? "PROP-2026-0000",
     title: row.title,
     zone: row.zone,
+    subzone: row.subzone ?? null,
     agencyId: row.agencies?.slug ?? "",
     agencyName: row.agencies?.name ?? "—",
     operation: row.operation === "rent" ? "alquiler" : "venta",
+    stayType:
+      row.stay === "short" ? "corta" : row.stay === "long" ? "larga" : null,
     status: PROPERTY_STATUS_MAP[row.status],
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters ?? 0,
     price: Number(row.price),
+    floor: extractFloor(
+      [...(row.features ?? []), ...(row.features_manual ?? [])],
+      row.title,
+      row.description,
+    ),
     publishedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     featured: false,
     coverPhotoUrl: row.cover_photo_url,

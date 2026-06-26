@@ -3,125 +3,277 @@
 import {
   BarChart3,
   Building2,
+  Calendar,
   ClipboardList,
+  Globe2,
+  Heart,
   Home,
+  LayoutDashboard,
   LogOut,
+  Menu,
   MessageSquare,
   Radio,
+  Send,
   Settings,
+  Sparkles,
+  Stethoscope,
+  User,
   UserCog,
   Users,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { useT } from "@/lib/i18n/provider";
+import {
+  canAccess,
+  type EffectivePermissions,
+  type PermissionResource,
+} from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { href: "/admin/agencias", labelKey: "admin.nav.agencias", icon: Building2 },
-  { href: "/admin/propiedades", labelKey: "admin.nav.propiedades", icon: Home },
-  { href: "/admin/clientes", labelKey: "admin.nav.clientes", icon: Users },
-  {
-    href: "/admin/solicitudes",
-    labelKey: "admin.nav.solicitudes",
-    icon: ClipboardList,
-  },
-  {
-    href: "/admin/mensajes",
-    labelKey: "admin.nav.mensajes",
-    icon: MessageSquare,
-  },
-  {
-    href: "/admin/sindicacion",
-    labelKey: "admin.nav.sindicacion",
-    icon: Radio,
-  },
-  { href: "/admin/reportes", labelKey: "admin.nav.reportes", icon: BarChart3 },
-  { href: "/admin/usuarios", labelKey: "admin.nav.usuarios", icon: UserCog },
-  {
-    href: "/admin/configuracion",
-    labelKey: "admin.nav.configuracion",
-    icon: Settings,
-  },
-] as const;
+type NavItem = {
+  href: string;
+  labelKey: string;
+  icon: React.ElementType;
+  /** Recurso de permisos asociado. Si se define, se comprueba canAccess(role, resource, "view") */
+  permissionResource?: string;
+  /** Si se define, el item solo se muestra para ese país (ej: "cl" o "es") */
+  onlyCountry?: string;
+};
 
-export function AdminSidebar({ user }: { user: AdminUser }) {
+const NAV_ITEMS: NavItem[] = [
+  { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
+  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
+  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares"  },
+  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
+  { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "properties",   onlyCountry: "cl" },
+  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
+  { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
+  { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
+  { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
+  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
+  { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
+  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion", onlyCountry: "es" },
+  { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
+];
+
+interface AdminSidebarProps {
+  user: AdminUser;
+  /** Rol del usuario actual. Usado para filtrar items según permisos. */
+  currentRole?: string;
+  /**
+   * Permisos efectivos (rol + excepciones por usuario) calculados en el
+   * servidor. Si vienen, mandan sobre canAccess(rol).
+   */
+  permissions?: EffectivePermissions;
+  /** Cantidad de visitas pendientes para el badge de Calendario. */
+  pendingVisits?: number;
+  /** Mensajes directos no leídos para el badge de Mensajes. */
+  unreadMessages?: number;
+  /** Notificaciones CRM no leídas (captaciones completadas, etc.) */
+  unreadNotifications?: number;
+  /** Callback para notificar al padre cuando el sidebar abre/cierra (mobile). */
+  onOpenChange?: (open: boolean) => void;
+  /** País activo del dashboard: 'es' o 'cl' */
+  country?: string;
+  /** Si el usuario puede cambiar de país (selector de banderas) */
+  canSwitchCountry?: boolean;
+}
+
+export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0, unreadMessages = 0, unreadNotifications = 0, onOpenChange, country = "es", canSwitchCountry = false }: AdminSidebarProps) {
   const t = useT();
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Build nav prefix based on country
+  const prefix = country === "cl" ? "/cl/admin" : "/es/admin";
+  const navItems = NAV_ITEMS.map(item => ({
+    ...item,
+    href: item.href.replace("/admin", prefix),
+  }));
+
+  function toggleMobile() {
+    const next = !mobileOpen;
+    setMobileOpen(next);
+    onOpenChange?.(next);
+  }
+
+  function closeMobile() {
+    setMobileOpen(false);
+    onOpenChange?.(false);
+  }
+
+  // Filtrar items de nav según permisos y país. Si llegan los permisos efectivos
+  // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
+  const visibleItems = navItems.filter(({ permissionResource, onlyCountry }) => {
+    if (onlyCountry && onlyCountry !== country) return false;
+    if (!permissionResource) return true;
+    if (permissions) {
+      return permissions[permissionResource as PermissionResource]?.view ?? true;
+    }
+    if (!currentRole) return true;
+    return canAccess(currentRole, permissionResource, "view");
+  });
 
   return (
-    <aside className="fixed left-0 top-0 z-20 flex h-screen w-[260px] flex-col bg-ink text-cream-50">
-      {/* Logo (white via CSS filter trick: brightness 0 turns the dark navy
-          PNG to pure black, invert flips it to white) */}
-      <div className="flex flex-col items-center px-6 pt-7">
-        <Image
-          src="/logo.png"
-          alt="Benjamín Cousiño Propiedades"
-          width={420}
-          height={Math.round(420 * (519 / 3282))}
-          priority
-          className="h-auto w-full select-none"
-          style={{ filter: "brightness(0) invert(1)" }}
+    <>
+      {/* Botón hamburger — solo visible en mobile */}
+      <button
+        type="button"
+        onClick={toggleMobile}
+        aria-label="Abrir menú"
+        className="fixed left-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-ink text-cream-50 shadow-md lg:hidden"
+      >
+        {mobileOpen ? <X size={18} strokeWidth={2} /> : <Menu size={18} strokeWidth={2} />}
+      </button>
+
+      {/* Overlay oscuro — solo en mobile cuando está abierto */}
+      {mobileOpen && (
+        <div
+          aria-hidden="true"
+          onClick={closeMobile}
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
         />
-      </div>
+      )}
 
-      <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
-        {t("admin.section.label")}
-      </p>
-
-      <nav className="mt-3 flex-1 px-3">
-        <ul className="space-y-1">
-          {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
-            const active =
-              pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
-                    active
-                      ? "bg-cream-50/8 text-gold"
-                      : "text-cream-50/70 hover:bg-cream-50/5 hover:text-cream-50",
-                  )}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <Icon size={17} strokeWidth={1.75} />
-                  <span>{t(labelKey)}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      <div className="m-3 rounded-xl border border-cream-50/10 p-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 font-serif text-[11px] font-medium text-cream-50">
-            {user.initials}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold leading-tight">
-              {user.firstName} {user.lastName}
-            </p>
-            <p className="mt-0.5 truncate text-[10px] text-cream-50/55">
-              {t(user.roleKey)}
-            </p>
-          </div>
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-30 flex h-screen w-[260px] flex-col bg-ink text-cream-50 transition-transform duration-300",
+          // Mobile: oculto por defecto, visible cuando mobileOpen
+          "-translate-x-full lg:translate-x-0",
+          mobileOpen && "translate-x-0",
+        )}
+      >
+        {/* Logo (white via CSS filter trick: brightness 0 turns the dark navy
+            PNG to pure black, invert flips it to white) */}
+        <div className="flex flex-col items-center px-6 pt-7">
+          <Image
+            src="/logo.png"
+            alt="Benjamín Cousiño Propiedades"
+            width={420}
+            height={Math.round(420 * (519 / 3282))}
+            priority
+            className="h-auto w-full select-none"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
         </div>
-        <form action={signOutAction} className="mt-3">
-          <button
-            type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
-          >
-            <LogOut size={13} strokeWidth={1.75} />
-            <span>{t("sidebar.logout")}</span>
-          </button>
-        </form>
-      </div>
-    </aside>
+
+        {canSwitchCountry && (
+          <div className="mt-5 flex items-center gap-2 px-6">
+            <Link
+              href="/es/admin"
+              title="España"
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                country === "es"
+                  ? "border-gold/60 bg-gold/15 text-gold"
+                  : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
+              )}
+            >
+              <span className="text-base leading-none">🇪🇸</span>
+              <span>España</span>
+            </Link>
+            <Link
+              href="/cl/admin"
+              title="Chile"
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                country === "cl"
+                  ? "border-gold/60 bg-gold/15 text-gold"
+                  : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
+              )}
+            >
+              <span className="text-base leading-none">🇨🇱</span>
+              <span>Chile</span>
+            </Link>
+          </div>
+        )}
+
+        <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
+          {t("admin.section.label")}
+        </p>
+
+        <nav className="mt-3 flex-1 overflow-y-auto px-3">
+          <ul className="space-y-1">
+            {visibleItems.map(({ href, labelKey, icon: Icon }) => {
+              const dashboardHref = `${prefix}`;
+              const active =
+                pathname === href ||
+                (href !== dashboardHref && pathname.startsWith(`${href}/`));
+              const isCalendario = href.endsWith("/admin/calendario");
+              const isMensajes = href.endsWith("/admin/mensajes");
+              const isCaptaciones = href.endsWith("/admin/captaciones");
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={closeMobile}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                      active
+                        ? "bg-cream-50/8 text-gold"
+                        : "text-cream-50/70 hover:bg-cream-50/5 hover:text-cream-50",
+                    )}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon size={17} strokeWidth={1.75} />
+                    <span className="flex-1">{t(labelKey)}</span>
+                    {isCalendario && pendingVisits > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
+                        {pendingVisits}
+                      </span>
+                    )}
+                    {isMensajes && unreadMessages > 0 && (
+                      <span className="ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                        {unreadMessages > 99 ? "99+" : unreadMessages}
+                      </span>
+                    )}
+                    {isCaptaciones && unreadNotifications > 0 && (
+                      <span className="ml-auto rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                        {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="m-3 rounded-xl border border-cream-50/10 p-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 font-serif text-[11px] font-medium text-cream-50">
+              {user.initials}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold leading-tight">
+                {user.firstName} {user.lastName}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-cream-50/55">
+                {t(user.roleKey)}
+              </p>
+            </div>
+          </div>
+          <form action={signOutAction} className="mt-3">
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
+            >
+              <LogOut size={13} strokeWidth={1.75} />
+              <span>{t("sidebar.logout")}</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+    </>
   );
 }

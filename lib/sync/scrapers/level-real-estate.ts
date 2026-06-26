@@ -41,6 +41,9 @@ const ALLOWED_ZONE_KEYS = (process.env.LEVEL_ALLOWED_ZONES ?? "")
   )
   .filter(Boolean);
 
+// Features binarias del scraper: solo etiquetas con valor sí/no son útiles
+// como chip en la UI. "Orientación" se omite porque su valor (N/S/E/O) no
+// se almacena hoy en BD y un chip "Orientación" sin valor confunde.
 const FEATURE_LABELS = new Set([
   "Terrazas",
   "Piscina",
@@ -51,10 +54,47 @@ const FEATURE_LABELS = new Set([
   "Aire acondicionado",
   "Calefacción",
   "Portero",
-  "Orientación",
   "Reformado",
   "Amueblado",
 ]);
+
+// Detección heurística de features desde la descripción libre. Level no
+// publica las features en SSR (las carga por JS), así que la única fuente
+// fiable y automática es el texto descriptivo. Cada regla mira una palabra
+// clave razonablemente inequívoca; si encaja, añadimos la feature.
+// IMPORTANTE: ante la duda, NO añadir. Mejor faltarle una que mentir.
+const DESCRIPTION_FEATURE_RULES: Array<{ label: string; pattern: RegExp }> = [
+  { label: "Reformado", pattern: /\breformad[oa]s?\b/i },
+  { label: "Amueblado", pattern: /\bamueblad[oa]s?\b/i },
+  { label: "Terraza", pattern: /\bterraza(s)?\b/i },
+  { label: "Balcón", pattern: /\bbalc[oó]n(es)?\b/i },
+  { label: "Aire acondicionado", pattern: /\baire acondicionad[oa]\b/i },
+  { label: "Calefacción", pattern: /\bcalefacci[oó]n\b/i },
+  { label: "Piscina", pattern: /\bpiscina\b/i },
+  { label: "Jardín", pattern: /\bjard[ií]n(es)?\b/i },
+  { label: "Garaje", pattern: /\b(garaje|plaza de garaje|parking)\b/i },
+  { label: "Trastero", pattern: /\btrastero\b/i },
+  { label: "Ascensor", pattern: /\bascensor(es)?\b/i },
+  { label: "Portero", pattern: /\b(portero|conserje|conserjer[ií]a)\b/i },
+  { label: "Vestidor", pattern: /\bvestidor(es)?\b/i },
+  // "completamente equipada" es la frase comercial estándar para cocinas
+  // de gama alta — más conservador que un genérico /cocina equipada/.
+  { label: "Cocina equipada", pattern: /\b(completamente equipada|cocina equipada)\b/i },
+  { label: "Armarios empotrados", pattern: /\barmarios (empotrados|de suelo a techo)\b/i },
+  // "Baño en suite" requiere la frase completa: el genérico "suite" es
+  // demasiado ambiguo (puede ser un baño dentro de la habitación principal,
+  // no una "suite" en sí).
+  { label: "Baño en suite", pattern: /\bba[ñn]os? en suite\b/i },
+];
+
+export function extractFeaturesFromText(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const found = new Set<string>();
+  for (const rule of DESCRIPTION_FEATURE_RULES) {
+    if (rule.pattern.test(text)) found.add(rule.label);
+  }
+  return Array.from(found);
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -93,13 +133,21 @@ async function loadSitemapRefs(): Promise<
   const xml = await fetchText(SITEMAP_URL);
   if (!xml) return [];
 
+  // Dedupe por ref: el sitemap de Level puede listar la misma propiedad en
+  // dos URLs distintas (visto en mayo 2026 con ref 5379). Sin dedupe el
+  // diff engine procesa la propiedad dos veces y el segundo INSERT falla
+  // con "duplicate key violates properties_slug_key", dejando el sync en
+  // partial.
+  const seen = new Set<string>();
   const urls: Array<{ ref: string; url: string }> = [];
   const re = /<loc>([^<]+)<\/loc>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml)) !== null) {
     const url = m[1].trim();
     const ref = refFromUrl(url);
-    if (ref) urls.push({ ref, url });
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    urls.push({ ref, url });
   }
   return urls;
 }
@@ -145,40 +193,56 @@ function parseFeatureList(
   let sqm: number | null = null;
   const features = new Set<string>();
 
-  // Las características aparecen pareadas: <li>label</li><li>value</li>.
-  // Recogemos todas las parejas que encontremos en cualquier lista de iconos.
-  const items = $(".elementor-icon-list-text")
-    .map((_, el) => $(el).text().trim())
-    .get();
+  // Level inserta en el HTML un bloque "Características" oculto en todas las
+  // pantallas (triple clase `elementor-hidden-*`) que enumera TODAS las
+  // amenidades posibles (Piscina, Jardín, Garaje, ...) con un valor
+  // placeholder "3" — es una plantilla genérica, no las features reales del
+  // piso. Si lo leyéramos, mostraríamos features que el piso NO tiene.
+  // Por eso descartamos cualquier lista cuyo ancestor sea un contenedor
+  // marcado como oculto en todas las pantallas.
+  const isInHiddenBlock = (el: Parameters<cheerio.CheerioAPI>[0]): boolean => {
+    return (
+      $(el as Parameters<typeof $>[0]).closest(
+        ".elementor-hidden-desktop.elementor-hidden-tablet.elementor-hidden-mobile",
+      ).length > 0
+    );
+  };
 
-  for (let i = 0; i < items.length; i++) {
-    const label = items[i];
-    const value = items[i + 1] ?? "";
+  // Cada lista de iconos lleva sus pares label/value en una <ul>. Procesamos
+  // por lista (no concatenando todas) para que el emparejamiento label/value
+  // no se desincronice entre bloques.
+  $(".elementor-icon-list-items").each((_, ul) => {
+    if (isInHiddenBlock(ul)) return;
 
-    if (label === "Dormitorios") {
-      const n = parseInt(value, 10);
-      if (Number.isFinite(n) && bedrooms === 0) bedrooms = n;
-    } else if (label === "Baños") {
-      const n = parseInt(value, 10);
-      if (Number.isFinite(n) && bathrooms === 0) bathrooms = n;
-    } else if (label === "Construido" || label === "Superficie") {
-      const m = value.match(/([\d.,]+)\s*m/);
-      if (m && sqm == null) {
-        sqm = Math.round(Number(m[1].replace(",", ".")));
+    const items = $(ul)
+      .find(".elementor-icon-list-text")
+      .map((_i, el) => $(el).text().trim())
+      .get();
+
+    for (let i = 0; i < items.length; i += 2) {
+      const label = items[i];
+      const value = items[i + 1] ?? "";
+
+      if (label === "Dormitorios") {
+        const n = parseInt(value, 10);
+        if (Number.isFinite(n) && bedrooms === 0) bedrooms = n;
+      } else if (label === "Baños") {
+        const n = parseInt(value, 10);
+        if (Number.isFinite(n) && bathrooms === 0) bathrooms = n;
+      } else if (label === "Construido" || label === "Superficie") {
+        const m = value.match(/([\d.,]+)\s*m/);
+        if (m && sqm == null) {
+          sqm = Math.round(Number(m[1].replace(",", ".")));
+        }
+      } else if (FEATURE_LABELS.has(label)) {
+        // Solo cuenta como feature si el value es un número entero >= 1
+        // (cantidad real, ej. "2" terrazas). Cualquier otra cosa (placeholder
+        // tipo "3" del bloque oculto, "Sí"/"No", vacío) no se considera fiable.
+        const n = parseInt(value, 10);
+        if (Number.isFinite(n) && n >= 1) features.add(label);
       }
-    } else if (FEATURE_LABELS.has(label)) {
-      // Solo añadimos como feature si parece que el valor confirma presencia
-      // (en el HTML de Level los valores numéricos tipo "3" indican que el
-      // dato existe; cualquier valor no-vacío basta como señal).
-      if (value && value !== "0") features.add(label);
     }
-
-    // También cubrimos el caso del listado compacto: m² aislado sin label.
-    if (/^[\d.,]+\s*m²?$/.test(label) && sqm == null) {
-      const m = label.match(/([\d.,]+)/);
-      if (m) sqm = Math.round(Number(m[1].replace(",", ".")));
-    }
-  }
+  });
 
   return { bedrooms, bathrooms, sqm, features: Array.from(features) };
 }
@@ -198,6 +262,35 @@ function detectOperation(
     return { operation: "sale", stay: null };
   }
   return null;
+}
+
+// Diccionario para normalizar el slug de Yoast a un nombre legible. Si
+// aparece un slug no listado, devolvemos el slug capitalizado.
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  pisos: "Piso",
+  piso: "Piso",
+  aticos: "Ático",
+  atico: "Ático",
+  duplex: "Dúplex",
+  chalets: "Chalet",
+  chalet: "Chalet",
+  villas: "Villa",
+  villa: "Villa",
+  estudios: "Estudio",
+  estudio: "Estudio",
+  locales: "Local",
+  local: "Local",
+  oficinas: "Oficina",
+  oficina: "Oficina",
+};
+
+function detectPropertyType(classAttrs: string): string | null {
+  const m = classAttrs.match(/property_type-([a-z-]+?)-es\b/);
+  if (!m) return null;
+  const slug = m[1];
+  if (PROPERTY_TYPE_LABELS[slug]) return PROPERTY_TYPE_LABELS[slug];
+  // Fallback: capitalizar el slug ("loft" → "Loft")
+  return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
 
 function extractPhotos(
@@ -232,6 +325,7 @@ export async function scrapeProperty(
 
   const opInfo = detectOperation(classAttrs);
   if (!opInfo) return null;
+  const propertyType = detectPropertyType(classAttrs);
 
   const locationText = $(".property-location").first().text().trim();
   // Filtro de zona: si LEVEL_ALLOWED_ZONES está activo y esta propiedad
@@ -253,7 +347,17 @@ export async function scrapeProperty(
 
   const zone = parseZone(locationText);
 
-  const { bedrooms, bathrooms, sqm, features } = parseFeatureList($);
+  const { bedrooms, bathrooms, sqm, features: htmlFeatures } = parseFeatureList($);
+
+  // Las listas de iconos en SSR no exponen las amenidades reales (Level las
+  // carga por JS dinámico). Como fallback fiable, las inferimos de la
+  // descripción con keywords claros. Si BC quiere afinar, puede añadir
+  // features manuales desde el admin.
+  const descriptionFeatures = extractFeaturesFromText(description);
+
+  // Mantenemos las que sí extrajimos del HTML (cantidades reales de
+  // terrazas/etc.) y añadimos las de la descripción, deduplicando.
+  const features = Array.from(new Set([...htmlFeatures, ...descriptionFeatures]));
 
   const photos = extractPhotos($, ref);
 
@@ -264,6 +368,7 @@ export async function scrapeProperty(
     description: description || undefined,
     operation: opInfo.operation,
     stay: opInfo.stay ?? undefined,
+    propertyType: propertyType ?? undefined,
     price,
     bedrooms,
     bathrooms,

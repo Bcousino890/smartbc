@@ -3,14 +3,23 @@
 import {
   Bell,
   Building2,
+  Check,
+  Eye,
+  EyeOff,
   Globe,
   Palette,
+  RefreshCw,
   Save,
+  Shield,
   Sliders,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
+import { DeployButton } from "./deploy-button";
+import { EmailConfigClient } from "./email-config-client";
+import { LogsViewer } from "./logs-viewer";
+import { MigrationsManager } from "./migrations-manager";
 import { useT } from "@/lib/i18n/provider";
 import { mockAppSettings } from "@/lib/mock-admin-extras";
 import type { AppSettings } from "@/lib/types";
@@ -19,6 +28,65 @@ import { cn } from "@/lib/utils";
 export default function AdminConfiguracionPage() {
   const t = useT();
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
+  const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
+  const [scrapingAppKey, setScrapingAppKey] = useState("");
+  const [scrapingCapSolverKey, setScrapingCapSolverKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then((res) => res.json())
+      .then((data: Record<string, unknown>) => {
+        setSettings((prev) => ({
+          ...prev,
+          ...(data.company ? { company: data.company as AppSettings["company"] } : {}),
+          ...(data.branding ? { branding: data.branding as AppSettings["branding"] } : {}),
+          ...(data.defaults ? { defaults: data.defaults as AppSettings["defaults"] } : {}),
+          ...(data.notifications ? { notifications: data.notifications as AppSettings["notifications"] } : {}),
+        }));
+        if (typeof data["scraping.proxyUrl"] === "string") {
+          setScrapingProxyUrl(data["scraping.proxyUrl"]);
+        }
+        if (typeof data["scraping.smartproxy.app_key"] === "string") {
+          let key = data["scraping.smartproxy.app_key"] as string;
+          // Extract app_key if full URL was saved
+          if (key.includes("app_key=")) {
+            try { const u = new URL(key); key = u.searchParams.get("app_key") ?? key; } catch {}
+          }
+          setScrapingAppKey(key);
+        }
+        if (typeof data["scraping.capsolver.api_key"] === "string") {
+          setScrapingCapSolverKey(data["scraping.capsolver.api_key"]);
+        }
+      })
+      .catch(() => {
+        // Si falla la carga, se mantienen los valores mock
+      });
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: settings.company,
+          branding: settings.branding,
+          defaults: settings.defaults,
+          notifications: settings.notifications,
+          "scraping.proxyUrl": scrapingProxyUrl,
+          "scraping.smartproxy.app_key": scrapingAppKey,
+          "scraping.capsolver.api_key": scrapingCapSolverKey,
+        }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function updateCompany<K extends keyof AppSettings["company"]>(
     key: K,
@@ -205,16 +273,94 @@ export default function AdminConfiguracionPage() {
           </ul>
         </SettingsSection>
 
+        {/* Scraping */}
+        <SettingsSection
+          icon={<Shield size={16} strokeWidth={1.75} />}
+          titleKey="config.scraping.title"
+        >
+          <div className="space-y-3">
+            <p className="text-xs text-ink/55">
+              Smartproxy API para rotación automática de 100 IPs residenciales. Pega el <strong>app_key</strong> o la URL completa del dashboard — se extrae automáticamente.
+            </p>
+            <PasswordField
+              label="Smartproxy App Key"
+              value={scrapingAppKey}
+              onChange={setScrapingAppKey}
+              placeholder="9cf8f476185ea51d90a811dfedf19974"
+            />
+            <p className="text-xs text-ink/55 pt-3">
+              CapSolver API Key para resolver CAPTCHAs de DataDome automáticamente:
+            </p>
+            <PasswordField
+              label="CapSolver API Key"
+              value={scrapingCapSolverKey}
+              onChange={setScrapingCapSolverKey}
+              placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            />
+            <p className="text-xs text-ink/55 pt-3">
+              URL de proxy estático (fallback si la API falla):
+            </p>
+            <PasswordField
+              label="URL del proxy (fallback)"
+              value={scrapingProxyUrl}
+              onChange={setScrapingProxyUrl}
+              placeholder="http://usuario:contraseña@eu.smartproxy.net:3120"
+            />
+          </div>
+        </SettingsSection>
+
+        {/* Migrations Manager */}
+        <MigrationsManager />
+
+        {/* Email Configuration */}
+        <EmailConfigClient />
+
         {/* Save bar */}
         <div className="flex justify-end">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
+            onClick={handleSave}
+            disabled={saving}
+            className={cn(
+              "flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-cream-50 transition",
+              saved
+                ? "bg-green-700 hover:bg-green-800"
+                : "bg-ink hover:bg-ink-soft",
+              saving && "cursor-not-allowed opacity-60",
+            )}
           >
-            <Save size={14} strokeWidth={1.75} className="text-gold" />
-            <span>{t("config.save")}</span>
+            {saved ? (
+              <>
+                <Check size={14} strokeWidth={2} className="text-green-300" />
+                <span>Guardado</span>
+              </>
+            ) : (
+              <>
+                <Save size={14} strokeWidth={1.75} className="text-gold" />
+                <span>{saving ? "Guardando…" : t("config.save")}</span>
+              </>
+            )}
           </button>
         </div>
+      </div>
+
+      {/* Deploy */}
+      <section className="mt-7 rounded-2xl border border-sky-200 bg-sky-50/60 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.10)]">
+        <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/80">
+          <RefreshCw size={14} strokeWidth={2} className="text-sky-600" />
+          <span>Despliegue del servidor</span>
+        </header>
+        <p className="mt-2 text-xs text-ink/55">
+          Fuerza un <code className="rounded bg-ink/8 px-1 py-0.5 font-mono text-[11px]">git pull</code> y reconstrucción inmediata sin esperar el cron de 5 min. El build tarda ~2 min; los logs de PM2 confirmarán cuando esté listo.
+        </p>
+        <div className="mt-4">
+          <DeployButton />
+        </div>
+      </section>
+
+      {/* Logs Viewer */}
+      <div className="mt-7">
+        <LogsViewer />
       </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
@@ -376,6 +522,41 @@ function SelectField({
             </option>
           ))}
         </select>
+      </div>
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <label className="flex flex-col gap-1.5 md:col-span-2">
+      <span className="text-[11px] font-medium text-ink/65">{label}</span>
+      <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 bg-transparent font-mono text-sm text-ink placeholder:font-sans placeholder:text-ink/35 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          className="shrink-0 text-ink/40 hover:text-ink/70 transition"
+        >
+          {show ? <EyeOff size={14} strokeWidth={1.75} /> : <Eye size={14} strokeWidth={1.75} />}
+        </button>
       </div>
     </label>
   );
