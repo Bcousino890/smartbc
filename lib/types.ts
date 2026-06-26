@@ -437,3 +437,86 @@ export type AppSettings = {
     propertyUpdates: boolean;
   };
 };
+
+// ============ CHILE SPECIFIC TYPES ============
+
+export type ArchitecturalType = "mediterranea" | "chilena" | "inglesa" | "moderna" | "neoclasica" | "colonial" | "contemporanea";
+export type Orientation = "norte" | "sur" | "oriente" | "poniente" | "norponiente" | "nororiente" | "suroriente" | "surponiente";
+
+export type PropertyArchitecturalSpecs = {
+  id: string;
+  propertyId: string;
+  hasServiceBedroom: boolean;
+  architecturalType?: ArchitecturalType;
+  numFloors?: number;
+  isCondominium: boolean;
+  buildingFloor?: number;
+  orientation?: Orientation;
+  parkingSpaces: number;
+  hasLaundryArea: boolean;
+  hasStorage: boolean;
+  hasGarden: boolean;
+};
+
+export type PropertyPrice = {
+  id: string;
+  propertyId: string;
+  priceCLP: number;
+  priceUF?: number;
+  clpToUfRate?: number;
+  operation: "alquiler" | "venta";
+  rentalPeriod?: "mes" | "día" | "año";
+};
+
+export type LocationHierarchy = {
+  id: string;
+  countryId: string;
+  regionName: string;
+  regionCode: string;
+  communeName: string;
+  communeCode: string;
+  sectorName: string;
+  sectorCode: string;
+  polygonGeojson?: Record<string, unknown> | null;
+  priority: number;
+  isActive: boolean;
+};
+
+export type GeofenceZone = {
+  id: string;
+  locationHierarchyId: string;
+  polygonGeojson: Record<string, unknown>;
+  zoneName: string;
+  description?: string;
+  zoneType: string;
+  searchRadiusMeters?: number;
+  isActive: boolean;
+};
+
+export type ChileClientPreferences = {
+  countryId: string;
+  preferredRegions: string[];
+  preferredCommunes: string[];
+  preferredSectors: string[];
+  preferredGeofenceZones: string[];
+  requiresServiceBedroom?: boolean;
+  preferredArchitecturalTypes: ArchitecturalType[];
+  minParkingSpaces?: number;
+  maxParkingSpaces?: number;
+  prefersCondominium?: boolean;
+  preferredOrientations: Orientation[];
+  minFloors?: number;
+  currencyPreference: "CLP" | "UF";
+  minPriceUf?: number;
+  maxPriceUf?: number;
+  budgetMin?: number;
+  budgetMax?: number;
+};
+
+export type Country = {
+  id: string;
+  code: string;
+  nameEs: string;
+  nameEn: string;
+  currencyCode: string;
+};
