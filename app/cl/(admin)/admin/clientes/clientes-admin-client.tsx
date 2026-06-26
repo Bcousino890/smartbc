@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CreateClientDialog } from "@/components/admin/clientes/create-client-dialog";
-import { ClientDetailPanel } from "@/components/admin/clientes/client-detail-panel";
+import { ClientDetailPanelCL } from "@/components/admin/clientes/client-detail-panel-cl";
 import { ClientsTable } from "@/components/admin/clientes/clients-table";
 import type { AdminClient } from "@/lib/types";
 
@@ -35,7 +35,7 @@ export function ClientesAdminClient({
           selectedId={selectedId}
           onSelect={setSelectedId}
         />
-        <ClientDetailPanel client={selected} />
+        <ClientDetailPanelCL client={selected} />
       </div>
     </div>
   );
