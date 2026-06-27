@@ -6,6 +6,14 @@ import { createNewClient } from "@/app/cl/(admin)/admin/clientes/actions";
 import type { Operation, ClientProfileType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LocationMultiselect, CHILE_REGIONS, COMMUNES_BY_REGION, SECTORS_BY_COMMUNE } from "./location-multiselect";
+import { MapPolygonSelector } from "./map-polygon-selector";
+
+interface PolygonData {
+  id: string;
+  name: string;
+  coordinates: number[][][];
+  description?: string;
+}
 
 type FormState = {
   firstName: string;
@@ -30,6 +38,7 @@ type FormState = {
   preferredOrientations: string[];
   minFloors: number;
   notes: string;
+  interestPolygons: PolygonData[];
 };
 
 export function CreateClientDialogCL() {
@@ -61,6 +70,7 @@ export function CreateClientDialogCL() {
     preferredOrientations: [],
     minFloors: 0,
     notes: "",
+    interestPolygons: [],
   });
 
   const patch = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -106,6 +116,7 @@ export function CreateClientDialogCL() {
         workers: 0,
         pets: false,
         notes: form.notes,
+        interestPolygons: form.interestPolygons,
       });
 
       if (result.ok) {
@@ -135,6 +146,7 @@ export function CreateClientDialogCL() {
             preferredOrientations: [],
             minFloors: 0,
             notes: "",
+            interestPolygons: [],
           });
           setFeedback("idle");
         }, 2000);
@@ -523,6 +535,12 @@ export function CreateClientDialogCL() {
                     onChange={(e) => patch("notes", e.target.value)}
                     className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] focus:border-gold/55 focus:outline-none resize-none"
                     rows={2}
+                  />
+
+                  {/* Selector de polígonos */}
+                  <MapPolygonSelector
+                    selectedPolygons={form.interestPolygons}
+                    onChange={(polygons) => patch("interestPolygons", polygons)}
                   />
                 </div>
               </section>
