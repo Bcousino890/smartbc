@@ -428,7 +428,26 @@ export async function fetchIdealistaPhoneViaPlaywright(
       }
     }
 
-    const normalizedPhone = normalizeSpanishPhone(phoneFromAjax);
+    let normalizedPhone = normalizeSpanishPhone(phoneFromAjax);
+
+    // Final fallback: search the entire rendered HTML (after JS execution)
+    // If the phone is visible anywhere in the UI, it's in page.content()
+    if (!normalizedPhone) {
+      try {
+        const fullHtml = await page.content();
+        // Import the HTML extraction from the main detector
+        const { extractPhoneWithConfidence } = await import("./idealista-advertiser-detector");
+        const extracted = extractPhoneWithConfidence(fullHtml);
+        if (extracted.phone) {
+          normalizedPhone = extracted.phone;
+          phoneFromAjax = extracted.phone;
+          console.log(`[playwright-phone] Phone from full HTML content: ${normalizedPhone} (conf=${extracted.confidence})`);
+        }
+      } catch (err) {
+        console.log(`[playwright-phone] Full HTML search failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     console.log(`[playwright-phone] ${normalizedPhone ? `✓ ${normalizedPhone}` : "✗ sin teléfono"}`);
 
     return {
