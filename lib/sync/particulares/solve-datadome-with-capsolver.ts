@@ -47,10 +47,11 @@ export async function solveDatadomeWithCapSolver(
 
     if (!createRes.ok) {
       const text = await createRes.text();
-      console.error(`[capsolver] createTask HTTP ${createRes.status}: ${text.slice(0, 200)}`);
+      console.error(`[capsolver] createTask HTTP ${createRes.status}: ${text.slice(0, 500)}`);
+      console.error(`[capsolver] Request payload: ${JSON.stringify({ clientKey: apiKey?.slice(0, 20) + "...", task: { type: "DatadomeSliderTask", captchaUrl: captchaUrl.slice(0, 50) + "..." } })}`);
       return {
         token: null,
-        error: `createTask failed: HTTP ${createRes.status}`,
+        error: `createTask failed: HTTP ${createRes.status} - ${text.slice(0, 200)}`,
       };
     }
 
