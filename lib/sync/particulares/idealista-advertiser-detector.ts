@@ -534,9 +534,13 @@ export function parseStructuredAjaxPhone(
   }
 
   // 3) Campos planos en data (o en root como fallback).
+  // Incluye los campos específicos que usa adContactInfoForDetail.ajax:
+  //   formattedContactPhone1, formattedContactPhoneWithPrefix, contactPhone1
   const flatKeys = [
     "phone", "phoneNumber", "formattedPhone", "phoneNumberForMobileDialing",
     "mobilePhone", "ownerPhone", "contactPhone", "mainPhone", "displayPhone",
+    "formattedContactPhone1", "formattedContactPhoneWithPrefix", "contactPhone1",
+    "formattedPhone1", "phoneWithPrefix", "contactPhoneWithPrefix",
   ];
   for (const obj of [data, root]) {
     for (const key of flatKeys) {
@@ -606,8 +610,13 @@ export async function fetchIdealistaPhoneViaAjax(
   );
 
   const phonePatterns = [
+    // Campos específicos de adContactInfoForDetail.ajax (Idealista actual)
+    /"formattedContactPhone(?:WithPrefix)?(?:\d)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"contactPhone(?:WithPrefix)?(?:\d)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"formattedPhone(?:WithPrefix)?(?:Number)?(?:\d)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    /"phoneWithPrefix"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
+    // Campos genéricos
     /"phoneNumberForMobileDialing"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
-    /"formattedPhone(?:Number)?"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
     /"nationalNumber"\s*:\s*"?([+\d][\d\s\-]{6,18})"?/,
     /"number"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
     /"phone"\s*:\s*"([+\d][\d\s\-]{6,18})"/,
@@ -635,7 +644,7 @@ export async function fetchIdealistaPhoneViaAjax(
       // Captura ampliada (2500 chars) para que el panel "Testear extracción" del
       // VPS revele la estructura completa de `data` en las respuestas 200 OK —
       // imprescindible para ver dónde viene el teléfono en adContactInfoForDetail.
-      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 2500) });
+      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 5000) });
     }
 
     console.log(`[idealista-phone-ajax] ${endpoint.split("/").slice(-2).join("/")} → HTTP ${res.status}`);
