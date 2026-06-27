@@ -674,6 +674,27 @@ export async function fetchIdealistaPhoneViaAjax(
 
   console.log(`[idealista-phone-ajax] ✗ Curl cookie-jar fallido (${endpoints.length} endpoints)`);
 
+  // ─── Step 1b: extraer teléfono del HTML de la página cargada con Browser UA ──
+  // El HTML de la página se cargó con BROWSER_UA_FOR_PAGE (Chrome real) para pasar
+  // DataDome. Para muchos anuncios de particulares, el teléfono está en ese HTML
+  // aunque no lo esté en la versión WhatsApp UA que usa el scraper principal.
+  if (pageHtml) {
+    const { phone: htmlPhone, confidence: htmlConf } = extractPhoneWithConfidence(pageHtml, adId.slice(-9));
+    if (htmlPhone) {
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía pageHtml (Browser UA): adId=${adId}, phone=${htmlPhone}, conf=${htmlConf}`);
+      const cnMatch = pageHtml.match(/(?:advertiserName|contactName)\s*:\s*['"]([^'"]{2,60})['"]/);
+      if (debug) {
+        debug.push({ endpoint: "pageHtml-browser-ua", status: 200, bodySnippet: `phone=${htmlPhone} conf=${htmlConf}` });
+      }
+      return { phone: htmlPhone, phone_confidence: "high", contact_name: cnMatch?.[1]?.trim() ?? null, debug };
+    } else {
+      console.log(`[idealista-phone-ajax] pageHtml (Browser UA) sin teléfono (${pageHtml.length} chars)`);
+      if (debug) {
+        debug.push({ endpoint: "pageHtml-browser-ua", status: 0, bodySnippet: `no phone, htmlLen=${pageHtml.length}` });
+      }
+    }
+  }
+
   // ─── Step 2: DataDome pre-auth ───────────────────────────────────────────────
   // The browser flow: page loads → DataDome JS POSTs to https://dd.idealista.com/is/
   // → DataDome responds with {"status":200,"cookie":"datadome=VALUE;..."}
