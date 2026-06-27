@@ -185,7 +185,7 @@ export function TestPhoneExtractor() {
                           <span className="truncate">{entry.endpoint.split("/").pop()}</span>
                           {entry.bodySnippet && entry.bodySnippet.length > 0 && (
                             <div className="mt-0.5 text-[9px] text-ink/40 break-all max-w-full whitespace-pre-wrap">
-                              {entry.bodySnippet.slice(0, 1200)}
+                              {entry.bodySnippet.slice(0, 2500)}
                             </div>
                           )}
                         </div>

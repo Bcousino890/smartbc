@@ -644,7 +644,7 @@ export async function fetchIdealistaPhoneViaAjax(
       // Captura ampliada (2500 chars) para que el panel "Testear extracción" del
       // VPS revele la estructura completa de `data` en las respuestas 200 OK —
       // imprescindible para ver dónde viene el teléfono en adContactInfoForDetail.
-      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 5000) });
+      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 8000) });
     }
 
     console.log(`[idealista-phone-ajax] ${endpoint.split("/").slice(-2).join("/")} → HTTP ${res.status}`);
