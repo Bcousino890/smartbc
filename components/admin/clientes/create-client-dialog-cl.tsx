@@ -27,7 +27,9 @@ type FormState = {
   minParkingSpaces: number;
   prefersCondominium: boolean | undefined;
   preferredArchitecturalTypes: string[];
+  preferredOrientations: string[];
   minFloors: number;
+  notes: string;
 };
 
 export function CreateClientDialogCL() {
@@ -56,7 +58,9 @@ export function CreateClientDialogCL() {
     minParkingSpaces: 0,
     prefersCondominium: undefined,
     preferredArchitecturalTypes: [],
+    preferredOrientations: [],
     minFloors: 0,
+    notes: "",
   });
 
   const patch = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -88,10 +92,20 @@ export function CreateClientDialogCL() {
         },
         budgetMin: form.budgetMin,
         budgetMax: form.budgetMax,
+        minBedrooms: form.minBedrooms,
+        minBathrooms: form.minBathrooms,
+        minSquareMeters: form.minSquareMeters,
+        requiresServiceBedroom: form.requiresServiceBedroom,
+        minParkingSpaces: form.minParkingSpaces,
+        prefersCondominium: form.prefersCondominium,
+        preferredArchitecturalTypes: form.preferredArchitecturalTypes,
+        preferredOrientations: form.preferredOrientations,
+        minFloors: form.minFloors,
         occupants: 0,
         students: 0,
         workers: 0,
         pets: false,
+        notes: form.notes,
       });
 
       if (result.ok) {
@@ -118,7 +132,9 @@ export function CreateClientDialogCL() {
             minParkingSpaces: 0,
             prefersCondominium: undefined,
             preferredArchitecturalTypes: [],
+            preferredOrientations: [],
             minFloors: 0,
+            notes: "",
           });
           setFeedback("idle");
         }, 2000);
@@ -373,6 +389,141 @@ export function CreateClientDialogCL() {
                       className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
                     />
                   </div>
+                </div>
+              </section>
+
+              {/* Características arquitectónicas */}
+              <section>
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+                  Características arquitectónicas
+                </p>
+                <div className="space-y-3">
+                  {/* Dorm servicio y Condominio */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-medium text-ink/60">Dorm. servicio</p>
+                      <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
+                        {([undefined, true, false] as const).map((val) => (
+                          <button
+                            key={String(val)}
+                            type="button"
+                            onClick={() => patch("requiresServiceBedroom", val)}
+                            className={cn(
+                              "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition",
+                              form.requiresServiceBedroom === val
+                                ? "bg-ink text-cream-50 shadow-sm"
+                                : "text-ink/65 hover:text-ink",
+                            )}
+                          >
+                            {val === undefined ? "—" : val ? "Sí" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-medium text-ink/60">Condominio</p>
+                      <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
+                        {([undefined, true, false] as const).map((val) => (
+                          <button
+                            key={String(val)}
+                            type="button"
+                            onClick={() => patch("prefersCondominium", val)}
+                            className={cn(
+                              "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition",
+                              form.prefersCondominium === val
+                                ? "bg-ink text-cream-50 shadow-sm"
+                                : "text-ink/65 hover:text-ink",
+                            )}
+                          >
+                            {val === undefined ? "—" : val ? "Sí" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Estacionamientos y pisos */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Estac. mín"
+                      value={form.minParkingSpaces || ""}
+                      onChange={(e) => patch("minParkingSpaces", parseInt(e.target.value) || 0)}
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Pisos mín"
+                      value={form.minFloors || ""}
+                      onChange={(e) => patch("minFloors", parseInt(e.target.value) || 0)}
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Tipo de propiedad */}
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-medium text-ink/60">Tipo de propiedad</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(["Mediterránea", "Chilena", "Inglesa", "Moderna", "Neoclásica", "Colonial", "Contemporánea"] as const).map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            const updated = form.preferredArchitecturalTypes.includes(type)
+                              ? form.preferredArchitecturalTypes.filter((t) => t !== type)
+                              : [...form.preferredArchitecturalTypes, type];
+                            patch("preferredArchitecturalTypes", updated);
+                          }}
+                          className={cn(
+                            "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
+                            form.preferredArchitecturalTypes.includes(type)
+                              ? "bg-ink text-cream-50 shadow-sm"
+                              : "border border-ink/20 text-ink/70 hover:border-ink/40 hover:text-ink",
+                          )}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Orientación */}
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-medium text-ink/60">Orientación preferida</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(["Norte", "Sur", "Oriente", "Poniente", "Nor-Oriente", "Nor-Poniente", "Sur-Oriente", "Sur-Poniente"] as const).map((ori) => (
+                        <button
+                          key={ori}
+                          type="button"
+                          onClick={() => {
+                            const updated = form.preferredOrientations.includes(ori)
+                              ? form.preferredOrientations.filter((o) => o !== ori)
+                              : [...form.preferredOrientations, ori];
+                            patch("preferredOrientations", updated);
+                          }}
+                          className={cn(
+                            "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
+                            form.preferredOrientations.includes(ori)
+                              ? "bg-ink text-cream-50 shadow-sm"
+                              : "border border-ink/20 text-ink/70 hover:border-ink/40 hover:text-ink",
+                          )}
+                        >
+                          {ori}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notas */}
+                  <textarea
+                    placeholder="Notas internas (observaciones especiales)…"
+                    value={form.notes}
+                    onChange={(e) => patch("notes", e.target.value)}
+                    className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] focus:border-gold/55 focus:outline-none resize-none"
+                    rows={2}
+                  />
                 </div>
               </section>
 

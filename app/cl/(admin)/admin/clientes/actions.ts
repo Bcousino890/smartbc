@@ -94,6 +94,15 @@ export type CreateClientInput = {
   selectedSubzones: Record<string, string[]>; // zona -> subzonas
   budgetMin: number;
   budgetMax: number;
+  minBedrooms?: number;
+  minBathrooms?: number;
+  minSquareMeters?: number;
+  requiresServiceBedroom?: boolean;
+  minParkingSpaces?: number;
+  prefersCondominium?: boolean;
+  preferredArchitecturalTypes?: string[];
+  preferredOrientations?: string[];
+  minFloors?: number;
   universities?: string;
   occupants: number;
   students: number;
