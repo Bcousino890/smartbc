@@ -14,6 +14,16 @@ export async function solveDatadomeWithCapSolver(
   userAgent: string,
   options?: { proxyUrl?: string; apiKey?: string },
 ): Promise<CapSolverResult> {
+  // CapSolver has a whitelist of supported user agents for DataDome tasks.
+  // If a custom UA is passed, validate it; otherwise use a CapSolver-approved default.
+  const supportedUAs = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  ];
+  const effectiveUA = supportedUAs.includes(userAgent) ? userAgent : supportedUAs[3];
   let apiKey = options?.apiKey;
   if (!apiKey) {
     const { getCapSolverApiKey } = await import("./capsolver-config");
@@ -39,7 +49,7 @@ export async function solveDatadomeWithCapSolver(
         task: {
           type: "DatadomeSliderTask",
           captchaUrl,
-          userAgent,
+          userAgent: effectiveUA,
           proxy: options?.proxyUrl ? parseProxyUrl(options.proxyUrl) : undefined,
         },
       }),
