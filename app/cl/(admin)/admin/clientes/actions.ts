@@ -109,6 +109,12 @@ export type CreateClientInput = {
   workers: number;
   pets: boolean;
   notes?: string;
+  interestPolygons?: Array<{
+    id: string;
+    name: string;
+    coordinates: number[][][];
+    description?: string;
+  }>;
 };
 
 export type CreateClientResult =
