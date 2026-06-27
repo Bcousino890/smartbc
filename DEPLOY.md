@@ -7,8 +7,12 @@ Este proyecto está configurado para auto-deployer desde GitHub cada 5 minutos.
 El VPS tiene un cron que cada 5 minutos ejecuta:
 
 ```bash
-cd /home/smartbc && git pull && npm run build && pm2 restart smartbc
+cd /home/smartbc && git pull && npm run build && cd portal-web && npm install && npm run build && cd .. && pm2 restart smartbc-main smartbc-portal-web
 ```
+
+**Aplicaciones PM2:**
+- `smartbc-main`: Next.js en puerto 3137
+- `smartbc-portal-web`: TanStack Start (portal de propiedades) en puerto 3138, servido en `/web/`
 
 ## Mejora: Post-Deploy Automático
 
