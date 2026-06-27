@@ -165,25 +165,32 @@ export function TestPhoneExtractor() {
               {result.debug && (
                 <details className="mt-2 group">
                   <summary className="cursor-pointer select-none text-[10px] font-medium text-ink/40 hover:text-ink/60 group-open:text-ink/70 transition">
-                    📊 Debug AJAX ({result.debug.ajax.length} endpoints) {result.debug.datadomeBlocked && "⚠️"}
+                    📊 Debug ({result.debug.ajax.length} endpoints · HTML {result.debug.htmlLength?.toLocaleString()} chars · tel:{result.debug.hasTelHref ? "✓" : "✗"}) {result.debug.datadomeBlocked && "⚠️DataDome"}
                   </summary>
-                  <div className="mt-2 max-h-[240px] overflow-y-auto rounded-lg bg-ink/3 p-2 space-y-1">
-                    {result.debug.ajax.map((entry, i) => (
-                      <div key={i} className="text-[10px] font-mono text-ink/60 hover:text-ink/80 transition">
-                        <span className={cn(
-                          "font-bold mr-2",
-                          entry.status === 200 ? "text-emerald-600" : "text-red-600"
-                        )}>
-                          {entry.status}
-                        </span>
-                        <span className="truncate">{entry.endpoint.split("/").pop()}</span>
-                        {entry.bodySnippet && entry.bodySnippet.length > 0 && (
-                          <div className="mt-0.5 text-[9px] text-ink/40 truncate max-w-[280px]">
-                            {entry.bodySnippet.slice(0, 60)}...
-                          </div>
-                        )}
+                  <div className="mt-2 rounded-lg bg-ink/3 p-2 space-y-1">
+                    {result.debug.telHrefs && result.debug.telHrefs.length > 0 && (
+                      <div className="text-[9px] font-mono text-emerald-700 mb-1">
+                        tel: links: {result.debug.telHrefs.join(" | ")}
                       </div>
-                    ))}
+                    )}
+                    <div className="max-h-[320px] overflow-y-auto space-y-1">
+                      {result.debug.ajax.map((entry, i) => (
+                        <div key={i} className="text-[10px] font-mono text-ink/60 hover:text-ink/80 transition">
+                          <span className={cn(
+                            "font-bold mr-2",
+                            entry.status === 200 ? "text-emerald-600" : "text-red-600"
+                          )}>
+                            {entry.status}
+                          </span>
+                          <span className="truncate">{entry.endpoint.split("/").pop()}</span>
+                          {entry.bodySnippet && entry.bodySnippet.length > 0 && (
+                            <div className="mt-0.5 text-[9px] text-ink/40 break-all max-w-full whitespace-pre-wrap">
+                              {entry.bodySnippet.slice(0, 400)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </details>
               )}
