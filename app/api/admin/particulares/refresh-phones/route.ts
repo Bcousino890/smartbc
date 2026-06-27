@@ -2,7 +2,10 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
-import { detectAdvertiserFromHtml } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import {
+  detectAdvertiserFromHtml,
+  fetchIdealistaPhoneViaAjax,
+} from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 
@@ -49,6 +52,19 @@ export async function POST(req: Request) {
       if (!res.ok) { still_missing++; continue; }
 
       const info = detectAdvertiserFromHtml(res.html);
+
+      // Fallback AJAX: many Idealista listings hide the phone behind "Ver teléfono"
+      if (!info.phone) {
+        const adIdMatch = row.source_url.match(/\/inmueble\/(\d+)/);
+        if (adIdMatch?.[1]) {
+          const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], { proxyUrl });
+          if (ajax.phone) {
+            info.phone = ajax.phone;
+            info.phone_confidence = ajax.phone_confidence;
+          }
+        }
+      }
+
       if (info.phone) {
         await db
           .from("particulares")

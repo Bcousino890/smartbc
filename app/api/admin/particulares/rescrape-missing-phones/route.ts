@@ -1,7 +1,10 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
-import { detectAdvertiserFromHtml } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import {
+  detectAdvertiserFromHtml,
+  fetchIdealistaPhoneViaAjax,
+} from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 
@@ -67,6 +70,18 @@ async function rescrapeParticularForPhone(
 
     // Try to extract phone from the fresh HTML
     const advertiserInfo = detectAdvertiserFromHtml(curlRes.html);
+
+    // Fallback AJAX: many Idealista listings hide the phone behind "Ver teléfono"
+    if (!advertiserInfo.phone) {
+      const adIdMatch = particular.source_url.match(/\/inmueble\/(\d+)/);
+      if (adIdMatch?.[1]) {
+        const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], { proxyUrl });
+        if (ajax.phone) {
+          advertiserInfo.phone = ajax.phone;
+          advertiserInfo.phone_confidence = ajax.phone_confidence;
+        }
+      }
+    }
 
     if (advertiserInfo.phone) {
       result.new_phone = advertiserInfo.phone;
