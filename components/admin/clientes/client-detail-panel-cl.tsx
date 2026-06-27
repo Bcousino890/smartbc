@@ -27,6 +27,12 @@ import { saveClientPreferencesChile } from "@/app/cl/(admin)/admin/clientes/acti
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import {
+  LocationMultiselect,
+  CHILE_REGIONS,
+  COMMUNES_BY_REGION,
+  SECTORS_BY_COMMUNE,
+} from "./location-multiselect";
 
 type FeedbackKind = "idle" | "saved" | "error";
 
@@ -293,29 +299,67 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
           </FilterRow>
         )}
 
-        {/* Ubicación */}
+        {/* Ubicación en cascada */}
         <div className="rounded-xl border border-gold/15 bg-white/40 p-3">
           <p className="mb-3 text-[11px] font-medium text-ink/55">Ubicación preferida (Chile)</p>
 
-          <div className="space-y-2">
-            <LocationTagInput
+          <div className="space-y-3">
+            {/* Regiones */}
+            <LocationMultiselect
               label="Regiones"
-              tags={state.preferredRegions}
-              onChange={(v) => patch("preferredRegions", v)}
-              placeholder="ej: Metropolitana"
+              placeholder="Selecciona regiones…"
+              options={CHILE_REGIONS.map((r) => r.name)}
+              selected={state.preferredRegions}
+              onChange={(v) => {
+                patch("preferredRegions", v);
+                // Limpiar comunas y sectores si ya no corresponden
+                const validCodes = CHILE_REGIONS.filter((r) => v.includes(r.name)).map((r) => r.code);
+                const validCommunes = Object.entries(COMMUNES_BY_REGION)
+                  .filter(([code]) => validCodes.includes(code))
+                  .flatMap(([, communes]) => communes);
+                const filteredCommunes = state.preferredCommunes.filter((c) => validCommunes.includes(c));
+                patch("preferredCommunes", filteredCommunes);
+                patch("preferredSectors", []);
+              }}
             />
-            <LocationTagInput
-              label="Comunas"
-              tags={state.preferredCommunes}
-              onChange={(v) => patch("preferredCommunes", v)}
-              placeholder="ej: Providencia, Las Condes"
-            />
-            <LocationTagInput
-              label="Sectores"
-              tags={state.preferredSectors}
-              onChange={(v) => patch("preferredSectors", v)}
-              placeholder="ej: Bellavista, Sanhattan"
-            />
+
+            {/* Comunas — filtradas por regiones seleccionadas */}
+            {(() => {
+              const selectedCodes = CHILE_REGIONS.filter((r) => state.preferredRegions.includes(r.name)).map((r) => r.code);
+              const availableCommunes = selectedCodes.length > 0
+                ? selectedCodes.flatMap((code) => COMMUNES_BY_REGION[code] || []).sort()
+                : Object.values(COMMUNES_BY_REGION).flat().sort();
+              return (
+                <LocationMultiselect
+                  label="Comunas"
+                  placeholder={selectedCodes.length === 0 ? "Selecciona una región primero…" : "Selecciona comunas…"}
+                  options={availableCommunes}
+                  selected={state.preferredCommunes}
+                  onChange={(v) => {
+                    patch("preferredCommunes", v);
+                    // Limpiar sectores que ya no correspondan
+                    const validSectors = v.flatMap((c) => SECTORS_BY_COMMUNE[c] || []);
+                    patch("preferredSectors", state.preferredSectors.filter((s) => validSectors.includes(s)));
+                  }}
+                />
+              );
+            })()}
+
+            {/* Sectores — filtrados por comunas seleccionadas */}
+            {(() => {
+              const availableSectors = state.preferredCommunes.length > 0
+                ? state.preferredCommunes.flatMap((c) => SECTORS_BY_COMMUNE[c] || []).sort()
+                : [];
+              return availableSectors.length > 0 ? (
+                <LocationMultiselect
+                  label="Sectores / Barrios"
+                  placeholder="Selecciona sectores…"
+                  options={availableSectors}
+                  selected={state.preferredSectors}
+                  onChange={(v) => patch("preferredSectors", v)}
+                />
+              ) : null;
+            })()}
           </div>
         </div>
 
@@ -614,56 +658,3 @@ function ThreeToggle({
   );
 }
 
-function LocationTagInput({
-  label,
-  tags,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  tags: string[];
-  onChange: (tags: string[]) => void;
-  placeholder: string;
-}) {
-  const [inputValue, setInputValue] = useState("");
-
-  const addTag = (val: string) => {
-    const trimmed = val.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      onChange([...tags, trimmed]);
-    }
-    setInputValue("");
-  };
-
-  const removeTag = (tag: string) => {
-    onChange(tags.filter((t) => t !== tag));
-  };
-
-  return (
-    <div>
-      <p className="mb-1 text-[10px] text-ink/45">{label}</p>
-      <div className="flex flex-wrap gap-1 rounded-lg border border-ink/10 bg-white/70 p-2 focus-within:border-gold/55">
-        {tags.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-gold/20 bg-gold/10 px-2 py-0.5 text-[11px] font-medium text-gold-dark">
-            {tag}
-            <button type="button" onClick={() => removeTag(tag)} className="ml-0.5 opacity-60 hover:opacity-100">×</button>
-          </span>
-        ))}
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === ",") {
-              e.preventDefault();
-              addTag(inputValue);
-            }
-          }}
-          onBlur={() => { if (inputValue.trim()) addTag(inputValue); }}
-          placeholder={tags.length === 0 ? placeholder : "Agregar…"}
-          className="min-w-[80px] flex-1 bg-transparent text-[12px] outline-none placeholder:text-ink/30"
-        />
-      </div>
-    </div>
-  );
-}
