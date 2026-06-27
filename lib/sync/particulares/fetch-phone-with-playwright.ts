@@ -369,31 +369,55 @@ export async function fetchIdealistaPhoneViaPlaywright(
     // DOM fallback: check if phone was injected into the page after clicking
     if (!phoneFromAjax) {
       const domPhone = await page.evaluate(() => {
-        // appcallback_target_phone attribute (Idealista sets this after AJAX)
+        // 1. appcallback_target_phone attribute (Idealista sets this after AJAX)
         const el = document.querySelector("[appcallback_target_phone]");
         if (el) {
           const v = el.getAttribute("appcallback_target_phone");
           if (v && /^\d{9}$/.test(v)) return v;
         }
-        // tel: links with real phone numbers in the contact container
-        const telLinks = document.querySelectorAll(
-          "#contact-phones-container a[href^='tel:+'], " +
-          "#contact-phones-container a[href^='tel:6'], " +
-          "#contact-phones-container a[href^='tel:7'], " +
-          "#contact-phones-container a[href^='tel:8'], " +
-          "#contact-phones-container a[href^='tel:9']",
-        );
+        // 2. tel: links with real phone numbers (anywhere, not just contact-phones-container)
+        const telLinks = document.querySelectorAll("a[href^='tel:']");
         for (const link of telLinks) {
           const href = link.getAttribute("href") ?? "";
           const num = href.replace("tel:", "").trim();
-          if (/^[+\d][\d\s\-]{8,}$/.test(num)) return num;
+          if (/^[+\d][\d\s\-]{8,}$/.test(num)) {
+            // Prefer visible links, but accept any valid phone
+            return num;
+          }
         }
-        // hidden-contact-phones class
-        const hiddenPhone = document.querySelector(".hidden-contact-phones-formatted-phone");
-        if (hiddenPhone) {
-          const href = hiddenPhone.getAttribute("href") ?? "";
-          const num = href.replace("tel:", "").trim();
-          if (num) return num;
+        // 3. hidden-contact-phones class or other hidden phone elements
+        const hiddenPhoneSelectors = [
+          ".hidden-contact-phones-formatted-phone",
+          "[class*='contact-phone']",
+          "[class*='phone-link']",
+          "[data-phone]",
+          "[data-contact-phone]",
+        ];
+        for (const sel of hiddenPhoneSelectors) {
+          const hiddenPhone = document.querySelector(sel);
+          if (hiddenPhone) {
+            const href = hiddenPhone.getAttribute("href") ?? "";
+            const dataPhone = hiddenPhone.getAttribute("data-phone") ?? hiddenPhone.getAttribute("data-contact-phone") ?? "";
+            const num = (href.replace("tel:", "").trim() || dataPhone).trim();
+            if (num && /^[+\d][\d\s\-]{6,}$/.test(num)) return num;
+          }
+        }
+        // 4. WhatsApp links (wa.me with embedded phone)
+        const waLink = document.querySelector("a[href*='wa.me']");
+        if (waLink) {
+          const href = waLink.getAttribute("href") ?? "";
+          const waMatch = href.match(/wa\.me\/(?:34)?([6789]\d{8})/);
+          if (waMatch?.[1]) return waMatch[1];
+        }
+        // 5. Visible text patterns in contact section
+        const contactSection = document.getElementById("contact-phones-container") ||
+                               document.querySelector("[class*='contact']") ||
+                               document.body;
+        const text = contactSection?.innerText ?? "";
+        const phoneMatch = text.match(/(?:Llamar|Tel|Teléfono)[\s:]*([+\d][\d\s\-()]{8,})/i);
+        if (phoneMatch?.[1]) {
+          const num = phoneMatch[1].replace(/\D/g, "");
+          if (/^[34679]\d{8,}$/.test(num)) return num;
         }
         return null;
       }).catch(() => null);
