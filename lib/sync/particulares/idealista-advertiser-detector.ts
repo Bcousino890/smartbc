@@ -468,6 +468,100 @@ async function fetchDataDomeCookie(
 }
 
 /**
+ * Parser ESTRUCTURADO del JSON de los endpoints de contacto de Idealista.
+ * El endpoint `adContactInfoForDetail.ajax` devuelve HTTP 200 con una envoltura
+ * `{"message":null,"result":"OK","errorCode":null,"data":{...}}`. El teléfono,
+ * cuando existe, vive dentro de `data` en formas variadas:
+ *   - data.phone1 / data.phone2 → {"number":"...","formatted":"..."}
+ *   - data.contactMethods[] → {"type":"PHONE","number":"..."}
+ *   - data.phone / data.phoneNumber / data.formattedPhone (planos)
+ * Los regex sueltos a veces fallan con estas estructuras anidadas; este parser
+ * recorre el objeto de forma robusta. Devuelve teléfono normalizado o null.
+ *
+ * `excludeReference`: últimos 9 dígitos del adId, para no confundir la
+ * referencia del anuncio con un teléfono.
+ */
+export function parseStructuredAjaxPhone(
+  body: string,
+  excludeReference?: string | null,
+): { phone: string | null; contact_name: string | null } {
+  let json: unknown;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    return { phone: null, contact_name: null };
+  }
+
+  // Desenvuelve `data` si la respuesta viene como {result:"OK", data:{...}}.
+  const root = (json as Record<string, unknown>) ?? {};
+  const data = (root.data as Record<string, unknown> | undefined) ?? root;
+
+  const tryCandidate = (raw: unknown): string | null => {
+    if (typeof raw !== "string" && typeof raw !== "number") return null;
+    return acceptPhoneCandidate(String(raw), excludeReference);
+  };
+
+  // 1) phone1 / phone2 anidados: {"number":"...","formatted":"..."}
+  for (const key of ["phone1", "phone2"]) {
+    const p = data[key] as Record<string, unknown> | undefined;
+    if (p && typeof p === "object") {
+      const phone = tryCandidate(p.number) ?? tryCandidate(p.formatted);
+      if (phone) {
+        const contact_name = extractContactName(data) ?? extractContactName(root);
+        return { phone, contact_name };
+      }
+    }
+  }
+
+  // 2) contactMethods / phones: array de {type:"PHONE", number:"..."}
+  for (const key of ["contactMethods", "phones", "contactPhones"]) {
+    const arr = data[key];
+    if (Array.isArray(arr)) {
+      for (const item of arr) {
+        if (item && typeof item === "object") {
+          const m = item as Record<string, unknown>;
+          const isPhone = !m.type || String(m.type).toUpperCase().includes("PHONE");
+          if (isPhone) {
+            const phone = tryCandidate(m.number) ?? tryCandidate(m.formatted) ?? tryCandidate(m.value);
+            if (phone) {
+              const contact_name = extractContactName(data) ?? extractContactName(root);
+              return { phone, contact_name };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3) Campos planos en data (o en root como fallback).
+  const flatKeys = [
+    "phone", "phoneNumber", "formattedPhone", "phoneNumberForMobileDialing",
+    "mobilePhone", "ownerPhone", "contactPhone", "mainPhone", "displayPhone",
+  ];
+  for (const obj of [data, root]) {
+    for (const key of flatKeys) {
+      const phone = tryCandidate(obj[key]);
+      if (phone) {
+        const contact_name = extractContactName(data) ?? extractContactName(root);
+        return { phone, contact_name };
+      }
+    }
+  }
+
+  return { phone: null, contact_name: null };
+}
+
+function extractContactName(obj: Record<string, unknown>): string | null {
+  for (const key of ["contactName", "userName", "advertiserName", "name"]) {
+    const v = obj[key];
+    if (typeof v === "string" && v.trim().length >= 2 && v.trim().length <= 60) {
+      return v.trim();
+    }
+  }
+  return null;
+}
+
+/**
  * Intenta obtener el teléfono de un anuncio de Idealista llamando a los
  * endpoints AJAX de contacto (los del botón "Ver teléfono").
  * Flujo de tres pasos:
@@ -538,7 +632,10 @@ export async function fetchIdealistaPhoneViaAjax(
     const endpoint = endpoints[i];
 
     if (debug) {
-      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 300) });
+      // Captura ampliada (2500 chars) para que el panel "Testear extracción" del
+      // VPS revele la estructura completa de `data` en las respuestas 200 OK —
+      // imprescindible para ver dónde viene el teléfono en adContactInfoForDetail.
+      debug.push({ endpoint, status: res.status, bodySnippet: (res.body ?? "").slice(0, 2500) });
     }
 
     console.log(`[idealista-phone-ajax] ${endpoint.split("/").slice(-2).join("/")} → HTTP ${res.status}`);
@@ -546,6 +643,17 @@ export async function fetchIdealistaPhoneViaAjax(
     if (!res.ok || !res.body) continue;
 
     const body = res.body;
+
+    // Paso A: parser ESTRUCTURADO del JSON (maneja la envoltura `data` y
+    // estructuras anidadas phone1/phone2/contactMethods que los regex sueltos
+    // a veces pierden, aunque el HTTP sea 200).
+    const structured = parseStructuredAjaxPhone(body, adId.slice(-9));
+    if (structured.phone) {
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía curl (parser estructurado): adId=${adId}, phone=${structured.phone}`);
+      return { phone: structured.phone, phone_confidence: "high", contact_name: structured.contact_name, debug };
+    }
+
+    // Paso B: fallback a regex sobre el cuerpo crudo.
     let phone: string | null = null;
     for (const pattern of phonePatterns) {
       const m = body.match(pattern);
@@ -559,7 +667,7 @@ export async function fetchIdealistaPhoneViaAjax(
     const contact_name = cn?.[1]?.trim() ?? null;
 
     if (phone) {
-      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía curl: adId=${adId}, phone=${phone}`);
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía curl (regex): adId=${adId}, phone=${phone}`);
       return { phone, phone_confidence: "high", contact_name, debug };
     }
   }
@@ -624,6 +732,14 @@ export async function fetchIdealistaPhoneViaAjax(
           if (ddRes.ok && "html" in ddRes && ddRes.html) {
             const body = ddRes.html;
             console.log(`[idealista-phone-ajax] Response body: ${body.slice(0, 200)}`);
+
+            // Parser estructurado primero, regex como fallback.
+            const structured = parseStructuredAjaxPhone(body, adId.slice(-9));
+            if (structured.phone) {
+              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía DataDome pre-auth (estructurado): ${structured.phone}`);
+              return { phone: structured.phone, phone_confidence: "high", contact_name: structured.contact_name, debug };
+            }
+
             let phone: string | null = null;
             for (const pattern of phonePatterns) {
               const m = body.match(pattern);
@@ -634,7 +750,7 @@ export async function fetchIdealistaPhoneViaAjax(
             }
             const cn = body.match(/"contactName"\s*:\s*"([^"]{2,60})"/);
             if (phone) {
-              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía DataDome pre-auth: ${phone}`);
+              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía DataDome pre-auth (regex): ${phone}`);
               return { phone, phone_confidence: "high", contact_name: cn?.[1]?.trim() ?? null, debug };
             } else {
               console.log(`[idealista-phone-ajax] DataDome cookie trabajó pero sin teléfono en response`);
