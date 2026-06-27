@@ -1,9 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import "server-only";
+import { createClient } from "../server";
 
 export type Region = {
   id: string;
@@ -48,27 +44,38 @@ export type Country = {
 export async function getRegionsByCountry(
   countryCode: string
 ): Promise<Region[]> {
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const { data: country } = await (supabase as any)
+    .from("countries")
+    .select("id")
+    .eq("code", countryCode)
+    .maybeSingle();
+
+  if (!country) return [];
+
+  const { data, error } = await (supabase as any)
     .from("location_hierarchies")
-    .select(
-      "id, region_code, region_name, country_id, priority"
-    )
-    .eq("countries.code", countryCode)
+    .select("id, region_code, region_name, country_id, priority")
+    .eq("country_id", country.id)
     .eq("is_active", true)
     .order("priority")
     .order("region_name");
 
   if (error) throw error;
 
-  return (
-    data?.map((row: any) => ({
-      id: row.id,
-      regionCode: row.region_code,
-      regionName: row.region_name,
-      countryId: row.country_id,
-      priority: row.priority,
-    })) || []
-  );
+  // Devolver regiones únicas
+  const seen = new Set<string>();
+  return (data || []).filter((row: any) => {
+    if (seen.has(row.region_code)) return false;
+    seen.add(row.region_code);
+    return true;
+  }).map((row: any) => ({
+    id: row.id,
+    regionCode: row.region_code,
+    regionName: row.region_name,
+    countryId: row.country_id,
+    priority: row.priority,
+  }));
 }
 
 // Obtener comunas de una región específica
@@ -76,12 +83,19 @@ export async function getCommunesByRegion(
   countryCode: string,
   regionCode: string
 ): Promise<Commune[]> {
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const { data: country } = await (supabase as any)
+    .from("countries")
+    .select("id")
+    .eq("code", countryCode)
+    .maybeSingle();
+
+  if (!country) return [];
+
+  const { data, error } = await (supabase as any)
     .from("location_hierarchies")
-    .select(
-      "id, region_code, region_name, commune_code, commune_name, country_id, priority"
-    )
-    .eq("countries.code", countryCode)
+    .select("id, region_code, region_name, commune_code, commune_name, country_id, priority")
+    .eq("country_id", country.id)
     .eq("region_code", regionCode)
     .eq("is_active", true)
     .order("priority")
@@ -89,17 +103,20 @@ export async function getCommunesByRegion(
 
   if (error) throw error;
 
-  return (
-    data?.map((row: any) => ({
-      id: row.id,
-      regionCode: row.region_code,
-      regionName: row.region_name,
-      communeCode: row.commune_code,
-      communeName: row.commune_name,
-      countryId: row.country_id,
-      priority: row.priority,
-    })) || []
-  );
+  const seen = new Set<string>();
+  return (data || []).filter((row: any) => {
+    if (seen.has(row.commune_code)) return false;
+    seen.add(row.commune_code);
+    return true;
+  }).map((row: any) => ({
+    id: row.id,
+    regionCode: row.region_code,
+    regionName: row.region_name,
+    communeCode: row.commune_code,
+    communeName: row.commune_name,
+    countryId: row.country_id,
+    priority: row.priority,
+  }));
 }
 
 // Obtener sectores de una comuna específica
@@ -108,12 +125,19 @@ export async function getSectorsByCommune(
   regionCode: string,
   communeCode: string
 ): Promise<Sector[]> {
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const { data: country } = await (supabase as any)
+    .from("countries")
+    .select("id")
+    .eq("code", countryCode)
+    .maybeSingle();
+
+  if (!country) return [];
+
+  const { data, error } = await (supabase as any)
     .from("location_hierarchies")
-    .select(
-      "id, region_code, region_name, commune_code, commune_name, sector_code, sector_name, country_id, polygon_geojson, priority"
-    )
-    .eq("countries.code", countryCode)
+    .select("id, region_code, region_name, commune_code, commune_name, sector_code, sector_name, country_id, polygon_geojson, priority")
+    .eq("country_id", country.id)
     .eq("region_code", regionCode)
     .eq("commune_code", communeCode)
     .eq("is_active", true)
@@ -122,31 +146,30 @@ export async function getSectorsByCommune(
 
   if (error) throw error;
 
-  return (
-    data?.map((row: any) => ({
-      id: row.id,
-      regionCode: row.region_code,
-      regionName: row.region_name,
-      communeCode: row.commune_code,
-      communeName: row.commune_name,
-      sectorCode: row.sector_code,
-      sectorName: row.sector_name,
-      countryId: row.country_id,
-      polygonGeojson: row.polygon_geojson,
-      priority: row.priority,
-    })) || []
-  );
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    regionCode: row.region_code,
+    regionName: row.region_name,
+    communeCode: row.commune_code,
+    communeName: row.commune_name,
+    sectorCode: row.sector_code,
+    sectorName: row.sector_name,
+    countryId: row.country_id,
+    polygonGeojson: row.polygon_geojson,
+    priority: row.priority,
+  }));
 }
 
 // Obtener información de un país
 export async function getCountry(countryCode: string): Promise<Country | null> {
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any)
     .from("countries")
     .select("id, code, name_es, name_en, currency_code")
     .eq("code", countryCode)
-    .single();
+    .maybeSingle();
 
-  if (error) return null;
+  if (error || !data) return null;
 
   return {
     id: data.id,
@@ -157,34 +180,20 @@ export async function getCountry(countryCode: string): Promise<Country | null> {
   };
 }
 
-// Buscar propiedades dentro de un polígono GeoJSON
-// Usa la función PostGIS ST_Contains si el polígono está en el DB
-export async function getPropertiesInPolygon(
-  polygonGeojson: unknown,
-  countryCode: string
-): Promise<string[]> {
-  // Para MVP usamos JavaScript/turf.js en lugar de PostGIS
-  // Los IDs de propiedades dentro del polígono se filtran en el cliente
-  const { data, error } = await supabase
-    .from("properties")
-    .select("id, latitude, longitude")
-    .eq("countries.code", countryCode)
-    .not("latitude", "is", null)
-    .not("longitude", "is", null);
-
-  if (error) throw error;
-
-  return data?.map((p: any) => p.id) || [];
-}
-
 // Obtener geofence zones activas de un país
 export async function getGeofenceZones(countryCode: string) {
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const { data: country } = await (supabase as any)
+    .from("countries")
+    .select("id")
+    .eq("code", countryCode)
+    .maybeSingle();
+
+  if (!country) return [];
+
+  const { data, error } = await (supabase as any)
     .from("geofence_zones")
-    .select(
-      "id, location_hierarchy_id, polygon_geojson, zone_name, zone_type, search_radius_meters"
-    )
-    .eq("location_hierarchies.countries.code", countryCode)
+    .select("id, location_hierarchy_id, polygon_geojson, zone_name, zone_type, search_radius_meters")
     .eq("is_active", true)
     .order("zone_name");
 
