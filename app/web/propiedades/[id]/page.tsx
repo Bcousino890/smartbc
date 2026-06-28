@@ -1,0 +1,164 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowRight, Heart, MapPin } from "lucide-react";
+import { getProperty, properties } from "@/lib/portal-properties";
+import { PropertyCard } from "../../_components/PropertyCard";
+import type { Metadata } from "next";
+
+type Props = { params: Promise<{ id: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const p = getProperty(id);
+  if (!p) return { title: "Propiedad" };
+  return {
+    title: `${p.title} — ${p.zone} · ${p.city}`,
+    description: p.description.slice(0, 160),
+    openGraph: { images: [p.cover] },
+  };
+}
+
+export default async function PropertyDetail({ params }: Props) {
+  const { id } = await params;
+  const p = getProperty(id);
+  if (!p) notFound();
+
+  const similar = properties.filter((x) => x.id !== p.id).slice(0, 3);
+
+  return (
+    <div>
+      {/* GALLERY */}
+      <section className="bg-cream-deep">
+        <div className="container-luxe py-6 grid md:grid-cols-3 gap-2 h-[70vh]">
+          <div className="md:col-span-2 relative overflow-hidden">
+            <img src={p.cover} alt={p.title} className="h-full w-full object-cover" />
+            <button className="absolute bottom-6 left-6 bg-cream/95 text-navy px-5 py-2 text-[11px] tracking-[0.24em] uppercase">↗ Ver galería</button>
+          </div>
+          <div className="hidden md:grid grid-rows-2 gap-2">
+            {p.gallery.slice(0, 2).map((img, i) => (
+              <div key={i} className="overflow-hidden relative">
+                <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                {i === 1 && p.gallery.length > 2 && (
+                  <span className="absolute bottom-4 right-4 bg-navy/80 text-cream px-3 py-1 text-[11px] tracking-wider uppercase">+{p.gallery.length - 2} fotos</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="container-luxe py-16 grid lg:grid-cols-[1fr_380px] gap-16">
+        <article>
+          <p className="text-[11px] tracking-[0.24em] uppercase text-gray-400">
+            <Link href="/web" className="hover:text-gold">Inicio</Link> / <Link href="/web/propiedades" className="hover:text-gold">Propiedades</Link> / {p.zone}
+          </p>
+          <div className="mt-4 flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-[11px] tracking-[0.28em] uppercase text-gold">Ref. {p.ref}</p>
+            {p.badge && <span className="text-[10px] tracking-[0.28em] uppercase bg-navy text-cream px-3 py-1.5">{p.badge}</span>}
+          </div>
+          <h1 className="mt-4 font-display text-5xl md:text-7xl text-navy leading-tight">{p.title}</h1>
+          <div className="mt-6 flex items-end justify-between gap-6 flex-wrap pb-6 border-b border-stone-200">
+            <div>
+              <p className="font-display text-4xl text-navy">{p.price}</p>
+              <p className="mt-1 text-[11px] tracking-[0.24em] uppercase text-gray-400">{p.operation}</p>
+            </div>
+            <p className="text-sm text-gray-500 flex items-center gap-2">
+              <MapPin size={14} className="text-gold" />
+              {p.address}, {p.city}, {p.country}
+            </p>
+          </div>
+
+          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { n: p.beds, l: "Hab." },
+              { n: p.baths, l: "Baños" },
+              { n: p.sqm, l: "m²" },
+              { n: p.cert ?? "—", l: "Cert. Energ." },
+            ].map((m, i) => (
+              <div key={i} className="border-l-2 border-gold pl-4">
+                <p className="font-display text-4xl text-navy">{m.n}</p>
+                <p className="text-[11px] tracking-[0.24em] uppercase text-gray-400 mt-1">{m.l}</p>
+              </div>
+            ))}
+          </div>
+
+          <section className="mt-16">
+            <h2 className="font-display text-3xl text-navy">Descripción</h2>
+            <p className="mt-6 text-base leading-relaxed text-navy/80">{p.description}</p>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="font-display text-3xl text-navy">Características</h2>
+            <ul className="mt-6 grid sm:grid-cols-2 gap-x-8 gap-y-3">
+              {p.features.map((f) => (
+                <li key={f} className="flex items-start gap-3 text-sm text-navy/80">
+                  <span className="text-gold mt-1.5 h-1 w-4 bg-gold inline-block" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="font-display text-3xl text-navy">Ubicación</h2>
+            <div className="mt-6 aspect-[16/7] bg-cream-deep border border-stone-200 flex items-center justify-center">
+              <div className="text-center">
+                <MapPin size={28} className="text-gold mx-auto" />
+                <p className="mt-3 text-navy font-display text-xl">{p.address}</p>
+                <p className="text-sm text-gray-500">{p.city}, {p.country}</p>
+              </div>
+            </div>
+          </section>
+        </article>
+
+        {/* SIDEBAR */}
+        <aside className="lg:sticky lg:top-28 lg:self-start space-y-6">
+          <div className="border border-stone-200 bg-white p-8">
+            <p className="eyebrow">Gestionado por</p>
+            <div className="mt-4 flex items-center gap-4 pb-6 border-b border-stone-200">
+              <div className="h-14 w-14 border border-gold text-gold flex items-center justify-center font-display text-xl">BC</div>
+              <div>
+                <p className="font-display text-xl text-navy">Benjamín Cousiño</p>
+                <p className="text-xs text-gray-500">Oficina {p.office}</p>
+              </div>
+            </div>
+            <a href={`tel:${p.phone.replace(/\s/g, "")}`} className="mt-6 block text-navy font-display text-2xl hover:text-gold">{p.phone}</a>
+            <p className="text-[11px] tracking-[0.22em] uppercase text-gray-400 mt-2">
+              {p.office === "Madrid" ? "Lun–Vie 9:00–19:00 · Sáb 10:00–14:00" : "Lun–Vie 9:00–18:30"}
+            </p>
+            <button className="mt-6 w-full bg-navy text-cream py-4 text-[11px] tracking-[0.28em] uppercase hover:bg-gold hover:text-navy transition-colors">
+              Solicitar Visita
+            </button>
+            <button className="mt-2 w-full border border-stone-200 py-4 text-[11px] tracking-[0.24em] uppercase text-navy hover:bg-cream-deep inline-flex items-center justify-center gap-2">
+              <Heart size={14} /> Guardar
+            </button>
+          </div>
+
+          <div className="border border-gold/40 p-8 bg-cream-deep">
+            <p className="eyebrow">¿Busca algo diferente?</p>
+            <p className="mt-3 text-sm text-navy/80 leading-relaxed">Consulte nuestra cartera off market de 1.800+ propiedades no publicadas.</p>
+            <Link href="/web/off-market" className="mt-4 inline-flex items-center gap-2 text-[11px] tracking-[0.24em] uppercase text-gold hover:text-navy">
+              Cartera Off Market <ArrowRight size={14} />
+            </Link>
+          </div>
+        </aside>
+      </div>
+
+      {/* SIMILAR */}
+      <section className="bg-cream-deep py-24">
+        <div className="container-luxe">
+          <div className="flex items-end justify-between gap-6 flex-wrap">
+            <div>
+              <p className="eyebrow">Puede Interesarle</p>
+              <h2 className="mt-3 font-display text-4xl md:text-5xl text-navy">Propiedades Similares</h2>
+            </div>
+            <Link href="/web/propiedades" className="text-[11px] tracking-[0.28em] uppercase text-gold hover:text-navy inline-flex items-center gap-2">Ver todas <ArrowRight size={14} /></Link>
+          </div>
+          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {similar.map((s) => <PropertyCard key={s.id} p={s} />)}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

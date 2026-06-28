@@ -13,15 +13,22 @@ const config: Config = {
           DEFAULT: "#0a0a0a",
           soft: "#1a1a1a",
         },
+        navy: {
+          DEFAULT: "#1b2a4a",
+          soft: "#2a3d5a",
+        },
         cream: {
+          DEFAULT: "#f7f3ed",
           50: "#fbf8f3",
           100: "#f5f0e8",
           200: "#ede5d5",
           300: "#e1d5bd",
+          deep: "#ece5d5",
         },
         gold: {
           DEFAULT: "#c9a96e",
           light: "#d9bf8a",
+          soft: "#d9bf8a",
           dark: "#a88a52",
         },
       },
