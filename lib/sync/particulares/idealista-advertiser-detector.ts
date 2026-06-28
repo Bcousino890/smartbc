@@ -62,7 +62,7 @@ function acceptPhoneCandidate(
 // El teléfono devuelto viene SIEMPRE normalizado a +34XXXXXXXXX.
 // `excludeReference`: referencia del anuncio (propertyCode/adId) para descartar
 // candidatos que en realidad son la referencia y no un teléfono.
-function extractPhoneWithConfidence(
+export function extractPhoneWithConfidence(
   html: string,
   excludeReference?: string | null,
 ): { phone: string | null; confidence: "high" | "medium" | "low" | null } {
