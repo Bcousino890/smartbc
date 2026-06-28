@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Plus, Minus } from "lucide-react";
-import { featuredProperties } from "@/lib/portal-properties";
+import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "./_components/PropertyCard";
 import { SectionEyebrow } from "./_components/SectionEyebrow";
 
@@ -64,6 +64,15 @@ const faqs = [
 ];
 
 export default function Home() {
+  const [featured, setFeatured] = useState<Property[]>([]);
+
+  useEffect(() => {
+    fetch("/api/portal/properties")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Property[]) => setFeatured(data.slice(0, 4)))
+      .catch(() => {});
+  }, []);
+
   return (
     <div>
       {/* HERO */}
@@ -149,7 +158,10 @@ export default function Home() {
             </Link>
           </div>
           <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {featuredProperties.map((p) => <PropertyCard key={p.id} p={p} />)}
+            {featured.length > 0
+              ? featured.map((p) => <PropertyCard key={p.id} p={p} />)
+              : <p className="col-span-4 text-center text-sm text-navy/50 py-12">Próximamente — propiedades publicadas aparecerán aquí.</p>
+            }
           </div>
         </div>
       </section>

@@ -1,15 +1,144 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Heart, MapPin } from "lucide-react";
-import { getProperty, properties } from "@/lib/portal-properties";
+import { createAdminClient } from "@/lib/db/admin";
+import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "../../_components/PropertyCard";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
 
+async function getPortalProperty(slug: string): Promise<Property | null> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin as any)
+    .from("properties")
+    .select(
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+    )
+    .eq("slug", slug)
+    .eq("published_web", true)
+    .eq("status", "available")
+    .is("archived_at", null)
+    .maybeSingle();
+
+  if (!data) return null;
+  const p = data as Record<string, unknown>;
+  const photos = ((p.property_photos as Array<{ url: string; is_cover: boolean; position: number }>) ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position);
+  const coverFromPhotos =
+    photos.find((ph) => ph.is_cover)?.url ?? photos[0]?.url ?? "";
+  const cover =
+    (p.cover_photo_url as string | null) ??
+    coverFromPhotos ||
+    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
+  const gallery = photos.filter((ph) => ph.url !== cover).map((ph) => ph.url);
+  const countryCode = p.country as string;
+  const city = countryCode === "es" ? "Madrid" : "Santiago";
+  const office = countryCode === "es" ? "Madrid" : "Santiago";
+  const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
+  const priceNum = Number(p.price);
+  const priceStr =
+    countryCode === "cl"
+      ? `USD ${priceNum.toLocaleString("en-US")}`
+      : `€ ${priceNum.toLocaleString("es-ES")}`;
+
+  return {
+    id: p.slug as string,
+    ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
+    title: p.title as string,
+    zone: p.zone as string,
+    city,
+    country: countryCode === "es" ? "España" : "Chile",
+    price: priceStr,
+    priceNum,
+    operation: (p.operation as string) === "sale" ? "Venta" : "Alquiler",
+    type: "Apartamento",
+    beds: Number(p.bedrooms),
+    baths: Number(p.bathrooms),
+    sqm: Number(p.square_meters ?? 0),
+    cover,
+    gallery,
+    description: (p.description as string | null) ?? "",
+    features: [
+      ...((p.features as string[]) ?? []),
+      ...((p.features_manual as string[]) ?? []),
+    ],
+    address: (p.address as string | null) ?? (p.zone as string),
+    office: office as "Madrid" | "Santiago",
+    phone,
+  };
+}
+
+async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin as any)
+    .from("properties")
+    .select(
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+    )
+    .eq("published_web", true)
+    .eq("status", "available")
+    .is("archived_at", null)
+    .neq("slug", currentSlug)
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  if (!data) return [];
+  return ((data as unknown[]) ?? []).map((raw) => {
+    const p = raw as Record<string, unknown>;
+    const photos = ((p.property_photos as Array<{ url: string; is_cover: boolean; position: number }>) ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position);
+    const coverFromPhotos =
+      photos.find((ph) => ph.is_cover)?.url ?? photos[0]?.url ?? "";
+    const cover =
+      (p.cover_photo_url as string | null) ??
+      coverFromPhotos ||
+      "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
+    const gallery = photos.filter((ph) => ph.url !== cover).map((ph) => ph.url);
+    const countryCode = p.country as string;
+    const city = countryCode === "es" ? "Madrid" : "Santiago";
+    const office = countryCode === "es" ? "Madrid" : "Santiago";
+    const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
+    const priceNum = Number(p.price);
+    const priceStr =
+      countryCode === "cl"
+        ? `USD ${priceNum.toLocaleString("en-US")}`
+        : `€ ${priceNum.toLocaleString("es-ES")}`;
+    return {
+      id: p.slug as string,
+      ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
+      title: p.title as string,
+      zone: p.zone as string,
+      city,
+      country: countryCode === "es" ? "España" : "Chile",
+      price: priceStr,
+      priceNum,
+      operation: (p.operation as string) === "sale" ? "Venta" : "Alquiler",
+      type: "Apartamento",
+      beds: Number(p.bedrooms),
+      baths: Number(p.bathrooms),
+      sqm: Number(p.square_meters ?? 0),
+      cover,
+      gallery,
+      description: (p.description as string | null) ?? "",
+      features: [
+        ...((p.features as string[]) ?? []),
+        ...((p.features_manual as string[]) ?? []),
+      ],
+      address: (p.address as string | null) ?? (p.zone as string),
+      office: office as "Madrid" | "Santiago",
+      phone,
+    } satisfies Property;
+  });
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const p = getProperty(id);
+  const p = await getPortalProperty(id);
   if (!p) return { title: "Propiedad" };
   return {
     title: `${p.title} — ${p.zone} · ${p.city}`,
@@ -20,10 +149,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PropertyDetail({ params }: Props) {
   const { id } = await params;
-  const p = getProperty(id);
+  const p = await getPortalProperty(id);
   if (!p) notFound();
 
-  const similar = properties.filter((x) => x.id !== p.id).slice(0, 3);
+  const similar = await getSimilarProperties(id);
 
   return (
     <div>
