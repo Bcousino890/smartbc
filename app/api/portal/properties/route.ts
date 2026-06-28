@@ -22,7 +22,8 @@ export async function GET() {
       .or("published_web.eq.true,source.eq.scrape")
       .eq("status", "available")
       .is("archived_at", null)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(1000);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
