@@ -17,12 +17,12 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
     )
     .eq("slug", slug)
-    .eq("published_web", true)
     .eq("status", "available")
     .is("archived_at", null)
     .maybeSingle();
 
   if (!data) return null;
+
   const p = data as Record<string, unknown>;
   const photos = ((p.property_photos as Array<{ url: string; is_cover: boolean; position: number }>) ?? [])
     .slice()
@@ -79,7 +79,6 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
     .select(
       "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
     )
-    .eq("published_web", true)
     .eq("status", "available")
     .is("archived_at", null)
     .neq("slug", currentSlug)

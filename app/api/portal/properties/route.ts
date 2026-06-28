@@ -20,7 +20,7 @@ function ensureAbsoluteUrl(url: string): string {
 export async function GET() {
   try {
     const admin = createAdminClient();
-    const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, source, property_photos(url, is_cover, position)";
+    const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)";
 
     // Mostrar propiedades scrapeadas (source='scrape') - temporalmente sin published_web
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,7 +33,10 @@ export async function GET() {
       .order("id", { ascending: false })
       .limit(1000);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("Portal API error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     const properties = ((data as unknown[]) ?? []).map((raw) => {
       const p = raw as Record<string, unknown>;
