@@ -368,6 +368,7 @@ export type UpdatePropertyInput = {
   ownerPhone?: string | null;
   ownerEmail?: string | null;
   internalNotes?: string | null;
+  publishedWeb?: boolean;
 };
 
 export type UpdatePropertyResult =
@@ -443,6 +444,7 @@ export async function updateProperty(
     payload.owner_email = input.ownerEmail?.trim() || null;
   if (input.internalNotes !== undefined)
     payload.internal_notes = input.internalNotes?.trim() || null;
+  if (input.publishedWeb !== undefined) payload.published_web = input.publishedWeb;
 
   if (Object.keys(payload).length === 0) {
     return { ok: false, error: "nothing_to_update" };

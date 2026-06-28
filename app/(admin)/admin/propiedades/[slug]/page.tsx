@@ -43,6 +43,7 @@ export default async function PropertyDetailPage({
         owner_phone: string | null;
         owner_email: string | null;
         internal_notes: string | null;
+        published_web: boolean;
         agencies:
           | { id: string; name: string; slug: string }
           | Array<{ id: string; name: string; slug: string }>
@@ -117,6 +118,7 @@ export default async function PropertyDetailPage({
         owner_phone: property.owner_phone,
         owner_email: property.owner_email,
         internal_notes: property.internal_notes,
+        published_web: property.published_web ?? false,
         agency: agency
           ? { id: agency.id, name: agency.name, slug: agency.slug }
           : null,

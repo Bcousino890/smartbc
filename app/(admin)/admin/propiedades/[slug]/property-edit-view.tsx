@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FileDown,
   FileImage,
+  Globe,
   Image as ImageIcon,
   Info,
   Link2,
@@ -77,6 +78,7 @@ export type PropertyForEdit = {
   owner_phone: string | null;
   owner_email: string | null;
   internal_notes: string | null;
+  published_web: boolean;
   agency: { id: string; name: string; slug: string } | null;
   photos: Photo[];
 };
@@ -143,6 +145,7 @@ export function PropertyEditView({
   );
   const [newFeature, setNewFeature] = useState("");
   const [copied, setCopied] = useState(false);
+  const [publishedWeb, setPublishedWeb] = useState(property.published_web);
 
   const addManualFeature = () => {
     const f = newFeature.trim();
@@ -312,6 +315,7 @@ export function PropertyEditView({
         ownerEmail: ownerEmail || null,
         internalNotes: internalNotes || null,
         featuresManual,
+        publishedWeb,
       });
       if (res.ok) {
         setSaveState({ kind: "saved", at: Date.now() });
@@ -952,6 +956,51 @@ export function PropertyEditView({
           {plans.length === 0 && (
             <p className="mt-2 text-[12px] text-ink/45">
               Sin planos aún. Sube imágenes de la distribución.
+            </p>
+          )}
+        </Section>
+
+        {/* Publicación en web pública */}
+        <Section
+          icon={<Globe size={15} strokeWidth={1.75} />}
+          title="Web Pública"
+          subtitle="Controla si esta propiedad aparece en el portal web público (bcousinoprop.com/web/propiedades)."
+        >
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setPublishedWeb((v) => !v)}
+              aria-pressed={publishedWeb}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none",
+                publishedWeb ? "bg-gold" : "bg-ink/20",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                  publishedWeb ? "translate-x-6" : "translate-x-1",
+                )}
+              />
+            </button>
+            <span className="text-sm text-ink/80">
+              {publishedWeb
+                ? "Publicada en el portal web"
+                : "No publicada · Solo visible internamente"}
+            </span>
+          </div>
+          {publishedWeb && (
+            <p className="text-[12px] text-ink/50">
+              La propiedad aparecerá en{" "}
+              <a
+                href="/web/propiedades"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gold-dark hover:underline"
+              >
+                /web/propiedades
+              </a>{" "}
+              una vez guardada.
             </p>
           )}
         </Section>

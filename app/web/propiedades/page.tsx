@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { properties } from "@/lib/portal-properties";
+import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "../_components/PropertyCard";
 
 type Currency = "EUR" | "USD" | "UF" | "CLP";
@@ -38,6 +38,16 @@ const ZONAS_ESPANA = [
 ];
 
 export default function Catalog() {
+  const [allProperties, setAllProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/portal/properties")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Property[]) => { setAllProperties(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
   const [op, setOp] = useState<"Todo" | "Venta" | "Alquiler">("Todo");
   const [country, setCountry] = useState<"Todo" | "España" | "Chile">("Todo");
   const [type, setType] = useState<"Todo" | "Apartamento" | "Penthouse" | "Casa / Villa">("Todo");
@@ -57,7 +67,7 @@ export default function Catalog() {
 
   const filtered = useMemo(() => {
     const zoneFilter = [...comunas, ...zonas];
-    return properties.filter((p) =>
+    return allProperties.filter((p) =>
       (op === "Todo" || p.operation === op) &&
       (country === "Todo" || p.country === country) &&
       (type === "Todo" || p.type === type) &&
@@ -71,7 +81,7 @@ export default function Catalog() {
         return a.includes(b) || b.includes(a);
       }))
     );
-  }, [op, country, type, minPrice, maxPrice, minBeds, minBaths, minSqm, comunas, zonas]);
+  }, [allProperties, op, country, type, minPrice, maxPrice, minBeds, minBaths, minSqm, comunas, zonas]);
 
   const rate = RATES[currency];
   const step = STEPS[currency];
@@ -168,7 +178,13 @@ export default function Catalog() {
 
         {/* GRID */}
         <div>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-8">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="aspect-[4/5] bg-stone-100 animate-pulse" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-32 border border-dashed border-stone-200">
               <p className="font-display text-3xl text-navy">Sin resultados</p>
               <p className="mt-2 text-gray-500">Pruebe otros filtros, o consulte nuestra cartera off market.</p>
