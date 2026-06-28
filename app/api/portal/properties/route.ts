@@ -17,9 +17,9 @@ export async function GET() {
     const { data, error } = await (admin as any)
       .from("properties")
       .select(
-        "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+        "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, source, property_photos(url, is_cover, position)",
       )
-      .eq("published_web", true)
+      .or("published_web.eq.true,source.eq.scrape")
       .eq("status", "available")
       .is("archived_at", null)
       .order("created_at", { ascending: false });
