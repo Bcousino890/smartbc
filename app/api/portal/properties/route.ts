@@ -60,8 +60,8 @@ export async function GET() {
       const coverFromPhotos =
         photos.find((ph) => ph.is_cover)?.url ?? photos[0]?.url ?? "";
       const cover =
-        (p.cover_photo_url as string | null) ??
-        coverFromPhotos ||
+        ((p.cover_photo_url as string | null) ??
+          coverFromPhotos) ||
         "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
 
       const absoluteCover = ensureAbsoluteUrl(cover);
