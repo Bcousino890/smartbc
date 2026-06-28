@@ -10,6 +10,13 @@ function formatPrice(price: number, country: string): string {
   return `€ ${Number(price).toLocaleString("es-ES")}`;
 }
 
+function ensureAbsoluteUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  return `${supabaseUrl}${url.startsWith("/") ? url : "/" + url}`;
+}
+
 export async function GET() {
   try {
     const admin = createAdminClient();
@@ -40,8 +47,9 @@ export async function GET() {
         coverFromPhotos ||
         "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
 
+      const absoluteCover = ensureAbsoluteUrl(cover);
       const galleryPhotos = photos.filter((ph) => ph.url !== cover);
-      const gallery = galleryPhotos.map((ph) => ph.url);
+      const gallery = galleryPhotos.map((ph) => ensureAbsoluteUrl(ph.url));
 
       const countryCode = p.country as string;
       const countryLabel = countryCode === "es" ? "España" : "Chile";
@@ -63,7 +71,7 @@ export async function GET() {
         beds: Number(p.bedrooms),
         baths: Number(p.bathrooms),
         sqm: Number(p.square_meters ?? 0),
-        cover,
+        cover: absoluteCover,
         gallery,
         description: (p.description as string | null) ?? "",
         features: [
