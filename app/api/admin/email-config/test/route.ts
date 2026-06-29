@@ -80,6 +80,9 @@ export async function POST(req: Request) {
         user: smtpUser,
         pass: password,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     await transporter.verify();

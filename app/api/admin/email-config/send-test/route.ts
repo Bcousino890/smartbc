@@ -38,6 +38,9 @@ export async function POST(req: Request) {
       port: config.smtpPort,
       secure: config.useSsl,
       auth: { user: config.smtpUser, pass: password },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     await transporter.sendMail({
