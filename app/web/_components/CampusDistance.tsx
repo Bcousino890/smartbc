@@ -115,9 +115,10 @@ export function CampusDistance({ city, address }: { city: string; address: strin
   const [selected, setSelected] = useState<University>(universities[0]);
   const times = getTransportTimes(selected);
 
-  // Crear URL para Google Maps Directions embebido
-  const mapsEmbedUrl = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyANhjqyzVK9_l1xr0bnLRu6kNrQvJxX8tg&origin=${encodeURIComponent(address + "," + city)}&destination=${selected.lat},${selected.lng}&mode=driving`;
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address + "," + city)}/${selected.lat},${selected.lng}`;
+
+  // OpenStreetMap embed URL
+  const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${(selected.lng - 0.05)},${(selected.lat - 0.05)},${(selected.lng + 0.05)},${(selected.lat + 0.05)}&layer=mapnik&marker=${selected.lat},${selected.lng}`;
 
   return (
     <section className="mt-16">
@@ -146,19 +147,18 @@ export function CampusDistance({ city, address }: { city: string; address: strin
             ))}
           </div>
 
-          {/* Mapa estático con ruta */}
-          <a
-            href={mapsDirectionsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block rounded-lg overflow-hidden border border-stone-200 shadow-sm hover:shadow-md transition-shadow"
-          >
-            <img
-              src={`https://maps.googleapis.com/maps/api/staticmap?size=500x400&markers=color:blue%7C${encodeURIComponent(address + "," + city)}&markers=color:red%7C${selected.lat},${selected.lng}&path=color:0x0000ff|weight:3|${encodeURIComponent(address + "," + city)}%7C${selected.lat},${selected.lng}&key=AIzaSyANhjqyzVK9_l1xr0bnLRu6kNrQvJxX8tg`}
-              alt={`Ruta desde ${address} a ${selected.shortName}`}
-              className="w-full h-auto"
+          {/* Mapa OpenStreetMap */}
+          <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm">
+            <iframe
+              width="100%"
+              height="400"
+              style={{ border: 0 }}
+              src={osmEmbedUrl}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
             />
-          </a>
+          </div>
 
           <div className="mt-4 flex justify-center">
             <a
