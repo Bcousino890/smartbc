@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Mail, Eye, EyeOff, Loader2, CheckCircle, AlertCircle, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useT } from "@/lib/i18n/provider";
 
@@ -34,6 +34,10 @@ export function EmailConfigClient() {
   const [testStatus, setTestStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [sendingTo, setSendingTo] = useState(false);
+  const [testToEmail, setTestToEmail] = useState("");
+  const [sendToStatus, setSendToStatus] = useState<"idle" | "success" | "error">("idle");
+  const [sendToMessage, setSendToMessage] = useState("");
 
   // Load existing config on mount
   useEffect(() => {
@@ -275,6 +279,59 @@ export function EmailConfigClient() {
             {saving && <Loader2 size={14} className="animate-spin" />}
             <span>Guardar Configuración</span>
           </button>
+        </div>
+
+        {/* Send test to specific address */}
+        <div className="border-t border-ink/8 pt-4 mt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/45 mb-3">Enviar correo de prueba</p>
+          {sendToStatus !== "idle" && (
+            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm mb-3 ${sendToStatus === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+              {sendToStatus === "success" ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+              <span>{sendToMessage}</span>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={testToEmail}
+              onChange={(e) => setTestToEmail(e.target.value)}
+              placeholder="destino@ejemplo.com"
+              className="flex-1 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            />
+            <button
+              onClick={async () => {
+                setSendingTo(true);
+                setSendToStatus("idle");
+                setSendToMessage("");
+                try {
+                  const res = await fetch("/api/admin/email-config/send-test", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ to: testToEmail }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok || !data.ok) {
+                    setSendToStatus("error");
+                    setSendToMessage(data.error || "Error al enviar");
+                  } else {
+                    setSendToStatus("success");
+                    setSendToMessage(data.message || "Enviado correctamente");
+                    setTimeout(() => setSendToStatus("idle"), 4000);
+                  }
+                } catch (e) {
+                  setSendToStatus("error");
+                  setSendToMessage(e instanceof Error ? e.message : "Error desconocido");
+                } finally {
+                  setSendingTo(false);
+                }
+              }}
+              disabled={sendingTo || !testToEmail}
+              className="flex items-center gap-2 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/5 disabled:opacity-40"
+            >
+              {sendingTo ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              <span>Enviar</span>
+            </button>
+          </div>
         </div>
 
         {/* Info Text */}
