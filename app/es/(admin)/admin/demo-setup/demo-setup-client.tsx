@@ -23,18 +23,6 @@ export function DemoSetupClient() {
     setCredentials([]);
 
     try {
-      // First apply migration
-      const migrationRes = await fetch("/api/admin/migrations/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ migrations: ["0054"] }),
-      });
-
-      if (!migrationRes.ok) {
-        const err = await migrationRes.json();
-        throw new Error(err.error || "Error al aplicar migración");
-      }
-
       // Create 3 demo clients
       const demoClients = [
         {
@@ -79,6 +67,17 @@ export function DemoSetupClient() {
         } catch (err) {
           console.error(`Error creating ${client.email}:`, err);
         }
+      }
+
+      // Create demo applications and documents
+      const appsRes = await fetch("/api/admin/demo/create-applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!appsRes.ok) {
+        const err = await appsRes.json();
+        throw new Error(err.error || "Error al crear solicitudes demo");
       }
 
       setCredentials(createdCreds);
