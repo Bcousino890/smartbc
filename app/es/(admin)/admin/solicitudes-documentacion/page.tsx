@@ -6,7 +6,15 @@ import { SolicitudesDocumentacionClient } from "./solicitudes-documentacion-clie
 export const dynamic = "force-dynamic";
 
 export default async function SolicitudesDocumentacionPage() {
-  const { data: applications, count } = await getApplicationsForAdmin({ limit: 50 });
+  let applications: Awaited<ReturnType<typeof getApplicationsForAdmin>>["data"] = [];
+  let count = 0;
+  try {
+    const result = await getApplicationsForAdmin({ limit: 50 });
+    applications = result.data;
+    count = result.count ?? 0;
+  } catch {
+    // Tablas aún no migradas en el VPS — mostrar página vacía
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
@@ -16,7 +24,7 @@ export default async function SolicitudesDocumentacionPage() {
       />
       <SolicitudesDocumentacionClient
         initialApplications={(applications ?? []) as Parameters<typeof SolicitudesDocumentacionClient>[0]["initialApplications"]}
-        totalCount={count ?? 0}
+        totalCount={count}
       />
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>
