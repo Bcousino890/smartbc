@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "../../_components/PropertyCard";
 import { PropertyGallery } from "../../_components/PropertyGallery";
+import { PropertyVideos } from "../../_components/PropertyVideos";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -15,7 +16,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .eq("slug", slug)
     .in("status", ["available", "reserved"])
@@ -35,6 +36,12 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       coverFromPhotos) ||
     "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
   const gallery = photos.filter((ph) => ph.url !== cover).map((ph) => ph.url);
+  const media = ((p.property_media as Array<{ url: string; type: string; file_name: string }>) ?? [])
+    .filter((m) => m.type === "video" && m.url);
+  const videos = media.map((m) => ({
+    url: m.url,
+    title: m.file_name || "Video",
+  }));
   const countryCode = p.country as string;
   const city = countryCode === "es" ? "Madrid" : "Santiago";
   const office = countryCode === "es" ? "Madrid" : "Santiago";
@@ -61,6 +68,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
     sqm: Number(p.square_meters ?? 0),
     cover,
     gallery,
+    videos: videos.length > 0 ? videos : undefined,
     description: (p.description as string | null) ?? "",
     features: [
       ...((p.features as string[]) ?? []),
@@ -78,7 +86,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .in("status", ["available", "reserved"])
     .is("archived_at", null)
@@ -99,6 +107,12 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
         coverFromPhotos) ||
       "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
     const gallery = photos.filter((ph) => ph.url !== cover).map((ph) => ph.url);
+    const media = ((p.property_media as Array<{ url: string; type: string; file_name: string }>) ?? [])
+      .filter((m) => m.type === "video" && m.url);
+    const videos = media.map((m) => ({
+      url: m.url,
+      title: m.file_name || "Video",
+    }));
     const countryCode = p.country as string;
     const city = countryCode === "es" ? "Madrid" : "Santiago";
     const office = countryCode === "es" ? "Madrid" : "Santiago";
@@ -124,6 +138,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
       sqm: Number(p.square_meters ?? 0),
       cover,
       gallery,
+      videos: videos.length > 0 ? videos : undefined,
       description: (p.description as string | null) ?? "",
       features: [
         ...((p.features as string[]) ?? []),
@@ -209,6 +224,10 @@ export default async function PropertyDetail({ params }: Props) {
               ))}
             </ul>
           </section>
+
+          {p.videos && p.videos.length > 0 && (
+            <PropertyVideos videos={p.videos} />
+          )}
 
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>

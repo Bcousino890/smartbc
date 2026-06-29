@@ -20,7 +20,7 @@ function ensureAbsoluteUrl(url: string): string {
 export async function GET() {
   try {
     const admin = createAdminClient();
-    const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)";
+    const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
 
     // Mostrar propiedades disponibles o reservadas (scrape + manual)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,6 +60,13 @@ export async function GET() {
       const office = countryCode === "es" ? "Madrid" : "Santiago";
       const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
 
+      const media = ((p.property_media as Array<{ url: string; type: string; file_name: string }>) ?? [])
+        .filter((m) => m.type === "video" && m.url);
+      const videos = media.map((m) => ({
+        url: ensureAbsoluteUrl(m.url),
+        title: m.file_name || "Video",
+      }));
+
       return {
         id: p.slug as string,
         ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
@@ -84,6 +91,7 @@ export async function GET() {
         address: (p.address as string | null) ?? (p.zone as string),
         office,
         phone,
+        videos,
       };
     });
 
