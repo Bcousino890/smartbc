@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Car, Train, Bus } from "lucide-react";
+import { Car, Train, Bus } from "lucide-react";
 
 interface University {
   id: string;
@@ -81,14 +81,16 @@ export function CampusDistance({ city, address }: { city: string; address: strin
   const [selected, setSelected] = useState<University>(universities[0]);
   const times = getTransportTimes(selected);
 
-  const mapsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address)},${encodeURIComponent(city)}/${selected.lat},${selected.lng}`;
+  // Crear URL para Google Maps Directions embebido
+  const mapsEmbedUrl = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyANhjqyzVK9_l1xr0bnLRu6kNrQvJxX8tg&origin=${encodeURIComponent(address + "," + city)}&destination=${selected.lat},${selected.lng}&mode=driving`;
+  const mapsDirectionsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address + "," + city)}/${selected.lat},${selected.lng}`;
 
   return (
     <section className="mt-16">
       <h2 className="font-display text-3xl text-navy mb-8">Distancia al campus</h2>
 
       <div className="grid lg:grid-cols-2 gap-12">
-        {/* Selector de universidad y tarjetas */}
+        {/* Selector de universidad y mapa */}
         <div>
           <label className="text-[11px] tracking-[0.24em] uppercase text-gray-400 block mb-4">
             Selecciona tu universidad
@@ -109,19 +111,29 @@ export function CampusDistance({ city, address }: { city: string; address: strin
             ))}
           </div>
 
-          {/* Mapa placeholder */}
-          <a
-            href={mapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block aspect-[4/3] rounded-lg overflow-hidden border border-stone-200 bg-gradient-to-br from-stone-100 to-stone-50 flex items-center justify-center hover:from-stone-50 hover:to-stone-100 transition-colors group"
-          >
-            <div className="text-center">
-              <MapPin size={40} className="text-gold mx-auto group-hover:scale-110 transition-transform" />
-              <p className="mt-3 text-navy font-display font-semibold text-sm">{selected.shortName}</p>
-              <p className="text-xs text-gold mt-2 tracking-wide uppercase group-hover:text-navy">Ver en Google Maps →</p>
-            </div>
-          </a>
+          {/* Mapa con ruta */}
+          <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm">
+            <iframe
+              width="100%"
+              height="400"
+              style={{ border: 0 }}
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+              src={mapsEmbedUrl}
+            />
+          </div>
+
+          <div className="mt-4 flex justify-center">
+            <a
+              href={mapsDirectionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] tracking-[0.24em] uppercase text-gold hover:text-navy transition-colors"
+            >
+              Ver ruta detallada en Google Maps →
+            </a>
+          </div>
         </div>
 
         {/* Tiempos de transporte */}
