@@ -26,11 +26,14 @@ export function SiteHeader() {
     >
       <div className="container-luxe flex items-center justify-between py-5">
         <Link href="/web" className="flex items-center py-1" aria-label="Benjamín Cousiño Propiedades">
-          <div className="flex flex-col leading-none">
-            <span className="font-display text-xs tracking-[0.06em] text-navy font-bold">BENJAMIN</span>
-            <span className="font-display text-xs tracking-[0.06em] text-navy font-bold">COUSIÑO</span>
-            <span className="text-[6px] tracking-[0.08em] uppercase text-navy/50 font-sans mt-0.5">Propiedades</span>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Benjamín Cousiño Propiedades"
+            width={280}
+            height={60}
+            className="h-9 w-auto"
+            priority
+          />
         </Link>
 
         <nav className="hidden lg:flex items-center gap-10">

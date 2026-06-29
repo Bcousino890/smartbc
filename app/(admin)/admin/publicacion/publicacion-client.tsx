@@ -286,6 +286,7 @@ export function PublicacionClient({
 
   const handleSaveIdealistaListing = async (data: IdealistaListing) => {
     try {
+      // Save listing first
       const res = await fetch("/api/admin/publicacion/save-idealista-listing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,6 +296,26 @@ export function PublicacionClient({
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error ?? "Error al guardar");
+      }
+
+      // If publishToIdealista is checked, trigger publishing
+      if (data.publishToIdealista) {
+        try {
+          const publishRes = await fetch("/api/admin/idealista/publish-property", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ propertyId: data.propertyId }),
+          });
+
+          if (!publishRes.ok) {
+            const err = await publishRes.json();
+            console.error("Publishing failed:", err);
+            // Don't throw - publishing is background job
+          }
+        } catch (err) {
+          console.error("Error triggering publication:", err);
+          // Continue - don't block the UI
+        }
       }
 
       setEditingIdealistaProperty(null);
