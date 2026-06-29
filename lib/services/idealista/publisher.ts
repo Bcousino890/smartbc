@@ -209,7 +209,7 @@ async function fetchPropertyData(propertyId: string): Promise<PropertyData | nul
   try {
     const { data: p } = await db
       .from("properties")
-      .select("id, title, description, price, bedrooms, bathrooms, square_meters, address, zone, operation, features")
+      .select("id, title, description, price, bedrooms, bathrooms, square_meters, address, zone, operation, features, property_type")
       .eq("id", propertyId)
       .single();
 
@@ -232,6 +232,7 @@ async function fetchPropertyData(propertyId: string): Promise<PropertyData | nul
       address: (p as any).address,
       zone: (p as any).zone,
       operation: (p as any).operation,
+      propertyType: (p as any).property_type,
       features: (p as any).features ?? [],
       photos: media?.map((m: any) => ({ url: m.url, storagePath: m.storage_path })) ?? [],
     };
@@ -284,7 +285,7 @@ async function updateLog(
         status,
         error_message: errorMessage ?? null,
         last_attempt_at: new Date().toISOString(),
-        published_at: status === "published" ? new Date().toISOString() : null,
+        ...(status === "published" ? { published_at: new Date().toISOString() } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("property_id", propertyId);

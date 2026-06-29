@@ -8,6 +8,7 @@ import {
   navigateToPage,
   saveCookies,
   cookiesExist,
+  deleteCookies,
 } from "./browser-manager";
 import { storePendingSession, getPendingSession, removePendingSession } from "./session-store";
 
@@ -132,7 +133,7 @@ export async function completeLogin(sessionId: string, smsCode: string): Promise
     return { success: false, error: `Error al verificar código: ${msg}` };
   } finally {
     removePendingSession(sessionId);
-    await browser.close().catch(() => {});
+    await closeBrowserSession({ browser, context, page });
   }
 }
 
