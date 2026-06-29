@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Heart, Home, LogOut, Mail, User } from "lucide-react";
+import { Building2, FileText, Heart, Home, LogOut, Mail, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/inicio", labelKey: "sidebar.inicio", icon: Home },
   { href: "/propiedades", labelKey: "sidebar.propiedades", icon: Building2 },
   { href: "/favoritos", labelKey: "sidebar.favoritos", icon: Heart },
+  { href: "/documentacion", labelKey: "sidebar.documentacion", icon: FileText },
   { href: "/perfil", labelKey: "sidebar.perfil", icon: User },
   { href: "/mensajes", labelKey: "sidebar.mensajes", icon: Mail },
 ] as const;
