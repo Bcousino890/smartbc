@@ -1,8 +1,9 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { authenticateWithIdealista } from "@/lib/services/idealista/authenticator";
 
-export async function POST() {
+export async function POST(req: Request) {
   const profile = await getCurrentProfile();
   if (!profile) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -12,9 +13,9 @@ export async function POST() {
   }
 
   try {
-    const supabase = createAdminClient();
+    const db = createAdminClient();
 
-    const { data: config } = await (supabase
+    const { data: config } = await (db
       .from("idealista_config")
       .select("*")
       .limit(1)
@@ -24,48 +25,35 @@ export async function POST() {
       return Response.json({ error: "No hay configuración guardada" }, { status: 400 });
     }
 
-    const { client_id, client_secret, feed_key, sandbox_mode } = config as any;
+    const { username, password } = config as any;
 
-    if (!client_id || !client_secret) {
-      return Response.json({ error: "Faltan credenciales (client_id / client_secret)" }, { status: 400 });
+    if (!username || !password) {
+      return Response.json(
+        { error: "Faltan credenciales (username/password)" },
+        { status: 400 }
+      );
     }
 
-    const baseUrl = sandbox_mode
-      ? "https://partners-sandbox.idealista.com"
-      : "https://partners.idealista.com";
+    // Test connection using Puppeteer/Playwright automation
+    const authResult = await authenticateWithIdealista(username, password);
 
-    const credentials = Buffer.from(`${client_id}:${client_secret}`).toString("base64");
-
-    const tokenRes = await fetch(`${baseUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-      },
-      body: "grant_type=client_credentials&scope=write",
-    });
-
-    const rawBody = await tokenRes.text();
-
-    if (!tokenRes.ok) {
+    if (!authResult.success) {
       return Response.json(
-        { error: `Auth error ${tokenRes.status}`, details: rawBody },
+        { error: authResult.error || "Authentication failed" },
         { status: 401 }
       );
     }
 
-    const tokenData = JSON.parse(rawBody);
-
     return Response.json({
       ok: true,
-      accessToken: tokenData.access_token,
-      expiresIn: tokenData.expires_in,
-      scope: tokenData.scope,
-      feedKey: feed_key,
-      sandbox: sandbox_mode,
+      message: "Conexión exitosa con Idealista",
+      lastLoginAt: authResult.lastLoginAt,
     });
   } catch (error) {
     console.error("Test connection error:", error);
-    return Response.json({ error: "Error de red o configuración" }, { status: 500 });
+    return Response.json(
+      { error: "Error al probar conexión" },
+      { status: 500 }
+    );
   }
 }
