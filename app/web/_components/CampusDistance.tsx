@@ -146,18 +146,19 @@ export function CampusDistance({ city, address }: { city: string; address: strin
             ))}
           </div>
 
-          {/* Mapa con ruta */}
-          <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm">
-            <iframe
-              width="100%"
-              height="400"
-              style={{ border: 0 }}
-              loading="lazy"
-              allowFullScreen
-              referrerPolicy="no-referrer-when-downgrade"
-              src={mapsEmbedUrl}
+          {/* Mapa estático con ruta */}
+          <a
+            href={mapsDirectionsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-lg overflow-hidden border border-stone-200 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <img
+              src={`https://maps.googleapis.com/maps/api/staticmap?size=500x400&markers=color:blue%7C${encodeURIComponent(address + "," + city)}&markers=color:red%7C${selected.lat},${selected.lng}&path=color:0x0000ff|weight:3|${encodeURIComponent(address + "," + city)}%7C${selected.lat},${selected.lng}&key=AIzaSyANhjqyzVK9_l1xr0bnLRu6kNrQvJxX8tg`}
+              alt={`Ruta desde ${address} a ${selected.shortName}`}
+              className="w-full h-auto"
             />
-          </div>
+          </a>
 
           <div className="mt-4 flex justify-center">
             <a
