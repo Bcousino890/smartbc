@@ -23,13 +23,30 @@ export async function createBrowserSession(withSavedCookies = false): Promise<Br
       "--no-default-browser-check",
       "--disable-dev-shm-usage",
       "--no-sandbox",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-infobars",
+      "--window-size=1920,1080",
     ],
   });
 
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    locale: "es-ES",
+    timezoneId: "Europe/Madrid",
+    extraHTTPHeaders: {
+      "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    },
+  });
+
+  // Hide automation fingerprints
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, "languages", { get: () => ["es-ES", "es"] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).chrome = { runtime: {} };
   });
 
   if (withSavedCookies) {
@@ -100,8 +117,8 @@ export async function closeBrowserSession(session: BrowserSession): Promise<void
 }
 
 export async function navigateToPage(page: Page, url: string): Promise<void> {
-  const res = await page.goto(url, { waitUntil: "domcontentloaded" });
-  if (res && !res.ok() && res.status() !== 304) {
+  const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT });
+  if (res && !res.ok() && res.status() !== 304 && res.status() !== 0) {
     throw new Error(`Navigation to ${url} failed with HTTP ${res.status()}`);
   }
 }
