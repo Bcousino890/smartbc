@@ -37,7 +37,7 @@ export async function getApplicationsByClient(clientId: string): Promise<Propert
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("property_applications")
-    .select("*, property_application_scores(*)")
+    .select("*")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
   if (error) throw error;
