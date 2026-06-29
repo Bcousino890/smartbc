@@ -64,6 +64,7 @@ export default function Catalog() {
   const [minBeds, setMinBeds] = useState<number>(0);
   const [minBaths, setMinBaths] = useState<number>(0);
   const [minSqm, setMinSqm] = useState<number>(0);
+  const [stayDuration, setStayDuration] = useState<"Todo" | "Corta" | "Larga">("Todo");
   const [comunas, setComunas] = useState<string[]>([]);
   const [zonas, setZonas] = useState<string[]>([]);
 
@@ -74,21 +75,28 @@ export default function Catalog() {
 
   const filtered = useMemo(() => {
     const zoneFilter = [...comunas, ...zonas];
-    return allProperties.filter((p) =>
-      (op === "Todo" || p.operation === op) &&
-      (country === "Todo" || p.country === country) &&
-      (type === "Todo" || p.type === type) &&
-      p.priceNum >= minPrice &&
-      p.priceNum <= maxPrice &&
-      p.beds >= minBeds &&
-      p.baths >= minBaths &&
-      p.sqm >= minSqm &&
-      (zoneFilter.length === 0 || zoneFilter.some((z) => {
+    return allProperties.filter((p) => {
+      const operationMatch = op === "Todo" || p.operation === op;
+      const countryMatch = country === "Todo" || p.country === country;
+      const typeMatch = type === "Todo" || p.type === type;
+      const priceMatch = p.priceNum >= minPrice && p.priceNum <= maxPrice;
+      const bedsMatch = p.beds >= minBeds;
+      const bathsMatch = p.baths >= minBaths;
+      const sqmMatch = p.sqm >= minSqm;
+      const zoneMatch = zoneFilter.length === 0 || zoneFilter.some((z) => {
         const a = p.zone.toLowerCase(); const b = z.toLowerCase();
         return a.includes(b) || b.includes(a);
-      }))
-    );
-  }, [allProperties, op, country, type, minPrice, maxPrice, minBeds, minBaths, minSqm, comunas, zonas]);
+      });
+
+      // Only apply stayDuration filter for rentals
+      let stayDurationMatch = true;
+      if (p.operation === "Alquiler" && stayDuration !== "Todo") {
+        stayDurationMatch = (p as any).stayDuration === stayDuration;
+      }
+
+      return operationMatch && countryMatch && typeMatch && priceMatch && bedsMatch && bathsMatch && sqmMatch && zoneMatch && stayDurationMatch;
+    });
+  }, [allProperties, op, country, type, minPrice, maxPrice, minBeds, minBaths, minSqm, stayDuration, comunas, zonas]);
 
   const rate = RATES[currency];
   const step = STEPS[currency];
@@ -99,6 +107,7 @@ export default function Catalog() {
     setOp("Todo"); setCountry("Todo"); setType("Todo");
     setMinPrice(0); setMaxPrice(10_000_000);
     setMinBeds(0); setMinBaths(0); setMinSqm(0);
+    setStayDuration("Todo");
     setComunas([]); setZonas([]);
   };
 
@@ -120,6 +129,10 @@ export default function Catalog() {
           <Filter label="Operación" value={op} setValue={(v) => setOp(v as typeof op)} options={["Todo", "Venta", "Alquiler"]} />
           <Filter label="País" value={country} setValue={(v) => setCountry(v as typeof country)} options={["Todo", "España", "Chile"]} />
           <Filter label="Tipo de propiedad" value={type} setValue={(v) => setType(v as typeof type)} options={["Todo", "Apartamento", "Penthouse", "Casa / Villa"]} />
+
+          {(op === "Todo" || op === "Alquiler") && (
+            <Filter label="Duración de estancia" value={stayDuration} setValue={(v) => setStayDuration(v as typeof stayDuration)} options={["Todo", "Corta", "Larga"]} />
+          )}
 
           {(country === "Todo" || country === "Chile") && (
             <MultiChips label="Comunas (Chile)" options={COMUNAS_CHILE} selected={comunas} onToggle={(v) => toggleInList(v, comunas, setComunas)} max={3} />
@@ -186,7 +199,7 @@ export default function Catalog() {
         {/* GRID */}
         <div>
           {loading ? (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="aspect-[4/5] bg-stone-100 animate-pulse" />
               ))}
@@ -201,7 +214,7 @@ export default function Catalog() {
               </div>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 auto-rows-max">
               {filtered.map((p) => <PropertyCard key={p.id} p={p} />)}
             </div>
           )}
