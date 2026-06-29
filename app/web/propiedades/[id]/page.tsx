@@ -18,7 +18,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
     )
     .eq("slug", slug)
-    .eq("status", "available")
+    .in("status", ["available", "reserved"])
     .is("archived_at", null)
     .maybeSingle();
 
@@ -80,7 +80,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
     .select(
       "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
     )
-    .eq("status", "available")
+    .in("status", ["available", "reserved"])
     .is("archived_at", null)
     .neq("slug", currentSlug)
     .order("created_at", { ascending: false })
