@@ -33,7 +33,7 @@ export async function getDocumentTypes(
 
 // ─── Solicitudes ──────────────────────────────────────────────────────────────
 
-export async function getApplicationsByClient(clientId: string) {
+export async function getApplicationsByClient(clientId: string): Promise<PropertyApplication[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("property_applications")
@@ -41,7 +41,7 @@ export async function getApplicationsByClient(clientId: string) {
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data;
+  return (data ?? []) as unknown as PropertyApplication[];
 }
 
 export async function getApplicationById(
@@ -73,7 +73,7 @@ export async function getApplicationsForAdmin(filters: {
   limit?: number;
   offset?: number;
 }) {
-  const supabase = await createAdminClient();
+  const supabase = createAdminClient();
   let query = supabase
     .from("property_applications")
     .select(
@@ -99,7 +99,7 @@ export async function getApplicationsForAdmin(filters: {
 }
 
 export async function getApplicationsForProperty(propertyId: string) {
-  const supabase = await createAdminClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("property_applications")
     .select(
@@ -122,7 +122,8 @@ export async function createApplication(input: {
   property_id?: string;
 }): Promise<PropertyApplication> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
     .from("property_applications")
     .insert({
       client_id: input.client_id,
@@ -139,7 +140,8 @@ export async function createApplication(input: {
 
 export async function submitApplicationForReview(id: string): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_applications")
     .update({ status: "pending_review", submitted_at: new Date().toISOString() })
     .eq("id", id);
@@ -151,8 +153,9 @@ export async function approveApplication(
   reviewerId: string,
   notes?: string
 ): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_applications")
     .update({
       status: "approved",
@@ -169,8 +172,9 @@ export async function rejectApplication(
   reviewerId: string,
   notes: string
 ): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_applications")
     .update({
       status: "rejected",
@@ -212,11 +216,12 @@ export async function insertDocument(input: {
   file_name: string;
   storage_path: string;
   file_url: string;
-  file_size_bytes?: number;
+  file_size?: number;
   mime_type?: string;
 }): Promise<PropertyApplicationDocument> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
     .from("property_application_documents")
     .insert({
       property_application_id: input.property_application_id,
@@ -225,7 +230,7 @@ export async function insertDocument(input: {
       file_name: input.file_name,
       storage_path: input.storage_path,
       file_url: input.file_url,
-      file_size_bytes: input.file_size_bytes ?? null,
+      file_size: input.file_size ?? null,
       mime_type: input.mime_type ?? null,
       status: "pending",
     })
@@ -239,8 +244,9 @@ export async function updateDocumentAiAnalysis(
   documentId: string,
   aiAnalysis: Record<string, unknown>
 ): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_documents")
     .update({ ai_analysis: aiAnalysis })
     .eq("id", documentId);
@@ -252,8 +258,9 @@ export async function verifyDocument(
   verifierId: string,
   input: VerifyDocumentInput
 ): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_documents")
     .update({
       status: input.status,
@@ -266,15 +273,16 @@ export async function verifyDocument(
 }
 
 export async function deleteDocument(documentId: string): Promise<string | null> {
-  const supabase = await createAdminClient();
-  const { data, error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
     .from("property_application_documents")
     .delete()
     .eq("id", documentId)
     .select("storage_path")
     .single();
   if (error) throw error;
-  return data?.storage_path ?? null;
+  return (data as { storage_path: string } | null)?.storage_path ?? null;
 }
 
 // ─── Scoring ─────────────────────────────────────────────────────────────────
@@ -283,8 +291,9 @@ export async function upsertScore(
   applicationId: string,
   score: Omit<PropertyApplicationScore, "id" | "property_application_id" | "created_at" | "updated_at" | "calculated_at">
 ): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_scores")
     .upsert({
       property_application_id: applicationId,
@@ -302,16 +311,18 @@ export async function addAnnotation(input: {
   annotation_type: "info" | "warning" | "error";
   created_by: string;
 }): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_document_annotations")
     .insert(input);
   if (error) throw error;
 }
 
 export async function resolveAnnotation(annotationId: string): Promise<void> {
-  const supabase = await createAdminClient();
-  const { error } = await supabase
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_document_annotations")
     .update({ resolved_at: new Date().toISOString() })
     .eq("id", annotationId);
@@ -327,14 +338,16 @@ export async function addCoApplicant(input: {
   const supabase = await createClient();
 
   // Busca si el email ya tiene un perfil
-  const adminSupabase = await createAdminClient();
-  const { data: profile } = await adminSupabase
+  const adminSupabase = createAdminClient();
+  const { data: profileData } = await adminSupabase
     .from("profiles")
     .select("id")
     .eq("email", input.invite_email)
     .single();
+  const profile = profileData as { id: string } | null;
 
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_co_applicants")
     .insert({
       property_application_id: input.property_application_id,
@@ -350,7 +363,8 @@ export async function acceptCoApplicantInvite(
   clientId: string
 ): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("property_application_co_applicants")
     .update({ accepted_at: new Date().toISOString(), client_id: clientId })
     .eq("property_application_id", applicationId)
@@ -371,15 +385,16 @@ export async function getApplicationDocumentProgress(applicationId: string): Pro
   const supabase = await createClient();
 
   // Obtener tipos requeridos para el país/operación de esta solicitud
-  const { data: app } = await supabase
+  const { data: appRaw } = await supabase
     .from("property_applications")
     .select("country, operation")
     .eq("id", applicationId)
     .single();
+  const app = appRaw as { country: string; operation: string } | null;
 
   if (!app) return { total: 0, required: 0, uploaded: 0, required_uploaded: 0, verified: 0, pct: 0 };
 
-  const [{ data: docTypes }, { data: docs }] = await Promise.all([
+  const [{ data: docTypesRaw }, { data: docsRaw }] = await Promise.all([
     supabase
       .from("property_application_document_types")
       .select("id, is_required")
@@ -390,6 +405,8 @@ export async function getApplicationDocumentProgress(applicationId: string): Pro
       .select("document_type_id, status")
       .eq("property_application_id", applicationId),
   ]);
+  const docTypes = docTypesRaw as { id: string; is_required: boolean }[] | null;
+  const docs = docsRaw as { document_type_id: string; status: string }[] | null;
 
   const total = docTypes?.length ?? 0;
   const required = docTypes?.filter((t) => t.is_required).length ?? 0;

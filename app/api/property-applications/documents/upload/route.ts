@@ -106,7 +106,7 @@ export async function POST(req: Request) {
       file_name: file.name,
       storage_path: storagePath,
       file_url: publicUrl,
-      file_size_bytes: file.size,
+      file_size: file.size,
       mime_type: file.type || undefined,
     });
 
