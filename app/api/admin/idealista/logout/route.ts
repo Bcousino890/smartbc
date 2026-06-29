@@ -2,7 +2,7 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 
-export async function POST(req: Request) {
+export async function POST() {
   const profile = await getCurrentProfile();
   if (!profile) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const db = createAdminClient();
+    const db = createAdminClient() as any;
 
     // Reset login-related fields
     await db.from("idealista_config").update({

@@ -1,91 +1,94 @@
-// Centralizes CSS/XPath selectors for Idealista form elements
-// These need to be maintained if Idealista changes their DOM structure
+// Idealista form selectors - verified by DOM inspection on 2026-06-29
+// Update this file if Idealista changes their UI
 
 export const IDEALISTA_SELECTORS = {
-  // Login page
   login: {
-    emailInput: 'input[name="email"], input[type="email"]',
-    passwordInput: 'input[name="password"], input[type="password"]',
-    submitButton: 'button[type="submit"], button:has-text("Entrar")',
+    // Step 1: email
+    emailInput: 'input#login-email',
+    continueButton: 'button[type="submit"]:has-text("Continuar")',
+
+    // Step 2: password
+    passwordInput: 'input#login-password',
+    loginButton: 'button[type="submit"]:has-text("Iniciar sesión")',
+
+    // Step 3: SMS 2FA
+    smsCodeInput: 'input#verification-requested-code',
+    confirmButton: 'button[type="submit"]:has-text("Confirmar y entrar")',
+    // The phone hint text is inside the modal (e.g. "Te hemos enviado un código al ****103")
+    smsHintContainer: '[class*="kiwi-textbox"], .verification-hint, p',
   },
 
-  // Property listing form (main form)
+  // New property form: https://idealista.com/tools/propiedad/nuevo
   form: {
-    // Basic info tab
-    titleInput: 'input[name="title"], input[placeholder*="título" i]',
-    descriptionInput: 'textarea[name="description"], textarea[placeholder*="descripción" i]',
-    priceInput: 'input[name="price"], input[name="precio"], input[type="number"]',
+    // Tipo de inmueble — click the label with the type text
+    propertyTypeLabel: (type: string) => `label:has-text("${type}")`,
 
-    // Property details
-    operationType: 'select[name="operationType"], select[name="operation"]', // rent | sale
-    propertyType: 'select[name="propertyType"], select[name="type"]', // apartment, house, etc
-    bedrooms: 'input[name="bedrooms"], select[name="bedrooms"]',
-    bathrooms: 'input[name="bathrooms"], select[name="bathrooms"]',
-    squareMeters: 'input[name="squareMeters"], input[name="size"]',
+    // Localización — inputs have no id/name, select by sibling of <p> label
+    localidadInput: 'p:has-text("Localidad") + div input',
+    calleInput: 'p:has-text("Nombre de la calle") + div input',
+    numeroInput: 'p:has-text("Número") + div input',
+    referenciaCatastralInput: 'p:has-text("Referencia catastral") + div input',
+    sinNumeroCheckbox: 'label:has-text("Sin número") input[type="checkbox"]',
+    validarDireccionBtn: 'a[aria-label="Validar dirección"]',
 
-    // Location
-    street: 'input[name="street"], input[placeholder*="calle" i]',
-    number: 'input[name="number"], input[placeholder*="número" i]',
-    city: 'input[name="city"], select[name="city"]',
-    postalCode: 'input[name="postalCode"], input[placeholder*="código postal" i]',
-    district: 'select[name="district"]',
-    neighborhood: 'select[name="neighborhood"]',
+    // Visibilidad en portales (radio)
+    visibilidadExacta: 'label:has-text("Dirección exacta") input[type="radio"]',
+    visibilidadSoloCalle: 'label:has-text("Mostrar sólo calle") input[type="radio"]',
+    visibilidadOcultar: 'label:has-text("Ocultar dirección") input[type="radio"]',
 
-    // Features/Amenities (checkboxes)
-    pool: 'input[name="pool"][type="checkbox"]',
-    garden: 'input[name="garden"][type="checkbox"]',
-    parking: 'input[name="parking"][type="checkbox"]',
-    balcony: 'input[name="balcony"][type="checkbox"]',
-    terrace: 'input[name="terrace"][type="checkbox"]',
-    airConditioning: 'input[name="airConditioning"][type="checkbox"]',
-    heating: 'input[name="heating"][type="checkbox"]',
-    storage: 'input[name="storage"][type="checkbox"]',
+    // Descripción
+    descriptionTextarea: 'textarea[aria-label*="Esta sección se lee mucho"]',
+    websiteInput: 'input[aria-label="http://"]',
 
-    // Energy certificate
-    energyPerformance: 'select[name="energyPerformance"]',
-    emissionRating: 'select[name="emissionRating"]',
+    // Publicar en (radio)
+    publicarIdealista: 'label:has-text("En idealista y tu oficina online") input[type="radio"]',
+    publicarSoloWeb: 'label:has-text("Sólo en tu oficina online") input[type="radio"]',
+    noPublicar: 'label:has-text("No publicar.") input[type="radio"]',
 
-    // Photos/Media section
-    photoUploadButton: 'button:has-text("Añadir fotos"), label:has-text("Fotos"), input[type="file"][accept*="image"]',
-    videoUploadButton: 'button:has-text("Añadir video"), input[type="file"][accept*="video"]',
-    planUploadButton: 'button:has-text("Planos"), input[type="file"][accept*="pdf"]',
+    // Referencia interna y notas
+    referenciaInternaInput: 'p:has-text("Referencia interna") + div input',
+    notasPrivadasTextarea: 'p:has-text("Notas privadas") + div textarea',
 
-    // Action buttons
-    publishButton: 'button:has-text("Publicar"), button[type="submit"]:has-text("Publicar")',
-    saveButton: 'button:has-text("Guardar"), button[type="submit"]:has-text("Guardar")',
-    nextButton: 'button:has-text("Siguiente"), button[type="button"]:has-text("Siguiente")',
-    prevButton: 'button:has-text("Anterior"), button[type="button"]:has-text("Anterior")',
+    // Fotos / Media — file inputs inside the section
+    fotosSection: 'h2:has-text("Fotos")',
+    fileInputHidden: 'input[type="file"]',
 
-    // Rental specific
-    rentalType: 'select[name="rentalType"], input[name="rentalType"]', // long-term | short-term
+    // Submit
+    guardarPublicarBtn: 'a[aria-label="Guardar y publicar anuncio"]',
+
+    // Dynamic fields that appear after property type selection
+    // (selectors may vary by type — inspect after type selection)
+    precioInput: 'p:has-text("Precio") + div input, input[placeholder*="precio" i]',
+    habitacionesInput: 'p:has-text("Habitaciones") + div input, p:has-text("Dormitorios") + div input',
+    banosInput: 'p:has-text("Baños") + div input',
+    metrosInput: 'p:has-text("Metros") + div input, p:has-text("Superficie") + div input',
   },
 
-  // Success/Error states
+  // Feedback / detection selectors
   feedback: {
-    successMessage: '.success-message, [class*="success"], text=/publicado|éxito/i',
-    errorMessage: '.error-message, [class*="error"], text=/error|falló/i',
-    captchaElement: 'iframe[src*="recaptcha"], [class*="captcha"]',
-    loadingSpinner: '[class*="loading"], [class*="spinner"]',
-  },
-
-  // Navigation
-  navigation: {
-    dashboard: 'a[href*="/mis-anuncios"], a[href*="/dashboard"]',
-    myListings: 'a[href*="/mis-anuncios"]',
+    // Detect whether we're on the tools dashboard (= logged in)
+    toolsDashboard: '.tools-header, [id="close-tools-aside"], .tools-header__action',
+    // Redirect to login = session expired
+    loginPage: 'input#login-email, [class*="login-box"]',
+    errorMessage: '[class*="error"], [class*="alert"], text=/error|falló/i',
   },
 };
 
-export type IdealistaSelector = keyof typeof IDEALISTA_SELECTORS;
-
-// Helper to get selector fallback chain
-export function getSelector(path: string): string[] {
-  const keys = path.split(".");
-  let obj: any = IDEALISTA_SELECTORS;
-
-  for (const key of keys) {
-    obj = obj[key];
-    if (!obj) return [];
-  }
-
-  return typeof obj === "string" ? [obj] : [];
-}
+// Mapping from SmartBC property types to Idealista label text
+export const PROPERTY_TYPE_MAP: Record<string, string> = {
+  apartment: "Piso",
+  flat: "Piso",
+  piso: "Piso",
+  house: "Casa / Chalet",
+  chalet: "Casa / Chalet",
+  rustic: "Casa rústica",
+  room: "Habitación",
+  habitacion: "Habitación",
+  commercial: "Local o nave",
+  local: "Local o nave",
+  garage: "Garaje",
+  office: "Oficina",
+  land: "Terreno",
+  storage: "Trastero",
+  building: "Edificio",
+};

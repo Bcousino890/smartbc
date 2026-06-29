@@ -1,10 +1,9 @@
 import { Page } from "playwright";
 import { createAdminClient } from "@/lib/db/admin";
-import { BrowserSession, closeBrowserSession, createBrowserSession, navigateToPage, fillFormField, clickElement, checkElementExists, waitForSelector } from "./browser-manager";
-import { authenticateWithIdealista } from "./authenticator";
-import { IDEALISTA_SELECTORS } from "./selectors";
+import { closeBrowserSession, createBrowserSession, navigateToPage, checkElementExists } from "./browser-manager";
+import { IDEALISTA_SELECTORS, PROPERTY_TYPE_MAP } from "./selectors";
 
-const IDEALISTA_NEW_LISTING_URL = "https://www.idealista.com/es/admin/propiedades/nueva";
+const NEW_LISTING_URL = "https://www.idealista.com/tools/propiedad/nuevo";
 
 export interface PublishResult {
   success: boolean;
@@ -24,341 +23,272 @@ interface PropertyData {
   squareMeters?: number;
   address?: string;
   zone?: string;
-  operation: "rent" | "sale";
+  operation: string;
+  propertyType?: string;
   features?: string[];
-  photos?: Array<{
-    url: string;
-    isCover: boolean;
-  }>;
+  photos?: Array<{ url: string; storagePath?: string }>;
 }
 
-export async function publishPropertyToIdealista(
-  propertyId: string,
-  username: string,
-  password: string
-): Promise<PublishResult> {
-  let session: BrowserSession | null = null;
+export async function publishPropertyToIdealista(propertyId: string): Promise<PublishResult> {
   let attemptCount = 0;
 
+  await createPendingLog(propertyId);
+
   try {
-    // Fetch property data from DB
-    const propertyData = await fetchPropertyData(propertyId);
-    if (!propertyData) {
-      return {
-        success: false,
-        propertyId,
-        error: "Property not found in database",
-        attemptCount: 0,
-      };
+    const property = await fetchPropertyData(propertyId);
+    if (!property) {
+      await updateLog(propertyId, undefined, "failed", "Propiedad no encontrada en BD");
+      return { success: false, propertyId, error: "Propiedad no encontrada", attemptCount: 0 };
     }
 
-    // Create browser session
-    session = await createBrowserSession();
+    // Create browser with saved cookies (session must exist)
+    const session = await createBrowserSession(true);
     const { page } = session;
+    attemptCount = 1;
 
-    // Authenticate
-    console.log(`[Publisher] Authenticating as ${username}...`);
-    const authResult = await authenticateWithIdealista(username, password);
-    if (!authResult.success) {
-      return {
-        success: false,
-        propertyId,
-        error: authResult.error || "Authentication failed",
-        attemptCount: ++attemptCount,
-      };
-    }
+    try {
+      // Navigate to new listing form
+      await navigateToPage(page, NEW_LISTING_URL);
+      await page.waitForTimeout(2000);
 
-    // Navigate to new listing form
-    console.log("[Publisher] Navigating to new listing form...");
-    await navigateToPage(page, IDEALISTA_NEW_LISTING_URL);
-    attemptCount++;
+      // Detect session expired (redirected to login)
+      const currentUrl = page.url();
+      if (currentUrl.includes("/login")) {
+        await updateLog(propertyId, undefined, "failed", "Sesión de Idealista expirada. Re-autentícate desde Configuración.");
+        return {
+          success: false,
+          propertyId,
+          error: "Sesión de Idealista expirada. Ve a Configuración → Idealista y vuelve a conectar.",
+          attemptCount,
+        };
+      }
 
-    // Fill form with property data
-    console.log("[Publisher] Filling form with property data...");
-    await fillPropertyForm(page, propertyData);
+      console.log("[Publisher] Form loaded, filling property data...");
 
-    // Upload photos
-    if (propertyData.photos && propertyData.photos.length > 0) {
-      console.log(`[Publisher] Uploading ${propertyData.photos.length} photos...`);
-      // Note: Photo upload is complex and platform-dependent
-      // This is a placeholder - actual implementation would need to handle file uploads
-      // await uploadPhotos(page, propertyData.photos);
-    }
+      // Fill the form
+      await fillPropertyType(page, property);
+      await page.waitForTimeout(1000); // Wait for dynamic fields to appear
 
-    // Publish
-    console.log("[Publisher] Publishing property...");
-    const publishSuccess = await publishForm(page);
-    if (!publishSuccess) {
-      return {
-        success: false,
-        propertyId,
-        error: "Failed to publish form",
-        attemptCount,
-      };
-    }
+      await fillLocation(page, property);
+      await fillDescription(page, property);
+      await fillPublicationSettings(page);
 
-    // Extract the Idealista property ID from response or success page
-    const idealistaId = await extractIdealistaPropertyId(page);
+      // Submit
+      const submitted = await submitForm(page);
+      if (!submitted) {
+        await updateLog(propertyId, undefined, "failed", "No se pudo enviar el formulario");
+        return { success: false, propertyId, error: "Error al enviar formulario", attemptCount };
+      }
 
-    // Update database with success
-    await updatePublishLog(propertyId, idealistaId, "published");
+      // Extract Idealista property ID from redirect URL
+      await page.waitForTimeout(3000);
+      const idealistaId = extractIdealistaId(page.url());
 
-    console.log(
-      `[Publisher] Successfully published property ${propertyId} to Idealista as ${idealistaId}`
-    );
+      await updateLog(propertyId, idealistaId, "published");
 
-    return {
-      success: true,
-      propertyId,
-      idealistaPropertyId: idealistaId,
-      attemptCount,
-    };
-  } catch (error) {
-    console.error("[Publisher] Error publishing property:", error);
-    await updatePublishLog(propertyId, undefined, "failed", error instanceof Error ? error.message : String(error));
-
-    return {
-      success: false,
-      propertyId,
-      error: `Publishing error: ${error instanceof Error ? error.message : String(error)}`,
-      attemptCount,
-    };
-  } finally {
-    if (session) {
+      console.log(`[Publisher] Property ${propertyId} published as Idealista ID: ${idealistaId}`);
+      return { success: true, propertyId, idealistaPropertyId: idealistaId, attemptCount };
+    } finally {
       await closeBrowserSession(session);
     }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Publisher] Error:", msg);
+    await updateLog(propertyId, undefined, "failed", msg);
+    return { success: false, propertyId, error: msg, attemptCount };
   }
 }
 
-async function fetchPropertyData(propertyId: string): Promise<PropertyData | null> {
-  const db = createAdminClient();
+async function fillPropertyType(page: Page, property: PropertyData): Promise<void> {
+  const idealistaType = property.propertyType
+    ? PROPERTY_TYPE_MAP[property.propertyType.toLowerCase()] ?? "Piso"
+    : "Piso";
 
-  try {
-    const { data: property } = await db
-      .from("properties")
-      .select(
-        `
-        id, title, description, price, bedrooms, bathrooms, square_meters,
-        address, zone, operation, features, cover_photo_url
-      `
-      )
-      .eq("id", propertyId)
-      .single();
-
-    if (!property) return null;
-
-    // Fetch photos
-    const { data: media } = await db
-      .from("property_media")
-      .select("url, type")
-      .eq("property_id", propertyId)
-      .eq("type", "photo");
-
-    return {
-      id: property.id,
-      title: property.title,
-      description: property.description || "",
-      price: property.price,
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      squareMeters: property.square_meters,
-      address: property.address,
-      zone: property.zone,
-      operation: property.operation,
-      features: property.features || [],
-      photos: media
-        ? media.map((m: any) => ({
-            url: m.url,
-            isCover: m.url === property.cover_photo_url,
-          }))
-        : [],
-    };
-  } catch (error) {
-    console.error("[Publisher] Error fetching property data:", error);
-    return null;
+  const typeSelector = IDEALISTA_SELECTORS.form.propertyTypeLabel(idealistaType);
+  if (await checkElementExists(page, typeSelector)) {
+    await page.click(typeSelector);
+    console.log(`[Publisher] Selected property type: ${idealistaType}`);
+  } else {
+    console.warn(`[Publisher] Property type label not found: ${idealistaType}`);
   }
 }
 
-async function fillPropertyForm(page: Page, property: PropertyData): Promise<void> {
-  // Fill title
-  if (await checkElementExists(page, IDEALISTA_SELECTORS.form.titleInput)) {
-    await fillFormField(page, IDEALISTA_SELECTORS.form.titleInput, property.title);
-  }
+async function fillLocation(page: Page, property: PropertyData): Promise<void> {
+  if (!property.address) return;
 
-  // Fill description
-  if (await checkElementExists(page, IDEALISTA_SELECTORS.form.descriptionInput)) {
-    // Truncate description to reasonable length
-    const desc = (property.description || "").substring(0, 1000);
-    await fillFormField(page, IDEALISTA_SELECTORS.form.descriptionInput, desc);
-  }
+  const addressParts = parseAddress(property.address);
 
-  // Fill price
-  if (await checkElementExists(page, IDEALISTA_SELECTORS.form.priceInput)) {
-    await fillFormField(page, IDEALISTA_SELECTORS.form.priceInput, String(property.price));
-  }
-
-  // Fill operation type
-  if (await checkElementExists(page, IDEALISTA_SELECTORS.form.operationType)) {
-    // This would need to be select value, not fill
-    await page.selectOption(IDEALISTA_SELECTORS.form.operationType, property.operation);
-  }
-
-  // Fill bedrooms
-  if (await checkElementExists(page, IDEALISTA_SELECTORS.form.bedrooms)) {
-    await fillFormField(page, IDEALISTA_SELECTORS.form.bedrooms, String(property.bedrooms));
-  }
-
-  // Fill bathrooms
-  if (await checkElementExists(page, IDEALISTA_SELECTORS.form.bathrooms)) {
-    await fillFormField(page, IDEALISTA_SELECTORS.form.bathrooms, String(property.bathrooms));
-  }
-
-  // Fill square meters
-  if (property.squareMeters && (await checkElementExists(page, IDEALISTA_SELECTORS.form.squareMeters))) {
-    await fillFormField(page, IDEALISTA_SELECTORS.form.squareMeters, String(property.squareMeters));
-  }
-
-  // Fill address components
-  if (property.address && (await checkElementExists(page, IDEALISTA_SELECTORS.form.street))) {
-    // Parse address (this is simplified - real address parsing would be needed)
-    await fillFormField(page, IDEALISTA_SELECTORS.form.street, property.address);
-  }
-
-  // Fill features (checkboxes)
-  if (property.features && property.features.length > 0) {
-    for (const feature of property.features) {
-      const featureKey = feature.toLowerCase();
-
-      if (featureKey.includes("pool") && (await checkElementExists(page, IDEALISTA_SELECTORS.form.pool))) {
-        await page.check(IDEALISTA_SELECTORS.form.pool);
-      }
-
-      if (featureKey.includes("garden") && (await checkElementExists(page, IDEALISTA_SELECTORS.form.garden))) {
-        await page.check(IDEALISTA_SELECTORS.form.garden);
-      }
-
-      if (featureKey.includes("parking") && (await checkElementExists(page, IDEALISTA_SELECTORS.form.parking))) {
-        await page.check(IDEALISTA_SELECTORS.form.parking);
-      }
-
-      if (
-        featureKey.includes("balcony") &&
-        (await checkElementExists(page, IDEALISTA_SELECTORS.form.balcony))
-      ) {
-        await page.check(IDEALISTA_SELECTORS.form.balcony);
-      }
-
-      if (
-        featureKey.includes("terrace") &&
-        (await checkElementExists(page, IDEALISTA_SELECTORS.form.terrace))
-      ) {
-        await page.check(IDEALISTA_SELECTORS.form.terrace);
-      }
-
-      if (
-        featureKey.includes("air") &&
-        (await checkElementExists(page, IDEALISTA_SELECTORS.form.airConditioning))
-      ) {
-        await page.check(IDEALISTA_SELECTORS.form.airConditioning);
-      }
+  if (addressParts.localidad) {
+    const localidadInput = await page.$(IDEALISTA_SELECTORS.form.localidadInput);
+    if (localidadInput) {
+      await localidadInput.fill(addressParts.localidad);
+      await page.waitForTimeout(500);
+      const suggestion = await page.$('[class*="autocomplete"] li:first-child, [class*="suggestion"]:first-child');
+      if (suggestion) await suggestion.click();
     }
   }
 
-  console.log("[Publisher] Form filled with property data");
+  if (addressParts.calle) {
+    const calleInput = await page.$(IDEALISTA_SELECTORS.form.calleInput);
+    if (calleInput) {
+      await calleInput.fill(addressParts.calle);
+      await page.waitForTimeout(300);
+    }
+  }
+
+  if (addressParts.numero) {
+    const numInput = await page.$(IDEALISTA_SELECTORS.form.numeroInput);
+    if (numInput) await numInput.fill(addressParts.numero);
+  }
+
+  const validarBtn = await page.$(IDEALISTA_SELECTORS.form.validarDireccionBtn);
+  if (validarBtn) {
+    await validarBtn.click();
+    await page.waitForTimeout(2000);
+  }
+
+  console.log("[Publisher] Location filled");
 }
 
-async function publishForm(page: Page): Promise<boolean> {
-  try {
-    // Look for publish button
-    const publishSelector = IDEALISTA_SELECTORS.form.publishButton;
+async function fillDescription(page: Page, property: PropertyData): Promise<void> {
+  const descInput = await page.$(IDEALISTA_SELECTORS.form.descriptionTextarea);
+  if (descInput && property.description) {
+    await descInput.fill(property.description.substring(0, 2000));
+    console.log("[Publisher] Description filled");
+  }
+}
 
-    if (!(await checkElementExists(page, publishSelector))) {
-      console.error("[Publisher] Publish button not found");
+async function fillPublicationSettings(page: Page): Promise<void> {
+  const exactaRadio = await page.$(IDEALISTA_SELECTORS.form.visibilidadExacta);
+  if (exactaRadio) await exactaRadio.click();
+
+  const publicarRadio = await page.$(IDEALISTA_SELECTORS.form.publicarIdealista);
+  if (publicarRadio) await publicarRadio.click();
+
+  console.log("[Publisher] Publication settings configured");
+}
+
+async function submitForm(page: Page): Promise<boolean> {
+  try {
+    const submitBtn = await page.$(IDEALISTA_SELECTORS.form.guardarPublicarBtn);
+    if (!submitBtn) {
+      console.error("[Publisher] Submit button not found");
       return false;
     }
-
-    // Click publish
-    await clickElement(page, publishSelector, 2000);
-
-    // Wait for success confirmation
-    await page.waitForTimeout(3000); // Wait for page to update
-
-    // Check if we got a success message
-    const successUrl = page.url();
-    const hasSuccess = successUrl.includes("/es/admin") || (await checkElementExists(page, IDEALISTA_SELECTORS.feedback.successMessage));
-
-    return hasSuccess;
-  } catch (error) {
-    console.error("[Publisher] Error publishing form:", error);
+    await submitBtn.click();
+    await page.waitForTimeout(5000);
+    return true;
+  } catch (err) {
+    console.error("[Publisher] Submit error:", err);
     return false;
   }
 }
 
-async function extractIdealistaPropertyId(page: Page): Promise<string> {
+function extractIdealistaId(url: string): string {
+  const match = url.match(/propiedad[^\d]*(\d+)/);
+  return match?.[1] ?? `tmp_${Date.now()}`;
+}
+
+function parseAddress(address: string): { calle?: string; numero?: string; localidad?: string } {
+  const cityMatch = address.match(/,\s*([^,]+)$/);
+  const localidad = cityMatch?.[1]?.trim();
+
+  const numMatch = address.match(/\s+(\d+[A-Za-z]?)\s*(?:,|$)/);
+  const numero = numMatch?.[1];
+
+  const calleRaw = address
+    .replace(/,\s*[^,]+$/, "")
+    .replace(/\s+\d+[A-Za-z]?\s*$/, "")
+    .trim();
+
+  return { calle: calleRaw || undefined, numero, localidad };
+}
+
+async function fetchPropertyData(propertyId: string): Promise<PropertyData | null> {
+  const db = createAdminClient();
   try {
-    // The property ID might be in the URL or in a data attribute
-    const url = page.url();
+    const { data: p } = await db
+      .from("properties")
+      .select("id, title, description, price, bedrooms, bathrooms, square_meters, address, zone, operation, features")
+      .eq("id", propertyId)
+      .single();
 
-    // Try to extract from URL patterns like .../propiedades/123456789
-    const match = url.match(/propiedades[^\d]*(\d+)/);
-    if (match && match[1]) {
-      return match[1];
-    }
+    if (!p) return null;
 
-    // Try to extract from page content (data attribute or hidden field)
-    const idFromAttribute = await page.getAttribute("body", "data-property-id");
-    if (idFromAttribute) {
-      return idFromAttribute;
-    }
+    const { data: media } = await db
+      .from("property_media")
+      .select("url, storage_path")
+      .eq("property_id", propertyId)
+      .eq("type", "photo");
 
-    // Fallback: use timestamp-based ID
-    return `temp_${Date.now()}`;
-  } catch (error) {
-    console.error("[Publisher] Error extracting Idealista property ID:", error);
-    return `temp_${Date.now()}`;
+    return {
+      id: (p as any).id,
+      title: (p as any).title,
+      description: (p as any).description ?? "",
+      price: (p as any).price,
+      bedrooms: (p as any).bedrooms,
+      bathrooms: (p as any).bathrooms,
+      squareMeters: (p as any).square_meters,
+      address: (p as any).address,
+      zone: (p as any).zone,
+      operation: (p as any).operation,
+      features: (p as any).features ?? [],
+      photos: media?.map((m: any) => ({ url: m.url, storagePath: m.storage_path })) ?? [],
+    };
+  } catch (err) {
+    console.error("[Publisher] fetchPropertyData error:", err);
+    return null;
   }
 }
 
-async function updatePublishLog(
+async function createPendingLog(propertyId: string): Promise<void> {
+  const db = createAdminClient();
+  try {
+    const { data: existing } = await (db as any)
+      .from("idealista_publish_log")
+      .select("id, attempt_count")
+      .eq("property_id", propertyId)
+      .single();
+
+    if (!existing) {
+      await (db as any).from("idealista_publish_log").insert({
+        property_id: propertyId,
+        status: "pending",
+        attempt_count: 1,
+        last_attempt_at: new Date().toISOString(),
+      });
+    } else {
+      await (db as any).from("idealista_publish_log").update({
+        status: "pending",
+        last_attempt_at: new Date().toISOString(),
+        attempt_count: (existing as any).attempt_count + 1,
+      }).eq("id", (existing as any).id);
+    }
+  } catch (err) {
+    console.error("[Publisher] createPendingLog error:", err);
+  }
+}
+
+async function updateLog(
   propertyId: string,
   idealistaPropertyId: string | undefined,
   status: "pending" | "published" | "failed",
   errorMessage?: string
 ): Promise<void> {
   const db = createAdminClient();
-
   try {
-    // Check if log entry exists
-    const { data: existing } = await db
+    await (db as any)
       .from("idealista_publish_log")
-      .select("id")
-      .eq("property_id", propertyId)
-      .single();
-
-    if (existing) {
-      // Update existing entry
-      await db.from("idealista_publish_log").update({
+      .update({
         idealista_property_id: idealistaPropertyId,
         status,
-        error_message: errorMessage,
+        error_message: errorMessage ?? null,
         last_attempt_at: new Date().toISOString(),
         published_at: status === "published" ? new Date().toISOString() : null,
-        attempt_count: (await db.from("idealista_publish_log").select("attempt_count").eq("property_id", propertyId))
-          .data?.[0]?.attempt_count ?? 0 + 1,
-      });
-    } else {
-      // Create new entry
-      await db.from("idealista_publish_log").insert({
-        property_id: propertyId,
-        idealista_property_id: idealistaPropertyId,
-        status,
-        error_message: errorMessage,
-        attempt_count: 1,
-        last_attempt_at: new Date().toISOString(),
-        published_at: status === "published" ? new Date().toISOString() : null,
-      });
-    }
-  } catch (error) {
-    console.error("[Publisher] Error updating publish log:", error);
+        updated_at: new Date().toISOString(),
+      })
+      .eq("property_id", propertyId);
+  } catch (err) {
+    console.error("[Publisher] updateLog error:", err);
   }
 }
