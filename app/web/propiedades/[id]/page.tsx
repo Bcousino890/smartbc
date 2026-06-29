@@ -6,6 +6,7 @@ import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "../../_components/PropertyCard";
 import { PropertyGallery } from "../../_components/PropertyGallery";
 import { PropertyVideos } from "../../_components/PropertyVideos";
+import { CampusDistance } from "../../_components/CampusDistance";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -245,6 +246,8 @@ export default async function PropertyDetail({ params }: Props) {
               </div>
             </a>
           </section>
+
+          {p.country === "España" && <CampusDistance city={p.city} address={p.address} />}
         </article>
 
         {/* SIDEBAR */}
