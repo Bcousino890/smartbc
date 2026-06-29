@@ -212,21 +212,19 @@ export default async function PropertyDetail({ params }: Props) {
 
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>
-            <div className="mt-6 aspect-[16/7] rounded-lg overflow-hidden border border-stone-200">
-              <iframe
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                loading="lazy"
-                allowFullScreen
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBu-pHA0q0wN8grVJp-Ax1KB4U9fV4jZLs&q=${encodeURIComponent(p.address + ", " + p.city + ", " + p.country)}`}
-              />
-            </div>
-            <p className="mt-4 text-sm text-navy/80">
-              <span className="font-semibold">{p.address}</span><br />
-              {p.city}, {p.country}
-            </p>
+            <a
+              href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(p.address + ", " + p.city + ", " + p.country)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 block aspect-[16/7] rounded-lg overflow-hidden border border-stone-200 bg-gradient-to-br from-cream-deep to-stone-100 flex items-center justify-center hover:from-stone-100 hover:to-cream-deep transition-colors"
+            >
+              <div className="text-center">
+                <MapPin size={32} className="text-gold mx-auto" />
+                <p className="mt-4 text-navy font-display text-lg font-semibold">{p.address}</p>
+                <p className="text-sm text-gray-500 mt-1">{p.city}, {p.country}</p>
+                <p className="text-[11px] text-gold mt-3 tracking-wide uppercase">Ver en OpenStreetMap →</p>
+              </div>
+            </a>
           </section>
         </article>
 

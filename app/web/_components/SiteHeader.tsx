@@ -25,15 +25,12 @@ export function SiteHeader() {
       } border-b border-stone-200/60`}
     >
       <div className="container-luxe flex items-center justify-between py-5">
-        <Link href="/web" className="flex items-center" aria-label="Benjamín Cousiño Propiedades">
-          <svg width="200" height="60" viewBox="0 0 200 60" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
-            <text x="100" y="24" fontFamily="Georgia, serif" fontSize="20" fontWeight="bold" textAnchor="middle" fill="#1b2a4a" letterSpacing="2">
-              BENJAMIN COUSIÑO
-            </text>
-            <text x="100" y="42" fontFamily="Georgia, serif" fontSize="9" textAnchor="middle" fill="#1b2a4a" letterSpacing="1.5" opacity="0.7">
-              PROPIEDADES
-            </text>
-          </svg>
+        <Link href="/web" className="flex items-center py-1" aria-label="Benjamín Cousiño Propiedades">
+          <div className="flex flex-col leading-none">
+            <span className="font-display text-xs tracking-[0.06em] text-navy font-bold">BENJAMIN</span>
+            <span className="font-display text-xs tracking-[0.06em] text-navy font-bold">COUSIÑO</span>
+            <span className="text-[6px] tracking-[0.08em] uppercase text-navy/50 font-sans mt-0.5">Propiedades</span>
+          </div>
         </Link>
 
         <nav className="hidden lg:flex items-center gap-10">
