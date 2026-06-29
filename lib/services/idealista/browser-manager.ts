@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Browser, BrowserContext, Page, chromium } from "playwright";
 
@@ -77,6 +77,15 @@ export async function cookiesExist(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function deleteCookies(): Promise<void> {
+  try {
+    await unlink(COOKIES_PATH);
+    console.log("[Playwright] Cookies deleted from disk");
+  } catch {
+    // File didn't exist — that's fine
   }
 }
 

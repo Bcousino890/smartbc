@@ -1,6 +1,7 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { deleteCookies } from "@/lib/services/idealista/browser-manager";
 
 export async function POST() {
   const profile = await getCurrentProfile();
@@ -14,21 +15,16 @@ export async function POST() {
   try {
     const db = createAdminClient() as any;
 
-    // Reset login-related fields
     await db.from("idealista_config").update({
       login_failed_count: 0,
       updated_at: new Date().toISOString(),
     });
 
-    return Response.json({
-      ok: true,
-      message: "Sesión limpiada",
-    });
+    await deleteCookies();
+
+    return Response.json({ ok: true, message: "Sesión limpiada" });
   } catch (error) {
     console.error("Logout error:", error);
-    return Response.json(
-      { error: "Error al limpiar sesión" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Error al limpiar sesión" }, { status: 500 });
   }
 }
