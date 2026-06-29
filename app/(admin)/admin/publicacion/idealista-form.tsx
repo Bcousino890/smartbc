@@ -80,6 +80,10 @@ export type IdealistaListing = {
   photos: string[];
   videos: string[];
   plans: string[];
+  // Publicación automática
+  publishToIdealista?: boolean;
+  idealistaPublishStatus?: "idle" | "pending" | "published" | "failed";
+  idealistaPublishError?: string;
 };
 
 const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
@@ -136,6 +140,9 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   photos: [],
   videos: [],
   plans: [],
+  publishToIdealista: false,
+  idealistaPublishStatus: "idle",
+  idealistaPublishError: "",
 };
 
 // ── Utilidades ───────────────────────────────────────────────────────────
@@ -1107,6 +1114,44 @@ export function IdealistaForm({
         </div>
       </section>
 
+      {/* ── Publicación en Idealista ────────────────────────────────────── */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            id="publishToIdealista"
+            checked={form.publishToIdealista || false}
+            onChange={(e) => set("publishToIdealista", e.target.checked)}
+            className="mt-1 rounded border-amber-300 text-amber-600 focus:ring-amber-400"
+          />
+          <div className="flex-1">
+            <label htmlFor="publishToIdealista" className="block font-semibold text-sm text-amber-900 mb-0.5">
+              Publicar en Idealista
+            </label>
+            <p className="text-xs text-amber-700">
+              Publica automáticamente esta propiedad en Idealista usando tu cuenta configurada.
+            </p>
+            {form.idealistaPublishStatus === "pending" && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-amber-700">
+                <Loader2 size={14} className="animate-spin" />
+                Publicando...
+              </div>
+            )}
+            {form.idealistaPublishStatus === "published" && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+                ✓ Publicado en Idealista
+              </div>
+            )}
+            {form.idealistaPublishStatus === "failed" && (
+              <div className="mt-2 flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                <span className="mt-0.5">✕</span>
+                <span>{form.idealistaPublishError || "Error al publicar"}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── Guardar ──────────────────────────────────────────────────────── */}
       <div className="flex justify-end pt-2">
         <button
@@ -1115,7 +1160,7 @@ export function IdealistaForm({
           className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/85 disabled:opacity-50"
         >
           <Save size={15} />
-          {saving ? "Guardando..." : "Guardar borrador"}
+          {saving ? "Guardando..." : "Guardar y publicar"}
         </button>
       </div>
     </form>
