@@ -32,6 +32,10 @@ export type PropertyFilters = {
   minSquareMeters?: number;
   availableFrom?: string;
   includeUnavailable?: boolean;
+  // Incluye propiedades archivadas (archived_at != null). Por defecto se
+  // ocultan; el admin puede activarlo para encontrar/reactivar propiedades
+  // cuyo anuncio de origen se dio de baja.
+  includeArchived?: boolean;
 };
 
 export type ClientPreferencesRow = Database["public"]["Tables"]["client_preferences"]["Row"];
