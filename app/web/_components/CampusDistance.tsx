@@ -146,11 +146,11 @@ export function CampusDistance({ city, address }: { city: string; address: strin
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address + "," + city)}/${selected.lat},${selected.lng}`;
 
   return (
-    <section className="mt-16">
-      <h2 className="font-display text-3xl text-navy mb-8">Distancia al campus</h2>
+    <section className="mt-16 border border-stone-300 rounded-2xl p-8 bg-cream-50">
+      <h2 className="font-display text-4xl text-navy mb-8">Distancia al campus</h2>
 
-      {/* Search and Filter Section */}
-      <div className="mb-8 space-y-4">
+      {/* Search and Dropdown Section */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
         <div className="relative">
           <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
           <input
@@ -158,38 +158,55 @@ export function CampusDistance({ city, address }: { city: string; address: strin
             placeholder="Busca tu universidad o selecciona..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 border border-stone-200 rounded-lg bg-white text-sm focus:outline-none focus:border-gold"
+            className="w-full pl-12 pr-4 py-3 border border-stone-300 rounded-lg bg-white text-sm focus:outline-none focus:border-gold"
           />
         </div>
 
-        {/* University Logos/Tags */}
-        <div className="flex flex-wrap gap-3 items-center">
-          <span className="text-[11px] tracking-[0.24em] uppercase text-gray-400">Universidades:</span>
-          <div className="flex flex-wrap gap-2">
-            {universities.slice(0, 6).map((uni) => (
-              <button
-                key={uni.id}
-                onClick={() => setSelected(uni)}
-                className={`px-3 py-2 text-xs rounded-lg border transition-all ${
-                  selected.id === uni.id
-                    ? "border-gold bg-gold/10 text-navy font-semibold"
-                    : "border-stone-200 bg-white text-navy/70 hover:border-gold"
-                }`}
-              >
-                {uni.shortName}
-              </button>
-            ))}
-            {universities.length > 6 && (
-              <button className="px-3 py-2 text-xs text-gold border border-gold/40 rounded-lg hover:bg-gold/5">
-                +{universities.length - 6} más
-              </button>
-            )}
-          </div>
-        </div>
+        <select
+          value={selected.id}
+          onChange={(e) => {
+            const uni = universities.find(u => u.id === e.target.value);
+            if (uni) setSelected(uni);
+          }}
+          className="px-4 py-3 border border-stone-300 rounded-lg bg-cream-50 text-navy focus:outline-none focus:border-gold appearance-none cursor-pointer font-semibold text-sm"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 1rem center',
+            paddingRight: '2.5rem'
+          }}
+        >
+          <option value="">Select Campus</option>
+          {universities.map((uni) => (
+            <option key={uni.id} value={uni.id}>
+              {uni.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* University Logo Tags */}
+      <div className="mb-6 flex flex-wrap gap-3 items-center">
+        {universities.slice(0, 6).map((uni) => (
+          <button
+            key={uni.id}
+            onClick={() => {
+              setSelected(uni);
+              setSearchTerm("");
+            }}
+            className={`px-4 py-2 text-sm rounded-lg border-2 transition-all font-semibold ${
+              selected.id === uni.id
+                ? "border-gold bg-white text-navy ring-2 ring-gold"
+                : "border-stone-300 bg-white text-navy/70 hover:border-gold hover:text-navy"
+            }`}
+          >
+            {uni.shortName}
+          </button>
+        ))}
       </div>
 
       {/* Map Section */}
-      <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm mb-8" style={{ height: "450px" }}>
+      <div className="rounded-lg overflow-hidden border border-stone-300 shadow-sm mb-6" style={{ height: "350px" }}>
         <MapContainer bounds={bounds} style={{ height: "100%", width: "100%" }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -216,19 +233,19 @@ export function CampusDistance({ city, address }: { city: string; address: strin
           {/* Línea de ruta */}
           <Polyline
             positions={[[propertyCoords.lat, propertyCoords.lng], [selected.lat, selected.lng]]}
-            pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.7, dashArray: "5, 5" }}
+            pathOptions={{ color: "#c9a96e", weight: 2.5, opacity: 0.8, dashArray: "8, 6" }}
           />
         </MapContainer>
       </div>
 
-      {/* Transport Times - Horizontal Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      {/* Transport Times - Horizontal Cards with Button */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
         {times.map((time) => {
           const Icon = time.icon;
           return (
-            <div key={time.type} className="p-4 rounded-lg border border-stone-200 bg-white hover:border-gold transition-colors text-center">
-              <Icon size={24} className="text-gold mx-auto mb-3" />
-              <p className="text-[10px] tracking-[0.18em] uppercase text-gray-400 mb-2">
+            <div key={time.type} className="p-4 rounded-lg border border-stone-300 bg-white text-center">
+              <Icon size={24} className="text-gold mx-auto mb-2" />
+              <p className="text-[10px] tracking-[0.18em] uppercase text-gold font-semibold mb-2">
                 {time.label}
               </p>
               <p className="font-display text-3xl text-navy">{time.minutes}</p>
@@ -236,22 +253,21 @@ export function CampusDistance({ city, address }: { city: string; address: strin
             </div>
           );
         })}
-      </div>
 
-      {/* Show Route Button */}
-      <div className="flex justify-end">
+        {/* Show Route Button */}
         <a
           href={mapsDirectionsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-navy text-cream px-6 py-3 text-[11px] tracking-[0.28em] uppercase hover:bg-gold hover:text-navy transition-colors rounded-lg font-semibold"
+          className="h-full inline-flex flex-col items-center justify-center gap-1 bg-navy text-cream px-4 py-4 text-[10px] tracking-[0.24em] uppercase hover:bg-gold hover:text-navy transition-colors rounded-lg font-semibold text-center"
         >
-          Show Route <ArrowUpRight size={16} />
+          <span>Show Route</span>
+          <span className="text-xs font-normal">Open Google Maps</span>
         </a>
       </div>
 
       {/* Info Note */}
-      <div className="mt-8 p-4 rounded-lg border border-stone-200 bg-cream-deep">
+      <div className="mt-6 p-4 rounded-lg border border-stone-300 bg-cream-deep">
         <p className="text-xs text-gray-500">
           <span className="font-semibold text-navy">Nota:</span> Los tiempos son aproximados basados en horario de tráfico normal.
           Para obtener información en tiempo real, consulta Google Maps.
