@@ -60,7 +60,7 @@ export default function Catalog() {
   const [type, setType] = useState<"Todo" | "Apartamento" | "Penthouse" | "Casa / Villa">("Todo");
   const [currency, setCurrency] = useState<Currency>("EUR");
   const [minPrice, setMinPrice] = useState<number>(0);
-  const [maxPrice, setMaxPrice] = useState<number>(10_000_000);
+  const [maxPrice, setMaxPrice] = useState<number>(100_000_000);
   const [minBeds, setMinBeds] = useState<number>(0);
   const [minBaths, setMinBaths] = useState<number>(0);
   const [minSqm, setMinSqm] = useState<number>(0);
@@ -101,11 +101,11 @@ export default function Catalog() {
   const rate = RATES[currency];
   const step = STEPS[currency];
   const displayMax = Math.round(maxPrice * rate);
-  const sliderMaxDisplay = Math.round(15_000_000 * rate);
+  const sliderMaxDisplay = Math.round(100_000_000 * rate);
 
   const resetFilters = () => {
     setOp("Todo"); setCountry("Todo"); setType("Todo");
-    setMinPrice(0); setMaxPrice(10_000_000);
+    setMinPrice(0); setMaxPrice(100_000_000);
     setMinBeds(0); setMinBaths(0); setMinSqm(0);
     setStayDuration("Todo");
     setComunas([]); setZonas([]);
