@@ -247,7 +247,7 @@ export default async function PropertyDetail({ params }: Props) {
             </a>
           </section>
 
-          {p.country === "España" && <CampusDistance city={p.city} address={p.address} />}
+          <CampusDistance city={p.city} address={p.address} />
         </article>
 
         {/* SIDEBAR */}
