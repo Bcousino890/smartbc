@@ -218,7 +218,7 @@ export default async function PropertyDetail({ params }: Props) {
                 height="100%"
                 style={{ border: 0 }}
                 loading="lazy"
-                allowFullScreen=""
+                allowFullScreen
                 referrerPolicy="no-referrer-when-downgrade"
                 src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBu-pHA0q0wN8grVJp-Ax1KB4U9fV4jZLs&q=${encodeURIComponent(p.address + ", " + p.city + ", " + p.country)}`}
               />
