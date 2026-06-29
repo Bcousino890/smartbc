@@ -1,7 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Car, Train, Bus } from "lucide-react";
+import dynamic from "next/dynamic";
+import L from "leaflet";
+
+// Dynamic import to avoid SSR issues with Leaflet
+const MapContainer = dynamic(() => import("react-leaflet").then(m => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import("react-leaflet").then(m => m.TileLayer), { ssr: false });
+const Marker = dynamic(() => import("react-leaflet").then(m => m.Marker), { ssr: false });
+const Popup = dynamic(() => import("react-leaflet").then(m => m.Popup), { ssr: false });
+const Polyline = dynamic(() => import("react-leaflet").then(m => m.Polyline), { ssr: false });
+const Circle = dynamic(() => import("react-leaflet").then(m => m.Circle), { ssr: false });
 
 interface University {
   id: string;
@@ -110,15 +120,36 @@ const getTransportTimes = (university: University): TransportTime[] => {
   ];
 };
 
+// Approximate city center coordinates
+const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
+  Madrid: { lat: 40.4168, lng: -3.7038 },
+  Santiago: { lat: -33.4489, lng: -70.6693 },
+};
+
 export function CampusDistance({ city, address }: { city: string; address: string }) {
   const universities = city === "Santiago" ? UNIVERSITIES_SANTIAGO : UNIVERSITIES_MADRID;
   const [selected, setSelected] = useState<University>(universities[0]);
   const times = getTransportTimes(selected);
 
-  const mapsDirectionsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address + "," + city)}/${selected.lat},${selected.lng}`;
+  // Approximate property location (city center for now)
+  const propertyCoords = CITY_CENTERS[city] || { lat: 40.4168, lng: -3.7038 };
 
-  // OpenStreetMap embed URL
-  const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${(selected.lng - 0.05)},${(selected.lat - 0.05)},${(selected.lng + 0.05)},${(selected.lat + 0.05)}&layer=mapnik&marker=${selected.lat},${selected.lng}`;
+  // Calculate bounds to fit both markers with some padding
+  const bounds = useMemo(() => {
+    const lats = [propertyCoords.lat, selected.lat];
+    const lngs = [propertyCoords.lng, selected.lng];
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const padding = 0.03;
+    return [
+      [minLat - padding, minLng - padding],
+      [maxLat + padding, maxLng + padding],
+    ] as [[number, number], [number, number]];
+  }, [propertyCoords, selected]);
+
+  const mapsDirectionsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address + "," + city)}/${selected.lat},${selected.lng}`;
 
   return (
     <section className="mt-16">
@@ -147,17 +178,37 @@ export function CampusDistance({ city, address }: { city: string; address: strin
             ))}
           </div>
 
-          {/* Mapa OpenStreetMap */}
-          <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm">
-            <iframe
-              width="100%"
-              height="400"
-              style={{ border: 0 }}
-              src={osmEmbedUrl}
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
+          {/* Mapa Interactivo Leaflet */}
+          <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm" style={{ height: "400px" }}>
+            <MapContainer bounds={bounds} style={{ height: "100%", width: "100%" }}>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              {/* Marcador de propiedad */}
+              <Marker position={[propertyCoords.lat, propertyCoords.lng]}>
+                <Popup>📍 Propiedad: {address}</Popup>
+              </Marker>
+
+              {/* Círculo de área referencial alrededor de la propiedad */}
+              <Circle
+                center={[propertyCoords.lat, propertyCoords.lng]}
+                radius={500}
+                pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.3, fill: true, fillOpacity: 0.1 }}
+              />
+
+              {/* Marcador de universidad */}
+              <Marker position={[selected.lat, selected.lng]}>
+                <Popup>🎓 {selected.name}</Popup>
+              </Marker>
+
+              {/* Línea de ruta */}
+              <Polyline
+                positions={[[propertyCoords.lat, propertyCoords.lng], [selected.lat, selected.lng]]}
+                pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.7, dashArray: "5, 5" }}
+              />
+            </MapContainer>
           </div>
 
           <div className="mt-4 flex justify-center">
