@@ -240,3 +240,34 @@ export async function getClientById(id: string) {
   if (error) throw error;
   return data;
 }
+
+export type ContactRequestRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  country_interest: string | null;
+  subject: string | null;
+  message: string;
+  status: string;
+  created_at: string;
+};
+
+export async function getContactRequests(): Promise<ContactRequestRow[]> {
+  const admin = createAdminClient() as any;
+  const { data, error } = await admin
+    .from("contact_requests")
+    .select("id, name, email, phone, country_interest, subject, message, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) {
+    console.error("getContactRequests error:", error);
+    return [];
+  }
+  return (data ?? []) as ContactRequestRow[];
+}
+
+export async function markContactRequestRead(id: string): Promise<void> {
+  const admin = createAdminClient() as any;
+  await admin.from("contact_requests").update({ status: "read", updated_at: new Date().toISOString() }).eq("id", id);
+}

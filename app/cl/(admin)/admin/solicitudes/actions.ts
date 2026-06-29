@@ -5,6 +5,22 @@ import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 
+export async function markContactRead(id: string) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  await supabase
+    .from("contact_requests")
+    .update({ status: "read", updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  revalidatePath("/admin/solicitudes");
+  return { ok: true };
+}
+
 export async function updateVisitStatus(
   id: string,
   status: "confirmed" | "cancelled" | "completed",

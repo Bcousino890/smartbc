@@ -1,9 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export default function Contacto() {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSending(true);
+    setError(null);
+
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      name: fd.get("name") as string,
+      email: fd.get("email") as string,
+      phone: fd.get("phone") as string,
+      countryInterest: fd.get("country") as string,
+      subject: fd.get("subject") as string,
+      message: fd.get("message") as string,
+    };
+
+    try {
+      const res = await fetch("/api/portal/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Error al enviar");
+      setSent(true);
+    } catch {
+      setError("Hubo un problema al enviar. Por favor inténtelo de nuevo o escríbanos directamente a contacto@bcousinorprop.com");
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <div>
@@ -28,19 +61,27 @@ export default function Contacto() {
           ) : (
             <>
               <h2 className="font-display text-3xl text-navy">Envíenos un mensaje</h2>
-              <form className="mt-10 space-y-6" onSubmit={(e) => { e.preventDefault(); setSent(true); }}>
+              <form ref={formRef} className="mt-10 space-y-6" onSubmit={handleSubmit}>
                 <div className="grid sm:grid-cols-2 gap-6">
-                  <F label="Nombre completo *"><input required className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none" /></F>
-                  <F label="Email *"><input required type="email" className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none" /></F>
-                  <F label="Teléfono"><input className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none" /></F>
+                  <F label="Nombre completo *">
+                    <input name="name" required className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none" />
+                  </F>
+                  <F label="Email *">
+                    <input name="email" required type="email" className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none" />
+                  </F>
+                  <F label="Teléfono">
+                    <input name="phone" className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none" />
+                  </F>
                   <F label="País de interés">
-                    <select className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none">
-                      <option>España (Madrid)</option><option>Chile (Santiago)</option><option>Ambos</option>
+                    <select name="country" className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none">
+                      <option>España (Madrid)</option>
+                      <option>Chile (Santiago)</option>
+                      <option>Ambos</option>
                     </select>
                   </F>
                 </div>
                 <F label="Asunto">
-                  <select className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none">
+                  <select name="subject" className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none">
                     <option>Consulta sobre una propiedad publicada</option>
                     <option>Acceso a cartera off market</option>
                     <option>Quiero vender / alquilar mi propiedad</option>
@@ -48,14 +89,24 @@ export default function Contacto() {
                     <option>Otros</option>
                   </select>
                 </F>
-                <F label="Mensaje *"><textarea required rows={5} className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none resize-none" /></F>
+                <F label="Mensaje *">
+                  <textarea name="message" required rows={5} className="w-full border-b border-stone-200 bg-transparent py-3 focus:border-gold outline-none resize-none" />
+                </F>
                 <label className="flex items-start gap-3 text-xs text-gray-400">
                   <input type="checkbox" required className="mt-1" style={{ accentColor: "#c9a96e" }} />
                   Acepto la política de privacidad y el tratamiento confidencial de mis datos.
                 </label>
+                {error && (
+                  <p className="text-sm text-red-600">{error}</p>
+                )}
                 <div className="flex items-center justify-between gap-4 pt-4">
                   <p className="text-[11px] tracking-[0.24em] uppercase text-gold">Respuesta &lt; 24h</p>
-                  <button className="bg-navy text-cream px-10 py-4 text-[11px] tracking-[0.28em] uppercase hover:bg-gold hover:text-navy transition-colors">Enviar Mensaje</button>
+                  <button
+                    disabled={sending}
+                    className="bg-navy text-cream px-10 py-4 text-[11px] tracking-[0.28em] uppercase hover:bg-gold hover:text-navy transition-colors disabled:opacity-60"
+                  >
+                    {sending ? "Enviando..." : "Enviar Mensaje"}
+                  </button>
                 </div>
               </form>
             </>

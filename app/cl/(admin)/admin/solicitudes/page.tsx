@@ -2,6 +2,7 @@ import {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
+  MessageSquare,
 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
@@ -10,13 +11,15 @@ import { visitRequestRowToLegacy } from "@/lib/db/adapters";
 import {
   getVisitRequests,
   getVisitRequestsStats,
+  getContactRequests,
 } from "@/lib/db/queries/clients";
 import { SolicitudesAdminClient } from "./solicitudes-admin-client";
 
 export default async function AdminSolicitudesPage() {
-  const [rows, stats] = await Promise.all([
+  const [rows, stats, contactRows] = await Promise.all([
     getVisitRequests(),
     getVisitRequestsStats(),
+    getContactRequests(),
   ]);
   const requests = rows.map(visitRequestRowToLegacy);
 
@@ -44,13 +47,13 @@ export default async function AdminSolicitudesPage() {
           value={stats.confirmed}
         />
         <StatCard
-          icon={<CalendarDays size={20} strokeWidth={1.75} />}
+          icon={<MessageSquare size={20} strokeWidth={1.75} />}
           labelKey="solicitudes.stats.thisWeek"
-          value={stats.thisWeek}
+          value={contactRows.filter((r) => r.status === "pending").length}
         />
       </div>
 
-      <SolicitudesAdminClient requests={requests} />
+      <SolicitudesAdminClient requests={requests} contactRequests={contactRows} />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

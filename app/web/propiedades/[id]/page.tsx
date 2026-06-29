@@ -247,7 +247,7 @@ export default async function PropertyDetail({ params }: Props) {
             <div className="mt-4 flex items-center gap-4 pb-6 border-b border-stone-200">
               <div className="h-14 w-14 border border-gold text-gold flex items-center justify-center font-display text-xl">BC</div>
               <div>
-                <p className="font-display text-xl text-navy">Benjamín Cousiño</p>
+                <p className="font-display text-xl text-navy">Benjamín Cousiño Propiedades</p>
                 <p className="text-xs text-gray-500">Oficina {p.office}</p>
               </div>
             </div>
