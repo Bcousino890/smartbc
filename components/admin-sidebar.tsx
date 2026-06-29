@@ -64,6 +64,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
   { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion", onlyCountry: "es" },
+  { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 

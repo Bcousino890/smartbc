@@ -381,6 +381,7 @@ const es: Strings = {
   "dashboard.quickLinks.title": "Accesos rápidos",
 
   "admin.nav.usuarios": "Usuarios",
+  "admin.nav.demo_setup": "Demo Setup",
   "admin.nav.configuracion": "Configuración",
   "admin.realtime.footer": "Datos actualizados en tiempo real",
   "publicacion.title": "Publicación",
@@ -1392,6 +1393,7 @@ const en: Strings = {
   "dashboard.quickLinks.title": "Quick links",
 
   "admin.nav.usuarios": "Users",
+  "admin.nav.demo_setup": "Demo Setup",
   "admin.nav.configuracion": "Settings",
   "admin.realtime.footer": "Data updated in real time",
   "admin.relativeTime.justNow": "Just now",
@@ -2387,6 +2389,7 @@ const fr: Strings = {
   "dashboard.quickLinks.title": "Accès rapides",
 
   "admin.nav.usuarios": "Utilisateurs",
+  "admin.nav.demo_setup": "Configuration de démo",
   "admin.nav.configuracion": "Configuration",
   "admin.realtime.footer": "Données mises à jour en temps réel",
   "admin.relativeTime.justNow": "À l'instant",
@@ -3341,6 +3344,7 @@ const de: Strings = {
   "dashboard.quickLinks.title": "Schnellzugriff",
 
   "admin.nav.usuarios": "Benutzer",
+  "admin.nav.demo_setup": "Demo-Setup",
   "admin.nav.configuracion": "Einstellungen",
   "admin.realtime.footer": "Daten in Echtzeit aktualisiert",
   "admin.relativeTime.justNow": "Gerade eben",
