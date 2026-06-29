@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Plus, Minus } from "lucide-react";
 import type { Property } from "@/lib/portal-properties";
+import { featuredProperties } from "@/lib/portal-properties";
 import { PropertyCard } from "./_components/PropertyCard";
 import { SectionEyebrow } from "./_components/SectionEyebrow";
 
@@ -69,8 +70,8 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/portal/properties")
       .then((r) => r.ok ? r.json() : [])
-      .then((data: Property[]) => setFeatured(data.slice(0, 4)))
-      .catch(() => {});
+      .then((data: Property[]) => setFeatured((data.length > 0 ? data : featuredProperties).slice(0, 4)))
+      .catch(() => setFeatured(featuredProperties.slice(0, 4)));
   }, []);
 
   return (
