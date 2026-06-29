@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 const TEST_URL = "https://www.idealista.com/inmueble/111564879/";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 export async function GET() {
+  // Gate: solo Owner/Admin. Este endpoint dispara fetch + Playwright contra
+  // sitios externos; sin auth era abusable (consumo de proxy/recursos).
+  const gateProfile = await getCurrentProfile().catch(() => null);
+  if (!gateProfile || !["owner", "admin"].includes(gateProfile.role)) {
+    return NextResponse.json(
+      { error: "No autorizado — solo Owner/Admin" },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const proxyUrl = process.env.SMARTPROXY_URL;
 
   // Test directo sin proxy
