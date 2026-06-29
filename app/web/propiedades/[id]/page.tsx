@@ -4,6 +4,7 @@ import { ArrowRight, Heart, MapPin } from "lucide-react";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "../../_components/PropertyCard";
+import { PropertyGallery } from "../../_components/PropertyGallery";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -155,25 +156,7 @@ export default async function PropertyDetail({ params }: Props) {
 
   return (
     <div>
-      {/* GALLERY */}
-      <section className="bg-cream-deep">
-        <div className="container-luxe py-6 grid md:grid-cols-3 gap-2 h-[70vh]">
-          <div className="md:col-span-2 relative overflow-hidden">
-            <img src={p.cover} alt={p.title} className="h-full w-full object-cover" />
-            <button className="absolute bottom-6 left-6 bg-cream/95 text-navy px-5 py-2 text-[11px] tracking-[0.24em] uppercase">↗ Ver galería</button>
-          </div>
-          <div className="hidden md:grid grid-rows-2 gap-2">
-            {p.gallery.slice(0, 2).map((img, i) => (
-              <div key={i} className="overflow-hidden relative">
-                <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
-                {i === 1 && p.gallery.length > 2 && (
-                  <span className="absolute bottom-4 right-4 bg-navy/80 text-cream px-3 py-1 text-[11px] tracking-wider uppercase">+{p.gallery.length - 2} fotos</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <PropertyGallery cover={p.cover} gallery={p.gallery} title={p.title} />
 
       <div className="container-luxe py-16 grid lg:grid-cols-[1fr_380px] gap-16">
         <article>
@@ -229,13 +212,21 @@ export default async function PropertyDetail({ params }: Props) {
 
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>
-            <div className="mt-6 aspect-[16/7] bg-cream-deep border border-stone-200 flex items-center justify-center">
-              <div className="text-center">
-                <MapPin size={28} className="text-gold mx-auto" />
-                <p className="mt-3 text-navy font-display text-xl">{p.address}</p>
-                <p className="text-sm text-gray-500">{p.city}, {p.country}</p>
-              </div>
+            <div className="mt-6 aspect-[16/7] rounded-lg overflow-hidden border border-stone-200">
+              <iframe
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                loading="lazy"
+                allowFullScreen=""
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBu-pHA0q0wN8grVJp-Ax1KB4U9fV4jZLs&q=${encodeURIComponent(p.address + ", " + p.city + ", " + p.country)}`}
+              />
             </div>
+            <p className="mt-4 text-sm text-navy/80">
+              <span className="font-semibold">{p.address}</span><br />
+              {p.city}, {p.country}
+            </p>
           </section>
         </article>
 

@@ -22,12 +22,11 @@ export async function GET() {
     const admin = createAdminClient();
     const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)";
 
-    // Mostrar propiedades scrapeadas (source='scrape') - temporalmente sin published_web
+    // Mostrar propiedades disponibles (scrape + manual)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (admin as any)
       .from("properties")
       .select(selectStr)
-      .eq("source", "scrape")
       .eq("status", "available")
       .is("archived_at", null)
       .order("id", { ascending: false })
