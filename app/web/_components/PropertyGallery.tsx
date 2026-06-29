@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface PropertyGalleryProps {
@@ -12,6 +12,8 @@ interface PropertyGalleryProps {
 export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
   const allImages = [cover, ...gallery];
   const currentImage = allImages[currentIndex];
@@ -24,13 +26,61 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
     setCurrentIndex((prev) => (prev === allImages.length - 1 ? 0 : prev + 1));
   };
 
+  // Swipe handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.changedTouches[0].screenX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].screenX;
+    detectSwipe();
+  };
+
+  const detectSwipe = () => {
+    const swipeThreshold = 50;
+    const diff = touchStartX.current - touchEndX.current;
+
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) {
+        goToNext();
+      } else {
+        goToPrevious();
+      }
+    }
+  };
+
+  // Copy-paste protection
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleCopy = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+  };
+
   return (
     <>
       <section className="bg-cream-deep">
         <div className="container-luxe py-6 grid md:grid-cols-3 gap-2 h-[70vh]">
           {/* Main carousel */}
-          <div className="md:col-span-2 relative overflow-hidden group cursor-pointer" onClick={() => setIsFullscreen(true)}>
-            <img src={currentImage} alt={title} className="h-full w-full object-cover" />
+          <div
+            className="md:col-span-2 relative overflow-hidden group cursor-pointer user-select-none"
+            onClick={() => setIsFullscreen(true)}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <img
+              src={currentImage}
+              alt={title}
+              className="h-full w-full object-cover pointer-events-none"
+              onContextMenu={handleContextMenu}
+              onDragStart={handleDragStart}
+              onCopy={handleCopy}
+            />
 
             {/* Navigation buttons */}
             {allImages.length > 1 && (
@@ -77,7 +127,7 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
           </div>
 
           {/* Thumbnails */}
-          <div className="hidden md:grid grid-rows-2 gap-2">
+          <div className="hidden md:grid grid-rows-2 gap-2 user-select-none">
             {allImages.slice(0, 2).map((img, i) => (
               <button
                 key={i}
@@ -86,7 +136,15 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
                   currentIndex === i ? "ring-2 ring-gold" : ""
                 }`}
               >
-                <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                <img
+                  src={img}
+                  alt=""
+                  className="h-full w-full object-cover pointer-events-none"
+                  loading="lazy"
+                  onContextMenu={handleContextMenu}
+                  onDragStart={handleDragStart}
+                  onCopy={handleCopy}
+                />
                 {i === 1 && allImages.length > 2 && (
                   <span className="absolute bottom-4 right-4 bg-navy/80 text-cream px-3 py-1 text-[11px] tracking-wider uppercase">
                     +{allImages.length - 2}
@@ -100,7 +158,7 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
 
       {/* Fullscreen modal */}
       {isFullscreen && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col user-select-none">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex-1" />
@@ -119,11 +177,18 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
           </div>
 
           {/* Image */}
-          <div className="flex-1 flex items-center justify-center overflow-auto">
+          <div
+            className="flex-1 flex items-center justify-center overflow-auto"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             <img
               src={currentImage}
               alt={title}
-              className="max-w-full max-h-full object-contain"
+              className="max-w-full max-h-full object-contain pointer-events-none"
+              onContextMenu={handleContextMenu}
+              onDragStart={handleDragStart}
+              onCopy={handleCopy}
             />
           </div>
 
