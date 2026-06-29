@@ -14,9 +14,12 @@ export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
     .select(
       "*, agencies(name, slug), property_photos(url, is_cover, position)",
     )
-    .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
+
+  // Por defecto ocultamos las archivadas; con includeArchived el admin las ve
+  // (p. ej. para encontrar/reactivar una cuyo anuncio de origen se dio de baja).
+  if (!filters.includeArchived) query = query.is("archived_at", null);
 
   if (!filters.includeUnavailable) query = query.eq("status", "available");
 

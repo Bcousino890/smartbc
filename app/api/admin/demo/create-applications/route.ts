@@ -109,7 +109,8 @@ export async function POST(req: Request) {
 
     // Create documents for App 1 (Approved - all verified)
     const esRentDocs = docTypes?.filter(
-      (d) => d.country === "ES" && d.operation === "rent"
+      (d: { country: string; operation: string }) =>
+        d.country === "ES" && d.operation === "rent"
     ) || [];
     for (const docType of esRentDocs.slice(0, 5)) {
       await supabase.from("property_application_documents").insert({
@@ -139,7 +140,8 @@ export async function POST(req: Request) {
 
     // Create documents for App 2 (Pending - some pending)
     const clSaleDocs = docTypes?.filter(
-      (d) => d.country === "CL" && d.operation === "sale"
+      (d: { country: string; operation: string }) =>
+        d.country === "CL" && d.operation === "sale"
     ) || [];
     for (const docType of clSaleDocs.slice(0, 2)) {
       await supabase.from("property_application_documents").insert({
