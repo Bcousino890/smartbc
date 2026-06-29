@@ -38,6 +38,8 @@ export function EmailConfigClient() {
   const [testToEmail, setTestToEmail] = useState("");
   const [sendToStatus, setSendToStatus] = useState<"idle" | "success" | "error">("idle");
   const [sendToMessage, setSendToMessage] = useState("");
+  const [testingAllPorts, setTestingAllPorts] = useState(false);
+  const [portTestResults, setPortTestResults] = useState<any>(null);
 
   // Load existing config on mount
   useEffect(() => {
@@ -126,6 +128,43 @@ export function EmailConfigClient() {
       setErrorMessage(error instanceof Error ? error.message : "Error desconocido");
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleTestAllPorts = async () => {
+    setTestingAllPorts(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setPortTestResults(null);
+
+    try {
+      const response = await fetch("/api/admin/email-config/test-all-ports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+
+      const data = await response.json();
+      setPortTestResults(data);
+
+      if (data.ok && data.recommended) {
+        setSuccessMessage(
+          `✅ Puerto ${data.recommended.port} funciona. Actualiza tu configuración con: Puerto=${data.recommended.port}, SSL/TLS=${data.recommended.secure}`
+        );
+        setConfig((prev) => ({
+          ...prev,
+          smtpPort: data.recommended.port,
+          useSsl: data.recommended.secure,
+        }));
+      } else {
+        setErrorMessage(
+          data.message || "No se encontró puerto funcionando. Contacta a Hetzner."
+        );
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Error desconocido");
+    } finally {
+      setTestingAllPorts(false);
     }
   };
 
@@ -263,8 +302,17 @@ export function EmailConfigClient() {
         {/* Buttons */}
         <div className="flex flex-col gap-3 pt-2 md:flex-row md:justify-end md:gap-2">
           <button
+            onClick={handleTestAllPorts}
+            disabled={testingAllPorts || saving}
+            className="flex items-center justify-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-5 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+          >
+            {testingAllPorts && <Loader2 size={14} className="animate-spin" />}
+            <span>🔍 Probar Todos los Puertos</span>
+          </button>
+
+          <button
             onClick={handleTestConnection}
-            disabled={testing || saving}
+            disabled={testing || saving || testingAllPorts}
             className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-gold/5 disabled:opacity-50"
           >
             {testing && <Loader2 size={14} className="animate-spin" />}
@@ -273,13 +321,43 @@ export function EmailConfigClient() {
 
           <button
             onClick={handleSave}
-            disabled={saving || testing}
+            disabled={saving || testing || testingAllPorts}
             className="flex items-center justify-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             <span>Guardar Configuración</span>
           </button>
         </div>
+
+        {/* Port Test Results */}
+        {portTestResults && (
+          <div className="border-t border-ink/8 pt-4 mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/45 mb-3">
+              Resultados de prueba de puertos
+            </p>
+            <div className="space-y-2">
+              {portTestResults.results.map(
+                (result: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+                      result.status === "success"
+                        ? "border-green-200 bg-green-50 text-green-700"
+                        : "border-red-200 bg-red-50 text-red-700"
+                    }`}
+                  >
+                    <span>
+                      {result.status === "success" ? "✅" : "❌"} {result.name}
+                    </span>
+                    {result.status === "failed" && (
+                      <span className="text-xs opacity-75">{result.error}</span>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Send test to specific address */}
         <div className="border-t border-ink/8 pt-4 mt-2">
