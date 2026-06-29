@@ -38,10 +38,15 @@ export async function startLogin(username: string, password: string): Promise<Lo
   const { page, browser, context } = session;
 
   try {
+    // Visit home first to warm up cookies and avoid bot detection on direct login URL
+    console.log("[Auth] Warming up session on Idealista home...");
+    await page.goto("https://www.idealista.com/", { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => {});
+    await page.waitForTimeout(2000 + Math.random() * 1000);
+
     // Navigate to login
     console.log("[Auth] Navigating to Idealista login...");
     await navigateToPage(page, LOGIN_URL);
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1500 + Math.random() * 500);
 
     // Step 1: Enter email
     await page.waitForSelector(IDEALISTA_SELECTORS.login.emailInput, { timeout: 10_000 });
