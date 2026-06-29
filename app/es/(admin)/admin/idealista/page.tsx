@@ -118,11 +118,11 @@ export default async function AdminIdealistaPage() {
             </h2>
           </div>
           <Link
-            href="/admin/idealista/configuracion"
+            href="/es/admin/idealista/configuracion"
             className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/60 px-3 py-1.5 text-xs font-medium text-ink/60 transition hover:bg-white hover:text-ink"
           >
             <Settings size={13} />
-            Configuración API
+            Conectar cuenta
           </Link>
         </div>
         <p className="mb-6 text-sm text-ink/60">
