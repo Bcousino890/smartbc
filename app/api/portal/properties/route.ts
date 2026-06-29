@@ -22,12 +22,12 @@ export async function GET() {
     const admin = createAdminClient();
     const selectStr = "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)";
 
-    // Mostrar propiedades disponibles (scrape + manual)
+    // Mostrar propiedades disponibles o reservadas (scrape + manual)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (admin as any)
       .from("properties")
       .select(selectStr)
-      .eq("status", "available")
+      .in("status", ["available", "reserved"])
       .is("archived_at", null)
       .order("id", { ascending: false })
       .limit(1000);
