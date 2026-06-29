@@ -25,14 +25,12 @@ export function SiteHeader() {
       } border-b border-stone-200/60`}
     >
       <div className="container-luxe flex items-center justify-between py-5">
-        <Link href="/web" className="flex items-center group" aria-label="Benjamín Cousiño Propiedades">
-          <Image
-            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-95tcTe8Vt_wgWSKXwGn4c_c2XQNeyocXDn23RV2eaA&s"
-            alt="Benjamín Cousiño Propiedades"
-            width={40}
-            height={40}
-            className="object-contain"
-          />
+        <Link href="/web" className="flex items-center py-1" aria-label="Benjamín Cousiño Propiedades">
+          <div className="flex flex-col leading-none">
+            <span className="font-display text-xs tracking-[0.06em] text-navy font-bold">BENJAMIN</span>
+            <span className="font-display text-xs tracking-[0.06em] text-navy font-bold">COUSIÑO</span>
+            <span className="text-[6px] tracking-[0.08em] uppercase text-navy/50 font-sans mt-0.5">Propiedades</span>
+          </div>
         </Link>
 
         <nav className="hidden lg:flex items-center gap-10">

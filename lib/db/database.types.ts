@@ -549,6 +549,200 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["team_messages"]["Insert"]>;
       };
+      property_application_document_types: {
+        Row: {
+          id: string;
+          country: string;
+          operation: string;
+          document_key: string;
+          display_name: string;
+          description: string | null;
+          accepted_formats: string[];
+          max_file_size: number;
+          is_required: boolean;
+          validation_rules: Record<string, unknown> | null;
+          icon_name: string | null;
+          help_text: string | null;
+          display_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          country: string;
+          operation: string;
+          document_key: string;
+          display_name: string;
+          description?: string | null;
+          accepted_formats?: string[];
+          max_file_size?: number;
+          is_required?: boolean;
+          validation_rules?: Record<string, unknown> | null;
+          icon_name?: string | null;
+          help_text?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_application_document_types"]["Insert"]>;
+      };
+      property_applications: {
+        Row: {
+          id: string;
+          property_id: string | null;
+          client_id: string;
+          country: string;
+          operation: string;
+          status: string;
+          submitted_at: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          review_notes: string | null;
+          move_in_date: string | null;
+          purchase_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id?: string | null;
+          client_id: string;
+          country: string;
+          operation: string;
+          status?: string;
+          submitted_at?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          review_notes?: string | null;
+          move_in_date?: string | null;
+          purchase_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_applications"]["Insert"]>;
+      };
+      property_application_documents: {
+        Row: {
+          id: string;
+          property_application_id: string;
+          document_type_id: string;
+          co_applicant_id: string | null;
+          file_name: string;
+          storage_path: string;
+          file_url: string;
+          file_size: number;
+          mime_type: string;
+          status: string;
+          verification_notes: string | null;
+          ai_analysis: Record<string, unknown> | null;
+          verification_timestamp: string | null;
+          verified_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_application_id: string;
+          document_type_id: string;
+          co_applicant_id?: string | null;
+          file_name: string;
+          storage_path: string;
+          file_url: string;
+          file_size: number;
+          mime_type: string;
+          status?: string;
+          verification_notes?: string | null;
+          ai_analysis?: Record<string, unknown> | null;
+          verification_timestamp?: string | null;
+          verified_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_application_documents"]["Insert"]>;
+      };
+      property_application_scores: {
+        Row: {
+          id: string;
+          property_application_id: string;
+          total_score: number;
+          income_score: number;
+          document_completeness_score: number;
+          document_quality_score: number;
+          history_score: number;
+          ai_recommendation: string | null;
+          ai_summary: string | null;
+          currency_context: string | null;
+          income_amount: number | null;
+          income_currency: string | null;
+          income_amount_eur: number | null;
+          income_ratio: number | null;
+          calculated_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_application_id: string;
+          total_score: number;
+          income_score?: number;
+          document_completeness_score?: number;
+          document_quality_score?: number;
+          history_score?: number;
+          ai_recommendation?: string | null;
+          ai_summary?: string | null;
+          currency_context?: string | null;
+          income_amount?: number | null;
+          income_currency?: string | null;
+          income_amount_eur?: number | null;
+          income_ratio?: number | null;
+          calculated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_application_scores"]["Insert"]>;
+      };
+      property_application_co_applicants: {
+        Row: {
+          id: string;
+          property_application_id: string;
+          client_id: string;
+          role: string;
+          invited_at: string;
+          accepted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          property_application_id: string;
+          client_id: string;
+          role?: string;
+          invited_at?: string;
+          accepted_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_application_co_applicants"]["Insert"]>;
+      };
+      property_application_document_annotations: {
+        Row: {
+          id: string;
+          document_id: string;
+          annotation_text: string;
+          annotation_type: string;
+          created_by: string;
+          created_at: string;
+          resolved_at: string | null;
+          resolved_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          document_id: string;
+          annotation_text: string;
+          annotation_type?: string;
+          created_by: string;
+          created_at?: string;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["property_application_document_annotations"]["Insert"]>;
+      };
     };
     Enums: {
       user_role: UserRole;

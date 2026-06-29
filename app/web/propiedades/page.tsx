@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import type { Property } from "@/lib/portal-properties";
+import { featuredProperties } from "@/lib/portal-properties";
 import { PropertyCard } from "../_components/PropertyCard";
 
 type Currency = "EUR" | "USD" | "UF" | "CLP";
@@ -44,8 +45,14 @@ export default function Catalog() {
   useEffect(() => {
     fetch("/api/portal/properties")
       .then((r) => r.ok ? r.json() : [])
-      .then((data: Property[]) => { setAllProperties(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then((data: Property[]) => {
+        setAllProperties(data.length > 0 ? data : featuredProperties);
+        setLoading(false);
+      })
+      .catch(() => {
+        setAllProperties(featuredProperties);
+        setLoading(false);
+      });
   }, []);
 
   const [op, setOp] = useState<"Todo" | "Venta" | "Alquiler">("Todo");

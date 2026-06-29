@@ -5,6 +5,7 @@ import {
   Building2,
   Calendar,
   ClipboardList,
+  FileStack,
   Globe2,
   Heart,
   Home,
@@ -56,12 +57,14 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
+  { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "solicitudes"   },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
   { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties",   onlyCountry: "es" },
   { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
   { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion", onlyCountry: "es" },
+  { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 

@@ -4,6 +4,8 @@ import { ArrowRight, Heart, MapPin } from "lucide-react";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
 import { PropertyCard } from "../../_components/PropertyCard";
+import { PropertyGallery } from "../../_components/PropertyGallery";
+import { PropertyVideos } from "../../_components/PropertyVideos";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -14,15 +16,15 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .eq("slug", slug)
-    .eq("published_web", true)
-    .eq("status", "available")
+    .in("status", ["available", "reserved"])
     .is("archived_at", null)
     .maybeSingle();
 
   if (!data) return null;
+
   const p = data as Record<string, unknown>;
   const photos = ((p.property_photos as Array<{ url: string; is_cover: boolean; position: number }>) ?? [])
     .slice()
@@ -34,6 +36,12 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       coverFromPhotos) ||
     "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
   const gallery = photos.filter((ph) => ph.url !== cover).map((ph) => ph.url);
+  const media = ((p.property_media as Array<{ url: string; type: string; file_name: string }>) ?? [])
+    .filter((m) => m.type === "video" && m.url);
+  const videos = media.map((m) => ({
+    url: m.url,
+    title: m.file_name || "Video",
+  }));
   const countryCode = p.country as string;
   const city = countryCode === "es" ? "Madrid" : "Santiago";
   const office = countryCode === "es" ? "Madrid" : "Santiago";
@@ -60,6 +68,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
     sqm: Number(p.square_meters ?? 0),
     cover,
     gallery,
+    videos: videos.length > 0 ? videos : undefined,
     description: (p.description as string | null) ?? "",
     features: [
       ...((p.features as string[]) ?? []),
@@ -77,10 +86,9 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
-    .eq("published_web", true)
-    .eq("status", "available")
+    .in("status", ["available", "reserved"])
     .is("archived_at", null)
     .neq("slug", currentSlug)
     .order("created_at", { ascending: false })
@@ -99,6 +107,12 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
         coverFromPhotos) ||
       "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80&auto=format&fit=crop";
     const gallery = photos.filter((ph) => ph.url !== cover).map((ph) => ph.url);
+    const media = ((p.property_media as Array<{ url: string; type: string; file_name: string }>) ?? [])
+      .filter((m) => m.type === "video" && m.url);
+    const videos = media.map((m) => ({
+      url: m.url,
+      title: m.file_name || "Video",
+    }));
     const countryCode = p.country as string;
     const city = countryCode === "es" ? "Madrid" : "Santiago";
     const office = countryCode === "es" ? "Madrid" : "Santiago";
@@ -124,6 +138,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
       sqm: Number(p.square_meters ?? 0),
       cover,
       gallery,
+      videos: videos.length > 0 ? videos : undefined,
       description: (p.description as string | null) ?? "",
       features: [
         ...((p.features as string[]) ?? []),
@@ -156,25 +171,7 @@ export default async function PropertyDetail({ params }: Props) {
 
   return (
     <div>
-      {/* GALLERY */}
-      <section className="bg-cream-deep">
-        <div className="container-luxe py-6 grid md:grid-cols-3 gap-2 h-[70vh]">
-          <div className="md:col-span-2 relative overflow-hidden">
-            <img src={p.cover} alt={p.title} className="h-full w-full object-cover" />
-            <button className="absolute bottom-6 left-6 bg-cream/95 text-navy px-5 py-2 text-[11px] tracking-[0.24em] uppercase">↗ Ver galería</button>
-          </div>
-          <div className="hidden md:grid grid-rows-2 gap-2">
-            {p.gallery.slice(0, 2).map((img, i) => (
-              <div key={i} className="overflow-hidden relative">
-                <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
-                {i === 1 && p.gallery.length > 2 && (
-                  <span className="absolute bottom-4 right-4 bg-navy/80 text-cream px-3 py-1 text-[11px] tracking-wider uppercase">+{p.gallery.length - 2} fotos</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <PropertyGallery cover={p.cover} gallery={p.gallery} title={p.title} />
 
       <div className="container-luxe py-16 grid lg:grid-cols-[1fr_380px] gap-16">
         <article>
@@ -228,15 +225,25 @@ export default async function PropertyDetail({ params }: Props) {
             </ul>
           </section>
 
+          {p.videos && p.videos.length > 0 && (
+            <PropertyVideos videos={p.videos} />
+          )}
+
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>
-            <div className="mt-6 aspect-[16/7] bg-cream-deep border border-stone-200 flex items-center justify-center">
+            <a
+              href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(p.address + ", " + p.city + ", " + p.country)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 block aspect-[16/7] rounded-lg overflow-hidden border border-stone-200 bg-gradient-to-br from-cream-deep to-stone-100 flex items-center justify-center hover:from-stone-100 hover:to-cream-deep transition-colors"
+            >
               <div className="text-center">
-                <MapPin size={28} className="text-gold mx-auto" />
-                <p className="mt-3 text-navy font-display text-xl">{p.address}</p>
-                <p className="text-sm text-gray-500">{p.city}, {p.country}</p>
+                <MapPin size={32} className="text-gold mx-auto" />
+                <p className="mt-4 text-navy font-display text-lg font-semibold">{p.address}</p>
+                <p className="text-sm text-gray-500 mt-1">{p.city}, {p.country}</p>
+                <p className="text-[11px] text-gold mt-3 tracking-wide uppercase">Ver en OpenStreetMap →</p>
               </div>
-            </div>
+            </a>
           </section>
         </article>
 

@@ -411,7 +411,7 @@ export function PropertyEditView({
         </div>
       </header>
 
-      {/* Acciones rápidas: ver como cliente / copiar SmartLink / descargar PDF */}
+      {/* Acciones rápidas: ver como cliente / ver en web / copiar SmartLink / descargar PDF */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <a
           href={`/compartir/${property.slug}`}
@@ -421,6 +421,15 @@ export function PropertyEditView({
         >
           <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
           <span>{t("adminProps.detail.viewAsClient")}</span>
+        </a>
+        <a
+          href={`/web/propiedades/${property.slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+        >
+          <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
+          <span>Ver en web pública</span>
         </a>
         <button
           type="button"

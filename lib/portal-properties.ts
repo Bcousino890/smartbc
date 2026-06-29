@@ -16,6 +16,7 @@ export type Property = {
   cert?: string;
   cover: string;
   gallery: string[];
+  videos?: Array<{ url: string; title: string }>;
   description: string;
   features: string[];
   address: string;
