@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Car, Train, Bus } from "lucide-react";
+import { Car, Train, Bike, Footprints, Search, ArrowUpRight } from "lucide-react";
 import dynamic from "next/dynamic";
-import L from "leaflet";
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapContainer = dynamic(() => import("react-leaflet").then(m => m.MapContainer), { ssr: false });
@@ -23,9 +22,10 @@ interface University {
 }
 
 interface TransportTime {
-  type: "car" | "metro" | "bus";
+  type: "car" | "metro" | "bike" | "walk";
   minutes: number;
   icon: React.ElementType;
+  label: string;
 }
 
 // Universidades principales en Madrid
@@ -76,47 +76,35 @@ const UNIVERSITIES_SANTIAGO: University[] = [
   { id: "unab-peñalolén", name: "Universidad Andrés Bello - Peñalolén", shortName: "UNAB-PE", city: "Santiago", lat: -33.3904, lng: -70.5610 },
   { id: "uc-oriente", name: "Universidad Católica - Campus Oriente", shortName: "UC-Oriente", city: "Santiago", lat: -33.4100, lng: -70.5500 },
   { id: "uchile-norte", name: "Universidad de Chile - Campus Juan Gómez Millas", shortName: "UChile-Norte", city: "Santiago", lat: -33.4575, lng: -70.6671 },
-  { id: "udec", name: "Universidad de Concepción", shortName: "UDec", city: "Santiago", lat: -33.4600, lng: -70.6900 },
 ];
 
 // Mock data de tiempos de transporte
 const getTransportTimes = (university: University): TransportTime[] => {
   const timeMap: Record<string, TransportTime[]> = {
     uam: [
-      { type: "car", minutes: 25, icon: Car },
-      { type: "metro", minutes: 38, icon: Train },
-      { type: "bus", minutes: 49, icon: Bus },
+      { type: "car", minutes: 25, icon: Car, label: "EN COCHE" },
+      { type: "metro", minutes: 38, icon: Train, label: "TRANSPORTE PÚBLICO" },
+      { type: "bike", minutes: 45, icon: Bike, label: "BICICLETA" },
+      { type: "walk", minutes: 60, icon: Footprints, label: "A PIE" },
     ],
     ucm: [
-      { type: "car", minutes: 20, icon: Car },
-      { type: "metro", minutes: 32, icon: Train },
-      { type: "bus", minutes: 41, icon: Bus },
-    ],
-    upm: [
-      { type: "car", minutes: 22, icon: Car },
-      { type: "metro", minutes: 35, icon: Train },
-      { type: "bus", minutes: 44, icon: Bus },
-    ],
-    uc3m: [
-      { type: "car", minutes: 18, icon: Car },
-      { type: "metro", minutes: 28, icon: Train },
-      { type: "bus", minutes: 38, icon: Bus },
-    ],
-    upcomillas: [
-      { type: "car", minutes: 21, icon: Car },
-      { type: "metro", minutes: 33, icon: Train },
-      { type: "bus", minutes: 45, icon: Bus },
+      { type: "car", minutes: 20, icon: Car, label: "EN COCHE" },
+      { type: "metro", minutes: 32, icon: Train, label: "TRANSPORTE PÚBLICO" },
+      { type: "bike", minutes: 40, icon: Bike, label: "BICICLETA" },
+      { type: "walk", minutes: 50, icon: Footprints, label: "A PIE" },
     ],
     uc: [
-      { type: "car", minutes: 18, icon: Car },
-      { type: "metro", minutes: 25, icon: Train },
-      { type: "bus", minutes: 32, icon: Bus },
+      { type: "car", minutes: 18, icon: Car, label: "EN COCHE" },
+      { type: "metro", minutes: 25, icon: Train, label: "TRANSPORTE PÚBLICO" },
+      { type: "bike", minutes: 35, icon: Bike, label: "BICICLETA" },
+      { type: "walk", minutes: 45, icon: Footprints, label: "A PIE" },
     ],
   };
   return timeMap[university.id] || [
-    { type: "car", minutes: 25, icon: Car },
-    { type: "metro", minutes: 35, icon: Train },
-    { type: "bus", minutes: 45, icon: Bus },
+    { type: "car", minutes: 25, icon: Car, label: "EN COCHE" },
+    { type: "metro", minutes: 35, icon: Train, label: "TRANSPORTE PÚBLICO" },
+    { type: "bike", minutes: 45, icon: Bike, label: "BICICLETA" },
+    { type: "walk", minutes: 60, icon: Footprints, label: "A PIE" },
   ];
 };
 
@@ -129,12 +117,18 @@ const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
 export function CampusDistance({ city, address }: { city: string; address: string }) {
   const universities = city === "Santiago" ? UNIVERSITIES_SANTIAGO : UNIVERSITIES_MADRID;
   const [selected, setSelected] = useState<University>(universities[0]);
+  const [searchTerm, setSearchTerm] = useState("");
   const times = getTransportTimes(selected);
 
-  // Approximate property location (city center for now)
   const propertyCoords = CITY_CENTERS[city] || { lat: 40.4168, lng: -3.7038 };
 
-  // Calculate bounds to fit both markers with some padding
+  const filteredUniversities = useMemo(() => {
+    return universities.filter(uni =>
+      uni.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      uni.shortName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [searchTerm, universities]);
+
   const bounds = useMemo(() => {
     const lats = [propertyCoords.lat, selected.lat];
     const lngs = [propertyCoords.lng, selected.lng];
@@ -155,101 +149,108 @@ export function CampusDistance({ city, address }: { city: string; address: strin
     <section className="mt-16">
       <h2 className="font-display text-3xl text-navy mb-8">Distancia al campus</h2>
 
-      <div className="grid lg:grid-cols-2 gap-12">
-        {/* Selector de universidad y mapa */}
-        <div>
-          <label className="text-[11px] tracking-[0.24em] uppercase text-gray-400 block mb-4">
-            Selecciona tu universidad
-          </label>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-8">
-            {universities.map((uni) => (
+      {/* Search and Filter Section */}
+      <div className="mb-8 space-y-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Busca tu universidad o selecciona..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 border border-stone-200 rounded-lg bg-white text-sm focus:outline-none focus:border-gold"
+          />
+        </div>
+
+        {/* University Logos/Tags */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <span className="text-[11px] tracking-[0.24em] uppercase text-gray-400">Universidades:</span>
+          <div className="flex flex-wrap gap-2">
+            {universities.slice(0, 6).map((uni) => (
               <button
                 key={uni.id}
                 onClick={() => setSelected(uni)}
-                className={`p-2 rounded-lg border-2 transition-all text-center text-xs ${
+                className={`px-3 py-2 text-xs rounded-lg border transition-all ${
                   selected.id === uni.id
                     ? "border-gold bg-gold/10 text-navy font-semibold"
-                    : "border-stone-200 bg-white text-navy/70 hover:border-gold hover:text-navy"
+                    : "border-stone-200 bg-white text-navy/70 hover:border-gold"
                 }`}
-                title={uni.name}
               >
-                <p className="text-[11px] font-display leading-tight">{uni.shortName}</p>
+                {uni.shortName}
               </button>
             ))}
-          </div>
-
-          {/* Mapa Interactivo Leaflet */}
-          <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm" style={{ height: "400px" }}>
-            <MapContainer bounds={bounds} style={{ height: "100%", width: "100%" }}>
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              {/* Marcador de propiedad */}
-              <Marker position={[propertyCoords.lat, propertyCoords.lng]}>
-                <Popup>📍 Propiedad: {address}</Popup>
-              </Marker>
-
-              {/* Círculo de área referencial alrededor de la propiedad */}
-              <Circle
-                center={[propertyCoords.lat, propertyCoords.lng]}
-                radius={500}
-                pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.3, fill: true, fillOpacity: 0.1 }}
-              />
-
-              {/* Marcador de universidad */}
-              <Marker position={[selected.lat, selected.lng]}>
-                <Popup>🎓 {selected.name}</Popup>
-              </Marker>
-
-              {/* Línea de ruta */}
-              <Polyline
-                positions={[[propertyCoords.lat, propertyCoords.lng], [selected.lat, selected.lng]]}
-                pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.7, dashArray: "5, 5" }}
-              />
-            </MapContainer>
-          </div>
-
-          <div className="mt-4 flex justify-center">
-            <a
-              href={mapsDirectionsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] tracking-[0.24em] uppercase text-gold hover:text-navy transition-colors"
-            >
-              Ver ruta detallada en Google Maps →
-            </a>
-          </div>
-        </div>
-
-        {/* Tiempos de transporte */}
-        <div>
-          <p className="text-[11px] tracking-[0.24em] uppercase text-gray-400 mb-4">
-            Tiempos aproximados desde {address.split(",")[0]}
-          </p>
-          <div className="space-y-4">
-            {times.map((time) => {
-              const Icon = time.icon;
-              return (
-                <div key={time.type} className="flex items-center gap-6 p-5 rounded-lg border border-stone-200 bg-white hover:border-gold hover:bg-gold/2 transition-colors">
-                  <Icon size={24} className="text-gold flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-[10px] tracking-[0.18em] uppercase text-gray-400">
-                      {time.type === "car" && "EN COCHE"}
-                      {time.type === "metro" && "EN METRO"}
-                      {time.type === "bus" && "EN AUTOBÚS"}
-                    </p>
-                    <p className="font-display text-3xl text-navy mt-1">{time.minutes}</p>
-                    <p className="text-xs text-gray-400">minutos</p>
-                  </div>
-                </div>
-              );
-            })}
+            {universities.length > 6 && (
+              <button className="px-3 py-2 text-xs text-gold border border-gold/40 rounded-lg hover:bg-gold/5">
+                +{universities.length - 6} más
+              </button>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Map Section */}
+      <div className="rounded-lg overflow-hidden border border-stone-200 shadow-sm mb-8" style={{ height: "450px" }}>
+        <MapContainer bounds={bounds} style={{ height: "100%", width: "100%" }}>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          {/* Marcador de propiedad */}
+          <Marker position={[propertyCoords.lat, propertyCoords.lng]}>
+            <Popup>📍 Propiedad: {address}</Popup>
+          </Marker>
+
+          {/* Círculo de área referencial */}
+          <Circle
+            center={[propertyCoords.lat, propertyCoords.lng]}
+            radius={500}
+            pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.3, fill: true, fillOpacity: 0.1 }}
+          />
+
+          {/* Marcador de universidad */}
+          <Marker position={[selected.lat, selected.lng]}>
+            <Popup>🎓 {selected.name}</Popup>
+          </Marker>
+
+          {/* Línea de ruta */}
+          <Polyline
+            positions={[[propertyCoords.lat, propertyCoords.lng], [selected.lat, selected.lng]]}
+            pathOptions={{ color: "#c9a96e", weight: 2, opacity: 0.7, dashArray: "5, 5" }}
+          />
+        </MapContainer>
+      </div>
+
+      {/* Transport Times - Horizontal Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        {times.map((time) => {
+          const Icon = time.icon;
+          return (
+            <div key={time.type} className="p-4 rounded-lg border border-stone-200 bg-white hover:border-gold transition-colors text-center">
+              <Icon size={24} className="text-gold mx-auto mb-3" />
+              <p className="text-[10px] tracking-[0.18em] uppercase text-gray-400 mb-2">
+                {time.label}
+              </p>
+              <p className="font-display text-3xl text-navy">{time.minutes}</p>
+              <p className="text-xs text-gray-400">min</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Show Route Button */}
+      <div className="flex justify-end">
+        <a
+          href={mapsDirectionsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 bg-navy text-cream px-6 py-3 text-[11px] tracking-[0.28em] uppercase hover:bg-gold hover:text-navy transition-colors rounded-lg font-semibold"
+        >
+          Show Route <ArrowUpRight size={16} />
+        </a>
+      </div>
+
+      {/* Info Note */}
       <div className="mt-8 p-4 rounded-lg border border-stone-200 bg-cream-deep">
         <p className="text-xs text-gray-500">
           <span className="font-semibold text-navy">Nota:</span> Los tiempos son aproximados basados en horario de tráfico normal.
