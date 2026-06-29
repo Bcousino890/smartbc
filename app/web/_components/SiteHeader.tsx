@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
-import Image from "next/image";
 
 const nav = [
   { href: "/web/propiedades", label: "Propiedades" },
@@ -25,14 +24,11 @@ export function SiteHeader() {
       } border-b border-stone-200/60`}
     >
       <div className="container-luxe flex items-center justify-between py-5">
-        <Link href="/web" className="flex items-center group" aria-label="Benjamín Cousiño Propiedades">
-          <Image
-            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-95tcTe8Vt_wgWSKXwGn4c_c2XQNeyocXDn23RV2eaA&s"
-            alt="Benjamín Cousiño Propiedades"
-            width={40}
-            height={40}
-            className="object-contain"
-          />
+        <Link href="/web" className="flex items-center gap-1 group" aria-label="Benjamín Cousiño Propiedades">
+          <div className="flex flex-col leading-tight">
+            <span className="font-display text-[13px] tracking-[0.12em] text-navy font-semibold">BENJAMIN COUSIÑO</span>
+            <span className="text-[9px] tracking-[0.14em] uppercase text-navy/60 font-sans">Propiedades</span>
+          </div>
         </Link>
 
         <nav className="hidden lg:flex items-center gap-10">
