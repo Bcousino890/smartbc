@@ -35,7 +35,7 @@ export async function POST(req: Request) {
         username,
         password,
         updated_at: new Date().toISOString(),
-      });
+      }).eq("id", existing.id);
     } else {
       await db.from("idealista_config").insert({
         username,
