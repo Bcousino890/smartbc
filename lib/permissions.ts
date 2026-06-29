@@ -6,16 +6,20 @@
  *   - app/api/admin/usuarios/[id]/permissions/route.ts (RESOURCES / ACTIONS)
  *   - La UI de gestión de permisos (components/admin/permissions/**)
  *
- * Recursos: properties | particulares | clientes | solicitudes | mensajes |
- *           reportes | usuarios | configuracion | calendario
+ * Recursos: properties | particulares | publicacion | captaciones | clientes |
+ *           solicitudes | documentacion | mensajes | reportes | usuarios |
+ *           configuracion | calendario
  * Acciones: view | create | edit | delete | export
  */
 
 export type PermissionResource =
   | "properties"
   | "particulares"
+  | "publicacion"
+  | "captaciones"
   | "clientes"
   | "solicitudes"
+  | "documentacion"
   | "mensajes"
   | "reportes"
   | "usuarios"
@@ -31,8 +35,11 @@ type PermissionMatrix = Record<PermissionResource, Record<PermissionAction, bool
 export const PERMISSION_RESOURCES: readonly PermissionResource[] = [
   "properties",
   "particulares",
+  "publicacion",
+  "captaciones",
   "clientes",
   "solicitudes",
+  "documentacion",
   "mensajes",
   "reportes",
   "usuarios",
@@ -53,8 +60,11 @@ export const PERMISSION_ACTIONS: readonly PermissionAction[] = [
 export const RESOURCE_LABELS: Record<PermissionResource, string> = {
   properties:    "Propiedades",
   particulares:  "Particulares",
+  publicacion:   "Publicación",
+  captaciones:   "Captaciones",
   clientes:      "Clientes",
   solicitudes:   "Solicitudes y visitas",
+  documentacion: "Documentación",
   mensajes:      "Mensajes",
   reportes:      "Reportes",
   usuarios:      "Usuarios",
@@ -65,8 +75,11 @@ export const RESOURCE_LABELS: Record<PermissionResource, string> = {
 export const RESOURCE_DESCRIPTIONS: Record<PermissionResource, string> = {
   properties:    "Cartera de propiedades de la agencia.",
   particulares:  "Captaciones y anuncios de particulares.",
+  publicacion:   "Publicación de propiedades en portales.",
+  captaciones:   "Gestión de captaciones inmobiliarias.",
   clientes:      "Base de datos de clientes y leads.",
   solicitudes:   "Solicitudes de información y visitas.",
+  documentacion: "Documentos y archivos de propiedades.",
   mensajes:      "Bandeja de mensajes y conversaciones.",
   reportes:      "Informes y métricas del negocio.",
   usuarios:      "Equipo interno y gestión de cuentas.",
@@ -95,8 +108,11 @@ export const ACTION_DESCRIPTIONS: Record<PermissionAction, string> = {
 const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true,  create: false, edit: false, delete: false, export: false },
   particulares:  { view: true,  create: false, edit: false, delete: false, export: false },
+  publicacion:   { view: true,  create: false, edit: false, delete: false, export: false },
+  captaciones:   { view: true,  create: false, edit: false, delete: false, export: false },
   clientes:      { view: true,  create: false, edit: false, delete: false, export: false },
   solicitudes:   { view: true,  create: false, edit: false, delete: false, export: false },
+  documentacion: { view: true,  create: false, edit: false, delete: false, export: false },
   mensajes:      { view: true,  create: false, edit: false, delete: false, export: false },
   reportes:      { view: false, create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
@@ -107,8 +123,11 @@ const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
 const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true,  create: true,  edit: true,  delete: false, export: true  },
   particulares:  { view: true,  create: true,  edit: true,  delete: false, export: false },
+  publicacion:   { view: true,  create: true,  edit: true,  delete: false, export: false },
+  captaciones:   { view: true,  create: true,  edit: true,  delete: false, export: false },
   clientes:      { view: true,  create: true,  edit: true,  delete: false, export: false },
   solicitudes:   { view: true,  create: true,  edit: true,  delete: false, export: false },
+  documentacion: { view: true,  create: true,  edit: true,  delete: false, export: false },
   mensajes:      { view: true,  create: true,  edit: false, delete: false, export: false },
   reportes:      { view: true,  create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
@@ -119,8 +138,11 @@ const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
 const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true, create: true,  edit: true, delete: true,  export: true  },
   particulares:  { view: true, create: true,  edit: true, delete: true,  export: true  },
+  publicacion:   { view: true, create: true,  edit: true, delete: true,  export: true  },
+  captaciones:   { view: true, create: true,  edit: true, delete: true,  export: true  },
   clientes:      { view: true, create: true,  edit: true, delete: true,  export: true  },
   solicitudes:   { view: true, create: true,  edit: true, delete: true,  export: true  },
+  documentacion: { view: true, create: true,  edit: true, delete: true,  export: true  },
   mensajes:      { view: true, create: true,  edit: true, delete: false, export: false },
   reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
   usuarios:      { view: true, create: true,  edit: true, delete: false, export: false },
@@ -132,8 +154,11 @@ const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
 const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true, create: true, edit: true, delete: true, export: true },
   particulares:  { view: true, create: true, edit: true, delete: true, export: true },
+  publicacion:   { view: true, create: true, edit: true, delete: true, export: true },
+  captaciones:   { view: true, create: true, edit: true, delete: true, export: true },
   clientes:      { view: true, create: true, edit: true, delete: true, export: true },
   solicitudes:   { view: true, create: true, edit: true, delete: true, export: true },
+  documentacion: { view: true, create: true, edit: true, delete: true, export: true },
   mensajes:      { view: true, create: true, edit: true, delete: true, export: true },
   reportes:      { view: true, create: true, edit: true, delete: true, export: true },
   usuarios:      { view: true, create: true, edit: true, delete: true, export: true },
@@ -145,8 +170,11 @@ const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
 const ADVISOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true, create: true,  edit: true,  delete: true,  export: true  },
   particulares:  { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  publicacion:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  captaciones:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
   clientes:      { view: true, create: true,  edit: true,  delete: true,  export: true  },
   solicitudes:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  documentacion: { view: true, create: true,  edit: true,  delete: true,  export: true  },
   mensajes:      { view: true, create: true,  edit: true,  delete: false, export: false },
   reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
   usuarios:      { view: true, create: false, edit: false, delete: false, export: false },
@@ -158,8 +186,11 @@ const ADVISOR_PERMISSIONS: PermissionMatrix = {
 const NO_ACCESS_PERMISSIONS: PermissionMatrix = {
   properties:    { view: false, create: false, edit: false, delete: false, export: false },
   particulares:  { view: false, create: false, edit: false, delete: false, export: false },
+  publicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  captaciones:   { view: false, create: false, edit: false, delete: false, export: false },
   clientes:      { view: false, create: false, edit: false, delete: false, export: false },
   solicitudes:   { view: false, create: false, edit: false, delete: false, export: false },
+  documentacion: { view: false, create: false, edit: false, delete: false, export: false },
   mensajes:      { view: false, create: false, edit: false, delete: false, export: false },
   reportes:      { view: false, create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
