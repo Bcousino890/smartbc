@@ -27,6 +27,13 @@ export async function POST(
       return NextResponse.json({ error: "Not assigned to you" }, { status: 403 });
     }
 
+    // Obtener info de la captacion para notificaciones
+    const { data: captacion } = await db
+      .from("captaciones")
+      .select("created_by, title")
+      .eq("id", id)
+      .single();
+
     const { data, error } = await db
       .from("captacion_logs")
       .insert({
@@ -45,6 +52,37 @@ export async function POST(
       .single();
 
     if (error) throw error;
+
+    // Actualizar last_contact_attempt_at en la captacion
+    await db
+      .from("captaciones")
+      .update({
+        last_contact_attempt_at: new Date().toISOString(),
+        status: "contacting",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    // Notificar al agente del intento de contacto
+    if (captacion?.created_by) {
+      const propertyTitle = captacion.title || "Captación";
+      const resultLabel = getResultLabel(body.result);
+      const attemptTypeLabel = getAttemptTypeLabel(body.attempt_type);
+
+      await db.from("crm_notifications").insert({
+        user_id: captacion.created_by,
+        type: "captacion_contact_attempt",
+        title: `${attemptTypeLabel}: ${resultLabel}`,
+        body: `${profile.full_name || "Captadora"} contactó sobre ${propertyTitle} - ${resultLabel}`,
+        link: `/cl/admin/captaciones/${id}`,
+        data: {
+          captacion_id: id,
+          attempt_type: body.attempt_type,
+          result: body.result,
+        },
+      });
+    }
+
     return NextResponse.json(data);
   } catch (err) {
     console.error("[captaciones log]", err);
@@ -53,4 +91,27 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+function getAttemptTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    call: "Llamada",
+    visit: "Visita",
+    message: "Mensaje",
+    whatsapp: "WhatsApp",
+  };
+  return labels[type] || type;
+}
+
+function getResultLabel(result: string): string {
+  const labels: Record<string, string> = {
+    answered: "Respondió",
+    no_answer: "No respondió",
+    interested: "Interesado",
+    not_interested: "No interesado",
+    call_back: "Llamar después",
+    wrong_number: "Número incorrecto",
+    busy: "Ocupado",
+  };
+  return labels[result] || result;
 }

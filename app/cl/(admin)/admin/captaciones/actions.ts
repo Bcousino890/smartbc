@@ -29,10 +29,12 @@ export type Captacion = {
   owner_confirmed: boolean;
   assigned_to: string | null;
   assigned_at: string | null;
-  status: "pending" | "completed" | "converted_to_property" | "rejected";
+  status: "draft" | "assigned" | "preliminary_data" | "contacting" | "revision" | "confirmed" | "converted_to_property" | "rejected";
   scrape_status: "pending" | "scraped" | "failed" | "not_available" | null;
   scrape_error: string | null;
   notes: string | null;
+  revision_notes: string | null;
+  last_contact_attempt_at: string | null;
   updated_at: string;
 };
 
@@ -147,4 +149,43 @@ export async function updateCaptacionData(id: string, updates: {
 
   if (error) throw error;
   return data as Captacion;
+}
+
+export async function getCaptacionesPendingAssignment() {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("captaciones")
+    .select("*")
+    .eq("status", "draft")
+    .eq("country", "cl")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data as Captacion[];
+}
+
+export async function getCaptacionesConfirmed() {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("captaciones")
+    .select("*")
+    .eq("status", "confirmed")
+    .eq("country", "cl")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return data as Captacion[];
+}
+
+export async function getCaptacionesByStatus(status: string) {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("captaciones")
+    .select("*")
+    .eq("status", status)
+    .eq("country", "cl")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return data as Captacion[];
 }
