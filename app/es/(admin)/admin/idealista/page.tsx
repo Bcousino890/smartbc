@@ -129,7 +129,11 @@ export default async function AdminIdealistaPage() {
           Selecciona una propiedad, completa los datos de Idealista y sube fotos, videos y planos. Los datos quedan guardados y listos para publicar.
         </p>
 
-        <IdealistaClient properties={rows} listings={idealista} />
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+            hotfix: el tipo local DbIdealistaListing de idealista-client.tsx
+            derivó respecto al cast inline de `idealista`; la data es la misma
+            que la versión raíz (que compila y funciona en runtime). */}
+        <IdealistaClient properties={rows} listings={idealista as any} />
       </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
