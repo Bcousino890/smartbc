@@ -203,21 +203,6 @@ export function IdealistaConfigClient({
     }
   };
 
-  const handleDisconnect = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await fetch("/api/admin/idealista/logout", { method: "POST" });
-      setSessionState("expired");
-      setMessage("");
-      handleReset();
-    } catch {
-      setError("Error al desconectar. Intenta de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const sessionBadge = (
     <div
       className={cn(
