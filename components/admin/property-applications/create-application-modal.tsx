@@ -10,7 +10,6 @@ import {
   User,
   Home,
   Building2,
-  UserPlus,
   Mail,
   Phone,
   Copy,
@@ -95,14 +94,15 @@ function CopyButton({ text }: { text: string }) {
 export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const [step, setStep] = useState<Step>("client");
 
-  // Step 1: client
-  const [clientMode, setClientMode] = useState<"search" | "new">("search");
+  // Step 1: client search
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientResult[]>([]);
   const [clientLoading, setClientLoading] = useState(false);
+  const [clientSearched, setClientSearched] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClientResult | null>(null);
 
-  // New client form
+  // Inline create form
+  const [showInlineCreate, setShowInlineCreate] = useState(false);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -133,6 +133,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
     if (clientSearchTimeout.current) clearTimeout(clientSearchTimeout.current);
     if (!clientQuery.trim()) {
       setClientResults([]);
+      setClientSearched(false);
       return;
     }
     clientSearchTimeout.current = setTimeout(async () => {
@@ -141,6 +142,8 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
         const res = await fetch(`/api/admin/clientes/search?q=${encodeURIComponent(clientQuery)}`);
         const json = await res.json();
         setClientResults(json.data ?? []);
+        setClientSearched(true);
+        setShowInlineCreate(false);
       } finally {
         setClientLoading(false);
       }
@@ -166,6 +169,16 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
       }
     }, 300);
   }, [propertyQuery]);
+
+  function openInlineCreate(role: "client" | "owner") {
+    setNewRole(role);
+    setNewEmail(clientQuery.includes("@") ? clientQuery : "");
+    setNewFirstName("");
+    setNewLastName("");
+    setNewPhone("");
+    setShowInlineCreate(true);
+    setError(null);
+  }
 
   async function handleCreateNewUser() {
     if (!newEmail || !newFirstName) {
@@ -229,9 +242,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
         return;
       }
       setStep("success");
-      setTimeout(() => {
-        onCreated();
-      }, 1800);
+      setTimeout(() => { onCreated(); }, 1800);
     } catch {
       setError("Error de conexión");
     } finally {
@@ -239,12 +250,10 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
     }
   }
 
-  const stepLabel = step === "client"
-    ? "Paso 1 de 2 — Selecciona o crea el cliente"
-    : step === "credentials"
-    ? "Acceso creado — Guarda las credenciales"
-    : step === "details"
-    ? "Paso 2 de 2 — Detalles de la solicitud"
+  const stepLabel =
+    step === "client" ? "Paso 1 de 2 — Selecciona o crea el acceso"
+    : step === "credentials" ? "Acceso creado — Guarda las credenciales"
+    : step === "details" ? "Paso 2 de 2 — Detalles de la solicitud"
     : "";
 
   return (
@@ -256,10 +265,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
             <h2 className="font-serif text-lg text-ink">Nueva Solicitud de Documentación</h2>
             <p className="text-xs text-ink/50">{stepLabel}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-ink/40 transition hover:bg-ink/5 hover:text-ink"
-          >
+          <button onClick={onClose} className="rounded-lg p-1.5 text-ink/40 transition hover:bg-ink/5 hover:text-ink">
             <X size={18} />
           </button>
         </div>
@@ -267,7 +273,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
         {/* Body */}
         <div className="p-6">
 
-          {/* ── Step: success ── */}
+          {/* ── Success ── */}
           {step === "success" && (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 size={40} className="text-green-500" />
@@ -276,17 +282,16 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
             </div>
           )}
 
-          {/* ── Step: credentials ── */}
+          {/* ── Credentials ── */}
           {step === "credentials" && selectedClient && (
             <div className="space-y-4">
               <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                <p className="mb-2 text-xs font-semibold text-green-700">✓ Acceso creado correctamente</p>
+                <p className="mb-1 text-xs font-semibold text-green-700">✓ Acceso creado correctamente</p>
                 <p className="text-sm text-ink/70">Comparte estas credenciales con el usuario:</p>
               </div>
-
               <div className="space-y-2 rounded-xl border border-ink/10 bg-white p-4 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium text-ink/50 uppercase tracking-wide">Email</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-ink/50">Email</span>
                   <div className="flex items-center gap-1">
                     <span className="font-mono text-ink">{selectedClient.email}</span>
                     <CopyButton text={selectedClient.email} />
@@ -294,18 +299,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                 </div>
                 <div className="border-t border-ink/5" />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium text-ink/50 uppercase tracking-wide">Contraseña</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-ink/50">Contraseña</span>
                   <div className="flex items-center gap-1">
                     <span className="font-mono text-ink">{generatedPassword}</span>
                     <CopyButton text={generatedPassword ?? ""} />
                   </div>
                 </div>
               </div>
-
-              <p className="text-[11px] text-ink/40">
-                El usuario puede cambiar su contraseña desde el portal una vez que inicie sesión.
-              </p>
-
+              <p className="text-[11px] text-ink/40">El usuario puede cambiar su contraseña desde el portal una vez que inicie sesión.</p>
               <div className="flex justify-end">
                 <button
                   onClick={() => setStep("details")}
@@ -320,17 +321,8 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
           {/* ── Step 1: client ── */}
           {step === "client" && (
             <div className="space-y-4">
-              {/* Mode toggle */}
-              <Toggle
-                value={clientMode}
-                onChange={(v) => { setClientMode(v as "search" | "new"); setError(null); }}
-                options={[
-                  { value: "search", label: "Buscar cliente existente", icon: <Search size={12} /> },
-                  { value: "new", label: "Crear nuevo acceso", icon: <UserPlus size={12} /> },
-                ]}
-              />
-
-              {clientMode === "search" && (
+              {/* Search input */}
+              {!showInlineCreate && (
                 <div className="space-y-3">
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
@@ -339,7 +331,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                       type="text"
                       placeholder="Buscar cliente o propietario por nombre / email..."
                       value={clientQuery}
-                      onChange={(e) => setClientQuery(e.target.value)}
+                      onChange={(e) => { setClientQuery(e.target.value); setSelectedClient(null); }}
                       className="w-full rounded-xl border border-ink/15 bg-white/80 py-2.5 pl-9 pr-4 text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-1 focus:ring-gold"
                     />
                     {clientLoading && (
@@ -347,13 +339,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     )}
                   </div>
 
+                  {/* Results */}
                   {clientResults.length > 0 && (
                     <div className="max-h-52 overflow-y-auto rounded-xl border border-ink/10 bg-white shadow-sm">
                       {clientResults.map((c) => (
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => { setSelectedClient(c); setClientQuery(""); setClientResults([]); }}
+                          onClick={() => { setSelectedClient(c); setClientQuery(""); setClientResults([]); setClientSearched(false); }}
                           className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-cream-50/80"
                         >
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink/10 text-xs font-semibold text-ink/60">
@@ -374,6 +367,36 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     </div>
                   )}
 
+                  {/* No results → quick create buttons */}
+                  {clientSearched && !clientLoading && clientResults.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-ink/15 bg-white/50 p-4">
+                      <p className="mb-3 text-center text-xs text-ink/50">
+                        No se encontró ningún usuario con &quot;{clientQuery}&quot;
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openInlineCreate("client")}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                        >
+                          <Plus size={12} />
+                          <User size={12} />
+                          Crear cliente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openInlineCreate("owner")}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                        >
+                          <Plus size={12} />
+                          <Building2 size={12} />
+                          Crear propietario
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selected client pill */}
                   {selectedClient && (
                     <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-200 text-xs font-semibold text-green-800">
@@ -391,29 +414,44 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                 </div>
               )}
 
-              {clientMode === "new" && (
+              {/* Inline create form */}
+              {showInlineCreate && (
                 <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      newRole === "client" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                    )}>
+                      {newRole === "client" ? "Nuevo cliente" : "Nuevo propietario"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setShowInlineCreate(false); setError(null); }}
+                      className="text-xs text-ink/40 hover:text-ink"
+                    >
+                      ← Volver a buscar
+                    </button>
+                  </div>
+
                   <p className="text-xs text-ink/50">
-                    Se creará el acceso con contraseña generada automáticamente. Podrás verla y copiarla antes de continuar.
+                    Se generará una contraseña automáticamente. Podrás verla antes de continuar.
                   </p>
 
-                  {/* Role selector */}
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Tipo de acceso</label>
-                    <Toggle
-                      value={newRole}
-                      onChange={(v) => setNewRole(v as "client" | "owner")}
-                      options={[
-                        { value: "client", label: "Cliente (arrendatario/comprador)", icon: <User size={11} /> },
-                        { value: "owner", label: "Propietario (dueño)", icon: <Building2 size={11} /> },
-                      ]}
-                    />
-                  </div>
+                  {/* Role switch */}
+                  <Toggle
+                    value={newRole}
+                    onChange={(v) => setNewRole(v as "client" | "owner")}
+                    options={[
+                      { value: "client", label: "Cliente", icon: <User size={11} /> },
+                      { value: "owner", label: "Propietario", icon: <Building2 size={11} /> },
+                    ]}
+                  />
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="mb-1 block text-[11px] font-medium text-ink/60">Nombre *</label>
                       <input
+                        autoFocus
                         type="text"
                         value={newFirstName}
                         onChange={(e) => setNewFirstName(e.target.value)}
@@ -432,6 +470,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                       />
                     </div>
                   </div>
+
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-ink/60">Email *</label>
                     <div className="relative">
@@ -445,6 +484,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                       />
                     </div>
                   </div>
+
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-ink/60">Teléfono</label>
                     <div className="relative">
@@ -463,22 +503,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
               {error && <p className="text-xs text-red-600">{error}</p>}
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-1">
                 <button
                   onClick={onClose}
                   className="rounded-xl border border-ink/15 px-4 py-2 text-sm text-ink/60 transition hover:text-ink"
                 >
                   Cancelar
                 </button>
-                {clientMode === "search" ? (
-                  <button
-                    onClick={() => { setError(null); setStep("details"); }}
-                    disabled={!selectedClient}
-                    className="rounded-xl bg-ink px-4 py-2 text-sm text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
-                  >
-                    Continuar
-                  </button>
-                ) : (
+                {showInlineCreate ? (
                   <button
                     onClick={handleCreateNewUser}
                     disabled={creatingUser || !newEmail || !newFirstName}
@@ -486,6 +518,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   >
                     {creatingUser && <Loader2 size={13} className="animate-spin" />}
                     Crear acceso y ver contraseña
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setError(null); setStep("details"); }}
+                    disabled={!selectedClient}
+                    className="rounded-xl bg-ink px-4 py-2 text-sm text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
+                  >
+                    Continuar
                   </button>
                 )}
               </div>
