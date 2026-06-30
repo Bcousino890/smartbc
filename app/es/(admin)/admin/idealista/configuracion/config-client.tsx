@@ -2,6 +2,7 @@
 
 import {
   Check,
+  ClipboardPaste,
   KeyRound,
   Loader2,
   LogOut,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 type LoginStep = "credentials" | "sms" | "done";
 type SessionState = "unknown" | "active" | "expired";
+type ConnectMethod = "auto" | "cookies";
 
 export function IdealistaConfigClient({
   initialConfig,
@@ -25,6 +27,7 @@ export function IdealistaConfigClient({
     lastLoginAt: string | null;
   } | null;
 }) {
+  const [method, setMethod] = useState<ConnectMethod>("cookies");
   const [step, setStep] = useState<LoginStep>("credentials");
   const [sessionState, setSessionState] = useState<SessionState>("unknown");
 
@@ -33,6 +36,7 @@ export function IdealistaConfigClient({
   const [smsCode, setSmsCode] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [phoneMask, setPhoneMask] = useState("");
+  const [cookiesJson, setCookiesJson] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -60,6 +64,47 @@ export function IdealistaConfigClient({
   useEffect(() => {
     checkSession();
   }, [checkSession]);
+
+  const handleImportCookies = async () => {
+    if (!cookiesJson.trim()) {
+      setError("Pega el JSON de cookies primero");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      let parsed: unknown[];
+      try {
+        parsed = JSON.parse(cookiesJson);
+        if (!Array.isArray(parsed)) throw new Error("no es array");
+      } catch {
+        setError("JSON inválido. Asegúrate de copiar el array completo desde Cookie-Editor.");
+        return;
+      }
+
+      const res = await fetch("/api/admin/idealista/import-cookies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookies: parsed }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Error al importar cookies");
+        return;
+      }
+
+      setSessionState("active");
+      setStep("done");
+      setMessage(`✓ ${data.message}`);
+      setCookiesJson("");
+    } catch {
+      setError("Error de red. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleConnect = async () => {
     if (!username || !password) {
@@ -140,6 +185,7 @@ export function IdealistaConfigClient({
     setSessionId("");
     setPhoneMask("");
     setPassword("");
+    setCookiesJson("");
   };
 
   const handleDisconnect = async () => {
@@ -217,74 +263,145 @@ export function IdealistaConfigClient({
           </div>
         )}
 
-        {/* Step: Credentials */}
         {step === "credentials" && (
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
-                Email de Idealista
-              </label>
-              <input
-                type="email"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="andrea@bcousinoprop.com"
-                className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/30 focus:border-gold/55 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••"
-                className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/30 focus:border-gold/55 focus:outline-none"
-                onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-              />
-            </div>
-
-            <div className="flex gap-3">
+          <>
+            {/* Method tabs */}
+            <div className="mb-5 flex gap-1 rounded-xl bg-ink/5 p-1">
               <button
                 type="button"
-                onClick={handleConnect}
-                disabled={loading}
-                className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
-              >
-                {loading ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <KeyRound size={14} />
+                onClick={() => { setMethod("cookies"); setError(""); }}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition",
+                  method === "cookies"
+                    ? "bg-white text-ink shadow-sm"
+                    : "text-ink/50 hover:text-ink/70"
                 )}
-                Conectar con Idealista
+              >
+                <ClipboardPaste size={13} />
+                Importar cookies
+                <span className="rounded-full bg-gold/20 px-1.5 py-0.5 text-[10px] font-bold text-gold">
+                  Recomendado
+                </span>
               </button>
-
               <button
                 type="button"
-                onClick={checkSession}
-                disabled={loading}
-                className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5 disabled:opacity-50"
+                onClick={() => { setMethod("auto"); setError(""); }}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition",
+                  method === "auto"
+                    ? "bg-white text-ink shadow-sm"
+                    : "text-ink/50 hover:text-ink/70"
+                )}
               >
-                <RefreshCw size={14} />
-                Verificar sesión
+                <KeyRound size={13} />
+                Login automático
               </button>
-
-              {sessionState === "active" && (
-                <button
-                  type="button"
-                  onClick={handleDisconnect}
-                  disabled={loading}
-                  className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                >
-                  <LogOut size={14} />
-                  Desconectar
-                </button>
-              )}
             </div>
-          </div>
+
+            {/* Cookies method */}
+            {method === "cookies" && (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-amber-50 p-4 text-xs text-amber-800 space-y-1.5">
+                  <p className="font-semibold">Cómo exportar tus cookies (2 minutos):</p>
+                  <ol className="list-decimal list-inside space-y-1 text-amber-700/90">
+                    <li>En Chrome, abre <strong>idealista.com</strong> e inicia sesión normalmente</li>
+                    <li>Instala la extensión <strong>Cookie-Editor</strong> (gratuita, Chrome Web Store)</li>
+                    <li>Haz clic en el icono de la extensión → <strong>Export → Export as JSON</strong></li>
+                    <li>Copia todo el texto y pégalo abajo</li>
+                  </ol>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                    Pega el JSON de cookies aquí
+                  </label>
+                  <textarea
+                    value={cookiesJson}
+                    onChange={(e) => setCookiesJson(e.target.value)}
+                    placeholder={'[{"name":"sessionId","value":"abc123","domain":".idealista.com",...}]'}
+                    rows={5}
+                    className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 font-mono text-xs text-ink placeholder:text-ink/20 focus:border-gold/55 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleImportCookies}
+                    disabled={loading || !cookiesJson.trim()}
+                    className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : <ClipboardPaste size={14} />}
+                    Importar y conectar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={checkSession}
+                    disabled={loading}
+                    className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5 disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} />
+                    Verificar sesión
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Auto login method */}
+            {method === "auto" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                    Email de Idealista
+                  </label>
+                  <input
+                    type="email"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="portales@bcousinoprop.com"
+                    className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/30 focus:border-gold/55 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                    Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••"
+                    className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/30 focus:border-gold/55 focus:outline-none"
+                    onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleConnect}
+                    disabled={loading}
+                    className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                    Conectar con Idealista
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={checkSession}
+                    disabled={loading}
+                    className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5 disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} />
+                    Verificar sesión
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Step: SMS code */}
@@ -329,11 +446,7 @@ export function IdealistaConfigClient({
                 disabled={loading}
                 className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
               >
-                {loading ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Check size={14} />
-                )}
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 Verificar y conectar
               </button>
 
@@ -367,8 +480,8 @@ export function IdealistaConfigClient({
               onClick={handleReset}
               className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5"
             >
-              <KeyRound size={14} />
-              Cambiar cuenta
+              <ClipboardPaste size={14} />
+              Importar nuevas cookies
             </button>
 
             <button
@@ -391,16 +504,16 @@ export function IdealistaConfigClient({
         </h3>
         <ul className="space-y-2 text-sm text-ink/65">
           <li>
-            <strong className="text-ink/80">Conexión inicial:</strong> Ingresa el email y contraseña de tu cuenta Idealista. Se enviará un SMS al teléfono asociado.
+            <strong className="text-ink/80">Importar cookies:</strong> Inicia sesión en idealista.com desde tu navegador, exporta las cookies con Cookie-Editor y pégalas aquí. Duran semanas/meses.
           </li>
           <li>
-            <strong className="text-ink/80">Sesión guardada:</strong> Tras verificar el SMS, la sesión queda guardada en el servidor. No necesitarás volver a loguearte hasta que Idealista la expire (semanas/meses).
+            <strong className="text-ink/80">Sesión guardada:</strong> Las cookies quedan guardadas en el servidor del VPS. No necesitarás repetir el proceso hasta que Idealista las expire.
           </li>
           <li>
             <strong className="text-ink/80">Publicación automática:</strong> Desde la ficha de cada propiedad podrás publicarla en Idealista con un clic.
           </li>
           <li>
-            <strong className="text-ink/80">Sesión expirada:</strong> Si la sesión caduca, aparecerá un aviso. Solo tendrás que volver a conectar aquí.
+            <strong className="text-ink/80">Sesión expirada:</strong> Si la sesión caduca, aparecerá un aviso en rojo. Solo tendrás que volver a exportar e importar las cookies.
           </li>
         </ul>
       </div>

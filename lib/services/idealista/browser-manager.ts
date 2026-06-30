@@ -75,6 +75,12 @@ export async function saveCookies(context: BrowserContext): Promise<void> {
   }
 }
 
+export async function saveCookiesRaw(cookies: unknown[]): Promise<void> {
+  await mkdir(SESSION_DIR, { recursive: true });
+  await writeFile(COOKIES_PATH, JSON.stringify(cookies, null, 2), "utf-8");
+  console.log(`[Playwright] ${cookies.length} cookies imported and saved to ${COOKIES_PATH}`);
+}
+
 export async function loadCookies(context: BrowserContext): Promise<boolean> {
   try {
     const raw = await readFile(COOKIES_PATH, "utf-8");
