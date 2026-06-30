@@ -234,13 +234,13 @@ export function IdealistaClient({
     }
   };
 
-  const handlePublish = async (propertyId: string, listingId: string) => {
+  const handlePublish = async (listingId: string, propertyId?: string | null) => {
     setPublishingId(listingId);
     try {
       const res = await fetch("/api/admin/idealista/publish-property", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId }),
+        body: JSON.stringify(propertyId ? { propertyId } : { listingId }),
       });
       const data = await res.json();
       setPublishResults((prev) => ({
@@ -303,6 +303,12 @@ export function IdealistaClient({
           initialData={initialData}
           bcReference={!isInspo && !selectedListing ? (selectedProperty?.bc_reference ?? undefined) : undefined}
           onSave={handleSave}
+          onPublish={async (data) => {
+            // Save first, then publish
+            await handleSave(data);
+            const listingId = editingInspoId ?? selectedListing?.id;
+            await handlePublish(listingId ?? propertyId, !isInspo ? propertyId : null);
+          }}
         />
       </div>
     );
@@ -470,9 +476,9 @@ export function IdealistaClient({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    {!listing.is_inspo && listing.property_id && listing.idealista_state !== "published" && (
+                    {listing.idealista_state !== "published" && (
                       <button
-                        onClick={() => handlePublish(listing.property_id!, listing.id)}
+                        onClick={() => handlePublish(listing.id, listing.property_id)}
                         disabled={publishingId === listing.id}
                         className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
                         title="Publicar en Idealista ahora"

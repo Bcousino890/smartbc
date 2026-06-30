@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState, useEffect } from "react";
-import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Trash2, Video, RefreshCw, Calendar, Clock } from "lucide-react";
+import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
@@ -572,6 +572,7 @@ export function IdealistaForm({
   initialData,
   bcReference,
   onSave,
+  onPublish,
 }: {
   propertyId: string;
   propertyTitle?: string;
@@ -579,6 +580,7 @@ export function IdealistaForm({
   initialData?: Partial<IdealistaListing>;
   bcReference?: string;
   onSave: (data: IdealistaListing) => Promise<void>;
+  onPublish?: (data: IdealistaListing) => Promise<void>;
 }) {
   const [form, setForm] = useState<IdealistaListing>({
     ...DEFAULTS,
@@ -588,6 +590,7 @@ export function IdealistaForm({
     isInspo,
   });
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [showDescPreview, setShowDescPreview] = useState(false);
   const [generatingRef, setGeneratingRef] = useState(false);
   // Scheduling UI state
@@ -636,6 +639,16 @@ export function IdealistaForm({
       await onSave(form);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveAndPublish() {
+    if (!onPublish) return;
+    setPublishing(true);
+    try {
+      await onPublish(form);
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -1208,11 +1221,11 @@ export function IdealistaForm({
       </section>
 
       {/* ── Guardar ──────────────────────────────────────────────────────── */}
-      <div className="flex justify-end pt-2">
+      <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
         <button
           type="submit"
-          disabled={saving}
-          className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/85 disabled:opacity-50"
+          disabled={saving || publishing}
+          className="flex items-center gap-2 rounded-xl border border-ink/20 bg-white px-5 py-2.5 text-sm font-semibold text-ink transition hover:bg-ink/5 disabled:opacity-50"
         >
           <Save size={15} />
           {saving
@@ -1221,6 +1234,18 @@ export function IdealistaForm({
             ? "Guardar y programar"
             : "Guardar borrador"}
         </button>
+
+        {onPublish && (
+          <button
+            type="button"
+            onClick={handleSaveAndPublish}
+            disabled={saving || publishing}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {publishing ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            {publishing ? "Publicando en Idealista..." : "Publicar en Idealista"}
+          </button>
+        )}
       </div>
     </form>
   );

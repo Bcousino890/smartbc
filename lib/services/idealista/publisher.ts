@@ -29,6 +29,92 @@ interface PropertyData {
   photos?: Array<{ url: string; storagePath?: string }>;
 }
 
+// Publish an inspo listing (no linked property) directly from idealista_listings data
+export async function publishListingToIdealista(listingId: string): Promise<PublishResult> {
+  const db = createAdminClient();
+  try {
+    const { data: l } = await (db as any)
+      .from("idealista_listings")
+      .select("*")
+      .eq("id", listingId)
+      .single();
+
+    if (!l) {
+      return { success: false, propertyId: listingId, error: "Ficha no encontrada", attemptCount: 0 };
+    }
+
+    const property: PropertyData = {
+      id: l.id,
+      title: l.inspo_title ?? "Propiedad",
+      description: l.description ?? "",
+      price: l.price ?? 0,
+      bedrooms: l.bedrooms ?? 0,
+      bathrooms: l.bathrooms ?? 0,
+      squareMeters: l.square_meters ?? undefined,
+      address: [l.address_street, l.address_number, l.address_city].filter(Boolean).join(", "),
+      zone: l.address_city ?? undefined,
+      operation: "rent",
+      propertyType: l.property_type ?? "flat",
+      features: [],
+      photos: (l.photo_ids ?? []).map((url: string) => ({ url })),
+    };
+
+    const session = await createBrowserSession(true);
+    const { page } = session;
+
+    try {
+      await navigateToPage(page, NEW_LISTING_URL);
+      await page.waitForTimeout(2000);
+
+      if (page.url().includes("/login")) {
+        await updateListingState(listingId, "failed");
+        return { success: false, propertyId: listingId, error: "Sesión de Idealista expirada. Reconecta en Configuración.", attemptCount: 1 };
+      }
+
+      await fillPropertyType(page, property);
+      await page.waitForTimeout(1000);
+      await fillLocation(page, property);
+      await fillDescription(page, property);
+      await fillPublicationSettings(page);
+
+      const submitted = await submitForm(page);
+      if (!submitted) {
+        await updateListingState(listingId, "failed");
+        return { success: false, propertyId: listingId, error: "Error al enviar formulario", attemptCount: 1 };
+      }
+
+      await page.waitForTimeout(3000);
+      const idealistaId = extractIdealistaId(page.url());
+      await updateListingState(listingId, "published", idealistaId);
+
+      return { success: true, propertyId: listingId, idealistaPropertyId: idealistaId, attemptCount: 1 };
+    } finally {
+      await closeBrowserSession(session);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Publisher] publishListingToIdealista error:", msg);
+    await updateListingState(listingId, "failed");
+    return { success: false, propertyId: listingId, error: msg, attemptCount: 1 };
+  }
+}
+
+async function updateListingState(listingId: string, state: string, idealistaId?: string): Promise<void> {
+  const db = createAdminClient();
+  try {
+    await (db as any)
+      .from("idealista_listings")
+      .update({
+        idealista_state: state,
+        ...(idealistaId ? { idealista_property_id: idealistaId } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", listingId);
+  } catch (err) {
+    console.error("[Publisher] updateListingState error:", err);
+  }
+}
+
 export async function publishPropertyToIdealista(propertyId: string): Promise<PublishResult> {
   let attemptCount = 0;
 

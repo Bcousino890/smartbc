@@ -1,6 +1,6 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { publishPropertyToIdealista } from "@/lib/services/idealista/publisher";
+import { publishPropertyToIdealista, publishListingToIdealista } from "@/lib/services/idealista/publisher";
 
 export const maxDuration = 120; // Publishing can take up to 2 minutes
 
@@ -10,16 +10,17 @@ export async function POST(req: Request) {
   if (!["owner", "admin"].includes(profile.role)) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   try {
-    const { propertyId } = await req.json();
+    const { propertyId, listingId } = await req.json();
 
-    if (!propertyId) {
-      return Response.json({ error: "propertyId es requerido" }, { status: 400 });
+    if (!propertyId && !listingId) {
+      return Response.json({ error: "propertyId o listingId es requerido" }, { status: 400 });
     }
 
-    console.log(`[API] Publishing property ${propertyId} to Idealista...`);
+    console.log(`[API] Publishing ${listingId ? `listing ${listingId}` : `property ${propertyId}`} to Idealista...`);
 
-    // Run synchronously so we can return the actual result
-    const result = await publishPropertyToIdealista(propertyId);
+    const result = listingId
+      ? await publishListingToIdealista(listingId)
+      : await publishPropertyToIdealista(propertyId);
 
     if (result.success) {
       return Response.json({
