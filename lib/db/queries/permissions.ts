@@ -4,6 +4,9 @@ import {
   applyOverrides,
   type EffectivePermissions,
   type PermissionOverride,
+  canAccess,
+  getCaptacionEditableFields,
+  getCaptacionViewRestriction,
 } from "@/lib/permissions";
 
 /**
@@ -28,4 +31,29 @@ export async function getEffectivePermissions(
     // Sin overrides: solo defaults del rol.
   }
   return applyOverrides(role, overrides);
+}
+
+/**
+ * Verifica si un usuario puede acceder a un recurso/acción específico de captaciones,
+ * considerando su rol y permisos efectivos (incluyendo overrides).
+ */
+export async function canAccessCaptaciones(
+  userId: string,
+  role: string,
+  action: "view" | "create" | "edit" | "delete",
+): Promise<boolean> {
+  const effective = await getEffectivePermissions(userId, role);
+  return effective.captaciones?.[action] ?? false;
+}
+
+/**
+ * Retorna el nivel de granularidad de edición para captaciones según rol.
+ * Combina permisos base del rol con la especificación de campos editables.
+ */
+export function getCaptacionEditPermissions(role: string) {
+  return {
+    base: canAccess(role, "captaciones", "edit"),
+    fields: getCaptacionEditableFields(role),
+    viewRestriction: getCaptacionViewRestriction(role),
+  };
 }

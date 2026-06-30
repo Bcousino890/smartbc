@@ -109,7 +109,7 @@ const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true,  create: false, edit: false, delete: false, export: false },
   particulares:  { view: true,  create: false, edit: false, delete: false, export: false },
   publicacion:   { view: true,  create: false, edit: false, delete: false, export: false },
-  captaciones:   { view: true,  create: false, edit: false, delete: false, export: false },
+  captaciones:   { view: false, create: false, edit: false, delete: false, export: false },
   clientes:      { view: true,  create: false, edit: false, delete: false, export: false },
   solicitudes:   { view: true,  create: false, edit: false, delete: false, export: false },
   documentacion: { view: true,  create: false, edit: false, delete: false, export: false },
@@ -182,6 +182,22 @@ const ADVISOR_PERMISSIONS: PermissionMatrix = {
   calendario:    { view: true, create: true,  edit: true,  delete: true,  export: false },
 };
 
+// Rol "captadora" — operaria de captaciones (solo ve y edita asignadas a ella)
+const CAPTADORA_PERMISSIONS: PermissionMatrix = {
+  properties:    { view: false, create: false, edit: false, delete: false, export: false },
+  particulares:  { view: false, create: false, edit: false, delete: false, export: false },
+  publicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  captaciones:   { view: true,  create: false, edit: true,  delete: false, export: false },
+  clientes:      { view: false, create: false, edit: false, delete: false, export: false },
+  solicitudes:   { view: false, create: false, edit: false, delete: false, export: false },
+  documentacion: { view: false, create: false, edit: false, delete: false, export: false },
+  mensajes:      { view: false, create: false, edit: false, delete: false, export: false },
+  reportes:      { view: false, create: false, edit: false, delete: false, export: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  calendario:    { view: false, create: false, edit: false, delete: false, export: false },
+};
+
 // Sin acceso (client, viewer, roles desconocidos)
 const NO_ACCESS_PERMISSIONS: PermissionMatrix = {
   properties:    { view: false, create: false, edit: false, delete: false, export: false },
@@ -207,6 +223,7 @@ export const PERMISSIONS_BY_ROLE: Record<string, PermissionMatrix> = {
   agent_admin:   AGENT_ADMIN_PERMISSIONS,
   agent_senior:  AGENT_SENIOR_PERMISSIONS,
   agent_junior:  AGENT_JUNIOR_PERMISSIONS,
+  captadora:     CAPTADORA_PERMISSIONS,
   client:        NO_ACCESS_PERMISSIONS,
   viewer:        NO_ACCESS_PERMISSIONS,
 };
@@ -285,6 +302,91 @@ export const STAFF_ROLES = [
   "agent_admin",
   "captadora",
 ] as const;
+
+// ─── Granularidad de permisos para captaciones ──────────────────────────────────
+/**
+ * Especificación de qué campos puede editar cada rol en captaciones.
+ * Se aplica además de los permisos base (view, create, edit, delete).
+ */
+export type CaptacionEditableFields = {
+  canEditPropertyFields: boolean; // title, price, bedrooms, bathrooms, etc.
+  canEditOwnerFields: boolean;    // owner_phone, owner_name, owner_contact, address_real
+  canEditStatus: boolean;         // cambiar status manualmente
+  canAssignCaptadora: boolean;    // asignar a una captadora
+};
+
+/**
+ * Restricciones de visualización de captaciones por rol/contexto.
+ * Usado en queries para filtrar qué captaciones ve cada usuario.
+ */
+export type CaptacionViewRestriction =
+  | "all"           // Admin: ve todo
+  | "own_only"      // Agente: solo propias (created_by)
+  | "assigned_only" // Captadora: solo asignadas a ella
+  | "confirmed_and_own" // Agente senior: propias + confirmadas (para conversión);
+
+/**
+ * Retorna los campos editables para captaciones según rol.
+ */
+export function getCaptacionEditableFields(role: string): CaptacionEditableFields {
+  switch (role) {
+    case "admin":
+    case "owner":
+      return {
+        canEditPropertyFields: true,
+        canEditOwnerFields: true,
+        canEditStatus: true,
+        canAssignCaptadora: true,
+      };
+    case "agent_admin":
+      return {
+        canEditPropertyFields: true,
+        canEditOwnerFields: true,
+        canEditStatus: true,
+        canAssignCaptadora: true,
+      };
+    case "agent_senior":
+      return {
+        canEditPropertyFields: false, // Solo creador inicial puede editar estos
+        canEditOwnerFields: true,
+        canEditStatus: true,
+        canAssignCaptadora: false,
+      };
+    case "captadora":
+      return {
+        canEditPropertyFields: false,
+        canEditOwnerFields: true, // Solo datos del dueño
+        canEditStatus: false,
+        canAssignCaptadora: false,
+      };
+    default:
+      return {
+        canEditPropertyFields: false,
+        canEditOwnerFields: false,
+        canEditStatus: false,
+        canAssignCaptadora: false,
+      };
+  }
+}
+
+/**
+ * Retorna restricción de visualización según rol.
+ */
+export function getCaptacionViewRestriction(role: string): CaptacionViewRestriction {
+  switch (role) {
+    case "admin":
+    case "owner":
+    case "agent_admin":
+      return "all";
+    case "agent_senior":
+    case "agent_junior":
+      return "confirmed_and_own";
+    case "captadora":
+      return "assigned_only";
+    default:
+      return "assigned_only";
+  }
+}
 
 /** Comprueba si un rol es un rol de agente inmobiliario */
 export function isAgentRole(role: string): role is AgentRole {

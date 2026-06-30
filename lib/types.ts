@@ -563,3 +563,16 @@ export type Country = {
   nameEn: string;
   currencyCode: string;
 };
+
+// ============ CAPTACION TYPES ============
+
+export type CaptacionPropertyType = 'house' | 'apartment' | 'land' | 'office' | 'commercial' | 'other';
+
+export const CAPTACION_PROPERTY_TYPE_LABELS: Record<CaptacionPropertyType, string> = {
+  house: 'Casa',
+  apartment: 'Departamento',
+  land: 'Terreno',
+  office: 'Oficina',
+  commercial: 'Comercial',
+  other: 'Otro',
+};
