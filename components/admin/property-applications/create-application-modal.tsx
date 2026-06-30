@@ -547,10 +547,12 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   <div className="flex items-center gap-2 rounded-xl border border-ink/10 bg-white/60 px-4 py-2.5">
                     <Home size={14} className="shrink-0 text-ink/40" />
                     <div className="min-w-0">
-                      <p className="truncate text-sm text-ink">{selectedProperty.title}</p>
-                      {selectedProperty.bc_reference && (
-                        <p className="text-[11px] text-ink/40">{selectedProperty.bc_reference}</p>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm text-ink">{selectedProperty.title}</p>
+                        {selectedProperty.bc_reference && (
+                          <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{selectedProperty.bc_reference}</span>
+                        )}
+                      </div>
                     </div>
                     <button onClick={() => { setSelectedProperty(null); setPropertyQuery(""); }} className="ml-auto text-ink/30 hover:text-ink">
                       <X size={13} />
@@ -561,7 +563,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
                     <input
                       type="text"
-                      placeholder="Buscar por nombre, ref o dirección..."
+                      placeholder="Buscar por nombre, cód. referencia o dirección..."
                       value={propertyQuery}
                       onChange={(e) => { setPropertyQuery(e.target.value); setShowPropertyDropdown(true); }}
                       onFocus={() => propertyResults.length > 0 && setShowPropertyDropdown(true)}
@@ -580,9 +582,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                             className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-cream-50/80"
                           >
                             <Home size={13} className="shrink-0 text-ink/40" />
-                            <div className="min-w-0">
-                              <p className="truncate text-sm text-ink">{p.title}</p>
-                              {p.bc_reference && <p className="text-[11px] text-ink/40">{p.bc_reference}</p>}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm text-ink">{p.title}</p>
+                                {p.bc_reference && (
+                                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{p.bc_reference}</span>
+                                )}
+                              </div>
+                              {p.address && <p className="truncate text-[11px] text-ink/40">{p.address}</p>}
                             </div>
                           </button>
                         ))}
