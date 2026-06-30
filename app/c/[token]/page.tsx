@@ -125,5 +125,5 @@ export default async function TokenSharePage({
     property.latitude = coords.lat;
     property.longitude = coords.lng;
   }
-  return <PublicPropertyView property={property} />;
+  return <PublicPropertyView property={property} shareId={resolved.shareId} />;
 }
