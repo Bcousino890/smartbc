@@ -505,16 +505,6 @@ export function IdealistaConfigClient({
               <LogOut size={14} />
               Desconectar
             </button>
-
-            <button
-              type="button"
-              onClick={handleDisconnect}
-              disabled={loading}
-              className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-            >
-              <LogOut size={14} />
-              Desconectar
-            </button>
           </div>
         )}
       </div>

@@ -142,29 +142,10 @@ export async function completeLogin(sessionId: string, smsCode: string): Promise
   }
 }
 
-// Check if the stored session cookies are still valid
+// Check if session cookies are saved on disk (no browser navigation — avoids Cloudflare block)
 export async function checkSessionStatus(): Promise<SessionStatus> {
   const hasCookies = await cookiesExist();
-  if (!hasCookies) {
-    return { active: false, lastCheckedAt: new Date() };
-  }
-
-  const session = await createBrowserSession(true);
-  const { page } = session;
-
-  try {
-    await navigateToPage(page, TOOLS_URL);
-    await page.waitForTimeout(2000);
-
-    const url = page.url();
-    const active = url.includes("/tools") && !url.includes("/login");
-
-    return { active, lastCheckedAt: new Date() };
-  } catch {
-    return { active: false, lastCheckedAt: new Date() };
-  } finally {
-    await closeBrowserSession(session);
-  }
+  return { active: hasCookies, lastCheckedAt: new Date() };
 }
 
 async function markLoginSuccess(): Promise<void> {
