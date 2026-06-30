@@ -44,6 +44,17 @@ const RESULT_LABELS: Record<string, string> = {
   busy: "Ocupado",
 };
 
+const STATUS_CONFIG: Record<string, { label: string; color: string; description: string }> = {
+  draft: { label: "Borrador", color: "bg-red-100 text-red-700", description: "Esperando asignación" },
+  assigned: { label: "Asignada", color: "bg-blue-100 text-blue-700", description: "Asignada a captadora" },
+  preliminary_data: { label: "Datos Preliminares", color: "bg-orange-100 text-orange-700", description: "Datos iniciales completados" },
+  contacting: { label: "Contactando", color: "bg-purple-100 text-purple-700", description: "En proceso de contacto" },
+  revision: { label: "Revisión", color: "bg-orange-200 text-orange-800", description: "Revisar datos inconsistentes" },
+  confirmed: { label: "Confirmada", color: "bg-emerald-100 text-emerald-700", description: "Dueño confirmó que quiere vender" },
+  converted_to_property: { label: "Convertida", color: "bg-cyan-100 text-cyan-700", description: "Ya es una propiedad" },
+  rejected: { label: "Rechazada", color: "bg-red-100 text-red-700", description: "Rechazada" },
+};
+
 function formatPrice(price: number | null, currency: string): string | null {
   if (!price) return null;
   if (currency === "uf") return `UF ${price.toLocaleString("es-CL")}`;
@@ -57,11 +68,17 @@ export function CaptacionDetailClient({
   logs,
 }: DetailClientProps) {
   const isCaptadora = userRole === "captadora";
+  const isAdmin = userRole === "admin";
+  const isCreator = true; // Asumimos que eres el creador si tienes acceso
   const [tab, setTab] = useState<"info" | "photos" | "logs">("info");
   const [updatingData, setUpdatingData] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [loggingAttempt, setLoggingAttempt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rescrapingAttempt, setRescrapeingAttempt] = useState(false);
+  const [assigningCaptadora, setAssigningCaptadora] = useState(false);
+  const [selectedCaptadoraId, setSelectedCaptadoraId] = useState(captacion.assigned_to || "");
+  const [newStatus, setNewStatus] = useState(captacion.status);
   const [formData, setFormData] = useState({
     owner_phone: captacion.owner_phone || "",
     owner_name: captacion.owner_name || "",
@@ -100,6 +117,55 @@ export function CaptacionDetailClient({
       setError("Error de conexión");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAssign() {
+    if (!selectedCaptadoraId) {
+      setError("Selecciona una captadora");
+      return;
+    }
+    setError("");
+    setAssigningCaptadora(true);
+    try {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ captadora_id: selectedCaptadoraId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Error al asignar");
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setAssigningCaptadora(false);
+    }
+  }
+
+  async function handleStatusChange() {
+    if (!newStatus) return;
+    setError("");
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Error al cambiar estado");
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setUpdatingStatus(false);
     }
   }
 
@@ -249,18 +315,17 @@ export function CaptacionDetailClient({
                 </a>
               )}
             </div>
-            <span className={cn(
-              "flex-shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
-              captacion.status === "pending" && "bg-amber-100 text-amber-700",
-              captacion.status === "completed" && "bg-emerald-100 text-emerald-700",
-              captacion.status === "converted_to_property" && "bg-blue-100 text-blue-700",
-              captacion.status === "rejected" && "bg-red-100 text-red-700",
-            )}>
-              {captacion.status === "pending" && "Pendiente"}
-              {captacion.status === "completed" && "Completada"}
-              {captacion.status === "converted_to_property" && "Convertida"}
-              {captacion.status === "rejected" && "Rechazada"}
-            </span>
+            <div className="flex flex-col items-end gap-2">
+              <span className={cn(
+                "flex-shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
+                STATUS_CONFIG[captacion.status]?.color || "bg-gray-100 text-gray-700"
+              )}>
+                {STATUS_CONFIG[captacion.status]?.label || captacion.status}
+              </span>
+              <p className="text-[10px] text-ink/40">
+                {STATUS_CONFIG[captacion.status]?.description}
+              </p>
+            </div>
           </div>
 
           {/* Scrape status and meta */}
@@ -344,6 +409,76 @@ export function CaptacionDetailClient({
         </div>
       </div>
 
+      {/* Asignación (solo para admin) */}
+      {isAdmin && (
+        <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
+          <h3 className="text-sm font-semibold text-ink mb-4">Asignación</h3>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-ink/70 mb-2">Asignado a</label>
+              {captacion.assigned_to ? (
+                <div className="p-3 rounded-lg bg-ink/5 border border-ink/10">
+                  <p className="text-sm font-medium text-ink">
+                    {captacion.assigned_to} (desde {captacion.assigned_at ? new Date(captacion.assigned_at).toLocaleDateString("es-CL") : "—"})
+                  </p>
+                </div>
+              ) : (
+                <select
+                  value={selectedCaptadoraId}
+                  onChange={(e) => setSelectedCaptadoraId(e.target.value)}
+                  className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                >
+                  <option value="">Selecciona captadora...</option>
+                  <option value="captadora1">Captadora 1</option>
+                  <option value="captadora2">Captadora 2</option>
+                </select>
+              )}
+            </div>
+            {!captacion.assigned_to && (
+              <button
+                onClick={handleAssign}
+                disabled={assigningCaptadora || !selectedCaptadoraId}
+                className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+              >
+                {assigningCaptadora ? "Asignando..." : "Asignar"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Cambio de estado (solo admin) */}
+      {isAdmin && (
+        <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
+          <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Estado</h3>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+              >
+                <option value="draft">Borrador</option>
+                <option value="assigned">Asignada</option>
+                <option value="preliminary_data">Datos Preliminares</option>
+                <option value="contacting">Contactando</option>
+                <option value="revision">Revisión</option>
+                <option value="confirmed">Confirmada</option>
+                <option value="converted_to_property">Convertida</option>
+                <option value="rejected">Rechazada</option>
+              </select>
+            </div>
+            <button
+              onClick={handleStatusChange}
+              disabled={updatingStatus || newStatus === captacion.status}
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+            >
+              {updatingStatus ? "Actualizando..." : "Actualizar"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="mb-4 flex gap-1 border-b border-ink/10">
         {(["info", "photos", "logs"] as const).map((t) => (
@@ -385,13 +520,18 @@ export function CaptacionDetailClient({
                 <InfoRow label="Notas"><span className="whitespace-pre-wrap">{captacion.notes}</span></InfoRow>
               )}
 
-              {isCaptadora && (
+              {(isCaptadora || isAdmin) && (
                 <button
                   onClick={() => setUpdatingData(true)}
                   className="mt-2 rounded-lg border border-ink/20 px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5"
                 >
-                  Actualizar Datos
+                  {isCaptadora ? "Actualizar Datos del Dueño" : "Editar Datos"}
                 </button>
+              )}
+              {!isCaptadora && !isAdmin && (
+                <p className="mt-2 text-xs text-ink/40">
+                  Solo captadoras y admins pueden editar
+                </p>
               )}
             </div>
           ) : (

@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         commune: body.commune || null,
         zone: body.zone || null,
         notes: body.notes || null,
-        status: "pending",
+        status: "draft",
         scrape_status: "pending",
       })
       .select()
