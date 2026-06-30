@@ -48,7 +48,7 @@ export function TimelineChart({ data }: TimelineChartProps) {
             border: "1px solid #e5e7eb",
             borderRadius: "0.5rem",
           }}
-          formatter={(value) => value.toLocaleString()}
+          formatter={(value: any) => Number(value).toLocaleString()}
         />
         <Legend
           wrapperStyle={{ fontSize: 12, color: "#6b7280" }}

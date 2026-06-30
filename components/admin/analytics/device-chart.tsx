@@ -38,7 +38,7 @@ export function DeviceChart({ data }: DeviceChartProps) {
           cx="50%"
           cy="50%"
           outerRadius={80}
-          label={({ percentage }) => `${percentage.toFixed(1)}%`}
+          label={({ percent }: { percent?: number }) => `${((percent ?? 0) * 100).toFixed(1)}%`}
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -83,7 +83,7 @@ export default async function AnalyticsPage({
         devices,
         geo,
       }}
-      filters={filters}
+      filters={{ startDate, endDate, propertyId: filters.propertyId }}
       period={params.period || "últimos30d"}
     />
   );
