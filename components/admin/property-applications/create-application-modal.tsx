@@ -13,6 +13,8 @@ import {
   UserPlus,
   Mail,
   Phone,
+  Copy,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +36,7 @@ type PropertyResult = {
   operation: string | null;
 };
 
-type Step = "client" | "details" | "success";
+type Step = "client" | "credentials" | "details" | "success";
 
 type Props = {
   onClose: () => void;
@@ -72,6 +74,24 @@ function Toggle({
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="rounded p-1 text-ink/40 transition hover:text-ink"
+      title="Copiar"
+    >
+      {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+    </button>
+  );
+}
+
 export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const [step, setStep] = useState<Step>("client");
 
@@ -88,7 +108,10 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newRole, setNewRole] = useState<"client" | "owner">("client");
-  const [createingUser, setCreatingUser] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  // Generated credentials
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
   // Step 2: details
   const [country, setCountry] = useState<"ES" | "CL">("ES");
@@ -152,7 +175,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
     setError(null);
     setCreatingUser(true);
     try {
-      const res = await fetch("/api/admin/usuarios/create", {
+      const res = await fetch("/api/admin/usuarios/create-with-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -176,7 +199,8 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
         role: newRole,
         avatar_url: null,
       });
-      setStep("details");
+      setGeneratedPassword(json.password);
+      setStep("credentials");
     } catch {
       setError("Error de conexión");
     } finally {
@@ -207,13 +231,21 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
       setStep("success");
       setTimeout(() => {
         onCreated();
-      }, 1500);
+      }, 1800);
     } catch {
       setError("Error de conexión");
     } finally {
       setSubmitting(false);
     }
   }
+
+  const stepLabel = step === "client"
+    ? "Paso 1 de 2 — Selecciona o crea el cliente"
+    : step === "credentials"
+    ? "Acceso creado — Guarda las credenciales"
+    : step === "details"
+    ? "Paso 2 de 2 — Detalles de la solicitud"
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -222,9 +254,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4">
           <div>
             <h2 className="font-serif text-lg text-ink">Nueva Solicitud de Documentación</h2>
-            <p className="text-xs text-ink/50">
-              {step === "client" ? "Paso 1 de 2 — Selecciona o crea el cliente" : step === "details" ? "Paso 2 de 2 — Detalles de la solicitud" : ""}
-            </p>
+            <p className="text-xs text-ink/50">{stepLabel}</p>
           </div>
           <button
             onClick={onClose}
@@ -236,12 +266,54 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
         {/* Body */}
         <div className="p-6">
+
           {/* ── Step: success ── */}
           {step === "success" && (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 size={40} className="text-green-500" />
               <p className="font-medium text-ink">¡Solicitud creada!</p>
               <p className="text-sm text-ink/50">Se ha creado la solicitud en estado borrador.</p>
+            </div>
+          )}
+
+          {/* ── Step: credentials ── */}
+          {step === "credentials" && selectedClient && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                <p className="mb-2 text-xs font-semibold text-green-700">✓ Acceso creado correctamente</p>
+                <p className="text-sm text-ink/70">Comparte estas credenciales con el usuario:</p>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-ink/10 bg-white p-4 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-ink/50 uppercase tracking-wide">Email</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono text-ink">{selectedClient.email}</span>
+                    <CopyButton text={selectedClient.email} />
+                  </div>
+                </div>
+                <div className="border-t border-ink/5" />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-ink/50 uppercase tracking-wide">Contraseña</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono text-ink">{generatedPassword}</span>
+                    <CopyButton text={generatedPassword ?? ""} />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-ink/40">
+                El usuario puede cambiar su contraseña desde el portal una vez que inicie sesión.
+              </p>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setStep("details")}
+                  className="rounded-xl bg-ink px-5 py-2 text-sm text-cream-50 transition hover:bg-ink/80"
+                >
+                  Continuar con la solicitud →
+                </button>
+              </div>
             </div>
           )}
 
@@ -265,7 +337,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     <input
                       autoFocus
                       type="text"
-                      placeholder="Buscar por nombre o email..."
+                      placeholder="Buscar cliente o propietario por nombre / email..."
                       value={clientQuery}
                       onChange={(e) => setClientQuery(e.target.value)}
                       className="w-full rounded-xl border border-ink/15 bg-white/80 py-2.5 pl-9 pr-4 text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-1 focus:ring-gold"
@@ -322,7 +394,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
               {clientMode === "new" && (
                 <div className="space-y-3">
                   <p className="text-xs text-ink/50">
-                    Se creará un acceso al portal y se enviará un email de invitación.
+                    Se creará el acceso con contraseña generada automáticamente. Podrás verla y copiarla antes de continuar.
                   </p>
 
                   {/* Role selector */}
@@ -409,11 +481,11 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                 ) : (
                   <button
                     onClick={handleCreateNewUser}
-                    disabled={createingUser || !newEmail || !newFirstName}
+                    disabled={creatingUser || !newEmail || !newFirstName}
                     className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
                   >
-                    {createingUser && <Loader2 size={13} className="animate-spin" />}
-                    Crear acceso y continuar
+                    {creatingUser && <Loader2 size={13} className="animate-spin" />}
+                    Crear acceso y ver contraseña
                   </button>
                 )}
               </div>
@@ -433,7 +505,10 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     <p className="truncate text-sm font-medium text-ink">{selectedClient.full_name ?? selectedClient.email}</p>
                     <p className="truncate text-[11px] text-ink/40">{selectedClient.email}</p>
                   </div>
-                  <button onClick={() => { setStep("client"); setSelectedClient(null); }} className="ml-auto text-xs text-ink/30 hover:text-ink">
+                  <button
+                    onClick={() => { setStep("client"); setSelectedClient(null); setGeneratedPassword(null); }}
+                    className="ml-auto text-xs text-ink/30 hover:text-ink"
+                  >
                     cambiar
                   </button>
                 </div>
@@ -472,12 +547,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   <div className="flex items-center gap-2 rounded-xl border border-ink/10 bg-white/60 px-4 py-2.5">
                     <Home size={14} className="shrink-0 text-ink/40" />
                     <div className="min-w-0">
-                      <p className="truncate text-sm text-ink">{selectedProperty.title}</p>
-                      {selectedProperty.bc_reference && (
-                        <p className="text-[11px] text-ink/40">{selectedProperty.bc_reference}</p>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm text-ink">{selectedProperty.title}</p>
+                        {selectedProperty.bc_reference && (
+                          <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{selectedProperty.bc_reference}</span>
+                        )}
+                      </div>
                     </div>
-                    <button onClick={() => { setSelectedProperty(null); setPropertyQuery(""); }} className="ml-auto text-xs text-ink/30 hover:text-ink">
+                    <button onClick={() => { setSelectedProperty(null); setPropertyQuery(""); }} className="ml-auto text-ink/30 hover:text-ink">
                       <X size={13} />
                     </button>
                   </div>
@@ -486,7 +563,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
                     <input
                       type="text"
-                      placeholder="Buscar propiedad por nombre, ref o dirección..."
+                      placeholder="Buscar por nombre, cód. referencia o dirección..."
                       value={propertyQuery}
                       onChange={(e) => { setPropertyQuery(e.target.value); setShowPropertyDropdown(true); }}
                       onFocus={() => propertyResults.length > 0 && setShowPropertyDropdown(true)}
@@ -505,9 +582,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                             className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-cream-50/80"
                           >
                             <Home size={13} className="shrink-0 text-ink/40" />
-                            <div className="min-w-0">
-                              <p className="truncate text-sm text-ink">{p.title}</p>
-                              {p.bc_reference && <p className="text-[11px] text-ink/40">{p.bc_reference}</p>}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm text-ink">{p.title}</p>
+                                {p.bc_reference && (
+                                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{p.bc_reference}</span>
+                                )}
+                              </div>
+                              {p.address && <p className="truncate text-[11px] text-ink/40">{p.address}</p>}
                             </div>
                           </button>
                         ))}
@@ -521,7 +603,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
               <div className="flex justify-between gap-2 pt-1">
                 <button
-                  onClick={() => setStep("client")}
+                  onClick={() => setStep(generatedPassword ? "credentials" : "client")}
                   className="rounded-xl border border-ink/15 px-4 py-2 text-sm text-ink/60 transition hover:text-ink"
                 >
                   Atrás
