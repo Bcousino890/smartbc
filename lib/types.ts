@@ -451,6 +451,7 @@ export type InternalUser = {
   status: InternalUserStatus;
   lastLoginText?: string;
   joinedLabel: string;
+  country?: string;
 };
 
 // Admin / Configuración
