@@ -97,6 +97,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
   // Step 1: client search
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientResult[]>([]);
+  const [propertyMatchResults, setPropertyMatchResults] = useState<PropertyResult[]>([]);
   const [clientLoading, setClientLoading] = useState(false);
   const [clientSearched, setClientSearched] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClientResult | null>(null);
@@ -128,20 +129,26 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const clientSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const propertySearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Search clients
+  // Search clients (and properties by reference code simultaneously)
   useEffect(() => {
     if (clientSearchTimeout.current) clearTimeout(clientSearchTimeout.current);
     if (!clientQuery.trim()) {
       setClientResults([]);
+      setPropertyMatchResults([]);
       setClientSearched(false);
       return;
     }
     clientSearchTimeout.current = setTimeout(async () => {
       setClientLoading(true);
       try {
-        const res = await fetch(`/api/admin/clientes/search?q=${encodeURIComponent(clientQuery)}`);
-        const json = await res.json();
-        setClientResults(json.data ?? []);
+        const [clientRes, propRes] = await Promise.all([
+          fetch(`/api/admin/clientes/search?q=${encodeURIComponent(clientQuery)}`),
+          fetch(`/api/admin/properties/search?q=${encodeURIComponent(clientQuery)}`),
+        ]);
+        const clientJson = await clientRes.json();
+        const propJson = await propRes.json();
+        setClientResults(clientJson.data ?? []);
+        setPropertyMatchResults(propJson.data ?? []);
         setClientSearched(true);
         setShowInlineCreate(false);
       } finally {
@@ -329,7 +336,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     <input
                       autoFocus
                       type="text"
-                      placeholder="Buscar cliente o propietario por nombre / email..."
+                      placeholder="Buscar cliente, propietario o ref. de propiedad (ej: BC-1074)..."
                       value={clientQuery}
                       onChange={(e) => { setClientQuery(e.target.value); setSelectedClient(null); }}
                       className="w-full rounded-xl border border-ink/15 bg-white/80 py-2.5 pl-9 pr-4 text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-1 focus:ring-gold"
@@ -339,14 +346,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     )}
                   </div>
 
-                  {/* Results */}
+                  {/* Client results */}
                   {clientResults.length > 0 && (
                     <div className="max-h-52 overflow-y-auto rounded-xl border border-ink/10 bg-white shadow-sm">
                       {clientResults.map((c) => (
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => { setSelectedClient(c); setClientQuery(""); setClientResults([]); setClientSearched(false); }}
+                          onClick={() => { setSelectedClient(c); setClientQuery(""); setClientResults([]); setPropertyMatchResults([]); setClientSearched(false); }}
                           className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-cream-50/80"
                         >
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink/10 text-xs font-semibold text-ink/60">
@@ -367,11 +374,51 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                     </div>
                   )}
 
+                  {/* Property matches — shown alongside or when no client found */}
+                  {propertyMatchResults.length > 0 && (
+                    <div className="rounded-xl border border-ink/10 bg-white shadow-sm">
+                      <p className="border-b border-ink/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink/40">
+                        Propiedades encontradas — click para pre-seleccionar
+                      </p>
+                      {propertyMatchResults.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProperty(p);
+                            // auto-set operation based on property
+                            if (p.operation === "rent") setOperation("rent");
+                            if (p.operation === "sale") setOperation("sale");
+                            setClientQuery("");
+                            setPropertyMatchResults([]);
+                            setClientSearched(false);
+                          }}
+                          className={cn(
+                            "flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-cream-50/80",
+                            selectedProperty?.id === p.id && "bg-green-50"
+                          )}
+                        >
+                          <Home size={14} className="shrink-0 text-ink/40" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm text-ink">{p.title}</p>
+                              {p.bc_reference && (
+                                <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{p.bc_reference}</span>
+                              )}
+                            </div>
+                            {p.address && <p className="truncate text-[11px] text-ink/40">{p.address}</p>}
+                          </div>
+                          {selectedProperty?.id === p.id && <Check size={13} className="shrink-0 text-green-600" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {/* No results → quick create buttons */}
-                  {clientSearched && !clientLoading && clientResults.length === 0 && (
+                  {clientSearched && !clientLoading && clientResults.length === 0 && propertyMatchResults.length === 0 && (
                     <div className="rounded-xl border border-dashed border-ink/15 bg-white/50 p-4">
                       <p className="mb-3 text-center text-xs text-ink/50">
-                        No se encontró ningún usuario con &quot;{clientQuery}&quot;
+                        No se encontró ningún usuario ni propiedad con &quot;{clientQuery}&quot;
                       </p>
                       <div className="flex gap-2">
                         <button
@@ -393,6 +440,25 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                           Crear propietario
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Selected property preview (when pre-selected from search) */}
+                  {selectedProperty && !selectedClient && (
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
+                      <Home size={13} className="shrink-0 text-amber-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-medium text-amber-700">Propiedad pre-seleccionada</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-xs text-ink/70">{selectedProperty.title}</p>
+                          {selectedProperty.bc_reference && (
+                            <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 font-mono text-[10px] text-amber-800">{selectedProperty.bc_reference}</span>
+                          )}
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedProperty(null)} className="text-amber-400 hover:text-amber-700">
+                        <X size={13} />
+                      </button>
                     </div>
                   )}
 
