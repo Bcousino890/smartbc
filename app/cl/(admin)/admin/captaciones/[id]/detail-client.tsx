@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Captacion, CaptacionContact } from "../actions";
+import { LocationSection } from "./location-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 
 type Photo = { id: string; url: string; position: number };
@@ -87,7 +88,7 @@ export function CaptacionDetailClient({
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
-  const [tab, setTab] = useState<"info" | "photos" | "logs">("info");
+  const [tab, setTab] = useState<"info" | "location" | "photos" | "logs">("info");
   const [updatingData, setUpdatingData] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [loggingAttempt, setLoggingAttempt] = useState(false);
