@@ -1,160 +1,57 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { createAdminClient } from "@/lib/db/admin"
+import { NextRequest, NextResponse } from "next/server";
+import { insertPageView } from "@/lib/db/queries/analytics";
 
-export const dynamic = "force-dynamic"
-
-interface GeoData {
-  country?: string
-  countryCode?: string
-  city?: string
-}
-
-function parseUserAgent(ua: string): {
-  deviceType: string
-  browser: string
-  os: string
-} {
-  // Device type
-  let deviceType = "desktop"
-  if (/tablet|ipad|playbook|silk/i.test(ua)) {
-    deviceType = "tablet"
-  } else if (/mobile|android|iphone|ipod|blackberry|opera mini|iemobile|wpdesktop/i.test(ua)) {
-    deviceType = "mobile"
-  }
-
-  // Browser
-  let browser = "Other"
-  if (/Edg\//i.test(ua)) {
-    browser = "Edge"
-  } else if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) {
-    browser = "Chrome"
-  } else if (/Firefox\//i.test(ua)) {
-    browser = "Firefox"
-  } else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) {
-    browser = "Safari"
-  } else if (/MSIE|Trident/i.test(ua)) {
-    browser = "IE"
-  }
-
-  // OS
-  let os = "Other"
-  if (/Windows/i.test(ua)) {
-    os = "Windows"
-  } else if (/iPhone|iPad|iPod/i.test(ua)) {
-    os = "iOS"
-  } else if (/Macintosh|Mac OS X/i.test(ua)) {
-    os = "Mac"
-  } else if (/Android/i.test(ua)) {
-    os = "Android"
-  } else if (/Linux/i.test(ua)) {
-    os = "Linux"
-  }
-
-  return { deviceType, browser, os }
-}
-
-async function getGeoData(ip: string): Promise<GeoData> {
-  // Skip geo for local IPs
-  if (
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "::ffff:127.0.0.1" ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("10.") ||
-    ip.startsWith("172.")
-  ) {
-    return {}
-  }
-
+// POST /api/tracking/page-view
+// Registra una nueva visita de página desde el cliente.
+// Sin autenticación — visitantes públicos lo llaman.
+export async function POST(req: NextRequest) {
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000)
-    const res = await fetch(
-      `http://ip-api.com/json/${ip}?fields=country,countryCode,city&lang=es`,
-      { signal: controller.signal }
-    )
-    clearTimeout(timeoutId)
-    if (!res.ok) return {}
-    const data = (await res.json()) as GeoData
-    return data
-  } catch {
-    // geo falla silenciosamente
-    return {}
-  }
-}
+    const body = (await req.json()) as {
+      property_id?: string | null;
+      share_id?: string | null;
+      page_type: string;
+      page_path: string;
+      referrer?: string | null;
+      session_id: string;
+      device_type?: string | null;
+      browser?: string | null;
+      os?: string | null;
+      country_code?: string | null;
+      country_name?: string | null;
+      city?: string | null;
+    };
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = (await request.json()) as {
-      pageType?: string
-      propertyId?: string
-      shareId?: string
-      sessionId?: string
-      referrer?: string
-      pagePath?: string
-    }
-
-    const { pageType, propertyId, shareId, sessionId, referrer, pagePath } =
-      body
-
-    if (!sessionId || !pageType) {
+    if (!body.page_type || !body.page_path || !body.session_id) {
       return NextResponse.json(
-        { error: "sessionId and pageType are required" },
-        { status: 400 }
-      )
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
-    // Get IP
-    const forwardedFor = request.headers.get("x-forwarded-for")
-    const realIp = request.headers.get("x-real-ip")
     const ip =
-      (forwardedFor ? forwardedFor.split(",")[0].trim() : null) ??
-      realIp ??
-      "unknown"
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      null;
+    const userAgent = req.headers.get("user-agent") ?? null;
 
-    // Get user agent
-    const userAgent = request.headers.get("user-agent") ?? ""
+    const result = await insertPageView({
+      property_id: body.property_id ?? null,
+      share_id: body.share_id ?? null,
+      page_type: body.page_type,
+      page_path: body.page_path,
+      session_id: body.session_id,
+      ip,
+      user_agent: userAgent,
+      device_type: body.device_type ?? null,
+      browser: body.browser ?? null,
+      country_code: body.country_code ?? null,
+      country_name: body.country_name ?? null,
+      city: body.city ?? null,
+    } as Parameters<typeof insertPageView>[0]);
 
-    // Parse user agent
-    const { deviceType, browser, os } = parseUserAgent(userAgent)
-
-    // Get geo data (non-blocking, 3s timeout)
-    const geo = await getGeoData(ip)
-
-    const supabase = createAdminClient()
-
-    const { data, error } = await supabase
-      .from("page_views")
-      .insert({
-        property_id: propertyId ?? null,
-        share_id: shareId ?? null,
-        page_type: pageType,
-        page_path: pagePath ?? null,
-        referrer: referrer ?? null,
-        session_id: sessionId,
-        ip: ip !== "unknown" ? ip : null,
-        user_agent: userAgent || null,
-        device_type: deviceType,
-        browser,
-        os,
-        country_code: geo.countryCode ?? null,
-        country_name: geo.country ?? null,
-        city: geo.city ?? null,
-      })
-      .select("id")
-      .single()
-
-    if (error) {
-      console.error("[tracking/page-view] insert error:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ pageViewId: data.id })
+    return NextResponse.json({ id: result.id });
   } catch (err) {
-    console.error("[tracking/page-view] unexpected error:", err)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    console.error("[tracking/page-view] error:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
