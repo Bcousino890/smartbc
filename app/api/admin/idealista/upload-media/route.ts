@@ -1,12 +1,15 @@
 import "server-only";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { extname } from "node:path";
+import { randomUUID } from "node:crypto";
+import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const ALLOWED_IMAGE = ["jpg", "jpeg", "png", "webp", "gif", "heic"];
 const ALLOWED_VIDEO = ["mp4", "mov", "avi", "webm", "mkv"];
+// Mismo bucket que usa /api/admin/publicacion/upload-media (persistente).
+const BUCKET = "property-media";
 
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
@@ -36,21 +39,36 @@ export async function POST(req: Request) {
       );
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Persistimos en Supabase Storage (no en /public, que se borra en cada
+    // deploy y deja URLs muertas que Idealista no puede leer).
+    const supabase = createAdminClient();
+    const path = `idealista/${randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, file, {
+        contentType: file.type || undefined,
+        upsert: false,
+      });
 
-    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const uploadDir = join(process.cwd(), "public", "uploads", "idealista");
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(join(uploadDir, safeName), buffer);
+    if (uploadError) {
+      console.error("[idealista/upload-media] storage error:", uploadError);
+      return Response.json(
+        { error: uploadError.message || "Error al subir el archivo" },
+        { status: 500 }
+      );
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
     return Response.json({
-      url: `/uploads/idealista/${safeName}`,
+      url: publicUrl,
       type: isImage ? "image" : "video",
       name: file.name,
     });
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error("[idealista/upload-media] error:", error);
     return Response.json({ error: "Error al subir el archivo" }, { status: 500 });
   }
 }
