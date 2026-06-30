@@ -16,6 +16,7 @@ import { formatPrice } from "@/lib/format";
 import { shareSlug } from "@/lib/share-slug";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import type { Property } from "@/lib/types";
+import { useAnalytics } from "@/hooks/use-analytics";
 
 // URL pública de "SmartLink": vista limpia de la propiedad, sin login.
 // Pensada para enviar a un cliente concreto por WhatsApp/email. Sin
@@ -49,13 +50,21 @@ export function PublicPropertyView({
   property,
   videos,
   plans,
+  shareId,
 }: {
   property: Property;
   // Videos y planos subidos por el admin (tabla property_media). Opcionales
   // para no romper otros usos del componente (p. ej. /c/[token]).
   videos?: Array<{ url: string; file_name?: string | null }>;
   plans?: Array<{ url: string; file_name?: string | null }>;
+  shareId?: string;
 }) {
+  const trackerRef = useAnalytics({
+    pageType: 'public_property',
+    propertyId: property.id,
+    shareId: shareId,
+  });
+
   const isRent = property.operation === "alquiler";
   const price = formatPrice(property.price);
   // Enlace canónico al propio SmartLink (property.id es el slug) y referencia
@@ -98,7 +107,10 @@ export function PublicPropertyView({
 
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 md:px-8">
         {/* Galería principal — reutilizamos el componente del portal cliente */}
-        <PropertyGallery property={property} />
+        <PropertyGallery
+          property={property}
+          onPhotoView={(index) => trackerRef.current?.trackPhotoView(index)}
+        />
 
         {/* Cabecera de la propiedad: título + precio destacado */}
         <section className="mt-6 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
@@ -287,6 +299,7 @@ export function PublicPropertyView({
               href={waLink}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackerRef.current?.trackContactClick('whatsapp')}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#25D366] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1ebd5b]"
             >
               <WhatsAppIcon size={16} />
@@ -296,6 +309,7 @@ export function PublicPropertyView({
               href={`mailto:${BC_CONTACT.email}?subject=Consulta: ${encodeURIComponent(
                 property.title,
               )}`}
+              onClick={() => trackerRef.current?.trackContactClick('email')}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-5 py-3 text-sm font-medium text-ink transition hover:bg-gold-dark"
             >
               <Mail size={15} strokeWidth={1.75} />
@@ -303,6 +317,7 @@ export function PublicPropertyView({
             </a>
             <a
               href={`tel:${BC_CONTACT.phoneE164}`}
+              onClick={() => trackerRef.current?.trackContactClick('phone')}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-cream-50/30 bg-cream-50/5 px-5 py-3 text-sm font-medium text-cream-50 transition hover:bg-cream-50/10"
             >
               <Phone size={15} strokeWidth={1.75} />
@@ -325,6 +340,7 @@ export function PublicPropertyView({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Contactar por WhatsApp"
+            onClick={() => trackerRef.current?.trackContactClick('whatsapp')}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-3 py-2.5 text-sm font-medium text-white"
           >
             <WhatsAppIcon size={15} />
@@ -335,6 +351,7 @@ export function PublicPropertyView({
               property.title,
             )}`}
             aria-label="Contactar por email"
+            onClick={() => trackerRef.current?.trackContactClick('email')}
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gold text-ink"
           >
             <Mail size={15} strokeWidth={1.75} />
@@ -342,6 +359,7 @@ export function PublicPropertyView({
           <a
             href={`tel:${BC_CONTACT.phoneE164}`}
             aria-label="Llamar por teléfono"
+            onClick={() => trackerRef.current?.trackContactClick('phone')}
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-ink/15 bg-white/90 text-ink/75"
           >
             <Phone size={15} strokeWidth={1.75} />

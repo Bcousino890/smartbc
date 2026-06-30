@@ -14,7 +14,13 @@ const BADGE_KEYS: Record<PropertyBadge, string> = {
   premium: "card.badge.premium",
 };
 
-export function PropertyGallery({ property }: { property: Property }) {
+export function PropertyGallery({
+  property,
+  onPhotoView,
+}: {
+  property: Property;
+  onPhotoView?: (index: number) => void;
+}) {
   const t = useT();
   const photos = property.photos ?? [];
   const main = photos[0];
@@ -26,6 +32,7 @@ export function PropertyGallery({ property }: { property: Property }) {
   const openAt = (i: number) => {
     if (photos.length === 0) return;
     setLightboxIndex(i);
+    onPhotoView?.(i);
   };
 
   return (
