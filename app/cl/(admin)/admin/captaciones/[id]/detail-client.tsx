@@ -612,18 +612,27 @@ export function CaptacionDetailClient({
                   </p>
                 </div>
               ) : (
-                <select
-                  value={selectedCaptadoraId}
-                  onChange={(e) => setSelectedCaptadoraId(e.target.value)}
-                  className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-                >
-                  <option value="">Selecciona captadora...</option>
-                  {captadoras.map((captadora) => (
-                    <option key={captadora.id} value={captadora.id}>
-                      {captadora.full_name || "Sin nombre"}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    value={selectedCaptadoraId}
+                    onChange={(e) => setSelectedCaptadoraId(e.target.value)}
+                    className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                  >
+                    <option value="">Selecciona captadora...</option>
+                    {captadoras.map((captadora) => (
+                      <option key={captadora.id} value={captadora.id}>
+                        {captadora.full_name || "Sin nombre"}
+                      </option>
+                    ))}
+                  </select>
+                  {captadoras.length === 0 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      No hay captadoras registradas. Ve a{" "}
+                      <a href="/cl/admin/usuarios" className="underline">Usuarios</a>{" "}
+                      y cambia el rol de un usuario a &quot;Captadora&quot;.
+                    </p>
+                  )}
+                </>
               )}
             </div>
             {!captacion.assigned_to && (
@@ -643,31 +652,55 @@ export function CaptacionDetailClient({
       {isAdmin && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
           <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Estado</h3>
-          <div className="flex gap-3 items-end">
-            <div className="flex-1">
-              <select
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value as typeof newStatus)}
-                className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-              >
-                <option value="draft">Borrador</option>
-                <option value="assigned">Asignada</option>
-                <option value="preliminary_data">Datos Preliminares</option>
-                <option value="contacting">Contactando</option>
-                <option value="revision">Revisión</option>
-                <option value="confirmed">Confirmada</option>
-                <option value="converted_to_property">Convertida</option>
-                <option value="rejected">Rechazada</option>
-              </select>
-            </div>
-            <button
-              onClick={handleStatusChange}
-              disabled={updatingStatus || newStatus === captacion.status}
-              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
-            >
-              {updatingStatus ? "Actualizando..." : "Actualizar"}
-            </button>
-          </div>
+          {(() => {
+            const allowedNextStatuses = ALLOWED_TRANSITIONS[captacion.status] ?? [];
+            return (
+              <div>
+                {allowedNextStatuses.length === 0 ? (
+                  <p className="text-sm text-ink/50">Este estado no permite más transiciones</p>
+                ) : (
+                  <>
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1">
+                        <select
+                          value={newStatus}
+                          onChange={(e) => setNewStatus(e.target.value)}
+                          className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                        >
+                          <option value="">Selecciona nuevo estado...</option>
+                          {allowedNextStatuses.map((s) => (
+                            <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleStatusChange}
+                        disabled={updatingStatus || !newStatus || (newStatus === "revision" && !revisionNotes.trim())}
+                        className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+                      >
+                        {updatingStatus ? "Actualizando..." : "Actualizar"}
+                      </button>
+                    </div>
+                    {newStatus === "revision" && (
+                      <div className="mt-3">
+                        <label className="block text-xs font-medium text-ink/70 mb-1">
+                          Motivo de la revisión (requerido)
+                        </label>
+                        <textarea
+                          value={revisionNotes}
+                          onChange={(e) => setRevisionNotes(e.target.value)}
+                          placeholder="Ej: El teléfono no corresponde al dueño..."
+                          rows={2}
+                          className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {error && <div className="mt-3"><ErrorBox>{error}</ErrorBox></div>}
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
