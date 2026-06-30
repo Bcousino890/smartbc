@@ -18,11 +18,14 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { firstName, lastName = "", email, phone, role = "client" } = body;
+    const { firstName, lastName = "", email: emailInput, phone, role = "client" } = body;
 
-    if (!firstName || !email) {
-      return Response.json({ error: "Nombre y email son obligatorios" }, { status: 400 });
+    if (!firstName) {
+      return Response.json({ error: "El nombre es obligatorio" }, { status: 400 });
     }
+
+    // Si no hay email, se genera uno interno temporal no-reply
+    const email = emailInput?.trim() || `sin-email-${Date.now()}@interno.smartbc.local`;
 
     const validRoles = ["client", "owner", "advisor", "agent_junior", "agent_senior"];
     if (!validRoles.includes(role)) {
