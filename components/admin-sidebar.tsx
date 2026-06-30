@@ -53,7 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
   { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares"  },
   { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
-  { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "properties",   onlyCountry: "cl" },
+  { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "captaciones",  onlyCountry: "cl" },
   { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
