@@ -189,3 +189,15 @@ export async function getCaptacionesByStatus(status: string) {
   if (error) throw error;
   return data as Captacion[];
 }
+
+export async function getCaptadoras() {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, full_name")
+    .eq("role", "captadora")
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+  return data as Array<{ id: string; full_name: string | null }>;
+}

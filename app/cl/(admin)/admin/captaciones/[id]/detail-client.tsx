@@ -24,8 +24,10 @@ type Log = {
 type DetailClientProps = {
   captacion: Captacion;
   userRole: string;
+  currentUserId: string;
   photos: Photo[];
   logs: Log[];
+  captadoras: Array<{ id: string; full_name: string | null }>;
 };
 
 const ATTEMPT_TYPE_LABELS: Record<string, string> = {
@@ -64,12 +66,14 @@ function formatPrice(price: number | null, currency: string): string | null {
 export function CaptacionDetailClient({
   captacion,
   userRole,
+  currentUserId,
   photos,
   logs,
+  captadoras,
 }: DetailClientProps) {
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
-  const isCreator = true; // Asumimos que eres el creador si tienes acceso
+  const isCreator = currentUserId === captacion.created_by;
   const [tab, setTab] = useState<"info" | "photos" | "logs">("info");
   const [updatingData, setUpdatingData] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -419,7 +423,7 @@ export function CaptacionDetailClient({
               {captacion.assigned_to ? (
                 <div className="p-3 rounded-lg bg-ink/5 border border-ink/10">
                   <p className="text-sm font-medium text-ink">
-                    {captacion.assigned_to} (desde {captacion.assigned_at ? new Date(captacion.assigned_at).toLocaleDateString("es-CL") : "—"})
+                    {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || captacion.assigned_to} (desde {captacion.assigned_at ? new Date(captacion.assigned_at).toLocaleDateString("es-CL") : "—"})
                   </p>
                 </div>
               ) : (
@@ -429,8 +433,11 @@ export function CaptacionDetailClient({
                   className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
                 >
                   <option value="">Selecciona captadora...</option>
-                  <option value="captadora1">Captadora 1</option>
-                  <option value="captadora2">Captadora 2</option>
+                  {captadoras.map((captadora) => (
+                    <option key={captadora.id} value={captadora.id}>
+                      {captadora.full_name || "Sin nombre"}
+                    </option>
+                  ))}
                 </select>
               )}
             </div>

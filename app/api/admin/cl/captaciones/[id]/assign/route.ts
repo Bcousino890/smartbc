@@ -46,7 +46,7 @@ export async function POST(
 
     // Validar que la captadora existe
     const { data: captadora, error: captadoraError } = await db
-      .from("user_profiles")
+      .from("profiles")
       .select("id, full_name")
       .eq("id", captadora_id)
       .eq("role", "captadora")
