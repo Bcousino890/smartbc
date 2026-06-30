@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CheckCircle, Clock, FileText, Home, Search, SlidersHorizontal, Star, XCircle } from "lucide-react";
+import { Building2, CheckCircle, Clock, FileText, Home, Plus, Search, SlidersHorizontal, Star, XCircle } from "lucide-react";
 import type { ApplicationCountry, ApplicationOperation, ApplicationStatus } from "@/lib/property-applications/types";
 import { ApplicationDetailModal } from "@/components/admin/property-applications/application-detail-modal";
 import { CandidateScoreCard } from "@/components/admin/property-applications/candidate-score-card";
+import { CreateApplicationModal } from "@/components/admin/property-applications/create-application-modal";
 
 type ApplicationRow = {
   id: string;
@@ -95,6 +96,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
   const [filterOperation, setFilterOperation] = useState<ApplicationOperation | "all">("all");
   const [filterStatus, setFilterStatus] = useState<ApplicationStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const filtered = applications.filter((app) => {
     const name = app.profiles?.full_name?.toLowerCase() ?? "";
@@ -139,6 +141,13 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/80"
+        >
+          <Plus size={14} />
+          Nueva solicitud
+        </button>
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
           <input
@@ -284,6 +293,14 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           applicationId={selectedId}
           onClose={() => setSelectedId(null)}
           onUpdated={() => { setSelectedId(null); window.location.reload(); }}
+        />
+      )}
+
+      {/* Modal de creación */}
+      {showCreate && (
+        <CreateApplicationModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); window.location.reload(); }}
         />
       )}
     </div>
