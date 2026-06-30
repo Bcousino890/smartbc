@@ -445,20 +445,26 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
                   {/* Selected property preview (when pre-selected from search) */}
                   {selectedProperty && !selectedClient && (
-                    <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
-                      <Home size={13} className="shrink-0 text-amber-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-medium text-amber-700">Propiedad pre-seleccionada</p>
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-xs text-ink/70">{selectedProperty.title}</p>
-                          {selectedProperty.bc_reference && (
-                            <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 font-mono text-[10px] text-amber-800">{selectedProperty.bc_reference}</span>
-                          )}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
+                        <Home size={13} className="shrink-0 text-amber-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-medium text-amber-700">Propiedad pre-seleccionada</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-xs text-ink/70">{selectedProperty.title}</p>
+                            {selectedProperty.bc_reference && (
+                              <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 font-mono text-[10px] text-amber-800">{selectedProperty.bc_reference}</span>
+                            )}
+                          </div>
                         </div>
+                        <button onClick={() => setSelectedProperty(null)} className="text-amber-400 hover:text-amber-700">
+                          <X size={13} />
+                        </button>
                       </div>
-                      <button onClick={() => setSelectedProperty(null)} className="text-amber-400 hover:text-amber-700">
-                        <X size={13} />
-                      </button>
+                      <p className="flex items-center gap-1.5 text-xs text-ink/50">
+                        <Search size={11} />
+                        Ahora busca o crea el cliente para poder continuar
+                      </p>
                     </div>
                   )}
 
