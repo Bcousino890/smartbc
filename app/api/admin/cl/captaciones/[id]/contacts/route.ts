@@ -4,14 +4,15 @@ import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const db = createAdminClient() as any;
     const { data, error } = await db
       .from("captacion_contacts")
       .select("*")
-      .eq("captacion_id", params.id)
+      .eq("captacion_id", id)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
@@ -28,8 +29,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
@@ -65,7 +67,7 @@ export async function POST(
     const { data, error } = await db
       .from("captacion_contacts")
       .insert({
-        captacion_id: params.id,
+        captacion_id: id,
         contact_type,
         contact_name: contact_name || null,
         phone: normalizedPhone,

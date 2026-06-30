@@ -40,8 +40,8 @@ export async function POST(
     // Obtener permisos granulares del rol
     const editPerms = getCaptacionEditPermissions(profile.role);
 
-    // Validar acceso a la captación: propietario, creador, asignado (captadora), o admin
-    const isAdmin = profile.role === "admin" || profile.role === "owner" || profile.role === "agent_admin";
+    // Validar acceso a la captación: creador, asignado (captadora), o admin
+    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
     const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
     const isCreator = profile.id === captacion.created_by;
 

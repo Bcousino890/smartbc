@@ -4,8 +4,9 @@ import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string; contactId: string } }
+  { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
+  const { id, contactId } = await params;
   try {
     const body = await request.json();
     const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
@@ -52,8 +53,8 @@ export async function PUT(
     const { data, error } = await db
       .from("captacion_contacts")
       .update(updateData)
-      .eq("id", params.contactId)
-      .eq("captacion_id", params.id)
+      .eq("id", contactId)
+      .eq("captacion_id", id)
       .select()
       .single();
 
@@ -77,15 +78,16 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; contactId: string } }
+  { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
+  const { id, contactId } = await params;
   try {
     const db = createAdminClient() as any;
     const { error } = await db
       .from("captacion_contacts")
       .delete()
-      .eq("id", params.contactId)
-      .eq("captacion_id", params.id);
+      .eq("id", contactId)
+      .eq("captacion_id", id);
 
     if (error) throw error;
 

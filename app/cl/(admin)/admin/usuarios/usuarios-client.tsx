@@ -21,6 +21,7 @@ const ROLE_BADGE: Record<InternalUserRole, string> = {
   agent_junior: "border-sky-200 bg-sky-50 text-sky-700",
   agent_senior: "border-indigo-200 bg-indigo-50 text-indigo-700",
   agent_admin:  "border-purple-200 bg-purple-50 text-purple-700",
+  captadora:    "border-rose-200 bg-rose-50 text-rose-700",
 };
 
 const ROLE_LABEL: Record<InternalUserRole, string> = {
@@ -32,6 +33,7 @@ const ROLE_LABEL: Record<InternalUserRole, string> = {
   agent_junior: "Agente Junior",
   agent_senior: "Agente Senior",
   agent_admin:  "Agente Admin",
+  captadora:    "Captadora",
 };
 
 const STATUS_BADGE: Record<InternalUserStatus, string> = {

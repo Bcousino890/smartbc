@@ -56,7 +56,7 @@ export async function POST(
     // Validar permisos usando el sistema oficial
     const editPerms = getCaptacionEditPermissions(profile.role);
 
-    const isAdmin = profile.role === "admin" || profile.role === "owner" || profile.role === "agent_admin";
+    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
     const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
     const isCreator = captacion.created_by === profile.id;
 

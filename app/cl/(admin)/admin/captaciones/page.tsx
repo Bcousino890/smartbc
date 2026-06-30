@@ -1,6 +1,6 @@
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { CaptacionesClient } from "./captaciones-client";
-import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll } from "./actions";
+import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, type Captacion } from "./actions";
 import { canAccess } from "@/lib/permissions";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 
@@ -26,7 +26,7 @@ export default async function CaptacionesPage() {
   const editPerms = getCaptacionEditPermissions(profile.role);
   const viewRestriction = editPerms.viewRestriction;
 
-  let captaciones;
+  let captaciones: Captacion[];
   switch (viewRestriction) {
     case "all":
       // Admin, owner, agent_admin: ver todas

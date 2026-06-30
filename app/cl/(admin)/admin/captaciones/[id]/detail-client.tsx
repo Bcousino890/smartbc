@@ -754,6 +754,7 @@ export function CaptacionDetailClient({
                 <p className="mt-2 text-xs text-ink/40">
                   Solo captadoras y admins pueden editar
                 </p>
+              )}
 
               {/* Contactos Adicionales */}
               <div className="mt-6 border-t border-ink/10 pt-6">
@@ -897,7 +898,9 @@ export function CaptacionDetailClient({
                                 <Phone size={12} />
                                 {contact.phone}
                                 {contact.has_whatsapp && (
-                                  <MessageCircle size={12} className="text-emerald-600" title="Tiene WhatsApp" />
+                                  <span title="Tiene WhatsApp">
+                                    <MessageCircle size={12} className="text-emerald-600" />
+                                  </span>
                                 )}
                               </a>
                             )}
@@ -935,7 +938,6 @@ export function CaptacionDetailClient({
                   </div>
                 )}
               </div>
-              )}
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
