@@ -71,6 +71,7 @@ export async function POST(req: Request) {
       photo_ids: body.photos ?? [],
       video_ids: body.videos ?? [],
       plan_ids: body.plans ?? [],
+      scheduled_publish_at: body.scheduledPublishAt ?? null,
       updated_at: new Date().toISOString(),
     };
 

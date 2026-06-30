@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar } from "lucide-react";
 import { useState, useMemo } from "react";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,7 @@ type DbIdealistaListing = {
   plan_ids: string[];
   idealista_property_id: string | null;
   idealista_state: string | null;
+  scheduled_publish_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -151,6 +152,7 @@ function listingToInitialData(
     photos: listing.photo_ids ?? [],
     videos: listing.video_ids ?? [],
     plans: listing.plan_ids ?? [],
+    scheduledPublishAt: listing.scheduled_publish_at ?? null,
   };
 }
 
@@ -167,6 +169,8 @@ export function IdealistaClient({
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId),
@@ -230,6 +234,29 @@ export function IdealistaClient({
     }
   };
 
+  const handlePublish = async (propertyId: string, listingId: string) => {
+    setPublishingId(listingId);
+    try {
+      const res = await fetch("/api/admin/idealista/publish-property", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId }),
+      });
+      const data = await res.json();
+      setPublishResults((prev) => ({
+        ...prev,
+        [listingId]: { ok: data.ok, msg: data.ok ? "Publicado correctamente" : (data.error ?? "Error al publicar") },
+      }));
+    } catch {
+      setPublishResults((prev) => ({
+        ...prev,
+        [listingId]: { ok: false, msg: "Error de red al publicar" },
+      }));
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
   // ── Vista de formulario (propiedad existente o inspo) ─────────────────────
   const showingForm = (selectedPropertyId && selectedProperty) || isInspoMode || editingInspoId;
 
@@ -274,6 +301,7 @@ export function IdealistaClient({
           propertyTitle={propertyTitle}
           isInspo={!!isInspo}
           initialData={initialData}
+          bcReference={!isInspo && !selectedListing ? (selectedProperty?.bc_reference ?? undefined) : undefined}
           onSave={handleSave}
         />
       </div>
@@ -421,9 +449,19 @@ export function IdealistaClient({
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
                           ✓ Publicado
                         </span>
+                      ) : (listing as any).scheduled_publish_at ? (
+                        <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                          <Calendar size={9} />
+                          {new Date((listing as any).scheduled_publish_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       ) : (
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
                           Borrador
+                        </span>
+                      )}
+                      {publishResults[listing.id] && (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${publishResults[listing.id].ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                          {publishResults[listing.id].msg}
                         </span>
                       )}
                       <span className="text-ink/30">
@@ -431,19 +469,32 @@ export function IdealistaClient({
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (listing.is_inspo) {
-                        setEditingInspoId(listing.id);
-                      } else {
-                        setSelectedPropertyId(listing.property_id!);
-                      }
-                    }}
-                    className="shrink-0 rounded-lg border border-ink/15 bg-ink/5 p-1.5 text-ink/50 transition hover:bg-ink/10 hover:text-ink"
-                    title="Editar"
-                  >
-                    <Edit2 size={14} />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {!listing.is_inspo && listing.property_id && listing.idealista_state !== "published" && (
+                      <button
+                        onClick={() => handlePublish(listing.property_id!, listing.id)}
+                        disabled={publishingId === listing.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                        title="Publicar en Idealista ahora"
+                      >
+                        {publishingId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                        Publicar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (listing.is_inspo) {
+                          setEditingInspoId(listing.id);
+                        } else {
+                          setSelectedPropertyId(listing.property_id!);
+                        }
+                      }}
+                      className="rounded-lg border border-ink/15 bg-ink/5 p-1.5 text-ink/50 transition hover:bg-ink/10 hover:text-ink"
+                      title="Editar"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                  </div>
                 </div>
               );
             })}

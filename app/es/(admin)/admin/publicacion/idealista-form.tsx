@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState, useEffect } from "react";
-import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Trash2, Video, RefreshCw } from "lucide-react";
+import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Trash2, Video, RefreshCw, Calendar, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
@@ -80,6 +80,8 @@ export type IdealistaListing = {
   photos: string[];
   videos: string[];
   plans: string[];
+  // Programación
+  scheduledPublishAt: string | null;
 };
 
 const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
@@ -136,16 +138,16 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   photos: [],
   videos: [],
   plans: [],
+  scheduledPublishAt: null,
 };
 
 // ── Utilidades ───────────────────────────────────────────────────────────
 
-function generateReferenceCode(): string {
-  const year = new Date().getFullYear();
-  const random = Math.floor(Math.random() * 10000)
-    .toString()
-    .padStart(4, "0");
-  return `IDEAL-${year}-${random}`;
+async function fetchNextBCReference(): Promise<string> {
+  const res = await fetch("/api/admin/idealista/next-reference");
+  if (!res.ok) throw new Error("Error al generar referencia");
+  const { reference } = await res.json();
+  return reference as string;
 }
 
 interface NominatimResult {
@@ -333,19 +335,18 @@ function GeocodingMapSection({
 }: GeocodingMapSectionProps) {
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
+  // Coordenadas reales geocodificadas (pin azul — solo para referencia)
+  const [realLat, setRealLat] = useState(0);
+  const [realLng, setRealLng] = useState(0);
+  // Si el usuario ya movió el pin verde manualmente
+  const [hasManualPin, setHasManualPin] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const callbackRef = useRef(onCoordinatesChange);
+  useEffect(() => { callbackRef.current = onCoordinatesChange; });
 
-  // Debounce del geocoding
   useEffect(() => {
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-
-    // No hacer nada si no hay calle y ciudad
-    if (!street || !city) {
-      setGeocodeError(null);
-      return;
-    }
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (!street || !city) { setGeocodeError(null); return; }
 
     setGeocoding(true);
     setGeocodeError(null);
@@ -353,31 +354,36 @@ function GeocodingMapSection({
     debounceTimer.current = setTimeout(async () => {
       const result = await geocodeAddress(street, city);
       if (result) {
-        onCoordinatesChange(result.lat, result.lon);
+        setRealLat(result.lat);
+        setRealLng(result.lon);
+        // Solo mover el pin verde si el usuario no lo ha tocado aún
+        if (!hasManualPin) {
+          callbackRef.current(result.lat, result.lon);
+        }
         setGeocodeError(null);
       } else {
-        setGeocodeError(
-          "No se encontró la dirección. Puedes ajustar el pin manualmente."
-        );
+        setGeocodeError("No se encontró la dirección. Ajusta el pin verde manualmente.");
       }
       setGeocoding(false);
     }, 800);
 
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, [street, city, onCoordinatesChange]);
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [street, city]);
+
+  function handleMapClick(lat: number, lng: number) {
+    setHasManualPin(true);
+    callbackRef.current(lat, lng);
+  }
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <Label>Ubicación exacta en el mapa</Label>
+        <Label>Ubicación en el mapa</Label>
         {geocoding && (
           <span className="flex items-center gap-1 text-[10px] text-ink/50">
             <Loader2 size={10} className="animate-spin" />
-            Buscando...
+            Geocodificando...
           </span>
         )}
         {latitude !== 0 && longitude !== 0 && !geocoding && (
@@ -398,16 +404,16 @@ function GeocodingMapSection({
         <MapPicker
           lat={latitude}
           lng={longitude}
-          onChange={(lat, lng) => {
-            onCoordinatesChange(lat, lng);
-          }}
+          onChange={handleMapClick}
+          realLat={realLat || undefined}
+          realLng={realLng || undefined}
         />
       </div>
       <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink/40">
         <MapPin size={11} />
         {geocoding
-          ? "Detectando ubicación..."
-          : "Haz clic en el mapa para marcar la ubicación exacta"}
+          ? "Detectando dirección real..."
+          : "Clic en mapa o arrastra el pin verde para ajustar la posición de Idealista"}
       </p>
     </div>
   );
@@ -564,28 +570,63 @@ export function IdealistaForm({
   propertyTitle,
   isInspo = false,
   initialData,
+  bcReference,
   onSave,
 }: {
   propertyId: string;
   propertyTitle?: string;
   isInspo?: boolean;
   initialData?: Partial<IdealistaListing>;
+  bcReference?: string;
   onSave: (data: IdealistaListing) => Promise<void>;
 }) {
   const [form, setForm] = useState<IdealistaListing>({
     ...DEFAULTS,
+    referenceCode: bcReference ?? "",
     ...initialData,
     propertyId,
     isInspo,
   });
   const [saving, setSaving] = useState(false);
   const [showDescPreview, setShowDescPreview] = useState(false);
+  const [generatingRef, setGeneratingRef] = useState(false);
+  // Scheduling UI state
+  const [schedDate, setSchedDate] = useState(() => {
+    if (!form.scheduledPublishAt) return "";
+    return form.scheduledPublishAt.slice(0, 10);
+  });
+  const [schedTime, setSchedTime] = useState(() => {
+    if (!form.scheduledPublishAt) return "09:00";
+    return form.scheduledPublishAt.slice(11, 16);
+  });
 
   function set<K extends keyof IdealistaListing>(
     key: K,
     value: IdealistaListing[K]
   ) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleGenerateRef() {
+    setGeneratingRef(true);
+    try {
+      const ref = await fetchNextBCReference();
+      set("referenceCode", ref);
+    } catch {
+      // silent — user can retry
+    } finally {
+      setGeneratingRef(false);
+    }
+  }
+
+  function handleScheduleChange(date: string, time: string) {
+    setSchedDate(date);
+    setSchedTime(time);
+    if (date) {
+      set("scheduledPublishAt", `${date}T${time || "09:00"}:00`);
+    } else {
+      set("scheduledPublishAt", null);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -677,10 +718,11 @@ export function IdealistaForm({
             {!form.referenceCode && (
               <button
                 type="button"
-                onClick={() => set("referenceCode", generateReferenceCode())}
-                className="flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/8 px-3 py-2 text-xs font-medium text-gold transition hover:bg-gold/15"
+                onClick={handleGenerateRef}
+                disabled={generatingRef}
+                className="flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/8 px-3 py-2 text-xs font-medium text-gold transition hover:bg-gold/15 disabled:opacity-50"
               >
-                <RefreshCw size={12} />
+                {generatingRef ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 Generar
               </button>
             )}
@@ -1107,6 +1149,64 @@ export function IdealistaForm({
         </div>
       </section>
 
+      {/* ── 11. Programar publicación ──────────────────────────────────── */}
+      <section className="space-y-4">
+        <SectionHeader step={11} title="Programar publicación" />
+        <p className="text-xs text-ink/50">
+          Deja la fecha en blanco para guardar como borrador. Si indicas una fecha, la ficha se publicará automáticamente en Idealista cuando llegue ese momento.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <Label>
+              <span className="flex items-center gap-1">
+                <Calendar size={11} />
+                Fecha de publicación
+              </span>
+            </Label>
+            <input
+              type="date"
+              value={schedDate}
+              onChange={(e) => handleScheduleChange(e.target.value, schedTime)}
+              min={new Date().toISOString().slice(0, 10)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <Label>
+              <span className="flex items-center gap-1">
+                <Clock size={11} />
+                Hora
+              </span>
+            </Label>
+            <input
+              type="time"
+              value={schedTime}
+              onChange={(e) => handleScheduleChange(schedDate, e.target.value)}
+              disabled={!schedDate}
+              className={inputCls}
+            />
+          </div>
+        </div>
+        {schedDate && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            <Calendar size={12} />
+            Programado para publicar el{" "}
+            <strong>
+              {new Date(`${schedDate}T${schedTime}`).toLocaleDateString("es-ES", {
+                weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+              })}
+            </strong>
+            <button
+              type="button"
+              onClick={() => handleScheduleChange("", "09:00")}
+              className="ml-auto text-blue-500 hover:text-blue-700 underline"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+      </section>
+
       {/* ── Guardar ──────────────────────────────────────────────────────── */}
       <div className="flex justify-end pt-2">
         <button
@@ -1115,7 +1215,11 @@ export function IdealistaForm({
           className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/85 disabled:opacity-50"
         >
           <Save size={15} />
-          {saving ? "Guardando..." : "Guardar borrador"}
+          {saving
+            ? "Guardando..."
+            : schedDate
+            ? "Guardar y programar"
+            : "Guardar borrador"}
         </button>
       </div>
     </form>
