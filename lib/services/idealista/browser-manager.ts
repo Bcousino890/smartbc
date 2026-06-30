@@ -18,6 +18,12 @@ const COOKIES_PATH = join(SESSION_DIR, "cookies.json");
 
 chromiumExtra.use(StealthPlugin());
 
+// Proxy for bypassing Cloudflare IP blocks (Hetzner datacenter IPs are blocked).
+// Options:
+//   Smartproxy:  IDEALISTA_PROXY_URL=http://user:pass@gate.smartproxy.com:7000
+//   Mac tunnel:  ssh -N -D 1080 user@<mac-ip>  →  IDEALISTA_PROXY_URL=socks5://127.0.0.1:1080
+const PROXY_URL = process.env.IDEALISTA_PROXY_URL ?? null;
+
 export async function createBrowserSession(withSavedCookies = false): Promise<BrowserSession> {
   const browser = await chromiumExtra.launch({
     headless: true,
@@ -30,8 +36,24 @@ export async function createBrowserSession(withSavedCookies = false): Promise<Br
       "--disable-blink-features=AutomationControlled",
       "--disable-infobars",
       "--window-size=1920,1080",
+      ...(PROXY_URL ? [`--proxy-server=${PROXY_URL}`] : []),
     ],
   });
+
+  if (PROXY_URL) {
+    console.log(`[Playwright] Using proxy: ${PROXY_URL.replace(/:([^@]+)@/, ":***@")}`);
+  }
+
+  // Parse proxy credentials for context auth if present in URL
+  let proxyAuth: { username: string; password: string } | undefined;
+  if (PROXY_URL) {
+    try {
+      const u = new URL(PROXY_URL);
+      if (u.username) proxyAuth = { username: u.username, password: u.password };
+    } catch {
+      // malformed URL — ignore
+    }
+  }
 
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
@@ -42,6 +64,7 @@ export async function createBrowserSession(withSavedCookies = false): Promise<Br
     extraHTTPHeaders: {
       "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
     },
+    ...(proxyAuth ? { httpCredentials: proxyAuth } : {}),
   });
 
   // Hide automation fingerprints
