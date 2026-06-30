@@ -61,7 +61,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; description:
 
 // Transiciones de estado permitidas (debe coincidir con backend)
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  draft: ["assigned"],
+  draft: ["assigned", "rejected"],
   assigned: ["preliminary_data", "rejected"],
   preliminary_data: ["contacting", "revision", "rejected"],
   contacting: ["revision", "confirmed", "rejected"],
@@ -96,7 +96,7 @@ export function CaptacionDetailClient({
   const [rescrapingAttempt, setRescrapeingAttempt] = useState(false);
   const [assigningCaptadora, setAssigningCaptadora] = useState(false);
   const [selectedCaptadoraId, setSelectedCaptadoraId] = useState(captacion.assigned_to || "");
-  const [newStatus, setNewStatus] = useState(captacion.status);
+  const [newStatus, setNewStatus] = useState("");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [formData, setFormData] = useState({
     owner_phone: captacion.owner_phone || "",
