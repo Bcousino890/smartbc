@@ -74,7 +74,7 @@ export function PublicPropertyView({
   return (
     <div className="min-h-screen bg-cream-50">
       {/* Header sobrio con la marca BC */}
-      <header className="border-b border-gold/15 bg-cream-50/95 backdrop-blur">
+      <header className="border-b border-gold/30 bg-cream-50/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-8">
           <div className="flex items-center gap-3">
             <Image
@@ -101,7 +101,7 @@ export function PublicPropertyView({
         <PropertyGallery property={property} />
 
         {/* Cabecera de la propiedad: título + precio destacado */}
-        <section className="mt-6 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+        <section className="mt-6 rounded-2xl border border-gold/35 bg-white p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] md:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -115,7 +115,7 @@ export function PublicPropertyView({
                 </p>
                 {property.bcReference && (
                   <span
-                    className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold-dark"
+                    className="rounded-md border border-gold/50 bg-gold/15 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold-dark"
                     aria-label={`Referencia interna ${property.bcReference}`}
                   >
                     Ref. {property.bcReference}
@@ -146,7 +146,7 @@ export function PublicPropertyView({
           </div>
 
           {/* Specs rápidos */}
-          <div className="mt-6 grid grid-cols-3 gap-3 border-t border-gold/15 pt-5">
+          <div className="mt-6 grid grid-cols-3 gap-3 border-t border-gold/30 pt-5">
             <Spec
               icon={<BedDouble size={16} strokeWidth={1.75} />}
               label="Dormitorios"
@@ -167,7 +167,7 @@ export function PublicPropertyView({
 
         {/* Descripción */}
         {property.longDescription && (
-          <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+          <section className="mt-5 rounded-2xl border border-gold/35 bg-white p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] md:p-8">
             <h2 className="font-serif text-2xl font-medium text-ink">
               Descripción
             </h2>
@@ -181,7 +181,7 @@ export function PublicPropertyView({
 
         {/* Vídeo de la propiedad (subido desde /admin/publicacion) */}
         {videos && videos.length > 0 && (
-          <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+          <section className="mt-5 rounded-2xl border border-gold/35 bg-white p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] md:p-8">
             <h2 className="font-serif text-2xl font-medium text-ink">
               {videos.length > 1 ? "Vídeos" : "Vídeo"}
             </h2>
@@ -231,7 +231,7 @@ export function PublicPropertyView({
 
         {/* Plano de la vivienda (subido desde /admin/publicacion) */}
         {plans && plans.length > 0 && (
-          <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+          <section className="mt-5 rounded-2xl border border-gold/35 bg-white p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] md:p-8">
             <h2 className="font-serif text-2xl font-medium text-ink">
               {plans.length > 1 ? "Planos" : "Plano"}
             </h2>
@@ -404,7 +404,7 @@ function FeaturesSection({ features }: { features: string[] }) {
   const populated = groups.filter((g) => g.items.length > 0);
 
   return (
-    <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
+    <section className="mt-5 rounded-2xl border border-gold/35 bg-white p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] md:p-8">
       <h2 className="font-serif text-2xl font-medium text-ink">
         Características
       </h2>
@@ -470,7 +470,7 @@ function ZoneMap({
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
   const externalLink = `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=${coords.zoom}/${coords.lat}/${coords.lng}`;
   return (
-    <section className="mt-5 overflow-hidden rounded-2xl border border-gold/20 bg-white/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm">
+    <section className="mt-5 overflow-hidden rounded-2xl border border-gold/35 bg-white shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)]">
       <div className="px-6 pt-6 md:px-8 md:pt-8">
         <h2 className="font-serif text-2xl font-medium text-ink">
           Ubicación · {zone}
@@ -519,16 +519,16 @@ function ZoneMap({
 function RequirementsAndServices({ isRent }: { isRent: boolean }) {
   return (
     <section className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div className="rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-7">
+      <div className="rounded-2xl border border-gold/35 bg-white p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] md:p-7">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-gold-dark">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/25 text-gold-dark">
             <FileSignature size={17} strokeWidth={1.75} />
           </span>
           <h2 className="font-serif text-xl font-medium text-ink md:text-2xl">
             Requisitos
           </h2>
         </div>
-        <ul className="mt-4 space-y-3 text-sm text-ink/75">
+        <ul className="mt-4 list-none space-y-3 text-sm text-ink/75">
           {isRent ? (
             <>
               <li className="flex gap-2">
@@ -602,9 +602,9 @@ function RequirementsAndServices({ isRent }: { isRent: boolean }) {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gold/35 bg-ink p-6 text-cream-50 shadow-[0_25px_50px_-25px_rgba(40,28,10,0.55)] md:p-7">
+      <div className="rounded-2xl border border-gold/50 bg-ink p-6 text-cream-50 shadow-[0_25px_50px_-25px_rgba(40,28,10,0.55)] md:p-7">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 text-gold">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/30 text-gold">
             <Sparkles size={17} strokeWidth={1.75} />
           </span>
           <h2 className="font-serif text-xl font-medium md:text-2xl">
@@ -616,7 +616,7 @@ function RequirementsAndServices({ isRent }: { isRent: boolean }) {
           acompañamos en todo el proceso como tu Personal Shopper
           inmobiliario.
         </p>
-        <ul className="mt-4 space-y-2.5 text-sm text-cream-50/85">
+        <ul className="mt-4 list-none space-y-2.5 text-sm text-cream-50/85">
           <li className="flex gap-2">
             <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
             <span>Búsqueda a medida y filtrado de propiedades reales.</span>
@@ -647,13 +647,13 @@ function FeatureBlock({ title, items }: { title: string; items: string[] }) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-dark">
         {title}
       </p>
-      <ul className="mt-2 grid grid-cols-1 gap-2 text-sm text-ink/75 sm:grid-cols-2 md:grid-cols-3">
+      <ul className="mt-2 grid list-none grid-cols-1 gap-2 text-sm text-ink/75 sm:grid-cols-2 md:grid-cols-3">
         {items.map((f) => (
           <li
             key={f}
-            className="inline-flex items-center gap-2 rounded-lg border border-gold/15 bg-cream-50/85 px-3 py-2"
+            className="flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-100 px-3 py-2"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-gold" />
             {f}
           </li>
         ))}
