@@ -16,7 +16,6 @@ type CaptacionesClientProps = {
 
 export function CaptacionesClient({ captaciones, userRole }: CaptacionesClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [captacionesList, setCaptacionesList] = useState(captaciones);
 
   const isCaptadora = userRole === "captadora";
 

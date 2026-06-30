@@ -8,7 +8,7 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ["assigned"],
   assigned: ["preliminary_data", "rejected"],
   preliminary_data: ["contacting", "revision", "rejected"],
-  contacting: ["confirmation_pending", "revision", "confirmed", "rejected"],
+  contacting: ["revision", "confirmed", "rejected"],
   revision: ["preliminary_data", "contacting"],
   confirmed: ["converted_to_property", "rejected"],
   converted_to_property: [],
