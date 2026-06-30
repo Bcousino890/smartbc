@@ -302,6 +302,7 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   const [lastName, setLastName] = useState(user.lastName);
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<InternalUserRole>(user.roleKey);
+  const [country, setCountry] = useState(user.country ?? "es");
   const [newPassword, setNewPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -319,6 +320,7 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
         firstName,
         lastName,
         role,
+        country,
       };
       if (isClient && phone) payload.phone = phone;
       if (newPassword) payload.password = newPassword;
@@ -434,6 +436,25 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
                   <option value="agent_senior">Agente Senior</option>
                   <option value="agent_junior">Agente Junior</option>
                 </select>
+              </div>
+            )}
+
+            {!isClient && (
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  País
+                </label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
+                >
+                  <option value="es">🇪🇸 España</option>
+                  <option value="cl">🇨🇱 Chile</option>
+                </select>
+                <p className="mt-1 text-[11px] text-ink/40">
+                  Define a qué dashboard (/es/admin o /cl/admin) accede el usuario.
+                </p>
               </div>
             )}
 

@@ -255,6 +255,7 @@ export function profileRowToInternalUser(
       : "advisor") as InternalUserRole,
     status: "active",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
+    country: row.country ?? "es",
   };
 }
 
