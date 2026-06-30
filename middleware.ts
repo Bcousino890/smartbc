@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/db/middleware";
+import {
+  getClientIP,
+  isIPWhitelisted,
+  isIPBlocked,
+} from "@/lib/security/ip-security";
 
 // SmartLinks públicos: `/compartir/{slug}` (link estable por propiedad)
 // y `/c/{token}` (link único por envío comercial, con tracking). `/og/*`
@@ -23,11 +28,41 @@ function startsWithAny(pathname: string, prefixes: string[]) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function isPublicRoute(pathname: string) {
+  return startsWithAny(pathname, PUBLIC_PATHS) || pathname === "/";
+}
+
 export async function middleware(request: NextRequest) {
-  const { supabase, response } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  if (startsWithAny(pathname, PUBLIC_PATHS) || pathname === "/") {
+  // --- IP Security: solo en rutas públicas, excluir /api/tracking ---
+  // Las rutas de admin y cliente siguen el flujo normal de auth.
+  // /api/tracking debe recibir eventos aunque la IP esté bloqueada.
+  if (isPublicRoute(pathname) && !pathname.startsWith("/api/tracking")) {
+    const ip = getClientIP(request);
+    if (ip) {
+      // Primero comprobar whitelist: si la IP está whitelisted, saltar todos los checks
+      const whitelisted = await isIPWhitelisted(ip);
+      if (!whitelisted) {
+        // Verificar blacklist
+        const blocked = await isIPBlocked(ip);
+        if (blocked) {
+          return new NextResponse(
+            "<h1>Acceso denegado</h1><p>Tu acceso ha sido bloqueado. Contacta con soporte.</p>",
+            {
+              status: 403,
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }
+          );
+        }
+      }
+    }
+  }
+
+  // --- Sesión y control de acceso ---
+  const { supabase, response } = await updateSession(request);
+
+  if (isPublicRoute(pathname)) {
     return response;
   }
 
@@ -36,7 +71,9 @@ export async function middleware(request: NextRequest) {
 
   if (!isClient && !isAdmin) return response;
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
