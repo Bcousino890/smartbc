@@ -28,7 +28,7 @@ export async function POST(
     }
 
     // Obtener info de la captacion para notificaciones
-    const { data: captacion } = await db
+    const { data: captacionInfo } = await db
       .from("captaciones")
       .select("created_by, title")
       .eq("id", id)
@@ -64,13 +64,13 @@ export async function POST(
       .eq("id", id);
 
     // Notificar al agente del intento de contacto
-    if (captacion?.created_by) {
-      const propertyTitle = captacion.title || "Captación";
+    if (captacionInfo?.created_by) {
+      const propertyTitle = captacionInfo.title || "Captación";
       const resultLabel = getResultLabel(body.result);
       const attemptTypeLabel = getAttemptTypeLabel(body.attempt_type);
 
       await db.from("crm_notifications").insert({
-        user_id: captacion.created_by,
+        user_id: captacionInfo.created_by,
         type: "captacion_contact_attempt",
         title: `${attemptTypeLabel}: ${resultLabel}`,
         body: `${profile.full_name || "Captadora"} contactó sobre ${propertyTitle} - ${resultLabel}`,

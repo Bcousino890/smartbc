@@ -10,6 +10,7 @@ export async function PATCH(req: Request) {
     phone?: string;
     role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
+    country?: "es" | "cl";
   };
 
   try {
@@ -18,7 +19,7 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "Cuerpo JSON inválido" }, { status: 400 });
   }
 
-  const { userId, firstName, lastName, phone, role, password } = body;
+  const { userId, firstName, lastName, phone, role, password, country } = body;
 
   if (!userId) {
     return Response.json({ error: "userId requerido" }, { status: 400 });
@@ -42,6 +43,12 @@ export async function PATCH(req: Request) {
   }
   if (role !== undefined) updates.role = role;
   if (phone !== undefined) updates.phone = phone;
+  if (country !== undefined) {
+    if (country !== "es" && country !== "cl") {
+      return Response.json({ error: "País inválido" }, { status: 400 });
+    }
+    updates.country = country;
+  }
 
   if (Object.keys(updates).length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
