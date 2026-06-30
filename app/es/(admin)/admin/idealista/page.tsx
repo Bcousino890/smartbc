@@ -98,6 +98,7 @@ export default async function AdminIdealistaPage() {
     idealista_property_id: string | null;
     idealista_state: string | null;
     reference_code: string | null;
+    scheduled_publish_at: string | null;
     created_at: string;
     updated_at: string;
   }>;

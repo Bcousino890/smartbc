@@ -1,6 +1,8 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Browser, BrowserContext, Page, chromium } from "playwright";
+import { Browser, BrowserContext, Page } from "playwright";
+import { chromium as chromiumExtra } from "playwright-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 export interface BrowserSession {
   browser: Browser;
@@ -14,8 +16,10 @@ const PAGE_TIMEOUT = 30_000;
 const SESSION_DIR = process.env.IDEALISTA_SESSION_DIR ?? join(process.cwd(), ".idealista-session");
 const COOKIES_PATH = join(SESSION_DIR, "cookies.json");
 
+chromiumExtra.use(StealthPlugin());
+
 export async function createBrowserSession(withSavedCookies = false): Promise<BrowserSession> {
-  const browser = await chromium.launch({
+  const browser = await chromiumExtra.launch({
     headless: true,
     args: [
       "--disable-gpu",
