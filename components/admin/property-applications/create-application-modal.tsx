@@ -188,8 +188,8 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
   }
 
   async function handleCreateNewUser() {
-    if (!newEmail || !newFirstName) {
-      setError("Nombre y email son obligatorios");
+    if (!newFirstName) {
+      setError("El nombre es obligatorio");
       return;
     }
     setError(null);
@@ -299,10 +299,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
               <div className="space-y-2 rounded-xl border border-ink/10 bg-white p-4 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-ink/50">Email</span>
-                  <div className="flex items-center gap-1">
-                    <span className="font-mono text-ink">{selectedClient.email}</span>
-                    <CopyButton text={selectedClient.email} />
-                  </div>
+                  {selectedClient.email.includes("@interno.smartbc.local") ? (
+                    <span className="text-xs italic text-ink/40">Sin email — acceso solo por contraseña</span>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-ink">{selectedClient.email}</span>
+                      <CopyButton text={selectedClient.email} />
+                    </div>
+                  )}
                 </div>
                 <div className="border-t border-ink/5" />
                 <div className="flex items-center justify-between gap-2">
@@ -544,7 +548,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-[11px] font-medium text-ink/60">Email *</label>
+                    <label className="mb-1 block text-[11px] font-medium text-ink/60">Email</label>
                     <div className="relative">
                       <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
                       <input
@@ -585,7 +589,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                 {showInlineCreate ? (
                   <button
                     onClick={handleCreateNewUser}
-                    disabled={creatingUser || !newEmail || !newFirstName}
+                    disabled={creatingUser || !newFirstName}
                     className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
                   >
                     {creatingUser && <Loader2 size={13} className="animate-spin" />}
