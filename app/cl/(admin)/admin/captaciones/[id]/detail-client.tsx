@@ -673,7 +673,7 @@ export function CaptacionDetailClient({
 
       {/* Tabs */}
       <div className="mb-4 flex gap-1 border-b border-ink/10">
-        {(["info", "photos", "logs"] as const).map((t) => (
+        {(["info", "location", "photos", "logs"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -685,11 +685,41 @@ export function CaptacionDetailClient({
             )}
           >
             {t === "info" && "Datos del Dueño"}
+            {t === "location" && "Ubicación"}
             {t === "photos" && `Fotos (${allPhotos.length})`}
             {t === "logs" && `Intentos (${logs.length})`}
           </button>
         ))}
       </div>
+
+      {/* TAB: Location */}
+      {tab === "location" && (
+        <LocationSection
+          captacion={{
+            id: captacion.id,
+            property_type: captacion.property_type || null,
+            address_verified: captacion.address_verified || false,
+            latitude: captacion.latitude || null,
+            longitude: captacion.longitude || null,
+            address_real: captacion.address_real || null,
+          }}
+          captacionId={captacion.id}
+          isCaptadora={isCaptadora}
+          isAdmin={isAdmin}
+          onUpdate={async (data) => {
+            const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/update`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || "Error al actualizar");
+            }
+            window.location.reload();
+          }}
+        />
+      )}
 
       {/* TAB: Info */}
       {tab === "info" && (
@@ -724,6 +754,187 @@ export function CaptacionDetailClient({
                 <p className="mt-2 text-xs text-ink/40">
                   Solo captadoras y admins pueden editar
                 </p>
+
+              {/* Contactos Adicionales */}
+              <div className="mt-6 border-t border-ink/10 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-ink">Contactos Adicionales</h3>
+                  {(isCaptadora || isAdmin) && !showAddContact && (
+                    <button
+                      onClick={() => {
+                        resetContactForm();
+                        setShowAddContact(true);
+                      }}
+                      className="text-xs font-medium text-gold hover:text-gold-dark"
+                    >
+                      + Agregar Contacto
+                    </button>
+                  )}
+                </div>
+
+                {showAddContact && (
+                  <div className="mb-4 rounded-lg border border-ink/10 bg-ink/3 p-4">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs font-medium text-ink/70 mb-1">Tipo</label>
+                        <select
+                          value={contactForm.contact_type}
+                          onChange={(e) => setContactForm({ ...contactForm, contact_type: e.target.value as any })}
+                          className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                        >
+                          <option value="owner">Dueño</option>
+                          <option value="spouse">Cónyuge</option>
+                          <option value="family">Familiar</option>
+                          <option value="other">Otro</option>
+                        </select>
+                      </div>
+                      {contactForm.contact_type === "family" && (
+                        <Input
+                          label="Relación"
+                          value={contactForm.relationship}
+                          onChange={(v) => setContactForm({ ...contactForm, relationship: v })}
+                          placeholder="Hijo, Hermano, etc."
+                        />
+                      )}
+                    </div>
+
+                    <Input
+                      label="Nombre"
+                      value={contactForm.contact_name}
+                      onChange={(v) => setContactForm({ ...contactForm, contact_name: v })}
+                      placeholder="Juan, María, etc."
+                    />
+
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-ink/70 mb-1">Teléfono</label>
+                      <div className="flex gap-2 items-start">
+                        <input
+                          type="tel"
+                          value={contactForm.phone}
+                          onChange={(e) => handlePhoneChange(e.target.value)}
+                          placeholder="+56 9 1234 5678"
+                          className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                        />
+                        {contactForm.phone && isValidPhoneChile(normalizePhone(contactForm.phone)) && (
+                          <button
+                            onClick={handleCheckWhatsApp}
+                            disabled={checkingWhatsApp}
+                            title="Verificar si tiene WhatsApp"
+                            className="mt-0.5 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm transition hover:bg-ink/5 disabled:opacity-50"
+                          >
+                            {checkingWhatsApp ? "..." : "Verificar"}
+                          </button>
+                        )}
+                      </div>
+                      {phoneValidationError && (
+                        <p className="mt-1 text-xs text-red-600">{phoneValidationError}</p>
+                      )}
+                    </div>
+
+                    <Input
+                      label="Email"
+                      value={contactForm.email}
+                      onChange={(v) => setContactForm({ ...contactForm, email: v })}
+                      placeholder="correo@example.com"
+                    />
+
+                    <label className="flex items-center gap-2 mb-4">
+                      <input
+                        type="checkbox"
+                        checked={contactForm.has_whatsapp}
+                        onChange={(e) => setContactForm({ ...contactForm, has_whatsapp: e.target.checked })}
+                        className="rounded border border-ink/20"
+                      />
+                      <span className="text-sm font-medium text-ink">Tiene WhatsApp</span>
+                    </label>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveContact}
+                        disabled={savingContact}
+                        className="flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+                      >
+                        {savingContact && <Loader2 size={14} className="animate-spin" />}
+                        {editingContactId ? "Actualizar" : "Guardar"}
+                      </button>
+                      <button
+                        onClick={resetContactForm}
+                        className="rounded-lg border border-ink/20 px-3 py-2 text-sm font-medium text-ink transition hover:bg-ink/5"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {contacts.length === 0 ? (
+                  <p className="text-sm text-ink/40">Sin contactos adicionales</p>
+                ) : (
+                  <div className="space-y-2">
+                    {contacts.map((contact) => (
+                      <div key={contact.id} className="rounded-lg border border-ink/10 bg-white p-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="text-xs font-medium uppercase text-ink/50">
+                              {contact.contact_type === "owner" && "Dueño"}
+                              {contact.contact_type === "spouse" && "Cónyuge"}
+                              {contact.contact_type === "family" && "Familiar"}
+                              {contact.contact_type === "other" && "Otro"}
+                            </span>
+                            {contact.relationship && (
+                              <span className="text-xs text-ink/50">({contact.relationship})</span>
+                            )}
+                          </div>
+                          {contact.contact_name && (
+                            <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
+                          )}
+                          <div className="mt-1 flex items-center gap-3 flex-wrap">
+                            {contact.phone && (
+                              <a
+                                href={`tel:${contact.phone}`}
+                                className="flex items-center gap-1 text-xs text-gold hover:underline"
+                              >
+                                <Phone size={12} />
+                                {contact.phone}
+                                {contact.has_whatsapp && (
+                                  <MessageCircle size={12} className="text-emerald-600" title="Tiene WhatsApp" />
+                                )}
+                              </a>
+                            )}
+                            {contact.email && (
+                              <a
+                                href={`mailto:${contact.email}`}
+                                className="text-xs text-gold hover:underline truncate"
+                              >
+                                {contact.email}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        {(isCaptadora || isAdmin) && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleEditContact(contact)}
+                              title="Editar"
+                              className="rounded p-1.5 text-ink/50 hover:text-ink hover:bg-ink/5"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteContact(contact.id)}
+                              disabled={deletingContactId === contact.id}
+                              title="Eliminar"
+                              className="rounded p-1.5 text-ink/50 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               )}
             </div>
           ) : (
