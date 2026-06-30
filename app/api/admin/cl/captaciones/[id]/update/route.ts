@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { canAccess } from "@/lib/permissions";
 
 export async function POST(
   request: NextRequest,
@@ -13,10 +15,18 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
+    // Verificar permiso base: ¿tiene "edit" en captaciones?
+    if (!canAccess(profile.role, "captaciones", "edit")) {
+      return NextResponse.json(
+        { error: "No tienes permisos para editar captaciones" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const db = createAdminClient() as any;
 
-    // Verify ownership and get created_by for notification
+    // Obtener la captación
     const { data: captacion } = await db
       .from("captaciones")
       .select("assigned_to, created_by, title, owner_confirmed, status")
@@ -27,20 +37,40 @@ export async function POST(
       return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
     }
 
-    const isAdmin = profile.role === "admin";
+    // Obtener permisos granulares del rol
+    const editPerms = getCaptacionEditPermissions(profile.role);
+
+    // Validar acceso a la captación: propietario, creador, asignado (captadora), o admin
+    const isAdmin = profile.role === "admin" || profile.role === "owner" || profile.role === "agent_admin";
     const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
     const isCreator = profile.id === captacion.created_by;
 
-    // Permisos
     if (!isAdmin && !isCaptadora && !isCreator) {
-      return NextResponse.json({ error: "No tienes permisos para actualizar" }, { status: 403 });
+      return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
 
-    // Captadoras solo pueden editar owner data
-    if (!isAdmin && isCaptadora) {
-      if (body.status || body.title || body.price) {
+    // Validar restricciones de campos editables por rol
+    const fieldRestrictions = editPerms.fields;
+
+    // Detectar qué tipo de campos intenta editar
+    const isEditingPropertyFields = [
+      "title", "price", "currency", "bedrooms", "bathrooms",
+      "square_meters", "region", "commune", "zone", "subzone"
+    ].some(field => field in body && body[field] !== undefined);
+
+    const isEditingStatus = "status" in body && body.status !== undefined;
+
+    // Captadora solo puede editar owner fields
+    if (isCaptadora && !isAdmin) {
+      if (isEditingPropertyFields) {
         return NextResponse.json(
-          { error: "Solo puedes editar los datos del dueño" },
+          { error: "Solo puedes editar los datos del propietario" },
+          { status: 403 }
+        );
+      }
+      if (isEditingStatus) {
+        return NextResponse.json(
+          { error: "No puedes cambiar el estado de la captación" },
           { status: 403 }
         );
       }
@@ -61,6 +91,10 @@ export async function POST(
     if (body.address_real !== undefined) updates.address_real = body.address_real || null;
     if (body.notes !== undefined) updates.notes = body.notes || null;
     if (body.owner_confirmed !== undefined) updates.owner_confirmed = nowConfirmed;
+    if (body.property_type !== undefined) updates.property_type = body.property_type || null;
+    if (body.address_verified !== undefined) updates.address_verified = body.address_verified || false;
+    if (body.latitude !== undefined && body.latitude !== null) updates.latitude = body.latitude;
+    if (body.longitude !== undefined && body.longitude !== null) updates.longitude = body.longitude;
 
     // Campos que solo admin puede editar
     if (isAdmin) {

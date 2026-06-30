@@ -2,14 +2,21 @@ import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
-
-const AGENT_ROLES = ["admin", "agent", "agent_junior", "agent_senior", "agent_admin"];
+import { canAccess } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   try {
     const profile = await getCurrentProfile();
-    if (!profile || !AGENT_ROLES.includes(profile.role)) {
+    if (!profile) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    // Verificar permiso oficial: ¿tiene "create" en captaciones?
+    if (!canAccess(profile.role, "captaciones", "create")) {
+      return NextResponse.json(
+        { error: "No tienes permisos para crear captaciones" },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();

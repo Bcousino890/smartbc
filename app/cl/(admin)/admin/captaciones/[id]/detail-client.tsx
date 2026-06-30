@@ -2,12 +2,13 @@
 
 import {
   ArrowLeft, Phone, MapPin, Check, Image, Clock,
-  MessageSquare, Navigation, ExternalLink, Loader2,
+  MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { Captacion } from "../actions";
+import type { Captacion, CaptacionContact } from "../actions";
+import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 
 type Photo = { id: string; url: string; position: number };
 type Log = {
@@ -57,6 +58,18 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; description:
   rejected: { label: "Rechazada", color: "bg-red-100 text-red-700", description: "Rechazada" },
 };
 
+// Transiciones de estado permitidas (debe coincidir con backend)
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  draft: ["assigned"],
+  assigned: ["preliminary_data", "rejected"],
+  preliminary_data: ["contacting", "revision", "rejected"],
+  contacting: ["revision", "confirmed", "rejected"],
+  revision: ["preliminary_data", "contacting"],
+  confirmed: ["converted_to_property", "rejected"],
+  converted_to_property: [],
+  rejected: [],
+};
+
 function formatPrice(price: number | null, currency: string): string | null {
   if (!price) return null;
   if (currency === "uf") return `UF ${price.toLocaleString("es-CL")}`;
@@ -83,6 +96,7 @@ export function CaptacionDetailClient({
   const [assigningCaptadora, setAssigningCaptadora] = useState(false);
   const [selectedCaptadoraId, setSelectedCaptadoraId] = useState(captacion.assigned_to || "");
   const [newStatus, setNewStatus] = useState(captacion.status);
+  const [revisionNotes, setRevisionNotes] = useState("");
   const [formData, setFormData] = useState({
     owner_phone: captacion.owner_phone || "",
     owner_name: captacion.owner_name || "",
@@ -100,6 +114,21 @@ export function CaptacionDetailClient({
   });
   const [error, setError] = useState("");
   const [currentPhoto, setCurrentPhoto] = useState(0);
+  const [contacts, setContacts] = useState<CaptacionContact[]>(captacion.contacts || []);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [savingContact, setSavingContact] = useState(false);
+  const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
+  const [contactForm, setContactForm] = useState({
+    contact_type: "owner" as "owner" | "spouse" | "family" | "other",
+    contact_name: "",
+    phone: "",
+    email: "",
+    has_whatsapp: false,
+    relationship: "",
+  });
+  const [phoneValidationError, setPhoneValidationError] = useState("");
+  const [checkingWhatsApp, setCheckingWhatsApp] = useState(false);
 
   async function handleUpdate() {
     setError("");
@@ -152,13 +181,23 @@ export function CaptacionDetailClient({
 
   async function handleStatusChange() {
     if (!newStatus) return;
+
+    // Validar que si es "revision", debe haber notas
+    if (newStatus === "revision" && !revisionNotes.trim()) {
+      setError("Se requieren notas para marcar como revisión");
+      return;
+    }
+
     setError("");
     setUpdatingStatus(true);
     try {
       const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_status: newStatus }),
+        body: JSON.stringify({
+          new_status: newStatus,
+          notes: newStatus === "revision" ? revisionNotes : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -223,6 +262,151 @@ export function CaptacionDetailClient({
     } finally {
       setRescrapeingAttempt(false);
     }
+  }
+
+  function handlePhoneChange(value: string) {
+    setPhoneValidationError("");
+    setContactForm({ ...contactForm, phone: value });
+    if (value.trim()) {
+      const normalized = normalizePhone(value);
+      if (!isValidPhoneChile(normalized)) {
+        setPhoneValidationError("Teléfono chileno inválido (debe ser 9 dígitos después del prefijo)");
+      }
+    }
+  }
+
+  async function handleCheckWhatsApp() {
+    if (!contactForm.phone || !isValidPhoneChile(normalizePhone(contactForm.phone))) {
+      setPhoneValidationError("Teléfono inválido");
+      return;
+    }
+    setCheckingWhatsApp(true);
+    try {
+      const normalized = normalizePhone(contactForm.phone);
+      const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/check-whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalized }),
+      });
+      if (!res.ok) {
+        setPhoneValidationError("Error al verificar WhatsApp");
+        return;
+      }
+      const data = await res.json();
+      setContactForm({ ...contactForm, has_whatsapp: data.has_whatsapp || false });
+    } catch (e) {
+      console.error("check-whatsapp error:", e);
+    } finally {
+      setCheckingWhatsApp(false);
+    }
+  }
+
+  async function handleSaveContact() {
+    setPhoneValidationError("");
+    setSavingContact(true);
+    try {
+      let phone = contactForm.phone;
+      if (phone) {
+        const normalized = normalizePhone(phone);
+        if (!isValidPhoneChile(normalized)) {
+          setPhoneValidationError("Teléfono chileno inválido");
+          setSavingContact(false);
+          return;
+        }
+        phone = normalized;
+      }
+
+      const method = editingContactId ? "PUT" : "POST";
+      const url = editingContactId
+        ? `/api/admin/cl/captaciones/${captacion.id}/contacts/${editingContactId}`
+        : `/api/admin/cl/captaciones/${captacion.id}/contacts`;
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contact_type: contactForm.contact_type,
+          contact_name: contactForm.contact_name || null,
+          phone: phone || null,
+          email: contactForm.email || null,
+          has_whatsapp: contactForm.has_whatsapp,
+          relationship: contactForm.relationship || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setPhoneValidationError(data.error || "Error al guardar contacto");
+        return;
+      }
+      const newContact = await res.json();
+      if (editingContactId) {
+        setContacts(contacts.map(c => c.id === editingContactId ? newContact : c));
+      } else {
+        setContacts([...contacts, newContact]);
+      }
+      setShowAddContact(false);
+      setEditingContactId(null);
+      setContactForm({
+        contact_type: "owner",
+        contact_name: "",
+        phone: "",
+        email: "",
+        has_whatsapp: false,
+        relationship: "",
+      });
+    } catch (e) {
+      console.error("save-contact error:", e);
+      setPhoneValidationError("Error de conexión");
+    } finally {
+      setSavingContact(false);
+    }
+  }
+
+  function handleEditContact(contact: CaptacionContact) {
+    setEditingContactId(contact.id);
+    setContactForm({
+      contact_type: contact.contact_type,
+      contact_name: contact.contact_name || "",
+      phone: contact.phone || "",
+      email: contact.email || "",
+      has_whatsapp: contact.has_whatsapp || false,
+      relationship: contact.relationship || "",
+    });
+    setShowAddContact(true);
+  }
+
+  async function handleDeleteContact(contactId: string) {
+    if (!confirm("¿Eliminar este contacto?")) return;
+    setDeletingContactId(contactId);
+    try {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/contacts/${contactId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        setError("Error al eliminar contacto");
+        return;
+      }
+      setContacts(contacts.filter(c => c.id !== contactId));
+    } catch (e) {
+      console.error("delete-contact error:", e);
+      setError("Error de conexión");
+    } finally {
+      setDeletingContactId(null);
+    }
+  }
+
+  function resetContactForm() {
+    setShowAddContact(false);
+    setEditingContactId(null);
+    setContactForm({
+      contact_type: "owner",
+      contact_name: "",
+      phone: "",
+      email: "",
+      has_whatsapp: false,
+      relationship: "",
+    });
+    setPhoneValidationError("");
   }
 
   const allPhotos = photos.length > 0 ? photos : (captacion.cover_photo_url ? [{ id: "0", url: captacion.cover_photo_url, position: 0 }] : []);

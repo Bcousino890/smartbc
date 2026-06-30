@@ -1,6 +1,19 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 
+export type CaptacionContact = {
+  id: string;
+  captacion_id: string;
+  contact_type: "owner" | "spouse" | "family" | "other";
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  has_whatsapp: boolean;
+  relationship: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Captacion = {
   id: string;
   created_by: string;
@@ -35,7 +48,10 @@ export type Captacion = {
   notes: string | null;
   revision_notes: string | null;
   last_contact_attempt_at: string | null;
+  property_type: 'house' | 'apartment' | 'land' | 'office' | 'commercial' | 'other' | null;
+  address_verified: boolean;
   updated_at: string;
+  contacts?: CaptacionContact[];
 };
 
 export async function createCaptacion(input: {
@@ -124,7 +140,22 @@ export async function getCaptacion(id: string) {
     .single();
 
   if (error) throw error;
-  return data as Captacion;
+
+  // Cargar contactos asociados
+  const { data: contacts, error: contactsError } = await db
+    .from("captacion_contacts")
+    .select("*")
+    .eq("captacion_id", id)
+    .order("created_at", { ascending: true });
+
+  if (contactsError) {
+    console.error("Error loading contacts:", contactsError);
+  }
+
+  return {
+    ...data,
+    contacts: contacts || [],
+  } as Captacion;
 }
 
 export async function updateCaptacionData(id: string, updates: {

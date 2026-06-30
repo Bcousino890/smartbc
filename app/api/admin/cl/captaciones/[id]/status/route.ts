@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 
 // Transiciones de estado permitidas
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -52,12 +53,23 @@ export async function POST(
       );
     }
 
-    // Validar permisos
-    const isAdmin = profile.role === "admin";
+    // Validar permisos usando el sistema oficial
+    const editPerms = getCaptacionEditPermissions(profile.role);
+
+    const isAdmin = profile.role === "admin" || profile.role === "owner" || profile.role === "agent_admin";
     const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
     const isCreator = captacion.created_by === profile.id;
 
+    // Validar que tiene acceso a esta captación
     if (!isAdmin && !isCaptadora && !isCreator) {
+      return NextResponse.json(
+        { error: "No tienes acceso a esta captación" },
+        { status: 403 }
+      );
+    }
+
+    // Validar que puede cambiar estado (según rol)
+    if (!isAdmin && !editPerms.fields.canEditStatus) {
       return NextResponse.json(
         { error: "No tienes permisos para cambiar el estado" },
         { status: 403 }

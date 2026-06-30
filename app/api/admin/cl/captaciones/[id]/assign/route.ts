@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 
 export async function POST(
   request: NextRequest,
@@ -10,10 +11,15 @@ export async function POST(
     const { id } = await params;
     const profile = await getCurrentProfile();
 
-    // Solo admins pueden asignar
-    if (!profile || profile.role !== "admin") {
+    if (!profile) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    // Verificar permiso granular: solo quien puede asignar captadora
+    const editPerms = getCaptacionEditPermissions(profile.role);
+    if (!editPerms.fields.canAssignCaptadora) {
       return NextResponse.json(
-        { error: "Solo administradores pueden asignar captaciones" },
+        { error: "No tienes permisos para asignar captaciones" },
         { status: 403 }
       );
     }
