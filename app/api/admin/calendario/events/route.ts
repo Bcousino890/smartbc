@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
       completed_at,
       created_at,
       updated_at,
+      google_event_id,
+      calendar_synced_at,
       properties ( id, title, address, zone ),
       profiles!visit_requests_client_id_fkey ( id, full_name, email )
     `)
@@ -96,6 +98,8 @@ export async function POST(request: NextRequest) {
       completed_at,
       created_at,
       updated_at,
+      google_event_id,
+      calendar_synced_at,
       properties ( id, title, address, zone ),
       profiles!visit_requests_client_id_fkey ( id, full_name, email )
     `)

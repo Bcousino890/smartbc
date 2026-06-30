@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Clock,
   Flag,
+  Calendar,
+  AlertCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
@@ -48,6 +50,8 @@ type VisitEvent = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  google_event_id?: string | null;
+  calendar_synced_at?: string | null;
   properties: { id: string; title: string; address: string | null; zone: string } | null;
   profiles: { id: string; full_name: string | null; email: string } | null;
 };
@@ -164,6 +168,13 @@ export function CalendarioClient({
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>("all");
 
+  // Google Calendar integration
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [syncingEventId, setSyncingEventId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<Record<string, boolean>>({});
+
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(makeDefaultCreateForm());
@@ -180,6 +191,18 @@ export function CalendarioClient({
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  const checkGoogleStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrations/google/status");
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleConnected(data.connected);
+      }
+    } catch (error) {
+      console.error("Error checking Google Calendar status:", error);
+    }
+  }, []);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -195,7 +218,51 @@ export function CalendarioClient({
 
   useEffect(() => {
     fetchEvents();
-  }, [fetchEvents]);
+    checkGoogleStatus();
+  }, [fetchEvents, checkGoogleStatus]);
+
+  const handleConnectGoogle = async () => {
+    setGoogleLoading(true);
+    setGoogleError(null);
+    try {
+      const res = await fetch("/api/integrations/google/auth-url");
+      if (!res.ok) {
+        setGoogleError("Error connecting to Google Calendar");
+        return;
+      }
+      const data = await res.json();
+      window.location.href = data.authUrl;
+    } catch (error) {
+      setGoogleError("Failed to initiate Google Calendar connection");
+      console.error(error);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleSyncToGoogle = async (eventId: string) => {
+    setSyncingEventId(eventId);
+    try {
+      const res = await fetch("/api/admin/calendario/sync-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitId: eventId }),
+      });
+
+      if (res.ok) {
+        setSyncStatus((prev) => ({ ...prev, [eventId]: true }));
+        await fetchEvents();
+      } else {
+        const error = await res.json();
+        alert(error.error ?? "Error al sincronizar con Google Calendar");
+      }
+    } catch (error) {
+      alert("Error de conexión al sincronizar con Google Calendar");
+      console.error(error);
+    } finally {
+      setSyncingEventId(null);
+    }
+  };
 
   // ---- Navigation ----
   function prevMonth() {
@@ -374,6 +441,27 @@ export function CalendarioClient({
                 {pendingCount} pendiente{pendingCount !== 1 ? "s" : ""}
               </span>
             )}
+            {googleConnected && (
+              <span className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                <Calendar size={11} strokeWidth={2} />
+                Google Calendar conectado
+              </span>
+            )}
+            {!googleConnected && (
+              <button
+                type="button"
+                onClick={handleConnectGoogle}
+                disabled={googleLoading}
+                className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-[13px] font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+              >
+                {googleLoading ? (
+                  <Loader2 size={14} strokeWidth={2} className="animate-spin" />
+                ) : (
+                  <Calendar size={14} strokeWidth={2} />
+                )}
+                Conectar Google Calendar
+              </button>
+            )}
             <button
               type="button"
               onClick={() => openCreate()}
@@ -445,18 +533,40 @@ export function CalendarioClient({
                 </span>
                 <div className="mt-0.5 space-y-0.5 overflow-hidden">
                   {dayEvents.slice(0, 3).map((ev) => (
-                    <button
-                      key={ev.id}
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); openEdit(ev); }}
-                      title={`${ev.properties?.title ?? "Propiedad"} — ${displayName(ev.profiles)}`}
-                      className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[10px] font-medium transition hover:opacity-80 ${STATUS_CARD[ev.status]}`}
-                    >
-                      <span className="flex items-center gap-1 truncate">
-                        <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[ev.status]}`} />
-                        {formatTime(ev.requested_at)} {ev.properties?.title ?? "—"}
-                      </span>
-                    </button>
+                    <div key={ev.id} className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEdit(ev); }}
+                        title={`${ev.properties?.title ?? "Propiedad"} — ${displayName(ev.profiles)}`}
+                        className={`flex-1 truncate rounded border px-1 py-0.5 text-left text-[10px] font-medium transition hover:opacity-80 ${STATUS_CARD[ev.status]}`}
+                      >
+                        <span className="flex items-center gap-1 truncate">
+                          <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[ev.status]}`} />
+                          {formatTime(ev.requested_at)} {ev.properties?.title ?? "—"}
+                        </span>
+                      </button>
+                      {googleConnected && !ev.google_event_id && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSyncToGoogle(ev.id);
+                          }}
+                          disabled={syncingEventId === ev.id}
+                          title="Sincronizar con Google Calendar"
+                          className="flex h-full items-center justify-center rounded border border-transparent bg-blue-50/60 px-1 py-0.5 text-blue-600 transition hover:bg-blue-100/80 disabled:opacity-50"
+                        >
+                          {syncingEventId === ev.id ? (
+                            <Loader2 size={10} strokeWidth={2} className="animate-spin" />
+                          ) : (
+                            <Calendar size={10} strokeWidth={2} />
+                          )}
+                        </button>
+                      )}
+                      {ev.google_event_id && (
+                        <CheckCircle2 size={12} strokeWidth={2} className="shrink-0 text-emerald-600" title="Sincronizado con Google Calendar" />
+                      )}
+                    </div>
                   ))}
                   {dayEvents.length > 3 && (
                     <span className="block pl-1 text-[9px] text-ink/45">
@@ -812,26 +922,56 @@ export function CalendarioClient({
                 </p>
               )}
 
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setEditEvent(null); setEditForm(null); }}
-                  className="rounded-lg border border-ink/10 bg-white/70 px-4 py-2 text-[13px] font-medium text-ink/70 transition hover:bg-white"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-[13px] font-medium text-ink transition hover:bg-gold/80 disabled:opacity-60"
-                >
-                  {saving ? (
-                    <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 size={13} strokeWidth={2} />
+              <div className="flex justify-between gap-2 pt-1">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setEditEvent(null); setEditForm(null); }}
+                    className="rounded-lg border border-ink/10 bg-white/70 px-4 py-2 text-[13px] font-medium text-ink/70 transition hover:bg-white"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  {googleConnected && !editEvent?.google_event_id && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (editEvent) {
+                          handleSyncToGoogle(editEvent.id);
+                        }
+                      }}
+                      disabled={syncingEventId === editEvent?.id}
+                      className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-[13px] font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+                    >
+                      {syncingEventId === editEvent?.id ? (
+                        <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />
+                      ) : (
+                        <Calendar size={13} strokeWidth={2} />
+                      )}
+                      Sincronizar Google
+                    </button>
                   )}
-                  Guardar cambios
-                </button>
+                  {editEvent?.google_event_id && (
+                    <span className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-[13px] font-medium text-emerald-700">
+                      <CheckCircle2 size={13} strokeWidth={2} />
+                      Ya sincronizado
+                    </span>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-[13px] font-medium text-ink transition hover:bg-gold/80 disabled:opacity-60"
+                  >
+                    {saving ? (
+                      <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={13} strokeWidth={2} />
+                    )}
+                    Guardar cambios
+                  </button>
+                </div>
               </div>
             </form>
           </div>
