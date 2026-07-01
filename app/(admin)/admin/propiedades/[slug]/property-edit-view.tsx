@@ -14,6 +14,7 @@ import {
   Loader2,
   MapIcon,
   Plus,
+  Rocket,
   Save,
   Send,
   Trash2,
@@ -146,6 +147,14 @@ export function PropertyEditView({
   const [newFeature, setNewFeature] = useState("");
   const [copied, setCopied] = useState(false);
   const [publishedWeb, setPublishedWeb] = useState(property.published_web);
+
+  // ─── Publicación en Idealista ──────────────────────────────────────────
+  const [idealistaPublishing, setIdealistaPublishing] = useState(false);
+  const [idealistaResult, setIdealistaResult] = useState<
+    | { kind: "idle" }
+    | { kind: "success"; idealistaPropertyId?: string }
+    | { kind: "error"; msg: string }
+  >({ kind: "idle" });
 
   const addManualFeature = () => {
     const f = newFeature.trim();
@@ -324,6 +333,51 @@ export function PropertyEditView({
         setSaveState({ kind: "error", msg: res.error });
       }
     });
+  };
+
+  // Campos que Idealista necesita para poder crear el anuncio. Se validan
+  // contra el estado actual del formulario (no hace falta guardar antes).
+  const idealistaMissingFields: string[] = [];
+  if (!address.trim()) idealistaMissingFields.push("Dirección");
+  if (!zone.trim()) idealistaMissingFields.push("Zona");
+  if (squareMeters === "" || squareMeters <= 0) idealistaMissingFields.push("Metros cuadrados");
+  if (!price || price <= 0) idealistaMissingFields.push("Precio");
+  if (!description.trim()) idealistaMissingFields.push("Descripción");
+  if (property.photos.length === 0) idealistaMissingFields.push("Al menos 1 foto");
+
+  const handlePublishIdealista = async () => {
+    if (idealistaMissingFields.length > 0) return;
+    setIdealistaPublishing(true);
+    setIdealistaResult({ kind: "idle" });
+    try {
+      const res = await fetch("/api/admin/idealista/publish-property", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId: property.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setIdealistaResult({
+          kind: "success",
+          idealistaPropertyId: data.idealistaPropertyId,
+        });
+      } else {
+        setIdealistaResult({
+          kind: "error",
+          msg: data.error ?? "No se pudo publicar en Idealista",
+        });
+      }
+    } catch (err) {
+      setIdealistaResult({
+        kind: "error",
+        msg:
+          err instanceof Error
+            ? `Error de red: ${err.message}`
+            : "Error de red al publicar en Idealista",
+      });
+    } finally {
+      setIdealistaPublishing(false);
+    }
   };
 
   return (
@@ -1001,6 +1055,77 @@ export function PropertyEditView({
                 /web/propiedades
               </a>{" "}
               una vez guardada.
+            </p>
+          )}
+        </Section>
+
+        {/* Publicación en Idealista */}
+        <Section
+          icon={<Rocket size={15} strokeWidth={1.75} />}
+          title="Idealista"
+          subtitle="Publica esta propiedad como anuncio en Idealista. Antes de publicar, completa los datos que falten."
+        >
+          {idealistaMissingFields.length > 0 ? (
+            <div className="rounded-lg border border-gold/30 bg-gold/10 p-3.5 text-[12px] text-ink/80">
+              <p className="mb-1.5 font-medium text-ink">
+                Faltan datos para publicar en Idealista:
+              </p>
+              <ul className="list-inside list-disc space-y-0.5">
+                {idealistaMissingFields.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-ink/60">
+                Completa estos campos arriba y guarda los cambios antes de
+                publicar.
+              </p>
+            </div>
+          ) : (
+            <p className="text-[12px] text-ink/55">
+              Todos los datos requeridos están completos. Al publicar se
+              abrirá el formulario de Idealista automáticamente con esta
+              información.
+            </p>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handlePublishIdealista()}
+              disabled={idealistaPublishing || idealistaMissingFields.length > 0}
+              className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {idealistaPublishing ? (
+                <Loader2 size={13} className="animate-spin text-gold-dark" />
+              ) : (
+                <Rocket size={13} strokeWidth={1.75} className="text-gold-dark" />
+              )}
+              <span>
+                {idealistaPublishing
+                  ? "Publicando…"
+                  : "Publicar en Idealista"}
+              </span>
+            </button>
+            <Link
+              href="/admin/publicacion"
+              className="text-[12px] font-medium text-gold-dark hover:underline"
+            >
+              Completar ficha completa en Publicación →
+            </Link>
+          </div>
+
+          {idealistaResult.kind === "success" && (
+            <p className="text-[12px] text-emerald-700">
+              ✓ Publicado en Idealista correctamente
+              {idealistaResult.idealistaPropertyId
+                ? ` (ID ${idealistaResult.idealistaPropertyId})`
+                : ""}
+              .
+            </p>
+          )}
+          {idealistaResult.kind === "error" && (
+            <p className="text-[12px] text-rose-700">
+              {idealistaResult.msg}
             </p>
           )}
         </Section>
