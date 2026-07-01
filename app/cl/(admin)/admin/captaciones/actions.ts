@@ -141,20 +141,24 @@ export async function getCaptacion(id: string) {
 
   if (error) throw error;
 
-  // Cargar contactos asociados
-  const { data: contacts, error: contactsError } = await db
-    .from("captacion_contacts")
-    .select("*")
-    .eq("captacion_id", id)
-    .order("created_at", { ascending: true });
-
-  if (contactsError) {
-    console.error("Error loading contacts:", contactsError);
+  // Cargar contactos (tabla puede no existir si migración pendiente)
+  let contacts: any[] = [];
+  try {
+    const { data: contactsData } = await db
+      .from("captacion_contacts")
+      .select("*")
+      .eq("captacion_id", id)
+      .order("created_at", { ascending: true });
+    contacts = contactsData || [];
+  } catch {
+    // Migración 0057 pendiente — continuar sin contactos
   }
 
   return {
     ...data,
-    contacts: contacts || [],
+    property_type: data.property_type ?? null,
+    address_verified: data.address_verified ?? false,
+    contacts,
   } as Captacion;
 }
 

@@ -17,15 +17,21 @@ export default async function CaptacionDetailPage({
     return <div className="p-10 text-center">No autorizado</div>;
   }
 
-  const captacion = await getCaptacion(id);
+  let captacion;
+  try {
+    captacion = await getCaptacion(id);
+  } catch (e) {
+    console.error("getCaptacion error:", e);
+    return <div className="p-10 text-center">Error al cargar la captación</div>;
+  }
 
   if (!captacion) {
     return <div className="p-10 text-center">Captación no encontrada</div>;
   }
 
-  // Load photos, logs, and captadoras
   const db = createAdminClient() as any;
-  const [{ data: photos }, { data: logs }, captadoras] = await Promise.all([
+
+  const [photosResult, logsResult, captadoras] = await Promise.allSettled([
     db.from("captacion_photos").select("*").eq("captacion_id", id).order("position"),
     db
       .from("captacion_logs")
@@ -35,14 +41,18 @@ export default async function CaptacionDetailPage({
     getCaptadoras(),
   ]);
 
+  const photos = photosResult.status === "fulfilled" ? (photosResult.value.data || []) : [];
+  const logs = logsResult.status === "fulfilled" ? (logsResult.value.data || []) : [];
+  const captadorasList = captadoras.status === "fulfilled" ? (captadoras.value || []) : [];
+
   return (
     <CaptacionDetailClient
       captacion={captacion}
       userRole={profile.role}
       currentUserId={profile.id}
-      photos={photos || []}
-      logs={logs || []}
-      captadoras={captadoras || []}
+      photos={photos}
+      logs={logs}
+      captadoras={captadorasList}
     />
   );
 }
