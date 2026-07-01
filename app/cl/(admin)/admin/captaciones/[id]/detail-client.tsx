@@ -609,7 +609,7 @@ export function CaptacionDetailClient({
               <div>
                 <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Captadora asignada</p>
                 <p className="text-sm font-semibold text-ink">
-                  {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "—"}
+                  {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "Captadora"}
                 </p>
                 {captacion.assigned_at && (
                   <p className="text-xs text-ink/40 mt-0.5">
