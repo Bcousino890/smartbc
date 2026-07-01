@@ -28,12 +28,16 @@ type DbIdealistaListing = {
   inspo_title: string | null;
   reference_code: string | null;
   property_type: string | null;
+  cadastral_reference: string | null;
   address_street: string | null;
   address_number: string | null;
+  has_no_number: boolean;
   address_postal_code: string | null;
   address_city: string | null;
   address_block: string | null;
   address_door: string | null;
+  building_name: string | null;
+  is_last_floor: boolean;
   address_visibility: string | null;
   square_meters: number | null;
   built_square_meters: number | null;
@@ -41,7 +45,10 @@ type DbIdealistaListing = {
   bedrooms: number | null;
   bathrooms: number | null;
   condition: string | null;
+  operation: string | null;
   price: number | null;
+  community_fees: number | null;
+  sale_exception: string | null;
   total_rental_price: number | null;
   rental_type: string | null;
   max_tenants: number | null;
@@ -50,6 +57,11 @@ type DbIdealistaListing = {
   equipment_type: string | null;
   windows_location: string | null;
   has_elevator: boolean;
+  is_bank_property: boolean;
+  heating_type: string | null;
+  construction_year: number | null;
+  has_adapted_access: boolean;
+  has_wheelchair_access: boolean;
   orientation_north: boolean;
   orientation_south: boolean;
   orientation_east: boolean;
@@ -69,6 +81,7 @@ type DbIdealistaListing = {
   energy_performance: number | null;
   emission_rating: string | null;
   emission_value: number | null;
+  external_link: string | null;
   contact_id: string | null;
   notes: string | null;
   photo_ids: string[];
@@ -91,12 +104,16 @@ function listingToInitialData(
     inspoTitle: listing.inspo_title ?? "",
     referenceCode: listing.reference_code ?? "",
     propertyType: listing.property_type ?? "flat",
+    cadastralReference: listing.cadastral_reference ?? "",
     addressStreet: listing.address_street ?? "",
     addressNumber: listing.address_number ?? "",
+    hasNoNumber: listing.has_no_number,
     addressPostalCode: listing.address_postal_code ?? "",
     addressCity: listing.address_city ?? "",
     addressBlock: listing.address_block ?? "",
     addressDoor: listing.address_door ?? "",
+    buildingName: listing.building_name ?? "",
+    isLastFloor: listing.is_last_floor,
     addressVisibility: (listing.address_visibility ?? "exact") as
       | "exact"
       | "street"
@@ -111,7 +128,14 @@ function listingToInitialData(
       | "to-reform"
       | "needs-reform"
       | "new",
+    operation: (listing.operation ?? "rent") as "sale" | "rent",
     price: listing.price ?? 0,
+    communityFees: listing.community_fees ?? 0,
+    saleException: (listing.sale_exception ?? "none") as
+      | "none"
+      | "illegally-occupied"
+      | "rented-with-tenants"
+      | "bare-ownership",
     totalRentalPrice: listing.total_rental_price ?? 0,
     rentalType: (listing.rental_type ?? "residential") as
       | "residential"
@@ -128,6 +152,15 @@ function listingToInitialData(
       | "interior"
       | "exterior",
     hasElevator: listing.has_elevator,
+    isBankProperty: listing.is_bank_property,
+    heatingType: (listing.heating_type ?? "unknown") as
+      | "individual"
+      | "centralized"
+      | "none"
+      | "unknown",
+    constructionYear: listing.construction_year ?? 0,
+    hasAdaptedAccess: listing.has_adapted_access,
+    hasWheelchairAccess: listing.has_wheelchair_access,
     orientationNorth: listing.orientation_north,
     orientationSouth: listing.orientation_south,
     orientationEast: listing.orientation_east,
@@ -147,6 +180,7 @@ function listingToInitialData(
     energyPerformance: listing.energy_performance ?? 0,
     emissionRating: listing.emission_rating ?? "",
     emissionValue: listing.emission_value ?? 0,
+    externalLink: listing.external_link ?? "",
     contactId: listing.contact_id ?? "",
     notes: listing.notes ?? "",
     photos: listing.photo_ids ?? [],

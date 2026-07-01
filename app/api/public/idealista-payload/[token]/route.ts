@@ -46,17 +46,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     referenceCode: l.reference_code ?? "",
     propertyType: l.property_type ?? "flat",
     propertyTypeLabel: PROPERTY_TYPE_MAP[l.property_type ?? "flat"] ?? "Piso",
-    // Heurística: SmartBC no tiene un toggle explícito venta/alquiler en la
-    // ficha de Idealista — se infiere de qué precio se rellenó. Si ninguno
-    // calza, el usuario ajusta el checkbox Venta/Alquiler manualmente en Idealista.
-    operation: l.total_rental_price ? "rent" : "sale",
+    operation: l.operation ?? "rent",
+    cadastralReference: l.cadastral_reference ?? "",
 
     addressStreet: l.address_street ?? "",
     addressNumber: l.address_number ?? "",
+    hasNoNumber: !!l.has_no_number,
     addressPostalCode: l.address_postal_code ?? "",
     addressCity: l.address_city ?? "",
     addressBlock: l.address_block ?? "",
     addressDoor: l.address_door ?? "",
+    buildingName: l.building_name ?? "",
+    isLastFloor: !!l.is_last_floor,
     addressVisibility: l.address_visibility ?? "exact",
 
     squareMeters: l.square_meters ?? null,
@@ -67,6 +68,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     condition: l.condition ?? "good",
 
     price: l.price ?? null,
+    communityFees: l.community_fees ?? null,
+    saleException: l.sale_exception ?? "none",
     totalRentalPrice: l.total_rental_price ?? null,
     rentalType: l.rental_type ?? "residential",
     maxTenants: l.max_tenants ?? null,
@@ -76,6 +79,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     equipmentType: l.equipment_type ?? "unknown",
     windowsLocation: l.windows_location ?? "exterior",
     hasElevator: !!l.has_elevator,
+    isBankProperty: !!l.is_bank_property,
+    heatingType: l.heating_type ?? "unknown",
+    constructionYear: l.construction_year ?? null,
+    hasAdaptedAccess: !!l.has_adapted_access,
+    hasWheelchairAccess: !!l.has_wheelchair_access,
 
     orientationNorth: !!l.orientation_north,
     orientationSouth: !!l.orientation_south,
@@ -101,6 +109,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     emissionValue: l.emission_value ?? null,
 
     description: l.description ?? "",
+    externalLink: l.external_link ?? "",
     internalReference: l.reference_code ?? "",
     notes: l.notes ?? "",
 

@@ -49,12 +49,16 @@ export default async function AdminIdealistaPage() {
     is_inspo: boolean;
     inspo_title: string | null;
     property_type: string | null;
+    cadastral_reference: string | null;
     address_street: string | null;
     address_number: string | null;
+    has_no_number: boolean;
     address_postal_code: string | null;
     address_city: string | null;
     address_block: string | null;
     address_door: string | null;
+    building_name: string | null;
+    is_last_floor: boolean;
     address_visibility: string | null;
     square_meters: number | null;
     built_square_meters: number | null;
@@ -63,6 +67,8 @@ export default async function AdminIdealistaPage() {
     bathrooms: number | null;
     condition: string | null;
     price: number | null;
+    community_fees: number | null;
+    sale_exception: string | null;
     total_rental_price: number | null;
     rental_type: string | null;
     max_tenants: number | null;
@@ -71,6 +77,11 @@ export default async function AdminIdealistaPage() {
     equipment_type: string | null;
     windows_location: string | null;
     has_elevator: boolean;
+    is_bank_property: boolean;
+    heating_type: string | null;
+    construction_year: number | null;
+    has_adapted_access: boolean;
+    has_wheelchair_access: boolean;
     orientation_north: boolean;
     orientation_south: boolean;
     orientation_east: boolean;
@@ -90,6 +101,7 @@ export default async function AdminIdealistaPage() {
     energy_performance: number | null;
     emission_rating: string | null;
     emission_value: number | null;
+    external_link: string | null;
     contact_id: string | null;
     notes: string | null;
     photo_ids: string[];
@@ -98,6 +110,7 @@ export default async function AdminIdealistaPage() {
     idealista_property_id: string | null;
     idealista_state: string | null;
     reference_code: string | null;
+    operation: string | null;
     scheduled_publish_at: string | null;
     created_at: string;
     updated_at: string;

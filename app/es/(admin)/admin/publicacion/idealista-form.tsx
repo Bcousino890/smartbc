@@ -21,12 +21,16 @@ export type IdealistaListing = {
   propertyType: string;
   // Localización
   referenceCode: string;
+  cadastralReference: string;
   addressStreet: string;
   addressNumber: string;
+  hasNoNumber: boolean;
   addressPostalCode: string;
   addressCity: string;
   addressBlock: string;
   addressDoor: string;
+  buildingName: string;
+  isLastFloor: boolean;
   addressVisibility: "exact" | "street" | "hidden";
   latitude: number;
   longitude: number;
@@ -38,7 +42,10 @@ export type IdealistaListing = {
   bathrooms: number;
   condition: "good" | "to-reform" | "needs-reform" | "new";
   // Precio
+  operation: "sale" | "rent";
   price: number;
+  communityFees: number;
+  saleException: "none" | "illegally-occupied" | "rented-with-tenants" | "bare-ownership";
   totalRentalPrice: number;
   rentalType: "residential" | "temporary";
   maxTenants: number;
@@ -48,6 +55,11 @@ export type IdealistaListing = {
   equipmentType: "furnished" | "kitchen-only" | "empty" | "unknown";
   windowsLocation: "interior" | "exterior";
   hasElevator: boolean;
+  isBankProperty: boolean;
+  heatingType: "individual" | "centralized" | "none" | "unknown";
+  constructionYear: number;
+  hasAdaptedAccess: boolean;
+  hasWheelchairAccess: boolean;
   // Orientación
   orientationNorth: boolean;
   orientationSouth: boolean;
@@ -73,6 +85,7 @@ export type IdealistaListing = {
   emissionValue: number;
   // Descripción
   description: string;
+  externalLink: string;
   // Contacto
   contactId: string;
   notes: string;
@@ -89,12 +102,16 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   inspoTitle: "",
   propertyType: "flat",
   referenceCode: "",
+  cadastralReference: "",
   addressStreet: "",
   addressNumber: "",
+  hasNoNumber: false,
   addressPostalCode: "",
   addressCity: "",
   addressBlock: "",
   addressDoor: "",
+  buildingName: "",
+  isLastFloor: false,
   addressVisibility: "exact",
   latitude: 0,
   longitude: 0,
@@ -104,7 +121,10 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   bedrooms: 0,
   bathrooms: 0,
   condition: "good",
+  operation: "rent",
   price: 0,
+  communityFees: 0,
+  saleException: "none",
   totalRentalPrice: 0,
   rentalType: "residential",
   maxTenants: 0,
@@ -113,6 +133,11 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   equipmentType: "unknown",
   windowsLocation: "exterior",
   hasElevator: false,
+  isBankProperty: false,
+  heatingType: "unknown",
+  constructionYear: 0,
+  hasAdaptedAccess: false,
+  hasWheelchairAccess: false,
   orientationNorth: false,
   orientationSouth: false,
   orientationEast: false,
@@ -133,6 +158,7 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   emissionRating: "",
   emissionValue: 0,
   description: "",
+  externalLink: "",
   contactId: "",
   notes: "",
   photos: [],
@@ -747,6 +773,16 @@ export function IdealistaForm({
           )}
         </div>
 
+        <div>
+          <Label>Referencia catastral</Label>
+          <input
+            type="text"
+            value={form.cadastralReference}
+            onChange={(e) => set("cadastralReference", e.target.value)}
+            placeholder="Opcional"
+            className={inputCls}
+          />
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <Label>Calle</Label>
@@ -765,8 +801,17 @@ export function IdealistaForm({
               value={form.addressNumber}
               onChange={(e) => set("addressNumber", e.target.value)}
               placeholder="12"
-              className={inputCls}
+              disabled={form.hasNoNumber}
+              className={cn(inputCls, form.hasNoNumber && "opacity-50")}
             />
+            <label className="mt-1 flex items-center gap-1.5 text-xs text-ink/60">
+              <input
+                type="checkbox"
+                checked={form.hasNoNumber}
+                onChange={(e) => set("hasNoNumber", e.target.checked)}
+              />
+              Sin número
+            </label>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -801,6 +846,14 @@ export function IdealistaForm({
               placeholder="2ª"
               className={inputCls}
             />
+            <label className="mt-1 flex items-center gap-1.5 text-xs text-ink/60">
+              <input
+                type="checkbox"
+                checked={form.isLastFloor}
+                onChange={(e) => set("isLastFloor", e.target.checked)}
+              />
+              Última planta del bloque
+            </label>
           </div>
           <div>
             <Label>Bloque / Portal</Label>
@@ -822,6 +875,16 @@ export function IdealistaForm({
               className={inputCls}
             />
           </div>
+        </div>
+        <div>
+          <Label>Nombre de la urbanización</Label>
+          <input
+            type="text"
+            value={form.buildingName}
+            onChange={(e) => set("buildingName", e.target.value)}
+            placeholder="Opcional"
+            className={inputCls}
+          />
         </div>
         <RadioGroup
           label="Visibilidad de la dirección"
@@ -892,82 +955,122 @@ export function IdealistaForm({
       {/* ── 4. Precio ────────────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={4} title="Precio y condiciones" />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label>Precio (€)</Label>
-            <input
-              type="number"
-              min={0}
-              value={form.price || ""}
-              onChange={(e) => set("price", Number(e.target.value))}
-              placeholder="250000"
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <Label>Precio total con gastos (€/mes)</Label>
-            <input
-              type="number"
-              min={0}
-              value={form.totalRentalPrice || ""}
-              onChange={(e) => set("totalRentalPrice", Number(e.target.value))}
-              placeholder="1200"
-              className={inputCls}
-            />
-          </div>
-        </div>
         <RadioGroup
-          label="Tipo de alquiler"
-          value={form.rentalType}
-          onChange={(v) => set("rentalType", v)}
+          label="Operación"
+          value={form.operation}
+          onChange={(v) => set("operation", v)}
           options={[
-            { value: "residential", label: "Residencial" },
-            { value: "temporary", label: "Temporal" },
+            { value: "rent", label: "Alquiler" },
+            { value: "sale", label: "Venta" },
           ]}
         />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <Label>Máximo de inquilinos</Label>
-            <input
-              type="number"
-              min={0}
-              value={form.maxTenants || ""}
-              onChange={(e) => set("maxTenants", Number(e.target.value))}
-              placeholder="2"
-              className={inputCls}
+        {form.operation === "sale" ? (
+          <>
+            <RadioGroup
+              label="¿Se venderá en alguna situación excepcional?"
+              value={form.saleException}
+              onChange={(v) => set("saleException", v)}
+              options={[
+                { value: "none", label: "No, en ninguna situación excepcional" },
+                { value: "illegally-occupied", label: "Ocupada ilegalmente" },
+                { value: "rented-with-tenants", label: "Alquilada, con inquilinos" },
+                { value: "bare-ownership", label: "Nuda propiedad" },
+              ]}
             />
-          </div>
-          <div>
-            <Label>Mascotas permitidas</Label>
-            <div className="flex gap-1.5 mt-1">
-              <Chip label="Sí" checked={form.petsAllowed} onChange={(v) => set("petsAllowed", v)} />
-              <Chip label="No" checked={!form.petsAllowed} onChange={(v) => set("petsAllowed", !v)} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Precio de venta (€)</Label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.price || ""}
+                  onChange={(e) => set("price", Number(e.target.value))}
+                  placeholder="250000"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <Label>Gastos de comunidad (€/mes)</Label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.communityFees || ""}
+                  onChange={(e) => set("communityFees", Number(e.target.value))}
+                  placeholder="80"
+                  className={inputCls}
+                />
+              </div>
             </div>
-          </div>
-          <div>
-            <Label>Apto para niños</Label>
-            <div className="flex gap-1.5 mt-1">
-              <Chip label="Sí" checked={form.childrenRecommended} onChange={(v) => set("childrenRecommended", v)} />
-              <Chip label="No" checked={!form.childrenRecommended} onChange={(v) => set("childrenRecommended", !v)} />
+          </>
+        ) : (
+          <>
+            <div>
+              <Label>Precio total con gastos (€/mes)</Label>
+              <input
+                type="number"
+                min={0}
+                value={form.totalRentalPrice || ""}
+                onChange={(e) => set("totalRentalPrice", Number(e.target.value))}
+                placeholder="1200"
+                className={inputCls}
+              />
             </div>
-          </div>
-        </div>
+            <RadioGroup
+              label="Tipo de alquiler"
+              value={form.rentalType}
+              onChange={(v) => set("rentalType", v)}
+              options={[
+                { value: "residential", label: "Residencial" },
+                { value: "temporary", label: "Temporal" },
+              ]}
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <Label>Máximo de inquilinos</Label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.maxTenants || ""}
+                  onChange={(e) => set("maxTenants", Number(e.target.value))}
+                  placeholder="2"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <Label>Mascotas permitidas</Label>
+                <div className="flex gap-1.5 mt-1">
+                  <Chip label="Sí" checked={form.petsAllowed} onChange={(v) => set("petsAllowed", v)} />
+                  <Chip label="No" checked={!form.petsAllowed} onChange={(v) => set("petsAllowed", !v)} />
+                </div>
+              </div>
+              <div>
+                <Label>Apto para niños</Label>
+                <div className="flex gap-1.5 mt-1">
+                  <Chip label="Sí" checked={form.childrenRecommended} onChange={(v) => set("childrenRecommended", v)} />
+                  <Chip label="No" checked={!form.childrenRecommended} onChange={(v) => set("childrenRecommended", !v)} />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── 5. Equipamiento ──────────────────────────────────────────────── */}
       <section className="space-y-4">
         <SectionHeader step={5} title="Equipamiento y extras" />
-        <RadioGroup
-          label="Equipamiento"
-          value={form.equipmentType}
-          onChange={(v) => set("equipmentType", v)}
-          options={[
-            { value: "furnished", label: "Cocina equipada + amueblado" },
-            { value: "kitchen-only", label: "Cocina equipada (sin muebles)" },
-            { value: "empty", label: "Vacía" },
-            { value: "unknown", label: "No lo sé" },
-          ]}
-        />
+        {form.operation === "rent" && (
+          <RadioGroup
+            label="Equipamiento"
+            value={form.equipmentType}
+            onChange={(v) => set("equipmentType", v)}
+            options={[
+              { value: "furnished", label: "Cocina equipada + amueblado" },
+              { value: "kitchen-only", label: "Cocina equipada (sin muebles)" },
+              { value: "empty", label: "Vacía" },
+              { value: "unknown", label: "No lo sé" },
+            ]}
+          />
+        )}
         <RadioGroup
           label="Orientación de las ventanas"
           value={form.windowsLocation}
@@ -1004,6 +1107,44 @@ export function IdealistaForm({
             <Chip label="Jardín" checked={form.hasGarden} onChange={(v) => set("hasGarden", v)} />
             <Chip label="Armarios empotrados" checked={form.hasWardrobes} onChange={(v) => set("hasWardrobes", v)} />
             <Chip label="Aire acondicionado" checked={form.hasAC} onChange={(v) => set("hasAC", v)} />
+          </div>
+        </div>
+        <div>
+          <Label>Accesibilidad</Label>
+          <div className="flex flex-wrap gap-1.5">
+            <Chip label="Acceso exterior adaptado" checked={form.hasAdaptedAccess} onChange={(v) => set("hasAdaptedAccess", v)} />
+            <Chip label="Adaptado para silla de ruedas" checked={form.hasWheelchairAccess} onChange={(v) => set("hasWheelchairAccess", v)} />
+          </div>
+        </div>
+        <RadioGroup
+          label="Tipo de calefacción"
+          value={form.heatingType}
+          onChange={(v) => set("heatingType", v)}
+          options={[
+            { value: "individual", label: "Individual" },
+            { value: "centralized", label: "Centralizada" },
+            { value: "none", label: "No dispone" },
+            { value: "unknown", label: "No lo sé" },
+          ]}
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Año de construcción del edificio</Label>
+            <input
+              type="number"
+              min={0}
+              value={form.constructionYear || ""}
+              onChange={(e) => set("constructionYear", Number(e.target.value))}
+              placeholder="2005"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <Label>Inmueble de banco</Label>
+            <div className="flex gap-1.5 mt-1">
+              <Chip label="Sí" checked={form.isBankProperty} onChange={(v) => set("isBankProperty", v)} />
+              <Chip label="No" checked={!form.isBankProperty} onChange={(v) => set("isBankProperty", !v)} />
+            </div>
           </div>
         </div>
       </section>
@@ -1103,6 +1244,17 @@ export function IdealistaForm({
         <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 text-xs text-ink/60">
           <strong className="text-ink/80">Footer automático</strong> — al final siempre se agrega:
           <pre className="mt-1 whitespace-pre-wrap text-xs text-ink/50 font-sans">{DESCRIPTION_FOOTER.trim()}</pre>
+        </div>
+
+        <div>
+          <Label>Sitio web</Label>
+          <input
+            type="text"
+            value={form.externalLink}
+            onChange={(e) => set("externalLink", e.target.value)}
+            placeholder="http://"
+            className={inputCls}
+          />
         </div>
       </section>
 

@@ -209,6 +209,13 @@
     unknown: "No lo sé",
   };
   const ENERGY_OPTION_MAP = { "": ["Aún no dispone"], pending: ["En trámite"] };
+  const SALE_EXCEPTION_MAP = {
+    none: "No, en ninguna situación excepcional",
+    "illegally-occupied": "Ocupada ilegalmente",
+    "rented-with-tenants": "Alquilada, con inquilinos",
+    "bare-ownership": "Nuda propiedad",
+  };
+  const HEATING_TYPE_MAP = { individual: "Individual", centralized: "Centralizada", none: "No dispone" };
 
   function floorOptionTexts(floor) {
     const f = (floor || "").toLowerCase().replace(/[°ºª\s]/g, "");
@@ -227,10 +234,16 @@
     await selectCombobox("typology", [data.propertyTypeLabel]);
     await sleep(600); // esperar a que aparezcan los campos dinámicos
 
+    if (data.cadastralReference) await setTextInputInContainer("cadastralReference", data.cadastralReference);
+
     setStatus("Rellenando localización...");
     await fillLocationAutocomplete("location", 0, data.addressCity);
     await fillLocationAutocomplete("location", 1, data.addressStreet);
-    await setTextInputInContainer("location", data.addressNumber, 2);
+    if (data.hasNoNumber) {
+      await clickCheckOrRadioByLabel("location", "Sin número");
+    } else {
+      await setTextInputInContainer("location", data.addressNumber, 2);
+    }
     const validarBtn = document.getElementById("validateAddressButton");
     validarBtn?.querySelector('a, [role="button"]')?.click();
     await sleep(1000);
@@ -250,6 +263,8 @@
       const opts = floorOptionTexts(data.floor);
       if (opts) await selectCombobox("floorNumber", opts);
     }
+    if (data.isLastFloor) await clickCheckOrRadioByLabel("lastFloor", "Es la última planta del bloque");
+    if (data.buildingName) await setTextInputInContainer("buildingName", data.buildingName);
 
     setStatus("Visibilidad y operación...");
     await clickCheckOrRadioByLabel(
@@ -266,19 +281,27 @@
       if (data.childrenRecommended) await clickCheckOrRadioByLabel("recommendedForChildren", "La vivienda es apropiada para niños (0-12 años)");
       if (data.petsAllowed) await clickCheckOrRadioByLabel("petsAllowed", "Se admiten mascotas");
     } else {
-      // "¿Se venderá en alguna situación excepcional?" — por defecto ninguna
-      await clickGlobalRadioByLabel("No, en ninguna situación excepcional");
+      await clickGlobalRadioByLabel(SALE_EXCEPTION_MAP[data.saleException] ?? SALE_EXCEPTION_MAP.none);
       if (data.price) await fillPriceField("salePrice", "Precio de venta", data.price);
+      if (data.communityFees) await fillPriceField("saleCommunityFees", "Gastos de comunidad", data.communityFees);
     }
 
     setStatus("Características adicionales...");
     if (data.isPenthouse) await clickCheckOrRadioByLabel("subtypology", "Ático");
     if (data.isStudio) await clickCheckOrRadioByLabel("subtypology", "Estudio");
     if (data.isDuplex) await clickCheckOrRadioByLabel("subtypology", "Dúplex");
+    if (data.isBankProperty) await clickCheckOrRadioByLabel("categories", "Inmueble de banco");
 
     if (data.operation === "rent" && data.equipmentType && data.equipmentType !== "unknown") {
       await clickCheckOrRadioByLabel("installation", EQUIPMENT_MAP[data.equipmentType] ?? EQUIPMENT_MAP.unknown);
     }
+
+    if (data.heatingType && HEATING_TYPE_MAP[data.heatingType]) {
+      await selectCombobox("heatingType", [HEATING_TYPE_MAP[data.heatingType]]);
+    }
+    if (data.constructionYear) await setTextInputInContainer("constructionYear", data.constructionYear);
+    if (data.hasAdaptedAccess) await clickCheckOrRadioByLabel("accessibility", "Acceso exterior a la vivienda adaptado");
+    if (data.hasWheelchairAccess) await clickCheckOrRadioByLabel("accessibility", "Adaptado para uso con silla de ruedas");
 
     if (data.builtSquareMeters) await setTextInputInContainer("constructedArea", data.builtSquareMeters);
     if (data.squareMeters) await setTextInputInContainer("usableArea", data.squareMeters);
@@ -323,6 +346,7 @@
     if (descTextarea && data.description) setNativeValue(descTextarea, data.description);
     await sleep(SMS_DELAY);
 
+    if (data.externalLink) await setTextInputInContainer("externalLink", data.externalLink);
     if (data.internalReference) await setTextInputInContainer("internalReference", data.internalReference);
     if (data.notes) await setTextInputInContainer("privateNote", data.notes);
 
