@@ -757,6 +757,7 @@ export function CaptacionDetailClient({
             latitude: captacion.latitude || null,
             longitude: captacion.longitude || null,
             address_real: captacion.address_real || null,
+            rol: captacion.rol || null,
           }}
           captacionId={captacion.id}
           isCaptadora={isCaptadora}

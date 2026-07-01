@@ -16,6 +16,7 @@ type LocationSectionProps = {
     latitude: number | null;
     longitude: number | null;
     address_real: string | null;
+    rol: string | null;
   };
   captacionId: string;
   isCaptadora: boolean;
@@ -41,6 +42,8 @@ export function LocationSection({
     address_verified: captacion.address_verified || false,
     latitude: captacion.latitude,
     longitude: captacion.longitude,
+    address_real: captacion.address_real || "",
+    rol: captacion.rol || "",
   });
 
   const canEdit = isCaptadora || isAdmin;
@@ -117,6 +120,8 @@ export function LocationSection({
         address_verified: locationData.address_verified,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
+        address_real: locationData.address_real || null,
+        rol: locationData.rol || null,
       });
       setEditing(false);
     } catch (err) {
@@ -138,6 +143,20 @@ export function LocationSection({
                 : <span className="text-ink/35">No especificado</span>}
             </p>
           </div>
+
+          {captacion.address_real && (
+            <div>
+              <p className="text-[11px] text-ink/50 uppercase tracking-wide">Dirección Real</p>
+              <p className="mt-0.5 text-sm font-medium text-ink">{captacion.address_real}</p>
+            </div>
+          )}
+
+          {captacion.rol && (
+            <div>
+              <p className="text-[11px] text-ink/50 uppercase tracking-wide">Rol de Avalúo</p>
+              <p className="mt-0.5 text-sm font-medium text-ink">{captacion.rol}</p>
+            </div>
+          )}
 
           <div>
             <p className="text-[11px] text-ink/50 uppercase tracking-wide">Dirección Verificada</p>
@@ -217,6 +236,34 @@ export function LocationSection({
             <option value="commercial">Comercial</option>
             <option value="other">Otro</option>
           </select>
+        </div>
+
+        {/* Dirección real */}
+        <div>
+          <label className="block text-sm font-medium text-ink/70 mb-2">
+            Dirección Real
+          </label>
+          <input
+            type="text"
+            value={locationData.address_real}
+            onChange={(e) => setLocationData({ ...locationData, address_real: e.target.value })}
+            placeholder="Ej: Av. Providencia 1234, Piso 3"
+            className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+          />
+        </div>
+
+        {/* Rol de avalúo */}
+        <div>
+          <label className="block text-sm font-medium text-ink/70 mb-2">
+            Rol de Avalúo (SII)
+          </label>
+          <input
+            type="text"
+            value={locationData.rol}
+            onChange={(e) => setLocationData({ ...locationData, rol: e.target.value })}
+            placeholder="Ej: 1234-56"
+            className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+          />
         </div>
 
         {/* Dirección verificada */}

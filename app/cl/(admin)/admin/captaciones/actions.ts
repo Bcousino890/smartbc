@@ -50,6 +50,7 @@ export type Captacion = {
   last_contact_attempt_at: string | null;
   property_type: 'house' | 'apartment' | 'land' | 'office' | 'commercial' | 'other' | null;
   address_verified: boolean;
+  rol: string | null;
   updated_at: string;
   contacts?: CaptacionContact[];
 };
