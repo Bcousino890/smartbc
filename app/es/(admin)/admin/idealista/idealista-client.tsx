@@ -218,7 +218,13 @@ export function IdealistaClient({
   );
 
   const selectedListing = useMemo(
-    () => listings.find((l) => l.property_id === selectedPropertyId),
+    // Solo para propiedades reales seleccionadas. Sin el guard, al crear una inspo
+    // nueva (selectedPropertyId = null) coincidía con la primera inspo existente
+    // (property_id = null) y abría esa para editar en vez de una en blanco.
+    () =>
+      selectedPropertyId
+        ? listings.find((l) => !l.is_inspo && l.property_id === selectedPropertyId)
+        : undefined,
     [selectedPropertyId, listings]
   );
 
