@@ -31,7 +31,7 @@ export default async function CaptacionDetailPage({
 
   const db = createAdminClient() as any;
 
-  const [photosResult, logsResult, captadoras] = await Promise.allSettled([
+  const [photosResult, logsResult, captadoras, assignedProfileResult] = await Promise.allSettled([
     db.from("captacion_photos").select("*").eq("captacion_id", id).order("position"),
     db
       .from("captacion_logs")
@@ -39,11 +39,23 @@ export default async function CaptacionDetailPage({
       .eq("captacion_id", id)
       .order("created_at", { ascending: false }),
     getCaptadoras(),
+    // Fetch assigned user's profile by ID regardless of role (for name display)
+    captacion.assigned_to
+      ? db.from("profiles").select("id, full_name").eq("id", captacion.assigned_to).single()
+      : Promise.resolve({ data: null }),
   ]);
 
   const photos = photosResult.status === "fulfilled" ? (photosResult.value.data || []) : [];
   const logs = logsResult.status === "fulfilled" ? (logsResult.value.data || []) : [];
   const captadorasList = captadoras.status === "fulfilled" ? (captadoras.value || []) : [];
+
+  // Ensure the assigned user's name is always available even if not role='captadora'
+  if (assignedProfileResult.status === "fulfilled" && assignedProfileResult.value.data) {
+    const assignedProfile = assignedProfileResult.value.data as { id: string; full_name: string | null };
+    if (!captadorasList.find((c: { id: string }) => c.id === assignedProfile.id)) {
+      captadorasList.push(assignedProfile);
+    }
+  }
 
   return (
     <CaptacionDetailClient

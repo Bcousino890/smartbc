@@ -95,6 +95,7 @@ export function CaptacionDetailClient({
   const [saving, setSaving] = useState(false);
   const [rescrapingAttempt, setRescrapeingAttempt] = useState(false);
   const [assigningCaptadora, setAssigningCaptadora] = useState(false);
+  const [showReassignForm, setShowReassignForm] = useState(false);
   const [selectedCaptadoraId, setSelectedCaptadoraId] = useState(captacion.assigned_to || "");
   const [newStatus, setNewStatus] = useState("");
   const [revisionNotes, setRevisionNotes] = useState("");
@@ -172,6 +173,7 @@ export function CaptacionDetailClient({
         setError(data.error || "Error al asignar");
         return;
       }
+      setShowReassignForm(false);
       window.location.reload();
     } catch {
       setError("Error de conexión");
@@ -602,47 +604,66 @@ export function CaptacionDetailClient({
       {isAdmin && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
           <h3 className="text-sm font-semibold text-ink mb-4">Asignación</h3>
-          <div className="flex gap-3 items-end">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-ink/70 mb-2">Asignado a</label>
-              {captacion.assigned_to ? (
-                <div className="p-3 rounded-lg bg-ink/5 border border-ink/10">
-                  <p className="text-sm font-medium text-ink">
-                    {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || captacion.assigned_to} (desde {captacion.assigned_at ? new Date(captacion.assigned_at).toLocaleDateString("es-CL") : "—"})
+          {captacion.assigned_to && !showReassignForm ? (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Captadora asignada</p>
+                <p className="text-sm font-semibold text-ink">
+                  {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "—"}
+                </p>
+                {captacion.assigned_at && (
+                  <p className="text-xs text-ink/40 mt-0.5">
+                    Desde {new Date(captacion.assigned_at).toLocaleDateString("es-CL")}
                   </p>
-                </div>
-              ) : (
-                <>
-                  <select
-                    value={selectedCaptadoraId}
-                    onChange={(e) => setSelectedCaptadoraId(e.target.value)}
-                    className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-                  >
-                    <option value="">Selecciona captadora...</option>
-                    {captadoras.map((captadora) => (
+                )}
+              </div>
+              <button
+                onClick={() => { setShowReassignForm(true); setSelectedCaptadoraId(""); }}
+                className="text-xs text-ink/50 hover:text-ink underline"
+              >
+                Cambiar
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-ink/70 mb-2">
+                  {captacion.assigned_to ? "Reasignar a" : "Asignar a"}
+                </label>
+                <select
+                  value={selectedCaptadoraId}
+                  onChange={(e) => setSelectedCaptadoraId(e.target.value)}
+                  className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                >
+                  <option value="">Selecciona captadora...</option>
+                  {captadoras
+                    .filter(c => c.id !== captacion.assigned_to)
+                    .map((captadora) => (
                       <option key={captadora.id} value={captadora.id}>
                         {captadora.full_name || "Sin nombre"}
                       </option>
                     ))}
-                  </select>
-                  {captadoras.length === 0 && (
-                    <p className="mt-1 text-xs text-ink/40">
-                      Ningún usuario tiene rol &quot;Captadora&quot;. <a href="/cl/admin/usuarios" className="text-gold hover:underline">Ir a Usuarios</a>
-                    </p>
-                  )}
-                </>
-              )}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAssign}
+                  disabled={assigningCaptadora || !selectedCaptadoraId}
+                  className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+                >
+                  {assigningCaptadora ? "Asignando..." : "Asignar"}
+                </button>
+                {captacion.assigned_to && (
+                  <button
+                    onClick={() => setShowReassignForm(false)}
+                    className="rounded-lg border border-ink/20 px-3 py-2 text-sm font-medium text-ink hover:bg-ink/5"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </div>
-            {!captacion.assigned_to && (
-              <button
-                onClick={handleAssign}
-                disabled={assigningCaptadora || !selectedCaptadoraId}
-                className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
-              >
-                {assigningCaptadora ? "Asignando..." : "Asignar"}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       )}
 
