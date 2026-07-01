@@ -374,19 +374,27 @@
       log("⚠ No encontré el botón + de Fotos. Súbelas manualmente.");
       return;
     }
+    log(`Botón de fotos encontrado (locked=${addBtn.className.includes("locked")}), haciendo click...`);
     addBtn.click();
 
-    const modal = await waitFor(() => {
+    let modal = await waitFor(() => {
       const m = document.getElementById("uploadModal");
       return m && m.querySelector('input[type="file"]') ? m : null;
     }, 5000);
 
-    if (!modal) {
-      log("⚠ El modal de fotos no se abrió (¿faltan campos obligatorios?). Súbelas manualmente.");
-      return;
+    // Fallback: buscar cualquier input[type=file] en toda la página (por si
+    // el modal no usa el id #uploadModal o el input se monta en otro sitio)
+    let fileInput = modal?.querySelector('input[type="file"]');
+    if (!fileInput) {
+      fileInput = await waitFor(() => document.querySelector('input[type="file"]'), 2000);
     }
 
-    const fileInput = modal.querySelector('input[type="file"]');
+    if (!fileInput) {
+      const modalEl = document.getElementById("uploadModal");
+      log(`⚠ No encontré el input de archivos. #uploadModal existe=${!!modalEl}, contenido: ${(modalEl?.innerHTML || "").slice(0, 300) || "(vacío)"}`);
+      log("Sube las fotos manualmente.");
+      return;
+    }
     let done = 0;
     for (const url of photoUrls) {
       try {
@@ -404,7 +412,8 @@
     }
 
     // Buscar botón de confirmar/cerrar el modal (texto habitual: Guardar, Aceptar, Cerrar)
-    const confirmBtn = [...modal.querySelectorAll("a, button")].find((b) =>
+    const modalScope = modal || document.getElementById("uploadModal") || document;
+    const confirmBtn = [...modalScope.querySelectorAll("a, button")].find((b) =>
       /guardar|aceptar|confirmar|cerrar/i.test(b.textContent || "")
     );
     if (confirmBtn) {
