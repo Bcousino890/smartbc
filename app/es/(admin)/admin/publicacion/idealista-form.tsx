@@ -648,6 +648,16 @@ export function IdealistaForm({
     }
   }
 
+  // Autogenerar la referencia al abrir una ficha NUEVA sin código (el campo
+  // promete "se generará automáticamente"). Solo fichas nuevas (sin listingId):
+  // al editar una existente no se regenera.
+  useEffect(() => {
+    if (!form.referenceCode && !form.listingId) {
+      handleGenerateRef();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleScheduleChange(date: string, time: string) {
     setSchedDate(date);
     setSchedTime(time);
