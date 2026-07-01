@@ -134,6 +134,8 @@ export function CaptacionDetailClient({
   const [extraPhoneErrors, setExtraPhoneErrors] = useState<string[]>([]);
   const [contactSaveError, setContactSaveError] = useState("");
   const [checkingWhatsApp, setCheckingWhatsApp] = useState(false);
+  const [convertingToProperty, setConvertingToProperty] = useState(false);
+  const [convertedPropertySlug, setConvertedPropertySlug] = useState<string | null>(null);
 
   async function handleUpdate() {
     setError("");
@@ -267,6 +269,33 @@ export function CaptacionDetailClient({
       setError("Error de conexión");
     } finally {
       setRescrapeingAttempt(false);
+    }
+  }
+
+  async function handleConvertToProperty() {
+    if (!confirm("¿Crear propiedad en borrador a partir de esta captación?")) return;
+    setConvertingToProperty(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data.property_id) {
+          setConvertedPropertySlug(data.property_id);
+        } else {
+          setError(data.error || "Error al convertir");
+        }
+        return;
+      }
+      setConvertedPropertySlug(data.slug);
+      window.location.reload();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setConvertingToProperty(false);
     }
   }
 
@@ -624,123 +653,186 @@ export function CaptacionDetailClient({
         </div>
       </div>
 
-      {/* Asignación (solo para admin) */}
+      {/* Panel de flujo unificado (solo admin) */}
       {isAdmin && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
-          <h3 className="text-sm font-semibold text-ink mb-4">Asignación</h3>
-          {captacion.assigned_to && !showReassignForm ? (
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Captadora asignada</p>
+          {/* Estado actual */}
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div>
+              <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-1">Estado actual</p>
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold",
+                STATUS_CONFIG[captacion.status]?.color || "bg-gray-100 text-gray-700"
+              )}>
+                {STATUS_CONFIG[captacion.status]?.label || captacion.status}
+              </span>
+              <p className="mt-1 text-xs text-ink/45">{STATUS_CONFIG[captacion.status]?.description}</p>
+            </div>
+
+            {/* Captadora asignada */}
+            {captacion.assigned_to && (
+              <div className="text-right">
+                <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Captadora</p>
                 <p className="text-sm font-semibold text-ink">
                   {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "Captadora"}
                 </p>
                 {captacion.assigned_at && (
-                  <p className="text-xs text-ink/40 mt-0.5">
+                  <p className="text-[11px] text-ink/40">
                     Desde {new Date(captacion.assigned_at).toLocaleDateString("es-CL")}
                   </p>
                 )}
+                {!showReassignForm && (
+                  <button
+                    onClick={() => { setShowReassignForm(true); setSelectedCaptadoraId(""); }}
+                    className="mt-1 text-[11px] text-ink/40 hover:text-ink underline"
+                  >
+                    Reasignar
+                  </button>
+                )}
               </div>
-              <button
-                onClick={() => { setShowReassignForm(true); setSelectedCaptadoraId(""); }}
-                className="text-xs text-ink/50 hover:text-ink underline"
-              >
-                Cambiar
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-3 items-end">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-ink/70 mb-2">
-                  {captacion.assigned_to ? "Reasignar a" : "Asignar a"}
-                </label>
+            )}
+          </div>
+
+          {/* Acción contextual según estado */}
+
+          {/* DRAFT: asignar captadora */}
+          {captacion.status === "draft" && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+              <p className="text-xs font-semibold text-blue-800 mb-3">Siguiente paso: asignar captadora</p>
+              <div className="flex gap-2 items-end">
                 <select
                   value={selectedCaptadoraId}
                   onChange={(e) => setSelectedCaptadoraId(e.target.value)}
-                  className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                  className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
                 >
                   <option value="">Selecciona captadora...</option>
-                  {captadoras
-                    .filter(c => c.id !== captacion.assigned_to)
-                    .map((captadora) => (
-                      <option key={captadora.id} value={captadora.id}>
-                        {captadora.full_name || "Sin nombre"}
-                      </option>
-                    ))}
+                  {captadoras.map((c) => (
+                    <option key={c.id} value={c.id}>{c.full_name || "Sin nombre"}</option>
+                  ))}
                 </select>
+                <button
+                  onClick={handleAssign}
+                  disabled={assigningCaptadora || !selectedCaptadoraId}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {assigningCaptadora ? "Asignando..." : "Asignar"}
+                </button>
               </div>
-              <div className="flex gap-2">
+            </div>
+          )}
+
+          {/* REASIGNACIÓN (si se pidió cambio de captadora) */}
+          {showReassignForm && captacion.status !== "draft" && (
+            <div className="mb-4 rounded-lg bg-ink/3 border border-ink/10 p-4">
+              <p className="text-xs font-semibold text-ink/70 mb-3">Reasignar captadora</p>
+              <div className="flex gap-2 items-end">
+                <select
+                  value={selectedCaptadoraId}
+                  onChange={(e) => setSelectedCaptadoraId(e.target.value)}
+                  className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                >
+                  <option value="">Selecciona captadora...</option>
+                  {captadoras.filter(c => c.id !== captacion.assigned_to).map((c) => (
+                    <option key={c.id} value={c.id}>{c.full_name || "Sin nombre"}</option>
+                  ))}
+                </select>
                 <button
                   onClick={handleAssign}
                   disabled={assigningCaptadora || !selectedCaptadoraId}
                   className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
                 >
-                  {assigningCaptadora ? "Asignando..." : "Asignar"}
+                  {assigningCaptadora ? "..." : "Reasignar"}
                 </button>
-                {captacion.assigned_to && (
-                  <button
-                    onClick={() => setShowReassignForm(false)}
-                    className="rounded-lg border border-ink/20 px-3 py-2 text-sm font-medium text-ink hover:bg-ink/5"
-                  >
-                    Cancelar
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowReassignForm(false)}
+                  className="rounded-lg border border-ink/20 px-3 py-2 text-sm font-medium text-ink hover:bg-ink/5"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Cambio de estado (solo admin) */}
-      {isAdmin && (
-        <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
-          <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Estado</h3>
-          {(() => {
-            const allowedNextStatuses = ALLOWED_TRANSITIONS[captacion.status] ?? [];
-            return (
+          {/* CONFIRMED: botón convertir a propiedad */}
+          {captacion.status === "confirmed" && (
+            <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4 flex items-center justify-between gap-4">
               <div>
-                {allowedNextStatuses.length === 0 ? (
-                  <p className="text-sm text-ink/50">Este estado no permite más transiciones</p>
-                ) : (
-                  <>
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <select
-                          value={newStatus}
-                          onChange={(e) => setNewStatus(e.target.value)}
-                          className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-                        >
-                          <option value="">Selecciona nuevo estado...</option>
-                          {allowedNextStatuses.map((s) => (
-                            <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        onClick={handleStatusChange}
-                        disabled={updatingStatus || !newStatus || (newStatus === "revision" && !revisionNotes.trim())}
-                        className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
-                      >
-                        {updatingStatus ? "Actualizando..." : "Actualizar"}
-                      </button>
-                    </div>
-                    {newStatus === "revision" && (
-                      <div className="mt-3">
-                        <label className="block text-xs font-medium text-ink/70 mb-1">
-                          Motivo de la revisión (requerido)
-                        </label>
-                        <textarea
-                          value={revisionNotes}
-                          onChange={(e) => setRevisionNotes(e.target.value)}
-                          placeholder="Ej: El teléfono no corresponde al dueño..."
-                          rows={2}
-                          className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-                        />
-                      </div>
-                    )}
-                    {error && <div className="mt-3"><ErrorBox>{error}</ErrorBox></div>}
-                  </>
+                <p className="text-sm font-semibold text-emerald-800">Dueño confirmado</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Puedes crear la propiedad en borrador para publicarla después</p>
+              </div>
+              <button
+                onClick={handleConvertToProperty}
+                disabled={convertingToProperty}
+                className="flex-shrink-0 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {convertingToProperty ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : "Crear Propiedad"}
+              </button>
+            </div>
+          )}
+
+          {/* CONVERTED: link a propiedad */}
+          {captacion.status === "converted_to_property" && (
+            <div className="mb-4 rounded-lg bg-cyan-50 border border-cyan-200 p-4 flex items-center justify-between gap-4">
+              <p className="text-sm font-semibold text-cyan-800">Propiedad creada en borrador</p>
+              <a
+                href={`/cl/admin/propiedades`}
+                className="flex-shrink-0 flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+              >
+                <ExternalLink size={14} />
+                Ver propiedades
+              </a>
+            </div>
+          )}
+
+          {/* REJECTED */}
+          {captacion.status === "rejected" && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-700">Captación rechazada. Sin más acciones posibles.</p>
+            </div>
+          )}
+
+          {/* Cambio de estado — solo si hay transiciones posibles */}
+          {(() => {
+            const allowed = ALLOWED_TRANSITIONS[captacion.status] ?? [];
+            if (allowed.length === 0) return null;
+            return (
+              <div className={cn(
+                "rounded-lg border border-ink/10 bg-ink/3 p-4",
+                captacion.status === "draft" ? "mt-4" : ""
+              )}>
+                <p className="text-xs font-semibold text-ink/60 mb-3 uppercase tracking-wide">Cambiar estado manualmente</p>
+                <div className="flex gap-2 items-end">
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                    className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                  >
+                    <option value="">Selecciona estado...</option>
+                    {allowed.map((s) => (
+                      <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleStatusChange}
+                    disabled={updatingStatus || !newStatus || (newStatus === "revision" && !revisionNotes.trim())}
+                    className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+                  >
+                    {updatingStatus ? "..." : "Aplicar"}
+                  </button>
+                </div>
+                {newStatus === "revision" && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-ink/70 mb-1">Motivo (requerido)</label>
+                    <textarea
+                      value={revisionNotes}
+                      onChange={(e) => setRevisionNotes(e.target.value)}
+                      placeholder="Ej: El teléfono no corresponde al dueño..."
+                      rows={2}
+                      className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                    />
+                  </div>
                 )}
+                {error && <div className="mt-3"><ErrorBox>{error}</ErrorBox></div>}
               </div>
             );
           })()}
