@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { cn } from "@/lib/utils";
 
@@ -205,6 +206,7 @@ export function IdealistaClient({
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const router = useRouter();
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId),
@@ -262,6 +264,9 @@ export function IdealistaClient({
       }
       const { id } = await res.json();
       clearForm();
+      // Refresca los datos del server component para que la nueva ficha aparezca
+      // en "Fichas guardadas" sin recargar la página a mano.
+      router.refresh();
       return id as string | undefined;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido al guardar");
