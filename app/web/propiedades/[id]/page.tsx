@@ -234,7 +234,7 @@ export default async function PropertyDetail({ params }: Props) {
 
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>
-            <PropertyLocationMap address={p.address} city={p.city} country={p.country} />
+            <PropertyLocationMap address={p.address} city={p.city} country={p.country} zone={p.zone} />
           </section>
 
           <CampusDistance city={p.city} address={p.address} />
