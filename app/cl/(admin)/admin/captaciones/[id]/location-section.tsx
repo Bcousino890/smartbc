@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { MapPin, Loader2, Check } from "lucide-react";
 import { CAPTACION_PROPERTY_TYPE_LABELS } from "@/lib/types";
 import type { CaptacionPropertyType } from "@/lib/types";
+
+const LeafletMap = dynamic(() => import("./leaflet-map"), { ssr: false });
 
 type LocationSectionProps = {
   captacion: {
@@ -152,15 +155,21 @@ export function LocationSection({
 
           {captacion.latitude && captacion.longitude && (
             <div>
-              <p className="text-[11px] text-ink/50 uppercase tracking-wide">Coordenadas</p>
+              <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-2">Ubicación</p>
+              <LeafletMap
+                lat={captacion.latitude}
+                lng={captacion.longitude}
+                onMove={() => {}}
+                readonly
+              />
               <a
                 href={`https://maps.google.com/?q=${captacion.latitude},${captacion.longitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-0.5 inline-flex items-center gap-1.5 text-sm font-medium text-gold hover:underline"
+                className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-gold hover:underline"
               >
-                <MapPin size={14} />
-                {captacion.latitude.toFixed(4)}, {captacion.longitude.toFixed(4)}
+                <MapPin size={12} />
+                Ver en Google Maps ({captacion.latitude.toFixed(4)}, {captacion.longitude.toFixed(4)})
               </a>
             </div>
           )}
@@ -262,30 +271,15 @@ export function LocationSection({
           )}
         </div>
 
-        {/* Mapa simple (opcional - sin librerías) */}
-        {locationData.latitude && locationData.longitude && (
-          <div className="rounded-lg overflow-hidden border border-gold/15">
-            <a
-              href={`https://maps.google.com/?q=${locationData.latitude},${locationData.longitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block h-48 bg-gray-100 relative"
-            >
-              <img
-                src={`https://maps.googleapis.com/maps/api/staticmap?center=${locationData.latitude},${locationData.longitude}&zoom=15&size=600x300&markers=color:red%7C${locationData.latitude},${locationData.longitude}&key=AIzaSyDummyKeyForStatic`}
-                alt="Mapa"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // Google Maps API error - mostrar enlace alternativo
-                  (e.target as HTMLElement).style.display = "none";
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 flex items-center justify-center hover:from-blue-500/10">
-                <p className="text-sm font-medium text-ink/70">Ver en Google Maps</p>
-              </div>
-            </a>
-          </div>
-        )}
+        {/* Mapa interactivo Leaflet */}
+        <LeafletMap
+          key={`${locationData.latitude}-${locationData.longitude}`}
+          lat={locationData.latitude ?? -33.4569}
+          lng={locationData.longitude ?? -70.6483}
+          onMove={(lat, lng) =>
+            setLocationData({ ...locationData, latitude: lat, longitude: lng })
+          }
+        />
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
