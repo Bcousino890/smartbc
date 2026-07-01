@@ -75,13 +75,15 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     };
 
+    let id: string | undefined = existing?.id;
     if (existing) {
       await db.from("idealista_listings").update(record).eq("id", existing.id);
     } else {
-      await db.from("idealista_listings").insert(record);
+      const { data: inserted } = await db.from("idealista_listings").insert(record).select("id").single();
+      id = inserted?.id;
     }
 
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, id });
   } catch (error) {
     console.error("Save idealista listing error:", error);
     return Response.json({ error: "Error al guardar el listado" }, { status: 500 });

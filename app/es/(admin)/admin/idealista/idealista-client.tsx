@@ -213,7 +213,7 @@ export function IdealistaClient({
     setError(null);
   }
 
-  const handleSave = async (data: IdealistaListing) => {
+  const handleSave = async (data: IdealistaListing): Promise<string | undefined> => {
     setError(null);
     setIsSaving(true);
     try {
@@ -226,32 +226,38 @@ export function IdealistaClient({
         const errorData = await res.json();
         throw new Error(errorData.error || "Error al guardar");
       }
+      const { id } = await res.json();
       clearForm();
+      return id as string | undefined;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido al guardar");
+      return undefined;
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handlePublish = async (listingId: string, propertyId?: string | null) => {
+  // Abre la ficha en idealista.com con los datos precargados — la extensión
+  // de Chrome "SmartBC → Idealista Autopublish" detecta el parámetro ?smartbc=
+  // y rellena el formulario automáticamente en el navegador del usuario
+  // (evita el bloqueo de Cloudflare que sufre la automatización desde el VPS).
+  const handlePublish = async (listingId: string) => {
     setPublishingId(listingId);
     try {
-      const res = await fetch("/api/admin/idealista/publish-property", {
+      const res = await fetch("/api/admin/idealista/publish-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(propertyId ? { propertyId } : { listingId }),
+        body: JSON.stringify({ listingId }),
       });
       const data = await res.json();
-      setPublishResults((prev) => ({
-        ...prev,
-        [listingId]: { ok: data.ok, msg: data.ok ? "Publicado correctamente" : (data.error ?? "Error al publicar") },
-      }));
+      if (!res.ok || !data.url) {
+        setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: data.error ?? "Error al generar el enlace" } }));
+        return;
+      }
+      window.open(data.url, "_blank");
+      setPublishResults((prev) => ({ ...prev, [listingId]: { ok: true, msg: "Abierto en Idealista — revisa la pestaña nueva" } }));
     } catch {
-      setPublishResults((prev) => ({
-        ...prev,
-        [listingId]: { ok: false, msg: "Error de red al publicar" },
-      }));
+      setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: "Error de red al generar el enlace" } }));
     } finally {
       setPublishingId(null);
     }
@@ -304,10 +310,9 @@ export function IdealistaClient({
           bcReference={!isInspo && !selectedListing ? (selectedProperty?.bc_reference ?? undefined) : undefined}
           onSave={handleSave}
           onPublish={async (data) => {
-            // Save first, then publish
-            await handleSave(data);
-            const listingId = editingInspoId ?? selectedListing?.id;
-            await handlePublish(listingId ?? propertyId, !isInspo ? propertyId : null);
+            const savedId = await handleSave(data);
+            const listingId = savedId ?? editingInspoId ?? selectedListing?.id;
+            if (listingId) await handlePublish(listingId);
           }}
         />
       </div>
@@ -478,13 +483,13 @@ export function IdealistaClient({
                   <div className="flex shrink-0 items-center gap-1.5">
                     {listing.idealista_state !== "published" && (
                       <button
-                        onClick={() => handlePublish(listing.id, listing.property_id)}
+                        onClick={() => handlePublish(listing.id)}
                         disabled={publishingId === listing.id}
                         className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
-                        title="Publicar en Idealista ahora"
+                        title="Abrir en Idealista con los datos precargados"
                       >
                         {publishingId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                        Publicar
+                        Abrir en Idealista
                       </button>
                     )}
                     <button

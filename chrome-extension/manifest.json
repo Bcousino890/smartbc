@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "SmartBC → Idealista Autopublish",
+  "version": "1.0.0",
+  "description": "Rellena y publica anuncios en Idealista automáticamente con los datos preparados en SmartBC.",
+  "permissions": [],
+  "host_permissions": [
+    "https://www.idealista.com/*",
+    "https://portal.bcousinoprop.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.idealista.com/tools/propiedad/nuevo*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

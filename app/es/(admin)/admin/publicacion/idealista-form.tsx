@@ -579,7 +579,7 @@ export function IdealistaForm({
   isInspo?: boolean;
   initialData?: Partial<IdealistaListing>;
   bcReference?: string;
-  onSave: (data: IdealistaListing) => Promise<void>;
+  onSave: (data: IdealistaListing) => Promise<string | void>;
   onPublish?: (data: IdealistaListing) => Promise<void>;
 }) {
   const [form, setForm] = useState<IdealistaListing>({
@@ -1243,7 +1243,7 @@ export function IdealistaForm({
             className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
           >
             {publishing ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            {publishing ? "Publicando en Idealista..." : "Publicar en Idealista"}
+            {publishing ? "Abriendo Idealista..." : "Guardar y abrir en Idealista"}
           </button>
         )}
       </div>
