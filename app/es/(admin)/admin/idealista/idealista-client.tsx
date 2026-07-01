@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -209,6 +209,7 @@ export function IdealistaClient({
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
 
   const selectedProperty = useMemo(
@@ -302,6 +303,25 @@ export function IdealistaClient({
       setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: "Error de red al generar el enlace" } }));
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Borrar esta ficha? Esta acción no se puede deshacer.")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch("/api/admin/idealista/delete-listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch {
+      // silent — el usuario puede reintentar
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -554,6 +574,18 @@ export function IdealistaClient({
                       title="Editar"
                     >
                       <Edit2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(listing.id)}
+                      disabled={deletingId === listing.id}
+                      className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-500 transition hover:bg-red-100 disabled:opacity-50"
+                      title="Borrar ficha"
+                    >
+                      {deletingId === listing.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
                     </button>
                   </div>
                 </div>
