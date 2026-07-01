@@ -21,7 +21,9 @@ export async function POST(req: Request) {
       is_inspo: isInspo,
       inspo_title: body.inspoTitle ?? null,
       ...(!isInspo && body.propertyId ? { property_id: body.propertyId } : {}),
-      reference_code: body.referenceCode ?? "",
+      // NULL (no "") cuando está vacío: reference_code tiene un UNIQUE, y varias
+      // inspo sin código guardarían "" repetido y chocarían. Varios NULL sí valen.
+      reference_code: body.referenceCode || null,
       property_type: body.propertyType ?? "flat",
       cadastral_reference: body.cadastralReference ?? "",
       address_street: body.addressStreet ?? "",
