@@ -98,6 +98,30 @@
     await sleep(SMS_DELAY);
   }
 
+  async function clickGlobalRadioByLabel(labelText) {
+    const label = findLabelByText(document, labelText);
+    const input = label?.querySelector('input[type="radio"], input[type="checkbox"]');
+    if (!input) return log(`⚠ No encontré la opción "${labelText}" en la página`);
+    if (!input.checked) input.click();
+    await sleep(SMS_DELAY);
+  }
+
+  // El id del contenedor de precio cambia entre venta (salePrice) y
+  // alquiler (rentPrice); si el id esperado no existe, se busca por el
+  // texto de su <p> de etiqueta como respaldo.
+  async function fillPriceField(containerId, labelFallback, value) {
+    let container = document.getElementById(containerId);
+    if (!container) {
+      const label = [...document.querySelectorAll("p")].find((p) => p.textContent.trim() === labelFallback);
+      container = label?.closest("[id]") || label?.parentElement;
+    }
+    if (!container) return log(`⚠ No encontré el campo de precio ("${labelFallback}")`);
+    const input = container.querySelector("input");
+    if (!input) return log(`⚠ Input de precio no encontrado ("${labelFallback}")`);
+    setNativeValue(input, String(value));
+    await sleep(SMS_DELAY);
+  }
+
   async function setTextInputInContainer(containerId, value, inputIndex = 0) {
     const container = document.getElementById(containerId);
     if (!container) return log(`⚠ Contenedor #${containerId} no encontrado`);
@@ -211,6 +235,17 @@
     validarBtn?.querySelector('a, [role="button"]')?.click();
     await sleep(1000);
 
+    // Idealista muestra un popup "Te hemos situado aquí" con mapa que hay
+    // que confirmar antes de que el resto del formulario quede disponible.
+    const confirmLocationBtn = await waitFor(
+      () => [...document.querySelectorAll("button, a")].find((b) => /ok,\s*es aqu[ií]/i.test(b.textContent || "")),
+      3000
+    );
+    if (confirmLocationBtn) {
+      confirmLocationBtn.click();
+      await sleep(600);
+    }
+
     if (data.floor) {
       const opts = floorOptionTexts(data.floor);
       if (opts) await selectCombobox("floorNumber", opts);
@@ -226,12 +261,14 @@
 
     if (data.operation === "rent") {
       await clickCheckOrRadioByLabel("rentalType", RENTAL_TYPE_MAP[data.rentalType] ?? RENTAL_TYPE_MAP.residential);
-      if (data.totalRentalPrice) await setTextInputInContainer("rentPrice", data.totalRentalPrice);
+      if (data.totalRentalPrice) await fillPriceField("rentPrice", "Precio alquiler total", data.totalRentalPrice);
       if (data.maxTenants) await setStepper("maxTenantsAllowed", data.maxTenants);
       if (data.childrenRecommended) await clickCheckOrRadioByLabel("recommendedForChildren", "La vivienda es apropiada para niños (0-12 años)");
       if (data.petsAllowed) await clickCheckOrRadioByLabel("petsAllowed", "Se admiten mascotas");
-    } else if (data.price) {
-      await setTextInputInContainer("rentPrice", data.price);
+    } else {
+      // "¿Se venderá en alguna situación excepcional?" — por defecto ninguna
+      await clickGlobalRadioByLabel("No, en ninguna situación excepcional");
+      if (data.price) await fillPriceField("salePrice", "Precio de venta", data.price);
     }
 
     setStatus("Características adicionales...");
@@ -239,7 +276,7 @@
     if (data.isStudio) await clickCheckOrRadioByLabel("subtypology", "Estudio");
     if (data.isDuplex) await clickCheckOrRadioByLabel("subtypology", "Dúplex");
 
-    if (data.equipmentType && data.equipmentType !== "unknown") {
+    if (data.operation === "rent" && data.equipmentType && data.equipmentType !== "unknown") {
       await clickCheckOrRadioByLabel("installation", EQUIPMENT_MAP[data.equipmentType] ?? EQUIPMENT_MAP.unknown);
     }
 
