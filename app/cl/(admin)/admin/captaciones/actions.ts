@@ -10,6 +10,7 @@ export type CaptacionContact = {
   email: string | null;
   has_whatsapp: boolean;
   relationship: string | null;
+  extra_phones: string[];
   created_at: string;
   updated_at: string;
 };

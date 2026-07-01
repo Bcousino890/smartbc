@@ -125,11 +125,13 @@ export function CaptacionDetailClient({
     contact_type: "owner" as "owner" | "spouse" | "family" | "neighbor" | "other",
     contact_name: "",
     phone: "",
+    extra_phones: [] as string[],
     email: "",
     has_whatsapp: false,
     relationship: "",
   });
   const [phoneValidationError, setPhoneValidationError] = useState("");
+  const [extraPhoneErrors, setExtraPhoneErrors] = useState<string[]>([]);
   const [contactSaveError, setContactSaveError] = useState("");
   const [checkingWhatsApp, setCheckingWhatsApp] = useState(false);
 
@@ -307,6 +309,7 @@ export function CaptacionDetailClient({
 
   async function handleSaveContact() {
     setPhoneValidationError("");
+    setExtraPhoneErrors([]);
     setContactSaveError("");
     setSavingContact(true);
     try {
@@ -321,6 +324,18 @@ export function CaptacionDetailClient({
         phone = normalized;
       }
 
+      // Validar teléfonos extra
+      const extraErrors: string[] = contactForm.extra_phones.map((p) => {
+        if (!p.trim()) return "";
+        const n = normalizePhone(p);
+        return isValidPhoneChile(n) ? "" : "Número inválido";
+      });
+      if (extraErrors.some(Boolean)) {
+        setExtraPhoneErrors(extraErrors);
+        setSavingContact(false);
+        return;
+      }
+
       const method = editingContactId ? "PUT" : "POST";
       const url = editingContactId
         ? `/api/admin/cl/captaciones/${captacion.id}/contacts/${editingContactId}`
@@ -333,6 +348,7 @@ export function CaptacionDetailClient({
           contact_type: contactForm.contact_type,
           contact_name: contactForm.contact_name || null,
           phone: phone || null,
+          extra_phones: contactForm.extra_phones.filter(p => p.trim()),
           email: contactForm.email || null,
           has_whatsapp: contactForm.has_whatsapp,
           relationship: contactForm.relationship || null,
@@ -355,6 +371,7 @@ export function CaptacionDetailClient({
         contact_type: "owner",
         contact_name: "",
         phone: "",
+        extra_phones: [],
         email: "",
         has_whatsapp: false,
         relationship: "",
@@ -373,10 +390,12 @@ export function CaptacionDetailClient({
       contact_type: contact.contact_type,
       contact_name: contact.contact_name || "",
       phone: contact.phone || "",
+      extra_phones: contact.extra_phones || [],
       email: contact.email || "",
       has_whatsapp: contact.has_whatsapp || false,
       relationship: contact.relationship || "",
     });
+    setExtraPhoneErrors([]);
     setShowAddContact(true);
   }
 
@@ -407,11 +426,13 @@ export function CaptacionDetailClient({
       contact_type: "owner",
       contact_name: "",
       phone: "",
+      extra_phones: [],
       email: "",
       has_whatsapp: false,
       relationship: "",
     });
     setPhoneValidationError("");
+    setExtraPhoneErrors([]);
     setContactSaveError("");
   }
 
@@ -834,8 +855,10 @@ export function CaptacionDetailClient({
                     />
 
                     <div className="mb-3">
-                      <label className="block text-xs font-medium text-ink/70 mb-1">Teléfono</label>
-                      <div className="flex gap-2 items-start">
+                      <label className="block text-xs font-medium text-ink/70 mb-1">Teléfonos</label>
+
+                      {/* Teléfono principal */}
+                      <div className="flex gap-2 items-start mb-1">
                         <input
                           type="tel"
                           value={contactForm.phone}
@@ -845,24 +868,71 @@ export function CaptacionDetailClient({
                         />
                         {contactForm.phone && isValidPhoneChile(normalizePhone(contactForm.phone)) && (
                           <button
+                            type="button"
                             onClick={handleCheckWhatsApp}
                             disabled={checkingWhatsApp}
                             title="Verificar si tiene WhatsApp"
-                            className="mt-0.5 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm transition hover:bg-ink/5 disabled:opacity-50"
+                            className="rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm transition hover:bg-ink/5 disabled:opacity-50"
                           >
-                            {checkingWhatsApp ? "..." : "Verificar"}
+                            {checkingWhatsApp ? "..." : "WhatsApp"}
                           </button>
                         )}
                       </div>
                       {contactForm.phone && contactForm.phone.trim() && !contactForm.phone.startsWith("+") && (() => {
                         const normalized = normalizePhone(contactForm.phone);
                         return isValidPhoneChile(normalized) ? (
-                          <p className="mt-1 text-xs text-emerald-600">→ Se guardará como: {normalized}</p>
+                          <p className="mb-1 text-xs text-emerald-600">→ Se guardará como: {normalized}</p>
                         ) : null;
                       })()}
                       {phoneValidationError && (
-                        <p className="mt-1 text-xs text-red-600">{phoneValidationError}</p>
+                        <p className="mb-1 text-xs text-red-600">{phoneValidationError}</p>
                       )}
+
+                      {/* Teléfonos extra */}
+                      {contactForm.extra_phones.map((ep, idx) => (
+                        <div key={idx} className="mt-1">
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="tel"
+                              value={ep}
+                              onChange={(e) => {
+                                const updated = [...contactForm.extra_phones];
+                                updated[idx] = e.target.value;
+                                setContactForm({ ...contactForm, extra_phones: updated });
+                                const errs = [...extraPhoneErrors];
+                                errs[idx] = "";
+                                setExtraPhoneErrors(errs);
+                              }}
+                              placeholder="+56 9 1234 5678"
+                              className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = contactForm.extra_phones.filter((_, i) => i !== idx);
+                                setContactForm({ ...contactForm, extra_phones: updated });
+                                setExtraPhoneErrors(extraPhoneErrors.filter((_, i) => i !== idx));
+                              }}
+                              className="rounded-lg p-2 text-ink/40 hover:text-red-600 hover:bg-red-50"
+                              title="Eliminar teléfono"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          {extraPhoneErrors[idx] && (
+                            <p className="mt-0.5 text-xs text-red-600">{extraPhoneErrors[idx]}</p>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Botón agregar teléfono */}
+                      <button
+                        type="button"
+                        onClick={() => setContactForm({ ...contactForm, extra_phones: [...contactForm.extra_phones, ""] })}
+                        className="mt-2 flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark"
+                      >
+                        + Agregar teléfono
+                      </button>
                     </div>
 
                     <Input
@@ -929,7 +999,7 @@ export function CaptacionDetailClient({
                           {contact.contact_name && (
                             <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
                           )}
-                          <div className="mt-1 flex items-center gap-3 flex-wrap">
+                          <div className="mt-1 flex flex-col gap-1">
                             {contact.phone && (
                               <a
                                 href={`tel:${contact.phone}`}
@@ -944,6 +1014,16 @@ export function CaptacionDetailClient({
                                 )}
                               </a>
                             )}
+                            {(contact.extra_phones || []).map((ep, i) => (
+                              <a
+                                key={i}
+                                href={`tel:${ep}`}
+                                className="flex items-center gap-1 text-xs text-gold hover:underline"
+                              >
+                                <Phone size={12} />
+                                {ep}
+                              </a>
+                            ))}
                             {contact.email && (
                               <a
                                 href={`mailto:${contact.email}`}
