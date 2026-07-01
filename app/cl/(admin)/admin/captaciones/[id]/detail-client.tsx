@@ -130,6 +130,7 @@ export function CaptacionDetailClient({
     relationship: "",
   });
   const [phoneValidationError, setPhoneValidationError] = useState("");
+  const [contactSaveError, setContactSaveError] = useState("");
   const [checkingWhatsApp, setCheckingWhatsApp] = useState(false);
 
   async function handleUpdate() {
@@ -306,6 +307,7 @@ export function CaptacionDetailClient({
 
   async function handleSaveContact() {
     setPhoneValidationError("");
+    setContactSaveError("");
     setSavingContact(true);
     try {
       let phone = contactForm.phone;
@@ -337,8 +339,8 @@ export function CaptacionDetailClient({
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        setPhoneValidationError(data.error || "Error al guardar contacto");
+        const data = await res.json().catch(() => ({}));
+        setContactSaveError(data.error || `Error ${res.status}: no se pudo guardar el contacto`);
         return;
       }
       const newContact = await res.json();
@@ -359,7 +361,7 @@ export function CaptacionDetailClient({
       });
     } catch (e) {
       console.error("save-contact error:", e);
-      setPhoneValidationError("Error de conexión");
+      setContactSaveError("Error de conexión al guardar el contacto");
     } finally {
       setSavingContact(false);
     }
@@ -410,6 +412,7 @@ export function CaptacionDetailClient({
       relationship: "",
     });
     setPhoneValidationError("");
+    setContactSaveError("");
   }
 
   const allPhotos = photos.length > 0 ? photos : (captacion.cover_photo_url ? [{ id: "0", url: captacion.cover_photo_url, position: 0 }] : []);
@@ -876,6 +879,12 @@ export function CaptacionDetailClient({
                       />
                       <span className="text-sm font-medium text-ink">Tiene WhatsApp</span>
                     </label>
+
+                    {contactSaveError && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {contactSaveError}
+                      </div>
+                    )}
 
                     <div className="flex gap-2">
                       <button

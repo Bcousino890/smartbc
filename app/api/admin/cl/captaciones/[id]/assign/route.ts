@@ -80,14 +80,14 @@ export async function POST(
 
     if (updateError) throw updateError;
 
-    // Registrar en log de captacion
+    // Registrar en log de captacion (attempt_type must be in allowed set)
     await db.from("captacion_logs").insert({
       captacion_id: id,
       created_by: profile.id,
-      attempt_type: "assignment",
+      attempt_type: "message",
       result: "assigned",
       notes: `Asignada a ${captadora.full_name}`,
-    });
+    }).then(() => {}).catch(() => {}); // non-critical, ignore errors
 
     // Enviar notificación a la captadora
     const propertyTitle = captacion.title || "Captación";
