@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -204,12 +204,20 @@ export function IdealistaClient({
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isInspoMode, setIsInspoMode] = useState(false);
   const [editingInspoId, setEditingInspoId] = useState<string | null>(null);
+  // Datos precargados al "sembrar" una inspo (desde link o desde propiedad).
+  // Cuando existe, el formulario se abre relleno para revisar antes de guardar.
+  const [seedData, setSeedData] = useState<Partial<IdealistaListing> | null>(null);
+  const [seedUrl, setSeedUrl] = useState("");
+  // Qué siembra está cargando: "link" o el id de la propiedad. null = ninguna.
+  const [seeding, setSeeding] = useState<string | null>(null);
+  const [seedError, setSeedError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cleaningId, setCleaningId] = useState<string | null>(null);
   const router = useRouter();
 
   const selectedProperty = useMemo(
@@ -256,8 +264,63 @@ export function IdealistaClient({
     setSelectedPropertyId(null);
     setIsInspoMode(false);
     setEditingInspoId(null);
+    setSeedData(null);
+    setSeedUrl("");
+    setSeedError(null);
     setError(null);
   }
+
+  // Siembra una inspo desde un link externo: extrae datos + re-aloja fotos
+  // limpias, y abre el formulario relleno para revisar antes de guardar.
+  const handleSeedFromLink = async () => {
+    const url = seedUrl.trim();
+    if (!url || seeding) return;
+    setSeedError(null);
+    setSeeding("link");
+    try {
+      const res = await fetch("/api/admin/idealista/inspo-from-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSeedError(json.error ?? "No se pudo leer el anuncio");
+        return;
+      }
+      setSeedData(json.data as Partial<IdealistaListing>);
+      setIsInspoMode(true);
+    } catch {
+      setSeedError("Error de red al leer el anuncio");
+    } finally {
+      setSeeding(null);
+    }
+  };
+
+  // Siembra una inspo a partir de una propiedad ya existente en el sistema.
+  const handleSeedFromProperty = async (propertyId: string) => {
+    if (seeding) return;
+    setSeedError(null);
+    setSeeding(propertyId);
+    try {
+      const res = await fetch("/api/admin/idealista/inspo-from-property", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSeedError(json.error ?? "No se pudo preparar la inspo");
+        return;
+      }
+      setSeedData(json.data as Partial<IdealistaListing>);
+      setIsInspoMode(true);
+    } catch {
+      setSeedError("Error de red al preparar la inspo");
+    } finally {
+      setSeeding(null);
+    }
+  };
 
   const handleSave = async (data: IdealistaListing): Promise<string | undefined> => {
     setError(null);
@@ -312,6 +375,36 @@ export function IdealistaClient({
     }
   };
 
+  // Opt-in: quita la marca de agua del portal de origen de las fotos de la inspo.
+  // Destructivo, por eso pide confirmación explícita (puede tocar fotos sin marca).
+  const handleCleanWatermark = async (id: string) => {
+    if (
+      !confirm(
+        "Quitar la marca de agua reprocesa las fotos ya alojadas (necesita ≥8 fotos y puede alterar fotos sin marca). ¿Continuar?",
+      )
+    )
+      return;
+    setCleaningId(id);
+    try {
+      const res = await fetch("/api/admin/idealista/inspo-clean-watermark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPublishResults((prev) => ({ ...prev, [id]: { ok: false, msg: data.error ?? "No se pudo limpiar" } }));
+      } else {
+        setPublishResults((prev) => ({ ...prev, [id]: { ok: true, msg: `Marca quitada en ${data.cleaned} fotos` } }));
+        router.refresh();
+      }
+    } catch {
+      setPublishResults((prev) => ({ ...prev, [id]: { ok: false, msg: "Error de red al limpiar" } }));
+    } finally {
+      setCleaningId(null);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("¿Borrar esta ficha? Esta acción no se puede deshacer.")) return;
     setDeletingId(id);
@@ -335,13 +428,15 @@ export function IdealistaClient({
   const showingForm = (selectedPropertyId && selectedProperty) || isInspoMode || editingInspoId;
 
   if (showingForm) {
-    const isInspo = isInspoMode || inspoListing?.is_inspo;
+    const isInspo = isInspoMode || inspoListing?.is_inspo || !!seedData;
     const propertyId = selectedPropertyId ?? editingInspoId ?? `inspo-${Date.now()}`;
     const propertyTitle = isInspo
-      ? (inspoListing?.inspo_title ?? "")
+      ? (seedData?.inspoTitle ?? inspoListing?.inspo_title ?? "")
       : (selectedProperty?.title ?? "");
     const initialData =
-      selectedListing
+      seedData
+        ? seedData
+        : selectedListing
         ? listingToInitialData(selectedListing, propertyId)
         : inspoListing
         ? listingToInitialData(inspoListing, inspoListing.id)
@@ -413,21 +508,57 @@ export function IdealistaClient({
         </div>
 
         {/* Modo 2: inspo */}
-        <button
-          onClick={() => setIsInspoMode(true)}
-          className="rounded-xl border-2 border-dashed border-gold/40 bg-gold/5 p-4 text-left transition hover:border-gold/70 hover:bg-gold/10 group"
-        >
+        <div className="rounded-xl border-2 border-dashed border-gold/40 bg-gold/5 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Sparkles size={15} className="text-gold" />
             <h3 className="text-sm font-semibold text-ink">Nueva Inspo</h3>
           </div>
-          <p className="text-xs text-ink/50">
-            Crea una ficha desde cero para publicar en Idealista, sin necesidad de tener la propiedad en el sistema.
+          <p className="text-xs text-ink/50 mb-3">
+            Pega el link de un anuncio y se autocompleta la ficha (datos + fotos sin marca), o créala desde cero.
           </p>
-          <span className="mt-3 inline-flex items-center gap-1 rounded-lg bg-gold/20 px-3 py-1 text-xs font-semibold text-gold group-hover:bg-gold/30 transition">
-            + Crear inspo
-          </span>
-        </button>
+
+          {/* Autocompletar desde link */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Link2 size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/35" />
+              <input
+                type="url"
+                placeholder="Pega el link del anuncio (idealista, fotocasa...)"
+                value={seedUrl}
+                onChange={(e) => setSeedUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSeedFromLink();
+                }}
+                disabled={seeding === "link"}
+                className="w-full rounded-lg border border-gold/25 bg-white pl-8 pr-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none disabled:opacity-60"
+              />
+            </div>
+            <button
+              onClick={handleSeedFromLink}
+              disabled={!seedUrl.trim() || seeding === "link"}
+              className="flex items-center gap-1.5 rounded-lg bg-gold/20 px-3 py-2 text-xs font-semibold text-gold transition hover:bg-gold/30 disabled:opacity-50"
+            >
+              {seeding === "link" ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+              Autocompletar
+            </button>
+          </div>
+
+          {seeding === "link" && (
+            <p className="mt-2 text-[11px] text-ink/45">
+              Leyendo el anuncio y limpiando fotos... puede tardar unos segundos.
+            </p>
+          )}
+          {seedError && (
+            <p className="mt-2 text-[11px] text-red-600">{seedError}</p>
+          )}
+
+          <button
+            onClick={() => setIsInspoMode(true)}
+            className="mt-3 inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1 text-xs font-semibold text-ink/60 ring-1 ring-inset ring-ink/10 transition hover:text-ink"
+          >
+            + Crear en blanco
+          </button>
+        </div>
       </div>
 
       {/* Lista de propiedades del sistema (si hay búsqueda o siempre visible) */}
@@ -463,12 +594,23 @@ export function IdealistaClient({
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setSelectedPropertyId(property.id)}
-                    className="shrink-0 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold transition hover:bg-gold/20"
-                  >
-                    {listing ? "Editar" : "Preparar →"}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={() => handleSeedFromProperty(property.id)}
+                      disabled={!!seeding}
+                      className="flex items-center gap-1 rounded-lg border border-gold/25 bg-gold/5 px-2.5 py-1.5 text-xs font-semibold text-gold transition hover:bg-gold/15 disabled:opacity-50"
+                      title="Crear una inspo autocompletada con los datos y fotos de esta propiedad"
+                    >
+                      {seeding === property.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      Inspo
+                    </button>
+                    <button
+                      onClick={() => setSelectedPropertyId(property.id)}
+                      className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold transition hover:bg-gold/20"
+                    >
+                      {listing ? "Editar" : "Preparar →"}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -557,6 +699,17 @@ export function IdealistaClient({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {listing.is_inspo && (
+                      <button
+                        onClick={() => handleCleanWatermark(listing.id)}
+                        disabled={cleaningId === listing.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+                        title="Quitar la marca de agua del portal de origen (reprocesa las fotos)"
+                      >
+                        {cleaningId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Droplets size={12} />}
+                        Quitar marca
+                      </button>
+                    )}
                     {listing.idealista_state !== "published" && (
                       <button
                         onClick={() => handlePublish(listing.id)}
