@@ -100,6 +100,9 @@ function listingToInitialData(
   propertyId: string
 ): Partial<IdealistaListing> {
   return {
+    // listingId: id de la fila. Necesario para que al editar (sobre todo inspos)
+    // el guardado ACTUALICE en vez de insertar un duplicado.
+    listingId: listing.id,
     propertyId,
     isInspo: listing.is_inspo,
     inspoTitle: listing.inspo_title ?? "",
@@ -481,15 +484,23 @@ export function IdealistaClient({
                       {listing.bedrooms != null && listing.bedrooms > 0 && (
                         <span>{listing.bedrooms} hab.</span>
                       )}
-                      {listing.price && (
-                        <span>
-                          {new Intl.NumberFormat("es-ES", {
-                            style: "currency",
-                            currency: "EUR",
-                            maximumFractionDigits: 0,
-                          }).format(listing.price)}
-                        </span>
-                      )}
+                      {(() => {
+                        // Alquiler: el precio está en total_rental_price, no en price.
+                        const p =
+                          listing.operation === "rent"
+                            ? listing.total_rental_price
+                            : listing.price;
+                        return p ? (
+                          <span>
+                            {new Intl.NumberFormat("es-ES", {
+                              style: "currency",
+                              currency: "EUR",
+                              maximumFractionDigits: 0,
+                            }).format(p)}
+                            {listing.operation === "rent" ? "/mes" : ""}
+                          </span>
+                        ) : null;
+                      })()}
                       {listing.reference_code && (
                         <span className="rounded-full bg-blue-100/60 px-2 py-0.5 text-[10px] font-medium text-blue-700 font-mono">
                           {listing.reference_code}
