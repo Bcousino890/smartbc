@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/db/admin";
 export type CaptacionContact = {
   id: string;
   captacion_id: string;
-  contact_type: "owner" | "spouse" | "family" | "other";
+  contact_type: "owner" | "spouse" | "family" | "neighbor" | "other";
   contact_name: string | null;
   phone: string | null;
   email: string | null;

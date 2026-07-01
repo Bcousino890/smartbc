@@ -37,7 +37,7 @@ export async function POST(
     const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
 
     // Validaciones
-    if (!contact_type || !["owner", "spouse", "family", "other"].includes(contact_type)) {
+    if (!contact_type || !["owner", "spouse", "family", "neighbor", "other"].includes(contact_type)) {
       return NextResponse.json(
         { error: "contact_type inválido" },
         { status: 400 }

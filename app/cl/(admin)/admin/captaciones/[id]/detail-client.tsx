@@ -122,7 +122,7 @@ export function CaptacionDetailClient({
   const [savingContact, setSavingContact] = useState(false);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [contactForm, setContactForm] = useState({
-    contact_type: "owner" as "owner" | "spouse" | "family" | "other",
+    contact_type: "owner" as "owner" | "spouse" | "family" | "neighbor" | "other",
     contact_name: "",
     phone: "",
     email: "",
@@ -811,6 +811,7 @@ export function CaptacionDetailClient({
                           <option value="owner">Dueño</option>
                           <option value="spouse">Cónyuge</option>
                           <option value="family">Familiar</option>
+                          <option value="neighbor">Vecino</option>
                           <option value="other">Otro</option>
                         </select>
                       </div>
@@ -917,6 +918,7 @@ export function CaptacionDetailClient({
                               {contact.contact_type === "owner" && "Dueño"}
                               {contact.contact_type === "spouse" && "Cónyuge"}
                               {contact.contact_type === "family" && "Familiar"}
+                              {contact.contact_type === "neighbor" && "Vecino"}
                               {contact.contact_type === "other" && "Otro"}
                             </span>
                             {contact.relationship && (
