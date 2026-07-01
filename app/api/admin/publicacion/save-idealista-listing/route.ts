@@ -1,4 +1,5 @@
 import "server-only";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
 
 export async function POST(req: Request) {
@@ -90,11 +91,31 @@ export async function POST(req: Request) {
 
     let id: string | undefined = existing?.id;
     if (existing) {
-      await db.from("idealista_listings").update(record).eq("id", existing.id);
+      const { error: updateErr } = await db
+        .from("idealista_listings")
+        .update(record)
+        .eq("id", existing.id);
+      if (updateErr) {
+        console.error("Save idealista listing update error:", updateErr);
+        return Response.json({ error: updateErr.message ?? "Error al actualizar" }, { status: 500 });
+      }
     } else {
-      const { data: inserted } = await db.from("idealista_listings").insert(record).select("id").single();
+      const { data: inserted, error: insertErr } = await db
+        .from("idealista_listings")
+        .insert(record)
+        .select("id")
+        .single();
+      if (insertErr) {
+        console.error("Save idealista listing insert error:", insertErr);
+        return Response.json({ error: insertErr.message ?? "Error al guardar" }, { status: 500 });
+      }
       id = inserted?.id;
     }
+
+    // Revalidar la lista de fichas para que la nueva/actualizada aparezca sin
+    // tener que recargar la página a mano.
+    revalidatePath("/es/admin/idealista");
+    revalidatePath("/cl/admin/idealista");
 
     return Response.json({ ok: true, id });
   } catch (error) {
