@@ -1,6 +1,7 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
+import { DESCRIPTION_STYLE, enforceAgencyOpening } from "@/lib/services/idealista/description-style";
 
 // Lee las fotos del inmueble con IA (visión) y COMPLETA la ficha con lo que se
 // puede deducir de las imágenes: título, descripción, tipo, estado, amueblado,
@@ -13,8 +14,9 @@ const MAX_VISION_PHOTOS = 12;
 const SYSTEM_PROMPT = `Eres un agente inmobiliario experto que redacta fichas para Idealista (España) a partir de FOTOS de un inmueble. Analiza TODAS las fotos y rellena el esquema.
 
 Reglas:
-- Escribe "title": un título comercial breve y atractivo en español (máx ~70 caracteres), basado en lo que se ve (tipo de vivienda, luz, estado, ambiente). No pongas la zona salvo que se vea claramente.
-- Escribe "description": una descripción atractiva y honesta en español de España, 120-180 palabras en 2-3 párrafos, basada SOLO en lo que aparece en las fotos (distribución, estancias, luz, calidades, mobiliario, exteriores). No inventes servicios cercanos, ni metros, ni precio.
+- Escribe "title": un título comercial breve y atractivo en español (máx ~70 caracteres), basado en lo que se ve (tipo de vivienda, luz, estado, ambiente) y, si se conoce, la zona.
+- Escribe "description" siguiendo ESTE estilo y formato:
+${DESCRIPTION_STYLE}
 - "propertyType": el tipo que mejor encaje (flat, house, studio no existe como tipo: usa "flat" y marca isStudio).
 - "isStudio"/"isPenthouse"/"isDuplex": true si se ve claramente.
 - "bedrooms"/"bathrooms": ESTIMA a partir de las fotos (cuenta dormitorios y baños distintos que veas). Si no puedes estimarlo con confianza, pon 0.
@@ -95,7 +97,7 @@ export async function POST(req: Request) {
       system: SYSTEM_PROMPT,
       userText: `Analiza estas ${photos.length} fotos del inmueble y completa la ficha (esquema JSON).`,
       images: photos,
-      maxTokens: 1800,
+      maxTokens: 2200,
       jsonSchema: SCHEMA,
     });
   } catch (err) {
@@ -125,6 +127,11 @@ export async function POST(req: Request) {
 
   if (!suggestion) {
     return Response.json({ error: "Respuesta de la IA no interpretable" }, { status: 502 });
+  }
+
+  // La descripción debe empezar por la apertura de la agencia, salga el modelo que salga.
+  if (typeof suggestion.description === "string") {
+    suggestion.description = enforceAgencyOpening(suggestion.description);
   }
 
   return Response.json({ suggestion, photosUsed: photos.length });

@@ -2,6 +2,7 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { PROPERTY_TYPE_MAP } from "@/lib/services/idealista/selectors";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
+import { AGENCY_NAME, DESCRIPTION_STYLE, enforceAgencyOpening } from "@/lib/services/idealista/description-style";
 
 // Genera la descripción del anuncio con IA a partir de los datos de la ficha.
 // Devuelve SOLO el cuerpo del texto: el footer fijo lo añade el formulario.
@@ -95,18 +96,11 @@ function buildFacts(d: DescInput): string {
   return lines.join("\n");
 }
 
-const SYSTEM_PROMPT = `Eres un redactor experto de anuncios inmobiliarios para Idealista en España. Escribes descripciones atractivas, profesionales y honestas en español de España.
+const SYSTEM_PROMPT = `Eres el redactor de anuncios de ${AGENCY_NAME}, una inmobiliaria premium en España.
 
-Reglas:
-- Devuelve SOLO el texto de la descripción, sin títulos, sin markdown, sin comillas, sin viñetas.
-- Longitud: 120-180 palabras, en 2-3 párrafos cortos.
-- Usa únicamente los datos aportados; NO inventes características, medidas, ni servicios cercanos que no se indiquen.
-- Destaca los puntos fuertes reales (superficie, extras, estado, zona).
-- Tono cálido y comercial, sin exageraciones ni superlativos huecos.
-- Termina invitando a solicitar una visita.
-- No incluyas precio salvo que aporte valor comercial; nunca inventes cifras.
-- No incluyas datos de contacto ni el footer (se añaden aparte).
-- Si se aportan fotos, básate también en lo que se ve en ellas (luz, distribución, calidades, estado, exteriores), pero NO inventes datos que no puedas confirmar (m², nº de habitaciones, etc.): usa solo los que aparezcan en los datos.`;
+${DESCRIPTION_STYLE}
+
+Si se aportan fotos, básate también en lo que se ve en ellas (luz, distribución, calidades, estado, exteriores).`;
 
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
@@ -129,16 +123,16 @@ export async function POST(req: Request) {
     (photos.length ? `\n\nSe adjuntan ${photos.length} fotos del inmueble.` : "");
 
   try {
-    const description = await aiComplete({
+    const raw = await aiComplete({
       system: SYSTEM_PROMPT,
       userText: userPrompt,
       images: photos,
-      maxTokens: 1500,
+      maxTokens: 1600,
     });
-    if (!description) {
+    if (!raw) {
       return Response.json({ error: "La IA no devolvió texto" }, { status: 502 });
     }
-    return Response.json({ description });
+    return Response.json({ description: enforceAgencyOpening(raw) });
   } catch (err) {
     if (err instanceof AINotConfiguredError) {
       return Response.json({ error: err.message }, { status: 503 });
