@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -405,6 +405,16 @@ export function IdealistaClient({
     }
   };
 
+  // Descarga las fotos de la ficha en un ZIP (carpeta con la referencia BC).
+  // Es una descarga directa por GET; el navegador la guarda por el header.
+  const handleDownloadPhotos = (id: string) => {
+    const a = document.createElement("a");
+    a.href = `/api/admin/idealista/download-photos?listingId=${id}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("¿Borrar esta ficha? Esta acción no se puede deshacer.")) return;
     setDeletingId(id);
@@ -699,6 +709,16 @@ export function IdealistaClient({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {listing.photo_ids?.length > 0 && (
+                      <button
+                        onClick={() => handleDownloadPhotos(listing.id)}
+                        className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-ink/5 px-2.5 py-1.5 text-xs font-semibold text-ink/60 transition hover:bg-ink/10 hover:text-ink"
+                        title={`Descargar las ${listing.photo_ids.length} fotos en una carpeta`}
+                      >
+                        <Download size={12} />
+                        Fotos
+                      </button>
+                    )}
                     {listing.is_inspo && (
                       <button
                         onClick={() => handleCleanWatermark(listing.id)}

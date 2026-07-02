@@ -621,6 +621,9 @@ export function IdealistaForm({
   const [generatingRef, setGeneratingRef] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
+  const [analyzingPhotos, setAnalyzingPhotos] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [detectedFromPhotos, setDetectedFromPhotos] = useState<string[] | null>(null);
   // Scheduling UI state
   const [schedDate, setSchedDate] = useState(() => {
     if (!form.scheduledPublishAt) return "";
@@ -688,6 +691,8 @@ export function IdealistaForm({
           equipmentType: form.equipmentType,
           heatingType: form.heatingType,
           petsAllowed: form.petsAllowed,
+          // Las fotos permiten que la IA "vea" el inmueble y describa lo real.
+          photos: form.photos,
         }),
       });
       const data = await res.json();
@@ -700,6 +705,58 @@ export function IdealistaForm({
       setDescError("Error de red al generar la descripción");
     } finally {
       setGeneratingDesc(false);
+    }
+  }
+
+  // Analiza las fotos con IA y aplica SOLO sugerencias de campos visibles
+  // (extras, estado, amueblado). No toca datos duros (m², habitaciones, precio).
+  async function handleAnalyzePhotos() {
+    setPhotoError(null);
+    setDetectedFromPhotos(null);
+    if (!form.photos || form.photos.length === 0) {
+      setPhotoError("Añade fotos a la ficha antes de analizarlas.");
+      return;
+    }
+    setAnalyzingPhotos(true);
+    try {
+      const res = await fetch("/api/admin/idealista/analyze-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photos: form.photos }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPhotoError(data.error ?? "No se pudieron analizar las fotos");
+        return;
+      }
+      const s = data.suggestion as {
+        hasTerrace?: boolean;
+        hasBalcony?: boolean;
+        hasPool?: boolean;
+        hasGarden?: boolean;
+        hasAC?: boolean;
+        hasWardrobes?: boolean;
+        condition?: IdealistaListing["condition"];
+        equipmentType?: IdealistaListing["equipmentType"];
+        detected?: string[];
+      };
+      // Solo ENCENDEMOS extras detectados (no desmarcamos lo que el usuario ya puso).
+      setForm((prev) => ({
+        ...prev,
+        hasTerrace: prev.hasTerrace || !!s.hasTerrace,
+        hasBalcony: prev.hasBalcony || !!s.hasBalcony,
+        hasPool: prev.hasPool || !!s.hasPool,
+        hasGarden: prev.hasGarden || !!s.hasGarden,
+        hasAC: prev.hasAC || !!s.hasAC,
+        hasWardrobes: prev.hasWardrobes || !!s.hasWardrobes,
+        condition: s.condition ?? prev.condition,
+        equipmentType: s.equipmentType ?? prev.equipmentType,
+      }));
+      setDetectedFromPhotos(s.detected ?? []);
+    } catch {
+      setPhotoError("Error de red al analizar las fotos");
+    } finally {
+      setAnalyzingPhotos(false);
     }
   }
 
@@ -1280,10 +1337,20 @@ export function IdealistaForm({
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                onClick={handleAnalyzePhotos}
+                disabled={analyzingPhotos}
+                className="flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline disabled:opacity-50"
+                title="Detecta extras visibles (terraza, piscina...) y estado a partir de las fotos"
+              >
+                {analyzingPhotos ? <Loader2 size={11} className="animate-spin" /> : <ImageIcon size={11} />}
+                Analizar fotos
+              </button>
+              <button
+                type="button"
                 onClick={handleGenerateDescription}
                 disabled={generatingDesc}
                 className="flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline disabled:opacity-50"
-                title="Redacta la descripción con IA a partir de los datos de la ficha"
+                title="Redacta la descripción con IA a partir de los datos y las fotos de la ficha"
               >
                 {generatingDesc ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
                 {form.description ? "Regenerar con IA" : "Generar con IA"}
@@ -1307,7 +1374,18 @@ export function IdealistaForm({
           {generatingDesc && (
             <p className="mt-1 text-[11px] text-ink/45">Redactando con IA...</p>
           )}
+          {analyzingPhotos && (
+            <p className="mt-1 text-[11px] text-ink/45">Analizando las fotos...</p>
+          )}
           {descError && <p className="mt-1 text-[11px] text-red-600">{descError}</p>}
+          {photoError && <p className="mt-1 text-[11px] text-red-600">{photoError}</p>}
+          {detectedFromPhotos && (
+            <p className="mt-1 text-[11px] text-emerald-700">
+              {detectedFromPhotos.length
+                ? `Detectado en las fotos y marcado en extras/estado: ${detectedFromPhotos.join(", ")}. Revisa que sea correcto.`
+                : "No se detectaron extras claros en las fotos."}
+            </p>
+          )}
         </div>
 
         {showDescPreview && (
