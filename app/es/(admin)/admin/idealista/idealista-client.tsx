@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -91,6 +91,7 @@ type DbIdealistaListing = {
   idealista_property_id: string | null;
   idealista_state: string | null;
   scheduled_publish_at: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -218,6 +219,7 @@ export function IdealistaClient({
   const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningId, setCleaningId] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const router = useRouter();
 
   const selectedProperty = useMemo(
@@ -257,6 +259,18 @@ export function IdealistaClient({
   );
   const systemListings = useMemo(
     () => listings.filter((l) => !l.is_inspo),
+    [listings]
+  );
+
+  // Pipeline de bajas: las fichas archivadas (bajadas de Idealista) se sacan
+  // de la lista activa pero no se borran — se muestran aparte, con opción de
+  // restaurar.
+  const activeListings = useMemo(
+    () => listings.filter((l) => !l.archived_at),
+    [listings]
+  );
+  const archivedListings = useMemo(
+    () => listings.filter((l) => !!l.archived_at),
     [listings]
   );
 
@@ -415,8 +429,11 @@ export function IdealistaClient({
     a.remove();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Borrar esta ficha? Esta acción no se puede deshacer.")) return;
+  const handleDelete = async (id: string, isPublished: boolean) => {
+    const message = isPublished
+      ? "¿Bajar esta ficha de Idealista? Se archivará (no se borra: fotos y datos quedan guardados) y podrás restaurarla luego."
+      : "¿Borrar esta ficha? Esta acción no se puede deshacer.";
+    if (!confirm(message)) return;
     setDeletingId(id);
     try {
       const res = await fetch("/api/admin/idealista/delete-listing", {
@@ -431,6 +448,25 @@ export function IdealistaClient({
       // silent — el usuario puede reintentar
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Restaura una ficha archivada (bajada) a la lista activa como publicada.
+  const handleRestore = async (id: string) => {
+    setRestoringId(id);
+    try {
+      const res = await fetch("/api/admin/idealista/restore-listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch {
+      // silent — el usuario puede reintentar
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -629,13 +665,13 @@ export function IdealistaClient({
       )}
 
       {/* Fichas preparadas: del sistema + inspo */}
-      {listings.length > 0 && (
+      {activeListings.length > 0 && (
         <div>
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink/45">
-            Fichas guardadas ({listings.length})
+            Fichas guardadas ({activeListings.length})
           </h3>
           <div className="space-y-2">
-            {listings.map((listing) => {
+            {activeListings.map((listing) => {
               const property = !listing.is_inspo
                 ? properties.find((p) => p.id === listing.property_id)
                 : null;
@@ -755,18 +791,64 @@ export function IdealistaClient({
                       <Edit2 size={14} />
                     </button>
                     <button
-                      onClick={() => handleDelete(listing.id)}
+                      onClick={() => handleDelete(listing.id, listing.idealista_state === "published")}
                       disabled={deletingId === listing.id}
                       className="rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-500 transition hover:bg-red-100 disabled:opacity-50"
-                      title="Borrar ficha"
+                      title={listing.idealista_state === "published" ? "Bajar ficha (se archiva, no se borra)" : "Borrar ficha"}
                     >
                       {deletingId === listing.id ? (
                         <Loader2 size={14} className="animate-spin" />
+                      ) : listing.idealista_state === "published" ? (
+                        <Archive size={14} />
                       ) : (
                         <Trash2 size={14} />
                       )}
                     </button>
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {archivedListings.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink/45">
+            Archivadas — bajadas de Idealista ({archivedListings.length})
+          </h3>
+          <div className="space-y-2">
+            {archivedListings.map((listing) => {
+              const displayTitle = listing.is_inspo
+                ? (listing.inspo_title || "Inspo sin título")
+                : (properties.find((p) => p.id === listing.property_id)?.title ?? "Propiedad eliminada");
+              return (
+                <div
+                  key={listing.id}
+                  className="flex items-center gap-3 rounded-xl border border-ink/10 bg-ink/[0.03] px-4 py-3 opacity-75"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink/70">{displayTitle}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/45">
+                      {listing.reference_code && (
+                        <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-medium font-mono">
+                          {listing.reference_code}
+                        </span>
+                      )}
+                      <span>
+                        Archivada el {new Date(listing.archived_at!).toLocaleDateString("es-ES")}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRestore(listing.id)}
+                    disabled={restoringId === listing.id}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                    title="Restaurar a fichas activas"
+                  >
+                    {restoringId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                    Restaurar
+                  </button>
                 </div>
               );
             })}
