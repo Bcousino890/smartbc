@@ -514,7 +514,7 @@ export function IdealistaClient({
             <h3 className="text-sm font-semibold text-ink">Nueva Inspo</h3>
           </div>
           <p className="text-xs text-ink/50 mb-3">
-            Pega el link de un anuncio y se autocompleta la ficha (datos + fotos sin marca), o créala desde cero.
+            Pega el link de un anuncio de cualquier portal (idealista, fotocasa, airbnb...) y se autocompleta la ficha (datos + fotos sin marca), o créala desde cero.
           </p>
 
           {/* Autocompletar desde link */}
@@ -523,7 +523,7 @@ export function IdealistaClient({
               <Link2 size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/35" />
               <input
                 type="url"
-                placeholder="Pega el link del anuncio (idealista, fotocasa...)"
+                placeholder="Pega el link del anuncio (idealista, fotocasa, airbnb, cualquier portal...)"
                 value={seedUrl}
                 onChange={(e) => setSeedUrl(e.target.value)}
                 onKeyDown={(e) => {

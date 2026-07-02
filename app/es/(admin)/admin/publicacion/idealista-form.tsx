@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState, useEffect } from "react";
-import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock } from "lucide-react";
+import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
@@ -619,6 +619,8 @@ export function IdealistaForm({
   const [publishing, setPublishing] = useState(false);
   const [showDescPreview, setShowDescPreview] = useState(false);
   const [generatingRef, setGeneratingRef] = useState(false);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
+  const [descError, setDescError] = useState<string | null>(null);
   // Scheduling UI state
   const [schedDate, setSchedDate] = useState(() => {
     if (!form.scheduledPublishAt) return "";
@@ -645,6 +647,59 @@ export function IdealistaForm({
       // silent — user can retry
     } finally {
       setGeneratingRef(false);
+    }
+  }
+
+  // Genera la descripción con IA a partir de los datos actuales del formulario.
+  async function handleGenerateDescription() {
+    setDescError(null);
+    setGeneratingDesc(true);
+    try {
+      const res = await fetch("/api/admin/idealista/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inspoTitle: form.inspoTitle,
+          propertyType: form.propertyType,
+          operation: form.operation,
+          addressCity: form.addressCity,
+          addressStreet: form.addressStreet,
+          squareMeters: form.squareMeters,
+          bedrooms: form.bedrooms,
+          bathrooms: form.bathrooms,
+          floor: form.floor,
+          condition: form.condition,
+          price: form.price,
+          totalRentalPrice: form.totalRentalPrice,
+          communityFees: form.communityFees,
+          constructionYear: form.constructionYear,
+          hasElevator: form.hasElevator,
+          hasTerrace: form.hasTerrace,
+          hasBalcony: form.hasBalcony,
+          hasParking: form.hasParking,
+          hasStorage: form.hasStorage,
+          hasPool: form.hasPool,
+          hasGarden: form.hasGarden,
+          hasWardrobes: form.hasWardrobes,
+          hasAC: form.hasAC,
+          isPenthouse: form.isPenthouse,
+          isStudio: form.isStudio,
+          isDuplex: form.isDuplex,
+          equipmentType: form.equipmentType,
+          heatingType: form.heatingType,
+          petsAllowed: form.petsAllowed,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDescError(data.error ?? "No se pudo generar la descripción");
+        return;
+      }
+      set("description", data.description as string);
+    } catch {
+      setDescError("Error de red al generar la descripción");
+    } finally {
+      setGeneratingDesc(false);
     }
   }
 
@@ -1222,21 +1277,37 @@ export function IdealistaForm({
         <div>
           <div className="flex items-center justify-between mb-1">
             <Label>Descripción principal</Label>
-            <button
-              type="button"
-              onClick={() => setShowDescPreview((v) => !v)}
-              className="text-[11px] text-gold hover:underline"
-            >
-              {showDescPreview ? "Ocultar vista previa" : "Ver con footer"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleGenerateDescription}
+                disabled={generatingDesc}
+                className="flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline disabled:opacity-50"
+                title="Redacta la descripción con IA a partir de los datos de la ficha"
+              >
+                {generatingDesc ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                {form.description ? "Regenerar con IA" : "Generar con IA"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDescPreview((v) => !v)}
+                className="text-[11px] text-gold hover:underline"
+              >
+                {showDescPreview ? "Ocultar vista previa" : "Ver con footer"}
+              </button>
+            </div>
           </div>
           <textarea
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
             rows={6}
-            placeholder="Describe la propiedad: distribución, calidades, vistas, entorno del barrio..."
+            placeholder="Describe la propiedad: distribución, calidades, vistas, entorno del barrio... o pulsa 'Generar con IA'."
             className={cn(inputCls, "resize-y")}
           />
+          {generatingDesc && (
+            <p className="mt-1 text-[11px] text-ink/45">Redactando con IA...</p>
+          )}
+          {descError && <p className="mt-1 text-[11px] text-red-600">{descError}</p>}
         </div>
 
         {showDescPreview && (
