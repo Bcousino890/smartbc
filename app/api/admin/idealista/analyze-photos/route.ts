@@ -82,7 +82,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => null)) as { photos?: string[] } | null;
+  const body = (await req.json().catch(() => null)) as
+    | { photos?: string[]; addressCity?: string; addressStreet?: string }
+    | null;
   const photos = (body?.photos ?? [])
     .filter((u) => typeof u === "string" && u.startsWith("http"))
     .slice(0, MAX_VISION_PHOTOS);
@@ -91,11 +93,20 @@ export async function POST(req: Request) {
     return Response.json({ error: "Añade fotos a la ficha antes de analizarlas." }, { status: 400 });
   }
 
+  // Zona/calle (si el usuario las indicó): la IA las usa en título y descripción.
+  // La calle solo se usa si viene dada; la IA nunca se la inventa.
+  const zone = (body?.addressCity ?? "").trim();
+  const street = (body?.addressStreet ?? "").trim();
+  const locationCtx =
+    zone || street
+      ? `\n\nUbicación (úsala en título y descripción, no la inventes): ${[street, zone].filter(Boolean).join(", ")}.`
+      : "\n\nNo se conoce el barrio: no menciones zona ni calle concretas.";
+
   let raw: string;
   try {
     raw = await aiComplete({
       system: SYSTEM_PROMPT,
-      userText: `Analiza estas ${photos.length} fotos del inmueble y completa la ficha (esquema JSON).`,
+      userText: `Analiza estas ${photos.length} fotos del inmueble y completa la ficha (esquema JSON).${locationCtx}`,
       images: photos,
       maxTokens: 2200,
       jsonSchema: SCHEMA,

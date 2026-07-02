@@ -19,6 +19,7 @@ export function AIConfigSection() {
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
   const [visionModel, setVisionModel] = useState("");
+  const [zones, setZones] = useState(""); // una zona por línea
   const [hasKey, setHasKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,6 +35,7 @@ export function AIConfigSection() {
           setProvider(d.provider ?? "openrouter");
           setModel(d.model ?? "");
           setVisionModel(d.visionModel ?? "");
+          setZones((d.zones ?? []).join("\n"));
           setHasKey(!!d.hasKey);
         }
       } catch {
@@ -52,7 +54,13 @@ export function AIConfigSection() {
       const res = await fetch("/api/admin/idealista/ai-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, model, visionModel }),
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          model,
+          visionModel,
+          zones: zones.split("\n").map((z) => z.trim()).filter(Boolean),
+        }),
       });
       const d = await res.json();
       if (!res.ok) {
@@ -159,6 +167,23 @@ export function AIConfigSection() {
                 className={`${inputCls} font-mono`}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              Zonas / barrios (una por línea)
+            </label>
+            <textarea
+              value={zones}
+              onChange={(e) => setZones(e.target.value)}
+              rows={5}
+              placeholder={"Barrio de Salamanca\nChamberí\nRetiro\nCentro"}
+              className={`${inputCls} resize-y`}
+            />
+            <p className="mt-1 text-[11px] text-ink/45">
+              Estas zonas aparecen como sugerencia en la ficha (campo Ciudad/Zona) y ayudan a la IA a
+              redactar el título y la descripción con el barrio correcto.
+            </p>
           </div>
 
           {msg && (

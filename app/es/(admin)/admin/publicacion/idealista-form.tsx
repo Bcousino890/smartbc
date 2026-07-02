@@ -217,6 +217,27 @@ async function geocodeAddress(
   }
 }
 
+// Reverse geocoding: de coordenadas a calle (Nominatim). Se usa al hacer clic en
+// el mapa para rellenar la calle real automáticamente.
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      { headers: { Accept: "application/json", "User-Agent": "smartbc-idealista-form" } }
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      address?: { road?: string; pedestrian?: string; house_number?: string };
+    };
+    const road = data.address?.road ?? data.address?.pedestrian;
+    if (!road) return null;
+    const num = data.address?.house_number;
+    return num ? `${road} ${num}` : road;
+  } catch {
+    return null;
+  }
+}
+
 // ── Micro-components ──────────────────────────────────────────────────────────────
 
 function SectionHeader({ step, title }: { step: number; title: string }) {
@@ -350,6 +371,7 @@ interface GeocodingMapSectionProps {
   latitude: number;
   longitude: number;
   onCoordinatesChange: (lat: number, lng: number) => void;
+  onStreetDetected?: (street: string) => void;
 }
 
 function GeocodingMapSection({
@@ -358,6 +380,7 @@ function GeocodingMapSection({
   latitude,
   longitude,
   onCoordinatesChange,
+  onStreetDetected,
 }: GeocodingMapSectionProps) {
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
@@ -369,6 +392,8 @@ function GeocodingMapSection({
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const callbackRef = useRef(onCoordinatesChange);
   useEffect(() => { callbackRef.current = onCoordinatesChange; });
+  const streetCbRef = useRef(onStreetDetected);
+  useEffect(() => { streetCbRef.current = onStreetDetected; });
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -400,6 +425,12 @@ function GeocodingMapSection({
   function handleMapClick(lat: number, lng: number) {
     setHasManualPin(true);
     callbackRef.current(lat, lng);
+    // Rellena la calle real a partir del punto pinchado (si se puede resolver).
+    if (streetCbRef.current) {
+      reverseGeocode(lat, lng).then((s) => {
+        if (s) streetCbRef.current?.(s);
+      });
+    }
   }
 
   return (
@@ -624,6 +655,16 @@ export function IdealistaForm({
   const [analyzingPhotos, setAnalyzingPhotos] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [detectedFromPhotos, setDetectedFromPhotos] = useState<string[] | null>(null);
+  // Zonas/barrios configurados (Configuración → IA): sugerencia en el campo Ciudad/Zona.
+  const [zoneOptions, setZoneOptions] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/admin/idealista/ai-config")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.zones)) setZoneOptions(d.zones);
+      })
+      .catch(() => {});
+  }, []);
   // Scheduling UI state
   const [schedDate, setSchedDate] = useState(() => {
     if (!form.scheduledPublishAt) return "";
@@ -724,7 +765,11 @@ export function IdealistaForm({
       const res = await fetch("/api/admin/idealista/analyze-photos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photos: form.photos }),
+        body: JSON.stringify({
+          photos: form.photos,
+          addressCity: form.addressCity,
+          addressStreet: form.addressStreet,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -970,14 +1015,26 @@ export function IdealistaForm({
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>Ciudad / Municipio</Label>
+            <Label>Ciudad / Zona (barrio)</Label>
             <input
               type="text"
+              list="ai-zone-options"
               value={form.addressCity}
               onChange={(e) => set("addressCity", e.target.value)}
-              placeholder="Madrid"
+              placeholder="Ej. Chamberí (elige de la lista o escribe)"
               className={inputCls}
             />
+            <datalist id="ai-zone-options">
+              {zoneOptions.map((z) => (
+                <option key={z} value={z} />
+              ))}
+            </datalist>
+            {zoneOptions.length > 0 && (
+              <p className="mt-1 text-[11px] text-ink/40">
+                La zona ayuda a la IA a redactar el título y la descripción con el barrio correcto. Edita la
+                lista en Configuración → IA.
+              </p>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3">
@@ -1051,6 +1108,7 @@ export function IdealistaForm({
             set("latitude", lat);
             set("longitude", lng);
           }}
+          onStreetDetected={(s) => set("addressStreet", s)}
         />
       </section>
 
