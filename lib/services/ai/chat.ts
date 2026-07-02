@@ -1,18 +1,29 @@
 import "server-only";
+import { createAdminClient } from "@/lib/db/admin";
 
-// Cliente de IA multi-proveedor. Un solo interruptor por variable de entorno
-// permite usar Claude (Anthropic) o cualquier proveedor compatible con OpenAI
-// (OpenRouter, NVIDIA NIM, Ollama, OpenAI...) sin tocar el código de los
-// endpoints. Todo por fetch: sin dependencias añadidas al build del VPS.
+// Cliente de IA multi-proveedor. La configuración se guarda en la tabla
+// `app_settings` (clave "ai.config") y se puede editar desde el panel de
+// Configuración — no hace falta tocar el .env ni SSH. Como fallback, también
+// se leen variables de entorno. Soporta Claude (Anthropic) y cualquier
+// proveedor compatible con OpenAI (OpenRouter, NVIDIA NIM, Ollama, OpenAI...).
+// Todo por fetch: sin dependencias añadidas al build del VPS.
 //
-// Variables:
-//   AI_PROVIDER      anthropic | openrouter | nvidia | ollama | openai
-//                    (por defecto: "anthropic" si hay ANTHROPIC_API_KEY)
-//   AI_API_KEY       clave del proveedor OpenAI-compatible (Bearer)
-//   AI_BASE_URL      base URL para "ollama"/"openai" custom (ej. http://localhost:11434/v1)
-//   AI_MODEL         modelo de texto
-//   AI_VISION_MODEL  modelo para fotos (si no, usa AI_MODEL)
-//   ANTHROPIC_API_KEY / IDEALISTA_DESC_MODEL  (compatibilidad con lo anterior)
+// Config (en app_settings["ai.config"] o por env):
+//   provider  anthropic | openrouter | nvidia | ollama | openai
+//   apiKey    clave del proveedor
+//   model     modelo de texto
+//   visionModel  modelo para fotos (si no, usa model)
+// Env de fallback: AI_PROVIDER, AI_API_KEY, AI_BASE_URL, AI_MODEL,
+//   AI_VISION_MODEL, y ANTHROPIC_API_KEY / IDEALISTA_DESC_MODEL.
+
+export const AI_SETTINGS_KEY = "ai.config";
+
+export type StoredAIConfig = {
+  provider?: string;
+  apiKey?: string;
+  model?: string;
+  visionModel?: string;
+};
 
 type ProviderConfig =
   | { kind: "anthropic"; key: string; model: string; visionModel: string }
@@ -25,21 +36,40 @@ const OPENAI_BASES: Record<string, string> = {
 
 export class AINotConfiguredError extends Error {}
 
-function resolveConfig(): ProviderConfig {
+async function loadStoredConfig(): Promise<StoredAIConfig | null> {
+  try {
+    const db = createAdminClient() as any;
+    const { data } = await db
+      .from("app_settings")
+      .select("value")
+      .eq("key", AI_SETTINGS_KEY)
+      .maybeSingle();
+    const v = data?.value;
+    if (v && typeof v === "object") return v as StoredAIConfig;
+  } catch {
+    // best-effort: si la tabla no está disponible, caemos a env
+  }
+  return null;
+}
+
+async function resolveConfig(): Promise<ProviderConfig> {
+  const stored = await loadStoredConfig();
   const provider = (
-    process.env.AI_PROVIDER ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "")
+    stored?.provider ||
+    process.env.AI_PROVIDER ||
+    (process.env.ANTHROPIC_API_KEY ? "anthropic" : "")
   ).toLowerCase();
 
   if (provider === "anthropic") {
-    const key = process.env.ANTHROPIC_API_KEY;
-    if (!key) throw new AINotConfiguredError("Falta ANTHROPIC_API_KEY en el servidor.");
-    const model = process.env.AI_MODEL ?? process.env.IDEALISTA_DESC_MODEL ?? "claude-opus-4-8";
-    return { kind: "anthropic", key, model, visionModel: process.env.AI_VISION_MODEL ?? model };
+    const key = stored?.apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!key) throw new AINotConfiguredError("IA no configurada: falta la clave de Anthropic.");
+    const model = stored?.model || process.env.AI_MODEL || process.env.IDEALISTA_DESC_MODEL || "claude-opus-4-8";
+    return { kind: "anthropic", key, model, visionModel: stored?.visionModel || process.env.AI_VISION_MODEL || model };
   }
 
   if (!provider) {
     throw new AINotConfiguredError(
-      "IA no configurada: define AI_PROVIDER (openrouter, nvidia, ollama, anthropic...) y su clave.",
+      "IA no configurada. Ve a Configuración → IA y elige proveedor, clave y modelo.",
     );
   }
 
@@ -50,13 +80,13 @@ function resolveConfig(): ProviderConfig {
     (provider === "ollama" ? "http://localhost:11434/v1" : undefined) ??
     "";
   if (!base) {
-    throw new AINotConfiguredError(`Falta AI_BASE_URL para el proveedor "${provider}".`);
+    throw new AINotConfiguredError(`Falta la URL base para el proveedor "${provider}".`);
   }
-  const key = process.env.AI_API_KEY ?? (provider === "ollama" ? "ollama" : "");
-  if (!key) throw new AINotConfiguredError(`Falta AI_API_KEY para el proveedor "${provider}".`);
-  const model = process.env.AI_MODEL;
-  if (!model) throw new AINotConfiguredError(`Falta AI_MODEL para el proveedor "${provider}".`);
-  return { kind: "openai", base, key, model, visionModel: process.env.AI_VISION_MODEL ?? model };
+  const key = stored?.apiKey || process.env.AI_API_KEY || (provider === "ollama" ? "ollama" : "");
+  if (!key) throw new AINotConfiguredError(`Falta la clave (API key) para "${provider}".`);
+  const model = stored?.model || process.env.AI_MODEL;
+  if (!model) throw new AINotConfiguredError(`Falta el modelo para "${provider}".`);
+  return { kind: "openai", base, key, model, visionModel: stored?.visionModel || process.env.AI_VISION_MODEL || model };
 }
 
 export type AICompleteOpts = {
@@ -69,7 +99,7 @@ export type AICompleteOpts = {
 
 // Devuelve el texto de la respuesta (para JSON, el string que el llamador parsea).
 export async function aiComplete(opts: AICompleteOpts): Promise<string> {
-  const cfg = resolveConfig();
+  const cfg = await resolveConfig();
   const images = opts.images ?? [];
   const maxTokens = opts.maxTokens ?? 1500;
 
