@@ -19,6 +19,34 @@ export async function POST(req: Request) {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = createAdminClient() as any;
+
+    // Pipeline de bajas: una ficha que ya se publicó en Idealista no se borra
+    // (se perderían fotos/datos/historial), se ARCHIVA. Solo se borra de
+    // verdad si nunca llegó a publicarse (borrador/fallida).
+    const { data: listing } = await db
+      .from("idealista_listings")
+      .select("idealista_state")
+      .eq("id", id)
+      .single();
+
+    if (listing?.idealista_state === "published") {
+      const { error: archiveError } = await db
+        .from("idealista_listings")
+        .update({
+          idealista_state: "archived",
+          archived_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (archiveError) {
+        console.error("Archive idealista listing error:", archiveError);
+        return Response.json({ error: archiveError.message }, { status: 500 });
+      }
+      revalidatePath("/es/admin/idealista");
+      revalidatePath("/cl/admin/idealista");
+      return Response.json({ ok: true, archived: true });
+    }
+
     const { error } = await db.from("idealista_listings").delete().eq("id", id);
     if (error) {
       console.error("Delete idealista listing error:", error);

@@ -2,10 +2,12 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { buildZip, type ZipEntry } from "@/lib/services/zip";
+import { applyBrandWatermark } from "@/lib/services/idealista/brand-watermark";
 
-// Descarga TODAS las fotos de una ficha en un ZIP. Al descomprimir queda una
-// carpeta con la referencia BC (ej. "BC-1133/01.jpg"). Pensado para que el jefe
-// se baje las fotos limpias de una tacada.
+// Descarga TODAS las fotos de una ficha en un ZIP, con la marca de agua de la
+// agencia superpuesta (protege las fotos si se suben a Idealista u otro
+// portal). Al descomprimir queda una carpeta con la referencia BC (ej.
+// "BC-1133/01.jpg"). Pensado para que el jefe se baje las fotos de una tacada.
 
 const CONCURRENCY = 8;
 
@@ -77,9 +79,15 @@ export async function GET(req: Request) {
             clearTimeout(timer);
           }
           if (!r.ok) return;
-          const buf = Buffer.from(await r.arrayBuffer());
+          const rawBuf = Buffer.from(await r.arrayBuffer());
           const ext = extFromContentType(r.headers.get("content-type"), url);
           const num = String(i + 1).padStart(2, "0");
+          let buf = rawBuf;
+          try {
+            buf = Buffer.from(await applyBrandWatermark(rawBuf));
+          } catch {
+            // si el procesado falla, se incluye la foto original sin marca
+          }
           entries[i] = { name: `${folder}/${num}.${ext}`, data: buf };
         } catch {
           // foto que falla: se omite
