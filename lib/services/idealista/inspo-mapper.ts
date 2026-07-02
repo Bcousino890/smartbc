@@ -174,7 +174,9 @@ export function previewToInspo(
     bedrooms: preview.bedrooms ?? 0,
     bathrooms: preview.bathrooms ?? 0,
     condition: inferCondition({ features, title: preview.title, raw: preview.rawAttributes }),
-    constructionYear: firstNumber(rawAttr(preview.rawAttributes, "ano construccion", "año", "construccion")) ?? 0,
+    // Solo claves que contengan "construccion" (no el bare "año", que colaría
+    // "Tamaño" → tamano y metería basura en el año).
+    constructionYear: firstNumber(rawAttr(preview.rawAttributes, "ano construccion", "construccion")) ?? 0,
     // Precio (alquiler → totalRentalPrice; venta → price)
     operation,
     price: operation === "sale" ? price : 0,
