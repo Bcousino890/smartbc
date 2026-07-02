@@ -2,47 +2,73 @@ import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 
-// Analiza las fotos del inmueble con IA (visión) y devuelve SUGERENCIAS solo para
-// campos que se pueden ver en las imágenes: extras visibles (terraza, piscina...),
-// estado y amueblado. NUNCA infiere datos duros (m², habitaciones, precio): esos
-// no están en las fotos y se los inventaría.
-// El proveedor de IA se elige por env — ver lib/services/ai/chat.ts.
+// Lee las fotos del inmueble con IA (visión) y COMPLETA la ficha con lo que se
+// puede deducir de las imágenes: título, descripción, tipo, estado, amueblado,
+// extras visibles y una ESTIMACIÓN de dormitorios/baños. Nunca inventa datos que
+// no están en las fotos (m², precio, dirección, año): esos quedan para el usuario.
+// El proveedor de IA se elige por env / panel — ver lib/services/ai/chat.ts.
 
-const MAX_VISION_PHOTOS = 10;
+const MAX_VISION_PHOTOS = 12;
 
-const SYSTEM_PROMPT = `Eres un tasador inmobiliario que analiza ÚNICAMENTE lo que se ve en las fotos de un inmueble.
+const SYSTEM_PROMPT = `Eres un agente inmobiliario experto que redacta fichas para Idealista (España) a partir de FOTOS de un inmueble. Analiza TODAS las fotos y rellena el esquema.
 
-Reglas estrictas:
-- Marca un extra como true SOLO si lo ves con claridad en alguna foto.
-- NO infieras metros cuadrados, número de habitaciones ni baños, precio, año, ni nada que no sea visible: eso no es tu tarea.
-- Para "condition" (estado): "new" si parece a estrenar/obra nueva, "needs-reform" o "to-reform" si se ven desperfectos o está anticuado, si no "good".
-- Para "equipmentType": "furnished" si está claramente amueblado, "empty" si está vacío, "kitchen-only" si solo la cocina está equipada, "unknown" si no se aprecia.
-- En "detected" lista en español y breve lo que has visto que justifica las marcas (p.ej. "terraza amplia", "piscina comunitaria", "cocina equipada").
-- Responde ÚNICAMENTE con el objeto JSON pedido, sin texto adicional.`;
+Reglas:
+- Escribe "title": un título comercial breve y atractivo en español (máx ~70 caracteres), basado en lo que se ve (tipo de vivienda, luz, estado, ambiente). No pongas la zona salvo que se vea claramente.
+- Escribe "description": una descripción atractiva y honesta en español de España, 120-180 palabras en 2-3 párrafos, basada SOLO en lo que aparece en las fotos (distribución, estancias, luz, calidades, mobiliario, exteriores). No inventes servicios cercanos, ni metros, ni precio.
+- "propertyType": el tipo que mejor encaje (flat, house, studio no existe como tipo: usa "flat" y marca isStudio).
+- "isStudio"/"isPenthouse"/"isDuplex": true si se ve claramente.
+- "bedrooms"/"bathrooms": ESTIMA a partir de las fotos (cuenta dormitorios y baños distintos que veas). Si no puedes estimarlo con confianza, pon 0.
+- "condition": "new" si parece a estrenar, "to-reform"/"needs-reform" si está anticuado o con desperfectos, si no "good".
+- "equipmentType": "furnished" si está claramente amueblado, "empty" si está vacío, "kitchen-only" si solo la cocina está equipada, "unknown" si no se aprecia.
+- Extras (true solo si se ven con claridad): hasTerrace, hasBalcony, hasPool, hasGarden, hasAC, hasWardrobes, hasElevator.
+- "detected": lista breve en español de lo relevante que has visto (p.ej. "cocina equipada", "2 dormitorios", "terraza").
+- NO estimes m², precio, dirección ni año: no están en las fotos.
+- Responde ÚNICAMENTE con el objeto JSON pedido.`;
 
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    title: { type: "string" },
+    description: { type: "string" },
+    propertyType: {
+      type: "string",
+      enum: ["flat", "house", "rustic", "commercial", "office", "land", "storage", "building", "room", "garage"],
+    },
+    isStudio: { type: "boolean" },
+    isPenthouse: { type: "boolean" },
+    isDuplex: { type: "boolean" },
+    bedrooms: { type: "integer" },
+    bathrooms: { type: "integer" },
+    condition: { type: "string", enum: ["good", "to-reform", "needs-reform", "new"] },
+    equipmentType: { type: "string", enum: ["furnished", "kitchen-only", "empty", "unknown"] },
     hasTerrace: { type: "boolean" },
     hasBalcony: { type: "boolean" },
     hasPool: { type: "boolean" },
     hasGarden: { type: "boolean" },
     hasAC: { type: "boolean" },
     hasWardrobes: { type: "boolean" },
-    condition: { type: "string", enum: ["good", "to-reform", "needs-reform", "new"] },
-    equipmentType: { type: "string", enum: ["furnished", "kitchen-only", "empty", "unknown"] },
+    hasElevator: { type: "boolean" },
     detected: { type: "array", items: { type: "string" } },
   },
   required: [
+    "title",
+    "description",
+    "propertyType",
+    "isStudio",
+    "isPenthouse",
+    "isDuplex",
+    "bedrooms",
+    "bathrooms",
+    "condition",
+    "equipmentType",
     "hasTerrace",
     "hasBalcony",
     "hasPool",
     "hasGarden",
     "hasAC",
     "hasWardrobes",
-    "condition",
-    "equipmentType",
+    "hasElevator",
     "detected",
   ],
 };
@@ -67,9 +93,9 @@ export async function POST(req: Request) {
   try {
     raw = await aiComplete({
       system: SYSTEM_PROMPT,
-      userText: "Analiza estas fotos del inmueble y rellena el esquema con lo que veas.",
+      userText: `Analiza estas ${photos.length} fotos del inmueble y completa la ficha (esquema JSON).`,
       images: photos,
-      maxTokens: 1024,
+      maxTokens: 1800,
       jsonSchema: SCHEMA,
     });
   } catch (err) {
@@ -101,5 +127,5 @@ export async function POST(req: Request) {
     return Response.json({ error: "Respuesta de la IA no interpretable" }, { status: 502 });
   }
 
-  return Response.json({ suggestion });
+  return Response.json({ suggestion, photosUsed: photos.length });
 }

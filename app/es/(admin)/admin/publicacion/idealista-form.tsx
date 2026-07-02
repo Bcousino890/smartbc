@@ -708,9 +708,11 @@ export function IdealistaForm({
     }
   }
 
-  // Analiza las fotos con IA y aplica SOLO sugerencias de campos visibles
-  // (extras, estado, amueblado). No toca datos duros (m², habitaciones, precio).
-  async function handleAnalyzePhotos() {
+  // Lee las fotos con IA y COMPLETA la ficha con lo deducible de las imágenes:
+  // título, descripción, tipo, estado, amueblado, extras y una estimación de
+  // dormitorios/baños. No toca datos duros que no salen en fotos (m², precio,
+  // dirección, año): esos los pone el usuario.
+  async function handleCompleteFromPhotos() {
     setPhotoError(null);
     setDetectedFromPhotos(null);
     if (!form.photos || form.photos.length === 0) {
@@ -730,27 +732,47 @@ export function IdealistaForm({
         return;
       }
       const s = data.suggestion as {
+        title?: string;
+        description?: string;
+        propertyType?: string;
+        isStudio?: boolean;
+        isPenthouse?: boolean;
+        isDuplex?: boolean;
+        bedrooms?: number;
+        bathrooms?: number;
+        condition?: IdealistaListing["condition"];
+        equipmentType?: IdealistaListing["equipmentType"];
         hasTerrace?: boolean;
         hasBalcony?: boolean;
         hasPool?: boolean;
         hasGarden?: boolean;
         hasAC?: boolean;
         hasWardrobes?: boolean;
-        condition?: IdealistaListing["condition"];
-        equipmentType?: IdealistaListing["equipmentType"];
+        hasElevator?: boolean;
         detected?: string[];
       };
-      // Solo ENCENDEMOS extras detectados (no desmarcamos lo que el usuario ya puso).
       setForm((prev) => ({
         ...prev,
+        // Título y descripción: los completa/corrige con lo que se ve en las fotos.
+        inspoTitle: s.title?.trim() ? s.title.trim() : prev.inspoTitle,
+        description: s.description?.trim() ? s.description.trim() : prev.description,
+        propertyType: s.propertyType || prev.propertyType,
+        isStudio: prev.isStudio || !!s.isStudio,
+        isPenthouse: prev.isPenthouse || !!s.isPenthouse,
+        isDuplex: prev.isDuplex || !!s.isDuplex,
+        // Dormitorios/baños: solo si el usuario no los puso (evita pisar datos suyos).
+        bedrooms: prev.bedrooms > 0 ? prev.bedrooms : s.bedrooms ?? 0,
+        bathrooms: prev.bathrooms > 0 ? prev.bathrooms : s.bathrooms ?? 0,
+        condition: s.condition ?? prev.condition,
+        equipmentType: s.equipmentType ?? prev.equipmentType,
+        // Extras: solo ENCENDEMOS lo detectado (no desmarcamos lo que ya estaba).
         hasTerrace: prev.hasTerrace || !!s.hasTerrace,
         hasBalcony: prev.hasBalcony || !!s.hasBalcony,
         hasPool: prev.hasPool || !!s.hasPool,
         hasGarden: prev.hasGarden || !!s.hasGarden,
         hasAC: prev.hasAC || !!s.hasAC,
         hasWardrobes: prev.hasWardrobes || !!s.hasWardrobes,
-        condition: s.condition ?? prev.condition,
-        equipmentType: s.equipmentType ?? prev.equipmentType,
+        hasElevator: prev.hasElevator || !!s.hasElevator,
       }));
       setDetectedFromPhotos(s.detected ?? []);
     } catch {
@@ -1337,13 +1359,13 @@ export function IdealistaForm({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleAnalyzePhotos}
+                onClick={handleCompleteFromPhotos}
                 disabled={analyzingPhotos}
                 className="flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline disabled:opacity-50"
-                title="Detecta extras visibles (terraza, piscina...) y estado a partir de las fotos"
+                title="Lee las fotos y completa la ficha: título, descripción, tipo, estado, amueblado, extras y estimación de dormitorios/baños"
               >
                 {analyzingPhotos ? <Loader2 size={11} className="animate-spin" /> : <ImageIcon size={11} />}
-                Analizar fotos
+                Completar con fotos
               </button>
               <button
                 type="button"
@@ -1375,15 +1397,15 @@ export function IdealistaForm({
             <p className="mt-1 text-[11px] text-ink/45">Redactando con IA...</p>
           )}
           {analyzingPhotos && (
-            <p className="mt-1 text-[11px] text-ink/45">Analizando las fotos...</p>
+            <p className="mt-1 text-[11px] text-ink/45">Leyendo las fotos y completando la ficha...</p>
           )}
           {descError && <p className="mt-1 text-[11px] text-red-600">{descError}</p>}
           {photoError && <p className="mt-1 text-[11px] text-red-600">{photoError}</p>}
           {detectedFromPhotos && (
             <p className="mt-1 text-[11px] text-emerald-700">
-              {detectedFromPhotos.length
-                ? `Detectado en las fotos y marcado en extras/estado: ${detectedFromPhotos.join(", ")}. Revisa que sea correcto.`
-                : "No se detectaron extras claros en las fotos."}
+              Ficha completada desde las fotos (título, descripción, tipo, estado, extras y estimación de hab./baños).
+              {detectedFromPhotos.length ? ` Detectado: ${detectedFromPhotos.join(", ")}.` : ""} Revisa los datos —
+              m², precio, dirección y año NO salen de las fotos, ponlos tú.
             </p>
           )}
         </div>
