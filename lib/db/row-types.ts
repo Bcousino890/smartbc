@@ -36,6 +36,9 @@ export type PropertyFilters = {
   // ocultan; el admin puede activarlo para encontrar/reactivar propiedades
   // cuyo anuncio de origen se dio de baja.
   includeArchived?: boolean;
+  // Aísla el catálogo por país ('es' | 'cl'). Sin él la vista de Chile
+  // mostraba también todo el catálogo de España (y viceversa).
+  country?: string;
 };
 
 export type ClientPreferencesRow = Database["public"]["Tables"]["client_preferences"]["Row"];

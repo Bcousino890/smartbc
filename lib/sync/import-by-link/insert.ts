@@ -15,6 +15,9 @@ export type InsertImportInput = {
   preview: ImportPreview;
   agencyId: string;
   agencySlug: string;
+  // País del catálogo ('es' | 'cl'). El import desde el admin de Chile debe
+  // marcar 'cl' o la propiedad queda invisible para las vistas chilenas.
+  country?: string;
   overrides: {
     title: string;
     description: string | null;
@@ -110,7 +113,7 @@ async function rehostPhotosInBackground(params: {
 export async function insertImportedProperty(
   input: InsertImportInput,
 ): Promise<InsertImportResult> {
-  const { preview, agencyId, agencySlug, overrides } = input;
+  const { preview, agencyId, agencySlug, overrides, country } = input;
   const supabase = createAdminClient();
 
   const baseSlug = normalizeSlug(overrides.title || "propiedad");
@@ -153,6 +156,7 @@ export async function insertImportedProperty(
     source_url: preview.sourceUrl,
     latitude: preview.latitude,
     longitude: preview.longitude,
+    ...(country ? { country } : {}),
     last_synced_at: new Date().toISOString(),
     // Fecha de "publicación": se refresca también en re-importación para que la
     // ficha suba al principio del listado (ordenado por created_at desc).

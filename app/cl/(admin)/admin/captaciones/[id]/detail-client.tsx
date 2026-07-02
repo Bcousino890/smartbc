@@ -66,7 +66,9 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   preliminary_data: ["contacting", "revision", "rejected"],
   contacting: ["revision", "confirmed", "rejected"],
   revision: ["preliminary_data", "contacting"],
-  confirmed: ["converted_to_property", "rejected"],
+  // La conversión a propiedad tiene su propio botón (llama a /convert, que
+  // crea la ficha real); por eso no aparece en el selector de estados.
+  confirmed: ["rejected"],
   converted_to_property: [],
   rejected: [],
 };
@@ -91,6 +93,7 @@ export function CaptacionDetailClient({
   const [tab, setTab] = useState<"info" | "location" | "photos" | "logs">("info");
   const [updatingData, setUpdatingData] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [loggingAttempt, setLoggingAttempt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rescrapingAttempt, setRescrapeingAttempt] = useState(false);
@@ -213,6 +216,28 @@ export function CaptacionDetailClient({
       setError("Error de conexión");
     } finally {
       setUpdatingStatus(false);
+    }
+  }
+
+  async function handleConvert() {
+    setError("");
+    setConverting(true);
+    try {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/convert`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || "Error al convertir a propiedad");
+        return;
+      }
+      // La propiedad se crea como borrador: llevamos al agente directo a la
+      // ficha para completarla y publicarla.
+      window.location.href = `/cl/admin/propiedades/${data.slug}`;
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -667,6 +692,33 @@ export function CaptacionDetailClient({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Conversión a propiedad: paso final del flujo de captación. Crea la
+          ficha real (borrador) con datos + fotos y enlaza la captación. */}
+      {captacion.status === "confirmed" && (isAdmin || isCreator) && (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-800">
+                Dueño confirmado — lista para convertir
+              </h3>
+              <p className="mt-1 text-xs text-emerald-700">
+                Se creará una propiedad en borrador con los datos y fotos de esta
+                captación para completar la ficha y publicarla.
+              </p>
+            </div>
+            <button
+              onClick={handleConvert}
+              disabled={converting}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+            >
+              {converting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {converting ? "Convirtiendo..." : "Convertir a propiedad"}
+            </button>
+          </div>
+          {error && <div className="mt-3"><ErrorBox>{error}</ErrorBox></div>}
         </div>
       )}
 

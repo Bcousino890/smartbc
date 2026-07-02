@@ -61,6 +61,13 @@ function MlStatusBadge({ status }: { status: string | null }) {
   );
 }
 
+// El item id de MercadoLibre ya viene con el prefijo del sitio ("MLC123...").
+// Antes se anteponía "MLC" otra vez y el enlace quedaba .../MLCMLC123 (roto).
+function mlListingUrl(itemId: string): string {
+  const digits = itemId.replace(/^MLC-?/i, "");
+  return `https://www.portalinmobiliario.com/MLC-${digits}`;
+}
+
 function formatCurrency(currency: string | null): string {
   if (currency === "clp") return "CLP";
   if (currency === "usd") return "USD";
@@ -337,7 +344,7 @@ export function PublicacionClClient({
                             )}
                             {p.portalinmobiliario_id && (
                               <a
-                                href={`https://www.portalinmobiliario.com/MLC${p.portalinmobiliario_id}`}
+                                href={mlListingUrl(p.portalinmobiliario_id)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-[11px] text-gold hover:text-gold-dark"

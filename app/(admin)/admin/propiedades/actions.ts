@@ -27,6 +27,10 @@ export type CreatePropertyInput = {
   currency?: string;
   description?: string;
   externalReference?: string;
+  // País del catálogo ('es' | 'cl'). Sin esto, las propiedades creadas desde
+  // el admin de Chile quedaban con el default 'es' y nunca aparecían en
+  // Publicación CL ni en Portal Inmobiliario.
+  country?: string;
 };
 
 export type CreatePropertyResult =
@@ -105,6 +109,7 @@ export async function createProperty(
       region: input.region?.trim() || null,
       property_type: input.propertyType || null,
       currency: input.currency || null,
+      country: input.country === "cl" ? "cl" : "es",
       description: input.description?.trim() || null,
     })
     .select("id, slug")
@@ -116,6 +121,8 @@ export async function createProperty(
   if (!insertResult.data) return { ok: false, error: "insert_no_row" };
 
   revalidatePath("/admin/propiedades");
+  revalidatePath("/cl/admin/propiedades");
+  revalidatePath("/es/admin/propiedades");
   revalidatePath(`/admin/agencias/${input.agencySlug}`);
   return { ok: true, slug: insertResult.data.slug, id: insertResult.data.id };
 }

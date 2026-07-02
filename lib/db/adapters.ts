@@ -390,6 +390,7 @@ export function propertyRowToAdminProperty(
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters ?? 0,
     price: Number(row.price),
+    currency: (row as any).currency ?? null,
     floor: extractFloor(
       [...(row.features ?? []), ...(row.features_manual ?? [])],
       row.title,

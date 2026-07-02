@@ -119,6 +119,7 @@ export async function confirmByLink(
     preview: { ...preview, photos: filteredPhotos },
     agencyId: agency.id,
     agencySlug,
+    country: "cl",
     overrides: {
       title: overrides.title.trim(),
       description: overrides.description?.trim() || null,
@@ -138,6 +139,7 @@ export async function confirmByLink(
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath("/admin/propiedades");
+  revalidatePath("/cl/admin/propiedades");
   return {
     ok: true,
     slug: result.slug,

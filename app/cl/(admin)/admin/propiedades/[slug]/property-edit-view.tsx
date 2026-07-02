@@ -327,7 +327,7 @@ export function PropertyEditView({
       {/* Cabecera */}
       <div className="flex items-center justify-between pt-7">
         <Link
-          href="/admin/propiedades"
+          href="/cl/admin/propiedades"
           className="inline-flex items-center gap-2 text-[12px] font-medium text-ink/65 transition hover:text-ink"
         >
           <ArrowLeft size={14} strokeWidth={1.75} />

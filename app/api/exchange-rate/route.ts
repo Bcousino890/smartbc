@@ -1,25 +1,33 @@
 // API para obtener tasas de cambio
 // Para MVP usaremos tasas aproximadas; en producción, conectar a una API real
+// (p. ej. mindicador.cl para la UF).
+//
+// Semántica: RATES[from][to] = cuántas unidades de `to` vale 1 unidad de
+// `from` (monto_destino = monto_origen * rate). La tabla anterior tenía los
+// pares CLP↔UF invertidos: convertir CLP→UF multiplicaba por 34500 y daba
+// cifras absurdas.
+
+const UF_IN_CLP = 39000; // Aproximado: 1 UF ≈ 39.000 CLP
 
 const RATES: Record<string, Record<string, number>> = {
   CLP: {
-    UF: 34500, // Aproximado: 1 UF = 34500 CLP
-    EUR: 0.00102, // Aproximado
-    USD: 0.00105, // Aproximado
+    UF: 1 / UF_IN_CLP,
+    EUR: 0.00098, // 1 EUR ≈ 1.020 CLP
+    USD: 0.00105, // 1 USD ≈ 950 CLP
   },
   UF: {
-    CLP: 0.0000290, // 1 CLP = 0.000029 UF
-    EUR: 0.000003,
-    USD: 0.0000305,
+    CLP: UF_IN_CLP,
+    EUR: 38.2,
+    USD: 41,
   },
   EUR: {
-    CLP: 980,
-    UF: 0.028,
+    CLP: 1020,
+    UF: 1020 / UF_IN_CLP,
     USD: 1.1,
   },
   USD: {
     CLP: 950,
-    UF: 0.0275,
+    UF: 950 / UF_IN_CLP,
     EUR: 0.91,
   },
 };

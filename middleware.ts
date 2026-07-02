@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/db/middleware";
+import { isStaffRole } from "@/lib/permissions";
 import {
   getClientIP,
   isIPWhitelisted,
@@ -12,17 +13,12 @@ import {
 // accesibles sin login.
 const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes"];
-const ADMIN_PATHS = ["/admin"];
+// Los árboles de país (/es/admin, /cl/admin) también son admin: antes solo
+// se protegían en el layout; el middleware ni los miraba.
+const ADMIN_PATHS = ["/admin", "/es/admin", "/cl/admin"];
 
-// Roles que acceden al /admin (staff). Los agent_* van a /admin, no a /inicio.
-const STAFF_ROLES = new Set([
-  "owner",
-  "admin",
-  "advisor",
-  "agent_junior",
-  "agent_senior",
-  "agent_admin",
-]);
+// Roles staff: se usa isStaffRole de lib/permissions como única fuente de
+// verdad (la copia local anterior no incluía 'captadora' y divergía).
 
 function startsWithAny(pathname: string, prefixes: string[]) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -88,7 +84,7 @@ export async function middleware(request: NextRequest) {
     .maybeSingle();
 
   const role = profile?.role ?? "client";
-  const isStaff = STAFF_ROLES.has(role);
+  const isStaff = isStaffRole(role);
 
   // Clientes y roles sin acceso admin son redirigidos a /inicio
   if (isAdmin && !isStaff) {

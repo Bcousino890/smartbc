@@ -11,10 +11,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Usuarios de Chile o admins multi-país (el layout deja a los admin
+    // cambiar de país libremente; este gate los bloqueaba igual).
     const userCountry = (profile as any).country ?? "es";
-    if (userCountry !== "cl") {
+    const isMultiCountryAdmin = profile.role === "admin" || (profile.role as string) === "owner";
+    if (userCountry !== "cl" && !isMultiCountryAdmin) {
       return NextResponse.json(
-        { error: "Only Chile users can publish to Portalinmobiliario" },
+        { error: "Solo usuarios de Chile pueden publicar en Portal Inmobiliario" },
         { status: 403 }
       );
     }

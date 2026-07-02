@@ -359,6 +359,9 @@ export type AdminProperty = {
   bathrooms: number;
   squareMeters: number;
   price: number;
+  // Moneda de la ficha: 'eur' (España) o 'clp'/'uf'/'usd' (Chile). Filas
+  // antiguas y mocks no la informan → cada vista asume la de su país.
+  currency?: string | null;
   // Nº de planta deducido de features/título/descripción (ver lib/floor.ts).
   // Opcional: los mocks legacy no lo informan.
   floor?: number | null;

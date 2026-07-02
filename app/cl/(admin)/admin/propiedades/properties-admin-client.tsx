@@ -28,8 +28,16 @@ import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
-import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
+
+// Precio con moneda chilena: UF/USD/CLP. Las fichas de Chile guardan la
+// moneda en `currency`; sin ella se asume CLP (nunca € en esta vista).
+function formatPriceCl(price: number, currency?: string | null): string {
+  const n = new Intl.NumberFormat("es-CL").format(price);
+  if (currency === "uf") return `UF ${n}`;
+  if (currency === "usd") return `US$ ${n}`;
+  return `$ ${n}`;
+}
 import { canAccess } from "@/lib/permissions";
 import type { AdminProperty, AdminPropertyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -296,8 +304,8 @@ export function PropertiesAdminClient({
   const copyForClients = () => {
     const text = selectedProps
       .map((p) => {
-        const price = `${formatPrice(p.price)} €${p.operation === "alquiler" ? "/mes" : ""}`;
-        return `🏠 ${p.title}\n💶 ${price} · ${p.zone}\n🔗 ${shareUrl(p.id)}`;
+        const price = `${formatPriceCl(p.price, p.currency)}${p.operation === "alquiler" ? "/mes" : ""}`;
+        return `🏠 ${p.title}\n💰 ${price} · ${p.zone}\n🔗 ${shareUrl(p.id)}`;
       })
       .join("\n\n");
     copyToClipboard(text, "Mensaje copiado, listo para enviar");
@@ -364,7 +372,7 @@ export function PropertiesAdminClient({
               {/* "Importar por link" navega a la página dedicada
                   /admin/propiedades/importar (Idealista / Fotocasa / Inmoweb). */}
               <Link
-                href="/admin/propiedades/importar"
+                href="/cl/admin/propiedades/importar"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
                 className="flex w-full items-start gap-3 border-t border-gold/10 px-4 py-3 text-left text-sm text-ink transition hover:bg-gold/10"
@@ -648,7 +656,7 @@ function PropertyRow({
   const t = useT();
   const [photosOpen, setPhotosOpen] = useState(false);
   const isRent = property.operation === "alquiler";
-  const formatted = formatPrice(property.price);
+  const formatted = formatPriceCl(property.price, property.currency);
   const cover = property.coverPhotoUrl ?? property.photos?.[0]?.url ?? null;
 
   return (
@@ -744,7 +752,7 @@ function PropertyRow({
         {property.bedrooms} / {property.bathrooms} / {property.squareMeters}
       </td>
       <td className="px-3 py-3 font-semibold text-ink">
-        {formatted} €{isRent ? " /mes" : ""}
+        {formatted}{isRent ? " /mes" : ""}
       </td>
       <td className="px-3 py-3">
         <span
@@ -772,7 +780,7 @@ function PropertyRow({
           </a>
           {canEdit ? (
             <Link
-              href={`/admin/propiedades/${property.id}`}
+              href={`/cl/admin/propiedades/${property.id}`}
               className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
             >
               <Pencil size={12} strokeWidth={1.75} className="text-gold" />
@@ -933,7 +941,7 @@ function PriceRange({
   return (
     <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
-        Precio €
+        Precio
       </span>
       <input
         type="text"

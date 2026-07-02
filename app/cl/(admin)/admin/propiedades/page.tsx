@@ -24,7 +24,9 @@ export default async function AdminPropiedadesPage({
     // Límite alto: el admin debe ver TODO el catálogo activo (cientos de pisos
     // de todas las agencias). Con un tope bajo, el total y el filtro de agencia
     // se quedaban cortos (faltaban agencias). Buscador/filtros operan en cliente.
-    getProperties({ includeUnavailable: true, includeArchived: showArchived }, 2000),
+    // country: 'cl' — la vista de Chile solo debe listar el catálogo chileno;
+    // sin el filtro se mezclaba con todo el catálogo de España.
+    getProperties({ includeUnavailable: true, includeArchived: showArchived, country: "cl" }, 2000),
     getAgencies(),
     getCurrentProfile(),
   ]);

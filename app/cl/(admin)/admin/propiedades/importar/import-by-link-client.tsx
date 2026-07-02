@@ -150,7 +150,7 @@ export function ImportByLinkClient({
           `Propiedad creada con ${result.photosProcessed} fotos. Slug: ${result.slug}`,
         );
         // Vuelve al listado tras 1.5s.
-        setTimeout(() => router.push("/admin/propiedades"), 1500);
+        setTimeout(() => router.push("/cl/admin/propiedades"), 1500);
       } catch {
         // Si la acción falla o tarda demasiado (muchas fotos), mostramos un
         // aviso en vez de dejar que reviente la página. La propiedad puede

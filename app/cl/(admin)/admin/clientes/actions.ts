@@ -78,6 +78,7 @@ export async function saveClientPreferences(
   }
 
   revalidatePath("/admin/clientes");
+  revalidatePath("/cl/admin/clientes");
   return { ok: true };
 }
 
@@ -235,6 +236,7 @@ export async function createNewClient(
   }
 
   revalidatePath("/admin/clientes");
+  revalidatePath("/cl/admin/clientes");
   return { ok: true, clientId };
 }
 

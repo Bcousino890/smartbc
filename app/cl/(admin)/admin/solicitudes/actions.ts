@@ -18,6 +18,7 @@ export async function markContactRead(id: string) {
     .eq("id", id);
 
   revalidatePath("/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
   return { ok: true };
 }
 
@@ -44,5 +45,6 @@ export async function updateVisitStatus(
   }
 
   revalidatePath("/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
   return { ok: true };
 }

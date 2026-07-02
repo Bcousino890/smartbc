@@ -10,8 +10,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Usuarios de Chile o admins multi-país (mismo criterio que el publish).
     const userCountry = (profile as any).country ?? "es";
-    if (userCountry !== "cl") {
+    const isMultiCountryAdmin = profile.role === "admin" || (profile.role as string) === "owner";
+    if (userCountry !== "cl" && !isMultiCountryAdmin) {
       return NextResponse.json(
         { error: "Solo usuarios Chile pueden gestionar PortalInmobiliario" },
         { status: 403 }

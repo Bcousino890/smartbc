@@ -163,6 +163,7 @@ export function NewPropertyModal({
         region: isCL ? region : undefined,
         propertyType: isCL ? propertyType : undefined,
         currency: isCL ? currency : undefined,
+        country,
         description: description.trim() || undefined,
         externalReference: externalReference.trim() || undefined,
       });

@@ -4,13 +4,16 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 
 // Transiciones de estado permitidas
+// Debe coincidir con ALLOWED_TRANSITIONS del detail-client (frontend).
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  draft: ["assigned"],
+  draft: ["assigned", "rejected"],
   assigned: ["preliminary_data", "rejected"],
   preliminary_data: ["contacting", "revision", "rejected"],
   contacting: ["revision", "confirmed", "rejected"],
   revision: ["preliminary_data", "contacting"],
-  confirmed: ["converted_to_property", "rejected"],
+  // converted_to_property NO se permite aquí: la conversión real (crear la
+  // propiedad + copiar fotos) la hace POST /captaciones/[id]/convert.
+  confirmed: ["rejected"],
   converted_to_property: [],
   rejected: [],
 };

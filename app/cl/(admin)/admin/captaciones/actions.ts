@@ -54,44 +54,10 @@ export type Captacion = {
   contacts?: CaptacionContact[];
 };
 
-export async function createCaptacion(input: {
-  source_url: string;
-  source_site?: string;
-  title?: string;
-  price?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  square_meters?: number;
-  cover_photo_url?: string;
-  region?: string;
-  commune?: string;
-  zone?: string;
-  notes?: string;
-}) {
-  const db = createAdminClient() as any;
-  const { data, error } = await db
-    .from("captaciones")
-    .insert({
-      source_url: input.source_url,
-      source_site: input.source_site || null,
-      title: input.title || null,
-      price: input.price || null,
-      bedrooms: input.bedrooms || null,
-      bathrooms: input.bathrooms || null,
-      square_meters: input.square_meters || null,
-      cover_photo_url: input.cover_photo_url || null,
-      region: input.region || null,
-      commune: input.commune || null,
-      zone: input.zone || null,
-      notes: input.notes || null,
-      status: "pending",
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data as Captacion;
-}
+// La creación de captaciones vive en POST /api/admin/cl/captaciones/create
+// (fija country, created_by y status 'draft', y dispara el scrape). La antigua
+// función createCaptacion de este archivo insertaba status 'pending' (estado
+// eliminado en la migración 0051) y sin created_by (NOT NULL): fallaba siempre.
 
 export async function getCaptacionesForAgent(userId: string) {
   const db = createAdminClient() as any;

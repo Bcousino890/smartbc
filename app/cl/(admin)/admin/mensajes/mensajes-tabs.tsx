@@ -23,7 +23,7 @@ export function MensajesTabs({
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl border border-gold/15 bg-cream-50/60 p-1 w-fit">
         <Link
-          href="/admin/mensajes"
+          href="/cl/admin/mensajes"
           className={cn(
             "rounded-lg px-4 py-1.5 text-sm font-medium transition",
             activeTab === "clientes"
@@ -34,7 +34,7 @@ export function MensajesTabs({
           Clientes
         </Link>
         <Link
-          href="/admin/mensajes?tab=equipo"
+          href="/cl/admin/mensajes?tab=equipo"
           className={cn(
             "rounded-lg px-4 py-1.5 text-sm font-medium transition",
             activeTab === "equipo"

@@ -276,7 +276,7 @@ function RequestCard({ request }: { request: VisitRequest }) {
       <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
         {request.propertySlug ? (
           <a
-            href={`/admin/propiedades/${request.propertySlug}`}
+            href={`/cl/admin/propiedades/${request.propertySlug}`}
             className="block group"
           >
             <p className="text-[12px] font-medium text-ink/75 group-hover:text-amber-800 transition-colors truncate">

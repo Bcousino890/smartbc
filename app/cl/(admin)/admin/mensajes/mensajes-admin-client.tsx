@@ -46,7 +46,7 @@ export function AdminMensajesClient({
   const selectConversation = (id: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("c", id);
-    router.push(`/admin/mensajes?${next.toString()}`);
+    router.push(`/cl/admin/mensajes?${next.toString()}`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {

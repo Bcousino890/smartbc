@@ -2,14 +2,21 @@ import { CalendarClock, Home, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { getDashboardData } from "@/lib/db/queries/dashboard";
 
-function formatPrice(price: number | null, operation: string | null) {
+// Moneda chilena: CLP con separador local, UF y USD según la ficha.
+function formatPrice(
+  price: number | null,
+  operation: string | null,
+  currency?: string | null,
+) {
   if (price == null) return "—";
-  const formatted = new Intl.NumberFormat("es-ES").format(price);
-  return operation === "rent" ? `${formatted} €/mes` : `${formatted} €`;
+  const n = new Intl.NumberFormat("es-CL").format(price);
+  const unit =
+    currency === "uf" ? `UF ${n}` : currency === "usd" ? `US$ ${n}` : `$ ${n}`;
+  return operation === "rent" ? `${unit}/mes` : unit;
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-ES", {
+  return new Date(iso).toLocaleDateString("es-CL", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -35,7 +42,7 @@ const STATUS_VISIT_COLORS: Record<string, string> = {
 const STATUS_PROP_LABELS: Record<string, string> = {
   available: "Disponible",
   reserved: "Reservada",
-  rented: "Alquilada",
+  rented: "Arrendada",
   sold: "Vendida",
   draft: "Borrador",
 };
@@ -49,7 +56,7 @@ const STATUS_PROP_COLORS: Record<string, string> = {
 };
 
 export default async function AdminDashboardPage() {
-  const data = await getDashboardData();
+  const data = await getDashboardData("cl");
   const { kpis, recentProperties, recentVisits } = data;
 
   const kpiItems = [
@@ -114,7 +121,7 @@ export default async function AdminDashboardPage() {
               Últimas propiedades
             </h2>
             <Link
-              href="/admin/propiedades"
+              href="/cl/admin/propiedades"
               className="text-[11px] font-medium text-gold hover:underline"
             >
               Ver todas →
@@ -129,7 +136,7 @@ export default async function AdminDashboardPage() {
               {recentProperties.map((prop) => (
                 <Link
                   key={prop.id}
-                  href={`/admin/propiedades/${prop.slug}`}
+                  href={`/cl/admin/propiedades/${prop.slug}`}
                   className="flex items-center gap-4 px-5 py-3.5 transition hover:bg-gold/5"
                 >
                   {/* Miniatura */}
@@ -153,14 +160,14 @@ export default async function AdminDashboardPage() {
                       {prop.title}
                     </p>
                     <p className="mt-0.5 truncate text-[11px] text-ink/50">
-                      {prop.zone ?? "—"}
+                      {prop.commune ?? prop.zone ?? "—"}
                       {prop.bc_reference ? ` · Ref. ${prop.bc_reference}` : ""}
                     </p>
                   </div>
                   {/* Precio + estado */}
                   <div className="shrink-0 text-right">
                     <p className="text-[12px] font-semibold text-ink">
-                      {formatPrice(prop.price, prop.operation)}
+                      {formatPrice(prop.price, prop.operation, prop.currency)}
                     </p>
                     {prop.status && (
                       <span
@@ -183,7 +190,7 @@ export default async function AdminDashboardPage() {
               Últimas solicitudes de visita
             </h2>
             <Link
-              href="/admin/solicitudes"
+              href="/cl/admin/solicitudes"
               className="text-[11px] font-medium text-gold hover:underline"
             >
               Ver todas →

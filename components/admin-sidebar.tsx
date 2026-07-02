@@ -51,7 +51,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
   { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties",   onlyCountry: "es" },
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
-  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares"  },
+  // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
+  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
   { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
   { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "captaciones",  onlyCountry: "cl" },
   { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },

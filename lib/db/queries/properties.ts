@@ -23,6 +23,8 @@ export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
 
   if (!filters.includeUnavailable) query = query.eq("status", "available");
 
+  if (filters.country) query = query.eq("country", filters.country);
+
   if (filters.operation) query = query.eq("operation", filters.operation);
   if (filters.stay) query = query.eq("stay", filters.stay);
   if (filters.zones?.length) query = query.in("zone", filters.zones);

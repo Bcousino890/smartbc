@@ -91,7 +91,7 @@ export function ClientFichaView({
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 pt-7 md:pt-9">
         <Link
-          href="/admin/clientes"
+          href="/cl/admin/clientes"
           className="inline-flex items-center gap-2 text-sm text-ink/65 transition hover:text-ink"
         >
           <ArrowLeft size={15} strokeWidth={1.75} className="text-gold" />
@@ -156,7 +156,7 @@ export function ClientFichaView({
 
           {/* Botón enviar mensaje */}
           <Link
-            href="/admin/mensajes"
+            href="/cl/admin/mensajes"
             className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
           >
             <Send size={14} strokeWidth={1.75} className="text-gold" />
@@ -400,7 +400,7 @@ function FavoritesCard({ favorites }: { favorites: FavoriteRef[] }) {
               {/* La ruta de admin usa slug; sin slug no hay link válido. */}
               {fav.slug && (
                 <Link
-                  href={`/admin/propiedades/${fav.slug}`}
+                  href={`/cl/admin/propiedades/${fav.slug}`}
                   className="shrink-0 text-[11px] font-medium text-gold-dark transition hover:text-gold hover:underline"
                 >
                   {t("clientes.ficha.favorites.viewProperty")}
@@ -456,7 +456,7 @@ function VisitsCard({ visits }: { visits: RawVisit[] }) {
                   <div className="min-w-0">
                     {visit.propertySlug ? (
                       <Link
-                        href={`/admin/propiedades/${visit.propertySlug}`}
+                        href={`/cl/admin/propiedades/${visit.propertySlug}`}
                         className="block truncate text-[12px] font-medium text-ink hover:underline"
                       >
                         {visit.propertyTitle ?? `${visit.property_id.slice(0, 20)}…`}
