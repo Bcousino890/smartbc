@@ -23,7 +23,7 @@ import {
   Trees,
 } from "lucide-react";
 import { useState, useTransition } from "react";
-import { saveClientPreferencesChile } from "@/app/cl/(admin)/admin/clientes/actions";
+import { saveClientPreferencesChile } from "@/app/(admin)/admin/clientes/actions";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient } from "@/lib/types";
 import { cn } from "@/lib/utils";

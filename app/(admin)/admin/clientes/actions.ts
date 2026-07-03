@@ -78,6 +78,7 @@ export async function saveClientPreferences(
   }
 
   revalidatePath("/admin/clientes");
+  revalidatePath("/cl/admin/clientes");
   return { ok: true };
 }
 
@@ -94,12 +95,27 @@ export type CreateClientInput = {
   selectedSubzones: Record<string, string[]>; // zona -> subzonas
   budgetMin: number;
   budgetMax: number;
+  minBedrooms?: number;
+  minBathrooms?: number;
+  minSquareMeters?: number;
+  requiresServiceBedroom?: boolean;
+  minParkingSpaces?: number;
+  prefersCondominium?: boolean;
+  preferredArchitecturalTypes?: string[];
+  preferredOrientations?: string[];
+  minFloors?: number;
   universities?: string;
   occupants: number;
   students: number;
   workers: number;
   pets: boolean;
   notes?: string;
+  interestPolygons?: Array<{
+    id: string;
+    name: string;
+    coordinates: number[][][];
+    description?: string;
+  }>;
 };
 
 export type CreateClientResult =
@@ -220,5 +236,86 @@ export async function createNewClient(
   }
 
   revalidatePath("/admin/clientes");
+  revalidatePath("/cl/admin/clientes");
   return { ok: true, clientId };
+}
+
+// ─── Preferencias Chile ──────────────────────────────────────────────────────
+
+export type SaveClientPreferencesChileInput = {
+  clientId: string;
+  operation: "alquiler" | "venta";
+  preferredRegions: string[];
+  preferredCommunes: string[];
+  preferredSectors: string[];
+  budgetMin?: number;
+  budgetMax?: number;
+  minPriceUf?: number;
+  maxPriceUf?: number;
+  currencyPreference: "CLP" | "UF";
+  minBedrooms?: number;
+  minBathrooms?: number;
+  minSquareMeters?: number;
+  requiresServiceBedroom?: boolean;
+  preferredArchitecturalTypes: string[];
+  minParkingSpaces?: number;
+  prefersCondominium?: boolean;
+  preferredOrientations: string[];
+  minFloors?: number;
+};
+
+export async function saveClientPreferencesChile(
+  input: SaveClientPreferencesChileInput,
+): Promise<SaveClientPreferencesResult> {
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const updateData: Record<string, unknown> = {
+    operation: input.operation === "alquiler" ? "rent" : "sale",
+    preferred_regions: input.preferredRegions,
+    preferred_communes: input.preferredCommunes,
+    preferred_sectors: input.preferredSectors,
+    currency_preference: input.currencyPreference,
+    preferred_architectural_types: input.preferredArchitecturalTypes,
+    preferred_orientations: input.preferredOrientations,
+  };
+
+  if (input.budgetMin !== undefined) updateData.min_price = input.budgetMin;
+  if (input.budgetMax !== undefined) updateData.max_price = input.budgetMax;
+  if (input.minPriceUf !== undefined) updateData.min_price_uf = input.minPriceUf;
+  if (input.maxPriceUf !== undefined) updateData.max_price_uf = input.maxPriceUf;
+  if (input.minBedrooms !== undefined) updateData.min_bedrooms = input.minBedrooms;
+  if (input.minBathrooms !== undefined) updateData.min_bathrooms = input.minBathrooms;
+  if (input.minSquareMeters !== undefined) updateData.min_square_meters = input.minSquareMeters;
+  if (input.requiresServiceBedroom !== undefined) updateData.requires_service_bedroom = input.requiresServiceBedroom;
+  if (input.minParkingSpaces !== undefined) updateData.min_parking_spaces = input.minParkingSpaces;
+  if (input.prefersCondominium !== undefined) updateData.prefers_condominium = input.prefersCondominium;
+  if (input.minFloors !== undefined) updateData.min_floors = input.minFloors;
+
+  const existingResult = await supabase
+    .from("client_preferences")
+    .select("client_id")
+    .eq("client_id", input.clientId)
+    .maybeSingle();
+
+  const existingRow = existingResult.data as { client_id: string } | null;
+
+  const prefs = supabase.from("client_preferences") as unknown as {
+    update: (payload: Record<string, unknown>) => {
+      eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+    };
+    insert: (payload: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+  };
+
+  const writeResult = existingRow
+    ? await prefs.update({ ...updateData, client_id: input.clientId }).eq("client_id", input.clientId)
+    : await prefs.insert({ ...updateData, client_id: input.clientId });
+
+  if (writeResult.error) {
+    return { ok: false, error: writeResult.error.message };
+  }
+
+  revalidatePath("/cl/admin/clientes");
+  return { ok: true };
 }

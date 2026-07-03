@@ -65,6 +65,8 @@ export async function replyToConversation(
     .eq("id", input.conversationId);
 
   revalidatePath("/admin/mensajes");
+  revalidatePath("/es/admin/mensajes");
+  revalidatePath("/cl/admin/mensajes");
   revalidatePath("/mensajes");
   return { ok: true, id: inserted.data.id };
 }
