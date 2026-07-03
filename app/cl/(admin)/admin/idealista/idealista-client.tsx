@@ -4,6 +4,7 @@ import { ArrowLeft, Edit2, Loader2, Search, Sparkles, History } from "lucide-rea
 import { useState, useMemo } from "react";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
+import { IdealistaStateSelector } from "@/components/admin/idealista-state-selector";
 import { cn } from "@/lib/utils";
 
 type Property = {
@@ -427,18 +428,18 @@ export function IdealistaClient({
                           {listing.reference_code}
                         </span>
                       )}
-                      {listing.idealista_state === "published" ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                          ✓ Publicado
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
-                          Borrador
-                        </span>
-                      )}
                       <span className="text-ink/30">
                         {new Date(listing.updated_at).toLocaleDateString("es-ES")}
                       </span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-ink/10">
+                      <IdealistaStateSelector
+                        listingId={listing.id}
+                        currentState={listing.idealista_state}
+                        onStateChange={(newState) => {
+                          listing.idealista_state = newState;
+                        }}
+                      />
                     </div>
                   </div>
                   <button
