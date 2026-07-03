@@ -4,12 +4,13 @@ import { createAdminClient } from "@/lib/db/admin";
 export type CaptacionContact = {
   id: string;
   captacion_id: string;
-  contact_type: "owner" | "spouse" | "family" | "other";
+  contact_type: "owner" | "spouse" | "family" | "neighbor" | "other";
   contact_name: string | null;
   phone: string | null;
   email: string | null;
   has_whatsapp: boolean;
   relationship: string | null;
+  extra_phones: string[];
   created_at: string;
   updated_at: string;
 };
@@ -50,6 +51,7 @@ export type Captacion = {
   last_contact_attempt_at: string | null;
   property_type: 'house' | 'apartment' | 'land' | 'office' | 'commercial' | 'other' | null;
   address_verified: boolean;
+  rol: string | null;
   updated_at: string;
   contacts?: CaptacionContact[];
 };

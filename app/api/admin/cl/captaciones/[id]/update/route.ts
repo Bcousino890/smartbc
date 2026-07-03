@@ -95,6 +95,7 @@ export async function POST(
     if (body.address_verified !== undefined) updates.address_verified = body.address_verified || false;
     if (body.latitude !== undefined && body.latitude !== null) updates.latitude = body.latitude;
     if (body.longitude !== undefined && body.longitude !== null) updates.longitude = body.longitude;
+    if (body.rol !== undefined) updates.rol = body.rol || null;
 
     // Campos que solo admin puede editar
     if (isAdmin) {

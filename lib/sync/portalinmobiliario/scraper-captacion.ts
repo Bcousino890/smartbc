@@ -105,17 +105,28 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
     region = item.address.state || region;
   }
 
-  // Photos
-  const photoUrls: string[] = [];
+  // Photos: item.pictures may only include a subset; /pictures endpoint returns all
+  const picMap = new Map<string, string>();
   if (item.pictures && Array.isArray(item.pictures)) {
-    for (const pic of item.pictures.slice(0, 30)) {
-      if (pic.url) {
-        // Get the largest resolution
-        const large = pic.url.replace(/-[A-Z]+\./, "-O.");
-        photoUrls.push(large);
-      }
+    for (const pic of item.pictures) {
+      if (pic.id && pic.url) picMap.set(pic.id, pic.url.replace(/-[A-Z]+\./, "-O."));
+      else if (pic.url) picMap.set(pic.url, pic.url.replace(/-[A-Z]+\./, "-O."));
     }
   }
+  try {
+    const picRes = await fetch(`https://api.mercadolibre.com/items/${itemId}/pictures`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (picRes.ok) {
+      const picData = (await picRes.json()) as any[];
+      for (const pic of picData) {
+        if (pic.id && pic.url) picMap.set(pic.id, pic.url.replace(/-[A-Z]+\./, "-O."));
+      }
+    }
+  } catch {
+    // ignore — we already have item.pictures as fallback
+  }
+  const photoUrls = Array.from(picMap.values()).slice(0, 50);
 
   // Geolocation
   let latitude: number | null = null;
@@ -211,16 +222,62 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
 
   const { lat, lng } = extractLatLng(html);
 
+  const seenUrls = new Set<string>();
   const photoUrls: string[] = [];
-  const ogImage = $("meta[property='og:image']").attr("content");
-  if (ogImage) photoUrls.push(ogImage);
 
+  function addPhoto(url: string) {
+    if (!url || !url.startsWith("http")) return;
+    const lower = url.toLowerCase();
+    if (lower.includes("logo") || lower.includes("icon") || lower.includes("favicon") || lower.includes("avatar")) return;
+    if (seenUrls.has(url)) return;
+    seenUrls.add(url);
+    photoUrls.push(url);
+  }
+
+  // og:image (suele ser la foto principal)
+  $("meta[property='og:image'], meta[property='og:image:url']").each((_, el) => {
+    addPhoto($(el).attr("content") || "");
+  });
+
+  // JSON-LD estructurado (muchos portales lo incluyen)
+  $("script[type='application/ld+json']").each((_, el) => {
+    try {
+      const data = JSON.parse($(el).text());
+      const images = data.image || data.photo || [];
+      const arr = Array.isArray(images) ? images : [images];
+      for (const img of arr) {
+        if (typeof img === "string") addPhoto(img);
+        else if (img?.url) addPhoto(img.url);
+        else if (img?.contentUrl) addPhoto(img.contentUrl);
+      }
+    } catch {}
+  });
+
+  // JSON embebido en scripts (ej: __PRELOADED_STATE__, window.PI_DATA, etc.)
+  const jsonImagePattern = /"(?:url|src|image_url|photo_url|imageUrl)"\s*:\s*"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/gi;
+  let jsonMatch: RegExpExecArray | null;
+  while ((jsonMatch = jsonImagePattern.exec(html)) !== null) {
+    addPhoto(jsonMatch[1]);
+  }
+
+  // Etiquetas <img>: src, data-src, data-lazy-src, srcset
   $("img").each((_, el) => {
-    const src = $(el).attr("src") || $(el).attr("data-src") || "";
-    if (src && src.startsWith("http") && !src.includes("logo") && !src.includes("icon")) {
-      const w = $(el).attr("width");
-      if (w && parseInt(w) > 200) {
-        if (!photoUrls.includes(src)) photoUrls.push(src);
+    const el$ = $(el);
+    const candidates = [
+      el$.attr("src"),
+      el$.attr("data-src"),
+      el$.attr("data-lazy-src"),
+      el$.attr("data-original"),
+    ];
+    for (const src of candidates) {
+      if (src) addPhoto(src);
+    }
+    // srcset puede tener múltiples URLs con descriptores
+    const srcset = el$.attr("srcset") || el$.attr("data-srcset") || "";
+    if (srcset) {
+      for (const part of srcset.split(",")) {
+        const url = part.trim().split(/\s+/)[0];
+        addPhoto(url);
       }
     }
   });
@@ -233,7 +290,7 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
     latitude: lat,
     longitude: lng,
     cover_photo_url: photoUrls[0] || null,
-    photo_urls: photoUrls.slice(0, 30),
+    photo_urls: photoUrls.slice(0, 50),
   };
 }
 

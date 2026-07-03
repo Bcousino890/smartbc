@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 
+function normalizePhoneList(phones: unknown): string[] {
+  if (!Array.isArray(phones)) return [];
+  const result: string[] = [];
+  for (const p of phones) {
+    if (typeof p !== "string" || !p.trim()) continue;
+    const n = normalizePhone(p);
+    if (!isValidPhoneChile(n)) continue;
+    result.push(n);
+  }
+  return result;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,34 +46,28 @@ export async function POST(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
+    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones } = body;
 
-    // Validaciones
-    if (!contact_type || !["owner", "spouse", "family", "other"].includes(contact_type)) {
+    if (!contact_type || !["owner", "spouse", "family", "neighbor", "other"].includes(contact_type)) {
       return NextResponse.json(
         { error: "contact_type inválido" },
         { status: 400 }
       );
     }
 
-    if (phone && !isValidPhoneChile(phone)) {
-      return NextResponse.json(
-        { error: "Teléfono inválido. Debe ser un número chileno válido." },
-        { status: 400 }
-      );
-    }
-
-    // Normalizar teléfono si viene
     let normalizedPhone = null;
     if (phone) {
-      normalizedPhone = normalizePhone(phone);
-      if (!isValidPhoneChile(normalizedPhone)) {
+      const n = normalizePhone(phone);
+      if (!isValidPhoneChile(n)) {
         return NextResponse.json(
-          { error: "Teléfono no pudo ser normalizado" },
+          { error: "Teléfono inválido. Debe ser un número chileno válido." },
           { status: 400 }
         );
       }
+      normalizedPhone = n;
     }
+
+    const normalizedExtras = normalizePhoneList(extra_phones);
 
     const db = createAdminClient() as any;
     const { data, error } = await db
@@ -71,6 +77,7 @@ export async function POST(
         contact_type,
         contact_name: contact_name || null,
         phone: normalizedPhone,
+        extra_phones: normalizedExtras,
         email: email || null,
         has_whatsapp: has_whatsapp || false,
         relationship: relationship || null,
