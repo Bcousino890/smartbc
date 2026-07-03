@@ -144,41 +144,63 @@ rutas (`/cl/admin/*` incluidas).
 
 ---
 
-## 4. Plan por fases (siguientes)
+## 4. Plan por fases
 
-### Fase 2 — Aislamiento total de datos por país (1-2 días)
-1. **Clientes**: filtrar `getClients()`/`getClientStats()` por
-   `profiles.country` y **backfill** de clientes chilenos existentes
-   (`UPDATE profiles SET country='cl' WHERE …`). Hoy la lista de clientes en
-   `/cl` es global.
-2. **Solicitudes / Calendario / Reportes / Mensajes**: mismas queries con
-   filtro país (visit_requests ya tiene `country`; el resto se filtra vía la
-   propiedad o el perfil).
-3. **Usuarios**: en `/cl/admin/usuarios` default de alta con `country='cl'`.
-4. Índices: `CREATE INDEX ON properties(country) WHERE archived_at IS NULL`.
+### Fase 2 — Aislamiento total de datos por país ✅ hecha
+- `getClients()`, `getClientStats()`, `getVisitRequests()`,
+  `getVisitRequestsStats()` (lib/db/queries/clients.ts) y `getReportsStats()`
+  (lib/db/queries/reports.ts) aceptan `country?` opcional; los árboles
+  raíz/es mantienen el comportamiento histórico sin el argumento.
+- Nuevo `lib/db/queries/calendar.ts` (`getCalendarSelectors`) centraliza los
+  selectores de propiedades/clientes del calendario, filtrados por país (el
+  staff queda global a propósito: agentes multi-país operan en ambos).
+- `/api/admin/calendario/events`: `GET` acepta `?country=`; `POST` fija
+  `visit_requests.country` al país de la propiedad visitada.
+- Alta de usuarios (`/api/admin/usuarios/create`) acepta `country`; el
+  formulario usa el país del árbol admin desde el que se abre.
+- Migración `0064`: índices parciales (`properties`, `visit_requests`,
+  `profiles` por `country`) y backfill determinista de `visit_requests` /
+  `client_preferences` desde la propiedad o el perfil dueño.
+- **Decisiones documentadas**: `contact_requests` queda global (no tiene
+  columna país, solo `country_interest` de texto libre); `conversations` no
+  se backfillea (no tiene `property_id`, no hay forma determinista de
+  derivar su país); `profiles.country` de clientes existentes NO se infiere
+  con heurísticas — se asigna a mano desde `/usuarios` o con el `UPDATE`
+  documentado en la migración.
 
-### Fase 3 — Profundizar el flujo Chile (2-4 días)
-1. **Captaciones**: vista Kanban por estado (draft → assigned → contacting →
-   confirmed), métricas de conversión por captadora, recordatorios de
-   seguimiento (`last_contact_attempt_at` + cron).
-2. **Portal Inmobiliario**: guardar el `permalink` real que devuelve ML,
-   sincronización de bajas/cambios vía `ml-webhook` (hoy el webhook no
-   actualiza `portalinmobiliario_sync_status`), y re-publicación automática
-   al editar precio/fotos (`updatePropertyInML` ya existe y nadie lo llama).
-3. **UF en vivo**: reemplazar `/api/exchange-rate` por mindicador.cl con
-   caché diaria; mostrar equivalencia CLP⇄UF en la ficha.
-4. **Ficha propiedad CL**: editor con campos chilenos (comuna/región/tipo/
-   moneda) en `property-edit-view` (hoy solo el modal de alta los tiene).
+### Fase 4 — Desduplicar la arquitectura ✅ hecha
+Los tres árboles admin casi idénticos (`app/(admin)`, `app/es/(admin)`,
+`app/cl/(admin)`) se unificaron en **`app/[country]/(admin)/admin/...`**:
+- `lib/country-config.ts`: tipo `Country`, `isCountry()`, `getCountryConfig()`
+  con locale/prefix/moneda/labels por país — un solo lugar para esto.
+- El layout dinámico valida el param (`notFound()` si no es `es`/`cl`) y
+  reproduce la lógica de auth/redirect que tenían los layouts es/cl.
+- Módulos compartidos (propiedades, dashboard, clientes, solicitudes,
+  solicitudes-documentación, calendario, mensajes, reportes, usuarios,
+  configuración, demo-setup) parametrizados por país en un solo archivo.
+  Módulos exclusivos (captaciones + publicación CL en `cl`; idealista,
+  agencias, sindicación, diagnóstico, particulares y publicación España en
+  `es`) redirigen simétricamente al país contrario.
+- `app/(admin)/admin/*` (raíz) quedó como redirects por perfil, salvo
+  `analytics` y `security` (datos cross-país por naturaleza — geo-IP y
+  seguridad del sitio completo — no ligados a es/cl) y los `actions.ts`
+  compartidos que importan componentes de ambos países.
+- **URLs finales sin cambios**: `/es/admin/...` y `/cl/admin/...` funcionan
+  igual que antes; solo cambió dónde vive el código.
+- Al integrar esta fase con la Fase 2 (desarrolladas en paralelo) aparecieron
+  3 páginas (`solicitudes`, `reportes`, `calendario`) que habían quedado con
+  `"cl"` literal en vez del `country` dinámico de la ruta — se corrigieron
+  antes de mergear, junto con el alta/edición de usuarios que tenía el mismo
+  problema (crear un usuario desde `/es/admin/usuarios` los mandaba a Chile).
 
-### Fase 4 — Desduplicar la arquitectura (refactor mayor, 1 semana)
-Hoy existen **tres árboles admin casi idénticos** (`app/(admin)`, `app/es`,
-`app/cl`) que ya divergieron (este análisis es la prueba). Propuesta:
-- Ruta dinámica única `app/[country]/(admin)/admin/...` con `country` como
-  parámetro + helpers `useCountry()`/`getCountryFromParams()`.
-- El árbol raíz `/admin` queda como redirect por país.
-- Un solo lugar para queries/formatos/moneda por país
-  (`lib/country-config.ts`: locale, moneda, labels "Arriendo/Alquiler").
-- Tests e2e (Playwright ya está configurado) para los dos países.
+**Verificación de la integración**: `next build` genera únicamente rutas
+`/[country]/admin/...` (sin duplicados estáticos `/es/admin/*` +
+`/cl/admin/*`), `tsc --noEmit` limpio y `scripts/lint-migrations.py` en verde.
+
+### Fase 3 — Profundizar el flujo Chile ⏸️ en pausa
+Pendiente de que el usuario detalle los ajustes al alcance propuesto
+originalmente (Kanban de captaciones, sync real con Portal Inmobiliario/ML,
+UF en vivo, campos chilenos en el editor de ficha) antes de implementar.
 
 ---
 
