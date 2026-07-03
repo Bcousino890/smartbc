@@ -5,6 +5,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
+import { IdealistaStateSelector } from "@/components/admin/idealista-state-selector";
 import { cn } from "@/lib/utils";
 
 type Property = {
@@ -730,20 +731,6 @@ export function IdealistaClient({
                           {listing.reference_code}
                         </span>
                       )}
-                      {listing.idealista_state === "published" ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                          ✓ Publicado
-                        </span>
-                      ) : (listing as any).scheduled_publish_at ? (
-                        <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                          <Calendar size={9} />
-                          {new Date((listing as any).scheduled_publish_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
-                          Borrador
-                        </span>
-                      )}
                       {publishResults[listing.id] && (
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${publishResults[listing.id].ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
                           {publishResults[listing.id].msg}
@@ -752,6 +739,16 @@ export function IdealistaClient({
                       <span className="text-ink/30">
                         {new Date(listing.updated_at).toLocaleDateString("es-ES")}
                       </span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-ink/10">
+                      <IdealistaStateSelector
+                        listingId={listing.id}
+                        currentState={listing.idealista_state}
+                        onStateChange={(newState) => {
+                          listing.idealista_state = newState;
+                          router.refresh();
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
