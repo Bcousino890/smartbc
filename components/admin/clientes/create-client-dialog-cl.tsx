@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Plus, Loader2, AlertCircle, CheckCircle2, X } from "lucide-react";
-import { createNewClient } from "@/app/cl/(admin)/admin/clientes/actions";
+import { createNewClient } from "@/app/(admin)/admin/clientes/actions";
 import type { Operation, ClientProfileType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LocationMultiselect, CHILE_REGIONS, COMMUNES_BY_REGION, SECTORS_BY_COMMUNE } from "./location-multiselect";

@@ -1,7 +1,8 @@
-import { getReportsStats } from "@/lib/db/queries/reports";
-import { ReportesClient } from "./reportes-client";
+import { redirect } from "next/navigation";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
 export default async function AdminReportesPage() {
-  const stats = await getReportsStats();
-  return <ReportesClient stats={stats} />;
+  const profile = await getCurrentProfile();
+  const country = (profile as any)?.country === "cl" ? "cl" : "es";
+  redirect(`/${country}/admin/reportes`);
 }

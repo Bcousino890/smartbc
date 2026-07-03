@@ -8,7 +8,7 @@
 // lo corrige en la revisión antes de guardar el borrador.
 
 import type { ImportPreview } from "@/lib/sync/import-by-link/types";
-import type { IdealistaListing } from "@/app/es/(admin)/admin/publicacion/idealista-form";
+import type { IdealistaListing } from "@/app/[country]/(admin)/admin/publicacion/idealista-form";
 
 // ── Utilidades de texto ──────────────────────────────────────────────────────
 

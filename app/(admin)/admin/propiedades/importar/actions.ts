@@ -9,6 +9,7 @@ import type {
   ImportExtractError,
   ImportPreview,
 } from "@/lib/sync/import-by-link/types";
+import type { Country } from "@/lib/country-config";
 
 export type PreviewByLinkResult =
   | { ok: true; preview: ImportPreview }
@@ -58,6 +59,10 @@ export async function previewByLink(
 export type ConfirmByLinkInput = {
   preview: ImportPreview;
   agencySlug: string;
+  // País del catálogo donde se guarda la propiedad importada. Opcional para
+  // no romper llamadores existentes; sin él, `insertImportedProperty` usa el
+  // default de la BD ('es').
+  country?: Country;
   overrides: {
     title: string;
     description: string | null;
@@ -88,7 +93,7 @@ export async function confirmByLink(
   const auth = await requireStaff(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
 
-  const { preview, agencySlug, overrides } = input;
+  const { preview, agencySlug, overrides, country } = input;
 
   // Validaciones mínimas — la UI ya filtra, esto es defensa en profundidad.
   if (!overrides.title.trim()) return { ok: false, error: "title_required" };
@@ -119,6 +124,7 @@ export async function confirmByLink(
     preview: { ...preview, photos: filteredPhotos },
     agencyId: agency.id,
     agencySlug,
+    ...(country ? { country } : {}),
     overrides: {
       title: overrides.title.trim(),
       description: overrides.description?.trim() || null,
@@ -138,6 +144,7 @@ export async function confirmByLink(
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath("/admin/propiedades");
+  if (country) revalidatePath(`/${country}/admin/propiedades`);
   return {
     ok: true,
     slug: result.slug,
