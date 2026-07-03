@@ -42,6 +42,8 @@ type DbIdealistaListing = {
   building_name: string | null;
   is_last_floor: boolean;
   address_visibility: string | null;
+  latitude: number | null;
+  longitude: number | null;
   square_meters: number | null;
   built_square_meters: number | null;
   floor: string | null;
@@ -87,6 +89,7 @@ type DbIdealistaListing = {
   external_link: string | null;
   contact_id: string | null;
   notes: string | null;
+  description: string | null;
   photo_ids: string[];
   video_ids: string[];
   plan_ids: string[];
@@ -125,6 +128,8 @@ function listingToInitialData(
       | "exact"
       | "street"
       | "hidden",
+    latitude: listing.latitude ?? 0,
+    longitude: listing.longitude ?? 0,
     squareMeters: listing.square_meters ?? 0,
     builtSquareMeters: listing.built_square_meters ?? 0,
     floor: listing.floor ?? "",
@@ -190,6 +195,7 @@ function listingToInitialData(
     externalLink: listing.external_link ?? "",
     contactId: listing.contact_id ?? "",
     notes: listing.notes ?? "",
+    description: listing.description ?? "",
     photos: listing.photo_ids ?? [],
     videos: listing.video_ids ?? [],
     plans: listing.plan_ids ?? [],
