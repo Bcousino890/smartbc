@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, History } from "lucide-react";
 import { useState, useMemo } from "react";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
+import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
 import { cn } from "@/lib/utils";
 
 type Property = {
@@ -167,6 +168,9 @@ export function IdealistaClient({
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusModalListingId, setStatusModalListingId] = useState<string | null>(null);
+  const [statusModalTitle, setStatusModalTitle] = useState("");
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId),
@@ -228,6 +232,12 @@ export function IdealistaClient({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleOpenStatusHistory = (listingId: string, title: string) => {
+    setStatusModalListingId(listingId);
+    setStatusModalTitle(title);
+    setStatusModalOpen(true);
   };
 
   // ── Vista de formulario (propiedad existente o inspo) ─────────────────────
@@ -432,6 +442,13 @@ export function IdealistaClient({
                     </div>
                   </div>
                   <button
+                    onClick={() => handleOpenStatusHistory(listing.id, displayTitle)}
+                    className="shrink-0 rounded-lg border border-ink/15 bg-ink/5 p-1.5 text-ink/50 transition hover:bg-ink/10 hover:text-ink"
+                    title="Ver historial de cambios de estado"
+                  >
+                    <History size={14} />
+                  </button>
+                  <button
                     onClick={() => {
                       if (listing.is_inspo) {
                         setEditingInspoId(listing.id);
@@ -458,6 +475,18 @@ export function IdealistaClient({
           </p>
         </div>
       )}
+
+      {/* Modal de historial de estados */}
+      <IdealistaStatusModal
+        listingId={statusModalListingId || ""}
+        title={statusModalTitle}
+        isOpen={statusModalOpen}
+        onClose={() => {
+          setStatusModalOpen(false);
+          setStatusModalListingId(null);
+          setStatusModalTitle("");
+        }}
+      />
     </div>
   );
 }

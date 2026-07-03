@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
+import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
 import { cn } from "@/lib/utils";
 
 type Property = {
@@ -220,6 +221,9 @@ export function IdealistaClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningId, setCleaningId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusModalListingId, setStatusModalListingId] = useState<string | null>(null);
+  const [statusModalTitle, setStatusModalTitle] = useState("");
   const router = useRouter();
 
   const selectedProperty = useMemo(
@@ -468,6 +472,12 @@ export function IdealistaClient({
     } finally {
       setRestoringId(null);
     }
+  };
+
+  const handleOpenStatusHistory = (listingId: string, title: string) => {
+    setStatusModalListingId(listingId);
+    setStatusModalTitle(title);
+    setStatusModalOpen(true);
   };
 
   // ── Vista de formulario (propiedad existente o inspo) ─────────────────────
@@ -745,6 +755,14 @@ export function IdealistaClient({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenStatusHistory(listing.id, displayTitle)}
+                      className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-ink/5 px-2.5 py-1.5 text-xs font-semibold text-ink/60 transition hover:bg-ink/10 hover:text-ink"
+                      title="Ver historial de cambios de estado"
+                    >
+                      <History size={12} />
+                      Historial
+                    </button>
                     {listing.photo_ids?.length > 0 && (
                       <button
                         onClick={() => handleDownloadPhotos(listing.id)}
@@ -863,6 +881,18 @@ export function IdealistaClient({
           </p>
         </div>
       )}
+
+      {/* Modal de historial de estados */}
+      <IdealistaStatusModal
+        listingId={statusModalListingId || ""}
+        title={statusModalTitle}
+        isOpen={statusModalOpen}
+        onClose={() => {
+          setStatusModalOpen(false);
+          setStatusModalListingId(null);
+          setStatusModalTitle("");
+        }}
+      />
     </div>
   );
 }
