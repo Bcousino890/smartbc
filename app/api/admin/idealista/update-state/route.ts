@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const db = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
 
   // Actualizar el estado
   const { data, error } = await db
