@@ -11,6 +11,11 @@ export async function POST(req: Request) {
     role: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
     assignedAdvisorId?: string;
+    // Opcional: país del nuevo perfil ('es' | 'cl'). Si se omite, se
+    // mantiene el default histórico de la tabla ('es') — así los árboles
+    // raíz y España no cambian de comportamiento. El árbol de Chile envía
+    // siempre 'cl'.
+    country?: "es" | "cl";
   };
 
   try {
@@ -27,6 +32,7 @@ export async function POST(req: Request) {
     role: roleInput,
     password,
     assignedAdvisorId,
+    country,
   } = body;
 
   const role = roleInput;
@@ -138,6 +144,10 @@ export async function POST(req: Request) {
     role,
     email,
   };
+
+  if (country === "es" || country === "cl") {
+    profileUpdate.country = country;
+  }
 
   if (role === "client") {
     profileUpdate.assigned_advisor_id = assignedAdvisorId || null;

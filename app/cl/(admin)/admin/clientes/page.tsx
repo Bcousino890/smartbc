@@ -6,7 +6,7 @@ import { getClients, getClientStats } from "@/lib/db/queries/clients";
 import { ClientesAdminClient } from "./clientes-admin-client";
 
 export default async function AdminClientesPage() {
-  const [rows, stats] = await Promise.all([getClients(), getClientStats()]);
+  const [rows, stats] = await Promise.all([getClients("cl"), getClientStats("cl")]);
   const clients = rows.map(clientRowToAdminClient);
 
   return (

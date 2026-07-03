@@ -87,6 +87,9 @@ function CreateUserModal({
         assignedAdvisorId:
           modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
         password: modalType !== "client" ? password : undefined,
+        // Alta desde /cl/admin/usuarios: país por defecto 'cl' (los árboles
+        // raíz/es no envían este campo y mantienen el default 'es' de la BD).
+        country: "cl",
       };
 
       const res = await fetch("/api/admin/usuarios/create", {
@@ -304,7 +307,9 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   const [lastName, setLastName] = useState(user.lastName);
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<InternalUserRole>(user.roleKey);
-  const [country, setCountry] = useState(user.country ?? "es");
+  // Árbol Chile: si el perfil aún no tiene país asignado, el default de
+  // edición es 'cl' (no 'es' como en los árboles raíz/España).
+  const [country, setCountry] = useState(user.country ?? "cl");
   const [newPassword, setNewPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
