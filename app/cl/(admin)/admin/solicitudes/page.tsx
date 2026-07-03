@@ -17,9 +17,9 @@ import { SolicitudesAdminClient } from "./solicitudes-admin-client";
 
 export default async function AdminSolicitudesPage() {
   const [rows, stats, contactRows] = await Promise.all([
-    getVisitRequests(),
-    getVisitRequestsStats(),
-    getContactRequests(),
+    getVisitRequests("cl"),
+    getVisitRequestsStats("cl"),
+    getContactRequests(), // contact_requests no tiene columna country → global
   ]);
   const requests = rows.map(visitRequestRowToLegacy);
 

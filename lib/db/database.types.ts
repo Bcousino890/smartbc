@@ -154,6 +154,7 @@ export type Database = {
           geocoded_at: string | null;
           last_synced_at: string | null;
           archived_at: string | null;
+          country: string;
           created_at: string;
           updated_at: string;
         };
@@ -162,6 +163,7 @@ export type Database = {
           agency_id?: string | null;
           source?: PropertySource;
           external_id?: string | null;
+          country?: string;
           slug: string;
           title: string;
           description?: string | null;
@@ -316,6 +318,7 @@ export type Database = {
           notes: string | null;
           confirmed_at: string | null;
           completed_at: string | null;
+          country: string;
           created_at: string;
           updated_at: string;
         };
@@ -328,6 +331,7 @@ export type Database = {
           notes?: string | null;
           confirmed_at?: string | null;
           completed_at?: string | null;
+          country?: string;
           created_at?: string;
           updated_at?: string;
         };
