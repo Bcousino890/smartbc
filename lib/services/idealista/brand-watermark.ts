@@ -18,18 +18,16 @@ async function getLogo(): Promise<Buffer> {
   return logoBuffer;
 }
 
-// Coloca el logo en la esquina inferior derecha, a ~22% del ancho de la foto,
-// con un margen proporcional y algo de transparencia para que no tape el
-// contenido de la imagen.
+// Coloca el logo centrado sobre la foto, a ~35% del ancho, con transparencia
+// para que no tape del todo el contenido de la imagen.
 export async function applyBrandWatermark(buf: Buffer): Promise<Buffer> {
   const image = sharp(buf, { failOn: "none" }).rotate();
   const meta = await image.metadata();
   const width = meta.width ?? 1600;
   const height = meta.height ?? 1200;
 
-  const logoWidth = Math.round(width * 0.22);
-  const margin = Math.round(width * 0.03);
-  const opacity = 0.8;
+  const logoWidth = Math.round(width * 0.35);
+  const opacity = 0.55;
 
   // Redimensiona el logo y atenúa su canal alfa multiplicándolo por la
   // opacidad deseada (manipulación directa de píxeles crudos: es el método
@@ -50,8 +48,8 @@ export async function applyBrandWatermark(buf: Buffer): Promise<Buffer> {
     .composite([
       {
         input: logo,
-        left: Math.max(0, width - logoWidth - margin),
-        top: Math.max(0, height - logoHeight - margin),
+        left: Math.max(0, Math.round((width - logoWidth) / 2)),
+        top: Math.max(0, Math.round((height - logoHeight) / 2)),
       },
     ])
     .toBuffer();
