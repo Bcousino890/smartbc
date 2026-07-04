@@ -7,6 +7,8 @@ import {
   getApplicationById,
   insertDocument,
 } from "@/lib/db/queries/property-applications";
+import { analyzeApplicationDocument } from "@/lib/property-applications/ai-analysis";
+import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
 
 const BUCKET = "property-application-documents";
 
@@ -94,27 +96,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: { publicUrl } } = adminSupabase.storage
-      .from(BUCKET)
-      .getPublicUrl(storagePath);
-
-    // Insertar en BD
+    // El bucket es privado — no hay URL pública. La visualización siempre
+    // pasa por una URL firmada generada bajo demanda (ver attachSignedUrls
+    // en lib/db/queries/property-applications.ts). file_url guarda el path
+    // como referencia legible, no un enlace directo.
     const document = await insertDocument({
       property_application_id: applicationId,
       document_type_id: documentTypeId,
       co_applicant_id: coApplicantId ?? undefined,
       file_name: file.name,
       storage_path: storagePath,
-      file_url: publicUrl,
+      file_url: storagePath,
       file_size: file.size,
       mime_type: file.type || undefined,
+    });
+
+    // Recalculamos ya la completitud documental (rápido, sin IA) y
+    // lanzamos el análisis IA en segundo plano — no bloquea la respuesta
+    // de subida. El servidor es un proceso Node persistente (PM2), no
+    // serverless, así que el trabajo continúa tras devolver la respuesta.
+    await recalculateApplicationScore(applicationId);
+    void analyzeApplicationDocument(document.id).catch((err) => {
+      console.error("[upload-doc] Error en análisis IA:", err);
     });
 
     return Response.json({
       ok: true,
       document_id: document.id,
-      file_url: publicUrl,
-      analysis_status: "pending",
+      analysis_status: "processing",
     });
   } catch (err) {
     console.error("[upload-doc] Error:", err);

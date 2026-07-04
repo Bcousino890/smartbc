@@ -14,6 +14,29 @@ import type {
   VerifyDocumentInput,
 } from "../../property-applications/types";
 
+const DOCUMENTS_BUCKET = "property-application-documents";
+const SIGNED_URL_TTL_SECONDS = 600;
+
+// Genera URLs firmadas de corta duración para documentos ya autorizados.
+// El bucket es privado: solo se llega aquí después de que la fila del
+// documento pasó el filtro de RLS (o el chequeo manual de permisos de la
+// ruta), así que usar el cliente admin únicamente para firmar es seguro —
+// nunca decide aquí quién puede ver qué.
+async function attachSignedUrls<T extends { storage_path: string }>(
+  docs: T[]
+): Promise<(T & { signed_url: string | null })[]> {
+  if (docs.length === 0) return [];
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage
+    .from(DOCUMENTS_BUCKET)
+    .createSignedUrls(docs.map((d) => d.storage_path), SIGNED_URL_TTL_SECONDS);
+  if (error || !data) {
+    return docs.map((d) => ({ ...d, signed_url: null }));
+  }
+  const urlByPath = new Map(data.map((r) => [r.path, r.signedUrl]));
+  return docs.map((d) => ({ ...d, signed_url: urlByPath.get(d.storage_path) ?? null }));
+}
+
 // ─── Tipos de documentos ──────────────────────────────────────────────────────
 
 export async function getDocumentTypes(
@@ -48,22 +71,42 @@ export async function getApplicationById(
   id: string
 ): Promise<PropertyApplicationWithDetails | null> {
   const supabase = await createClient();
+  // Los alias (client:, property:, score:, etc.) son necesarios: sin ellos
+  // PostgREST devuelve las claves con el nombre de la tabla/relación
+  // (p.ej. "property_application_scores"), que no coincide con los campos
+  // que espera PropertyApplicationWithDetails ni la UI ("score", "documents"...).
   const { data, error } = await supabase
     .from("property_applications")
     .select(
       `*,
-      property_application_scores(*),
-      property_application_co_applicants(*, profiles:client_id(id, full_name, email, avatar_url)),
-      property_application_documents(
+      client:client_id(id, full_name, email, phone, avatar_url),
+      property:property_id(id, title, address, cover_photo_url, price, bc_reference),
+      score:property_application_scores(*),
+      co_applicants:property_application_co_applicants(*, profiles:client_id(id, full_name, email, avatar_url)),
+      documents:property_application_documents(
         *,
-        property_application_document_types(*),
-        property_application_document_annotations(*)
+        document_type:property_application_document_types(*),
+        annotations:property_application_document_annotations(*)
       )`
     )
     .eq("id", id)
     .single();
   if (error) return null;
-  return data as unknown as PropertyApplicationWithDetails;
+
+  const raw = data as unknown as Record<string, unknown>;
+  // La relación score es 1:1 (FK única) pero por seguridad normalizamos
+  // por si PostgREST la devuelve como array de un elemento.
+  const scoreRaw = raw.score;
+  const score = Array.isArray(scoreRaw) ? scoreRaw[0] : scoreRaw;
+  const documents = await attachSignedUrls(
+    (raw.documents ?? []) as unknown as { storage_path: string }[]
+  );
+
+  return {
+    ...raw,
+    score: score ?? undefined,
+    documents,
+  } as unknown as PropertyApplicationWithDetails;
 }
 
 export async function getApplicationsForAdmin(filters: {
@@ -195,7 +238,7 @@ export async function getDocumentsForApplication(
   const supabase = await createClient();
   let query = supabase
     .from("property_application_documents")
-    .select("*, property_application_document_types(*), property_application_document_annotations(*)")
+    .select("*, document_type:property_application_document_types(*), annotations:property_application_document_annotations(*)")
     .eq("property_application_id", applicationId)
     .order("created_at");
 
@@ -206,7 +249,7 @@ export async function getDocumentsForApplication(
 
   const { data, error } = await query;
   if (error) throw error;
-  return data as unknown as PropertyApplicationDocumentWithType[];
+  return attachSignedUrls((data ?? []) as unknown as ({ storage_path: string } & Record<string, unknown>)[]) as unknown as Promise<PropertyApplicationDocumentWithType[]>;
 }
 
 export async function insertDocument(input: {
@@ -230,7 +273,7 @@ export async function insertDocument(input: {
       file_name: input.file_name,
       storage_path: input.storage_path,
       file_url: input.file_url,
-      file_size: input.file_size ?? null,
+      file_size_bytes: input.file_size ?? null,
       mime_type: input.mime_type ?? null,
       status: "pending",
     })
@@ -257,10 +300,10 @@ export async function verifyDocument(
   documentId: string,
   verifierId: string,
   input: VerifyDocumentInput
-): Promise<void> {
+): Promise<string> {
   const supabase = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from("property_application_documents")
     .update({
       status: input.status,
@@ -268,8 +311,11 @@ export async function verifyDocument(
       verified_by: verifierId,
       verification_timestamp: new Date().toISOString(),
     })
-    .eq("id", documentId);
+    .eq("id", documentId)
+    .select("property_application_id")
+    .single();
   if (error) throw error;
+  return (data as { property_application_id: string }).property_application_id;
 }
 
 export async function deleteDocument(documentId: string): Promise<string | null> {
@@ -358,23 +404,76 @@ export async function addCoApplicant(input: {
   if (error) throw error;
 }
 
-export async function acceptCoApplicantInvite(
-  applicationId: string,
-  clientId: string
+// Acepta todas las invitaciones de co-solicitante pendientes para un email
+// dado, vinculándolas al perfil que acaba de iniciar sesión. Se llama de
+// forma automática al cargar /documentacion — no existe (ni existía) una
+// página de "aceptar invitación" separada, así que el punto natural de
+// aceptación es el primer login del invitado con ese email.
+export async function acceptPendingCoApplicantInvites(
+  clientId: string,
+  email: string
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("property_application_co_applicants")
     .update({ accepted_at: new Date().toISOString(), client_id: clientId })
-    .eq("property_application_id", applicationId)
+    .eq("invite_email", email)
     .is("accepted_at", null);
   if (error) throw error;
 }
 
+export type ClientApplicationRow = PropertyApplication & {
+  property: { title: string; address: string | null; cover_photo_url: string | null } | null;
+  is_primary: boolean;
+};
+
+// Solicitudes propias + solicitudes conjuntas donde el cliente ya aceptó
+// ser co-solicitante (invitación de pareja/compañero de piso).
+export async function getApplicationsForClientIncludingShared(
+  clientId: string
+): Promise<ClientApplicationRow[]> {
+  const supabase = await createClient();
+  const propertySelect = "*, property:property_id(title, address, cover_photo_url)";
+  const [{ data: owned, error: ownedError }, { data: coRows, error: coError }] = await Promise.all([
+    supabase
+      .from("property_applications")
+      .select(propertySelect)
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("property_application_co_applicants")
+      .select("property_application_id")
+      .eq("client_id", clientId)
+      .not("accepted_at", "is", null),
+  ]);
+  if (ownedError) throw ownedError;
+  if (coError) throw coError;
+
+  const sharedIds = (coRows ?? []).map((r) => (r as { property_application_id: string }).property_application_id);
+  const ownedList = (owned ?? []) as unknown as ClientApplicationRow[];
+  ownedList.forEach((a) => { a.is_primary = true; });
+  if (sharedIds.length === 0) return ownedList;
+
+  const { data: shared, error: sharedError } = await supabase
+    .from("property_applications")
+    .select(propertySelect)
+    .in("id", sharedIds)
+    .order("created_at", { ascending: false });
+  if (sharedError) throw sharedError;
+
+  const seen = new Set(ownedList.map((a) => a.id));
+  const sharedList = ((shared ?? []) as unknown as ClientApplicationRow[]).filter((a) => !seen.has(a.id));
+  sharedList.forEach((a) => { a.is_primary = false; });
+  return [...ownedList, ...sharedList];
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export async function getApplicationDocumentProgress(applicationId: string): Promise<{
+export async function getApplicationDocumentProgress(
+  applicationId: string,
+  coApplicantId?: string
+): Promise<{
   total: number;
   required: number;
   uploaded: number;
@@ -394,16 +493,21 @@ export async function getApplicationDocumentProgress(applicationId: string): Pro
 
   if (!app) return { total: 0, required: 0, uploaded: 0, required_uploaded: 0, verified: 0, pct: 0 };
 
+  let docsQuery = supabase
+    .from("property_application_documents")
+    .select("document_type_id, status")
+    .eq("property_application_id", applicationId);
+  // Si se pide el progreso de un co-solicitante concreto, cuenta solo sus
+  // propios documentos (privacidad: no se mezclan con los del titular).
+  if (coApplicantId) docsQuery = docsQuery.eq("co_applicant_id", coApplicantId);
+
   const [{ data: docTypesRaw }, { data: docsRaw }] = await Promise.all([
     supabase
       .from("property_application_document_types")
       .select("id, is_required")
       .eq("country", app.country)
       .eq("operation", app.operation),
-    supabase
-      .from("property_application_documents")
-      .select("document_type_id, status")
-      .eq("property_application_id", applicationId),
+    docsQuery,
   ]);
   const docTypes = docTypesRaw as { id: string; is_required: boolean }[] | null;
   const docs = docsRaw as { document_type_id: string; status: string }[] | null;

@@ -33,6 +33,8 @@ type ApplicationWithProgress = {
     address: string | null;
     cover_photo_url: string | null;
   } | null;
+  is_primary?: boolean;
+  coApplicantId?: string;
 };
 
 type Props = {
@@ -202,6 +204,11 @@ export function DocumentacionClient({ profile, applications, rentDocTypes, saleD
                           {app.property.title}
                         </p>
                       )}
+                      {app.is_primary === false && (
+                        <span className="mt-1 inline-block rounded-full bg-ink/8 px-1.5 py-0.5 text-[9px] font-medium text-ink/50">
+                          Co-solicitante
+                        </span>
+                      )}
                     </div>
                     <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>
                       <StatusIcon size={10} />
@@ -270,12 +277,16 @@ export function DocumentacionClient({ profile, applications, rentDocTypes, saleD
                 documents={selectedApp.documents}
                 docTypes={docTypes}
                 progress={selectedApp.progress}
+                coApplicantId={selectedApp.coApplicantId}
               />
 
-              <CoApplicantInvite applicationId={selectedApp.id} />
+              {selectedApp.is_primary !== false && (
+                <CoApplicantInvite applicationId={selectedApp.id} />
+              )}
 
-              {/* Botón enviar */}
-              {(selectedApp.status === "draft" || selectedApp.status === "rejected") &&
+              {/* Botón enviar — solo el solicitante principal envía la solicitud completa */}
+              {selectedApp.is_primary !== false &&
+                (selectedApp.status === "draft" || selectedApp.status === "rejected") &&
                 selectedApp.progress.required_uploaded >= selectedApp.progress.required && (
                   <div className="rounded-xl border border-gold/30 bg-gold/5 p-5">
                     <p className="text-sm font-medium text-ink">

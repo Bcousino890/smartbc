@@ -37,6 +37,10 @@ type Props = {
   documents: PropertyApplicationDocumentWithType[];
   docTypes: PropertyApplicationDocumentType[];
   progress: Progress;
+  // Presente cuando quien sube documentos es un co-solicitante (no el
+  // titular principal) — se envía en la subida para que quede etiquetado
+  // como suyo y nadie más pueda verlo.
+  coApplicantId?: string;
 };
 
 const DOC_STATUS_CONFIG: Record<DocumentStatus, { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; className: string }> = {
@@ -56,12 +60,14 @@ function DocumentRow({
   applicationId,
   disabled,
   onUploaded,
+  coApplicantId,
 }: {
   docType: PropertyApplicationDocumentType;
   document: PropertyApplicationDocumentWithType | null;
   applicationId: string;
   disabled: boolean;
   onUploaded: () => void;
+  coApplicantId?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -84,6 +90,7 @@ function DocumentRow({
       formData.append("file", file);
       formData.append("application_id", applicationId);
       formData.append("document_type_id", docType.id);
+      if (coApplicantId) formData.append("co_applicant_id", coApplicantId);
 
       const res = await fetch("/api/property-applications/documents/upload", {
         method: "POST",
@@ -207,9 +214,9 @@ function DocumentRow({
           )}
 
           {/* Link ver documento */}
-          {document?.file_url && (
+          {(document?.signed_url ?? document?.file_url) && (
             <a
-              href={document.file_url}
+              href={document.signed_url ?? document.file_url}
               target="_blank"
               rel="noreferrer"
               className="rounded-lg border border-ink/15 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink"
@@ -239,6 +246,7 @@ export function PropertyApplicationChecklist({
   documents,
   docTypes,
   progress,
+  coApplicantId,
 }: Props) {
   const isReadonly = status === "approved" || status === "completed";
 
@@ -284,6 +292,7 @@ export function PropertyApplicationChecklist({
             applicationId={applicationId}
             disabled={isReadonly}
             onUploaded={reload}
+            coApplicantId={coApplicantId}
           />
         ))}
       </div>

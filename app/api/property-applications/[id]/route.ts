@@ -8,6 +8,7 @@ import {
   rejectApplication,
   getApplicationDocumentProgress,
 } from "@/lib/db/queries/property-applications";
+import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
 
 export async function GET(
   _req: Request,
@@ -19,7 +20,7 @@ export async function GET(
     const auth = await requireSession(supabase);
     if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
 
-    const application = await getApplicationById(id);
+    let application = await getApplicationById(id);
     if (!application) {
       return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     }
@@ -28,6 +29,16 @@ export async function GET(
     const isOwner = application.client_id === auth.userId;
     if (!isStaff && !isOwner) {
       return Response.json({ error: "Sin permiso" }, { status: 403 });
+    }
+
+    // Auto-sana solicitudes que se quedaron sin score calcular (p.ej. las
+    // creadas antes de que el pipeline de scoring se conectara).
+    if (!application.score && (application.documents?.length ?? 0) > 0) {
+      await recalculateApplicationScore(id);
+      application = await getApplicationById(id);
+      if (!application) {
+        return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
+      }
     }
 
     const progress = await getApplicationDocumentProgress(id);

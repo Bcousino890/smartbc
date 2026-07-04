@@ -20,6 +20,7 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
 const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
@@ -175,6 +176,7 @@ export async function sendEmail(
       subject: options.subject,
       html: options.html,
       replyTo: options.replyTo,
+      attachments: options.attachments,
     });
 
     return {

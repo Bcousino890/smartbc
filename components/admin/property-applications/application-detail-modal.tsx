@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle, ChevronDown, ChevronUp, Download, MessageSquare, Star, X, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, ChevronDown, ChevronUp, Download, Loader2, Mail, MessageSquare, Star, X, XCircle } from "lucide-react";
 import type { PropertyApplicationWithDetails } from "@/lib/property-applications/types";
 import { getScoreBgColor } from "@/lib/property-applications/scoring";
 import { DocumentVerificationRow } from "./document-verification-row";
 import { CandidateScoreCard } from "./candidate-score-card";
+import { AdminDocumentUploader } from "./admin-document-uploader";
 
 type Props = {
   applicationId: string;
@@ -20,6 +21,28 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated }: Pr
   const [error, setError] = useState<string | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [sendingToOwner, setSendingToOwner] = useState(false);
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function handleSendToOwner() {
+    setSendingToOwner(true);
+    setSendResult(null);
+    try {
+      const res = await fetch(`/api/property-applications/${applicationId}/export-summary/send`, {
+        method: "POST",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setSendResult({ ok: false, message: data.error ?? "No se pudo enviar" });
+        return;
+      }
+      setSendResult({ ok: true, message: "Resumen enviado al propietario" });
+    } catch {
+      setSendResult({ ok: false, message: "Error de conexión" });
+    } finally {
+      setSendingToOwner(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -177,6 +200,18 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated }: Pr
                     No hay documentos subidos todavía
                   </p>
                 )}
+
+                {application && (
+                  <div className="mt-3">
+                    <AdminDocumentUploader
+                      applicationId={application.id}
+                      country={application.country}
+                      operation={application.operation}
+                      existingDocumentTypeIds={docs.map((d) => d.document_type_id)}
+                      onUploaded={handleDocUpdated}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Acciones principales */}
@@ -241,20 +276,39 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated }: Pr
               )}
 
               {/* PDF para dueño */}
-              <div className="flex items-center justify-between rounded-xl border border-ink/10 bg-ink/[0.02] px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-ink">Enviar resumen al dueño</p>
-                  <p className="text-xs text-ink/50">
-                    PDF con análisis explicado, sin documentos crudos
-                  </p>
+              <div className="rounded-xl border border-ink/10 bg-ink/[0.02] px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-ink">Resumen para el propietario</p>
+                    <p className="text-xs text-ink/50">
+                      PDF con análisis explicado, sin documentos crudos
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <a
+                      href={`/api/property-applications/${applicationId}/export-summary`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink"
+                    >
+                      <Download size={12} />
+                      Descargar PDF
+                    </a>
+                    <button
+                      onClick={handleSendToOwner}
+                      disabled={sendingToOwner}
+                      className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink disabled:opacity-50"
+                    >
+                      {sendingToOwner ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
+                      Enviar al propietario
+                    </button>
+                  </div>
                 </div>
-                <a
-                  href={`/api/property-applications/${applicationId}/export-summary`}
-                  className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink"
-                >
-                  <Download size={12} />
-                  Descargar PDF
-                </a>
+                {sendResult && (
+                  <p className={`mt-2 text-xs ${sendResult.ok ? "text-green-600" : "text-red-600"}`}>
+                    {sendResult.message}
+                  </p>
+                )}
               </div>
             </div>
           )}
