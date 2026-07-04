@@ -14,6 +14,12 @@ type ScoringInput = {
   rent_currency?: "CLP" | "EUR";
   has_references?: boolean;
   country: "ES" | "CL";
+  operation?: "rent" | "sale";
+  // Para operación "sale": solvencia por documentos financieros
+  has_preapproval?: boolean; // pre-aprobación hipotecaria subida
+  preapproval_verified?: boolean;
+  has_funds_proof?: boolean; // comprobante de fondos subido
+  funds_proof_verified?: boolean;
 };
 
 export async function calculateScore(
@@ -48,7 +54,18 @@ export async function calculateScore(
   let income_ratio: number | null = null;
   let currency_context: string | null = null;
 
-  if (input.income_amount && input.rent_price) {
+  if (input.operation === "sale") {
+    // En compras la solvencia se mide por pre-aprobación + fondos, no por renta
+    income_score += input.preapproval_verified ? 20 : input.has_preapproval ? 12 : 0;
+    income_score += input.funds_proof_verified ? 20 : input.has_funds_proof ? 12 : 0;
+    if (input.income_amount) {
+      const incomeCur = input.income_currency ?? "EUR";
+      income_amount_eur = incomeCur === "CLP"
+        ? await convertCLPtoEUR(input.income_amount)
+        : input.income_amount;
+      currency_context = await buildCurrencyContext(input.income_amount, incomeCur);
+    }
+  } else if (input.income_amount && input.rent_price) {
     const incomeCur = input.income_currency ?? "EUR";
     const rentCur = input.rent_currency ?? "EUR";
 
@@ -95,19 +112,27 @@ export async function calculateScore(
   }
 
   // Resumen textual en español
-  const ratioText = income_ratio
-    ? `${income_ratio.toFixed(1)}x la renta`
-    : "no determinado";
+  const isSale = input.operation === "sale";
+  const solvencyText = isSale
+    ? input.preapproval_verified || input.funds_proof_verified
+      ? "solvencia financiera verificada"
+      : input.has_preapproval || input.has_funds_proof
+        ? "solvencia aportada (pendiente de verificar)"
+        : "sin acreditación de solvencia"
+    : income_ratio
+      ? `ingresos de ${income_ratio.toFixed(1)}x la renta`
+      : "ingresos no determinados";
   const refsText = input.has_references ? "con referencias previas" : "sin referencias";
   const docsText = document_completeness_score >= 20
     ? "documentación completa"
     : `${verifiedDocs}/${totalDocs} documentos verificados`;
 
+  const solvCap = solvencyText.charAt(0).toUpperCase() + solvencyText.slice(1);
   const summaryMap: Record<AiRecommendation, string> = {
-    strong_approve: `Candidato sólido. Ingresos verificados de ${ratioText}, ${docsText}, ${refsText}. Riesgo bajo.`,
-    approve: `Candidato aceptable. Ingresos de ${ratioText}, ${docsText}, ${refsText}.`,
-    review: `Revisar manualmente. Ingresos de ${ratioText}, ${docsText}. Requiere análisis adicional.`,
-    reject: `Candidato no recomendado. Ingresos de ${ratioText}, documentación insuficiente.`,
+    strong_approve: `Candidato sólido. ${solvCap}, ${docsText}, ${refsText}. Riesgo bajo.`,
+    approve: `Candidato aceptable. ${solvCap}, ${docsText}, ${refsText}.`,
+    review: `Revisar manualmente. ${solvCap}, ${docsText}. Requiere análisis adicional.`,
+    reject: `Candidato no recomendado. ${solvCap}, documentación insuficiente.`,
   };
 
   return {

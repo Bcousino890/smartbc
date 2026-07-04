@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/db/server";
 import { requireSession } from "@/lib/db/auth-helpers";
-import { getApplicationById } from "@/lib/db/queries/property-applications";
+import { getApplicationByIdAdmin } from "@/lib/db/queries/property-applications";
 import { formatCLP, formatEUR } from "@/lib/property-applications/currency";
 import { getRecommendationLabel } from "@/lib/property-applications/scoring";
 
@@ -15,10 +15,10 @@ export async function GET(
     const auth = await requireSession(supabase);
     if (!auth.ok) return new Response("No autorizado", { status: 401 });
 
-    const isStaff = ["admin", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(auth.role);
+    const isStaff = ["admin", "owner", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(auth.role);
     if (!isStaff) return new Response("Sin permiso", { status: 403 });
 
-    const application = await getApplicationById(id);
+    const application = await getApplicationByIdAdmin(id);
     if (!application) return new Response("No encontrada", { status: 404 });
 
     const score = application.score;

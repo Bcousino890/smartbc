@@ -149,6 +149,11 @@ function DocumentRow({
             <div className="mt-1 flex items-center gap-2 text-xs text-ink/50">
               <FileText size={11} />
               <span className="truncate">{document.file_name}</span>
+              {document.status === "pending" && !document.ai_analysis && (
+                <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
+                  Analizando…
+                </span>
+              )}
             </div>
           ) : (
             <p className="mt-0.5 text-xs text-ink/50">{docType.description}</p>
@@ -201,7 +206,7 @@ function DocumentRow({
                 className="flex items-center gap-1.5 rounded-lg border border-ink/20 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-white disabled:opacity-50"
               >
                 <Upload size={12} strokeWidth={1.75} />
-                {uploading ? "Subiendo..." : document ? "Cambiar" : "Subir"}
+                {uploading ? "Subiendo…" : document ? "Cambiar" : "Subir"}
               </button>
             </>
           )}

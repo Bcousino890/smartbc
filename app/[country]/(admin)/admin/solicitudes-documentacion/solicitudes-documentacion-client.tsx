@@ -191,6 +191,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
             <option value="pending_review">Pendiente</option>
             <option value="approved">Aprobada</option>
             <option value="rejected">Rechazada</option>
+            <option value="completed">Completada</option>
           </select>
         </div>
       </div>
@@ -221,7 +222,9 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                 const StatusIcon = statusCfg.icon;
                 const opCfg = OP_CONFIG[app.operation];
                 const OpIcon = opCfg.icon;
-                const score = app.property_application_scores;
+                // PostgREST puede devolver el join uno-a-uno como array u objeto
+                const scoreRaw = app.property_application_scores as typeof app.property_application_scores | typeof app.property_application_scores[];
+                const score = Array.isArray(scoreRaw) ? scoreRaw[0] ?? null : scoreRaw;
                 const clientName = app.profiles?.full_name ?? app.profiles?.email ?? "—";
                 return (
                   <tr
@@ -259,7 +262,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                       {score ? (
                         <ScoreBadge score={score.total_score} />
                       ) : (
-                        <span className="text-[11px] text-ink/30">Calculando...</span>
+                        <span className="text-[11px] text-ink/30">Sin análisis</span>
                       )}
                     </td>
                     <td className="px-5 py-4">

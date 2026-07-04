@@ -562,7 +562,7 @@ export type Database = {
           display_name: string;
           description: string | null;
           accepted_formats: string[];
-          max_file_size: number;
+          max_file_size_bytes: number;
           is_required: boolean;
           validation_rules: Record<string, unknown> | null;
           icon_name: string | null;
@@ -579,7 +579,7 @@ export type Database = {
           display_name: string;
           description?: string | null;
           accepted_formats?: string[];
-          max_file_size?: number;
+          max_file_size_bytes?: number;
           is_required?: boolean;
           validation_rules?: Record<string, unknown> | null;
           icon_name?: string | null;
@@ -634,8 +634,8 @@ export type Database = {
           file_name: string;
           storage_path: string;
           file_url: string;
-          file_size: number;
-          mime_type: string;
+          file_size_bytes: number | null;
+          mime_type: string | null;
           status: string;
           verification_notes: string | null;
           ai_analysis: Record<string, unknown> | null;
@@ -652,8 +652,8 @@ export type Database = {
           file_name: string;
           storage_path: string;
           file_url: string;
-          file_size: number;
-          mime_type: string;
+          file_size_bytes?: number | null;
+          mime_type?: string | null;
           status?: string;
           verification_notes?: string | null;
           ai_analysis?: Record<string, unknown> | null;

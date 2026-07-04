@@ -44,26 +44,68 @@ export async function getApplicationsByClient(clientId: string): Promise<Propert
   return (data ?? []) as unknown as PropertyApplication[];
 }
 
+// PostgREST devuelve las relaciones uno-a-uno como array según la versión;
+// normalizamos aquí para que la UI reciba siempre la forma de
+// PropertyApplicationWithDetails (client, property, score, documents[]).
+function normalizeApplication(raw: Record<string, unknown>): PropertyApplicationWithDetails {
+  const first = <T,>(v: unknown): T | undefined =>
+    Array.isArray(v) ? (v[0] as T | undefined) : ((v ?? undefined) as T | undefined);
+
+  const docsRaw = (raw.documents ?? []) as Record<string, unknown>[];
+  const documents: PropertyApplicationDocumentWithType[] = docsRaw
+    .map((d) => ({
+      ...(d as unknown as PropertyApplicationDocumentWithType),
+      document_type: first<PropertyApplicationDocumentType>(d.document_type),
+      annotations: (Array.isArray(d.annotations) ? d.annotations : []) as PropertyApplicationDocumentWithType["annotations"],
+    }))
+    .sort((a, b) => (a.document_type?.display_order ?? 0) - (b.document_type?.display_order ?? 0));
+
+  return {
+    ...(raw as unknown as PropertyApplicationWithDetails),
+    client: first(raw.client),
+    property: first(raw.property),
+    score: first(raw.score),
+    documents,
+    co_applicants: (Array.isArray(raw.co_applicants) ? raw.co_applicants : []) as PropertyApplicationWithDetails["co_applicants"],
+  };
+}
+
+const APPLICATION_DETAIL_SELECT = `*,
+  client:client_id(id, full_name, email, phone, avatar_url),
+  property:property_id(id, title, address, cover_photo_url, price, bc_reference),
+  score:property_application_scores(*),
+  co_applicants:property_application_co_applicants(*),
+  documents:property_application_documents(
+    *,
+    document_type:property_application_document_types(*),
+    annotations:property_application_document_annotations(*)
+  )`;
+
 export async function getApplicationById(
   id: string
 ): Promise<PropertyApplicationWithDetails | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("property_applications")
-    .select(
-      `*,
-      property_application_scores(*),
-      property_application_co_applicants(*, profiles:client_id(id, full_name, email, avatar_url)),
-      property_application_documents(
-        *,
-        property_application_document_types(*),
-        property_application_document_annotations(*)
-      )`
-    )
+    .select(APPLICATION_DETAIL_SELECT)
     .eq("id", id)
     .single();
-  if (error) return null;
-  return data as unknown as PropertyApplicationWithDetails;
+  if (error || !data) return null;
+  return normalizeApplication(data as unknown as Record<string, unknown>);
+}
+
+// Variante con cliente admin (para procesos internos: análisis IA, scoring)
+export async function getApplicationByIdAdmin(
+  id: string
+): Promise<PropertyApplicationWithDetails | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("property_applications")
+    .select(APPLICATION_DETAIL_SELECT)
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return normalizeApplication(data as unknown as Record<string, unknown>);
 }
 
 export async function getApplicationsForAdmin(filters: {
@@ -139,7 +181,8 @@ export async function createApplication(input: {
 }
 
 export async function submitApplicationForReview(id: string): Promise<void> {
-  const supabase = await createClient();
+  // Admin client: la ruta ya validó que quien envía es el titular o staff
+  const supabase = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("property_applications")
@@ -186,6 +229,31 @@ export async function rejectApplication(
   if (error) throw error;
 }
 
+export async function completeApplication(id: string): Promise<void> {
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("property_applications")
+    .update({ status: "completed" })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function reopenApplication(id: string): Promise<void> {
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("property_applications")
+    .update({
+      status: "pending_review",
+      reviewed_by: null,
+      reviewed_at: null,
+      review_notes: null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // ─── Documentos ──────────────────────────────────────────────────────────────
 
 export async function getDocumentsForApplication(
@@ -219,7 +287,9 @@ export async function insertDocument(input: {
   file_size?: number;
   mime_type?: string;
 }): Promise<PropertyApplicationDocument> {
-  const supabase = await createClient();
+  // Cliente admin: la ruta que llama ya validó permisos (titular,
+  // co-solicitante o staff) y las policies RLS no cubren el rol "owner"
+  const supabase = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("property_application_documents")
@@ -230,7 +300,7 @@ export async function insertDocument(input: {
       file_name: input.file_name,
       storage_path: input.storage_path,
       file_url: input.file_url,
-      file_size: input.file_size ?? null,
+      file_size_bytes: input.file_size ?? null,
       mime_type: input.mime_type ?? null,
       status: "pending",
     })
@@ -326,6 +396,17 @@ export async function resolveAnnotation(annotationId: string): Promise<void> {
     .from("property_application_document_annotations")
     .update({ resolved_at: new Date().toISOString() })
     .eq("id", annotationId);
+  if (error) throw error;
+}
+
+export async function resolveAnnotationsForDocument(documentId: string): Promise<void> {
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("property_application_document_annotations")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("document_id", documentId)
+    .is("resolved_at", null);
   if (error) throw error;
 }
 

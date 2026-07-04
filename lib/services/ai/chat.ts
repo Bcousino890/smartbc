@@ -89,10 +89,16 @@ async function resolveConfig(): Promise<ProviderConfig> {
   return { kind: "openai", base, key, model, visionModel: stored?.visionModel || process.env.AI_VISION_MODEL || model };
 }
 
+export type AIFileAttachment = {
+  mime: string; // p. ej. "application/pdf", "image/jpeg", "image/png"
+  base64: string; // contenido del archivo en base64 (sin prefijo data:)
+};
+
 export type AICompleteOpts = {
   system: string;
   userText: string;
   images?: string[]; // URLs públicas
+  files?: AIFileAttachment[]; // adjuntos en base64 (PDF o imagen)
   maxTokens?: number;
   jsonSchema?: Record<string, unknown>; // si se da, se pide salida JSON conforme al esquema
 };
@@ -101,17 +107,24 @@ export type AICompleteOpts = {
 export async function aiComplete(opts: AICompleteOpts): Promise<string> {
   const cfg = await resolveConfig();
   const images = opts.images ?? [];
+  const files = opts.files ?? [];
+  const hasAttachments = images.length > 0 || files.length > 0;
   const maxTokens = opts.maxTokens ?? 1500;
 
   if (cfg.kind === "anthropic") {
-    const content = images.length
+    const content = hasAttachments
       ? [
           ...images.map((url) => ({ type: "image", source: { type: "url", url } })),
+          ...files.map((f) =>
+            f.mime === "application/pdf"
+              ? { type: "document", source: { type: "base64", media_type: f.mime, data: f.base64 } }
+              : { type: "image", source: { type: "base64", media_type: f.mime, data: f.base64 } },
+          ),
           { type: "text", text: opts.userText },
         ]
       : opts.userText;
     const body: Record<string, unknown> = {
-      model: images.length ? cfg.visionModel : cfg.model,
+      model: hasAttachments ? cfg.visionModel : cfg.model,
       max_tokens: maxTokens,
       system: opts.system,
       messages: [{ role: "user", content }],
@@ -144,14 +157,19 @@ export async function aiComplete(opts: AICompleteOpts): Promise<string> {
   }
 
   // OpenAI-compatible (OpenRouter / NVIDIA / Ollama / OpenAI)
-  const userContent = images.length
+  const userContent = hasAttachments
     ? [
         { type: "text", text: opts.userText },
         ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+        // PDFs van como data-url (soportado por OpenRouter/Gemini); imágenes igual
+        ...files.map((f) => ({
+          type: "image_url",
+          image_url: { url: `data:${f.mime};base64,${f.base64}` },
+        })),
       ]
     : opts.userText;
   const body: Record<string, unknown> = {
-    model: images.length ? cfg.visionModel : cfg.model,
+    model: hasAttachments ? cfg.visionModel : cfg.model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: opts.system },

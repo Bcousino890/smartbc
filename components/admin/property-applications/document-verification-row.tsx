@@ -8,7 +8,10 @@ import {
   ChevronUp,
   Clock,
   ExternalLink,
+  Loader2,
   MessageSquare,
+  Sparkles,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import type { PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
@@ -16,6 +19,7 @@ import type { PropertyApplicationDocumentWithType } from "@/lib/property-applica
 type Props = {
   document: PropertyApplicationDocumentWithType;
   onVerified: () => void;
+  readonly?: boolean;
 };
 
 const STATUS_COLORS = {
@@ -25,11 +29,14 @@ const STATUS_COLORS = {
   needs_correction: "border-amber-200 bg-amber-50/30",
 };
 
-export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
+export function DocumentVerificationRow({ document: doc, onVerified, readonly = false }: Props) {
   const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAnnotation, setShowAnnotation] = useState(false);
-  const [showAiAnalysis, setShowAiAnalysis] = useState(false);
+  const [showAiAnalysis, setShowAiAnalysis] = useState(true);
   const [annotationText, setAnnotationText] = useState("");
   const [annotationType, setAnnotationType] = useState<"info" | "warning" | "error">("warning");
   const [notes, setNotes] = useState("");
@@ -38,6 +45,7 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
   const analysis = doc.ai_analysis;
   const annotations = doc.annotations ?? [];
   const pendingAnnotations = annotations.filter((a) => !a.resolved_at);
+  const busy = loading || analyzing || deleting;
 
   async function handleVerify(status: "verified" | "rejected" | "needs_correction") {
     setError(null);
@@ -71,6 +79,47 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
     }
   }
 
+  async function handleAnalyze() {
+    setError(null);
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/property-application-documents/${doc.id}/analyze`, {
+        method: "POST",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Error al analizar el documento");
+        return;
+      }
+      onVerified();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleDelete() {
+    setError(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/property-application-documents/${doc.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Error al eliminar");
+        return;
+      }
+      onVerified();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   return (
     <div className={`rounded-xl border p-4 ${STATUS_COLORS[doc.status]}`}>
       <div className="flex items-start gap-3">
@@ -96,15 +145,19 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
               <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-[10px] text-ink/50">Opcional</span>
             )}
           </div>
-          <p className="mt-0.5 text-[11px] text-ink/50">{doc.file_name}</p>
+          <p className="mt-0.5 text-[11px] text-ink/50">
+            {doc.file_name}
+            {doc.file_size_bytes ? ` · ${(doc.file_size_bytes / 1024 / 1024).toFixed(1)}MB` : ""}
+          </p>
 
           {/* Análisis IA */}
-          {analysis && (
+          {analysis ? (
             <div className="mt-2">
               <button
                 onClick={() => setShowAiAnalysis(!showAiAnalysis)}
                 className="flex items-center gap-1 text-[11px] font-medium text-ink/60 transition hover:text-ink"
               >
+                <Sparkles size={11} className="text-gold" />
                 Análisis IA
                 {showAiAnalysis ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </button>
@@ -136,18 +189,35 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
                       <span className="text-ink/40">Tipo detectado:</span>{" "}
                       <span className="font-medium text-ink">{analysis.document_type_detected}</span>
                     </div>
-                    {analysis.income_amount && (
-                      <div>
-                        <span className="text-ink/40">Ingreso detectado:</span>{" "}
+                    <div>
+                      <span className="text-ink/40">Válido:</span>{" "}
+                      <span className={`font-medium ${analysis.is_valid ? "text-green-600" : "text-red-600"}`}>
+                        {analysis.is_valid ? "Sí" : "No"}
+                      </span>
+                    </div>
+                    {analysis.income_amount ? (
+                      <div className="col-span-2">
+                        <span className="text-ink/40">Ingreso mensual detectado:</span>{" "}
                         <span className="font-medium text-ink">
-                          {analysis.income_currency} {analysis.income_amount.toLocaleString()}
+                          {analysis.income_currency ?? ""} {analysis.income_amount.toLocaleString("es")}
                         </span>
                       </div>
-                    )}
+                    ) : null}
                   </div>
-                  {analysis.warnings.length > 0 && (
+                  {Object.entries(analysis.extracted_data ?? {}).filter(([, v]) => v).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {Object.entries(analysis.extracted_data ?? {})
+                        .filter(([, v]) => v)
+                        .map(([k, v]) => (
+                          <span key={k} className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] text-ink/60">
+                            {k}: <span className="font-medium text-ink/80">{String(v)}</span>
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                  {(analysis.warnings ?? []).length > 0 && (
                     <div className="mt-2 space-y-1">
-                      {analysis.warnings.map((w, i) => (
+                      {(analysis.warnings ?? []).map((w, i) => (
                         <div key={i} className="flex items-start gap-1 text-amber-700">
                           <AlertCircle size={11} className="mt-0.5 shrink-0" />
                           <span>{w}</span>
@@ -163,6 +233,20 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
                 </div>
               )}
             </div>
+          ) : (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-ink/40">
+              {analyzing ? (
+                <>
+                  <Loader2 size={11} className="animate-spin" />
+                  Analizando documento con IA...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={11} />
+                  Sin análisis IA todavía
+                </>
+              )}
+            </p>
           )}
 
           {/* Anotaciones existentes */}
@@ -187,7 +271,7 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
           {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
 
           {/* Formulario verificación (solo si no está verificado) */}
-          {doc.status !== "verified" && (
+          {!readonly && doc.status !== "verified" && (
             <div className="mt-3 space-y-2">
               <input
                 type="text"
@@ -244,27 +328,81 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
             Ver doc
           </a>
 
-          {/* Botones verificación */}
-          {doc.status !== "verified" && (
-            <button
-              onClick={() => handleVerify("verified")}
-              disabled={loading}
-              className="flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
-            >
-              <CheckCircle size={11} />
-              {loading ? "..." : "Verificar"}
-            </button>
-          )}
+          {!readonly && (
+            <>
+              {/* Botones verificación */}
+              {doc.status !== "verified" && (
+                <button
+                  onClick={() => handleVerify("verified")}
+                  disabled={busy}
+                  className="flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+                >
+                  <CheckCircle size={11} />
+                  {loading ? "..." : "Verificar"}
+                </button>
+              )}
 
-          {doc.status !== "needs_correction" && doc.status !== "rejected" && (
-            <button
-              onClick={() => handleVerify("needs_correction")}
-              disabled={loading}
-              className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
-            >
-              <AlertCircle size={11} />
-              Corregir
-            </button>
+              {doc.status !== "needs_correction" && doc.status !== "rejected" && (
+                <button
+                  onClick={() => handleVerify("needs_correction")}
+                  disabled={busy}
+                  className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                >
+                  <AlertCircle size={11} />
+                  Corregir
+                </button>
+              )}
+
+              {doc.status !== "rejected" && doc.status !== "verified" && (
+                <button
+                  onClick={() => handleVerify("rejected")}
+                  disabled={busy}
+                  className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                >
+                  <XCircle size={11} />
+                  Rechazar
+                </button>
+              )}
+
+              {/* Re-analizar con IA */}
+              <button
+                onClick={handleAnalyze}
+                disabled={busy}
+                className="flex items-center gap-1 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1.5 text-[11px] font-medium text-ink/70 transition hover:bg-gold/20 disabled:opacity-50"
+              >
+                {analyzing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                {analyzing ? "Analizando..." : analysis ? "Re-analizar" : "Analizar IA"}
+              </button>
+
+              {/* Eliminar */}
+              {confirmDelete ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleDelete}
+                    disabled={busy}
+                    className="rounded-lg bg-red-600 px-2 py-1.5 text-[11px] font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleting ? "..." : "Sí, eliminar"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={busy}
+                    className="rounded-lg border border-ink/15 px-2 py-1.5 text-[11px] text-ink/50 hover:text-ink"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={busy}
+                  className="flex items-center gap-1 rounded-lg border border-ink/10 px-2.5 py-1.5 text-[11px] text-ink/40 transition hover:border-red-200 hover:text-red-600 disabled:opacity-50"
+                >
+                  <Trash2 size={11} />
+                  Eliminar
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

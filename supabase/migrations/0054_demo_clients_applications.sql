@@ -103,7 +103,7 @@ BEGIN
 
   -- Create demo documents for App #1 (Approved - All verified)
   INSERT INTO property_application_documents (
-    id, property_application_id, document_type_id, file_name, storage_path, file_url, file_size, mime_type, status, verification_notes, ai_analysis, verified_by, verification_timestamp, created_at, updated_at
+    id, property_application_id, document_type_id, file_name, storage_path, file_url, file_size_bytes, mime_type, status, verification_notes, ai_analysis, verified_by, verification_timestamp, created_at, updated_at
   )
   SELECT
     gen_random_uuid(),
@@ -133,7 +133,7 @@ BEGIN
 
   -- Create demo documents for App #2 (Pending - Some uploaded, some pending)
   INSERT INTO property_application_documents (
-    id, property_application_id, document_type_id, file_name, storage_path, file_url, file_size, mime_type, status, verification_notes, ai_analysis, created_at, updated_at
+    id, property_application_id, document_type_id, file_name, storage_path, file_url, file_size_bytes, mime_type, status, verification_notes, ai_analysis, created_at, updated_at
   )
   SELECT
     gen_random_uuid(),
