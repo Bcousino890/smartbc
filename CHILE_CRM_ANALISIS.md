@@ -67,7 +67,7 @@ no podía funcionar de punta a punta.
 Agente pega link (Portal Inmobiliario u otro)
    → scrape automático (título, precio, fotos, ubicación)          [ya existía]
    → admin asigna a captadora                                      [ya existía, pero
-                                                                    el rol no se podía crear → FIX migración 0063]
+                                                                    el rol no se podía crear → FIX migración 0065]
    → captadora completa datos del dueño y registra intentos        [ya existía; el
                                                                     historial de estados no se guardaba → FIX]
    → confirmada (dueño quiere vender)
@@ -112,7 +112,7 @@ Importar por link → insert con country='cl'
 **Captaciones**
 - 🆕 Endpoint `POST /api/admin/cl/captaciones/[id]/convert` + botón
   "Convertir a propiedad" en la ficha (estado `confirmed`).
-- Migración `0063`: añade `captadora` al enum `user_role`, recrea las RLS
+- Migración `0065`: añade `captadora` al enum `user_role`, recrea las RLS
   contra `profiles` (antes `user_profiles`, inexistente) y arregla los CHECK
   de `captacion_logs` para que el historial de estados se guarde.
 - Eliminada `createCaptacion()` muerta; transiciones UI/backend alineadas
@@ -137,7 +137,7 @@ Importar por link → insert con country='cl'
 **Verificación**: `next build` compila y typecheckea sin errores con todas las
 rutas (`/cl/admin/*` incluidas).
 
-> ⚠️ **Despliegue**: aplicar la migración `0063_captaciones_role_and_rls_fixes.sql`
+> ⚠️ **Despliegue**: aplicar la migración `0065_captaciones_role_and_rls_fixes.sql`
 > en el VPS (botón de migraciones en `/admin/configuracion` o psql en el
 > contenedor `supabase-db`). Sin ella, el rol captadora sigue sin poder
 > asignarse y el historial de estados sigue sin guardarse.
@@ -158,7 +158,7 @@ rutas (`/cl/admin/*` incluidas).
   `visit_requests.country` al país de la propiedad visitada.
 - Alta de usuarios (`/api/admin/usuarios/create`) acepta `country`; el
   formulario usa el país del árbol admin desde el que se abre.
-- Migración `0064`: índices parciales (`properties`, `visit_requests`,
+- Migración `0066`: índices parciales (`properties`, `visit_requests`,
   `profiles` por `country`) y backfill determinista de `visit_requests` /
   `client_preferences` desde la propiedad o el perfil dueño.
 - **Decisiones documentadas**: `contact_requests` queda global (no tiene
@@ -215,4 +215,4 @@ UF en vivo, campos chilenos en el editor de ficha) antes de implementar.
 - `app/api/admin/cl/captaciones/[id]/{convert,status}/route.ts`
 - `app/api/admin/cl/{publish,unpublish}-*-portalinmobiliario/route.ts`
 - `app/api/exchange-rate/route.ts`
-- `supabase/migrations/0063_captaciones_role_and_rls_fixes.sql`
+- `supabase/migrations/0065_captaciones_role_and_rls_fixes.sql`
