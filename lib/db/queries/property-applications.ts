@@ -71,40 +71,46 @@ export async function getApplicationById(
   id: string
 ): Promise<PropertyApplicationWithDetails | null> {
   const supabase = await createClient();
-  // Los alias (client:, property:, score:, etc.) son necesarios: sin ellos
-  // PostgREST devuelve las claves con el nombre de la tabla/relación
-  // (p.ej. "property_application_scores"), que no coincide con los campos
-  // que espera PropertyApplicationWithDetails ni la UI ("score", "documents"...).
+  // Los alias (client:, property:) son necesarios: sin ellos PostgREST
+  // devuelve las claves con el nombre de la relación (p.ej. "profiles"),
+  // que no coincide con los campos que espera PropertyApplicationWithDetails.
+  // Score/co-solicitantes/documentos se piden aparte (en vez de anidados
+  // en un único select de 3 niveles) para evitar relaciones ambiguas o
+  // límites de anidamiento de PostgREST — cada consulta es simple y ya
+  // está probada por separado (getDocumentsForApplication, etc.).
   const { data, error } = await supabase
     .from("property_applications")
     .select(
       `*,
       client:client_id(id, full_name, email, phone, avatar_url),
-      property:property_id(id, title, address, cover_photo_url, price, bc_reference),
-      score:property_application_scores(*),
-      co_applicants:property_application_co_applicants(*, profiles:client_id(id, full_name, email, avatar_url)),
-      documents:property_application_documents(
-        *,
-        document_type:property_application_document_types(*),
-        annotations:property_application_document_annotations(*)
-      )`
+      property:property_id(id, title, address, cover_photo_url, price, bc_reference)`
     )
     .eq("id", id)
     .single();
-  if (error) return null;
+  if (error) {
+    console.error("[getApplicationById] Error:", error);
+    return null;
+  }
 
   const raw = data as unknown as Record<string, unknown>;
-  // La relación score es 1:1 (FK única) pero por seguridad normalizamos
-  // por si PostgREST la devuelve como array de un elemento.
-  const scoreRaw = raw.score;
-  const score = Array.isArray(scoreRaw) ? scoreRaw[0] : scoreRaw;
-  const documents = await attachSignedUrls(
-    (raw.documents ?? []) as unknown as { storage_path: string }[]
-  );
+
+  const [{ data: scoreRow }, { data: coApplicantsRaw }, documents] = await Promise.all([
+    supabase
+      .from("property_application_scores")
+      .select("*")
+      .eq("property_application_id", id)
+      .maybeSingle(),
+    supabase
+      .from("property_application_co_applicants")
+      .select("*, profiles:client_id(id, full_name, email, avatar_url)")
+      .eq("property_application_id", id),
+    getDocumentsForApplication(id),
+  ]);
 
   return {
     ...raw,
-    score: score ?? undefined,
+    score: scoreRow ?? undefined,
+    co_applicants: coApplicantsRaw ?? [],
     documents,
   } as unknown as PropertyApplicationWithDetails;
 }
