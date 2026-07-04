@@ -12,6 +12,18 @@ import type { IdealistaListing } from "@/app/[country]/(admin)/admin/publicacion
 
 // ── Utilidades de texto ──────────────────────────────────────────────────────
 
+// Identidad de un anuncio por su URL: origen + path, sin query ni hash (Airbnb
+// y otros portales añaden montones de parámetros volátiles). Se usa para
+// detectar que ya existe una ficha sembrada desde el mismo anuncio.
+export function normalizeSourceUrl(raw: string): string {
+  try {
+    const u = new URL(raw.trim());
+    return (u.origin + u.pathname).replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return raw.trim().toLowerCase();
+  }
+}
+
 function normalize(s: string): string {
   return s
     .normalize("NFD")

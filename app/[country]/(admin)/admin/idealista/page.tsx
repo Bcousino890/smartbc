@@ -115,6 +115,7 @@ export default async function AdminIdealistaPage({
     external_link: string | null;
     contact_id: string | null;
     notes: string | null;
+    description: string | null;
     photo_ids: string[];
     video_ids: string[];
     plan_ids: string[];

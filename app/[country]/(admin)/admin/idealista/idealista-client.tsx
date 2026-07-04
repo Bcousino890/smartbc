@@ -203,6 +203,22 @@ function listingToInitialData(
   };
 }
 
+// Qué le falta a una ficha para estar lista para publicar en Idealista.
+// Devuelve una lista de carencias en texto (vacía = ficha completa).
+function listingMissingFields(l: DbIdealistaListing): string[] {
+  const missing: string[] = [];
+  const photoCount = l.photo_ids?.length ?? 0;
+  if (photoCount === 0) missing.push("fotos");
+  else if (photoCount < 4) missing.push(`más fotos (tiene ${photoCount}, mínimo recomendable 4)`);
+  if (!l.description?.trim()) missing.push("descripción");
+  const price = l.operation === "rent" ? l.total_rental_price : l.price;
+  if (!price) missing.push("precio");
+  if (l.is_inspo && !l.inspo_title?.trim()) missing.push("título");
+  if (!l.reference_code) missing.push("referencia");
+  if (!l.address_city?.trim()) missing.push("zona/ciudad");
+  return missing;
+}
+
 export function IdealistaClient({
   properties,
   listings,
@@ -297,18 +313,30 @@ export function IdealistaClient({
 
   // Siembra una inspo desde un link externo: extrae datos + re-aloja fotos
   // limpias, y abre el formulario relleno para revisar antes de guardar.
-  const handleSeedFromLink = async () => {
+  // Si el servidor detecta que ya existe una ficha del mismo anuncio (409),
+  // pregunta y reintenta con force=true si el usuario confirma.
+  const handleSeedFromLink = async (force = false) => {
     const url = seedUrl.trim();
-    if (!url || seeding) return;
+    if (!url || (seeding && !force)) return;
     setSeedError(null);
     setSeeding("link");
     try {
       const res = await fetch("/api/admin/idealista/inspo-from-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, force }),
       });
       const json = await res.json();
+      if (res.status === 409 && json.duplicate) {
+        if (
+          confirm(
+            `Ya tienes una ficha creada desde este anuncio: "${json.duplicate.title}".\n\n¿Crear otra igualmente?`,
+          )
+        ) {
+          await handleSeedFromLink(true);
+        }
+        return;
+      }
       if (!res.ok) {
         setSeedError(json.error ?? "No se pudo leer el anuncio");
         return;
@@ -323,17 +351,27 @@ export function IdealistaClient({
   };
 
   // Siembra una inspo a partir de una propiedad ya existente en el sistema.
-  const handleSeedFromProperty = async (propertyId: string) => {
-    if (seeding) return;
+  const handleSeedFromProperty = async (propertyId: string, force = false) => {
+    if (seeding && !force) return;
     setSeedError(null);
     setSeeding(propertyId);
     try {
       const res = await fetch("/api/admin/idealista/inspo-from-property", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId }),
+        body: JSON.stringify({ propertyId, force }),
       });
       const json = await res.json();
+      if (res.status === 409 && json.duplicate) {
+        if (
+          confirm(
+            `Ya tienes una ficha creada desde el anuncio de origen de esta propiedad: "${json.duplicate.title}".\n\n¿Crear otra igualmente?`,
+          )
+        ) {
+          await handleSeedFromProperty(propertyId, true);
+        }
+        return;
+      }
       if (!res.ok) {
         setSeedError(json.error ?? "No se pudo preparar la inspo");
         return;
@@ -379,6 +417,18 @@ export function IdealistaClient({
   // y rellena el formulario automáticamente en el navegador del usuario
   // (evita el bloqueo de Cloudflare que sufre la automatización desde el VPS).
   const handlePublish = async (listingId: string) => {
+    // Aviso previo: si a la ficha le falta algo importante, confirmar antes de
+    // abrir Idealista (evita descubrir la carencia con el formulario ya abierto).
+    const listing = listings.find((l) => l.id === listingId);
+    if (listing) {
+      const missing = listingMissingFields(listing);
+      if (
+        missing.length > 0 &&
+        !confirm(`A esta ficha le falta: ${missing.join(", ")}.\n\n¿Abrir en Idealista igualmente?`)
+      ) {
+        return;
+      }
+    }
     setPublishingId(listingId);
     try {
       const res = await fetch("/api/admin/idealista/publish-link", {
@@ -597,7 +647,7 @@ export function IdealistaClient({
               />
             </div>
             <button
-              onClick={handleSeedFromLink}
+              onClick={() => handleSeedFromLink()}
               disabled={!seedUrl.trim() || seeding === "link"}
               className="flex items-center gap-1.5 rounded-lg bg-gold/20 px-3 py-2 text-xs font-semibold text-gold transition hover:bg-gold/30 disabled:opacity-50"
             >
@@ -737,6 +787,22 @@ export function IdealistaClient({
                           {listing.reference_code}
                         </span>
                       )}
+                      {(() => {
+                        // Checklist: ¿la ficha está lista para publicar?
+                        const missing = listingMissingFields(listing);
+                        return missing.length === 0 ? (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600" title="La ficha tiene todo lo necesario para publicar">
+                            ✓ Lista
+                          </span>
+                        ) : (
+                          <span
+                            className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700"
+                            title={`Antes de publicar completa: ${missing.join(", ")}`}
+                          >
+                            ⚠ Faltan: {missing.join(", ")}
+                          </span>
+                        );
+                      })()}
                       {publishResults[listing.id] && (
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${publishResults[listing.id].ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
                           {publishResults[listing.id].msg}

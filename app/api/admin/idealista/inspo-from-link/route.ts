@@ -1,8 +1,28 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { createAdminClient } from "@/lib/db/admin";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { downloadAndWatermark } from "@/lib/sync/watermark";
-import { previewToInspo } from "@/lib/services/idealista/inspo-mapper";
+import { previewToInspo, normalizeSourceUrl } from "@/lib/services/idealista/inspo-mapper";
+
+// Busca una ficha ya sembrada desde el mismo anuncio (misma URL sin query).
+// Exportable no: helper local compartido conceptualmente con inspo-from-property.
+async function findDuplicateByUrl(url: string): Promise<{ id: string; title: string } | null> {
+  const key = normalizeSourceUrl(url);
+  if (!key) return null;
+  const db = createAdminClient() as any;
+  const { data } = await db
+    .from("idealista_listings")
+    .select("id, inspo_title, external_link")
+    .not("external_link", "is", null)
+    .neq("external_link", "");
+  for (const row of (data ?? []) as Array<{ id: string; inspo_title: string | null; external_link: string }>) {
+    if (normalizeSourceUrl(row.external_link) === key) {
+      return { id: row.id, title: row.inspo_title || "sin título" };
+    }
+  }
+  return null;
+}
 
 // Siembra una inspo desde un link externo: extrae los datos de la ficha pública
 // (mismo motor que "crear propiedad por link"), re-aloja las fotos en NUESTRO
@@ -22,9 +42,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { url } = await req.json().catch(() => ({ url: null }));
+  const { url, force } = await req.json().catch(() => ({ url: null, force: false }));
   if (!url || typeof url !== "string") {
     return Response.json({ error: "url es requerido" }, { status: 400 });
+  }
+
+  // Detección de duplicados ANTES del trabajo caro (extraer + re-alojar fotos).
+  // Con force=true (el usuario confirmó que quiere otra copia) se salta el aviso.
+  if (!force) {
+    const duplicate = await findDuplicateByUrl(url);
+    if (duplicate) {
+      return Response.json({ duplicate }, { status: 409 });
+    }
   }
 
   const result = await extractFromUrl(url);
