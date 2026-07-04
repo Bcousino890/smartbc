@@ -6,8 +6,10 @@ import {
   submitApplicationForReview,
   approveApplication,
   rejectApplication,
+  updateApplicationFields,
   getApplicationDocumentProgress,
 } from "@/lib/db/queries/property-applications";
+import type { ApplicationCountry, ApplicationOperation } from "@/lib/property-applications/types";
 import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
 
 export async function GET(
@@ -60,9 +62,14 @@ export async function PATCH(
     if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
 
     const body = await req.json() as {
-      action: "submit" | "approve" | "reject";
+      action: "submit" | "approve" | "reject" | "update";
       notes?: string;
       rejected_document_ids?: string[];
+      property_id?: string | null;
+      operation?: ApplicationOperation;
+      country?: ApplicationCountry;
+      move_in_date?: string | null;
+      purchase_date?: string | null;
     };
 
     const application = await getApplicationById(id);
@@ -95,6 +102,29 @@ export async function PATCH(
       if (!isStaff) return Response.json({ error: "Sin permiso" }, { status: 403 });
       await approveApplication(id, auth.userId, body.notes);
       return Response.json({ ok: true, status: "approved" });
+    }
+
+    if (body.action === "update") {
+      if (!isStaff) return Response.json({ error: "Sin permiso" }, { status: 403 });
+
+      const changesCountryOrOp =
+        (body.operation && body.operation !== application.operation) ||
+        (body.country && body.country !== application.country);
+      if (changesCountryOrOp && (application.documents?.length ?? 0) > 0) {
+        return Response.json(
+          { error: "No se puede cambiar país/operación: ya tiene documentos subidos para el tipo actual" },
+          { status: 400 }
+        );
+      }
+
+      await updateApplicationFields(id, {
+        property_id: body.property_id,
+        operation: body.operation,
+        country: body.country,
+        move_in_date: body.move_in_date,
+        purchase_date: body.purchase_date,
+      });
+      return Response.json({ ok: true });
     }
 
     if (body.action === "reject") {
