@@ -187,6 +187,32 @@ export async function createApplication(input: {
   return data as PropertyApplication;
 }
 
+export async function updateApplicationFields(
+  id: string,
+  input: {
+    property_id?: string | null;
+    operation?: ApplicationOperation;
+    country?: ApplicationCountry;
+    move_in_date?: string | null;
+    purchase_date?: string | null;
+  }
+): Promise<void> {
+  const supabase = createAdminClient();
+  const update: Record<string, unknown> = {};
+  if ("property_id" in input) update.property_id = input.property_id;
+  if (input.operation) update.operation = input.operation;
+  if (input.country) update.country = input.country;
+  if ("move_in_date" in input) update.move_in_date = input.move_in_date;
+  if ("purchase_date" in input) update.purchase_date = input.purchase_date;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("property_applications")
+    .update(update)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function submitApplicationForReview(id: string): Promise<void> {
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

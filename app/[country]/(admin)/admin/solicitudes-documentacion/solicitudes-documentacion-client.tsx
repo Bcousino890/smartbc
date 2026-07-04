@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CheckCircle, Clock, FileText, Home, Plus, Search, SlidersHorizontal, Star, XCircle } from "lucide-react";
+import { Building2, CheckCircle, Clock, FileText, Home, Pencil, Plus, Search, SlidersHorizontal, Star, XCircle } from "lucide-react";
 import type { ApplicationCountry, ApplicationOperation, ApplicationStatus } from "@/lib/property-applications/types";
 import { ApplicationDetailModal } from "@/components/admin/property-applications/application-detail-modal";
 import { CandidateScoreCard } from "@/components/admin/property-applications/candidate-score-card";
 import { CreateApplicationModal } from "@/components/admin/property-applications/create-application-modal";
+import { EditApplicationModal } from "@/components/admin/property-applications/edit-application-modal";
 
 type ApplicationRow = {
   id: string;
@@ -14,6 +15,8 @@ type ApplicationRow = {
   status: ApplicationStatus;
   submitted_at: string | null;
   created_at: string;
+  move_in_date: string | null;
+  purchase_date: string | null;
   profiles: {
     id: string;
     full_name: string | null;
@@ -97,6 +100,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
   const [filterStatus, setFilterStatus] = useState<ApplicationStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const filtered = applications.filter((app) => {
     const name = app.profiles?.full_name?.toLowerCase() ?? "";
@@ -272,12 +276,21 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <button
-                        onClick={() => setSelectedId(app.id)}
-                        className="rounded-lg border border-ink/15 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink"
-                      >
-                        Revisar
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSelectedId(app.id)}
+                          className="rounded-lg border border-ink/15 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink"
+                        >
+                          Revisar
+                        </button>
+                        <button
+                          onClick={() => setEditingId(app.id)}
+                          title="Editar solicitud"
+                          className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 p-1.5 text-ink/50 transition hover:text-ink"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -303,6 +316,27 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           onCreated={() => { setShowCreate(false); window.location.reload(); }}
         />
       )}
+
+      {/* Modal de edición */}
+      {editingId && (() => {
+        const app = applications.find((a) => a.id === editingId);
+        if (!app) return null;
+        return (
+          <EditApplicationModal
+            applicationId={app.id}
+            country={app.country}
+            operation={app.operation}
+            propertyId={app.properties?.id ?? null}
+            propertyTitle={app.properties?.title ?? null}
+            propertyReference={app.properties?.bc_reference ?? null}
+            moveInDate={app.move_in_date}
+            purchaseDate={app.purchase_date}
+            hasDocuments={app.property_application_documents.length > 0}
+            onClose={() => setEditingId(null)}
+            onUpdated={() => { setEditingId(null); window.location.reload(); }}
+          />
+        );
+      })()}
     </div>
   );
 }
