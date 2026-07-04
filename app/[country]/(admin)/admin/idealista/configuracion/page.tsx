@@ -5,6 +5,7 @@ import { PageFooter } from "@/components/ui/page-footer";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { IdealistaConfigClient } from "./config-client";
+import { AIConfigSection } from "./ai-config-section";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,8 @@ export default async function IdealistaConfigPage({
 
         <IdealistaConfigClient initialConfig={initialConfig} />
       </div>
+
+      <AIConfigSection />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>
