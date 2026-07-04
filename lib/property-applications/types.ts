@@ -154,6 +154,11 @@ export type PropertyApplicationWithDetails = PropertyApplication & {
 export type PropertyApplicationDocumentWithType = PropertyApplicationDocument & {
   document_type?: PropertyApplicationDocumentType;
   annotations?: PropertyApplicationDocumentAnnotation[];
+  // URL firmada de corta duración (bucket privado). Se genera en el
+  // servidor en cada lectura y sustituye a file_url para visualizar/abrir
+  // el archivo — null si aún no se ha podido generar (p.ej. falta el
+  // objeto en storage).
+  signed_url?: string | null;
 };
 
 // Tipos para checklist de cliente (solo lo necesario por privacidad)

@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { verifyDocument, addAnnotation } from "@/lib/db/queries/property-applications";
+import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
 
 export async function POST(
   req: Request,
@@ -26,7 +27,7 @@ export async function POST(
       return Response.json({ error: "Se requiere el campo status" }, { status: 400 });
     }
 
-    await verifyDocument(id, auth.userId, {
+    const applicationId = await verifyDocument(id, auth.userId, {
       status: body.status,
       notes: body.notes,
     });
@@ -40,6 +41,8 @@ export async function POST(
         created_by: auth.userId,
       });
     }
+
+    await recalculateApplicationScore(applicationId);
 
     return Response.json({ ok: true, status: body.status });
   } catch (err) {

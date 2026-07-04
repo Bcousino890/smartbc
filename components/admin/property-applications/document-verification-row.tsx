@@ -9,6 +9,7 @@ import {
   Clock,
   ExternalLink,
   MessageSquare,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import type { PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
@@ -33,6 +34,27 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
   const [annotationText, setAnnotationText] = useState("");
   const [annotationType, setAnnotationType] = useState<"info" | "warning" | "error">("warning");
   const [notes, setNotes] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+
+  async function handleReanalyze() {
+    setError(null);
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/property-application-documents/${doc.id}/analyze`, {
+        method: "POST",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Error al analizar el documento");
+        return;
+      }
+      onVerified();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   const docType = doc.document_type;
   const analysis = doc.ai_analysis;
@@ -99,8 +121,8 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
           <p className="mt-0.5 text-[11px] text-ink/50">{doc.file_name}</p>
 
           {/* Análisis IA */}
-          {analysis && (
-            <div className="mt-2">
+          <div className="mt-2 flex items-center gap-3">
+            {analysis && (
               <button
                 onClick={() => setShowAiAnalysis(!showAiAnalysis)}
                 className="flex items-center gap-1 text-[11px] font-medium text-ink/60 transition hover:text-ink"
@@ -108,7 +130,19 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
                 Análisis IA
                 {showAiAnalysis ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </button>
+            )}
+            <button
+              onClick={handleReanalyze}
+              disabled={analyzing}
+              className="flex items-center gap-1 text-[11px] font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
+            >
+              <Sparkles size={11} />
+              {analyzing ? "Analizando..." : analysis ? "Reanalizar con IA" : "Analizar con IA"}
+            </button>
+          </div>
 
+          {analysis && (
+            <div className="mt-1">
               {showAiAnalysis && (
                 <div className="mt-2 rounded-lg bg-white/60 p-3 text-xs">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -235,7 +269,7 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
         <div className="flex shrink-0 flex-col items-end gap-2">
           {/* Ver documento */}
           <a
-            href={doc.file_url}
+            href={doc.signed_url ?? doc.file_url}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 transition hover:text-ink"

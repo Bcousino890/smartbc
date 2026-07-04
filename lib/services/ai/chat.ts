@@ -92,7 +92,12 @@ async function resolveConfig(): Promise<ProviderConfig> {
 export type AICompleteOpts = {
   system: string;
   userText: string;
-  images?: string[]; // URLs públicas
+  images?: string[]; // URLs (públicas o firmadas)
+  // Si las URLs de `images` son en realidad documentos no-imagen (p.ej. un
+  // PDF), indícalo aquí. Anthropic requiere un bloque "document" distinto
+  // de "image" para PDFs; los proveedores compatibles con OpenAI (usados
+  // vía OpenRouter/Gemini) aceptan ambos como image_url sin distinción.
+  fileMediaType?: string;
   maxTokens?: number;
   jsonSchema?: Record<string, unknown>; // si se da, se pide salida JSON conforme al esquema
 };
@@ -104,9 +109,14 @@ export async function aiComplete(opts: AICompleteOpts): Promise<string> {
   const maxTokens = opts.maxTokens ?? 1500;
 
   if (cfg.kind === "anthropic") {
+    const isDocument = opts.fileMediaType === "application/pdf";
     const content = images.length
       ? [
-          ...images.map((url) => ({ type: "image", source: { type: "url", url } })),
+          ...images.map((url) =>
+            isDocument
+              ? { type: "document", source: { type: "url", url } }
+              : { type: "image", source: { type: "url", url } }
+          ),
           { type: "text", text: opts.userText },
         ]
       : opts.userText;
