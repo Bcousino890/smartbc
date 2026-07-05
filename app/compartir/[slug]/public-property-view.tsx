@@ -451,15 +451,22 @@ function PropertyVideoTile({
         autoPlay={featured}
         loop={featured}
         controls={!featured}
-        preload={featured ? "auto" : "metadata"}
+        preload="metadata"
         controlsList="nodownload noremoteplayback"
         disablePictureInPicture
         onVolumeChange={(e) => {
           const el = e.currentTarget;
           if (!el.muted) el.muted = true;
         }}
-        className="aspect-video w-full bg-black object-cover"
-        src={url}
+        className={
+          featured
+            ? "aspect-video w-full bg-black object-cover"
+            : "aspect-video w-full bg-black object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+        }
+        // #t=0.5 → el navegador muestra el fotograma a 0,5s como "portada" del
+        // vídeo (sin descargarlo entero), en vez de pantalla negra. Así el
+        // usuario ve una imagen del piso y le entran ganas de pulsar.
+        src={featured ? url : `${url}#t=0.5`}
       />
       {featured && (
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
