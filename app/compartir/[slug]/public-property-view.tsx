@@ -233,15 +233,27 @@ export function PublicPropertyView({
                     </div>
                   );
                 }
-                // Direct video file (MP4, WebM, etc.) — muteado por defecto.
+                // Archivo directo (MP4, WebM…). Los vídeos de Idealista llevan
+                // MÚSICA de fondo: los queremos SIEMPRE sin sonido. El atributo
+                // `muted` de React no es fiable, así que además lo forzamos por
+                // ref en el propio elemento del DOM (y en cada play, por si el
+                // usuario intentara subir el volumen).
                 return (
                   <div key={v.url} className={cardCls}>
                     {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                     <video
+                      ref={(el) => {
+                        if (el) el.muted = true;
+                      }}
                       muted
                       controls
                       preload="metadata"
-                      controlsList="nodownload"
+                      controlsList="nodownload noremoteplayback"
+                      disablePictureInPicture
+                      onVolumeChange={(e) => {
+                        const el = e.currentTarget;
+                        if (!el.muted) el.muted = true;
+                      }}
                       className="aspect-video w-full bg-black object-cover"
                       src={v.url}
                     />
