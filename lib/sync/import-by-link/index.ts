@@ -10,7 +10,7 @@ import { extractIdealista } from "./extractors/idealista";
 import { extractInmoweb } from "./extractors/inmoweb";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
-import { extractVideos } from "./extract-videos";
+import { extractVideos, dedupeVideos } from "./extract-videos";
 import { dedupKey } from "../scrapers/image-utils";
 import { getProxyUrl } from "../proxy-config";
 import type { ImportExtractResult, ImportPreview } from "./types";
@@ -139,12 +139,11 @@ export async function extractFromUrl(
   // Vídeos: extractor genérico común a TODOS los portales (YouTube/Vimeo/
   // og:video/mp4/JSON-LD), fusionado con el `videoUrl` que ya saque el
   // extractor concreto (Idealista). Enlace directo, sin re-alojar.
-  const merged = new Set<string>([
+  preview.videos = dedupeVideos([
     ...(preview.videos ?? []),
     ...(preview.videoUrl ? [preview.videoUrl] : []),
     ...extractVideos($),
   ]);
-  preview.videos = [...merged].slice(0, 10);
 
   return { ok: true, preview: dedupePreviewPhotos(preview) };
 }

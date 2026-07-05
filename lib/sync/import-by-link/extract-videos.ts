@@ -8,9 +8,36 @@ import type { CheerioAPI } from "cheerio";
 // nada. Se guarda el enlace tal cual (no se re-aloja).
 
 const MAX_VIDEOS = 10;
+const DIRECT_RE = /^https?:\/\/.+\.(mp4|webm|mov|m3u8)(\?|$)/i;
 
 function ytWatch(id: string): string {
   return `https://www.youtube.com/watch?v=${id}`;
+}
+
+// Identidad de un vídeo para deduplicar. YouTube/Vimeo ya vienen en URL canónica
+// (el id va en la URL), así que se comparan tal cual. Los archivos directos
+// (mp4 de Idealista, etc.) llevan token/calidad en la QUERY que cambia en cada
+// fetch y por <source>; usamos origen+path para que el mismo vídeo no duplique.
+export function videoIdentity(url: string): string {
+  const u = (url ?? "").toLowerCase();
+  if (/youtube|youtu\.be|vimeo/.test(u)) return u;
+  try {
+    const p = new URL(url);
+    return `${p.origin}${p.pathname}`.toLowerCase();
+  } catch {
+    return u;
+  }
+}
+
+// Deduplica una lista de URLs de vídeo por identidad (conserva la primera).
+export function dedupeVideos(urls: string[]): string[] {
+  const byIdent = new Map<string, string>();
+  for (const url of urls) {
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url)) continue;
+    const id = videoIdentity(url);
+    if (!byIdent.has(id)) byIdent.set(id, url);
+  }
+  return [...byIdent.values()].slice(0, MAX_VIDEOS);
 }
 
 export function extractVideos($: CheerioAPI): string[] {
@@ -49,10 +76,21 @@ export function extractVideos($: CheerioAPI): string[] {
     }
   });
 
-  // 4) archivos de vídeo directos <video>/<source>
-  $("video[src], video source[src]").each((_, el) => {
-    const src = $(el).attr("src") ?? "";
-    if (/^https?:\/\/.+\.(mp4|webm|mov|m3u8)(\?|$)/i.test(src)) out.add(src);
+  // 4) archivos de vídeo directos: UNA URL por elemento <video>. Idealista y
+  //    otros ponen varias <source> del mismo vídeo (calidades/formatos); coger
+  //    todas las creaba duplicadas.
+  $("video").each((_, el) => {
+    const own = $(el).attr("src") ?? "";
+    if (DIRECT_RE.test(own)) {
+      out.add(own);
+      return;
+    }
+    const source = $(el)
+      .find("source[src]")
+      .map((__, s) => $(s).attr("src") ?? "")
+      .get()
+      .find((u) => DIRECT_RE.test(u));
+    if (source) out.add(source);
   });
 
   // 5) JSON-LD VideoObject (contentUrl / embedUrl)
@@ -75,5 +113,5 @@ export function extractVideos($: CheerioAPI): string[] {
     }
   });
 
-  return [...out].slice(0, MAX_VIDEOS);
+  return dedupeVideos([...out]);
 }
