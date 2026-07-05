@@ -304,9 +304,17 @@ export async function insertImportedProperty(
         opts: { onConflict: string; ignoreDuplicates: boolean },
       ) => Promise<{ error: { message: string } | null }>;
     };
-    await mediaTbl
-      .upsert(videoRows, { onConflict: "storage_path", ignoreDuplicates: true })
-      .catch(() => {});
+    // best-effort: un vídeo que no se guarde NO debe romper la creación de la
+    // propiedad. `await` + try/catch (el builder de Supabase no es Promise real,
+    // no tiene `.catch`).
+    try {
+      await mediaTbl.upsert(videoRows, {
+        onConflict: "storage_path",
+        ignoreDuplicates: true,
+      });
+    } catch {
+      /* se ignora: la propiedad ya está creada */
+    }
   }
 
   // Re-alojado en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En pm2 el
