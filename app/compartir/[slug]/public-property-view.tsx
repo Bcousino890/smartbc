@@ -205,11 +205,13 @@ export function PublicPropertyView({
                 const videoInfo = detectVideoType(v.url);
                 const cardCls =
                   "overflow-hidden rounded-2xl border border-gold/20 bg-ink/5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.40)]";
+                // Vídeos SIN volumen (muteados) por defecto: mute=1 en YouTube,
+                // muted=1 en Vimeo y atributo `muted` en archivos directos.
                 if (videoInfo.type === "youtube" && videoInfo.id) {
                   return (
                     <div key={v.url} className={cardCls}>
                       <iframe
-                        src={getYoutubeEmbedUrl(videoInfo.id)}
+                        src={`${getYoutubeEmbedUrl(videoInfo.id)}&mute=1`}
                         className="aspect-video w-full"
                         allowFullScreen
                         loading="lazy"
@@ -222,7 +224,7 @@ export function PublicPropertyView({
                   return (
                     <div key={v.url} className={cardCls}>
                       <iframe
-                        src={getVimeoEmbedUrl(videoInfo.id)}
+                        src={`${getVimeoEmbedUrl(videoInfo.id)}?muted=1`}
                         className="aspect-video w-full"
                         allowFullScreen
                         loading="lazy"
@@ -231,11 +233,12 @@ export function PublicPropertyView({
                     </div>
                   );
                 }
-                // Direct video file (MP4, WebM, etc.)
+                // Direct video file (MP4, WebM, etc.) — muteado por defecto.
                 return (
                   <div key={v.url} className={cardCls}>
                     {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                     <video
+                      muted
                       controls
                       preload="metadata"
                       controlsList="nodownload"

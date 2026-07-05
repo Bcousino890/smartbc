@@ -203,6 +203,8 @@ export function previewToInspo(
     externalLink: preview.sourceUrl ?? "",
     // Media ya re-alojada y limpia
     photos: photoUrls,
+    // Vídeos extraídos del anuncio (enlace directo, sin re-alojar).
+    videos: preview.videos ?? [],
   };
 }
 

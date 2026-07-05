@@ -275,6 +275,40 @@ export async function insertImportedProperty(
     }
   }
 
+  // Vídeos extraídos del anuncio → property_media (tipo 'video'). Se guarda el
+  // ENLACE directo (YouTube/Vimeo/mp4), no se re-aloja. Mismo esquema que
+  // addPropertyVideo: storage_path = url (es UNIQUE). upsert ignora duplicados
+  // para que re-importar no reviente por un vídeo ya existente.
+  const videoUrls = Array.from(
+    new Set((preview.videos ?? []).filter((u) => typeof u === "string" && u.startsWith("http"))),
+  );
+  if (videoUrls.length > 0) {
+    const videoRows = videoUrls.map((url) => {
+      let host = "video";
+      try {
+        host = new URL(url).hostname;
+      } catch {
+        /* host por defecto */
+      }
+      return {
+        property_id: propertyId,
+        type: "video",
+        file_name: host,
+        storage_path: url,
+        url,
+      };
+    });
+    const mediaTbl = supabase.from("property_media") as unknown as {
+      upsert: (
+        rows: Array<Record<string, unknown>>,
+        opts: { onConflict: string; ignoreDuplicates: boolean },
+      ) => Promise<{ error: { message: string } | null }>;
+    };
+    await mediaTbl
+      .upsert(videoRows, { onConflict: "storage_path", ignoreDuplicates: true })
+      .catch(() => {});
+  }
+
   // Re-alojado en SEGUNDO PLANO (sin await): la respuesta vuelve ya. En pm2 el
   // proceso sigue vivo y completa la descarga/optimización de las fotos.
   //

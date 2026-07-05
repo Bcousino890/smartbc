@@ -10,6 +10,7 @@ import { extractIdealista } from "./extractors/idealista";
 import { extractInmoweb } from "./extractors/inmoweb";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
+import { extractVideos } from "./extract-videos";
 import { dedupKey } from "../scrapers/image-utils";
 import { getProxyUrl } from "../proxy-config";
 import type { ImportExtractResult, ImportPreview } from "./types";
@@ -109,25 +110,41 @@ export async function extractFromUrl(
   const $ = cheerio.load(fetched.html);
   const finalUrl = fetched.finalUrl;
 
+  let preview: ImportPreview;
   switch (detected.portal) {
     case "idealista":
-      return { ok: true, preview: dedupePreviewPhotos(await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() })) };
+      preview = await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() });
+      break;
     case "fotocasa":
-      return { ok: true, preview: dedupePreviewPhotos(extractFotocasa($, finalUrl)) };
+      preview = extractFotocasa($, finalUrl);
+      break;
     case "inmoweb":
-      return { ok: true, preview: dedupePreviewPhotos(extractInmoweb($, finalUrl)) };
+      preview = extractInmoweb($, finalUrl);
+      break;
     case "clikalia":
-      return { ok: true, preview: dedupePreviewPhotos(extractClikalia($, finalUrl)) };
+      preview = extractClikalia($, finalUrl);
+      break;
     case "yaencontre":
-      return { ok: true, preview: dedupePreviewPhotos(extractYaencontre($, finalUrl)) };
+      preview = extractYaencontre($, finalUrl);
+      break;
     case "ukio":
-      return { ok: true, preview: dedupePreviewPhotos(extractUkio($, finalUrl)) };
+      preview = extractUkio($, finalUrl);
+      break;
     case "mobilia":
     case "generic":
     default:
-      return {
-        ok: true,
-        preview: dedupePreviewPhotos(extractGeneric($, finalUrl, detected.portal)),
-      };
+      preview = extractGeneric($, finalUrl, detected.portal);
   }
+
+  // Vídeos: extractor genérico común a TODOS los portales (YouTube/Vimeo/
+  // og:video/mp4/JSON-LD), fusionado con el `videoUrl` que ya saque el
+  // extractor concreto (Idealista). Enlace directo, sin re-alojar.
+  const merged = new Set<string>([
+    ...(preview.videos ?? []),
+    ...(preview.videoUrl ? [preview.videoUrl] : []),
+    ...extractVideos($),
+  ]);
+  preview.videos = [...merged].slice(0, 10);
+
+  return { ok: true, preview: dedupePreviewPhotos(preview) };
 }
