@@ -194,73 +194,28 @@ export function PublicPropertyView({
         {/* Vídeo de la propiedad (subido desde /admin/publicacion) */}
         {videos && videos.length > 0 && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
-            <h2 className="font-serif text-2xl font-medium text-ink">
-              {videos.length > 1 ? "Vídeos" : "Vídeo"}
-            </h2>
-            {/* Misma estética que la galería de fotos: rejilla de tarjetas
-                rounded-2xl con borde dorado y sombra, para que el SmartLink se
-                sienta cohesivo entre fotos y vídeos. */}
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              {videos.map((v) => {
-                const videoInfo = detectVideoType(v.url);
-                const cardCls =
-                  "overflow-hidden rounded-2xl border border-gold/20 bg-ink/5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.40)]";
-                // Vídeos SIN volumen (muteados) por defecto: mute=1 en YouTube,
-                // muted=1 en Vimeo y atributo `muted` en archivos directos.
-                if (videoInfo.type === "youtube" && videoInfo.id) {
-                  return (
-                    <div key={v.url} className={cardCls}>
-                      <iframe
-                        src={`${getYoutubeEmbedUrl(videoInfo.id)}&mute=1`}
-                        className="aspect-video w-full"
-                        allowFullScreen
-                        loading="lazy"
-                        title="YouTube video player"
-                      />
-                    </div>
-                  );
-                }
-                if (videoInfo.type === "vimeo" && videoInfo.id) {
-                  return (
-                    <div key={v.url} className={cardCls}>
-                      <iframe
-                        src={`${getVimeoEmbedUrl(videoInfo.id)}?muted=1`}
-                        className="aspect-video w-full"
-                        allowFullScreen
-                        loading="lazy"
-                        title="Vimeo video player"
-                      />
-                    </div>
-                  );
-                }
-                // Archivo directo (MP4, WebM…). Los vídeos de Idealista llevan
-                // MÚSICA de fondo: los queremos SIEMPRE sin sonido. El atributo
-                // `muted` de React no es fiable, así que además lo forzamos por
-                // ref en el propio elemento del DOM (y en cada play, por si el
-                // usuario intentara subir el volumen).
-                return (
-                  <div key={v.url} className={cardCls}>
-                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                    <video
-                      ref={(el) => {
-                        if (el) el.muted = true;
-                      }}
-                      muted
-                      controls
-                      preload="metadata"
-                      controlsList="nodownload noremoteplayback"
-                      disablePictureInPicture
-                      onVolumeChange={(e) => {
-                        const el = e.currentTarget;
-                        if (!el.muted) el.muted = true;
-                      }}
-                      className="aspect-video w-full bg-black object-cover"
-                      src={v.url}
-                    />
-                  </div>
-                );
-              })}
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-serif text-2xl font-medium text-ink">
+                {videos.length > 1 ? "Vídeos" : "Vídeo"}
+              </h2>
+              <span className="hidden text-[11px] uppercase tracking-[0.18em] text-gold-dark/70 sm:inline">
+                Tour cinematográfico
+              </span>
             </div>
+
+            {/* Vídeo DESTACADO: reproducción automática en bucle, sin sonido y
+                sin controles — presentación tipo showcase premium (EMAAR/DAMAC).
+                El resto, en rejilla elegante con controles. */}
+            <div className="mt-4">
+              <PropertyVideoTile url={videos[0]} featured />
+            </div>
+            {videos.length > 1 && (
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                {videos.slice(1).map((v) => (
+                  <PropertyVideoTile key={v.url} url={v.url} />
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -430,6 +385,88 @@ const FEATURE_GROUPS: Array<{
     match: /terraza|balc[oó]n|aire|calefacc|reformad|amueblad/i,
   },
 ];
+
+// Tarjeta de vídeo del SmartLink. `featured` = presentación cinematográfica:
+// reproducción automática en bucle, SIEMPRE sin sonido y sin controles (estilo
+// showcase premium tipo EMAAR/DAMAC). El resto: rejilla con controles, también
+// mutados. Los vídeos de Idealista traen música: nunca deben sonar.
+function PropertyVideoTile({
+  url,
+  featured = false,
+}: {
+  url: string;
+  featured?: boolean;
+}) {
+  const info = detectVideoType(url);
+  const cardCls =
+    "group relative overflow-hidden rounded-2xl border border-gold/25 bg-black shadow-[0_25px_60px_-30px_rgba(40,28,10,0.55)] ring-1 ring-inset ring-white/5";
+
+  if (info.type === "youtube" && info.id) {
+    const src = featured
+      ? `${getYoutubeEmbedUrl(info.id)}&mute=1&autoplay=1&loop=1&playlist=${info.id}&controls=0&modestbranding=1&playsinline=1`
+      : `${getYoutubeEmbedUrl(info.id)}&mute=1`;
+    return (
+      <div className={cardCls}>
+        <iframe
+          src={src}
+          className="aspect-video w-full"
+          allow="autoplay; fullscreen"
+          allowFullScreen
+          loading="lazy"
+          title="Vídeo de la propiedad"
+        />
+      </div>
+    );
+  }
+
+  if (info.type === "vimeo" && info.id) {
+    // background=1 en Vimeo = autoplay + loop + muted + sin controles (ambiente).
+    const src = featured
+      ? `${getVimeoEmbedUrl(info.id)}?background=1&muted=1&autoplay=1&loop=1`
+      : `${getVimeoEmbedUrl(info.id)}?muted=1`;
+    return (
+      <div className={cardCls}>
+        <iframe
+          src={src}
+          className="aspect-video w-full"
+          allow="autoplay; fullscreen"
+          allowFullScreen
+          loading="lazy"
+          title="Vídeo de la propiedad"
+        />
+      </div>
+    );
+  }
+
+  // Archivo directo (mp4/webm), típico de Idealista.
+  return (
+    <div className={cardCls}>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={(el) => {
+          if (el) el.muted = true;
+        }}
+        muted
+        playsInline
+        autoPlay={featured}
+        loop={featured}
+        controls={!featured}
+        preload={featured ? "auto" : "metadata"}
+        controlsList="nodownload noremoteplayback"
+        disablePictureInPicture
+        onVolumeChange={(e) => {
+          const el = e.currentTarget;
+          if (!el.muted) el.muted = true;
+        }}
+        className="aspect-video w-full bg-black object-cover"
+        src={url}
+      />
+      {featured && (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
+      )}
+    </div>
+  );
+}
 
 function FeaturesSection({ features }: { features: string[] }) {
   // "Orientación" no es una característica binaria — se muestra en Specs.
