@@ -23,8 +23,16 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
+
+// Mapa editable (Leaflet). ssr:false porque Leaflet toca `window`. Reutiliza el
+// mismo picker que el formulario de Idealista: clic o arrastrar el pin fija las
+// coordenadas exactas de la propiedad.
+const MapPicker = dynamic(() => import("../../publicacion/map-picker"), {
+  ssr: false,
+});
 import {
   updateProperty,
   addPropertyVideo,
@@ -134,6 +142,11 @@ export function PropertyEditView({
   );
   const [zone, setZone] = useState(property.zone);
   const [address, setAddress] = useState(property.address ?? "");
+  // Coordenadas editables (fijar el punto exacto en el mapa). 0 = sin fijar.
+  const [latitude, setLatitude] = useState<number>(property.latitude ?? 0);
+  const [longitude, setLongitude] = useState<number>(property.longitude ?? 0);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [operation, setOperation] = useState(property.operation);
   const [stay, setStay] = useState<"short" | "long" | "">(property.stay ?? "");
   const [availableFrom, setAvailableFrom] = useState(property.available_from ?? "");
@@ -296,6 +309,36 @@ export function PropertyEditView({
     property.photos[0]?.url ??
     null;
 
+  // Coloca el pin a partir de la dirección escrita (Nominatim/OSM). Útil para
+  // importaciones sin coordenadas: escribes/confirmas la dirección y de ahí
+  // sale el punto de partida, que luego se afina arrastrando el pin.
+  const geocodeFromAddress = async () => {
+    const q = [address, zone, "España"].filter(Boolean).join(", ");
+    if (!q.trim()) {
+      setGeocodeError("Escribe una dirección o zona primero.");
+      return;
+    }
+    setGeocoding(true);
+    setGeocodeError(null);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,
+        { headers: { Accept: "application/json", "User-Agent": "smartbc-property-edit" } },
+      );
+      const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+      if (!data.length) {
+        setGeocodeError("No se encontró esa dirección. Coloca el pin a mano en el mapa.");
+        return;
+      }
+      setLatitude(parseFloat(data[0].lat));
+      setLongitude(parseFloat(data[0].lon));
+    } catch {
+      setGeocodeError("Error al buscar la dirección. Coloca el pin a mano.");
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setSaveState({ kind: "idle" });
@@ -310,6 +353,9 @@ export function PropertyEditView({
         squareMeters: squareMeters === "" ? null : Number(squareMeters),
         zone,
         address: address || null,
+        // Coordenadas fijadas en el mapa (0 = sin fijar → null).
+        latitude: latitude || null,
+        longitude: longitude || null,
         operation,
         stay: stay || null,
         availableFrom: availableFrom || null,
@@ -626,17 +672,45 @@ export function PropertyEditView({
             </Field>
           </div>
 
-          {/* Mapa con la ubicación REAL geocodificada (uso interno —
-              dirección exacta visible). El admin lo usa para verificar
-              que el geocoding acertó. Si la posición es incorrecta, basta
-              con corregir la dirección y guardar: en el siguiente acceso
-              al SmartLink se recalcula. */}
-          <AdminPropertyMap
-            lat={property.latitude}
-            lng={property.longitude}
-            address={address || null}
-            zone={zone}
-          />
+          {/* Mapa EDITABLE: fija la ubicación exacta. Clic o arrastrar el pin
+              guarda las coordenadas al pulsar "Guardar cambios". Estas coords
+              tienen prioridad sobre el geocoding automático — imprescindible
+              para importaciones (Airbnb, Fotocasa…) que no traen coordenadas. */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[12px] text-ink/60">
+                Fija la ubicación exacta: haz clic en el mapa o arrastra el pin. Se guarda al pulsar “Guardar cambios”.
+              </p>
+              <button
+                type="button"
+                onClick={geocodeFromAddress}
+                disabled={geocoding}
+                className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[12px] font-medium text-ink/70 transition hover:bg-ink/5 disabled:opacity-50"
+              >
+                {geocoding ? <Loader2 size={13} className="animate-spin" /> : <MapIcon size={13} />}
+                Buscar por dirección
+              </button>
+            </div>
+            {geocodeError && (
+              <p className="text-[11px] text-orange-600">{geocodeError}</p>
+            )}
+            <div className="overflow-hidden rounded-lg border border-ink/15">
+              <MapPicker
+                lat={latitude}
+                lng={longitude}
+                onChange={(la, ln) => {
+                  setLatitude(la);
+                  setLongitude(ln);
+                  setGeocodeError(null);
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-ink/45">
+              {latitude && longitude
+                ? `Coordenadas fijadas: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} · el SmartLink mostrará este punto exacto.`
+                : "Sin coordenadas fijadas — coloca el pin para marcar la ubicación exacta del piso."}
+            </p>
+          </div>
         </Section>
 
         {/* Info del dueño — NUNCA se sobrescribe por el sync */}
@@ -1097,65 +1171,3 @@ function Field({
   );
 }
 
-// Mini-mapa para el admin: muestra la ubicación REAL del piso con el pin
-// exacto (no aproximada como en el SmartLink). Si no hay coordenadas
-// geocodificadas todavía, informa al admin.
-function AdminPropertyMap({
-  lat,
-  lng,
-  address,
-  zone,
-}: {
-  lat: number | null;
-  lng: number | null;
-  address: string | null;
-  zone: string;
-}) {
-  if (lat == null || lng == null) {
-    return (
-      <div className="rounded-lg border border-dashed border-ink/15 bg-ink/[0.03] p-4 text-[12px] text-ink/55">
-        <p className="font-medium text-ink/70">Sin coordenadas geocodificadas</p>
-        <p className="mt-1">
-          Las coordenadas se calculan automáticamente la primera vez que
-          alguien abre el SmartLink público de la propiedad. Si acabas de
-          editar la dirección, las coordenadas anteriores se han borrado y
-          se recalcularán en el próximo acceso al SmartLink.
-        </p>
-      </div>
-    );
-  }
-  // Centro exacto + marker preciso (el admin sí ve la dirección). Bbox
-  // estrecho (~150m radio) para ver la calle concreta.
-  const delta = 0.0025;
-  const bbox = [lng - delta, lat - delta * 0.6, lng + delta, lat + delta * 0.6].join(
-    ",",
-  );
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
-  const externalLink = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
-  return (
-    <div className="overflow-hidden rounded-lg border border-ink/15 bg-white">
-      <div className="flex items-center justify-between px-3 py-2 text-[11px] text-ink/55">
-        <span>
-          Ubicación geocodificada · {address ? address : zone}
-        </span>
-        <a
-          href={externalLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-gold-dark hover:underline"
-        >
-          Abrir en OSM ↗
-        </a>
-      </div>
-      <div className="aspect-[16/9] w-full md:aspect-[16/8]">
-        <iframe
-          title={`Mapa de ${address ?? zone}`}
-          src={src}
-          className="h-full w-full border-0"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      </div>
-    </div>
-  );
-}

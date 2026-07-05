@@ -365,6 +365,10 @@ export type UpdatePropertyInput = {
   squareMeters?: number | null;
   zone?: string;
   address?: string | null;
+  // Coordenadas fijadas a mano en el mapa del editor. Tienen prioridad sobre el
+  // geocoding automático (útil para importaciones sin coords o direcciones vagas).
+  latitude?: number | null;
+  longitude?: number | null;
   status?: "available" | "reserved" | "sold" | "archived";
   features?: string[];
   // Features añadidas a mano por BC. Se preservan en sync (no se sobreescriben).
@@ -452,6 +456,21 @@ export async function updateProperty(
   if (input.internalNotes !== undefined)
     payload.internal_notes = input.internalNotes?.trim() || null;
   if (input.publishedWeb !== undefined) payload.published_web = input.publishedWeb;
+
+  // Coordenadas manuales AL FINAL: si el admin fijó un punto en el mapa, gana
+  // sobre el `null` que ponen los bloques de address/zone de arriba. Marcamos
+  // geocoded_at para que el SmartLink las trate como válidas y no re-geocodifique.
+  if (input.latitude !== undefined && input.longitude !== undefined) {
+    if (input.latitude != null && input.longitude != null) {
+      payload.latitude = input.latitude;
+      payload.longitude = input.longitude;
+      payload.geocoded_at = new Date().toISOString();
+    } else {
+      payload.latitude = null;
+      payload.longitude = null;
+      payload.geocoded_at = null;
+    }
+  }
 
   if (Object.keys(payload).length === 0) {
     return { ok: false, error: "nothing_to_update" };

@@ -197,44 +197,52 @@ export function PublicPropertyView({
             <h2 className="font-serif text-2xl font-medium text-ink">
               {videos.length > 1 ? "Vídeos" : "Vídeo"}
             </h2>
-            <div className="mt-4 space-y-4">
+            {/* Misma estética que la galería de fotos: rejilla de tarjetas
+                rounded-2xl con borde dorado y sombra, para que el SmartLink se
+                sienta cohesivo entre fotos y vídeos. */}
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {videos.map((v) => {
                 const videoInfo = detectVideoType(v.url);
+                const cardCls =
+                  "overflow-hidden rounded-2xl border border-gold/20 bg-ink/5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.40)]";
                 if (videoInfo.type === "youtube" && videoInfo.id) {
                   return (
-                    <iframe
-                      key={v.url}
-                      src={getYoutubeEmbedUrl(videoInfo.id)}
-                      className="w-full rounded-xl aspect-video"
-                      allowFullScreen
-                      loading="lazy"
-                      title="YouTube video player"
-                    />
+                    <div key={v.url} className={cardCls}>
+                      <iframe
+                        src={getYoutubeEmbedUrl(videoInfo.id)}
+                        className="aspect-video w-full"
+                        allowFullScreen
+                        loading="lazy"
+                        title="YouTube video player"
+                      />
+                    </div>
                   );
                 }
                 if (videoInfo.type === "vimeo" && videoInfo.id) {
                   return (
-                    <iframe
-                      key={v.url}
-                      src={getVimeoEmbedUrl(videoInfo.id)}
-                      className="w-full rounded-xl aspect-video"
-                      allowFullScreen
-                      loading="lazy"
-                      title="Vimeo video player"
-                    />
+                    <div key={v.url} className={cardCls}>
+                      <iframe
+                        src={getVimeoEmbedUrl(videoInfo.id)}
+                        className="aspect-video w-full"
+                        allowFullScreen
+                        loading="lazy"
+                        title="Vimeo video player"
+                      />
+                    </div>
                   );
                 }
                 // Direct video file (MP4, WebM, etc.)
                 return (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <video
-                    key={v.url}
-                    controls
-                    preload="metadata"
-                    controlsList="nodownload"
-                    className="w-full rounded-xl"
-                    src={v.url}
-                  />
+                  <div key={v.url} className={cardCls}>
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    <video
+                      controls
+                      preload="metadata"
+                      controlsList="nodownload"
+                      className="aspect-video w-full bg-black object-cover"
+                      src={v.url}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -468,24 +476,21 @@ function ZoneMap({
   // hardcoded), usamos el zoom de barrio.
   const hasPreciseCoords = lat != null && lng != null;
   const fallback = ZONE_COORDS[zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 };
-  // Si tenemos coordenadas reales, usamos un zoom intermedio (15) para que
-  // el círculo cubra una zona razonable y NO se vea la calle exacta. La
-  // dirección exacta se reserva para cuando se concrete la visita.
-  const coords = hasPreciseCoords
-    ? { lat, lng, zoom: 15 }
-    : fallback;
-  const delta = 0.012 / (coords.zoom > 14 ? coords.zoom > 15 ? 4 : 1.8 : 1);
+  // Con coordenadas exactas mostramos el punto real con marcador y zoom de
+  // calle. Sin ellas, caemos al centro del barrio (aproximado).
+  const coords = hasPreciseCoords ? { lat: lat!, lng: lng!, zoom: 16 } : fallback;
+  const delta = hasPreciseCoords ? 0.0025 : 0.012;
   const bbox = [
     coords.lng - delta,
     coords.lat - delta * 0.6,
     coords.lng + delta,
     coords.lat + delta * 0.6,
   ].join(",");
-  // Iframe SIN `marker=` a propósito: cubrimos la ubicación con un círculo
-  // CSS overlay para indicar zona aproximada en lugar del pin rojo, que
-  // resultaba demasiado preciso para un enlace que se comparte por
-  // WhatsApp con clientes que aún no han firmado nada.
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
+  // Con coords exactas: marcador (pin) en el punto real. Sin ellas: sin
+  // marcador y un círculo CSS que indica la zona aproximada del barrio.
+  const src = hasPreciseCoords
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lng}`
+    : `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
   const externalLink = `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=${coords.zoom}/${coords.lat}/${coords.lng}`;
   return (
     <section className="mt-5 overflow-hidden rounded-2xl border border-gold/20 bg-white/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm">
@@ -495,7 +500,7 @@ function ZoneMap({
         </h2>
         <p className="mt-1 text-[12px] text-ink/55">
           {hasPreciseCoords
-            ? "Zona aproximada de la propiedad. Te facilitamos la dirección exacta al coordinar la visita."
+            ? "Ubicación exacta de la propiedad."
             : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
         </p>
       </div>
@@ -503,18 +508,18 @@ function ZoneMap({
         <iframe
           title={`Mapa de ${zone}`}
           src={src}
-          className="pointer-events-none h-full w-full border-0"
+          className={`h-full w-full border-0 ${hasPreciseCoords ? "" : "pointer-events-none"}`}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
         />
-        {/* Overlay circular SIEMPRE sobre la ubicación real. Como el
-            iframe está fijo (pointer-events-none), el cliente no puede
-            arrastrarlo ni desalinear el círculo. Para explorar el área
-            tiene el link "Ver mapa en pantalla completa" abajo, que
-            abre OSM en una pestaña nueva. */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-32 w-32 rounded-full border-2 border-gold/80 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.18)] md:h-40 md:w-40" />
-        </div>
+        {/* Sin coords exactas: círculo CSS sobre el centro del barrio para
+            indicar zona aproximada. Con coords exactas se ve el pin real del
+            iframe, así que no ponemos círculo. */}
+        {!hasPreciseCoords && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="h-32 w-32 rounded-full border-2 border-gold/80 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.18)] md:h-40 md:w-40" />
+          </div>
+        )}
       </div>
       <div className="px-6 py-3 md:px-8">
         <a
