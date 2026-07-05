@@ -207,7 +207,7 @@ export function PublicPropertyView({
                 sin controles — presentación tipo showcase premium (EMAAR/DAMAC).
                 El resto, en rejilla elegante con controles. */}
             <div className="mt-4">
-              <PropertyVideoTile url={videos[0]} featured />
+              <PropertyVideoTile url={videos[0].url} featured />
             </div>
             {videos.length > 1 && (
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
