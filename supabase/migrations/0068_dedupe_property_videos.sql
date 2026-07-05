@@ -7,9 +7,10 @@
 -- limpia las copias ya existentes.
 --
 -- Identidad: YouTube/Vimeo por su URL completa (el id va en la URL); el resto
--- por la RUTA sola (sin host ni query) — Idealista sirve el mismo mp4 desde
--- shards distintos (st1v/st3v…) y con token en la query, así que host+query no
--- estabilizan. Conservamos la fila más reciente por (propiedad, identidad).
+-- por la RUTA sola (sin host: shards st1v/st3v…; sin query: token) y quitando el
+-- prefijo de CALIDAD del nombre (hd_/sd_/720p_…), porque Idealista sube el mismo
+-- vídeo en dos calidades (hd_1353826753.mp4 y 1353826753.mp4). Conservamos la
+-- versión HD (o la más reciente) por (propiedad, identidad).
 
 WITH ranked AS (
   SELECT
@@ -19,9 +20,14 @@ WITH ranked AS (
         property_id,
         CASE
           WHEN url ~* '(youtube|youtu\.be|vimeo)' THEN lower(url)
-          ELSE split_part(regexp_replace(lower(url), '^https?://[^/]+', ''), '?', 1)
+          ELSE regexp_replace(
+                 split_part(regexp_replace(lower(url), '^https?://[^/]+', ''), '?', 1),
+                 '/(hd|sd|hq|lq|uhd|fhd|[0-9]{3,4}p)[_-]([^/]+)$',
+                 '/\2',
+                 'i'
+               )
         END
-      ORDER BY created_at DESC, id DESC
+      ORDER BY (url ~* '/hd[_-]') DESC, created_at DESC, id DESC
     ) AS rn
   FROM property_media
   WHERE type = 'video'
