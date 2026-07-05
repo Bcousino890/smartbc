@@ -7,9 +7,11 @@ import {
   Mail,
   MapPin,
   Phone,
+  Play,
   Ruler,
   Sparkles,
 } from "lucide-react";
+import { useState } from "react";
 import Image from "next/image";
 import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { formatPrice } from "@/lib/format";
@@ -64,6 +66,10 @@ export function PublicPropertyView({
     propertyId: property.id,
     shareId: shareId,
   });
+
+  // Vídeo seleccionado que se muestra como principal (arriba). Al pulsar una
+  // miniatura, ese vídeo sube al reproductor grande con una transición suave.
+  const [activeVideo, setActiveVideo] = useState(0);
 
   const isRent = property.operation === "alquiler";
   const price = formatPrice(property.price);
@@ -203,16 +209,28 @@ export function PublicPropertyView({
               </span>
             </div>
 
-            {/* Vídeo DESTACADO: reproducción automática en bucle, sin sonido y
-                sin controles — presentación tipo showcase premium (EMAAR/DAMAC).
-                El resto, en rejilla elegante con controles. */}
+            {/* Reproductor PRINCIPAL: el vídeo activo, autoplay en bucle, sin
+                sonido y con controles para verlo cómodo. `key` fuerza el remonte
+                y la transición suave (heroFade) al cambiar de vídeo. */}
             <div className="mt-4">
-              <PropertyVideoTile url={videos[0].url} featured />
+              <div
+                key={Math.min(activeVideo, videos.length - 1)}
+                className="opacity-0 [animation:heroFade_.45s_ease_forwards]"
+              >
+                <VideoHero url={videos[Math.min(activeVideo, videos.length - 1)].url} />
+              </div>
             </div>
+
+            {/* Miniaturas: al pulsar una, sube al reproductor principal. */}
             {videos.length > 1 && (
-              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                {videos.slice(1).map((v) => (
-                  <PropertyVideoTile key={v.url} url={v.url} />
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {videos.map((v, i) => (
+                  <VideoThumb
+                    key={v.url}
+                    url={v.url}
+                    active={i === Math.min(activeVideo, videos.length - 1)}
+                    onSelect={() => setActiveVideo(i)}
+                  />
                 ))}
               </div>
             )}
@@ -386,33 +404,22 @@ const FEATURE_GROUPS: Array<{
   },
 ];
 
-// Tarjeta de vídeo del SmartLink. `featured` = presentación cinematográfica:
-// reproducción automática en bucle, SIEMPRE sin sonido y sin controles (estilo
-// showcase premium tipo EMAAR/DAMAC). El resto: rejilla con controles, también
-// mutados. Los vídeos de Idealista traen música: nunca deben sonar.
-function PropertyVideoTile({
-  url,
-  featured = false,
-}: {
-  url: string;
-  featured?: boolean;
-}) {
+// Reproductor PRINCIPAL del SmartLink: el vídeo seleccionado, en grande, con
+// reproducción automática en bucle, SIEMPRE sin sonido, y con controles para
+// verlo cómodo. Los vídeos de Idealista traen música: nunca deben sonar.
+function VideoHero({ url }: { url: string }) {
   const info = detectVideoType(url);
   const cardCls =
-    "group relative overflow-hidden rounded-2xl border border-gold/25 bg-black shadow-[0_25px_60px_-30px_rgba(40,28,10,0.55)] ring-1 ring-inset ring-white/5";
+    "relative overflow-hidden rounded-2xl border border-gold/25 bg-black shadow-[0_25px_60px_-30px_rgba(40,28,10,0.55)] ring-1 ring-inset ring-white/5";
 
   if (info.type === "youtube" && info.id) {
-    const src = featured
-      ? `${getYoutubeEmbedUrl(info.id)}&mute=1&autoplay=1&loop=1&playlist=${info.id}&controls=0&modestbranding=1&playsinline=1`
-      : `${getYoutubeEmbedUrl(info.id)}&mute=1`;
     return (
       <div className={cardCls}>
         <iframe
-          src={src}
+          src={`${getYoutubeEmbedUrl(info.id)}&mute=1&autoplay=1&loop=1&playlist=${info.id}&modestbranding=1&playsinline=1`}
           className="aspect-video w-full"
           allow="autoplay; fullscreen"
           allowFullScreen
-          loading="lazy"
           title="Vídeo de la propiedad"
         />
       </div>
@@ -420,18 +427,13 @@ function PropertyVideoTile({
   }
 
   if (info.type === "vimeo" && info.id) {
-    // background=1 en Vimeo = autoplay + loop + muted + sin controles (ambiente).
-    const src = featured
-      ? `${getVimeoEmbedUrl(info.id)}?background=1&muted=1&autoplay=1&loop=1`
-      : `${getVimeoEmbedUrl(info.id)}?muted=1`;
     return (
       <div className={cardCls}>
         <iframe
-          src={src}
+          src={`${getVimeoEmbedUrl(info.id)}?autoplay=1&muted=1&loop=1`}
           className="aspect-video w-full"
           allow="autoplay; fullscreen"
           allowFullScreen
-          loading="lazy"
           title="Vídeo de la propiedad"
         />
       </div>
@@ -448,30 +450,87 @@ function PropertyVideoTile({
         }}
         muted
         playsInline
-        autoPlay={featured}
-        loop={featured}
-        controls={!featured}
-        preload="metadata"
+        autoPlay
+        loop
+        controls
+        preload="auto"
         controlsList="nodownload noremoteplayback"
         disablePictureInPicture
         onVolumeChange={(e) => {
           const el = e.currentTarget;
           if (!el.muted) el.muted = true;
         }}
-        className={
-          featured
-            ? "aspect-video w-full bg-black object-cover"
-            : "aspect-video w-full bg-black object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-        }
-        // #t=0.5 → el navegador muestra el fotograma a 0,5s como "portada" del
-        // vídeo (sin descargarlo entero), en vez de pantalla negra. Así el
-        // usuario ve una imagen del piso y le entran ganas de pulsar.
-        src={featured ? url : `${url}#t=0.5`}
+        className="aspect-video w-full bg-black object-cover"
+        src={url}
       />
-      {featured && (
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
-      )}
     </div>
+  );
+}
+
+// Miniatura clicable: muestra un fotograma del vídeo como portada y, al pulsar,
+// sube al reproductor principal. No reproduce sonido (sin controles).
+function VideoThumb({
+  url,
+  active,
+  onSelect,
+}: {
+  url: string;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const info = detectVideoType(url);
+  const ring = active
+    ? "ring-2 ring-gold"
+    : "ring-1 ring-inset ring-white/10 hover:ring-gold/50";
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label="Ver este vídeo"
+      className={`group relative block aspect-video w-full overflow-hidden rounded-xl border border-gold/20 bg-black transition ${ring}`}
+    >
+      {info.type === "youtube" && info.id ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`https://img.youtube.com/vi/${info.id}/hqdefault.jpg`}
+          alt=""
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : info.type === "vimeo" ? (
+        <div className="flex h-full w-full items-center justify-center bg-ink/85 text-[11px] uppercase tracking-wider text-cream-50/70">
+          Vídeo
+        </div>
+      ) : (
+        // Archivo directo: #t=0.5 pinta un fotograma como portada.
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video
+          muted
+          playsInline
+          preload="metadata"
+          tabIndex={-1}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          src={`${url}#t=0.5`}
+        />
+      )}
+
+      {/* Velo + botón de play. En el activo, el velo casi desaparece. */}
+      <span
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center transition ${
+          active ? "bg-black/5" : "bg-black/30 group-hover:bg-black/15"
+        }`}
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cream-50/90 text-ink shadow-md transition group-hover:scale-110">
+          <Play size={15} className="ml-0.5" fill="currentColor" />
+        </span>
+      </span>
+
+      {active && (
+        <span className="absolute left-2 top-2 rounded-full bg-gold px-2 py-0.5 text-[10px] font-semibold text-ink shadow">
+          Viendo
+        </span>
+      )}
+    </button>
   );
 }
 
