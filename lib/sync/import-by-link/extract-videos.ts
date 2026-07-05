@@ -22,8 +22,11 @@ export function videoIdentity(url: string): string {
   const u = (url ?? "").toLowerCase();
   if (/youtube|youtu\.be|vimeo/.test(u)) return u;
   try {
+    // Solo la RUTA (sin host ni query): Idealista sirve el mismo vídeo desde
+    // shards distintos (st1v/st3v.idealista.com…) y con token en la query que
+    // cambia en cada fetch. Comparar por la ruta estabiliza la identidad.
     const p = new URL(url);
-    return `${p.origin}${p.pathname}`.toLowerCase();
+    return p.pathname.toLowerCase().replace(/\/+$/, "");
   } catch {
     return u;
   }
