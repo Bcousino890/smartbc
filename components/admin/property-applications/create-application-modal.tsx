@@ -94,6 +94,16 @@ function CopyButton({ text }: { text: string }) {
 export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const [step, setStep] = useState<Step>("client");
 
+  // Cerrar con Escape (excepto en la pantalla de credenciales: hay que
+  // asegurarse de que el equipo guarda la contraseña generada antes)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && step !== "credentials") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose, step]);
+
   // Step 1: client search
   const [clientQuery, setClientQuery] = useState("");
   const [clientResults, setClientResults] = useState<ClientResult[]>([]);
@@ -264,7 +274,10 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
     : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && step !== "credentials") onClose(); }}
+    >
       <div className="relative w-full max-w-lg rounded-2xl bg-cream-50 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4">

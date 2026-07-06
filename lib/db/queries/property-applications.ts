@@ -261,6 +261,24 @@ export async function rejectApplication(
   if (error) throw error;
 }
 
+// Reabre una solicitud ya decidida (aprobada/rechazada) devolviéndola a
+// revisión. Limpia los campos de decisión para que el flujo de aprobación
+// vuelva a estar disponible en el panel.
+export async function reopenApplication(id: string): Promise<void> {
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("property_applications")
+    .update({
+      status: "pending_review",
+      reviewed_by: null,
+      reviewed_at: null,
+      review_notes: null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // ─── Documentos ──────────────────────────────────────────────────────────────
 
 export async function getDocumentsForApplication(

@@ -89,6 +89,15 @@ export function EditApplicationModal({
 
   const propertySearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cerrar con Escape
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   useEffect(() => {
     if (propertySearchTimeout.current) clearTimeout(propertySearchTimeout.current);
     if (!propertyQuery.trim()) {
@@ -138,7 +147,10 @@ export function EditApplicationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="relative w-full max-w-lg rounded-2xl bg-cream-50 shadow-2xl">
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4">
           <h2 className="font-serif text-lg text-ink">Editar solicitud</h2>
