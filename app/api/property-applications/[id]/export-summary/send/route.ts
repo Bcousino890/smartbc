@@ -25,7 +25,9 @@ export async function POST(
     const auth = await requireStaff(supabase);
     if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
 
-    const application = await getApplicationById(id);
+    // requireStaff ya validó el rol: leer con cliente admin (las RLS de la
+    // sesión pueden no cubrir todos los roles staff, p.ej. 'owner')
+    const application = await getApplicationById(id, true);
     if (!application) return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     if (!application.property_id) {
       return Response.json(

@@ -37,13 +37,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verificar que el usuario puede acceder a esta solicitud
-    const application = await getApplicationById(applicationId);
+    // Verificar que el usuario puede acceder a esta solicitud. El rol
+    // 'owner' es staff y faltaba en la lista; para staff se lee con el
+    // cliente admin (las RLS de la sesión pueden no cubrir su rol).
+    const isStaff = ["owner", "admin", "advisor", "agent_admin", "agent_senior"].includes(auth.role);
+    const application = await getApplicationById(applicationId, isStaff);
     if (!application) {
       return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     }
 
-    const isStaff = ["admin", "advisor", "agent_admin", "agent_senior"].includes(auth.role);
     const isOwner = application.client_id === auth.userId;
     const isCoApplicant = coApplicantId === auth.userId;
 
@@ -109,7 +111,7 @@ export async function POST(req: Request) {
       file_url: storagePath,
       file_size: file.size,
       mime_type: file.type || undefined,
-    });
+    }, isStaff);
 
     // Recalculamos ya la completitud documental (rápido, sin IA) y
     // lanzamos el análisis IA en segundo plano — no bloquea la respuesta

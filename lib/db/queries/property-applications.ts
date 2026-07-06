@@ -67,10 +67,15 @@ export async function getApplicationsByClient(clientId: string): Promise<Propert
   return (data ?? []) as unknown as PropertyApplication[];
 }
 
+// asAdmin: las rutas del panel de staff ya validan el rol en código, y la
+// sesión del staff puede no pasar las RLS (p.ej. roles no enumerados en la
+// política). Con asAdmin=true se lee con el cliente de servicio; NUNCA
+// pasar true sin haber comprobado antes que el llamante es staff.
 export async function getApplicationById(
-  id: string
+  id: string,
+  asAdmin = false
 ): Promise<PropertyApplicationWithDetails | null> {
-  const supabase = await createClient();
+  const supabase = asAdmin ? createAdminClient() : await createClient();
   // Los alias (client:, property:) son necesarios: sin ellos PostgREST
   // devuelve las claves con el nombre de la relación (p.ej. "profiles"),
   // que no coincide con los campos que espera PropertyApplicationWithDetails.
@@ -104,7 +109,7 @@ export async function getApplicationById(
       .from("property_application_co_applicants")
       .select("*, profiles:client_id(id, full_name, email, avatar_url)")
       .eq("property_application_id", id),
-    getDocumentsForApplication(id),
+    getDocumentsForApplication(id, undefined, asAdmin),
   ]);
 
   return {
@@ -283,9 +288,10 @@ export async function reopenApplication(id: string): Promise<void> {
 
 export async function getDocumentsForApplication(
   applicationId: string,
-  coApplicantId?: string
+  coApplicantId?: string,
+  asAdmin = false
 ): Promise<PropertyApplicationDocumentWithType[]> {
-  const supabase = await createClient();
+  const supabase = asAdmin ? createAdminClient() : await createClient();
   let query = supabase
     .from("property_application_documents")
     .select("*, document_type:property_application_document_types(*), annotations:property_application_document_annotations(*)")
@@ -311,8 +317,8 @@ export async function insertDocument(input: {
   file_url: string;
   file_size?: number;
   mime_type?: string;
-}): Promise<PropertyApplicationDocument> {
-  const supabase = await createClient();
+}, asAdmin = false): Promise<PropertyApplicationDocument> {
+  const supabase = asAdmin ? createAdminClient() : await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("property_application_documents")
@@ -522,7 +528,8 @@ export async function getApplicationsForClientIncludingShared(
 
 export async function getApplicationDocumentProgress(
   applicationId: string,
-  coApplicantId?: string
+  coApplicantId?: string,
+  asAdmin = false
 ): Promise<{
   total: number;
   required: number;
@@ -531,7 +538,7 @@ export async function getApplicationDocumentProgress(
   verified: number;
   pct: number;
 }> {
-  const supabase = await createClient();
+  const supabase = asAdmin ? createAdminClient() : await createClient();
 
   // Obtener tipos requeridos para el país/operación de esta solicitud
   const { data: appRaw } = await supabase
