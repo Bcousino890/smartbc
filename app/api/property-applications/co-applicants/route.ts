@@ -52,7 +52,10 @@ async function sendCoApplicantInviteEmail(
   inviteEmail: string,
   inviterId: string
 ): Promise<void> {
-  const application = await getApplicationById(applicationId);
+  // Lectura admin: es un helper interno para componer el email de una
+  // invitación que la ruta ya autorizó; la sesión del invitador (p.ej.
+  // staff con rol 'owner') puede no pasar las RLS.
+  const application = await getApplicationById(applicationId, true);
   if (!application) return;
 
   const inviterName = application.client?.full_name ?? application.client?.email ?? "Un cliente";

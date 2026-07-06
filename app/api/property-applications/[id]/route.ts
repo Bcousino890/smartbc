@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/queries/property-applications";
 import type { ApplicationCountry, ApplicationOperation, PropertyApplicationWithDetails } from "@/lib/property-applications/types";
 import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
+import { isStaffRole } from "@/lib/permissions";
 import { sendEmail } from "@/lib/email/send-email";
 import { renderEmailLayout, escapeHtml } from "@/lib/email/templates";
 
@@ -79,12 +80,16 @@ export async function GET(
     const auth = await requireSession(supabase);
     if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
 
-    let application = await getApplicationById(id);
+    // isStaffRole incluye TODOS los roles staff (también 'owner'): las
+    // listas escritas a mano lo omitían y el panel devolvía 404 al abrir
+    // la ficha para esos usuarios. Para staff se lee con el cliente admin
+    // porque las RLS del stack pueden ir por detrás del código.
+    const isStaff = isStaffRole(auth.role);
+    let application = await getApplicationById(id, isStaff);
     if (!application) {
       return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     }
 
-    const isStaff = ["admin", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(auth.role);
     const isOwner = application.client_id === auth.userId;
     if (!isStaff && !isOwner) {
       return Response.json({ error: "Sin permiso" }, { status: 403 });
@@ -94,13 +99,13 @@ export async function GET(
     // creadas antes de que el pipeline de scoring se conectara).
     if (!application.score && (application.documents?.length ?? 0) > 0) {
       await recalculateApplicationScore(id);
-      application = await getApplicationById(id);
+      application = await getApplicationById(id, isStaff);
       if (!application) {
         return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
       }
     }
 
-    const progress = await getApplicationDocumentProgress(id);
+    const progress = await getApplicationDocumentProgress(id, undefined, isStaff);
     return Response.json({ ...application, progress });
   } catch (err) {
     console.error("[app-GET] Error:", err);
@@ -129,12 +134,15 @@ export async function PATCH(
       purchase_date?: string | null;
     };
 
-    const application = await getApplicationById(id);
+    // Decisiones (aprobar/rechazar/editar/reabrir): todo el staff senior,
+    // incluido el rol 'owner' que faltaba en la lista original.
+    const isStaff = ["owner", "admin", "advisor", "agent_admin", "agent_senior"].includes(auth.role);
+
+    const application = await getApplicationById(id, isStaffRole(auth.role));
     if (!application) {
       return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     }
 
-    const isStaff = ["admin", "advisor", "agent_admin", "agent_senior"].includes(auth.role);
     const isOwner = application.client_id === auth.userId;
 
     if (body.action === "submit") {
