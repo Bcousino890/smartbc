@@ -16,6 +16,7 @@ type DocForAnalysis = {
   property_applications: { country: "ES" | "CL"; operation: "rent" | "sale" } | null;
   property_application_document_types: {
     display_name: string;
+    country: "ES" | "CL";
     validation_rules: Record<string, unknown> | null;
     help_text: string | null;
   } | null;
@@ -49,7 +50,7 @@ export async function analyzeApplicationDocument(documentId: string): Promise<vo
     .select(
       `id, storage_path, mime_type, property_application_id,
       property_applications(country, operation),
-      property_application_document_types(display_name, validation_rules, help_text)`
+      property_application_document_types(display_name, country, validation_rules, help_text)`
     )
     .eq("id", documentId)
     .single();
@@ -84,13 +85,21 @@ export async function analyzeApplicationDocument(documentId: string): Promise<vo
   const app = d.property_applications;
   const docType = d.property_application_document_types;
   const countryLabel = app?.country === "CL" ? "Chile" : "España";
-  const currencyNote =
-    app?.country === "CL"
-      ? "Todos los valores monetarios deben estar en pesos chilenos (CLP). Marca una advertencia si detectas USD u otra moneda."
-      : "Todos los valores monetarios deben estar en euros (EUR).";
+
+  // El país del TIPO de documento puede diferir del de la solicitud: los
+  // candidatos pueden aportar documentación extranjera (p.ej. nóminas
+  // chilenas en CLP para alquilar en España). En ese caso la moneda
+  // extranjera NO es un error — se reporta y la plataforma la convierte.
+  const docCountry = docType?.country ?? app?.country ?? "ES";
+  const docCountryLabel = docCountry === "CL" ? "Chile" : "España";
+  const expectedCurrency = docCountry === "CL" ? "pesos chilenos (CLP)" : "euros (EUR)";
+  const isForeignDoc = Boolean(app?.country && docType?.country && app.country !== docType.country);
+  const currencyNote = isForeignDoc
+    ? `Este es un documento de ${docCountryLabel} aportado para una solicitud en ${countryLabel}. Los valores monetarios estarán normalmente en ${expectedCurrency}: NO lo marques como error ni como advertencia — indica el importe y la moneda reales en income_amount/income_currency y la plataforma hará la conversión de divisa automáticamente. Solo advierte si la moneda no corresponde a ninguno de los dos países (p.ej. USD).`
+    : `Los valores monetarios deben estar en ${expectedCurrency}. Marca una advertencia si detectas otra moneda.`;
 
   const system = `Eres un experto en verificación de documentos inmobiliarios para ${countryLabel}.
-Analiza el documento adjunto de tipo "${docType?.display_name ?? "documento"}" para una solicitud de ${app?.operation === "rent" ? "alquiler" : "compra"}.
+Analiza el documento adjunto de tipo "${docType?.display_name ?? "documento"}" (documentación de ${docCountryLabel}) para una solicitud de ${app?.operation === "rent" ? "alquiler" : "compra"} en ${countryLabel}.
 
 ${currencyNote}
 ${docType?.validation_rules ? `Requisitos de validación: ${JSON.stringify(docType.validation_rules)}` : ""}

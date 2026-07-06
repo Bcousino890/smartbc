@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle, Loader2, RefreshCw, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle, Globe, Loader2, RefreshCw, Upload } from "lucide-react";
 import type {
   ApplicationCountry,
   ApplicationOperation,
@@ -16,11 +16,22 @@ type Props = {
   onUploaded: () => void;
 };
 
+const COUNTRY_LABEL: Record<ApplicationCountry, string> = {
+  ES: "🇪🇸 España",
+  CL: "🇨🇱 Chile",
+};
+
 // Permite al equipo subir documentos en nombre del cliente directamente
 // desde el panel de admin. La sección se muestra SIEMPRE (antes desaparecía
 // cuando todos los tipos ya tenían un documento, dando la impresión de que
 // no existía forma de añadir archivos): los tipos que faltan aparecen como
 // botones destacados y los ya subidos permiten añadir una nueva versión.
+//
+// Multi-país: el candidato puede aportar documentación de otro país (p.ej.
+// un cliente chileno alquilando en España presenta nóminas en CLP). El
+// selector de país cambia la lista de tipos; la IA detecta la moneda del
+// documento y el scoring convierte los importes (CLP ↔ EUR) para el ratio
+// y el resumen del propietario.
 export function AdminDocumentUploader({
   applicationId,
   country,
@@ -28,6 +39,7 @@ export function AdminDocumentUploader({
   existingDocumentTypeIds,
   onUploaded,
 }: Props) {
+  const [selectedCountry, setSelectedCountry] = useState<ApplicationCountry>(country);
   const [docTypes, setDocTypes] = useState<PropertyApplicationDocumentType[] | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +47,8 @@ export function AdminDocumentUploader({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/property-application-document-types?country=${country}&operation=${operation}`)
+    setDocTypes(null);
+    fetch(`/api/property-application-document-types?country=${selectedCountry}&operation=${operation}`)
       .then((r) => r.json())
       .then((data: { types?: PropertyApplicationDocumentType[] }) => {
         if (!cancelled) setDocTypes(data.types ?? []);
@@ -46,11 +59,12 @@ export function AdminDocumentUploader({
     return () => {
       cancelled = true;
     };
-  }, [country, operation]);
+  }, [selectedCountry, operation]);
 
   const existingIds = new Set(existingDocumentTypeIds);
   const missingTypes = (docTypes ?? []).filter((t) => !existingIds.has(t.id));
   const uploadedTypes = (docTypes ?? []).filter((t) => existingIds.has(t.id));
+  const isForeignCountry = selectedCountry !== country;
 
   async function handleUpload(docType: PropertyApplicationDocumentType, file: File) {
     setError(null);
@@ -119,12 +133,41 @@ export function AdminDocumentUploader({
 
   return (
     <div className="rounded-xl border border-dashed border-ink/15 bg-white/40 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Upload size={13} className="text-ink/40" />
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-          Añadir documentos (en nombre del cliente)
-        </p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Upload size={13} className="text-ink/40" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+            Añadir documentos (en nombre del cliente)
+          </p>
+        </div>
+
+        {/* Selector de país de la documentación */}
+        <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-0.5">
+          {(["ES", "CL"] as ApplicationCountry[]).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setSelectedCountry(c)}
+              className={
+                selectedCountry === c
+                  ? "rounded-md bg-ink px-2.5 py-1 text-[11px] font-medium text-cream-50 shadow-sm"
+                  : "rounded-md px-2.5 py-1 text-[11px] text-ink/55 transition hover:text-ink"
+              }
+            >
+              {COUNTRY_LABEL[c]}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {isForeignCountry && (
+        <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+          <Globe size={12} className="mt-0.5 shrink-0" />
+          Documentación de {COUNTRY_LABEL[selectedCountry]} para una solicitud de {COUNTRY_LABEL[country]}:
+          la IA detecta la moneda del documento y convierte los importes automáticamente
+          (CLP ↔ EUR) para el score y el resumen del propietario.
+        </p>
+      )}
 
       {docTypes === null && (
         <p className="flex items-center gap-1.5 text-xs text-ink/40">
@@ -136,8 +179,8 @@ export function AdminDocumentUploader({
       {docTypes !== null && docTypes.length === 0 && (
         <p className="flex items-center gap-1.5 text-xs text-amber-700">
           <AlertCircle size={12} />
-          No hay tipos de documento configurados para {country === "ES" ? "España" : "Chile"} /{" "}
-          {operation === "rent" ? "alquiler" : "compra"}. Configúralos en la base de datos para poder subir archivos.
+          No hay tipos de documento configurados para {COUNTRY_LABEL[selectedCountry]} /{" "}
+          {operation === "rent" ? "alquiler" : "compra"}.
         </p>
       )}
 
@@ -157,7 +200,7 @@ export function AdminDocumentUploader({
       {docTypes !== null && docTypes.length > 0 && missingTypes.length === 0 && (
         <p className="mb-2 flex items-center gap-1.5 text-xs text-green-700">
           <CheckCircle size={12} />
-          Todos los tipos de documento ya tienen un archivo subido.
+          Todos los tipos de documento de {COUNTRY_LABEL[selectedCountry]} ya tienen un archivo subido.
         </p>
       )}
 

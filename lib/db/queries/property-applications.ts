@@ -54,6 +54,23 @@ export async function getDocumentTypes(
   return data as PropertyApplicationDocumentType[];
 }
 
+// Busca un tipo de documento por id sin filtrar por país: los candidatos
+// pueden aportar documentación de otro país (p.ej. nóminas chilenas en una
+// solicitud española) y la validación de la subida se hace contra el tipo
+// concreto, no contra la lista del país de la solicitud.
+export async function getDocumentTypeById(
+  id: string
+): Promise<PropertyApplicationDocumentType | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("property_application_document_types")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return null;
+  return (data as PropertyApplicationDocumentType | null) ?? null;
+}
+
 // ─── Solicitudes ──────────────────────────────────────────────────────────────
 
 export async function getApplicationsByClient(clientId: string): Promise<PropertyApplication[]> {
