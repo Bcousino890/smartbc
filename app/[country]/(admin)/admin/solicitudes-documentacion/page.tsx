@@ -6,7 +6,9 @@ import { SolicitudesDocumentacionClient } from "./solicitudes-documentacion-clie
 export const dynamic = "force-dynamic";
 
 export default async function SolicitudesDocumentacionPage() {
-  const { data: applications, count } = await getApplicationsForAdmin({ limit: 50 });
+  // Límite amplio: la búsqueda y los filtros son client-side, así que lo
+  // que no se carga aquí no aparece nunca en el buscador del panel.
+  const { data: applications, count } = await getApplicationsForAdmin({ limit: 200 });
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Loader2, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle, Loader2, RefreshCw, Upload } from "lucide-react";
 import type {
   ApplicationCountry,
   ApplicationOperation,
@@ -17,9 +17,10 @@ type Props = {
 };
 
 // Permite al equipo subir documentos en nombre del cliente directamente
-// desde el panel de admin — hasta ahora el modal de detalle solo permitía
-// ver/verificar documentos ya subidos por el propio cliente desde el
-// portal, sin ninguna forma de añadir uno desde aquí.
+// desde el panel de admin. La sección se muestra SIEMPRE (antes desaparecía
+// cuando todos los tipos ya tenían un documento, dando la impresión de que
+// no existía forma de añadir archivos): los tipos que faltan aparecen como
+// botones destacados y los ya subidos permiten añadir una nueva versión.
 export function AdminDocumentUploader({
   applicationId,
   country,
@@ -49,6 +50,7 @@ export function AdminDocumentUploader({
 
   const existingIds = new Set(existingDocumentTypeIds);
   const missingTypes = (docTypes ?? []).filter((t) => !existingIds.has(t.id));
+  const uploadedTypes = (docTypes ?? []).filter((t) => existingIds.has(t.id));
 
   async function handleUpload(docType: PropertyApplicationDocumentType, file: File) {
     setError(null);
@@ -78,58 +80,95 @@ export function AdminDocumentUploader({
     }
   }
 
-  if (docTypes === null) {
+  function renderUploadButton(docType: PropertyApplicationDocumentType, alreadyUploaded: boolean) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-ink/40">
-        <Loader2 size={12} className="animate-spin" />
-        Cargando tipos de documento...
-      </p>
+      <div key={docType.id}>
+        <input
+          ref={(el) => { inputRefs.current[docType.id] = el; }}
+          type="file"
+          accept={(docType.accepted_formats as string[]).map((f) => `.${f}`).join(",")}
+          className="hidden"
+          disabled={uploadingId !== null}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleUpload(docType, file);
+          }}
+        />
+        <button
+          onClick={() => inputRefs.current[docType.id]?.click()}
+          disabled={uploadingId !== null}
+          className={
+            alreadyUploaded
+              ? "flex items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-1.5 text-xs text-ink/50 transition hover:border-ink/20 hover:text-ink disabled:opacity-50"
+              : "flex items-center gap-1.5 rounded-lg border border-gold/40 bg-white/90 px-3 py-1.5 text-xs font-medium text-ink/80 shadow-sm transition hover:border-gold hover:text-ink disabled:opacity-50"
+          }
+        >
+          {uploadingId === docType.id ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : alreadyUploaded ? (
+            <RefreshCw size={11} />
+          ) : (
+            <Upload size={12} />
+          )}
+          {docType.display_name}
+          {!alreadyUploaded && !docType.is_required && <span className="text-ink/30">(opcional)</span>}
+        </button>
+      </div>
     );
   }
 
-  if (missingTypes.length === 0) return null;
-
   return (
     <div className="rounded-xl border border-dashed border-ink/15 bg-white/40 p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink/40">
-        Subir en nombre del cliente
-      </p>
+      <div className="mb-3 flex items-center gap-2">
+        <Upload size={13} className="text-ink/40" />
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+          Añadir documentos (en nombre del cliente)
+        </p>
+      </div>
+
+      {docTypes === null && (
+        <p className="flex items-center gap-1.5 text-xs text-ink/40">
+          <Loader2 size={12} className="animate-spin" />
+          Cargando tipos de documento...
+        </p>
+      )}
+
+      {docTypes !== null && docTypes.length === 0 && (
+        <p className="flex items-center gap-1.5 text-xs text-amber-700">
+          <AlertCircle size={12} />
+          No hay tipos de documento configurados para {country === "ES" ? "España" : "Chile"} /{" "}
+          {operation === "rent" ? "alquiler" : "compra"}. Configúralos en la base de datos para poder subir archivos.
+        </p>
+      )}
+
       {error && (
         <p className="mb-2 flex items-center gap-1.5 text-xs text-red-600">
           <AlertCircle size={12} />
           {error}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        {missingTypes.map((docType) => (
-          <div key={docType.id}>
-            <input
-              ref={(el) => { inputRefs.current[docType.id] = el; }}
-              type="file"
-              accept={(docType.accepted_formats as string[]).map((f) => `.${f}`).join(",")}
-              className="hidden"
-              disabled={uploadingId !== null}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleUpload(docType, file);
-              }}
-            />
-            <button
-              onClick={() => inputRefs.current[docType.id]?.click()}
-              disabled={uploadingId !== null}
-              className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink disabled:opacity-50"
-            >
-              {uploadingId === docType.id ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Upload size={12} />
-              )}
-              {docType.display_name}
-              {!docType.is_required && <span className="text-ink/30">(opcional)</span>}
-            </button>
+
+      {missingTypes.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {missingTypes.map((t) => renderUploadButton(t, false))}
+        </div>
+      )}
+
+      {docTypes !== null && docTypes.length > 0 && missingTypes.length === 0 && (
+        <p className="mb-2 flex items-center gap-1.5 text-xs text-green-700">
+          <CheckCircle size={12} />
+          Todos los tipos de documento ya tienen un archivo subido.
+        </p>
+      )}
+
+      {uploadedTypes.length > 0 && (
+        <div className="mt-3 border-t border-ink/5 pt-3">
+          <p className="mb-2 text-[11px] text-ink/40">Subir nueva versión de un documento existente:</p>
+          <div className="flex flex-wrap gap-2">
+            {uploadedTypes.map((t) => renderUploadButton(t, true))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

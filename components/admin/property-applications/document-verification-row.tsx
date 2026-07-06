@@ -300,6 +300,17 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
               Corregir
             </button>
           )}
+
+          {doc.status !== "rejected" && (
+            <button
+              onClick={() => handleVerify("rejected")}
+              disabled={loading}
+              className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+            >
+              <XCircle size={11} />
+              Rechazar
+            </button>
+          )}
         </div>
       </div>
     </div>
