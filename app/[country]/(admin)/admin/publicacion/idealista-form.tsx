@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState, useEffect } from "react";
-import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock, Sparkles } from "lucide-react";
+import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
@@ -494,7 +494,18 @@ function MediaUploadZone({
   onChange: (urls: string[]) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reordena el elemento `from` a la posición `to` (la primera foto es la
+  // portada en Idealista, por eso el orden importa).
+  function move(from: number, to: number) {
+    if (to < 0 || to >= items.length || from === to) return;
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  }
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -562,6 +573,12 @@ function MediaUploadZone({
           <span className="text-xs">Haz clic o arrastra archivos aquí</span>
         </button>
       ) : (
+        <>
+        {isImage && items.length > 1 && (
+          <p className="mb-2 text-[11px] text-ink/45">
+            Arrastra las fotos para reordenarlas (o usa las flechas al pasar el ratón). La primera es la portada.
+          </p>
+        )}
         <div
           className={cn(
             isImage
@@ -570,15 +587,53 @@ function MediaUploadZone({
           )}
         >
           {items.map((url, i) => (
-            <div key={i} className="group relative">
+            <div
+              key={i}
+              className={cn("group relative", dragIndex === i && "opacity-40")}
+              draggable
+              onDragStart={() => setDragIndex(i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (dragIndex !== null) move(dragIndex, i);
+                setDragIndex(null);
+              }}
+              onDragEnd={() => setDragIndex(null)}
+            >
               {isImage ? (
-                <div className="aspect-square overflow-hidden rounded-lg border border-ink/10 bg-ink/5">
+                <div className="aspect-square cursor-move overflow-hidden rounded-lg border border-ink/10 bg-ink/5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
                     alt=""
                     className="h-full w-full object-cover"
                   />
+                  {/* Insignia de portada en la primera foto. */}
+                  {i === 0 && (
+                    <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-[9px] font-semibold text-ink shadow">
+                      Portada
+                    </span>
+                  )}
+                  {/* Botones para mover (además de arrastrar), aparecen al pasar el ratón. */}
+                  <div className="absolute inset-x-0 bottom-1 flex justify-center gap-1 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => move(i, i - 1)}
+                      disabled={i === 0}
+                      className="flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-white transition hover:bg-ink disabled:opacity-30"
+                      title="Mover antes"
+                    >
+                      <ChevronLeft size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => move(i, i + 1)}
+                      disabled={i === items.length - 1}
+                      className="flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-white transition hover:bg-ink disabled:opacity-30"
+                      title="Mover después"
+                    >
+                      <ChevronRight size={12} />
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/60 px-3 py-2">
@@ -615,6 +670,7 @@ function MediaUploadZone({
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={16} />}
           </button>
         </div>
+        </>
       )}
     </div>
   );
