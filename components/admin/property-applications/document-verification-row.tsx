@@ -12,11 +12,15 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
-import type { PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
+import type { ApplicationCountry, PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
 
 type Props = {
   document: PropertyApplicationDocumentWithType;
   onVerified: () => void;
+  // País de la solicitud: si el tipo del documento pertenece a otro país
+  // (documentación extranjera, p.ej. nóminas chilenas para alquilar en
+  // España), se muestra una insignia con su bandera.
+  applicationCountry?: ApplicationCountry;
 };
 
 const STATUS_COLORS = {
@@ -26,7 +30,7 @@ const STATUS_COLORS = {
   needs_correction: "border-amber-200 bg-amber-50/30",
 };
 
-export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
+export function DocumentVerificationRow({ document: doc, onVerified, applicationCountry }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAnnotation, setShowAnnotation] = useState(false);
@@ -116,6 +120,11 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
             </p>
             {!docType?.is_required && (
               <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-[10px] text-ink/50">Opcional</span>
+            )}
+            {docType?.country && applicationCountry && docType.country !== applicationCountry && (
+              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                {docType.country === "CL" ? "🇨🇱 Doc. de Chile" : "🇪🇸 Doc. de España"}
+              </span>
             )}
           </div>
           <p className="mt-0.5 text-[11px] text-ink/50">{doc.file_name}</p>

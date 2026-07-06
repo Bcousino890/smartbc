@@ -3,7 +3,7 @@ import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireSession } from "@/lib/db/auth-helpers";
 import {
-  getDocumentTypes,
+  getDocumentTypeById,
   getApplicationById,
   insertDocument,
 } from "@/lib/db/queries/property-applications";
@@ -53,11 +53,19 @@ export async function POST(req: Request) {
       return Response.json({ error: "Sin permiso para esta solicitud" }, { status: 403 });
     }
 
-    // Obtener tipo de documento para validaciones
-    const docTypes = await getDocumentTypes(application.country, application.operation);
-    const docType = docTypes.find((t) => t.id === documentTypeId);
+    // Obtener tipo de documento para validaciones. Se busca por id (no por
+    // la lista del país de la solicitud) para permitir documentación de
+    // otro país — p.ej. nóminas chilenas en CLP para una solicitud
+    // española; la IA detecta la moneda y el scoring la convierte a EUR.
+    const docType = await getDocumentTypeById(documentTypeId);
     if (!docType) {
       return Response.json({ error: "Tipo de documento no válido" }, { status: 400 });
+    }
+    if (docType.operation !== application.operation) {
+      return Response.json(
+        { error: "El tipo de documento no corresponde a esta operación (alquiler/compra)" },
+        { status: 400 }
+      );
     }
 
     // Validar tamaño

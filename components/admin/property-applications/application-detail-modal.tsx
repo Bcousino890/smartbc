@@ -10,6 +10,7 @@ import {
   Loader2,
   Mail,
   RotateCcw,
+  Sparkles,
   X,
   XCircle,
 } from "lucide-react";
@@ -168,6 +169,14 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
     }
   }
 
+  async function handleRecalculate() {
+    const ok = await patchAction({ action: "recalculate" }, "Error al recalcular");
+    if (ok) {
+      await loadApplication(false);
+      onUpdated();
+    }
+  }
+
   function handleDocUpdated() {
     void loadApplication(false);
     onUpdated();
@@ -302,7 +311,47 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
               )}
 
               {/* Score */}
-              {score && <CandidateScoreCard score={score} country={application.country} />}
+              {score ? (
+                <div>
+                  <CandidateScoreCard score={score} country={application.country} />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={handleRecalculate}
+                      disabled={actionLoading}
+                      className="flex items-center gap-1 text-[11px] font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
+                    >
+                      <Sparkles size={11} />
+                      {actionLoading ? "Recalculando..." : "Recalcular score y conversiones"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-ink/15 bg-ink/[0.02] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <Sparkles size={16} className="mt-0.5 shrink-0 text-gold" />
+                      <div>
+                        <p className="text-sm font-medium text-ink">Análisis IA del candidato</p>
+                        <p className="mt-0.5 text-xs text-ink/55">
+                          En cuanto haya documentos subidos, la IA generará el score (0-100), el resumen
+                          explicado, los ingresos detectados y las conversiones de moneda (CLP ↔ EUR)
+                          para calcular el ratio frente a la renta.
+                        </p>
+                      </div>
+                    </div>
+                    {docs.length > 0 && (
+                      <button
+                        onClick={handleRecalculate}
+                        disabled={actionLoading}
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-ink/15 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:text-ink disabled:opacity-50"
+                      >
+                        {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        Calcular ahora
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Documentos */}
               <div>
@@ -324,6 +373,7 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
                       key={doc.id}
                       document={doc}
                       onVerified={handleDocUpdated}
+                      applicationCountry={application.country}
                     />
                   ))}
                 </div>

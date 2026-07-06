@@ -124,7 +124,7 @@ export async function PATCH(
     if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
 
     const body = await req.json() as {
-      action: "submit" | "approve" | "reject" | "reopen" | "update";
+      action: "submit" | "approve" | "reject" | "reopen" | "update" | "recalculate";
       notes?: string;
       rejected_document_ids?: string[];
       property_id?: string | null;
@@ -168,6 +168,12 @@ export async function PATCH(
       await approveApplication(id, auth.userId, body.notes);
       notifyClientOfDecision(application, "approved");
       return Response.json({ ok: true, status: "approved" });
+    }
+
+    if (body.action === "recalculate") {
+      if (!isStaffRole(auth.role)) return Response.json({ error: "Sin permiso" }, { status: 403 });
+      await recalculateApplicationScore(id);
+      return Response.json({ ok: true });
     }
 
     if (body.action === "reopen") {
