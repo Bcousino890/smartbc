@@ -1328,9 +1328,16 @@ export function CaptacionDetailClient({
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
-              <Input label="Teléfono" type="tel" value={formData.owner_phone}
-                onChange={(v) => setFormData({ ...formData, owner_phone: v })}
-                placeholder="+56 9 1234 5678" />
+              <div>
+                <Input label="Teléfono" type="tel" value={formData.owner_phone}
+                  onChange={(v) => setFormData({ ...formData, owner_phone: v })}
+                  placeholder="+56 9 1234 5678" />
+                <p className="mt-1 text-xs text-ink/45">
+                  ¿El dueño tiene más de un teléfono? Regístralos en la sección{" "}
+                  <strong>Contactos → + Agregar Contacto</strong>: cada contacto admite
+                  varios teléfonos adicionales.
+                </p>
+              </div>
               <Input label="Nombre del Dueño" value={formData.owner_name}
                 onChange={(v) => setFormData({ ...formData, owner_name: v })}
                 placeholder="Juan Pérez" />

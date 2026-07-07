@@ -206,6 +206,140 @@ function extractLatLng(html: string): { lat: number | null; lng: number | null }
   return { lat: null, lng: null };
 }
 
+// La API pública de items de MercadoLibre pasó a exigir OAuth (403 PolicyAgent
+// para requests anónimos), así que la ficha se extrae directamente del HTML de
+// la página del aviso. portalinmobiliario.com es una VIP de MercadoLibre y usa
+// sus clases ui-pdp-* / andes-*.
+function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCaptacion> {
+  const title =
+    $("h1.ui-pdp-title").first().text().trim() ||
+    $("h1").first().text().trim() ||
+    null;
+
+  // Precio: primer monto del bloque principal (UF o CLP según el símbolo)
+  let price: number | null = null;
+  let currency: "uf" | "clp" | null = null;
+  const priceEl = $(".ui-pdp-price__second-line .andes-money-amount").first();
+  const symbol = priceEl.find(".andes-money-amount__currency-symbol").first().text().trim().toUpperCase();
+  const fraction = priceEl.find(".andes-money-amount__fraction").first().text().trim();
+  if (fraction) {
+    if (symbol.includes("UF")) {
+      currency = "uf";
+      const num = parseFloat(fraction.replace(/\./g, "").replace(",", "."));
+      price = isNaN(num) ? null : num;
+    } else {
+      currency = "clp";
+      const num = parseInt(fraction.replace(/[.,]/g, ""), 10);
+      price = isNaN(num) ? null : num;
+    }
+  }
+
+  // Specs: la tabla rayada trae TODAS las características de la ficha
+  let bedrooms: number | null = null;
+  let bathrooms: number | null = null;
+  let square_meters: number | null = null;
+  const features: string[] = [];
+  $(".ui-vpp-striped-specs__row").each((_, el) => {
+    const label = $(el).find("th").first().text().trim();
+    const value = $(el).find("td").first().text().trim();
+    if (!label || !value) return;
+    if (/^dormitorios$/i.test(label)) {
+      bedrooms = bedrooms ?? (parseInt(value) || null);
+    } else if (/^baños$/i.test(label)) {
+      bathrooms = bathrooms ?? (parseInt(value) || null);
+    } else if (/^superficie total$/i.test(label)) {
+      square_meters = square_meters ?? (parseInt(value) || null);
+    } else {
+      const entry = /^s[ií]$/i.test(value)
+        ? label
+        : /^no$/i.test(value)
+          ? null
+          : `${label}: ${value}`;
+      if (entry && !features.includes(entry)) features.push(entry);
+    }
+  });
+
+  // Fallback dormitorios/baños/m² desde los specs destacados ("5 dorm.", "5 baños", "820 m² totales")
+  $(".ui-pdp-highlighted-specs-res span").each((_, el) => {
+    const text = $(el).text().trim();
+    let m: RegExpMatchArray | null;
+    if (bedrooms == null && (m = text.match(/(\d+)\s*dorm/i))) bedrooms = parseInt(m[1]);
+    if (bathrooms == null && (m = text.match(/(\d+)\s*baño/i))) bathrooms = parseInt(m[1]);
+    if (square_meters == null && (m = text.match(/([\d.]+)\s*m²/i)))
+      square_meters = parseInt(m[1].replace(/\./g, ""));
+  });
+
+  // Descripción completa de la ficha (no los meta tags truncados)
+  const description =
+    $(".ui-pdp-description__content").first().text().trim().slice(0, 8000) ||
+    $("meta[property='og:description']").attr("content") ||
+    $("meta[name='description']").attr("content") ||
+    null;
+
+  // Fotos de la galería: patrón D_NQ_NP exclusivo de las fotos del aviso
+  // (miniaturas de avisos recomendados y avatares usan otros patrones)
+  const photoUrls: string[] = [];
+  const picRegex = /https:\/\/http2\.mlstatic\.com\/D_NQ_NP_[^"'\\\s)]+?\.(?:jpg|jpeg|png|webp)/g;
+  for (const m of html.matchAll(picRegex)) {
+    if (!photoUrls.includes(m[0])) photoUrls.push(m[0]);
+  }
+
+  // Ubicación desde el breadcrumb: ... > Región > Comuna > Barrio
+  const crumbs = $(".andes-breadcrumb__link")
+    .map((_, el) => $(el).text().trim())
+    .get()
+    .filter((t) => t && t !== "...");
+  let region: string | null = null;
+  let commune: string | null = null;
+  let zone: string | null = null;
+  if (crumbs.length >= 3) {
+    region = crumbs[crumbs.length - 3];
+    commune = crumbs[crumbs.length - 2];
+    zone = crumbs[crumbs.length - 1];
+  }
+
+  // Dirección textual de la sección "Ubicación" (el texto negro, no los avisos grises)
+  const address_scraped =
+    $("#location_and_points .ui-pdp-media__title.ui-pdp-color--BLACK span").first().text().trim() ||
+    $("#location_and_points .ui-pdp-media__title").filter((_, el) => $(el).text().includes(",")).first().text().trim() ||
+    null;
+
+  // Coordenadas reales: el mapa estático de Google del aviso trae center=lat,lng
+  // (extractLatLng suele capturar el centro del mapa de Chile, no el aviso)
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  const mapMatch = html.match(
+    /maps\.googleapis\.com\/maps\/api\/staticmap\?[^"']*?center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/i
+  );
+  if (mapMatch) {
+    latitude = parseFloat(mapMatch[1]);
+    longitude = parseFloat(mapMatch[2]);
+  } else {
+    const g = extractLatLng(html);
+    latitude = g.lat;
+    longitude = g.lng;
+  }
+
+  return {
+    title,
+    description,
+    price,
+    currency: currency ?? undefined,
+    bedrooms,
+    bathrooms,
+    square_meters,
+    region,
+    commune,
+    zone,
+    address_scraped,
+    latitude,
+    longitude,
+    cover_photo_url: photoUrls[0] || null,
+    photo_urls: photoUrls.slice(0, 30),
+    features: features.slice(0, 60),
+  };
+}
+
 function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCaptacion> {
   const title = $("h1").first().text().trim() || $("title").text().trim() || null;
 
@@ -332,7 +466,7 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
   }
 
   const $ = cheerio.load(html);
-  const partial = scrapeGeneric($, html);
+  const partial = site === "mercadolibre" ? scrapeMLPage($, html) : scrapeGeneric($, html);
 
   return {
     title: partial.title ?? null,
