@@ -1322,50 +1322,55 @@ export function CaptacionDetailClient({
                 )}
               </div>
 
-              {/* Legacy fields — only shown if they have values */}
-              {(captacion.owner_phone || captacion.owner_name || captacion.owner_contact || captacion.address_real || captacion.notes) && (
-                <>
-                  <hr className="border-ink/10" />
-                  <p className="text-xs text-ink/40">Datos heredados del sistema anterior</p>
-                  <div className="space-y-4">
-                    {captacion.owner_phone && (
-                      <InfoRow label="Teléfono">
-                        <a href={`tel:${captacion.owner_phone}`} className="text-gold hover:underline">
-                          {captacion.owner_phone}
-                        </a>
-                      </InfoRow>
-                    )}
-                    {captacion.owner_name && (
-                      <InfoRow label="Nombre">{captacion.owner_name}</InfoRow>
-                    )}
-                    {captacion.owner_contact && (
-                      <InfoRow label="Contacto (Email/Otro)">{captacion.owner_contact}</InfoRow>
-                    )}
-                    {captacion.address_real && (
-                      <InfoRow label="Dirección Real">{captacion.address_real}</InfoRow>
-                    )}
-                    {captacion.notes && (
-                      <InfoRow label="Notas"><span className="whitespace-pre-wrap">{captacion.notes}</span></InfoRow>
-                    )}
-                  </div>
-                </>
-              )}
-
               <hr className="border-ink/10" />
 
-              {(isCaptadora || isAdmin) && (
-                <button
-                  onClick={() => setUpdatingData(true)}
-                  className="mt-2 rounded-lg border border-ink/20 px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5"
-                >
-                  {isCaptadora ? "Actualizar Datos del Dueño" : "Editar Datos"}
-                </button>
-              )}
-              {!isCaptadora && !isAdmin && (
-                <p className="mt-2 text-xs text-ink/40">
-                  Solo captadoras y admins pueden editar
-                </p>
-              )}
+              {/* Datos del Dueño (legado) */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-ink">Datos del Dueño</h3>
+                  {(isCaptadora || isAdmin) && (
+                    <button
+                      onClick={() => setUpdatingData(true)}
+                      className="text-xs font-medium text-gold hover:text-gold-dark"
+                    >
+                      {isCaptadora ? "Actualizar Datos del Dueño" : "+ Editar Datos"}
+                    </button>
+                  )}
+                </div>
+
+                {(captacion.owner_phone || captacion.owner_name || captacion.owner_contact || captacion.address_real || captacion.notes) ? (
+                  <>
+                    <p className="mb-2 text-xs text-ink/40">Datos heredados del sistema anterior</p>
+                    <div className="space-y-4">
+                      {captacion.owner_phone && (
+                        <InfoRow label="Teléfono">
+                          <a href={`tel:${captacion.owner_phone}`} className="text-gold hover:underline">
+                            {captacion.owner_phone}
+                          </a>
+                        </InfoRow>
+                      )}
+                      {captacion.owner_name && (
+                        <InfoRow label="Nombre">{captacion.owner_name}</InfoRow>
+                      )}
+                      {captacion.owner_contact && (
+                        <InfoRow label="Contacto (Email/Otro)">{captacion.owner_contact}</InfoRow>
+                      )}
+                      {captacion.address_real && (
+                        <InfoRow label="Dirección Real">{captacion.address_real}</InfoRow>
+                      )}
+                      {captacion.notes && (
+                        <InfoRow label="Notas"><span className="whitespace-pre-wrap">{captacion.notes}</span></InfoRow>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  !isCaptadora && !isAdmin && (
+                    <p className="text-xs text-ink/40">
+                      Solo captadoras y admins pueden editar
+                    </p>
+                  )
+                )}
+              </div>
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
