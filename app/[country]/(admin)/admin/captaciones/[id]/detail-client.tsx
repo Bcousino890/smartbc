@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { Captacion, CaptacionContact } from "../actions";
+import type { Captacion, CaptacionContact, CaptacionExtraPhone } from "../actions";
 import { LocationSection } from "./location-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 
@@ -90,7 +90,10 @@ export function CaptacionDetailClient({
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
-  const [tab, setTab] = useState<"info" | "location" | "photos" | "logs">("info");
+  const hasFicha = Boolean(captacion.description || (captacion.features && captacion.features.length > 0));
+  const [tab, setTab] = useState<"ficha" | "info" | "location" | "photos" | "logs">(
+    hasFicha ? "ficha" : "info"
+  );
   const [updatingData, setUpdatingData] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -131,6 +134,7 @@ export function CaptacionDetailClient({
     email: "",
     has_whatsapp: false,
     relationship: "",
+    extra_phones: [] as CaptacionExtraPhone[],
   });
   const [phoneValidationError, setPhoneValidationError] = useState("");
   const [contactSaveError, setContactSaveError] = useState("");
@@ -346,6 +350,19 @@ export function CaptacionDetailClient({
         phone = normalized;
       }
 
+      // Validar teléfonos adicionales (los vacíos se descartan)
+      const extraPhones: CaptacionExtraPhone[] = [];
+      for (const extra of contactForm.extra_phones) {
+        if (!extra.phone.trim()) continue;
+        const normalized = normalizePhone(extra.phone);
+        if (!isValidPhoneChile(normalized)) {
+          setPhoneValidationError(`Teléfono adicional inválido: ${extra.phone}`);
+          setSavingContact(false);
+          return;
+        }
+        extraPhones.push({ phone: normalized, has_whatsapp: extra.has_whatsapp });
+      }
+
       const method = editingContactId ? "PUT" : "POST";
       const url = editingContactId
         ? `/api/admin/cl/captaciones/${captacion.id}/contacts/${editingContactId}`
@@ -361,6 +378,7 @@ export function CaptacionDetailClient({
           email: contactForm.email || null,
           has_whatsapp: contactForm.has_whatsapp,
           relationship: contactForm.relationship || null,
+          extra_phones: extraPhones,
         }),
       });
       if (!res.ok) {
@@ -383,6 +401,7 @@ export function CaptacionDetailClient({
         email: "",
         has_whatsapp: false,
         relationship: "",
+        extra_phones: [],
       });
     } catch (e) {
       console.error("save-contact error:", e);
@@ -401,6 +420,7 @@ export function CaptacionDetailClient({
       email: contact.email || "",
       has_whatsapp: contact.has_whatsapp || false,
       relationship: contact.relationship || "",
+      extra_phones: contact.extra_phones || [],
     });
     setShowAddContact(true);
   }
@@ -435,9 +455,20 @@ export function CaptacionDetailClient({
       email: "",
       has_whatsapp: false,
       relationship: "",
+      extra_phones: [],
     });
     setPhoneValidationError("");
     setContactSaveError("");
+  }
+
+  function updateExtraPhone(index: number, patch: Partial<CaptacionExtraPhone>) {
+    setPhoneValidationError("");
+    setContactForm({
+      ...contactForm,
+      extra_phones: contactForm.extra_phones.map((p, i) =>
+        i === index ? { ...p, ...patch } : p
+      ),
+    });
   }
 
   const allPhotos = photos.length > 0 ? photos : (captacion.cover_photo_url ? [{ id: "0", url: captacion.cover_photo_url, position: 0 }] : []);
@@ -779,18 +810,19 @@ export function CaptacionDetailClient({
       )}
 
       {/* Tabs */}
-      <div className="mb-4 flex gap-1 border-b border-ink/10">
-        {(["info", "location", "photos", "logs"] as const).map((t) => (
+      <div className="mb-4 flex gap-1 border-b border-ink/10 overflow-x-auto">
+        {(["ficha", "info", "location", "photos", "logs"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "px-4 py-2 text-sm font-medium transition",
+              "px-4 py-2 text-sm font-medium transition whitespace-nowrap",
               tab === t
                 ? "border-b-2 border-gold text-gold"
                 : "text-ink/50 hover:text-ink/80"
             )}
           >
+            {t === "ficha" && "Ficha"}
             {t === "info" && "Datos del Dueño"}
             {t === "location" && "Ubicación"}
             {t === "photos" && `Fotos (${allPhotos.length})`}
@@ -798,6 +830,141 @@ export function CaptacionDetailClient({
           </button>
         ))}
       </div>
+
+      {/* TAB: Ficha completa scrapeada del portal */}
+      {tab === "ficha" && (
+        <div className="rounded-2xl border border-gold/15 bg-white/70 p-6 space-y-6">
+          {!hasFicha && (
+            <div className="py-8 text-center">
+              <p className="text-sm text-ink/50">
+                Aún no hay ficha scrapeada para esta captación.
+              </p>
+              {!isCaptadora && (
+                <p className="mt-1 text-xs text-ink/40">
+                  Usa el botón &quot;Re-scrapear&quot; para obtener descripción,
+                  características y fotos del aviso original.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Resumen de datos */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {captacion.price && (
+              <InfoRow label="Precio">
+                {formatPrice(captacion.price, captacion.currency || "clp")}
+              </InfoRow>
+            )}
+            {captacion.property_type && (
+              <InfoRow label="Tipo">
+                {{
+                  house: "Casa",
+                  apartment: "Departamento",
+                  land: "Terreno",
+                  office: "Oficina",
+                  commercial: "Comercial",
+                  other: "Otro",
+                }[captacion.property_type]}
+              </InfoRow>
+            )}
+            {captacion.bedrooms != null && (
+              <InfoRow label="Dormitorios">{captacion.bedrooms}</InfoRow>
+            )}
+            {captacion.bathrooms != null && (
+              <InfoRow label="Baños">{captacion.bathrooms}</InfoRow>
+            )}
+            {captacion.square_meters != null && (
+              <InfoRow label="Superficie">{captacion.square_meters} m²</InfoRow>
+            )}
+            {(captacion.commune || captacion.region) && (
+              <InfoRow label="Ubicación">
+                {[captacion.commune, captacion.region].filter(Boolean).join(", ")}
+              </InfoRow>
+            )}
+            {captacion.address_scraped && (
+              <InfoRow label="Dirección (del aviso)">{captacion.address_scraped}</InfoRow>
+            )}
+            {captacion.rol_propiedad && (
+              <InfoRow label="Rol SII">{captacion.rol_propiedad}</InfoRow>
+            )}
+          </div>
+
+          {/* Descripción completa */}
+          {captacion.description && (
+            <div>
+              <h3 className="text-sm font-semibold text-ink mb-2">Descripción</h3>
+              <p className="text-sm text-ink/70 whitespace-pre-wrap leading-relaxed">
+                {captacion.description}
+              </p>
+            </div>
+          )}
+
+          {/* Características */}
+          {captacion.features && captacion.features.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-ink mb-2">
+                Características ({captacion.features.length})
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {captacion.features.map((feature, i) => (
+                  <span
+                    key={i}
+                    className="rounded-full bg-ink/6 px-3 py-1 text-xs text-ink/70"
+                  >
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Fotos en miniatura */}
+          {allPhotos.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-ink mb-2">
+                Fotos ({allPhotos.length})
+              </h3>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {allPhotos.slice(0, 8).map((p, i) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setTab("photos"); setCurrentPhoto(i); }}
+                    className="aspect-video overflow-hidden rounded-lg border border-ink/10 hover:border-gold/30"
+                  >
+                    <img
+                      src={p.url}
+                      alt={`Foto ${i + 1}`}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget.parentElement as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+              {allPhotos.length > 8 && (
+                <button
+                  onClick={() => setTab("photos")}
+                  className="mt-2 text-xs font-medium text-gold hover:underline"
+                >
+                  Ver las {allPhotos.length} fotos →
+                </button>
+              )}
+            </div>
+          )}
+
+          <a
+            href={captacion.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-gold hover:underline"
+          >
+            <ExternalLink size={12} />
+            Ver aviso original
+          </a>
+        </div>
+      )}
 
       {/* TAB: Location */}
       {tab === "location" && (
@@ -809,6 +976,7 @@ export function CaptacionDetailClient({
             latitude: captacion.latitude || null,
             longitude: captacion.longitude || null,
             address_real: captacion.address_real || null,
+            rol_propiedad: captacion.rol_propiedad || null,
           }}
           captacionId={captacion.id}
           isCaptadora={isCaptadora}
@@ -915,6 +1083,76 @@ export function CaptacionDetailClient({
                       )}
                     </div>
 
+                    {/* Teléfonos adicionales del mismo contacto */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-ink/70">
+                          Teléfonos adicionales
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setContactForm({
+                              ...contactForm,
+                              extra_phones: [
+                                ...contactForm.extra_phones,
+                                { phone: "", has_whatsapp: false },
+                              ],
+                            })
+                          }
+                          className="text-xs font-medium text-gold hover:text-gold-dark"
+                        >
+                          + Agregar otro teléfono
+                        </button>
+                      </div>
+                      {contactForm.extra_phones.length === 0 ? (
+                        <p className="text-xs text-ink/40">
+                          Si el dueño tiene más de un número, agrégalo aquí.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {contactForm.extra_phones.map((extra, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input
+                                type="tel"
+                                value={extra.phone}
+                                onChange={(e) => updateExtraPhone(i, { phone: e.target.value })}
+                                placeholder="+56 9 1234 5678"
+                                className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+                              />
+                              <label
+                                className="flex items-center gap-1 text-xs text-ink/60"
+                                title="Tiene WhatsApp"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={extra.has_whatsapp}
+                                  onChange={(e) =>
+                                    updateExtraPhone(i, { has_whatsapp: e.target.checked })
+                                  }
+                                  className="rounded border border-ink/20"
+                                />
+                                <MessageCircle size={13} className="text-emerald-600" />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setContactForm({
+                                    ...contactForm,
+                                    extra_phones: contactForm.extra_phones.filter((_, j) => j !== i),
+                                  })
+                                }
+                                title="Quitar teléfono"
+                                className="rounded p-1.5 text-ink/40 hover:text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <Input
                       label="Email"
                       value={contactForm.email}
@@ -993,6 +1231,21 @@ export function CaptacionDetailClient({
                                 )}
                               </a>
                             )}
+                            {(contact.extra_phones || []).map((extra, i) => (
+                              <a
+                                key={`${extra.phone}-${i}`}
+                                href={`tel:${extra.phone}`}
+                                className="flex items-center gap-1 text-xs text-gold hover:underline"
+                              >
+                                <Phone size={12} />
+                                {extra.phone}
+                                {extra.has_whatsapp && (
+                                  <span title="Tiene WhatsApp">
+                                    <MessageCircle size={12} className="text-emerald-600" />
+                                  </span>
+                                )}
+                              </a>
+                            ))}
                             {contact.email && (
                               <a
                                 href={`mailto:${contact.email}`}

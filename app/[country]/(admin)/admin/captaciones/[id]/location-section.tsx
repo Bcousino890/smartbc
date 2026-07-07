@@ -16,6 +16,7 @@ type LocationSectionProps = {
     latitude: number | null;
     longitude: number | null;
     address_real: string | null;
+    rol_propiedad: string | null;
   };
   captacionId: string;
   isCaptadora: boolean;
@@ -41,6 +42,8 @@ export function LocationSection({
     address_verified: captacion.address_verified || false,
     latitude: captacion.latitude,
     longitude: captacion.longitude,
+    address_real: captacion.address_real || "",
+    rol_propiedad: captacion.rol_propiedad || "",
   });
 
   const canEdit = isCaptadora || isAdmin;
@@ -117,6 +120,8 @@ export function LocationSection({
         address_verified: locationData.address_verified,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
+        address_real: locationData.address_real.trim() || null,
+        rol_propiedad: locationData.rol_propiedad.trim() || null,
       });
       setEditing(false);
     } catch (err) {
@@ -136,6 +141,24 @@ export function LocationSection({
               {captacion.property_type
                 ? CAPTACION_PROPERTY_TYPE_LABELS[captacion.property_type]
                 : <span className="text-ink/35">No especificado</span>}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Rol de la Propiedad (SII)</p>
+            <p className="mt-0.5 text-sm font-medium text-ink">
+              {captacion.rol_propiedad
+                ? captacion.rol_propiedad
+                : <span className="text-ink/35">No especificado</span>}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Dirección Real</p>
+            <p className="mt-0.5 text-sm font-medium text-ink">
+              {captacion.address_real
+                ? captacion.address_real
+                : <span className="text-ink/35">No especificada</span>}
             </p>
           </div>
 
@@ -217,6 +240,38 @@ export function LocationSection({
             <option value="commercial">Comercial</option>
             <option value="other">Otro</option>
           </select>
+        </div>
+
+        {/* Rol de avalúo SII */}
+        <div>
+          <label className="block text-sm font-medium text-ink/70 mb-2">
+            Rol de la Propiedad (SII)
+          </label>
+          <input
+            type="text"
+            value={locationData.rol_propiedad}
+            onChange={(e) =>
+              setLocationData({ ...locationData, rol_propiedad: e.target.value })
+            }
+            placeholder="Ej: 1234-56"
+            className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+          />
+        </div>
+
+        {/* Dirección real */}
+        <div>
+          <label className="block text-sm font-medium text-ink/70 mb-2">
+            Dirección Real
+          </label>
+          <input
+            type="text"
+            value={locationData.address_real}
+            onChange={(e) =>
+              setLocationData({ ...locationData, address_real: e.target.value })
+            }
+            placeholder="Av. Providencia 1234, Santiago"
+            className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+          />
         </div>
 
         {/* Dirección verificada */}

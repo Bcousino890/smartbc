@@ -17,6 +17,7 @@ export type ScrapedCaptacion = {
   longitude: number | null;
   cover_photo_url: string | null;
   photo_urls: string[];
+  features: string[];
   source_site: string;
 };
 
@@ -72,13 +73,15 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
     else currency = "clp";
   }
 
-  // Description
-  const description = desc.plain_text ? desc.plain_text.slice(0, 500) : null;
+  // Description: la ficha completa (antes se cortaba a 500 chars y se perdía
+  // casi toda la descripción del aviso)
+  const description = desc.plain_text ? String(desc.plain_text).slice(0, 8000) : null;
 
   // Attributes (bedrooms, bathrooms, m², etc.)
   let bedrooms: number | null = null;
   let bathrooms: number | null = null;
   let square_meters: number | null = null;
+  const features: string[] = [];
 
   if (item.attributes && Array.isArray(item.attributes)) {
     for (const attr of item.attributes) {
@@ -88,6 +91,12 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
         bathrooms = parseInt(attr.value_name || attr.value);
       } else if (attr.name === "TOTAL_AREA" || attr.name === "Superficie total") {
         square_meters = parseInt(attr.value_name || attr.value);
+      } else if (attr.name && attr.value_name) {
+        // Resto de atributos de la ficha → características visibles
+        // ("Piscina: Sí" se muestra como "Piscina"; "No" se omite)
+        const value = String(attr.value_name).trim();
+        if (/^s[ií]$/i.test(value)) features.push(attr.name);
+        else if (!/^no$/i.test(value)) features.push(`${attr.name}: ${value}`);
       }
     }
   }
@@ -143,6 +152,7 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
     longitude,
     cover_photo_url: photoUrls[0] || null,
     photo_urls: photoUrls,
+    features,
   };
 }
 
@@ -207,7 +217,31 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
   }
   const { price, currency } = parsePrice(priceText);
 
-  const description = $("meta[name='description']").attr("content") || null;
+  // Descripción: primero el bloque de descripción de la página (ficha
+  // completa); si no existe, caemos a los meta tags (suelen estar truncados).
+  let description: string | null = null;
+  const descBlock = $(
+    "[class*='descripcion'], [class*='description'], [id*='descripcion'], [id*='description']"
+  ).first();
+  if (descBlock.length) {
+    const text = descBlock.text().replace(/\s+\n/g, "\n").replace(/[ \t]+/g, " ").trim();
+    if (text.length > 40) description = text.slice(0, 8000);
+  }
+  if (!description) {
+    description =
+      $("meta[property='og:description']").attr("content") ||
+      $("meta[name='description']").attr("content") ||
+      null;
+  }
+
+  // Características: items de listas en secciones de características/amenities
+  const features: string[] = [];
+  $(
+    "[class*='caracter'] li, [class*='feature'] li, [class*='amenit'] li, [id*='caracter'] li"
+  ).each((_, el) => {
+    const text = $(el).text().replace(/\s+/g, " ").trim();
+    if (text && text.length <= 80 && !features.includes(text)) features.push(text);
+  });
 
   const { lat, lng } = extractLatLng(html);
 
@@ -234,6 +268,7 @@ function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapt
     longitude: lng,
     cover_photo_url: photoUrls[0] || null,
     photo_urls: photoUrls.slice(0, 30),
+    features: features.slice(0, 60),
   };
 }
 
@@ -262,6 +297,7 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
           longitude: partial.longitude ?? null,
           cover_photo_url: partial.cover_photo_url ?? null,
           photo_urls: partial.photo_urls ?? [],
+          features: partial.features ?? [],
           source_site: site,
         };
       }
@@ -314,6 +350,7 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
     longitude: partial.longitude ?? null,
     cover_photo_url: partial.cover_photo_url ?? null,
     photo_urls: partial.photo_urls ?? [],
+    features: partial.features ?? [],
     source_site: site,
   };
 }

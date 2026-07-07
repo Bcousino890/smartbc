@@ -1,6 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 
+export type CaptacionExtraPhone = {
+  phone: string;
+  has_whatsapp: boolean;
+};
+
 export type CaptacionContact = {
   id: string;
   captacion_id: string;
@@ -10,6 +15,7 @@ export type CaptacionContact = {
   email: string | null;
   has_whatsapp: boolean;
   relationship: string | null;
+  extra_phones: CaptacionExtraPhone[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -50,6 +56,8 @@ export type Captacion = {
   last_contact_attempt_at: string | null;
   property_type: 'house' | 'apartment' | 'land' | 'office' | 'commercial' | 'other' | null;
   address_verified: boolean;
+  rol_propiedad: string | null;
+  features: string[] | null;
   updated_at: string;
   contacts?: CaptacionContact[];
 };
@@ -124,6 +132,8 @@ export async function getCaptacion(id: string) {
     ...data,
     property_type: data.property_type ?? null,
     address_verified: data.address_verified ?? false,
+    rol_propiedad: data.rol_propiedad ?? null,
+    features: data.features ?? null,
     contacts,
   } as Captacion;
 }

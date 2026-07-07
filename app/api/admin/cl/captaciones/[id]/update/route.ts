@@ -92,6 +92,7 @@ export async function POST(
     if (body.notes !== undefined) updates.notes = body.notes || null;
     if (body.owner_confirmed !== undefined) updates.owner_confirmed = nowConfirmed;
     if (body.property_type !== undefined) updates.property_type = body.property_type || null;
+    if (body.rol_propiedad !== undefined) updates.rol_propiedad = body.rol_propiedad || null;
     if (body.address_verified !== undefined) updates.address_verified = body.address_verified || false;
     if (body.latitude !== undefined && body.latitude !== null) updates.latitude = body.latitude;
     if (body.longitude !== undefined && body.longitude !== null) updates.longitude = body.longitude;
