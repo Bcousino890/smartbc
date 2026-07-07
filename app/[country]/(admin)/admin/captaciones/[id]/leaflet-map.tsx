@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -50,10 +50,13 @@ type LeafletMapProps = {
 };
 
 export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapProps) {
+  // Capa base: mapa (OSM) o satélite (tiles públicos de Google, sin API key)
+  const [baseLayer, setBaseLayer] = useState<"map" | "satellite">("map");
+
   return (
     <div>
       <div
-        className="rounded-lg overflow-hidden border border-gold/15"
+        className="relative rounded-lg overflow-hidden border border-gold/15"
         style={{ height: 300, width: "100%" }}
       >
         <MapContainer
@@ -62,10 +65,20 @@ export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapPro
           style={{ height: "100%", width: "100%" }}
           scrollWheelZoom={true}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {baseLayer === "map" ? (
+            <TileLayer
+              key="map"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          ) : (
+            <TileLayer
+              key="satellite"
+              attribution="&copy; Google"
+              url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+              maxZoom={20}
+            />
+          )}
           {markerIcon && (
             <Marker
               position={[lat, lng]}
@@ -82,6 +95,32 @@ export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapPro
           <MapClickHandler onMove={onMove} readonly={readonly} />
           <MapRecenter lat={lat} lng={lng} />
         </MapContainer>
+
+        {/* Selector de capa Mapa / Satélite */}
+        <div className="absolute right-2 top-2 z-[1000] flex rounded-lg overflow-hidden border border-ink/15 bg-white shadow-sm text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => setBaseLayer("map")}
+            className={
+              baseLayer === "map"
+                ? "px-2.5 py-1.5 bg-ink text-white"
+                : "px-2.5 py-1.5 text-ink/70 hover:bg-ink/5"
+            }
+          >
+            Mapa
+          </button>
+          <button
+            type="button"
+            onClick={() => setBaseLayer("satellite")}
+            className={
+              baseLayer === "satellite"
+                ? "px-2.5 py-1.5 bg-ink text-white"
+                : "px-2.5 py-1.5 text-ink/70 hover:bg-ink/5"
+            }
+          >
+            Satélite
+          </button>
+        </div>
       </div>
       {!readonly && (
         <p className="mt-1.5 text-[11px] text-ink/50">

@@ -206,6 +206,39 @@ function extractLatLng(html: string): { lat: number | null; lng: number | null }
   return { lat: null, lng: null };
 }
 
+// La página SSR del aviso solo incluye las primeras ~5 fotos; el resto carga
+// por JS. El modal de galería (vis-modals/gallery/{itemId}) lista los IDs de
+// TODAS las fotos, y las URLs se construyen con el template del picture_config
+// del aviso: D_NQ_NP_{id}-F.webp (variante zoom, funciona sin el slug).
+async function fetchMLGalleryPhotos(itemId: string): Promise<string[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(
+      `https://www.portalinmobiliario.com/vis-modals/gallery/${itemId}`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "es-CL,es;q=0.9",
+        },
+        signal: controller.signal,
+      }
+    );
+    if (!res.ok) return [];
+    const modalHtml = await res.text();
+    const ids: string[] = [];
+    for (const m of modalHtml.matchAll(/\d{6}-MLC\d+(?:_\d{6})?/g)) {
+      if (!ids.includes(m[0])) ids.push(m[0]);
+    }
+    return ids.map((id) => `https://http2.mlstatic.com/D_NQ_NP_${id}-F.webp`);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // La API pública de items de MercadoLibre pasó a exigir OAuth (403 PolicyAgent
 // para requests anónimos), así que la ficha se extrae directamente del HTML de
 // la página del aviso. portalinmobiliario.com es una VIP de MercadoLibre y usa
@@ -467,6 +500,28 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
 
   const $ = cheerio.load(html);
   const partial = site === "mercadolibre" ? scrapeMLPage($, html) : scrapeGeneric($, html);
+
+  // Completar la galería: la página solo trae las primeras fotos, el modal
+  // de galería tiene todas. Se conserva la foto de portada del SSR al frente.
+  if (site === "mercadolibre") {
+    const mlId = extractMLId(url);
+    if (mlId) {
+      const galleryPhotos = await fetchMLGalleryPhotos(mlId);
+      if (galleryPhotos.length > (partial.photo_urls?.length ?? 0)) {
+        const coverId = partial.cover_photo_url?.match(/\d{6}-MLC\d+(?:_\d{6})?/)?.[0];
+        if (coverId) {
+          const coverUrl = `https://http2.mlstatic.com/D_NQ_NP_${coverId}-F.webp`;
+          const idx = galleryPhotos.indexOf(coverUrl);
+          if (idx > 0) {
+            galleryPhotos.splice(idx, 1);
+            galleryPhotos.unshift(coverUrl);
+          }
+        }
+        partial.photo_urls = galleryPhotos;
+        partial.cover_photo_url = galleryPhotos[0];
+      }
+    }
+  }
 
   return {
     title: partial.title ?? null,

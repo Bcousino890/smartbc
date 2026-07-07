@@ -130,6 +130,7 @@ export function CaptacionDetailClient({
   const [contactForm, setContactForm] = useState({
     contact_type: "owner" as "owner" | "spouse" | "family" | "other",
     contact_name: "",
+    rut: "",
     phone: "",
     email: "",
     has_whatsapp: false,
@@ -374,6 +375,7 @@ export function CaptacionDetailClient({
         body: JSON.stringify({
           contact_type: contactForm.contact_type,
           contact_name: contactForm.contact_name || null,
+          rut: contactForm.rut || null,
           phone: phone || null,
           email: contactForm.email || null,
           has_whatsapp: contactForm.has_whatsapp,
@@ -397,6 +399,7 @@ export function CaptacionDetailClient({
       setContactForm({
         contact_type: "owner",
         contact_name: "",
+        rut: "",
         phone: "",
         email: "",
         has_whatsapp: false,
@@ -416,6 +419,7 @@ export function CaptacionDetailClient({
     setContactForm({
       contact_type: contact.contact_type,
       contact_name: contact.contact_name || "",
+      rut: contact.rut || "",
       phone: contact.phone || "",
       email: contact.email || "",
       has_whatsapp: contact.has_whatsapp || false,
@@ -451,6 +455,7 @@ export function CaptacionDetailClient({
     setContactForm({
       contact_type: "owner",
       contact_name: "",
+      rut: "",
       phone: "",
       email: "",
       has_whatsapp: false,
@@ -977,6 +982,7 @@ export function CaptacionDetailClient({
             longitude: captacion.longitude || null,
             address_real: captacion.address_real || null,
             rol_propiedad: captacion.rol_propiedad || null,
+            commune: captacion.commune || null,
           }}
           captacionId={captacion.id}
           isCaptadora={isCaptadora}
@@ -1049,6 +1055,13 @@ export function CaptacionDetailClient({
                       value={contactForm.contact_name}
                       onChange={(v) => setContactForm({ ...contactForm, contact_name: v })}
                       placeholder="Juan, María, etc."
+                    />
+
+                    <Input
+                      label="RUT"
+                      value={contactForm.rut}
+                      onChange={(v) => setContactForm({ ...contactForm, rut: v })}
+                      placeholder="12.345.678-9"
                     />
 
                     <div className="mb-3">
@@ -1215,6 +1228,9 @@ export function CaptacionDetailClient({
                           </div>
                           {contact.contact_name && (
                             <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
+                          )}
+                          {contact.rut && (
+                            <p className="text-xs text-ink/55">RUT: {contact.rut}</p>
                           )}
                           <div className="mt-1 flex items-center gap-3 flex-wrap">
                             {contact.phone && (

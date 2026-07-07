@@ -53,9 +53,10 @@ export async function POST(
     const fieldRestrictions = editPerms.fields;
 
     // Detectar qué tipo de campos intenta editar
+    // (commune se excluye: la captadora la corrige desde la pestaña Ubicación)
     const isEditingPropertyFields = [
       "title", "price", "currency", "bedrooms", "bathrooms",
-      "square_meters", "region", "commune", "zone", "subzone"
+      "square_meters", "region", "zone", "subzone"
     ].some(field => field in body && body[field] !== undefined);
 
     const isEditingStatus = "status" in body && body.status !== undefined;
@@ -93,6 +94,7 @@ export async function POST(
     if (body.owner_confirmed !== undefined) updates.owner_confirmed = nowConfirmed;
     if (body.property_type !== undefined) updates.property_type = body.property_type || null;
     if (body.rol_propiedad !== undefined) updates.rol_propiedad = body.rol_propiedad || null;
+    if (body.commune !== undefined) updates.commune = body.commune || null;
     if (body.address_verified !== undefined) updates.address_verified = body.address_verified || false;
     if (body.latitude !== undefined && body.latitude !== null) updates.latitude = body.latitude;
     if (body.longitude !== undefined && body.longitude !== null) updates.longitude = body.longitude;
@@ -106,7 +108,6 @@ export async function POST(
       if (body.bathrooms !== undefined) updates.bathrooms = body.bathrooms || null;
       if (body.square_meters !== undefined) updates.square_meters = body.square_meters || null;
       if (body.region !== undefined) updates.region = body.region || null;
-      if (body.commune !== undefined) updates.commune = body.commune || null;
       if (body.zone !== undefined) updates.zone = body.zone || null;
     }
 

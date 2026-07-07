@@ -10,7 +10,7 @@ export async function PUT(
   const { id, contactId } = await params;
   try {
     const body = await request.json();
-    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones } = body;
+    const { contact_type, contact_name, rut, phone, email, has_whatsapp, relationship, extra_phones } = body;
 
     // Validaciones
     if (contact_type && !["owner", "spouse", "family", "other"].includes(contact_type)) {
@@ -46,6 +46,7 @@ export async function PUT(
 
     if (contact_type !== undefined) updateData.contact_type = contact_type;
     if (contact_name !== undefined) updateData.contact_name = contact_name;
+    if (rut !== undefined) updateData.rut = typeof rut === "string" && rut.trim() ? rut.trim() : null;
     if (phone !== undefined) updateData.phone = normalizedPhone;
     if (email !== undefined) updateData.email = email;
     if (has_whatsapp !== undefined) updateData.has_whatsapp = has_whatsapp;
