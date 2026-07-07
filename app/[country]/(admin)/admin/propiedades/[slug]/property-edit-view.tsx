@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  Droplets,
   ExternalLink,
   FileDown,
   FileImage,
@@ -116,6 +117,8 @@ export function PropertyEditView({
   const [isPending, startTransition] = useTransition();
   const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
   const [photosOpen, setPhotosOpen] = useState(false);
+  const [cleaningWatermark, setCleaningWatermark] = useState(false);
+  const [watermarkMsg, setWatermarkMsg] = useState<string | null>(null);
 
   // Videos state
   const [videos, setVideos] = useState<MediaItem[]>(initialVideos);
@@ -336,6 +339,36 @@ export function PropertyEditView({
       setGeocodeError("Error al buscar la dirección. Coloca el pin a mano.");
     } finally {
       setGeocoding(false);
+    }
+  };
+
+  // Opt-in: quita la marca de agua de la agencia de origen de las fotos ya
+  // alojadas. Destructivo, por eso pide confirmación (puede tocar fotos sin
+  // marca real y necesita ≥8 fotos + el motor del VPS).
+  const handleCleanWatermark = async () => {
+    if (
+      !confirm(
+        "Quitar la marca de agua reprocesa las fotos ya alojadas de esta propiedad. Necesita al menos 8 fotos y, si el anuncio no tiene una marca real, podría alterar las fotos. ¿Continuar?",
+      )
+    )
+      return;
+    setCleaningWatermark(true);
+    setWatermarkMsg(null);
+    try {
+      const res = await fetch(`/api/admin/properties/${property.slug}/clean-watermark`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setWatermarkMsg(data.error ?? "No se pudo quitar la marca de agua");
+        return;
+      }
+      setWatermarkMsg(`Marca de agua quitada en ${data.cleaned} fotos.`);
+      router.refresh();
+    } catch {
+      setWatermarkMsg("Error de red al procesar las fotos");
+    } finally {
+      setCleaningWatermark(false);
     }
   };
 
@@ -845,18 +878,37 @@ export function PropertyEditView({
           icon={<ImageIcon size={15} strokeWidth={1.75} />}
           title={t("adminProps.detail.photosSection")}
         >
-          <button
-            type="button"
-            onClick={() => setPhotosOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
-          >
-            <ImageIcon size={13} strokeWidth={1.75} className="text-gold" />
-            <span>
-              {t("adminProps.photos.action", {
-                count: property.photos.length,
-              })}
-            </span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPhotosOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+            >
+              <ImageIcon size={13} strokeWidth={1.75} className="text-gold" />
+              <span>
+                {t("adminProps.photos.action", {
+                  count: property.photos.length,
+                })}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={handleCleanWatermark}
+              disabled={cleaningWatermark}
+              className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-[12px] font-medium text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+              title="Quita la marca de agua de la agencia de origen (reprocesa las fotos, necesita ≥8)"
+            >
+              {cleaningWatermark ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Droplets size={13} />
+              )}
+              <span>Quitar marca de agua</span>
+            </button>
+          </div>
+          {watermarkMsg && (
+            <p className="mt-2 text-[12px] text-ink/60">{watermarkMsg}</p>
+          )}
         </Section>
 
         {/* Videos */}
