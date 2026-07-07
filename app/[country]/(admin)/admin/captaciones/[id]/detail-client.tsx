@@ -1322,24 +1322,13 @@ export function CaptacionDetailClient({
                 )}
               </div>
 
-              <hr className="border-ink/10" />
-
-              {/* Datos del Dueño (legado) */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-ink">Datos del Dueño</h3>
-                  {(isCaptadora || isAdmin) && (
-                    <button
-                      onClick={() => setUpdatingData(true)}
-                      className="text-xs font-medium text-gold hover:text-gold-dark"
-                    >
-                      {isCaptadora ? "Actualizar Datos del Dueño" : "+ Editar Datos"}
-                    </button>
-                  )}
-                </div>
-
-                {(captacion.owner_phone || captacion.owner_name || captacion.owner_contact || captacion.address_real || captacion.notes) ? (
-                  <>
+              {/* Datos heredados del sistema anterior — teléfono/nombre/contacto ahora
+                  se editan como Contacto (arriba) y la dirección en la pestaña
+                  Ubicación; esto queda solo como referencia de solo lectura. */}
+              {(captacion.owner_phone || captacion.owner_name || captacion.owner_contact || captacion.address_real) && (
+                <>
+                  <hr className="border-ink/10" />
+                  <div>
                     <p className="mb-2 text-xs text-ink/40">Datos heredados del sistema anterior</p>
                     <div className="space-y-4">
                       {captacion.owner_phone && (
@@ -1358,41 +1347,47 @@ export function CaptacionDetailClient({
                       {captacion.address_real && (
                         <InfoRow label="Dirección Real">{captacion.address_real}</InfoRow>
                       )}
-                      {captacion.notes && (
-                        <InfoRow label="Notas"><span className="whitespace-pre-wrap">{captacion.notes}</span></InfoRow>
-                      )}
                     </div>
-                  </>
-                ) : (
-                  !isCaptadora && !isAdmin && (
-                    <p className="text-xs text-ink/40">
-                      Solo captadoras y admins pueden editar
-                    </p>
-                  )
+                  </div>
+                </>
+              )}
+
+              <hr className="border-ink/10" />
+
+              {/* Notas y confirmación */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-ink">Notas y confirmación</h3>
+                  {(isCaptadora || isAdmin) && (
+                    <button
+                      onClick={() => setUpdatingData(true)}
+                      className="text-xs font-medium text-gold hover:text-gold-dark"
+                    >
+                      + Editar
+                    </button>
+                  )}
+                </div>
+
+                {captacion.notes && (
+                  <p className="mb-2 whitespace-pre-wrap text-sm text-ink">{captacion.notes}</p>
+                )}
+                {captacion.owner_confirmed && (
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                    <Check size={14} /> Dueño confirmó que quiere vender
+                  </p>
+                )}
+                {!captacion.notes && !captacion.owner_confirmed && (
+                  <p className="text-sm text-ink/40">Sin notas</p>
+                )}
+                {!isCaptadora && !isAdmin && (
+                  <p className="mt-2 text-xs text-ink/40">
+                    Solo captadoras y admins pueden editar
+                  </p>
                 )}
               </div>
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
-              <div>
-                <Input label="Teléfono" type="tel" value={formData.owner_phone}
-                  onChange={(v) => setFormData({ ...formData, owner_phone: v })}
-                  placeholder="+56 9 1234 5678" />
-                <p className="mt-1 text-xs text-ink/45">
-                  ¿El dueño tiene más de un teléfono? Regístralos en la sección{" "}
-                  <strong>Contactos → + Agregar Contacto</strong>: cada contacto admite
-                  varios teléfonos adicionales.
-                </p>
-              </div>
-              <Input label="Nombre del Dueño" value={formData.owner_name}
-                onChange={(v) => setFormData({ ...formData, owner_name: v })}
-                placeholder="Juan Pérez" />
-              <Input label="Contacto (Email/Otro)" value={formData.owner_contact}
-                onChange={(v) => setFormData({ ...formData, owner_contact: v })}
-                placeholder="juan@example.com" />
-              <Input label="Dirección Real" value={formData.address_real}
-                onChange={(v) => setFormData({ ...formData, address_real: v })}
-                placeholder="Av. Providencia 1234" />
               <div>
                 <label className="block text-sm font-medium text-ink/70 mb-1">Notas</label>
                 <textarea
