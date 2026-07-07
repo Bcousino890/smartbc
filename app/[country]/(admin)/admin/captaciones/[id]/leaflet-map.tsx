@@ -95,6 +95,7 @@ export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapPro
         >
           {satellite ? (
             <TileLayer
+              key="satellite"
               attribution='&copy; Google'
               url={SATELLITE_TILE_URL}
               subdomains={SATELLITE_SUBDOMAINS}
@@ -102,6 +103,7 @@ export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapPro
             />
           ) : (
             <TileLayer
+              key="street"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url={STREET_TILE_URL}
             />
