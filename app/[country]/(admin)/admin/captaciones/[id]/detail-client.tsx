@@ -361,7 +361,11 @@ export function CaptacionDetailClient({
           setSavingContact(false);
           return;
         }
-        extraPhones.push({ phone: normalized, has_whatsapp: extra.has_whatsapp });
+        extraPhones.push({
+          phone: normalized,
+          has_whatsapp: extra.has_whatsapp,
+          label: extra.label?.trim() || null,
+        });
       }
 
       const method = editingContactId ? "PUT" : "POST";
@@ -1109,7 +1113,7 @@ export function CaptacionDetailClient({
                               ...contactForm,
                               extra_phones: [
                                 ...contactForm.extra_phones,
-                                { phone: "", has_whatsapp: false },
+                                { phone: "", has_whatsapp: false, label: "" },
                               ],
                             })
                           }
@@ -1124,42 +1128,60 @@ export function CaptacionDetailClient({
                         </p>
                       ) : (
                         <div className="space-y-2">
+                          <datalist id="extra-phone-labels">
+                            <option value="Esposo/a" />
+                            <option value="Hijo/a" />
+                            <option value="Padre" />
+                            <option value="Madre" />
+                            <option value="Hermano/a" />
+                            <option value="Vecino/a" />
+                          </datalist>
                           {contactForm.extra_phones.map((extra, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input
-                                type="tel"
-                                value={extra.phone}
-                                onChange={(e) => updateExtraPhone(i, { phone: e.target.value })}
-                                placeholder="+56 9 1234 5678"
-                                className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-                              />
-                              <label
-                                className="flex items-center gap-1 text-xs text-ink/60"
-                                title="Tiene WhatsApp"
-                              >
+                            <div key={i} className="rounded-lg border border-ink/10 p-2 space-y-1.5">
+                              <div className="flex items-center gap-2">
                                 <input
-                                  type="checkbox"
-                                  checked={extra.has_whatsapp}
-                                  onChange={(e) =>
-                                    updateExtraPhone(i, { has_whatsapp: e.target.checked })
-                                  }
-                                  className="rounded border border-ink/20"
+                                  type="tel"
+                                  value={extra.phone}
+                                  onChange={(e) => updateExtraPhone(i, { phone: e.target.value })}
+                                  placeholder="+56 9 1234 5678"
+                                  className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
                                 />
-                                <MessageCircle size={13} className="text-emerald-600" />
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setContactForm({
-                                    ...contactForm,
-                                    extra_phones: contactForm.extra_phones.filter((_, j) => j !== i),
-                                  })
-                                }
-                                title="Quitar teléfono"
-                                className="rounded p-1.5 text-ink/40 hover:text-red-600 hover:bg-red-50"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                                <label
+                                  className="flex items-center gap-1 text-xs text-ink/60"
+                                  title="Tiene WhatsApp"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={extra.has_whatsapp}
+                                    onChange={(e) =>
+                                      updateExtraPhone(i, { has_whatsapp: e.target.checked })
+                                    }
+                                    className="rounded border border-ink/20"
+                                  />
+                                  <MessageCircle size={13} className="text-emerald-600" />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setContactForm({
+                                      ...contactForm,
+                                      extra_phones: contactForm.extra_phones.filter((_, j) => j !== i),
+                                    })
+                                  }
+                                  title="Quitar teléfono"
+                                  className="rounded p-1.5 text-ink/40 hover:text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                list="extra-phone-labels"
+                                value={extra.label || ""}
+                                onChange={(e) => updateExtraPhone(i, { label: e.target.value })}
+                                placeholder="¿Quién es? Esposa, hijo, vecino..."
+                                className="w-full rounded-lg border border-ink/10 bg-white px-3 py-1.5 text-xs focus:border-gold/50 focus:outline-none"
+                              />
                             </div>
                           ))}
                         </div>
@@ -1230,7 +1252,7 @@ export function CaptacionDetailClient({
                             <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
                           )}
                           {contact.rut && (
-                            <p className="text-xs text-ink/55">RUT: {contact.rut}</p>
+                            <p className="text-xs text-ink/50">RUT: {contact.rut}</p>
                           )}
                           <div className="mt-1 flex items-center gap-3 flex-wrap">
                             {contact.phone && (
@@ -1259,6 +1281,9 @@ export function CaptacionDetailClient({
                                   <span title="Tiene WhatsApp">
                                     <MessageCircle size={12} className="text-emerald-600" />
                                   </span>
+                                )}
+                                {extra.label && (
+                                  <span className="text-ink/40">({extra.label})</span>
                                 )}
                               </a>
                             ))}

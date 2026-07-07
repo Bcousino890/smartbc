@@ -124,6 +124,8 @@ export function LocationSection({
         longitude: locationData.longitude,
         address_real: locationData.address_real.trim() || null,
         rol_propiedad: locationData.rol_propiedad.trim() || null,
+        // El endpoint de update acepta commune de cualquier rol con permiso de
+        // edición (la captadora la corrige al verificar la ubicación real).
         commune: locationData.commune.trim() || null,
       });
       setEditing(false);
@@ -270,7 +272,7 @@ export function LocationSection({
           />
         </div>
 
-        {/* Comuna */}
+        {/* Comuna — editable también por la captadora al verificar la ubicación */}
         <div>
           <label className="block text-sm font-medium text-ink/70 mb-2">
             Comuna
