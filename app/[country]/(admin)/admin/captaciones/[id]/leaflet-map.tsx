@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+// Satélite de Google (sin API key). Google no publica esto como servicio
+// soportado, pero es el mismo endpoint que usa Google Maps en el navegador
+// y es el truco estándar para tener satélite gratis en Leaflet. Si Google
+// llegara a bloquearlo, cambiar a Esri World Imagery (100% gratuito y
+// soportado, aunque con menos detalle en Chile).
+const SATELLITE_TILE_URL = "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
+const SATELLITE_SUBDOMAINS = ["mt0", "mt1", "mt2", "mt3"];
+const STREET_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 const markerIcon =
   typeof window !== "undefined"
@@ -50,22 +59,53 @@ type LeafletMapProps = {
 };
 
 export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapProps) {
+  const [satellite, setSatellite] = useState(false);
+
   return (
     <div>
       <div
-        className="rounded-lg overflow-hidden border border-gold/15"
+        className="relative rounded-lg overflow-hidden border border-gold/15"
         style={{ height: 300, width: "100%" }}
       >
+        <div className="absolute top-2 right-2 z-[1000] flex overflow-hidden rounded-md border border-ink/15 bg-white text-xs shadow-sm">
+          <button
+            type="button"
+            onClick={() => setSatellite(false)}
+            className={`px-2.5 py-1 font-medium transition ${
+              !satellite ? "bg-ink text-white" : "text-ink/70 hover:bg-ink/5"
+            }`}
+          >
+            Mapa
+          </button>
+          <button
+            type="button"
+            onClick={() => setSatellite(true)}
+            className={`px-2.5 py-1 font-medium transition ${
+              satellite ? "bg-ink text-white" : "text-ink/70 hover:bg-ink/5"
+            }`}
+          >
+            Satélite
+          </button>
+        </div>
         <MapContainer
           center={[lat, lng]}
           zoom={15}
           style={{ height: "100%", width: "100%" }}
           scrollWheelZoom={true}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {satellite ? (
+            <TileLayer
+              attribution='&copy; Google'
+              url={SATELLITE_TILE_URL}
+              subdomains={SATELLITE_SUBDOMAINS}
+              maxZoom={20}
+            />
+          ) : (
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url={STREET_TILE_URL}
+            />
+          )}
           {markerIcon && (
             <Marker
               position={[lat, lng]}

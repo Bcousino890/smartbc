@@ -35,7 +35,7 @@ export async function POST(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones } = body;
+    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones, rut } = body;
 
     // Validaciones
     if (!contact_type || !["owner", "spouse", "family", "other"].includes(contact_type)) {
@@ -81,6 +81,7 @@ export async function POST(
         has_whatsapp: has_whatsapp || false,
         relationship: relationship || null,
         extra_phones: extraPhonesResult.phones,
+        rut: rut || null,
       })
       .select()
       .single();

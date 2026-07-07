@@ -11,6 +11,7 @@ export type CaptacionContact = {
   captacion_id: string;
   contact_type: "owner" | "spouse" | "family" | "other";
   contact_name: string | null;
+  rut: string | null;
   phone: string | null;
   email: string | null;
   has_whatsapp: boolean;
