@@ -89,6 +89,7 @@ async function scrapeAndUpdate(captacionId: string, url: string) {
         latitude: scraped.latitude,
         longitude: scraped.longitude,
         cover_photo_url: scraped.cover_photo_url || undefined,
+        features: scraped.features,
         scrape_status: "scraped",
         scraped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

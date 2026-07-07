@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
+import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 
 export async function GET(
   request: NextRequest,
@@ -34,7 +35,7 @@ export async function POST(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
+    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones } = body;
 
     // Validaciones
     if (!contact_type || !["owner", "spouse", "family", "other"].includes(contact_type)) {
@@ -63,6 +64,11 @@ export async function POST(
       }
     }
 
+    const extraPhonesResult = parseExtraPhones(extra_phones);
+    if (extraPhonesResult.error) {
+      return NextResponse.json({ error: extraPhonesResult.error }, { status: 400 });
+    }
+
     const db = createAdminClient() as any;
     const { data, error } = await db
       .from("captacion_contacts")
@@ -74,6 +80,7 @@ export async function POST(
         email: email || null,
         has_whatsapp: has_whatsapp || false,
         relationship: relationship || null,
+        extra_phones: extraPhonesResult.phones,
       })
       .select()
       .single();
