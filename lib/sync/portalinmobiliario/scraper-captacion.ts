@@ -206,6 +206,173 @@ function extractLatLng(html: string): { lat: number | null; lng: number | null }
   return { lat: null, lng: null };
 }
 
+// La página SSR del aviso solo incluye las primeras ~5 fotos; el resto carga
+// por JS. El modal de galería (vis-modals/gallery/{itemId}) lista los IDs de
+// TODAS las fotos, y las URLs se construyen con el template del picture_config
+// del aviso: D_NQ_NP_{id}-F.webp (variante zoom, funciona sin el slug).
+async function fetchMLGalleryPhotos(itemId: string): Promise<string[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(
+      `https://www.portalinmobiliario.com/vis-modals/gallery/${itemId}`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "es-CL,es;q=0.9",
+        },
+        signal: controller.signal,
+      }
+    );
+    if (!res.ok) return [];
+    const modalHtml = await res.text();
+    const ids: string[] = [];
+    for (const m of modalHtml.matchAll(/\d{6}-MLC\d+(?:_\d{6})?/g)) {
+      if (!ids.includes(m[0])) ids.push(m[0]);
+    }
+    return ids.map((id) => `https://http2.mlstatic.com/D_NQ_NP_${id}-F.webp`);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// La API pública de items de MercadoLibre pasó a exigir OAuth (403 PolicyAgent
+// para requests anónimos), así que la ficha se extrae directamente del HTML de
+// la página del aviso. portalinmobiliario.com es una VIP de MercadoLibre y usa
+// sus clases ui-pdp-* / andes-*.
+function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCaptacion> {
+  const title =
+    $("h1.ui-pdp-title").first().text().trim() ||
+    $("h1").first().text().trim() ||
+    null;
+
+  // Precio: primer monto del bloque principal (UF o CLP según el símbolo)
+  let price: number | null = null;
+  let currency: "uf" | "clp" | null = null;
+  const priceEl = $(".ui-pdp-price__second-line .andes-money-amount").first();
+  const symbol = priceEl.find(".andes-money-amount__currency-symbol").first().text().trim().toUpperCase();
+  const fraction = priceEl.find(".andes-money-amount__fraction").first().text().trim();
+  if (fraction) {
+    if (symbol.includes("UF")) {
+      currency = "uf";
+      const num = parseFloat(fraction.replace(/\./g, "").replace(",", "."));
+      price = isNaN(num) ? null : num;
+    } else {
+      currency = "clp";
+      const num = parseInt(fraction.replace(/[.,]/g, ""), 10);
+      price = isNaN(num) ? null : num;
+    }
+  }
+
+  // Specs: la tabla rayada trae TODAS las características de la ficha
+  let bedrooms: number | null = null;
+  let bathrooms: number | null = null;
+  let square_meters: number | null = null;
+  const features: string[] = [];
+  $(".ui-vpp-striped-specs__row").each((_, el) => {
+    const label = $(el).find("th").first().text().trim();
+    const value = $(el).find("td").first().text().trim();
+    if (!label || !value) return;
+    if (/^dormitorios$/i.test(label)) {
+      bedrooms = bedrooms ?? (parseInt(value) || null);
+    } else if (/^baños$/i.test(label)) {
+      bathrooms = bathrooms ?? (parseInt(value) || null);
+    } else if (/^superficie total$/i.test(label)) {
+      square_meters = square_meters ?? (parseInt(value) || null);
+    } else {
+      const entry = /^s[ií]$/i.test(value)
+        ? label
+        : /^no$/i.test(value)
+          ? null
+          : `${label}: ${value}`;
+      if (entry && !features.includes(entry)) features.push(entry);
+    }
+  });
+
+  // Fallback dormitorios/baños/m² desde los specs destacados ("5 dorm.", "5 baños", "820 m² totales")
+  $(".ui-pdp-highlighted-specs-res span").each((_, el) => {
+    const text = $(el).text().trim();
+    let m: RegExpMatchArray | null;
+    if (bedrooms == null && (m = text.match(/(\d+)\s*dorm/i))) bedrooms = parseInt(m[1]);
+    if (bathrooms == null && (m = text.match(/(\d+)\s*baño/i))) bathrooms = parseInt(m[1]);
+    if (square_meters == null && (m = text.match(/([\d.]+)\s*m²/i)))
+      square_meters = parseInt(m[1].replace(/\./g, ""));
+  });
+
+  // Descripción completa de la ficha (no los meta tags truncados)
+  const description =
+    $(".ui-pdp-description__content").first().text().trim().slice(0, 8000) ||
+    $("meta[property='og:description']").attr("content") ||
+    $("meta[name='description']").attr("content") ||
+    null;
+
+  // Fotos de la galería: patrón D_NQ_NP exclusivo de las fotos del aviso
+  // (miniaturas de avisos recomendados y avatares usan otros patrones)
+  const photoUrls: string[] = [];
+  const picRegex = /https:\/\/http2\.mlstatic\.com\/D_NQ_NP_[^"'\\\s)]+?\.(?:jpg|jpeg|png|webp)/g;
+  for (const m of html.matchAll(picRegex)) {
+    if (!photoUrls.includes(m[0])) photoUrls.push(m[0]);
+  }
+
+  // Ubicación desde el breadcrumb: ... > Región > Comuna > Barrio
+  const crumbs = $(".andes-breadcrumb__link")
+    .map((_, el) => $(el).text().trim())
+    .get()
+    .filter((t) => t && t !== "...");
+  let region: string | null = null;
+  let commune: string | null = null;
+  let zone: string | null = null;
+  if (crumbs.length >= 3) {
+    region = crumbs[crumbs.length - 3];
+    commune = crumbs[crumbs.length - 2];
+    zone = crumbs[crumbs.length - 1];
+  }
+
+  // Dirección textual de la sección "Ubicación" (el texto negro, no los avisos grises)
+  const address_scraped =
+    $("#location_and_points .ui-pdp-media__title.ui-pdp-color--BLACK span").first().text().trim() ||
+    $("#location_and_points .ui-pdp-media__title").filter((_, el) => $(el).text().includes(",")).first().text().trim() ||
+    null;
+
+  // Coordenadas reales: el mapa estático de Google del aviso trae center=lat,lng
+  // (extractLatLng suele capturar el centro del mapa de Chile, no el aviso)
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  const mapMatch = html.match(
+    /maps\.googleapis\.com\/maps\/api\/staticmap\?[^"']*?center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/i
+  );
+  if (mapMatch) {
+    latitude = parseFloat(mapMatch[1]);
+    longitude = parseFloat(mapMatch[2]);
+  } else {
+    const g = extractLatLng(html);
+    latitude = g.lat;
+    longitude = g.lng;
+  }
+
+  return {
+    title,
+    description,
+    price,
+    currency: currency ?? undefined,
+    bedrooms,
+    bathrooms,
+    square_meters,
+    region,
+    commune,
+    zone,
+    address_scraped,
+    latitude,
+    longitude,
+    cover_photo_url: photoUrls[0] || null,
+    photo_urls: photoUrls.slice(0, 30),
+    features: features.slice(0, 60),
+  };
+}
+
 function scrapeGeneric($: cheerio.CheerioAPI, html: string): Partial<ScrapedCaptacion> {
   const title = $("h1").first().text().trim() || $("title").text().trim() || null;
 
@@ -332,7 +499,29 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
   }
 
   const $ = cheerio.load(html);
-  const partial = scrapeGeneric($, html);
+  const partial = site === "mercadolibre" ? scrapeMLPage($, html) : scrapeGeneric($, html);
+
+  // Completar la galería: la página solo trae las primeras fotos, el modal
+  // de galería tiene todas. Se conserva la foto de portada del SSR al frente.
+  if (site === "mercadolibre") {
+    const mlId = extractMLId(url);
+    if (mlId) {
+      const galleryPhotos = await fetchMLGalleryPhotos(mlId);
+      if (galleryPhotos.length > (partial.photo_urls?.length ?? 0)) {
+        const coverId = partial.cover_photo_url?.match(/\d{6}-MLC\d+(?:_\d{6})?/)?.[0];
+        if (coverId) {
+          const coverUrl = `https://http2.mlstatic.com/D_NQ_NP_${coverId}-F.webp`;
+          const idx = galleryPhotos.indexOf(coverUrl);
+          if (idx > 0) {
+            galleryPhotos.splice(idx, 1);
+            galleryPhotos.unshift(coverUrl);
+          }
+        }
+        partial.photo_urls = galleryPhotos;
+        partial.cover_photo_url = galleryPhotos[0];
+      }
+    }
+  }
 
   return {
     title: partial.title ?? null,

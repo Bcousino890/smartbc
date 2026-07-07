@@ -124,10 +124,9 @@ export function LocationSection({
         longitude: locationData.longitude,
         address_real: locationData.address_real.trim() || null,
         rol_propiedad: locationData.rol_propiedad.trim() || null,
-        // La comuna es un campo de la propiedad (no del dueño): el endpoint de
-        // update solo lo acepta de admin. Si una captadora lo envía, el request
-        // completo es rechazado, así que se omite para ese rol.
-        ...(isAdmin ? { commune: locationData.commune.trim() || null } : {}),
+        // El endpoint de update acepta commune de cualquier rol con permiso de
+        // edición (la captadora la corrige al verificar la ubicación real).
+        commune: locationData.commune.trim() || null,
       });
       setEditing(false);
     } catch (err) {
@@ -273,27 +272,20 @@ export function LocationSection({
           />
         </div>
 
-        {/* Comuna — solo admin la edita (mismo campo que la ficha scrapeada) */}
+        {/* Comuna — editable también por la captadora al verificar la ubicación */}
         <div>
           <label className="block text-sm font-medium text-ink/70 mb-2">
             Comuna
           </label>
-          {isAdmin ? (
-            <input
-              type="text"
-              value={locationData.commune}
-              onChange={(e) =>
-                setLocationData({ ...locationData, commune: e.target.value })
-              }
-              placeholder="Las Condes"
-              className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
-            />
-          ) : (
-            <p className="text-sm text-ink/50">
-              {locationData.commune || <span className="text-ink/35">No especificada</span>}
-              <span className="ml-2 text-[11px] text-ink/35">(solo admin puede editarla)</span>
-            </p>
-          )}
+          <input
+            type="text"
+            value={locationData.commune}
+            onChange={(e) =>
+              setLocationData({ ...locationData, commune: e.target.value })
+            }
+            placeholder="Ej: Las Condes"
+            className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+          />
         </div>
 
         {/* Dirección real */}
