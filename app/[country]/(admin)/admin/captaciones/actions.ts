@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/db/admin";
 export type CaptacionExtraPhone = {
   phone: string;
   has_whatsapp: boolean;
+  label?: string | null;
 };
 
 export type CaptacionContact = {

@@ -1,6 +1,6 @@
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 
-export type ExtraPhone = { phone: string; has_whatsapp: boolean };
+export type ExtraPhone = { phone: string; has_whatsapp: boolean; label?: string | null };
 
 // Valida y normaliza el array extra_phones que llega del cliente.
 // Devuelve { phones } listo para guardar en JSONB, o { error } si algún
@@ -23,7 +23,12 @@ export function parseExtraPhones(
     }
     // Evitar duplicados dentro del mismo contacto
     if (phones.some((p) => p.phone === normalized)) continue;
-    phones.push({ phone: normalized, has_whatsapp: Boolean(item?.has_whatsapp) });
+    const label = typeof item?.label === "string" ? item.label.trim() : "";
+    phones.push({
+      phone: normalized,
+      has_whatsapp: Boolean(item?.has_whatsapp),
+      label: label || null,
+    });
   }
   return { phones };
 }
