@@ -20,7 +20,7 @@ export async function DELETE(
     const db = createAdminClient() as any;
     const { data: captacion } = await db
       .from("captaciones")
-      .select("id, created_by, status")
+      .select("id, created_by, converted_to_property_id")
       .eq("id", id)
       .single();
 
@@ -40,7 +40,7 @@ export async function DELETE(
 
     // Una captación ya convertida tiene una propiedad real enlazada: no se
     // borra desde aquí para no dejar la propiedad sin trazabilidad.
-    if (captacion.status === "converted_to_property") {
+    if (captacion.converted_to_property_id) {
       return NextResponse.json(
         { error: "No se puede eliminar una captación ya convertida a propiedad" },
         { status: 400 }

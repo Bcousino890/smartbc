@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 import { canAccess } from "@/lib/permissions";
+import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
 
 export async function POST(
   request: NextRequest,
@@ -29,13 +30,18 @@ export async function POST(
     // Obtener la captación
     const { data: captacion } = await db
       .from("captaciones")
-      .select("assigned_to, created_by, title, owner_confirmed, status")
+      .select("assigned_to, created_by, title, owner_confirmed, status, pipeline_id, stage_id")
       .eq("id", id)
       .single();
 
     if (!captacion) {
       return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
     }
+
+    // Etapas del pipeline de esta captación (para las auto-transiciones de
+    // abajo: confirmar/desconfirmar dueño, primeros datos preliminares)
+    const stages = captacion.pipeline_id ? await getStagesForPipeline(captacion.pipeline_id) : [];
+    const currentStage = stages.find((s) => s.id === captacion.stage_id) || null;
 
     // Obtener permisos granulares del rol
     const editPerms = getCaptacionEditPermissions(profile.role);
@@ -111,19 +117,24 @@ export async function POST(
       if (body.zone !== undefined) updates.zone = body.zone || null;
     }
 
-    // Auto-actualizar status si se marca como confirmado
-    if (nowConfirmed && captacion.status !== "confirmed") {
-      updates.status = "confirmed";
+    // Auto-mover de etapa si se marca/desmarca como confirmado
+    const isCurrentlyConfirmed = currentStage?.stage_type === "confirmed";
+    if (nowConfirmed && !isCurrentlyConfirmed) {
+      const confirmedStage = stages.find((s) => s.stage_type === "confirmed");
+      if (confirmedStage) updates.stage_id = confirmedStage.id;
       updates.completed_at = new Date().toISOString();
-    } else if (!nowConfirmed && captacion.status === "confirmed") {
-      // Si desmarca, volver a preliminary_data
-      updates.status = "preliminary_data";
+    } else if (!nowConfirmed && isCurrentlyConfirmed) {
+      // Si desmarca, vuelve a la primera etapa de trabajo en curso
+      const workingStage = pickWorkingStage(stages);
+      if (workingStage) updates.stage_id = workingStage.id;
       updates.completed_at = null;
     }
 
-    // Cambiar status a preliminary_data si se está llenando datos por primera vez
-    if (isCaptadora && captacion.status === "assigned" && (body.owner_phone || body.owner_name)) {
-      updates.status = "preliminary_data";
+    // Al llenar los primeros datos del dueño desde la etapa de asignación,
+    // avanza a la primera etapa de trabajo en curso del pipeline
+    if (isCaptadora && currentStage?.stage_type === "assign" && (body.owner_phone || body.owner_name)) {
+      const workingStage = pickWorkingStage(stages);
+      if (workingStage) updates.stage_id = workingStage.id;
     }
 
     const { data, error } = await db

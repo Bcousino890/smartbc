@@ -5,6 +5,7 @@ import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, 
 import { canAccess } from "@/lib/permissions";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { getPipelinesForCountry, getStagesForPipeline } from "@/lib/captaciones/pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,19 @@ export default async function CaptacionesPage({
     }
   }
 
+  // Pipelines configurables (migración 0078): puede haber más de uno, cada
+  // uno con sus propias etapas. El admin los gestiona desde /pipelines.
+  let pipelines: Array<{ id: string; name: string; is_default: boolean; stages: any[] }> = [];
+  try {
+    const rawPipelines = await getPipelinesForCountry("cl");
+    pipelines = await Promise.all(
+      rawPipelines.map(async (p) => ({ ...p, stages: await getStagesForPipeline(p.id) }))
+    );
+  } catch {
+    pipelines = [];
+  }
+  const canConfigurePipelines = ["admin", "owner", "agent_admin"].includes(profile.role);
+
   return (
     <CaptacionesClient
       captaciones={captaciones}
@@ -85,6 +99,8 @@ export default async function CaptacionesPage({
       assignableUsers={assignableUsers}
       canAssign={canAssign}
       canDelete={canDelete}
+      pipelines={pipelines}
+      canConfigurePipelines={canConfigurePipelines}
     />
   );
 }

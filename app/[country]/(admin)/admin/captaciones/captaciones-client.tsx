@@ -2,7 +2,7 @@
 
 import {
   Check, Globe2, Plus, MapPin, Trash2, Loader2, PhoneCall,
-  LayoutGrid, List as ListIcon, UserPlus, X, Filter,
+  LayoutGrid, List as ListIcon, UserPlus, X, Filter, Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -10,10 +10,12 @@ import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { cn } from "@/lib/utils";
+import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
 import { CreateCaptacionModal } from "./create-captacion-modal";
-import type { Captacion } from "./actions";
+import type { Captacion, CaptacionStage } from "./actions";
 
 type AssignableUser = { id: string; full_name: string | null; role: string };
+type PipelineWithStages = { id: string; name: string; is_default: boolean; stages: CaptacionStage[] };
 
 type CaptacionesClientProps = {
   captaciones: Captacion[];
@@ -21,6 +23,8 @@ type CaptacionesClientProps = {
   assignableUsers: AssignableUser[];
   canAssign: boolean;
   canDelete: boolean;
+  pipelines: PipelineWithStages[];
+  canConfigurePipelines: boolean;
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -32,51 +36,6 @@ const ROLE_LABEL: Record<string, string> = {
   agent_admin: "Agente Admin",
   captadora: "Captadora",
 };
-
-// Columnas del pipeline en orden de flujo. Debe coincidir con los estados
-// del backend (migración 0077).
-const PIPELINE_STATUSES = [
-  "draft",
-  "assigned",
-  "preliminary_data",
-  "contacting",
-  "field_visit",
-  "revision",
-  "confirmed",
-  "converted_to_property",
-  "rejected",
-] as const;
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  draft: { label: "Borrador", color: "bg-slate-100 text-slate-700", dot: "bg-slate-400" },
-  assigned: { label: "Asignada", color: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
-  preliminary_data: { label: "Datos Preliminares", color: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
-  contacting: { label: "Contactando", color: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
-  field_visit: { label: "Visita Presencial", color: "bg-amber-100 text-amber-800", dot: "bg-amber-500" },
-  revision: { label: "Revisión", color: "bg-orange-200 text-orange-800", dot: "bg-orange-600" },
-  confirmed: { label: "Confirmada", color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
-  converted_to_property: { label: "Convertida", color: "bg-cyan-100 text-cyan-700", dot: "bg-cyan-500" },
-  rejected: { label: "Rechazada", color: "bg-red-100 text-red-700", dot: "bg-red-400" },
-};
-
-// Transiciones de estado permitidas al arrastrar una tarjeta a otra columna
-// (subconjunto de lo que acepta el backend en status/route.ts). "assigned" se
-// maneja aparte: cualquier captación no terminal se puede (re)asignar
-// arrastrándola a esa columna, pidiendo a quién en un modal. "Convertida"
-// nunca es destino de arrastre: requiere el flujo de conversión de la ficha.
-const DRAG_ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  draft: ["rejected"],
-  assigned: ["preliminary_data", "field_visit", "rejected"],
-  preliminary_data: ["contacting", "field_visit", "revision", "rejected"],
-  contacting: ["field_visit", "revision", "confirmed", "rejected"],
-  field_visit: ["contacting", "preliminary_data", "confirmed", "rejected"],
-  revision: ["preliminary_data", "contacting"],
-  confirmed: ["rejected"],
-  converted_to_property: [],
-  rejected: [],
-};
-
-const TERMINAL_STATUSES = new Set(["converted_to_property", "rejected"]);
 
 // Filtros de calidad de datos: "¿cuántas captaciones no tienen X?". Se
 // calculan sobre has_phone/has_name/has_address/has_rol (attachDataQualityFlags
@@ -101,6 +60,8 @@ export function CaptacionesClient({
   assignableUsers,
   canAssign,
   canDelete,
+  pipelines,
+  canConfigurePipelines,
 }: CaptacionesClientProps) {
   const router = useRouter();
   const [captaciones, setCaptaciones] = useState(initialCaptaciones);
@@ -112,14 +73,22 @@ export function CaptacionesClient({
   const [error, setError] = useState("");
   const [activeDataFilters, setActiveDataFilters] = useState<Set<DataFilterKey>>(new Set());
 
+  // Pipeline seleccionado para el tablero (puede haber más de uno)
+  const defaultPipeline = pipelines.find((p) => p.is_default) || pipelines[0] || null;
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(defaultPipeline?.id ?? null);
+  const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId) || null;
+
   // Drag & drop del pipeline
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   // Modales que reemplazan a window.prompt (que queda bloqueado en iframes
   // con sandbox, como el panel de preview embebido)
   const [pendingAssign, setPendingAssign] = useState<Captacion | null>(null);
-  const [pendingNotes, setPendingNotes] = useState<{ captacion: Captacion; targetStatus: string } | null>(null);
+  const [pendingNotes, setPendingNotes] = useState<{ captacion: Captacion; stage: CaptacionStage } | null>(null);
+  const [creatingPipeline, setCreatingPipeline] = useState(false);
+  const [newPipelineName, setNewPipelineName] = useState("");
+  const [savingPipeline, setSavingPipeline] = useState(false);
 
   const isCaptadora = userRole === "captadora";
 
@@ -127,11 +96,27 @@ export function CaptacionesClient({
     window.location.reload();
   };
 
-  // A qué columnas se puede arrastrar una tarjeta con este estado actual.
-  function getValidDropTargets(status: string): Set<string> {
-    const targets = new Set(DRAG_ALLOWED_TRANSITIONS[status] || []);
-    if (canAssign && !TERMINAL_STATUSES.has(status)) targets.add("assigned");
-    return targets;
+  function stagesOf(pipelineId: string | null): CaptacionStage[] {
+    return pipelines.find((p) => p.id === pipelineId)?.stages || [];
+  }
+
+  function stageMeta(c: Captacion): CaptacionStage | null {
+    return stagesOf(c.pipeline_id).find((s) => s.id === c.stage_id) || null;
+  }
+
+  // A qué etapas se puede arrastrar una tarjeta: cualquier otra etapa de su
+  // mismo pipeline, excepto "converted" (solo vía conversión) y "draft"
+  // (nada vuelve al punto de entrada). "assign" solo si el usuario puede
+  // asignar.
+  function getValidDropTargets(c: Captacion): CaptacionStage[] {
+    const current = stageMeta(c);
+    if (!current || current.stage_type === "rejected" || current.stage_type === "converted") return [];
+    return stagesOf(c.pipeline_id).filter((s) => {
+      if (s.id === current.id) return false;
+      if (s.stage_type === "converted" || s.stage_type === "draft") return false;
+      if (s.stage_type === "assign" && !canAssign) return false;
+      return true;
+    });
   }
 
   async function handleDelete(c: Captacion) {
@@ -153,6 +138,12 @@ export function CaptacionesClient({
     }
   }
 
+  function applyUpdatedCaptacion(updated: any) {
+    setCaptaciones((prev) =>
+      prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+    );
+  }
+
   // Asignación rápida al ejecutivo/captadora (selector de la tarjeta o modal
   // de arrastre), para que le llegue la notificación y pueda llamar ya.
   async function assignTo(captacionId: string, userId: string) {
@@ -169,11 +160,7 @@ export function CaptacionesClient({
         setError(data.error || "Error al asignar");
         return;
       }
-      setCaptaciones((prev) =>
-        prev.map((x) =>
-          x.id === captacionId ? { ...x, status: "assigned" as const, assigned_to: userId } : x
-        )
-      );
+      applyUpdatedCaptacion(data.captacion);
     } catch {
       setError("Error de conexión");
     } finally {
@@ -186,25 +173,21 @@ export function CaptacionesClient({
     if (userId) assignTo(c.id, userId);
   }
 
-  async function moveStatus(captacionId: string, targetStatus: string, notes?: string) {
+  async function moveStage(captacionId: string, stageId: string, notes?: string) {
     setError("");
     setMovingId(captacionId);
     try {
       const res = await fetch(`/api/admin/cl/captaciones/${captacionId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_status: targetStatus, notes }),
+        body: JSON.stringify({ new_stage_id: stageId, notes }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "Error al mover la captación");
         return;
       }
-      setCaptaciones((prev) =>
-        prev.map((x) =>
-          x.id === captacionId ? { ...x, status: targetStatus as Captacion["status"] } : x
-        )
-      );
+      applyUpdatedCaptacion(data.captacion);
     } catch {
       setError("Error de conexión");
     } finally {
@@ -212,38 +195,62 @@ export function CaptacionesClient({
     }
   }
 
-  // Mueve la tarjeta soltada a la columna de destino. "Asignada" abre un
-  // modal para elegir a quién; Revisión/Visita Presencial piden el
-  // motivo/instrucciones en un modal antes de confirmar.
-  function handleDropOnStatus(targetStatus: string) {
-    const dragged = captaciones.find((c) => c.id === draggedId);
-    setDragOverStatus(null);
-    if (!dragged || dragged.status === targetStatus) return;
+  // Mueve la tarjeta soltada a la etapa de destino. "assign" abre un modal
+  // para elegir a quién; las etapas que piden notas abren un modal de notas.
+  function handleDropOnStage(c: Captacion, targetStage: CaptacionStage) {
+    setDragOverStageId(null);
+    const valid = getValidDropTargets(c);
+    if (!valid.some((s) => s.id === targetStage.id)) return;
 
-    const allowed = getValidDropTargets(dragged.status);
-    if (!allowed.has(targetStatus)) return;
-
-    if (targetStatus === "assigned") {
-      setPendingAssign(dragged);
+    if (targetStage.stage_type === "assign") {
+      setPendingAssign(c);
       return;
     }
-    if (targetStatus === "revision" || targetStatus === "field_visit") {
-      setPendingNotes({ captacion: dragged, targetStatus });
+    if (targetStage.requires_notes) {
+      setPendingNotes({ captacion: c, stage: targetStage });
       return;
     }
-    moveStatus(dragged.id, targetStatus);
+    moveStage(c.id, targetStage.id);
+  }
+
+  async function handleCreatePipeline() {
+    if (!newPipelineName.trim()) return;
+    setSavingPipeline(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/cl/captaciones/pipelines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newPipelineName.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Error al crear el pipeline");
+        return;
+      }
+      // Recargar para traer el pipeline nuevo (server component)
+      window.location.href = `/cl/admin/captaciones?pipeline=${data.id}`;
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setSavingPipeline(false);
+      setCreatingPipeline(false);
+      setNewPipelineName("");
+    }
   }
 
   const draggedCaptacion = captaciones.find((c) => c.id === draggedId) || null;
 
-  const filteredCaptaciones = captaciones.filter((c) =>
-    Array.from(activeDataFilters).every((key) => DATA_FILTERS.find((f) => f.key === key)!.test(c))
-  );
+  const filteredCaptaciones = captaciones
+    .filter((c) =>
+      Array.from(activeDataFilters).every((key) => DATA_FILTERS.find((f) => f.key === key)!.test(c))
+    )
+    .filter((c) => !selectedPipeline || c.pipeline_id === selectedPipeline.id);
 
   function CardActions({ c }: { c: Captacion }) {
+    const stage = stageMeta(c);
     if (!canAssign && !canDelete) return null;
-    const showAssign = canAssign && !c.assigned_to &&
-      !["converted_to_property", "rejected"].includes(c.status);
+    const showAssign = canAssign && !c.assigned_to && stage?.stage_type !== "converted" && stage?.stage_type !== "rejected";
     return (
       <div onClick={(e) => e.stopPropagation()} className="mt-2 space-y-1.5">
         {showAssign && (
@@ -304,7 +311,7 @@ export function CaptacionesClient({
         subtitleKey="Prospección de propiedades - Agentes crean, captadoras completan info"
       />
 
-      <section className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
         {!isCaptadora ? (
           <button
             onClick={() => setIsModalOpen(true)}
@@ -342,6 +349,71 @@ export function CaptacionesClient({
         </div>
       </section>
 
+      {/* Selector de pipeline: puede haber más de uno */}
+      {view === "pipeline" && (
+        <section className="mb-4 flex flex-wrap items-center gap-2">
+          {pipelines.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedPipelineId(p.id)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                selectedPipelineId === p.id
+                  ? "border-gold bg-gold/15 text-ink"
+                  : "border-ink/10 bg-white text-ink/60 hover:border-ink/20"
+              )}
+            >
+              {p.name}
+              {p.is_default && <span className="ml-1 text-ink/35">· default</span>}
+            </button>
+          ))}
+          {canConfigurePipelines && !creatingPipeline && (
+            <button
+              onClick={() => setCreatingPipeline(true)}
+              className="flex items-center gap-1 rounded-full border border-dashed border-ink/20 px-3 py-1.5 text-xs font-medium text-ink/50 hover:border-ink/40 hover:text-ink"
+            >
+              <Plus size={12} />
+              Nuevo pipeline
+            </button>
+          )}
+          {creatingPipeline && (
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={newPipelineName}
+                onChange={(e) => setNewPipelineName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreatePipeline()}
+                placeholder="Nombre del pipeline"
+                className="rounded-full border border-ink/15 bg-white px-3 py-1.5 text-xs focus:border-gold/50 focus:outline-none"
+              />
+              <button
+                onClick={handleCreatePipeline}
+                disabled={!newPipelineName.trim() || savingPipeline}
+                className="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 disabled:opacity-50"
+              >
+                {savingPipeline ? <Loader2 size={12} className="animate-spin" /> : "Crear"}
+              </button>
+              <button
+                onClick={() => { setCreatingPipeline(false); setNewPipelineName(""); }}
+                className="rounded-full border border-ink/15 px-3 py-1.5 text-xs text-ink/50"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+          {canConfigurePipelines && selectedPipeline && (
+            <Link
+              href={`/cl/admin/captaciones/pipelines`}
+              className="ml-auto flex items-center gap-1 text-xs text-ink/40 hover:text-ink/70"
+              title="Configurar etapas de los pipelines"
+            >
+              <Settings size={12} />
+              Configurar pipelines
+            </Link>
+          )}
+        </section>
+      )}
+
       <CreateCaptacionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -363,20 +435,12 @@ export function CaptacionesClient({
 
       {pendingNotes && (
         <NotesModal
-          title={
-            pendingNotes.targetStatus === "field_visit"
-              ? "Visita presencial — instrucciones"
-              : "Motivo de la revisión"
-          }
-          placeholder={
-            pendingNotes.targetStatus === "field_visit"
-              ? "Ir a la dirección, preguntar por el dueño al conserje, dejar carta si no hay nadie..."
-              : "Ej: El teléfono no corresponde al dueño..."
-          }
+          title={`Mover a "${pendingNotes.stage.label}"`}
+          placeholder="Escribe una nota para esta etapa..."
           saving={movingId === pendingNotes.captacion.id}
           onCancel={() => setPendingNotes(null)}
           onConfirm={(notes) => {
-            moveStatus(pendingNotes.captacion.id, pendingNotes.targetStatus, notes);
+            moveStage(pendingNotes.captacion.id, pendingNotes.stage.id, notes);
             setPendingNotes(null);
           }}
         />
@@ -431,7 +495,12 @@ export function CaptacionesClient({
         )}
       </div>
 
-      {filteredCaptaciones.length === 0 ? (
+      {!selectedPipeline ? (
+        <div className="rounded-xl border border-dashed border-ink/15 py-12 text-center">
+          <Globe2 size={32} className="mx-auto mb-3 text-ink/25" />
+          <p className="text-sm text-ink/50">Sin pipelines configurados todavía.</p>
+        </div>
+      ) : filteredCaptaciones.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink/15 py-12 text-center">
           <Globe2 size={32} className="mx-auto mb-3 text-ink/25" />
           <p className="text-sm text-ink/50">
@@ -439,34 +508,25 @@ export function CaptacionesClient({
               ? "Ninguna captación coincide con los filtros"
               : isCaptadora
                 ? "Sin captaciones asignadas"
-                : "Sin captaciones creadas aún"}
+                : "Sin captaciones en este pipeline"}
           </p>
         </div>
       ) : view === "pipeline" ? (
-        /* ── Pipeline: una columna por estado del workflow. Arrastra una
-            tarjeta a otra columna para cambiar su estado. ── */
+        /* ── Pipeline: una columna por etapa configurada. Arrastra una
+            tarjeta a otra columna para moverla de etapa. ── */
         <div className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-4">
-          {PIPELINE_STATUSES.map((status) => {
-            const items = filteredCaptaciones.filter((c) => c.status === status);
+          {selectedPipeline.stages.map((stage) => {
+            const items = filteredCaptaciones.filter((c) => c.stage_id === stage.id);
+            const color = pipelineColor(stage.color_key);
             const isValidDropTarget =
-              draggedCaptacion != null && getValidDropTargets(draggedCaptacion.status).has(status);
-            // Columnas terminales vacías no aportan y se ocultan, EXCEPTO si
-            // son un destino válido de la tarjeta que se está arrastrando
-            // (si no, no habría dónde soltarla).
-            if (
-              items.length === 0 &&
-              ["converted_to_property", "rejected", "revision", "field_visit"].includes(status) &&
-              !isValidDropTarget
-            ) {
-              return null;
-            }
-            const config = STATUS_CONFIG[status];
-            const isDragOver = dragOverStatus === status && isValidDropTarget;
+              draggedCaptacion != null &&
+              getValidDropTargets(draggedCaptacion).some((s) => s.id === stage.id);
+            const isDragOver = dragOverStageId === stage.id && isValidDropTarget;
             return (
-              <div key={status} className="w-60 flex-shrink-0">
+              <div key={stage.id} className="w-60 flex-shrink-0">
                 <div className="mb-2 flex items-center gap-2 px-1">
-                  <span className={cn("h-2 w-2 rounded-full", config.dot)} />
-                  <h3 className="text-xs font-semibold text-ink/70">{config.label}</h3>
+                  <span className={cn("h-2 w-2 rounded-full", color.dot)} />
+                  <h3 className="text-xs font-semibold text-ink/70">{stage.label}</h3>
                   <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-[10px] font-medium text-ink/50">
                     {items.length}
                   </span>
@@ -475,20 +535,20 @@ export function CaptacionesClient({
                   onDragOver={(e) => {
                     if (!isValidDropTarget) return;
                     e.preventDefault();
-                    if (dragOverStatus !== status) setDragOverStatus(status);
+                    if (dragOverStageId !== stage.id) setDragOverStageId(stage.id);
                   }}
                   onDragLeave={() =>
-                    setDragOverStatus((prev) => (prev === status ? null : prev))
+                    setDragOverStageId((prev) => (prev === stage.id ? null : prev))
                   }
                   onDrop={(e) => {
                     e.preventDefault();
-                    handleDropOnStatus(status);
+                    if (draggedCaptacion) handleDropOnStage(draggedCaptacion, stage);
                   }}
                   className={cn(
                     "space-y-2 rounded-xl bg-ink/3 p-2 min-h-[80px] transition",
                     isDragOver && "bg-gold/10 ring-2 ring-gold/50",
                     draggedCaptacion &&
-                      draggedCaptacion.status !== status &&
+                      draggedCaptacion.stage_id !== stage.id &&
                       !isValidDropTarget &&
                       "opacity-40"
                   )}
@@ -499,7 +559,7 @@ export function CaptacionesClient({
                     </p>
                   ) : (
                     items.map((c) => {
-                      const canDrag = !TERMINAL_STATUSES.has(c.status) && movingId !== c.id;
+                      const canDrag = getValidDropTargets(c).length > 0 && movingId !== c.id;
                       return (
                         <div
                           key={c.id}
@@ -510,7 +570,7 @@ export function CaptacionesClient({
                           }}
                           onDragEnd={() => {
                             setDraggedId(null);
-                            setDragOverStatus(null);
+                            setDragOverStageId(null);
                           }}
                           onClick={() => {
                             if (draggedId) return;
@@ -561,7 +621,7 @@ export function CaptacionesClient({
                               Dueño confirmado
                             </p>
                           )}
-                          {c.assigned_to && status !== "draft" && (
+                          {c.assigned_to && stage.stage_type !== "draft" && (
                             <p className="mt-1 flex items-center gap-1 text-[10px] text-ink/40">
                               <UserPlus size={9} />
                               {assignableUsers.find((u) => u.id === c.assigned_to)?.full_name ||
@@ -581,80 +641,84 @@ export function CaptacionesClient({
       ) : (
         /* ── Lista ── */
         <div className="space-y-3">
-          {filteredCaptaciones.map((c) => (
-            <div
-              key={c.id}
-              className="flex gap-4 rounded-xl border border-gold/15 bg-white/70 p-4 transition hover:border-gold/30 hover:bg-white"
-            >
-              <Link href={`/cl/admin/captaciones/${c.id}`} className="flex flex-1 min-w-0 gap-4">
-                {c.cover_photo_url && (
-                  <img
-                    src={c.cover_photo_url}
-                    alt=""
-                    className="h-16 w-20 rounded-lg object-cover flex-shrink-0"
-                    onError={(e) => (e.currentTarget.style.display = "none")}
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-ink line-clamp-1">
-                    {c.title || "Sin título"}
-                  </h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/55">
-                    {c.operation && (
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
-                          c.operation === "arriendo"
-                            ? "bg-sky-100 text-sky-700"
-                            : "bg-amber-100 text-amber-700"
-                        )}
-                      >
-                        {c.operation}
-                      </span>
-                    )}
-                    {c.commune && (
-                      <span className="flex items-center gap-1">
-                        <MapPin size={11} />
-                        {c.commune}
-                      </span>
-                    )}
-                    {c.bedrooms && <span>{c.bedrooms}d</span>}
-                    {c.price && <span>{formatPrice(c)}</span>}
-                    {c.scrape_status === "scraped" && (
-                      <span className="text-emerald-600 flex items-center gap-0.5">
-                        <Check size={10} />
-                        Scrapeado
-                      </span>
-                    )}
-                    {c.scrape_status === "failed" && (
-                      <span className="text-red-600 text-[10px]">❌ Error scrape</span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[10px] text-ink/40">
-                    Hace {new Date(c.created_at).toLocaleDateString("es-CL")}
-                  </p>
-                </div>
-              </Link>
-
-              <div className="flex-shrink-0 text-right">
-                <div
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium",
-                    STATUS_CONFIG[c.status]?.color || "bg-gray-100 text-gray-700"
+          {filteredCaptaciones.map((c) => {
+            const stage = stageMeta(c);
+            const color = stage ? pipelineColor(stage.color_key) : null;
+            return (
+              <div
+                key={c.id}
+                className="flex gap-4 rounded-xl border border-gold/15 bg-white/70 p-4 transition hover:border-gold/30 hover:bg-white"
+              >
+                <Link href={`/cl/admin/captaciones/${c.id}`} className="flex flex-1 min-w-0 gap-4">
+                  {c.cover_photo_url && (
+                    <img
+                      src={c.cover_photo_url}
+                      alt=""
+                      className="h-16 w-20 rounded-lg object-cover flex-shrink-0"
+                      onError={(e) => (e.currentTarget.style.display = "none")}
+                    />
                   )}
-                >
-                  {STATUS_CONFIG[c.status]?.label || c.status}
-                </div>
-                {c.owner_confirmed && (
-                  <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-emerald-600">
-                    <Check size={10} />
-                    Dueño confirmado
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-ink line-clamp-1">
+                      {c.title || "Sin título"}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/55">
+                      {c.operation && (
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
+                            c.operation === "arriendo"
+                              ? "bg-sky-100 text-sky-700"
+                              : "bg-amber-100 text-amber-700"
+                          )}
+                        >
+                          {c.operation}
+                        </span>
+                      )}
+                      {c.commune && (
+                        <span className="flex items-center gap-1">
+                          <MapPin size={11} />
+                          {c.commune}
+                        </span>
+                      )}
+                      {c.bedrooms && <span>{c.bedrooms}d</span>}
+                      {c.price && <span>{formatPrice(c)}</span>}
+                      {c.scrape_status === "scraped" && (
+                        <span className="text-emerald-600 flex items-center gap-0.5">
+                          <Check size={10} />
+                          Scrapeado
+                        </span>
+                      )}
+                      {c.scrape_status === "failed" && (
+                        <span className="text-red-600 text-[10px]">❌ Error scrape</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-ink/40">
+                      Hace {new Date(c.created_at).toLocaleDateString("es-CL")}
+                    </p>
                   </div>
-                )}
-                <CardActions c={c} />
+                </Link>
+
+                <div className="flex-shrink-0 text-right">
+                  <div
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium",
+                      color?.badge || "bg-gray-100 text-gray-700"
+                    )}
+                  >
+                    {stage?.label || "Sin etapa"}
+                  </div>
+                  {c.owner_confirmed && (
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-emerald-600">
+                      <Check size={10} />
+                      Dueño confirmado
+                    </div>
+                  )}
+                  <CardActions c={c} />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -663,9 +727,9 @@ export function CaptacionesClient({
   );
 }
 
-// Modal para elegir a quién asignar al soltar una tarjeta en "Asignada"
-// (reemplaza al selector nativo del navegador, que no puede mostrar una
-// lista con roles).
+// Modal para elegir a quién asignar al soltar una tarjeta en una etapa de
+// tipo "assign" (reemplaza al selector nativo del navegador, que no puede
+// mostrar una lista con roles).
 function AssignModal({
   captacion,
   assignableUsers,
@@ -680,7 +744,6 @@ function AssignModal({
   onConfirm: (userId: string) => void;
 }) {
   const [userId, setUserId] = useState(captacion.assigned_to || "");
-  const isReassign = captacion.status !== "draft" && captacion.status !== "assigned";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
@@ -698,10 +761,9 @@ function AssignModal({
           </button>
         </div>
 
-        {isReassign && (
+        {captacion.assigned_to && (
           <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Esta captación está en &quot;{STATUS_CONFIG[captacion.status]?.label}&quot;. Reasignar la
-            devuelve al estado &quot;Asignada&quot;.
+            Esta captación ya está asignada. Reasignarla puede reiniciar su etapa a la de asignación.
           </p>
         )}
 
@@ -740,7 +802,7 @@ function AssignModal({
   );
 }
 
-// Modal de notas para mover una tarjeta a Revisión o Visita Presencial
+// Modal de notas para mover una tarjeta a una etapa que pide nota
 // (reemplaza a window.prompt, que queda bloqueado si la app corre embebida
 // en un iframe con sandbox).
 function NotesModal({

@@ -47,7 +47,30 @@ export async function POST(
       );
     }
 
-    if (captacion.status !== "confirmed") {
+    let convertedStageId: string | null = null;
+    if (captacion.stage_id) {
+      const { data: currentStage } = await db
+        .from("captacion_pipeline_stages")
+        .select("stage_type, pipeline_id")
+        .eq("id", captacion.stage_id)
+        .single();
+      if (currentStage?.stage_type !== "confirmed") {
+        return NextResponse.json(
+          { error: "Solo se pueden convertir captaciones en una etapa de tipo \"confirmada\"" },
+          { status: 400 }
+        );
+      }
+      const { data: convertedStage } = await db
+        .from("captacion_pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", currentStage.pipeline_id)
+        .eq("stage_type", "converted")
+        .limit(1)
+        .maybeSingle();
+      convertedStageId = convertedStage?.id ?? null;
+    } else if (captacion.status !== "confirmed") {
+      // Captación legada sin pipeline_id (no debería pasar tras la migración
+      // 0078, pero por si acaso queda alguna sin backfillear)
       return NextResponse.json(
         { error: "Solo se pueden convertir captaciones confirmadas" },
         { status: 400 }
@@ -135,6 +158,7 @@ export async function POST(
       .from("captaciones")
       .update({
         status: "converted_to_property",
+        ...(convertedStageId ? { stage_id: convertedStageId } : {}),
         converted_to_property_id: property.id,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

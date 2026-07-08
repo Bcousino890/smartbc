@@ -39,7 +39,7 @@ export async function POST(
     // Obtener captacion para validación
     const { data: captacion, error: fetchError } = await db
       .from("captaciones")
-      .select("id, title, status, created_by, assigned_to")
+      .select("id, title, pipeline_id, stage_id, created_by, assigned_to")
       .eq("id", id)
       .single();
 
@@ -76,15 +76,44 @@ export async function POST(
       );
     }
 
-    // Actualizar captacion: asignar y cambiar estado a "assigned"
+    // Una captación ya convertida a propiedad no se reasigna: reabrir su
+    // workflow no tiene efecto (la propiedad real ya existe aparte).
+    if (captacion.stage_id) {
+      const { data: currentStage } = await db
+        .from("captacion_pipeline_stages")
+        .select("stage_type")
+        .eq("id", captacion.stage_id)
+        .single();
+      if (currentStage?.stage_type === "converted") {
+        return NextResponse.json(
+          { error: "Esta captación ya fue convertida a propiedad, no se puede reasignar" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Si el pipeline tiene una etapa de tipo "assign", la captación se mueve
+    // ahí (mismo comportamiento que antes: asignar la lleva a "Asignada").
+    // Si no tiene ninguna, solo se actualiza el usuario asignado.
+    const updates: any = {
+      assigned_to: captadora_id,
+      assigned_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (captacion.pipeline_id) {
+      const { data: assignStage } = await db
+        .from("captacion_pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", captacion.pipeline_id)
+        .eq("stage_type", "assign")
+        .limit(1)
+        .maybeSingle();
+      if (assignStage) updates.stage_id = assignStage.id;
+    }
+
     const { data: updated, error: updateError } = await db
       .from("captaciones")
-      .update({
-        assigned_to: captadora_id,
-        assigned_at: new Date().toISOString(),
-        status: "assigned",
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("id", id)
       .select()
       .single();

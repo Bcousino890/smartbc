@@ -2,25 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { isTerminalStageType } from "@/lib/captaciones/pipeline-stage-types";
 
-// Transiciones de estado permitidas
-// Debe coincidir con ALLOWED_TRANSITIONS del detail-client (frontend).
-const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  draft: ["assigned", "rejected"],
-  assigned: ["preliminary_data", "field_visit", "rejected"],
-  preliminary_data: ["contacting", "field_visit", "revision", "rejected"],
-  contacting: ["field_visit", "revision", "confirmed", "rejected"],
-  // Visita presencial: no hay datos del dueño, hay que ir a la propiedad.
-  // Las instrucciones de la visita van en notes (obligatorias).
-  field_visit: ["contacting", "preliminary_data", "confirmed", "rejected"],
-  revision: ["preliminary_data", "contacting"],
-  // converted_to_property NO se permite aquí: la conversión real (crear la
-  // propiedad + copiar fotos) la hace POST /captaciones/[id]/convert.
-  confirmed: ["rejected"],
-  converted_to_property: [],
-  rejected: [],
-};
-
+// Mueve una captación a otra etapa de su mismo pipeline. Las etapas son
+// configurables (migración 0078): en vez de un enum fijo, cada pipeline
+// define sus propias etapas con un stage_type que determina el
+// comportamiento (ver lib/captaciones/pipeline-stage-types.ts). Por eso las
+// reglas de aquí son genéricas en vez de un mapa de transiciones fijo:
+//  - No se puede mover DESDE una etapa terminal (rejected/converted).
+//  - No se puede mover manualmente HACIA "converted": eso solo lo hace
+//    POST /captaciones/[id]/convert (crea la propiedad real).
+//  - No se puede mover manualmente HACIA "assign": eso lo hace
+//    POST /captaciones/[id]/assign (requiere elegir un usuario).
+//  - Si la etapa destino pide notas (requires_notes), son obligatorias.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,90 +28,80 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { new_status, notes } = body;
+    const { new_stage_id, notes } = body;
 
-    if (!new_status) {
-      return NextResponse.json(
-        { error: "new_status es requerido" },
-        { status: 400 }
-      );
+    if (!new_stage_id) {
+      return NextResponse.json({ error: "new_stage_id es requerido" }, { status: 400 });
     }
 
     const db = createAdminClient() as any;
 
-    // Obtener captacion actual
     const { data: captacion, error: fetchError } = await db
       .from("captaciones")
-      .select("id, status, assigned_to, created_by, title")
+      .select("id, pipeline_id, stage_id, assigned_to, created_by, title")
       .eq("id", id)
       .single();
 
     if (fetchError || !captacion) {
+      return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
+    }
+    if (!captacion.pipeline_id || !captacion.stage_id) {
       return NextResponse.json(
-        { error: "Captación no encontrada" },
-        { status: 404 }
+        { error: "Esta captación no tiene pipeline asignado. Ábrela y guarda cualquier cambio para migrarla." },
+        { status: 400 }
       );
     }
 
-    // Validar permisos usando el sistema oficial
     const editPerms = getCaptacionEditPermissions(profile.role);
-
     const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
     const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
     const isCreator = captacion.created_by === profile.id;
 
-    // Validar que tiene acceso a esta captación
     if (!isAdmin && !isCaptadora && !isCreator) {
-      return NextResponse.json(
-        { error: "No tienes acceso a esta captación" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
-
-    // Validar que puede cambiar estado (según rol)
     if (!isAdmin && !editPerms.fields.canEditStatus) {
-      return NextResponse.json(
-        { error: "No tienes permisos para cambiar el estado" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "No tienes permisos para cambiar el estado" }, { status: 403 });
     }
 
-    // Validar transición
-    const allowedNextStates = ALLOWED_TRANSITIONS[captacion.status] || [];
-    if (!allowedNextStates.includes(new_status)) {
+    const [{ data: currentStage }, { data: targetStage }] = await Promise.all([
+      db.from("captacion_pipeline_stages").select("*").eq("id", captacion.stage_id).single(),
+      db.from("captacion_pipeline_stages").select("*").eq("id", new_stage_id).single(),
+    ]);
+
+    if (!targetStage || targetStage.pipeline_id !== captacion.pipeline_id) {
+      return NextResponse.json({ error: "Esa etapa no pertenece al pipeline de esta captación" }, { status: 400 });
+    }
+    if (currentStage && isTerminalStageType(currentStage.stage_type)) {
       return NextResponse.json(
-        {
-          error: `No puedes cambiar de ${captacion.status} a ${new_status}. Estados permitidos: ${allowedNextStates.join(", ")}`,
-        },
+        { error: `"${currentStage.label}" es una etapa terminal, no se puede mover desde ahí` },
+        { status: 400 }
+      );
+    }
+    if (targetStage.stage_type === "converted") {
+      return NextResponse.json(
+        { error: "Para convertir a propiedad usa el botón \"Convertir a propiedad\" de la ficha" },
+        { status: 400 }
+      );
+    }
+    if (targetStage.stage_type === "assign") {
+      return NextResponse.json(
+        { error: "Para mover a una etapa de asignación indica a quién (usa el flujo de asignar)" },
+        { status: 400 }
+      );
+    }
+    if (targetStage.requires_notes && !notes) {
+      return NextResponse.json(
+        { error: `Escribe una nota para mover a "${targetStage.label}"` },
         { status: 400 }
       );
     }
 
-    // Validar que si es cambio a "revision", tenga notas
-    if (new_status === "revision" && !notes) {
-      return NextResponse.json(
-        { error: "Se requieren notas al marcar como revisión" },
-        { status: 400 }
-      );
-    }
-
-    // Visita presencial requiere instrucciones (dirección, a quién preguntar,
-    // qué dejar si no hay nadie, etc.)
-    if (new_status === "field_visit" && !notes) {
-      return NextResponse.json(
-        { error: "Escribe las instrucciones para ir a la propiedad" },
-        { status: 400 }
-      );
-    }
-
-    // Actualizar status. revision_notes guarda el motivo/instrucciones del
-    // estado actual (revisión o visita presencial).
     const { data: updated, error: updateError } = await db
       .from("captaciones")
       .update({
-        status: new_status,
-        revision_notes:
-          new_status === "revision" || new_status === "field_visit" ? notes : null,
+        stage_id: new_stage_id,
+        revision_notes: targetStage.requires_notes ? notes : null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -126,73 +110,65 @@ export async function POST(
 
     if (updateError) throw updateError;
 
-    // Registrar en log
     await db.from("captacion_logs").insert({
       captacion_id: id,
       created_by: profile.id,
       attempt_type: "status_change",
-      result: new_status,
-      notes: notes || `Estado cambiado a ${new_status}`,
+      result: targetStage.key,
+      notes: notes || `Movida a ${targetStage.label}`,
     });
 
-    // Enviar notificaciones según el nuevo estado
+    // Notificaciones según el tipo de la etapa destino
     const propertyTitle = captacion.title || "Captación";
+    const notifyIds = [captacion.assigned_to, captacion.created_by].filter(
+      (uid: string | null, i: number, arr: (string | null)[]) =>
+        uid && uid !== profile.id && arr.indexOf(uid) === i
+    );
 
-    if (new_status === "field_visit") {
-      // Notificar a la persona asignada (ejecutivo/captadora) que hay que ir
-      // presencialmente a la propiedad, con las instrucciones
-      const notifyUserId = captacion.assigned_to || captacion.created_by;
-      if (notifyUserId && notifyUserId !== profile.id) {
+    if (targetStage.requires_notes) {
+      for (const uid of notifyIds) {
         await db.from("crm_notifications").insert({
-          user_id: notifyUserId,
-          type: "captacion_field_visit",
-          title: "📍 Ir a la propiedad",
-          body: `${propertyTitle}: visita presencial requerida. ${notes}`,
+          user_id: uid,
+          type: "captacion_stage_notes",
+          title: `📍 ${targetStage.label}`,
+          body: `${propertyTitle}: se movió a "${targetStage.label}". ${notes}`,
           link: `/cl/admin/captaciones/${id}`,
           data: { captacion_id: id },
         });
       }
-    } else if (new_status === "revision") {
-      // Notificar al agente que hay que revisar
-      await db.from("crm_notifications").insert({
-        user_id: captacion.created_by,
-        type: "captacion_revision_needed",
-        title: "Revisión necesaria",
-        body: `Datos inconsistentes en ${propertyTitle}: ${notes}`,
-        link: `/cl/admin/captaciones/${id}`,
-        data: { captacion_id: id },
-      });
-    } else if (new_status === "confirmed") {
-      // Notificar al agente que está confirmada
-      await db.from("crm_notifications").insert({
-        user_id: captacion.created_by,
-        type: "captacion_confirmed",
-        title: "✅ Captación confirmada",
-        body: `${propertyTitle} está confirmada - El dueño quiere vender`,
-        link: `/cl/admin/captaciones/${id}`,
-        data: { captacion_id: id },
-      });
-    } else if (new_status === "rejected") {
-      // Notificar al agente que fue rechazada
-      await db.from("crm_notifications").insert({
-        user_id: captacion.created_by,
-        type: "captacion_rejected",
-        title: "Captación rechazada",
-        body: `${propertyTitle} fue rechazada`,
-        link: `/cl/admin/captaciones/${id}`,
-        data: { captacion_id: id },
-      });
+    } else if (targetStage.stage_type === "confirmed") {
+      for (const uid of notifyIds) {
+        await db.from("crm_notifications").insert({
+          user_id: uid,
+          type: "captacion_confirmed",
+          title: "✅ Captación confirmada",
+          body: `${propertyTitle} está en "${targetStage.label}" - El dueño quiere vender`,
+          link: `/cl/admin/captaciones/${id}`,
+          data: { captacion_id: id },
+        });
+      }
+    } else if (targetStage.stage_type === "rejected") {
+      if (captacion.created_by && captacion.created_by !== profile.id) {
+        await db.from("crm_notifications").insert({
+          user_id: captacion.created_by,
+          type: "captacion_rejected",
+          title: "Captación rechazada",
+          body: `${propertyTitle} fue rechazada`,
+          link: `/cl/admin/captaciones/${id}`,
+          data: { captacion_id: id },
+        });
+      }
     }
 
     return NextResponse.json({
       success: true,
       captacion: updated,
-      message: `Estado actualizado a ${new_status}`,
+      message: `Movida a ${targetStage.label}`,
     });
   } catch (err) {
     console.error("[captaciones status]", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Error al cambiar estado" },
+      { error: err instanceof Error ? err.message : "Error al cambiar de etapa" },
       { status: 500 }
     );
   }

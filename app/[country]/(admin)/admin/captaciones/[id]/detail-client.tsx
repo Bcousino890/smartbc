@@ -7,10 +7,22 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { Captacion, CaptacionContact, CaptacionExtraPhone } from "../actions";
+import type { Captacion, CaptacionContact, CaptacionExtraPhone, CaptacionStage } from "../actions";
 import { LocationSection } from "./location-section";
 import { ListingsSection } from "./listings-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
+import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
+
+// Descripciones cortas por tipo de etapa (las etapas "normal" son libres, así
+// que no tienen una descripción fija: el nombre que le puso el admin ya es
+// autoexplicativo).
+const STAGE_TYPE_HINT: Record<string, string> = {
+  draft: "Esperando asignación",
+  assign: "Asignada, a la espera de contacto",
+  confirmed: "Dueño confirmó que quiere vender",
+  rejected: "Rechazada",
+  converted: "Ya es una propiedad",
+};
 
 type Photo = { id: string; url: string; position: number };
 type Log = {
@@ -38,6 +50,7 @@ type DetailClientProps = {
   logs: Log[];
   captadoras: Array<{ id: string; full_name: string | null }>;
   listingOperations: ListingOperation[];
+  stages: CaptacionStage[];
 };
 
 const ATTEMPT_TYPE_LABELS: Record<string, string> = {
@@ -61,33 +74,6 @@ const RESULT_LABELS: Record<string, string> = {
   nobody_home: "No había nadie",
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; description: string }> = {
-  draft: { label: "Borrador", color: "bg-red-100 text-red-700", description: "Esperando asignación" },
-  assigned: { label: "Asignada", color: "bg-blue-100 text-blue-700", description: "Asignada a captadora" },
-  preliminary_data: { label: "Datos Preliminares", color: "bg-orange-100 text-orange-700", description: "Datos iniciales completados" },
-  contacting: { label: "Contactando", color: "bg-purple-100 text-purple-700", description: "En proceso de contacto" },
-  field_visit: { label: "Visita Presencial", color: "bg-amber-100 text-amber-800", description: "Sin datos del dueño: ir a la propiedad" },
-  revision: { label: "Revisión", color: "bg-orange-200 text-orange-800", description: "Revisar datos inconsistentes" },
-  confirmed: { label: "Confirmada", color: "bg-emerald-100 text-emerald-700", description: "Dueño confirmó que quiere vender" },
-  converted_to_property: { label: "Convertida", color: "bg-cyan-100 text-cyan-700", description: "Ya es una propiedad" },
-  rejected: { label: "Rechazada", color: "bg-red-100 text-red-700", description: "Rechazada" },
-};
-
-// Transiciones de estado permitidas (debe coincidir con backend)
-const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  draft: ["assigned", "rejected"],
-  assigned: ["preliminary_data", "field_visit", "rejected"],
-  preliminary_data: ["contacting", "field_visit", "revision", "rejected"],
-  contacting: ["field_visit", "revision", "confirmed", "rejected"],
-  field_visit: ["contacting", "preliminary_data", "confirmed", "rejected"],
-  revision: ["preliminary_data", "contacting"],
-  // La conversión a propiedad tiene su propio botón (llama a /convert, que
-  // crea la ficha real); por eso no aparece en el selector de estados.
-  confirmed: ["rejected"],
-  converted_to_property: [],
-  rejected: [],
-};
-
 function formatPrice(price: number | null, currency: string): string | null {
   if (!price) return null;
   if (currency === "uf") return `UF ${price.toLocaleString("es-CL")}`;
@@ -102,10 +88,21 @@ export function CaptacionDetailClient({
   logs,
   captadoras,
   listingOperations,
+  stages,
 }: DetailClientProps) {
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
+
+  // Etapa actual dentro del pipeline configurable (reemplaza al status fijo)
+  const currentStage = stages.find((s) => s.id === captacion.stage_id) || captacion.stage || null;
+  const stageColor = currentStage ? pipelineColor(currentStage.color_key) : null;
+  // Destinos válidos para "Cambiar Estado": cualquier otra etapa del mismo
+  // pipeline, salvo "converted" (solo vía conversión) y "assign" (solo vía
+  // el flujo de asignación, arriba en esta misma página).
+  const allowedNextStages = currentStage && currentStage.stage_type !== "rejected" && currentStage.stage_type !== "converted"
+    ? stages.filter((s) => s.id !== currentStage.id && s.stage_type !== "converted" && s.stage_type !== "assign")
+    : [];
 
   // La misma propiedad puede estar en venta Y arriendo (dos avisos). Se toma
   // el mejor precio por operación de los avisos de corredoras para mostrar
@@ -134,7 +131,7 @@ export function CaptacionDetailClient({
   const [assigningCaptadora, setAssigningCaptadora] = useState(false);
   const [showReassignForm, setShowReassignForm] = useState(false);
   const [selectedCaptadoraId, setSelectedCaptadoraId] = useState(captacion.assigned_to || "");
-  const [newStatus, setNewStatus] = useState("");
+  const [newStageId, setNewStageId] = useState("");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [formData, setFormData] = useState({
     owner_phone: captacion.owner_phone || "",
@@ -225,15 +222,11 @@ export function CaptacionDetailClient({
   }
 
   async function handleStatusChange() {
-    if (!newStatus) return;
+    if (!newStageId) return;
+    const targetStage = stages.find((s) => s.id === newStageId);
 
-    // Revisión y Visita Presencial requieren notas (motivo / instrucciones)
-    if ((newStatus === "revision" || newStatus === "field_visit") && !revisionNotes.trim()) {
-      setError(
-        newStatus === "field_visit"
-          ? "Escribe las instrucciones para ir a la propiedad"
-          : "Se requieren notas para marcar como revisión"
-      );
+    if (targetStage?.requires_notes && !revisionNotes.trim()) {
+      setError(`Escribe una nota para mover a "${targetStage.label}"`);
       return;
     }
 
@@ -244,16 +237,13 @@ export function CaptacionDetailClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          new_status: newStatus,
-          notes:
-            newStatus === "revision" || newStatus === "field_visit"
-              ? revisionNotes
-              : undefined,
+          new_stage_id: newStageId,
+          notes: targetStage?.requires_notes ? revisionNotes : undefined,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Error al cambiar estado");
+        setError(data.error || "Error al cambiar de etapa");
         return;
       }
       window.location.reload();
@@ -622,13 +612,15 @@ export function CaptacionDetailClient({
             <div className="flex flex-col items-end gap-2">
               <span className={cn(
                 "flex-shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
-                STATUS_CONFIG[captacion.status]?.color || "bg-gray-100 text-gray-700"
+                stageColor?.badge || "bg-gray-100 text-gray-700"
               )}>
-                {STATUS_CONFIG[captacion.status]?.label || captacion.status}
+                {currentStage?.label || "Sin etapa"}
               </span>
-              <p className="text-[10px] text-ink/40">
-                {STATUS_CONFIG[captacion.status]?.description}
-              </p>
+              {currentStage && (
+                <p className="text-[10px] text-ink/40">
+                  {STAGE_TYPE_HINT[currentStage.stage_type] || ""}
+                </p>
+              )}
             </div>
           </div>
 
@@ -749,26 +741,15 @@ export function CaptacionDetailClient({
         </div>
       </div>
 
-      {/* Instrucciones del estado actual: visita presencial o revisión */}
-      {captacion.status === "field_visit" && captacion.revision_notes && (
+      {/* Nota de la etapa actual (etapas que piden nota al entrar, ej. una
+          "Visita Presencial" o "Revisión" configurada en el pipeline) */}
+      {currentStage?.requires_notes && captacion.revision_notes && (
         <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-800">
             <MapPin size={15} />
-            Visita presencial — instrucciones
+            {currentStage.label}
           </h3>
           <p className="mt-2 whitespace-pre-wrap text-sm text-amber-900">
-            {captacion.revision_notes}
-          </p>
-          <p className="mt-2 text-xs text-amber-700">
-            No hay datos del dueño: hay que ir a la propiedad. Registra el
-            resultado en la pestaña Intentos.
-          </p>
-        </div>
-      )}
-      {captacion.status === "revision" && captacion.revision_notes && (
-        <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50/80 p-5">
-          <h3 className="text-sm font-semibold text-orange-800">Motivo de la revisión</h3>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-orange-900">
             {captacion.revision_notes}
           </p>
         </div>
@@ -843,7 +824,7 @@ export function CaptacionDetailClient({
 
       {/* Conversión a propiedad: paso final del flujo de captación. Crea la
           ficha real (borrador) con datos + fotos y enlaza la captación. */}
-      {captacion.status === "confirmed" && (isAdmin || isCreator) && (
+      {currentStage?.stage_type === "confirmed" && (isAdmin || isCreator) && (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -868,54 +849,48 @@ export function CaptacionDetailClient({
         </div>
       )}
 
-      {/* Cambio de estado (solo admin) */}
+      {/* Cambio de etapa (solo admin) */}
       {isAdmin && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
-          <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Estado</h3>
+          <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Etapa</h3>
           {(() => {
-            const allowedNextStatuses = ALLOWED_TRANSITIONS[captacion.status] ?? [];
+            const targetStage = stages.find((s) => s.id === newStageId);
             return (
               <div>
-                {allowedNextStatuses.length === 0 ? (
-                  <p className="text-sm text-ink/50">Este estado no permite más transiciones</p>
+                {allowedNextStages.length === 0 ? (
+                  <p className="text-sm text-ink/50">Esta etapa no permite más transiciones</p>
                 ) : (
                   <>
                     <div className="flex gap-3 items-end">
                       <div className="flex-1">
                         <select
-                          value={newStatus}
-                          onChange={(e) => setNewStatus(e.target.value)}
+                          value={newStageId}
+                          onChange={(e) => setNewStageId(e.target.value)}
                           className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
                         >
-                          <option value="">Selecciona nuevo estado...</option>
-                          {allowedNextStatuses.map((s) => (
-                            <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
+                          <option value="">Selecciona nueva etapa...</option>
+                          {allowedNextStages.map((s) => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
                           ))}
                         </select>
                       </div>
                       <button
                         onClick={handleStatusChange}
-                        disabled={updatingStatus || !newStatus || ((newStatus === "revision" || newStatus === "field_visit") && !revisionNotes.trim())}
+                        disabled={updatingStatus || !newStageId || (targetStage?.requires_notes && !revisionNotes.trim())}
                         className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
                       >
                         {updatingStatus ? "Actualizando..." : "Actualizar"}
                       </button>
                     </div>
-                    {(newStatus === "revision" || newStatus === "field_visit") && (
+                    {targetStage?.requires_notes && (
                       <div className="mt-3">
                         <label className="block text-xs font-medium text-ink/70 mb-1">
-                          {newStatus === "field_visit"
-                            ? "Instrucciones para ir a la propiedad (requerido)"
-                            : "Motivo de la revisión (requerido)"}
+                          Nota para &quot;{targetStage.label}&quot; (requerido)
                         </label>
                         <textarea
                           value={revisionNotes}
                           onChange={(e) => setRevisionNotes(e.target.value)}
-                          placeholder={
-                            newStatus === "field_visit"
-                              ? "Ej: Ir a la dirección, preguntar por el dueño al conserje, dejar carta si no hay nadie..."
-                              : "Ej: El teléfono no corresponde al dueño..."
-                          }
+                          placeholder="Escribe el motivo o las instrucciones..."
                           rows={2}
                           className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
                         />

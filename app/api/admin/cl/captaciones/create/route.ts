@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
 import { canAccess } from "@/lib/permissions";
+import { getDefaultPipeline, getStagesForPipeline } from "@/lib/captaciones/pipeline";
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +22,26 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const db = createAdminClient() as any;
+
+    // Pipeline de la captación nueva: el que venga en el body (si el agente
+    // eligió uno en el selector) o el pipeline default del país.
+    let pipelineId: string | null = null;
+    let draftStageId: string | null = null;
+    if (body.pipeline_id) {
+      const stages = await getStagesForPipeline(body.pipeline_id).catch(() => []);
+      const draftStage = stages.find((s) => s.stage_type === "draft");
+      if (draftStage) {
+        pipelineId = body.pipeline_id;
+        draftStageId = draftStage.id;
+      }
+    }
+    if (!pipelineId) {
+      const defaultPipeline = await getDefaultPipeline("cl").catch(() => null);
+      if (defaultPipeline) {
+        pipelineId = defaultPipeline.pipeline.id;
+        draftStageId = defaultPipeline.stages.find((s) => s.stage_type === "draft")?.id ?? null;
+      }
+    }
 
     // Create the captacion first (with whatever data the agent provided)
     const { data: captacion, error } = await db
@@ -42,6 +63,8 @@ export async function POST(request: Request) {
         zone: body.zone || null,
         notes: body.notes || null,
         status: "draft",
+        pipeline_id: pipelineId,
+        stage_id: draftStageId,
         scrape_status: "pending",
       })
       .select()
