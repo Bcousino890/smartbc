@@ -652,7 +652,7 @@ export function CaptacionDetailClient({
             )}
             {captacion.square_meters && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
-                <p className="text-[10px] text-ink/50 uppercase tracking-wide">Superficie</p>
+                <p className="text-[10px] text-ink/50 uppercase tracking-wide">Superficie total</p>
                 <p className="mt-0.5 text-base font-bold text-ink">{captacion.square_meters} m²</p>
               </div>
             )}
@@ -907,7 +907,10 @@ export function CaptacionDetailClient({
               <InfoRow label="Baños">{captacion.bathrooms}</InfoRow>
             )}
             {captacion.square_meters != null && (
-              <InfoRow label="Superficie">{captacion.square_meters} m²</InfoRow>
+              <InfoRow label="Superficie total">{captacion.square_meters} m²</InfoRow>
+            )}
+            {captacion.useful_square_meters != null && (
+              <InfoRow label="Superficie útil">{captacion.useful_square_meters} m²</InfoRow>
             )}
             {(captacion.commune || captacion.region) && (
               <InfoRow label="Ubicación">

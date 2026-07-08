@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
           bedrooms: scraped.bedrooms,
           bathrooms: scraped.bathrooms,
           square_meters: scraped.square_meters,
+          useful_square_meters: scraped.useful_square_meters,
           region: scraped.region,
           commune: scraped.commune,
           zone: scraped.zone,

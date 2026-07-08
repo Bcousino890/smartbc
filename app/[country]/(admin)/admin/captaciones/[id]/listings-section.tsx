@@ -24,6 +24,7 @@ type Listing = {
   bedrooms: number | null;
   bathrooms: number | null;
   square_meters: number | null;
+  useful_square_meters: number | null;
   commune: string | null;
   cover_photo_url: string | null;
   photo_urls: string[] | null;
@@ -86,7 +87,13 @@ export function ListingsSection({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Error al scrapear el aviso");
+        const msg = String(data.error || "Error al scrapear el aviso");
+        // Tabla inexistente / caché de esquema => falta aplicar la migración
+        setError(
+          /does not exist|schema cache|not find the table/i.test(msg)
+            ? "Faltan las tablas de este módulo: ve a Configuración → \"Migraciones de Base de Datos\" → aplicar, y vuelve a intentarlo."
+            : msg
+        );
         return;
       }
       setListings((prev) => {
@@ -235,6 +242,9 @@ export function ListingsSection({
                           {trend < 0 ? "Bajó" : "Subió"} desde{" "}
                           {formatListingPrice(previous!.price, previous!.currency)}
                         </span>
+                      )}
+                      {listing.square_meters != null && (
+                        <span>{listing.square_meters} m²{listing.useful_square_meters != null ? ` (útil ${listing.useful_square_meters} m²)` : ""}</span>
                       )}
                       {(listing.photo_urls?.length ?? 0) > 0 && (
                         <span>{listing.photo_urls!.length} fotos</span>

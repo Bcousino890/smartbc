@@ -35,6 +35,7 @@ export type Captacion = {
   bedrooms: number | null;
   bathrooms: number | null;
   square_meters: number | null;
+  useful_square_meters: number | null;
   cover_photo_url: string | null;
   region: string | null;
   commune: string | null;
@@ -140,6 +141,7 @@ export async function getCaptacion(id: string) {
     features: data.features ?? null,
     broker_name: data.broker_name ?? null,
     external_reference: data.external_reference ?? null,
+    useful_square_meters: data.useful_square_meters ?? null,
     contacts,
   } as Captacion;
 }

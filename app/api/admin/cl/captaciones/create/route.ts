@@ -82,6 +82,7 @@ async function scrapeAndUpdate(captacionId: string, url: string) {
         bedrooms: scraped.bedrooms || undefined,
         bathrooms: scraped.bathrooms || undefined,
         square_meters: scraped.square_meters || undefined,
+        useful_square_meters: scraped.useful_square_meters || undefined,
         region: scraped.region || undefined,
         commune: scraped.commune || undefined,
         zone: scraped.zone || undefined,
