@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { getCaptacion, getCaptadoras } from "../actions";
+import { getCaptacion, getChileAssignableUsers } from "../actions";
 import { CaptacionDetailClient } from "./detail-client";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -43,10 +43,10 @@ export default async function CaptacionDetailPage({
       .select("*, profiles:created_by(full_name)")
       .eq("captacion_id", id)
       .order("created_at", { ascending: false }),
-    getCaptadoras(),
+    getChileAssignableUsers(),
     // Fetch assigned user's profile by ID regardless of role (for name display)
     captacion.assigned_to
-      ? db.from("profiles").select("id, full_name").eq("id", captacion.assigned_to).single()
+      ? db.from("profiles").select("id, full_name, role").eq("id", captacion.assigned_to).single()
       : Promise.resolve({ data: null }),
     // Avisos de corredoras: para mostrar en la Ficha si la propiedad también
     // está en arriendo/venta (la misma prop suele tener ambos avisos)
@@ -62,9 +62,14 @@ export default async function CaptacionDetailPage({
   const listingOperations =
     listingsResult.status === "fulfilled" ? (listingsResult.value.data || []) : [];
 
-  // Ensure the assigned user's name is always available even if not role='captadora'
+  // Ensure the assigned user's name is always available even if their role
+  // isn't in the assignable list (ej: rol cambiado después de asignar)
   if (assignedProfileResult.status === "fulfilled" && assignedProfileResult.value.data) {
-    const assignedProfile = assignedProfileResult.value.data as { id: string; full_name: string | null };
+    const assignedProfile = assignedProfileResult.value.data as {
+      id: string;
+      full_name: string | null;
+      role: string;
+    };
     if (!captadorasList.find((c: { id: string }) => c.id === assignedProfile.id)) {
       captadorasList.push(assignedProfile);
     }

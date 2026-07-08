@@ -13,14 +13,24 @@ import { cn } from "@/lib/utils";
 import { CreateCaptacionModal } from "./create-captacion-modal";
 import type { Captacion } from "./actions";
 
-type Captadora = { id: string; full_name: string | null };
+type AssignableUser = { id: string; full_name: string | null; role: string };
 
 type CaptacionesClientProps = {
   captaciones: Captacion[];
   userRole: string;
-  captadoras: Captadora[];
+  assignableUsers: AssignableUser[];
   canAssign: boolean;
   canDelete: boolean;
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Propietario",
+  admin: "Administrador",
+  advisor: "Asesor",
+  agent_junior: "Agente Junior",
+  agent_senior: "Agente Senior",
+  agent_admin: "Agente Admin",
+  captadora: "Captadora",
 };
 
 // Columnas del pipeline en orden de flujo. Debe coincidir con los estados
@@ -49,6 +59,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
   rejected: { label: "Rechazada", color: "bg-red-100 text-red-700", dot: "bg-red-400" },
 };
 
+// Transiciones permitidas al arrastrar una tarjeta a otra columna. Es un
+// subconjunto de las transiciones que acepta el backend (status/route.ts):
+// se excluye "assigned" (requiere elegir a quién asignar, usa el selector de
+// la tarjeta) y "converted_to_property" (requiere el flujo de conversión de
+// la ficha, que crea la propiedad real).
+const DRAG_ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  draft: ["rejected"],
+  assigned: ["preliminary_data", "field_visit", "rejected"],
+  preliminary_data: ["contacting", "field_visit", "revision", "rejected"],
+  contacting: ["field_visit", "revision", "confirmed", "rejected"],
+  field_visit: ["contacting", "preliminary_data", "confirmed", "rejected"],
+  revision: ["preliminary_data", "contacting"],
+  confirmed: ["rejected"],
+  converted_to_property: [],
+  rejected: [],
+};
+
 function formatPrice(c: Captacion) {
   if (!c.price) return null;
   if (c.currency === "uf") return `UF ${c.price.toLocaleString("es-CL")}`;
@@ -58,7 +85,7 @@ function formatPrice(c: Captacion) {
 export function CaptacionesClient({
   captaciones: initialCaptaciones,
   userRole,
-  captadoras,
+  assignableUsers,
   canAssign,
   canDelete,
 }: CaptacionesClientProps) {
@@ -70,6 +97,11 @@ export function CaptacionesClient({
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [assignSelection, setAssignSelection] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+
+  // Drag & drop del pipeline
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const isCaptadora = userRole === "captadora";
 
@@ -99,15 +131,15 @@ export function CaptacionesClient({
   // Asignación rápida al ejecutivo/captadora directamente desde la tarjeta,
   // para que le llegue la notificación y pueda llamar de inmediato.
   async function handleQuickAssign(c: Captacion) {
-    const captadoraId = assignSelection[c.id];
-    if (!captadoraId) return;
+    const userId = assignSelection[c.id];
+    if (!userId) return;
     setError("");
     setAssigningId(c.id);
     try {
       const res = await fetch(`/api/admin/cl/captaciones/${c.id}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ captadora_id: captadoraId }),
+        body: JSON.stringify({ captadora_id: userId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -116,7 +148,7 @@ export function CaptacionesClient({
       }
       setCaptaciones((prev) =>
         prev.map((x) =>
-          x.id === c.id ? { ...x, status: "assigned" as const, assigned_to: captadoraId } : x
+          x.id === c.id ? { ...x, status: "assigned" as const, assigned_to: userId } : x
         )
       );
     } catch {
@@ -125,6 +157,54 @@ export function CaptacionesClient({
       setAssigningId(null);
     }
   }
+
+  // Mueve la tarjeta soltada a la columna de destino cambiando su estado.
+  // Revisión y Visita Presencial requieren instrucciones/motivo.
+  async function handleDropOnStatus(targetStatus: string) {
+    const dragged = captaciones.find((c) => c.id === draggedId);
+    setDragOverStatus(null);
+    if (!dragged || dragged.status === targetStatus) return;
+
+    const allowed = DRAG_ALLOWED_TRANSITIONS[dragged.status] || [];
+    if (!allowed.includes(targetStatus)) return;
+
+    let notes: string | undefined;
+    if (targetStatus === "revision" || targetStatus === "field_visit") {
+      const input = window.prompt(
+        targetStatus === "field_visit"
+          ? "Instrucciones para ir a la propiedad (dirección, a quién preguntar, qué dejar si no hay nadie):"
+          : "Motivo de la revisión:"
+      );
+      if (!input || !input.trim()) return;
+      notes = input.trim();
+    }
+
+    setError("");
+    setMovingId(dragged.id);
+    try {
+      const res = await fetch(`/api/admin/cl/captaciones/${dragged.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_status: targetStatus, notes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Error al mover la captación");
+        return;
+      }
+      setCaptaciones((prev) =>
+        prev.map((x) =>
+          x.id === dragged.id ? { ...x, status: targetStatus as Captacion["status"] } : x
+        )
+      );
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setMovingId(null);
+    }
+  }
+
+  const draggedCaptacion = captaciones.find((c) => c.id === draggedId) || null;
 
   function CardActions({ c }: { c: Captacion }) {
     if (!canAssign && !canDelete) return null;
@@ -142,9 +222,10 @@ export function CaptacionesClient({
               className="min-w-0 flex-1 rounded-md border border-ink/10 bg-white px-1.5 py-1 text-[11px] focus:border-gold/50 focus:outline-none"
             >
               <option value="">Asignar a...</option>
-              {captadoras.map((cap) => (
-                <option key={cap.id} value={cap.id}>
-                  {cap.full_name || "Sin nombre"}
+              {assignableUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.full_name || "Sin nombre"}
+                  {ROLE_LABEL[u.role] ? ` · ${ROLE_LABEL[u.role]}` : ""}
                 </option>
               ))}
             </select>
@@ -247,7 +328,8 @@ export function CaptacionesClient({
           </p>
         </div>
       ) : view === "pipeline" ? (
-        /* ── Pipeline: una columna por estado del workflow ── */
+        /* ── Pipeline: una columna por estado del workflow. Arrastra una
+            tarjeta a otra columna para cambiar su estado. ── */
         <div className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-4">
           {PIPELINE_STATUSES.map((status) => {
             const items = captaciones.filter((c) => c.status === status);
@@ -259,6 +341,10 @@ export function CaptacionesClient({
               return null;
             }
             const config = STATUS_CONFIG[status];
+            const isValidDropTarget =
+              draggedCaptacion != null &&
+              (DRAG_ALLOWED_TRANSITIONS[draggedCaptacion.status] || []).includes(status);
+            const isDragOver = dragOverStatus === status && isValidDropTarget;
             return (
               <div key={status} className="w-60 flex-shrink-0">
                 <div className="mb-2 flex items-center gap-2 px-1">
@@ -268,64 +354,109 @@ export function CaptacionesClient({
                     {items.length}
                   </span>
                 </div>
-                <div className="space-y-2 rounded-xl bg-ink/3 p-2 min-h-[80px]">
+                <div
+                  onDragOver={(e) => {
+                    if (!isValidDropTarget) return;
+                    e.preventDefault();
+                    if (dragOverStatus !== status) setDragOverStatus(status);
+                  }}
+                  onDragLeave={() =>
+                    setDragOverStatus((prev) => (prev === status ? null : prev))
+                  }
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleDropOnStatus(status);
+                  }}
+                  className={cn(
+                    "space-y-2 rounded-xl bg-ink/3 p-2 min-h-[80px] transition",
+                    isDragOver && "bg-gold/10 ring-2 ring-gold/50",
+                    draggedCaptacion &&
+                      draggedCaptacion.status !== status &&
+                      !isValidDropTarget &&
+                      "opacity-40"
+                  )}
+                >
                   {items.length === 0 ? (
-                    <p className="py-4 text-center text-[11px] text-ink/30">Vacío</p>
+                    <p className="py-4 text-center text-[11px] text-ink/30">
+                      {isDragOver ? "Suelta aquí" : "Vacío"}
+                    </p>
                   ) : (
-                    items.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => router.push(`/cl/admin/captaciones/${c.id}`)}
-                        className="cursor-pointer rounded-lg border border-gold/15 bg-white p-2.5 transition hover:border-gold/40 hover:shadow-sm"
-                      >
-                        {c.cover_photo_url && (
-                          <img
-                            src={c.cover_photo_url}
-                            alt=""
-                            className="mb-2 h-20 w-full rounded-md object-cover"
-                            onError={(e) => (e.currentTarget.style.display = "none")}
-                          />
-                        )}
-                        <p className="text-xs font-semibold text-ink line-clamp-2 leading-snug">
-                          {c.title || "Sin título"}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/55">
-                          {c.operation && (
-                            <span
-                              className={cn(
-                                "rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
-                                c.operation === "arriendo"
-                                  ? "bg-sky-100 text-sky-700"
-                                  : "bg-amber-100 text-amber-700"
-                              )}
-                            >
-                              {c.operation}
-                            </span>
+                    items.map((c) => {
+                      const canDrag =
+                        (DRAG_ALLOWED_TRANSITIONS[c.status] || []).length > 0 &&
+                        movingId !== c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          draggable={canDrag}
+                          onDragStart={(e) => {
+                            setDraggedId(c.id);
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => {
+                            setDraggedId(null);
+                            setDragOverStatus(null);
+                          }}
+                          onClick={() => {
+                            if (draggedId) return;
+                            router.push(`/cl/admin/captaciones/${c.id}`);
+                          }}
+                          className={cn(
+                            "rounded-lg border border-gold/15 bg-white p-2.5 transition hover:border-gold/40 hover:shadow-sm",
+                            canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+                            draggedId === c.id && "opacity-40",
+                            movingId === c.id && "opacity-60"
                           )}
-                          {c.commune && (
-                            <span className="flex items-center gap-0.5">
-                              <MapPin size={9} />
-                              {c.commune}
-                            </span>
+                        >
+                          {c.cover_photo_url && (
+                            <img
+                              src={c.cover_photo_url}
+                              alt=""
+                              className="mb-2 h-20 w-full rounded-md object-cover"
+                              onError={(e) => (e.currentTarget.style.display = "none")}
+                            />
                           )}
-                          {c.price && <span className="font-semibold text-ink/75">{formatPrice(c)}</span>}
+                          <p className="text-xs font-semibold text-ink line-clamp-2 leading-snug">
+                            {c.title || "Sin título"}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/55">
+                            {c.operation && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
+                                  c.operation === "arriendo"
+                                    ? "bg-sky-100 text-sky-700"
+                                    : "bg-amber-100 text-amber-700"
+                                )}
+                              >
+                                {c.operation}
+                              </span>
+                            )}
+                            {c.commune && (
+                              <span className="flex items-center gap-0.5">
+                                <MapPin size={9} />
+                                {c.commune}
+                              </span>
+                            )}
+                            {c.price && <span className="font-semibold text-ink/75">{formatPrice(c)}</span>}
+                          </div>
+                          {c.owner_confirmed && (
+                            <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+                              <Check size={10} />
+                              Dueño confirmado
+                            </p>
+                          )}
+                          {c.assigned_to && status !== "draft" && (
+                            <p className="mt-1 flex items-center gap-1 text-[10px] text-ink/40">
+                              <UserPlus size={9} />
+                              {assignableUsers.find((u) => u.id === c.assigned_to)?.full_name ||
+                                "Asignada"}
+                            </p>
+                          )}
+                          <CardActions c={c} />
                         </div>
-                        {c.owner_confirmed && (
-                          <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-emerald-600">
-                            <Check size={10} />
-                            Dueño confirmado
-                          </p>
-                        )}
-                        {c.assigned_to && status !== "draft" && (
-                          <p className="mt-1 flex items-center gap-1 text-[10px] text-ink/40">
-                            <UserPlus size={9} />
-                            {captadoras.find((cap) => cap.id === c.assigned_to)?.full_name ||
-                              "Asignada"}
-                          </p>
-                        )}
-                        <CardActions c={c} />
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

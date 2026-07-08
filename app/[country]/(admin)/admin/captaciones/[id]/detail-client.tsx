@@ -781,9 +781,9 @@ export function CaptacionDetailClient({
           {captacion.assigned_to && !showReassignForm ? (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Captadora asignada</p>
+                <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Asignada a</p>
                 <p className="text-sm font-semibold text-ink">
-                  {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "Captadora"}
+                  {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "Usuario"}
                 </p>
                 {captacion.assigned_at && (
                   <p className="text-xs text-ink/40 mt-0.5">
@@ -809,7 +809,7 @@ export function CaptacionDetailClient({
                   onChange={(e) => setSelectedCaptadoraId(e.target.value)}
                   className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
                 >
-                  <option value="">Selecciona captadora...</option>
+                  <option value="">Selecciona usuario...</option>
                   {captadoras
                     .filter(c => c.id !== captacion.assigned_to)
                     .map((captadora) => (

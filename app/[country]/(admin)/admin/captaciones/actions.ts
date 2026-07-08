@@ -225,3 +225,27 @@ export async function getCaptadoras() {
   if (error) throw error;
   return data as Array<{ id: string; full_name: string | null }>;
 }
+
+// Cualquier usuario staff de Chile puede recibir una captación para llamar
+// (no solo captadoras): agentes, admins, etc. Se usa en el selector "Asignar
+// a" del pipeline.
+export async function getChileAssignableUsers() {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("country", "cl")
+    .in("role", [
+      "owner",
+      "admin",
+      "advisor",
+      "agent_junior",
+      "agent_senior",
+      "agent_admin",
+      "captadora",
+    ])
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+  return data as Array<{ id: string; full_name: string | null; role: string }>;
+}
