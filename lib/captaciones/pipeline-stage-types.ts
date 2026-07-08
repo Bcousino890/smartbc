@@ -12,8 +12,8 @@ export const STAGE_TYPE_LABEL: Record<StageType, string> = {
   assign: "Asignación (pide elegir usuario)",
   normal: "Normal (sin comportamiento especial)",
   confirmed: "Confirmada (habilita convertir a propiedad)",
-  rejected: "Rechazada (terminal)",
-  converted: "Convertida (terminal, solo vía conversión)",
+  rejected: "Rechazada",
+  converted: "Convertida (solo vía conversión)",
 };
 
 export const STAGE_TYPE_DESCRIPTION: Record<StageType, string> = {
@@ -21,10 +21,6 @@ export const STAGE_TYPE_DESCRIPTION: Record<StageType, string> = {
   assign: "Al soltar o mover una captación aquí se pide elegir a qué usuario asignarla.",
   normal: "Etapa libre: úsala para cualquier paso intermedio de tu proceso.",
   confirmed: "Muestra el botón \"Convertir a propiedad\" cuando una captación está aquí.",
-  rejected: "Etapa terminal: no se puede mover a otra etapa arrastrando.",
-  converted: "Etapa terminal reservada: solo la fija el flujo de conversión, nunca se arrastra manualmente.",
+  rejected: "El dueño rechazó vender. Se puede mover a otra etapa si cambia de opinión.",
+  converted: "Reservada: solo la fija el flujo de conversión, nunca se arrastra manualmente hacia ella (pero sí se puede mover desde ahí a otra etapa).",
 };
-
-export function isTerminalStageType(stageType: string): boolean {
-  return stageType === "rejected" || stageType === "converted";
-}

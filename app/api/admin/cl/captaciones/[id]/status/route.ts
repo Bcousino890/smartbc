@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
-import { isTerminalStageType } from "@/lib/captaciones/pipeline-stage-types";
 
 // Mueve una captación a otra etapa de su mismo pipeline. Las etapas son
 // configurables (migración 0078): en vez de un enum fijo, cada pipeline
 // define sus propias etapas con un stage_type que determina el
 // comportamiento (ver lib/captaciones/pipeline-stage-types.ts). Por eso las
 // reglas de aquí son genéricas en vez de un mapa de transiciones fijo:
-//  - No se puede mover DESDE una etapa terminal (rejected/converted).
+//  - Ninguna etapa es terminal: siempre se puede mover desde cualquier
+//    etapa (incluida "rejected"/"converted") a otra del mismo pipeline.
 //  - No se puede mover manualmente HACIA "converted": eso solo lo hace
 //    POST /captaciones/[id]/convert (crea la propiedad real).
 //  - No se puede mover manualmente HACIA "assign": eso lo hace
@@ -64,19 +64,14 @@ export async function POST(
       return NextResponse.json({ error: "No tienes permisos para cambiar el estado" }, { status: 403 });
     }
 
-    const [{ data: currentStage }, { data: targetStage }] = await Promise.all([
-      db.from("captacion_pipeline_stages").select("*").eq("id", captacion.stage_id).single(),
-      db.from("captacion_pipeline_stages").select("*").eq("id", new_stage_id).single(),
-    ]);
+    const { data: targetStage } = await db
+      .from("captacion_pipeline_stages")
+      .select("*")
+      .eq("id", new_stage_id)
+      .single();
 
     if (!targetStage || targetStage.pipeline_id !== captacion.pipeline_id) {
       return NextResponse.json({ error: "Esa etapa no pertenece al pipeline de esta captación" }, { status: 400 });
-    }
-    if (currentStage && isTerminalStageType(currentStage.stage_type)) {
-      return NextResponse.json(
-        { error: `"${currentStage.label}" es una etapa terminal, no se puede mover desde ahí` },
-        { status: 400 }
-      );
     }
     if (targetStage.stage_type === "converted") {
       return NextResponse.json(

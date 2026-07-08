@@ -99,8 +99,10 @@ export function CaptacionDetailClient({
   const stageColor = currentStage ? pipelineColor(currentStage.color_key) : null;
   // Destinos válidos para "Cambiar Estado": cualquier otra etapa del mismo
   // pipeline, salvo "converted" (solo vía conversión) y "assign" (solo vía
-  // el flujo de asignación, arriba en esta misma página).
-  const allowedNextStages = currentStage && currentStage.stage_type !== "rejected" && currentStage.stage_type !== "converted"
+  // el flujo de asignación, arriba en esta misma página). Ninguna etapa de
+  // origen es terminal: incluso desde "rechazada" o "convertida" se puede
+  // volver a mover la captación.
+  const allowedNextStages = currentStage
     ? stages.filter((s) => s.id !== currentStage.id && s.stage_type !== "converted" && s.stage_type !== "assign")
     : [];
 
