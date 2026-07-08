@@ -50,14 +50,16 @@ export async function POST(
       );
     }
 
-    // Validar que el usuario existe y es staff de Chile. Antes solo se podía
-    // asignar a captadoras; ahora cualquier ejecutivo/admin de Chile puede
-    // recibir la captación para llamar.
+    // Validar que el usuario existe y es staff. Antes solo se podía asignar
+    // a captadoras; ahora cualquier ejecutivo/admin puede recibir la
+    // captación para llamar. No se filtra por country: ese campo del
+    // perfil no siempre está seteado a 'cl' aunque el usuario trabaje en
+    // captaciones (default histórico 'es'), y filtrar por él dejaba la
+    // lista de asignables vacía.
     const { data: captadora, error: captadoraError } = await db
       .from("profiles")
       .select("id, full_name, role")
       .eq("id", captadora_id)
-      .eq("country", "cl")
       .in("role", [
         "owner",
         "admin",
