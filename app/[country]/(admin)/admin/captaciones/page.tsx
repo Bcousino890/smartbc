@@ -74,7 +74,8 @@ export default async function CaptacionesPage({
   if (canAssign) {
     try {
       assignableUsers = await getChileAssignableUsers();
-    } catch {
+    } catch (e) {
+      console.error("getChileAssignableUsers error:", e);
       assignableUsers = [];
     }
   }
