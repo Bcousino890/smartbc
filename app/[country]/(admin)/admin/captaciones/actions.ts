@@ -70,6 +70,13 @@ export type Captacion = {
   next_action_note: string | null;
   updated_at: string;
   contacts?: CaptacionContact[];
+  // Indicadores de calidad de datos para los filtros del listado (se
+  // calculan aparte con attachDataQualityFlags; opcionales porque no todas
+  // las consultas los necesitan).
+  has_phone?: boolean;
+  has_name?: boolean;
+  has_address?: boolean;
+  has_rol?: boolean;
 };
 
 // La creación de captaciones vive en POST /api/admin/cl/captaciones/create
@@ -224,6 +231,40 @@ export async function getCaptadoras() {
 
   if (error) throw error;
   return data as Array<{ id: string; full_name: string | null }>;
+}
+
+// Calcula los indicadores de calidad de datos para el listado (filtros "sin
+// dirección", "con rol SII", "sin teléfono", "con nombre"). Teléfono/nombre
+// consideran tanto los campos heredados (owner_phone/owner_name) como los
+// contactos nuevos (captacion_contacts), ya que una captación reciente puede
+// tener el dato solo en un contacto y no en la columna vieja.
+export async function attachDataQualityFlags(captaciones: Captacion[]): Promise<Captacion[]> {
+  if (captaciones.length === 0) return captaciones;
+
+  const db = createAdminClient() as any;
+  const ids = captaciones.map((c) => c.id);
+  const { data: contacts } = await db
+    .from("captacion_contacts")
+    .select("captacion_id, phone, contact_name")
+    .in("captacion_id", ids);
+
+  const contactsByCaptacion = new Map<string, { phone: string | null; contact_name: string | null }[]>();
+  for (const contact of contacts || []) {
+    const list = contactsByCaptacion.get(contact.captacion_id) || [];
+    list.push(contact);
+    contactsByCaptacion.set(contact.captacion_id, list);
+  }
+
+  return captaciones.map((c) => {
+    const ownContacts = contactsByCaptacion.get(c.id) || [];
+    return {
+      ...c,
+      has_phone: Boolean(c.owner_phone) || ownContacts.some((ct) => ct.phone),
+      has_name: Boolean(c.owner_name) || ownContacts.some((ct) => ct.contact_name),
+      has_address: Boolean(c.address_real),
+      has_rol: Boolean(c.rol_propiedad),
+    };
+  });
 }
 
 // Cualquier usuario staff de Chile puede recibir una captación para llamar

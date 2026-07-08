@@ -2,7 +2,7 @@
 
 import {
   Check, Globe2, Plus, MapPin, Trash2, Loader2, PhoneCall,
-  LayoutGrid, List as ListIcon, UserPlus,
+  LayoutGrid, List as ListIcon, UserPlus, X, Filter,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -59,11 +59,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
   rejected: { label: "Rechazada", color: "bg-red-100 text-red-700", dot: "bg-red-400" },
 };
 
-// Transiciones permitidas al arrastrar una tarjeta a otra columna. Es un
-// subconjunto de las transiciones que acepta el backend (status/route.ts):
-// se excluye "assigned" (requiere elegir a quién asignar, usa el selector de
-// la tarjeta) y "converted_to_property" (requiere el flujo de conversión de
-// la ficha, que crea la propiedad real).
+// Transiciones de estado permitidas al arrastrar una tarjeta a otra columna
+// (subconjunto de lo que acepta el backend en status/route.ts). "assigned" se
+// maneja aparte: cualquier captación no terminal se puede (re)asignar
+// arrastrándola a esa columna, pidiendo a quién en un modal. "Convertida"
+// nunca es destino de arrastre: requiere el flujo de conversión de la ficha.
 const DRAG_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ["rejected"],
   assigned: ["preliminary_data", "field_visit", "rejected"],
@@ -75,6 +75,19 @@ const DRAG_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   converted_to_property: [],
   rejected: [],
 };
+
+const TERMINAL_STATUSES = new Set(["converted_to_property", "rejected"]);
+
+// Filtros de calidad de datos: "¿cuántas captaciones no tienen X?". Se
+// calculan sobre has_phone/has_name/has_address/has_rol (attachDataQualityFlags
+// en actions.ts, que combina los campos heredados con captacion_contacts).
+type DataFilterKey = "no_address" | "has_rol" | "no_phone" | "has_name";
+const DATA_FILTERS: Array<{ key: DataFilterKey; label: string; test: (c: Captacion) => boolean }> = [
+  { key: "no_address", label: "Sin dirección", test: (c) => !c.has_address },
+  { key: "has_rol", label: "Con Rol SII", test: (c) => Boolean(c.has_rol) },
+  { key: "no_phone", label: "Sin teléfono", test: (c) => !c.has_phone },
+  { key: "has_name", label: "Con nombre", test: (c) => Boolean(c.has_name) },
+];
 
 function formatPrice(c: Captacion) {
   if (!c.price) return null;
@@ -97,17 +110,29 @@ export function CaptacionesClient({
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [assignSelection, setAssignSelection] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [activeDataFilters, setActiveDataFilters] = useState<Set<DataFilterKey>>(new Set());
 
   // Drag & drop del pipeline
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
+  // Modales que reemplazan a window.prompt (que queda bloqueado en iframes
+  // con sandbox, como el panel de preview embebido)
+  const [pendingAssign, setPendingAssign] = useState<Captacion | null>(null);
+  const [pendingNotes, setPendingNotes] = useState<{ captacion: Captacion; targetStatus: string } | null>(null);
 
   const isCaptadora = userRole === "captadora";
 
   const handleCreated = () => {
     window.location.reload();
   };
+
+  // A qué columnas se puede arrastrar una tarjeta con este estado actual.
+  function getValidDropTargets(status: string): Set<string> {
+    const targets = new Set(DRAG_ALLOWED_TRANSITIONS[status] || []);
+    if (canAssign && !TERMINAL_STATUSES.has(status)) targets.add("assigned");
+    return targets;
+  }
 
   async function handleDelete(c: Captacion) {
     if (!confirm(`¿Eliminar la captación "${c.title || "Sin título"}"? Se borran fotos, intentos y avisos de corredoras.`)) return;
@@ -128,27 +153,25 @@ export function CaptacionesClient({
     }
   }
 
-  // Asignación rápida al ejecutivo/captadora directamente desde la tarjeta,
-  // para que le llegue la notificación y pueda llamar de inmediato.
-  async function handleQuickAssign(c: Captacion) {
-    const userId = assignSelection[c.id];
-    if (!userId) return;
+  // Asignación rápida al ejecutivo/captadora (selector de la tarjeta o modal
+  // de arrastre), para que le llegue la notificación y pueda llamar ya.
+  async function assignTo(captacionId: string, userId: string) {
     setError("");
-    setAssigningId(c.id);
+    setAssigningId(captacionId);
     try {
-      const res = await fetch(`/api/admin/cl/captaciones/${c.id}/assign`, {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacionId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ captadora_id: userId }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError(data.error || "Error al asignar");
         return;
       }
       setCaptaciones((prev) =>
         prev.map((x) =>
-          x.id === c.id ? { ...x, status: "assigned" as const, assigned_to: userId } : x
+          x.id === captacionId ? { ...x, status: "assigned" as const, assigned_to: userId } : x
         )
       );
     } catch {
@@ -158,31 +181,16 @@ export function CaptacionesClient({
     }
   }
 
-  // Mueve la tarjeta soltada a la columna de destino cambiando su estado.
-  // Revisión y Visita Presencial requieren instrucciones/motivo.
-  async function handleDropOnStatus(targetStatus: string) {
-    const dragged = captaciones.find((c) => c.id === draggedId);
-    setDragOverStatus(null);
-    if (!dragged || dragged.status === targetStatus) return;
+  async function handleQuickAssign(c: Captacion) {
+    const userId = assignSelection[c.id];
+    if (userId) assignTo(c.id, userId);
+  }
 
-    const allowed = DRAG_ALLOWED_TRANSITIONS[dragged.status] || [];
-    if (!allowed.includes(targetStatus)) return;
-
-    let notes: string | undefined;
-    if (targetStatus === "revision" || targetStatus === "field_visit") {
-      const input = window.prompt(
-        targetStatus === "field_visit"
-          ? "Instrucciones para ir a la propiedad (dirección, a quién preguntar, qué dejar si no hay nadie):"
-          : "Motivo de la revisión:"
-      );
-      if (!input || !input.trim()) return;
-      notes = input.trim();
-    }
-
+  async function moveStatus(captacionId: string, targetStatus: string, notes?: string) {
     setError("");
-    setMovingId(dragged.id);
+    setMovingId(captacionId);
     try {
-      const res = await fetch(`/api/admin/cl/captaciones/${dragged.id}/status`, {
+      const res = await fetch(`/api/admin/cl/captaciones/${captacionId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_status: targetStatus, notes }),
@@ -194,7 +202,7 @@ export function CaptacionesClient({
       }
       setCaptaciones((prev) =>
         prev.map((x) =>
-          x.id === dragged.id ? { ...x, status: targetStatus as Captacion["status"] } : x
+          x.id === captacionId ? { ...x, status: targetStatus as Captacion["status"] } : x
         )
       );
     } catch {
@@ -204,7 +212,33 @@ export function CaptacionesClient({
     }
   }
 
+  // Mueve la tarjeta soltada a la columna de destino. "Asignada" abre un
+  // modal para elegir a quién; Revisión/Visita Presencial piden el
+  // motivo/instrucciones en un modal antes de confirmar.
+  function handleDropOnStatus(targetStatus: string) {
+    const dragged = captaciones.find((c) => c.id === draggedId);
+    setDragOverStatus(null);
+    if (!dragged || dragged.status === targetStatus) return;
+
+    const allowed = getValidDropTargets(dragged.status);
+    if (!allowed.has(targetStatus)) return;
+
+    if (targetStatus === "assigned") {
+      setPendingAssign(dragged);
+      return;
+    }
+    if (targetStatus === "revision" || targetStatus === "field_visit") {
+      setPendingNotes({ captacion: dragged, targetStatus });
+      return;
+    }
+    moveStatus(dragged.id, targetStatus);
+  }
+
   const draggedCaptacion = captaciones.find((c) => c.id === draggedId) || null;
+
+  const filteredCaptaciones = captaciones.filter((c) =>
+    Array.from(activeDataFilters).every((key) => DATA_FILTERS.find((f) => f.key === key)!.test(c))
+  );
 
   function CardActions({ c }: { c: Captacion }) {
     if (!canAssign && !canDelete) return null;
@@ -314,17 +348,98 @@ export function CaptacionesClient({
         onCreated={handleCreated}
       />
 
+      {pendingAssign && (
+        <AssignModal
+          captacion={pendingAssign}
+          assignableUsers={assignableUsers}
+          assigning={assigningId === pendingAssign.id}
+          onCancel={() => setPendingAssign(null)}
+          onConfirm={(userId) => {
+            assignTo(pendingAssign.id, userId);
+            setPendingAssign(null);
+          }}
+        />
+      )}
+
+      {pendingNotes && (
+        <NotesModal
+          title={
+            pendingNotes.targetStatus === "field_visit"
+              ? "Visita presencial — instrucciones"
+              : "Motivo de la revisión"
+          }
+          placeholder={
+            pendingNotes.targetStatus === "field_visit"
+              ? "Ir a la dirección, preguntar por el dueño al conserje, dejar carta si no hay nadie..."
+              : "Ej: El teléfono no corresponde al dueño..."
+          }
+          saving={movingId === pendingNotes.captacion.id}
+          onCancel={() => setPendingNotes(null)}
+          onConfirm={(notes) => {
+            moveStatus(pendingNotes.captacion.id, pendingNotes.targetStatus, notes);
+            setPendingNotes(null);
+          }}
+        />
+      )}
+
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {captaciones.length === 0 ? (
+      {/* Filtros de calidad de datos: cuántas captaciones faltan dirección,
+          teléfono, etc. Los conteos son sobre el total; al activarlos se
+          filtra lo que se ve abajo (se pueden combinar varios a la vez). */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1 text-[11px] font-medium text-ink/40">
+          <Filter size={11} />
+          Filtros:
+        </span>
+        {DATA_FILTERS.map((f) => {
+          const count = captaciones.filter(f.test).length;
+          const isActive = activeDataFilters.has(f.key);
+          return (
+            <button
+              key={f.key}
+              onClick={() =>
+                setActiveDataFilters((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(f.key)) next.delete(f.key);
+                  else next.add(f.key);
+                  return next;
+                })
+              }
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                isActive
+                  ? "border-gold bg-gold/15 text-ink"
+                  : "border-ink/10 bg-white text-ink/60 hover:border-ink/20"
+              )}
+            >
+              {f.label} <span className="text-ink/40">({count})</span>
+            </button>
+          );
+        })}
+        {activeDataFilters.size > 0 && (
+          <button
+            onClick={() => setActiveDataFilters(new Set())}
+            className="text-[11px] text-ink/40 underline hover:text-ink/60"
+          >
+            Limpiar
+          </button>
+        )}
+      </div>
+
+      {filteredCaptaciones.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink/15 py-12 text-center">
           <Globe2 size={32} className="mx-auto mb-3 text-ink/25" />
           <p className="text-sm text-ink/50">
-            {isCaptadora ? "Sin captaciones asignadas" : "Sin captaciones creadas aún"}
+            {activeDataFilters.size > 0
+              ? "Ninguna captación coincide con los filtros"
+              : isCaptadora
+                ? "Sin captaciones asignadas"
+                : "Sin captaciones creadas aún"}
           </p>
         </div>
       ) : view === "pipeline" ? (
@@ -332,18 +447,20 @@ export function CaptacionesClient({
             tarjeta a otra columna para cambiar su estado. ── */
         <div className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-4">
           {PIPELINE_STATUSES.map((status) => {
-            const items = captaciones.filter((c) => c.status === status);
-            // Columnas terminales vacías no aportan: se ocultan
+            const items = filteredCaptaciones.filter((c) => c.status === status);
+            const isValidDropTarget =
+              draggedCaptacion != null && getValidDropTargets(draggedCaptacion.status).has(status);
+            // Columnas terminales vacías no aportan y se ocultan, EXCEPTO si
+            // son un destino válido de la tarjeta que se está arrastrando
+            // (si no, no habría dónde soltarla).
             if (
               items.length === 0 &&
-              ["converted_to_property", "rejected", "revision", "field_visit"].includes(status)
+              ["converted_to_property", "rejected", "revision", "field_visit"].includes(status) &&
+              !isValidDropTarget
             ) {
               return null;
             }
             const config = STATUS_CONFIG[status];
-            const isValidDropTarget =
-              draggedCaptacion != null &&
-              (DRAG_ALLOWED_TRANSITIONS[draggedCaptacion.status] || []).includes(status);
             const isDragOver = dragOverStatus === status && isValidDropTarget;
             return (
               <div key={status} className="w-60 flex-shrink-0">
@@ -382,9 +499,7 @@ export function CaptacionesClient({
                     </p>
                   ) : (
                     items.map((c) => {
-                      const canDrag =
-                        (DRAG_ALLOWED_TRANSITIONS[c.status] || []).length > 0 &&
-                        movingId !== c.id;
+                      const canDrag = !TERMINAL_STATUSES.has(c.status) && movingId !== c.id;
                       return (
                         <div
                           key={c.id}
@@ -466,7 +581,7 @@ export function CaptacionesClient({
       ) : (
         /* ── Lista ── */
         <div className="space-y-3">
-          {captaciones.map((c) => (
+          {filteredCaptaciones.map((c) => (
             <div
               key={c.id}
               className="flex gap-4 rounded-xl border border-gold/15 bg-white/70 p-4 transition hover:border-gold/30 hover:bg-white"
@@ -544,6 +659,144 @@ export function CaptacionesClient({
       )}
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
+    </div>
+  );
+}
+
+// Modal para elegir a quién asignar al soltar una tarjeta en "Asignada"
+// (reemplaza al selector nativo del navegador, que no puede mostrar una
+// lista con roles).
+function AssignModal({
+  captacion,
+  assignableUsers,
+  assigning,
+  onCancel,
+  onConfirm,
+}: {
+  captacion: Captacion;
+  assignableUsers: AssignableUser[];
+  assigning: boolean;
+  onCancel: () => void;
+  onConfirm: (userId: string) => void;
+}) {
+  const [userId, setUserId] = useState(captacion.assigned_to || "");
+  const isReassign = captacion.status !== "draft" && captacion.status !== "assigned";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Asignar a</h3>
+            <p className="mt-0.5 text-xs text-ink/50 line-clamp-1">{captacion.title || "Sin título"}</p>
+          </div>
+          <button onClick={onCancel} className="rounded p-1 text-ink/40 hover:bg-ink/5 hover:text-ink">
+            <X size={16} />
+          </button>
+        </div>
+
+        {isReassign && (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Esta captación está en &quot;{STATUS_CONFIG[captacion.status]?.label}&quot;. Reasignar la
+            devuelve al estado &quot;Asignada&quot;.
+          </p>
+        )}
+
+        <select
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+          className="mb-4 w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+        >
+          <option value="">Selecciona usuario...</option>
+          {assignableUsers.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.full_name || "Sin nombre"}
+              {ROLE_LABEL[u.role] ? ` · ${ROLE_LABEL[u.role]}` : ""}
+            </option>
+          ))}
+        </select>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => userId && onConfirm(userId)}
+            disabled={!userId || assigning}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+          >
+            {assigning && <Loader2 size={14} className="animate-spin" />}
+            Asignar
+          </button>
+          <button
+            onClick={onCancel}
+            className="rounded-lg border border-ink/20 px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de notas para mover una tarjeta a Revisión o Visita Presencial
+// (reemplaza a window.prompt, que queda bloqueado si la app corre embebida
+// en un iframe con sandbox).
+function NotesModal({
+  title,
+  placeholder,
+  saving,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  placeholder: string;
+  saving: boolean;
+  onCancel: () => void;
+  onConfirm: (notes: string) => void;
+}) {
+  const [notes, setNotes] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h3 className="text-sm font-semibold text-ink">{title}</h3>
+          <button onClick={onCancel} className="rounded p-1 text-ink/40 hover:bg-ink/5 hover:text-ink">
+            <X size={16} />
+          </button>
+        </div>
+
+        <textarea
+          autoFocus
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder={placeholder}
+          rows={4}
+          className="mb-4 w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
+        />
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => notes.trim() && onConfirm(notes.trim())}
+            disabled={!notes.trim() || saving}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Confirmar
+          </button>
+          <button
+            onClick={onCancel}
+            className="rounded-lg border border-ink/20 px-4 py-2 text-sm font-medium text-ink transition hover:bg-ink/5"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { CaptacionesClient } from "./captaciones-client";
-import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getChileAssignableUsers, type Captacion } from "./actions";
+import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getChileAssignableUsers, attachDataQualityFlags, type Captacion } from "./actions";
 import { canAccess } from "@/lib/permissions";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -53,6 +53,15 @@ export default async function CaptacionesPage({
       break;
     default:
       captaciones = [];
+  }
+
+  // Indicadores de calidad de datos para los filtros del listado (sin
+  // dirección, con rol SII, sin teléfono, con nombre)
+  try {
+    captaciones = await attachDataQualityFlags(captaciones);
+  } catch {
+    // Si falla (ej. tabla captacion_contacts no existe todavía), se muestra
+    // el listado igual sin los indicadores.
   }
 
   // Para asignación rápida desde el pipeline (solo quien puede asignar).
