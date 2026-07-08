@@ -50,17 +50,28 @@ export async function POST(
       );
     }
 
-    // Validar que la captadora existe
+    // Validar que el usuario existe y es staff de Chile. Antes solo se podía
+    // asignar a captadoras; ahora cualquier ejecutivo/admin de Chile puede
+    // recibir la captación para llamar.
     const { data: captadora, error: captadoraError } = await db
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, role")
       .eq("id", captadora_id)
-      .eq("role", "captadora")
+      .eq("country", "cl")
+      .in("role", [
+        "owner",
+        "admin",
+        "advisor",
+        "agent_junior",
+        "agent_senior",
+        "agent_admin",
+        "captadora",
+      ])
       .single();
 
     if (captadoraError || !captadora) {
       return NextResponse.json(
-        { error: "Captadora no encontrada" },
+        { error: "Usuario no encontrado" },
         { status: 404 }
       );
     }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { CaptacionesClient } from "./captaciones-client";
-import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getCaptadoras, type Captacion } from "./actions";
+import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getChileAssignableUsers, type Captacion } from "./actions";
 import { canAccess } from "@/lib/permissions";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -55,15 +55,17 @@ export default async function CaptacionesPage({
       captaciones = [];
   }
 
-  // Para asignación rápida desde el pipeline (solo quien puede asignar)
+  // Para asignación rápida desde el pipeline (solo quien puede asignar).
+  // Cualquier usuario staff de Chile puede recibir la captación, no solo
+  // captadoras.
   const canAssign = editPerms.fields.canAssignCaptadora === true;
   const canDelete = canAccess(profile.role, "captaciones", "delete");
-  let captadoras: Array<{ id: string; full_name: string | null }> = [];
+  let assignableUsers: Array<{ id: string; full_name: string | null; role: string }> = [];
   if (canAssign) {
     try {
-      captadoras = await getCaptadoras();
+      assignableUsers = await getChileAssignableUsers();
     } catch {
-      captadoras = [];
+      assignableUsers = [];
     }
   }
 
@@ -71,7 +73,7 @@ export default async function CaptacionesPage({
     <CaptacionesClient
       captaciones={captaciones}
       userRole={profile.role}
-      captadoras={captadoras}
+      assignableUsers={assignableUsers}
       canAssign={canAssign}
       canDelete={canDelete}
     />
