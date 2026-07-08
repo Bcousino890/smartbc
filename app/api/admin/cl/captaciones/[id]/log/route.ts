@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
 
     const { data: captacion } = await db
       .from("captaciones")
-      .select("assigned_to, created_by, title, status")
+      .select("assigned_to, created_by, title, status, pipeline_id, stage_id")
       .eq("id", id)
       .single();
 
@@ -58,15 +59,21 @@ export async function POST(
 
     if (error) throw error;
 
-    // Actualizar seguimiento en la captación. El estado pasa a "contactando"
-    // solo si el workflow está en una etapa previa (no pisar confirmada,
-    // rechazada, visita presencial ni revisión).
+    // Actualizar seguimiento en la captación. Si aún está en la etapa de
+    // entrada o de asignación (no se ha empezado a trabajar), avanza a la
+    // primera etapa de trabajo en curso del pipeline; en cualquier otra
+    // etapa (revisión, confirmada, etc.) no se pisa.
     const captacionUpdates: any = {
       last_contact_attempt_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    if (["assigned", "preliminary_data", "contacting"].includes(captacion.status)) {
-      captacionUpdates.status = "contacting";
+    if (captacion.pipeline_id) {
+      const stages = await getStagesForPipeline(captacion.pipeline_id);
+      const currentStage = stages.find((s) => s.id === captacion.stage_id);
+      if (currentStage && (currentStage.stage_type === "draft" || currentStage.stage_type === "assign")) {
+        const workingStage = pickWorkingStage(stages);
+        if (workingStage) captacionUpdates.stage_id = workingStage.id;
+      }
     }
     // Próximo paso agendado (ej: "volver a llamar el viernes en la mañana")
     if (body.next_action_at !== undefined) {

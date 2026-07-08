@@ -22,10 +22,23 @@ export type CaptacionContact = {
   updated_at: string;
 };
 
+export type CaptacionStage = {
+  id: string;
+  key: string;
+  label: string;
+  color_key: string;
+  stage_type: "draft" | "assign" | "normal" | "confirmed" | "rejected" | "converted";
+  position: number;
+  requires_notes: boolean;
+};
+
 export type Captacion = {
   id: string;
   created_by: string;
   created_at: string;
+  pipeline_id: string | null;
+  stage_id: string | null;
+  stage?: CaptacionStage | null;
   source_url: string;
   source_site: string | null;
   title: string | null;
@@ -84,11 +97,15 @@ export type Captacion = {
 // función createCaptacion de este archivo insertaba status 'pending' (estado
 // eliminado en la migración 0051) y sin created_by (NOT NULL): fallaba siempre.
 
+// Trae también la etapa embebida (nombre/color/tipo) para pintar el tablero
+// sin una consulta aparte por captación.
+const CAPTACION_SELECT_WITH_STAGE = "*, stage:captacion_pipeline_stages(id, key, label, color_key, stage_type, position, requires_notes)";
+
 export async function getCaptacionesForAgent(userId: string) {
   const db = createAdminClient() as any;
   const { data, error } = await db
     .from("captaciones")
-    .select("*")
+    .select(CAPTACION_SELECT_WITH_STAGE)
     .eq("created_by", userId)
     .eq("country", "cl")
     .order("created_at", { ascending: false });
@@ -101,7 +118,7 @@ export async function getCaptacionesForCaptadora(userId: string) {
   const db = createAdminClient() as any;
   const { data, error } = await db
     .from("captaciones")
-    .select("*")
+    .select(CAPTACION_SELECT_WITH_STAGE)
     .eq("assigned_to", userId)
     .eq("country", "cl")
     .order("created_at", { ascending: false });
@@ -114,7 +131,7 @@ export async function getCaptacionesAll() {
   const db = createAdminClient() as any;
   const { data, error } = await db
     .from("captaciones")
-    .select("*")
+    .select(CAPTACION_SELECT_WITH_STAGE)
     .eq("country", "cl")
     .order("created_at", { ascending: false });
 
@@ -126,7 +143,7 @@ export async function getCaptacion(id: string) {
   const db = createAdminClient() as any;
   const { data, error } = await db
     .from("captaciones")
-    .select("*")
+    .select(CAPTACION_SELECT_WITH_STAGE)
     .eq("id", id)
     .single();
 

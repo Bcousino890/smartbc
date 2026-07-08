@@ -4,6 +4,7 @@ import { getCaptacion, getChileAssignableUsers } from "../actions";
 import { CaptacionDetailClient } from "./detail-client";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { getStagesForPipeline } from "@/lib/captaciones/pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,9 @@ export default async function CaptacionDetailPage({
     }
   }
 
+  // Etapas del pipeline de esta captación (para la ficha/estado/conversión)
+  const stages = captacion.pipeline_id ? await getStagesForPipeline(captacion.pipeline_id).catch(() => []) : [];
+
   return (
     <CaptacionDetailClient
       captacion={captacion}
@@ -84,6 +88,7 @@ export default async function CaptacionDetailPage({
       logs={logs}
       captadoras={captadorasList}
       listingOperations={listingOperations}
+      stages={stages}
     />
   );
 }
