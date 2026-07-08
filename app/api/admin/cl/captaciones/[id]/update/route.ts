@@ -146,17 +146,24 @@ export async function POST(
         link: `/cl/admin/captaciones/${id}`,
         data: { captacion_id: id },
       });
-    } else if (isCaptadora && (body.owner_phone || body.owner_name || body.owner_contact || body.address_real) && captacion.status === "assigned") {
-      // Notificar al agente que se agregaron datos preliminares
+    } else if (body.owner_phone || body.owner_name || body.owner_contact || body.address_real) {
+      // Datos del propietario actualizados: avisar al ejecutivo (creador) y
+      // al asignado para que ya pueda llamar — excepto a quien editó.
       const propertyTitle = captacion.title || "Captación";
-      await db.from("crm_notifications").insert({
-        user_id: captacion.created_by,
-        type: "captacion_preliminary_data_added",
-        title: "Datos agregados",
-        body: `Se agregaron datos preliminares para ${propertyTitle}`,
-        link: `/cl/admin/captaciones/${id}`,
-        data: { captacion_id: id },
-      });
+      const notifyIds = [captacion.created_by, captacion.assigned_to].filter(
+        (uid: string | null, i: number, arr: (string | null)[]) =>
+          uid && uid !== profile.id && arr.indexOf(uid) === i
+      );
+      for (const uid of notifyIds) {
+        await db.from("crm_notifications").insert({
+          user_id: uid,
+          type: "captacion_owner_updated",
+          title: "📞 Propietario actualizado",
+          body: `Ya tienes el propietario actualizado de la captación: ${propertyTitle}`,
+          link: `/cl/admin/captaciones/${id}`,
+          data: { captacion_id: id },
+        });
+      }
     }
 
     return NextResponse.json(data);

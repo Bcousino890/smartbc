@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { CaptacionesClient } from "./captaciones-client";
-import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, type Captacion } from "./actions";
+import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getCaptadoras, type Captacion } from "./actions";
 import { canAccess } from "@/lib/permissions";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -55,10 +55,25 @@ export default async function CaptacionesPage({
       captaciones = [];
   }
 
+  // Para asignación rápida desde el pipeline (solo quien puede asignar)
+  const canAssign = editPerms.fields.canAssignCaptadora === true;
+  const canDelete = canAccess(profile.role, "captaciones", "delete");
+  let captadoras: Array<{ id: string; full_name: string | null }> = [];
+  if (canAssign) {
+    try {
+      captadoras = await getCaptadoras();
+    } catch {
+      captadoras = [];
+    }
+  }
+
   return (
     <CaptacionesClient
       captaciones={captaciones}
       userRole={profile.role}
+      captadoras={captadoras}
+      canAssign={canAssign}
+      canDelete={canDelete}
     />
   );
 }

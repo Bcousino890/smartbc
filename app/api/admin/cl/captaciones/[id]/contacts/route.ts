@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
+import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
 
 export async function GET(
   request: NextRequest,
@@ -87,6 +89,10 @@ export async function POST(
       .single();
 
     if (error) throw error;
+
+    // Avisar al ejecutivo: ya tiene datos del propietario para llamar
+    const profile = await getCurrentProfile().catch(() => null);
+    await notifyOwnerUpdated(db, id, profile?.id ?? null);
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {

@@ -36,7 +36,7 @@ export default async function CaptacionDetailPage({
 
   const db = createAdminClient() as any;
 
-  const [photosResult, logsResult, captadoras, assignedProfileResult] = await Promise.allSettled([
+  const [photosResult, logsResult, captadoras, assignedProfileResult, listingsResult] = await Promise.allSettled([
     db.from("captacion_photos").select("*").eq("captacion_id", id).order("position"),
     db
       .from("captacion_logs")
@@ -48,11 +48,19 @@ export default async function CaptacionDetailPage({
     captacion.assigned_to
       ? db.from("profiles").select("id, full_name").eq("id", captacion.assigned_to).single()
       : Promise.resolve({ data: null }),
+    // Avisos de corredoras: para mostrar en la Ficha si la propiedad también
+    // está en arriendo/venta (la misma prop suele tener ambos avisos)
+    db
+      .from("captacion_listings")
+      .select("operation, price, currency")
+      .eq("captacion_id", id),
   ]);
 
   const photos = photosResult.status === "fulfilled" ? (photosResult.value.data || []) : [];
   const logs = logsResult.status === "fulfilled" ? (logsResult.value.data || []) : [];
   const captadorasList = captadoras.status === "fulfilled" ? (captadoras.value || []) : [];
+  const listingOperations =
+    listingsResult.status === "fulfilled" ? (listingsResult.value.data || []) : [];
 
   // Ensure the assigned user's name is always available even if not role='captadora'
   if (assignedProfileResult.status === "fulfilled" && assignedProfileResult.value.data) {
@@ -70,6 +78,7 @@ export default async function CaptacionDetailPage({
       photos={photos}
       logs={logs}
       captadoras={captadorasList}
+      listingOperations={listingOperations}
     />
   );
 }

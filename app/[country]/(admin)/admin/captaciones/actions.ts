@@ -51,7 +51,7 @@ export type Captacion = {
   owner_confirmed: boolean;
   assigned_to: string | null;
   assigned_at: string | null;
-  status: "draft" | "assigned" | "preliminary_data" | "contacting" | "revision" | "confirmed" | "converted_to_property" | "rejected";
+  status: "draft" | "assigned" | "preliminary_data" | "contacting" | "field_visit" | "revision" | "confirmed" | "converted_to_property" | "rejected";
   scrape_status: "pending" | "scraped" | "failed" | "not_available" | null;
   scrape_error: string | null;
   notes: string | null;
@@ -66,6 +66,8 @@ export type Captacion = {
   operation: "venta" | "arriendo" | null;
   portal_publication_number: string | null;
   published_ago: string | null;
+  next_action_at: string | null;
+  next_action_note: string | null;
   updated_at: string;
   contacts?: CaptacionContact[];
 };

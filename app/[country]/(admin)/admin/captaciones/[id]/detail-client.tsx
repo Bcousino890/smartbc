@@ -24,6 +24,12 @@ type Log = {
   profiles?: { full_name: string | null };
 };
 
+type ListingOperation = {
+  operation: string | null;
+  price: number | null;
+  currency: string | null;
+};
+
 type DetailClientProps = {
   captacion: Captacion;
   userRole: string;
@@ -31,6 +37,7 @@ type DetailClientProps = {
   photos: Photo[];
   logs: Log[];
   captadoras: Array<{ id: string; full_name: string | null }>;
+  listingOperations: ListingOperation[];
 };
 
 const ATTEMPT_TYPE_LABELS: Record<string, string> = {
@@ -47,6 +54,11 @@ const RESULT_LABELS: Record<string, string> = {
   call_back: "Llamar después",
   wrong_number: "Número incorrecto",
   busy: "Ocupado",
+  owner_found: "Dueño ubicado",
+  visit_scheduled: "Visita agendada",
+  no_owner_data: "Sin datos del dueño",
+  left_note: "Se dejó nota/carta",
+  nobody_home: "No había nadie",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; description: string }> = {
@@ -54,6 +66,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; description:
   assigned: { label: "Asignada", color: "bg-blue-100 text-blue-700", description: "Asignada a captadora" },
   preliminary_data: { label: "Datos Preliminares", color: "bg-orange-100 text-orange-700", description: "Datos iniciales completados" },
   contacting: { label: "Contactando", color: "bg-purple-100 text-purple-700", description: "En proceso de contacto" },
+  field_visit: { label: "Visita Presencial", color: "bg-amber-100 text-amber-800", description: "Sin datos del dueño: ir a la propiedad" },
   revision: { label: "Revisión", color: "bg-orange-200 text-orange-800", description: "Revisar datos inconsistentes" },
   confirmed: { label: "Confirmada", color: "bg-emerald-100 text-emerald-700", description: "Dueño confirmó que quiere vender" },
   converted_to_property: { label: "Convertida", color: "bg-cyan-100 text-cyan-700", description: "Ya es una propiedad" },
@@ -63,9 +76,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; description:
 // Transiciones de estado permitidas (debe coincidir con backend)
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ["assigned", "rejected"],
-  assigned: ["preliminary_data", "rejected"],
-  preliminary_data: ["contacting", "revision", "rejected"],
-  contacting: ["revision", "confirmed", "rejected"],
+  assigned: ["preliminary_data", "field_visit", "rejected"],
+  preliminary_data: ["contacting", "field_visit", "revision", "rejected"],
+  contacting: ["field_visit", "revision", "confirmed", "rejected"],
+  field_visit: ["contacting", "preliminary_data", "confirmed", "rejected"],
   revision: ["preliminary_data", "contacting"],
   // La conversión a propiedad tiene su propio botón (llama a /convert, que
   // crea la ficha real); por eso no aparece en el selector de estados.
@@ -87,10 +101,26 @@ export function CaptacionDetailClient({
   photos,
   logs,
   captadoras,
+  listingOperations,
 }: DetailClientProps) {
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
+
+  // La misma propiedad puede estar en venta Y arriendo (dos avisos). Se toma
+  // el mejor precio por operación de los avisos de corredoras para mostrar
+  // ambas operaciones en la ficha.
+  const pricesByOperation = new Map<string, { price: number; currency: string | null }>();
+  for (const l of listingOperations || []) {
+    if (!l.operation || l.price == null) continue;
+    if (!pricesByOperation.has(l.operation)) {
+      pricesByOperation.set(l.operation, { price: Number(l.price), currency: l.currency });
+    }
+  }
+  const mainOperation = captacion.operation || "venta";
+  const otherOperations = Array.from(pricesByOperation.entries()).filter(
+    ([op]) => op !== mainOperation
+  );
   const hasFicha = Boolean(captacion.description || (captacion.features && captacion.features.length > 0));
   const [tab, setTab] = useState<"ficha" | "info" | "location" | "photos" | "logs" | "listings">(
     hasFicha ? "ficha" : "info"
@@ -120,6 +150,8 @@ export function CaptacionDetailClient({
     notes: "",
     phone: "",
     name: "",
+    next_action_at: "",
+    next_action_note: "",
   });
   const [error, setError] = useState("");
   const [currentPhoto, setCurrentPhoto] = useState(0);
@@ -195,9 +227,13 @@ export function CaptacionDetailClient({
   async function handleStatusChange() {
     if (!newStatus) return;
 
-    // Validar que si es "revision", debe haber notas
-    if (newStatus === "revision" && !revisionNotes.trim()) {
-      setError("Se requieren notas para marcar como revisión");
+    // Revisión y Visita Presencial requieren notas (motivo / instrucciones)
+    if ((newStatus === "revision" || newStatus === "field_visit") && !revisionNotes.trim()) {
+      setError(
+        newStatus === "field_visit"
+          ? "Escribe las instrucciones para ir a la propiedad"
+          : "Se requieren notas para marcar como revisión"
+      );
       return;
     }
 
@@ -209,7 +245,10 @@ export function CaptacionDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           new_status: newStatus,
-          notes: newStatus === "revision" ? revisionNotes : undefined,
+          notes:
+            newStatus === "revision" || newStatus === "field_visit"
+              ? revisionNotes
+              : undefined,
         }),
       });
       if (!res.ok) {
@@ -260,6 +299,11 @@ export function CaptacionDetailClient({
           notes: logForm.notes,
           owner_phone: logForm.phone || undefined,
           owner_name: logForm.name || undefined,
+          // Próximo paso agendado del seguimiento (opcional)
+          next_action_at: logForm.next_action_at
+            ? new Date(logForm.next_action_at).toISOString()
+            : undefined,
+          next_action_note: logForm.next_action_note || undefined,
         }),
       });
       if (!res.ok) {
@@ -267,7 +311,7 @@ export function CaptacionDetailClient({
         setError(data.error || "Error al registrar intento");
         return;
       }
-      setLogForm({ attempt_type: "call", result: "answered", notes: "", phone: "", name: "" });
+      setLogForm({ attempt_type: "call", result: "answered", notes: "", phone: "", name: "", next_action_at: "", next_action_note: "" });
       setLoggingAttempt(false);
       window.location.reload();
     } catch {
@@ -632,12 +676,26 @@ export function CaptacionDetailClient({
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {captacion.price && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
-                <p className="text-[10px] text-ink/50 uppercase tracking-wide">Precio</p>
+                <p className="text-[10px] text-ink/50 uppercase tracking-wide">
+                  Precio {mainOperation === "arriendo" ? "Arriendo" : "Venta"}
+                </p>
                 <p className="mt-0.5 text-base font-bold text-ink">
                   {formatPrice(captacion.price, captacion.currency || "clp")}
                 </p>
               </div>
             )}
+            {/* La misma propiedad también publicada en la otra operación
+                (aviso registrado en Corredoras) */}
+            {otherOperations.map(([op, info]) => (
+              <div key={op} className="rounded-lg bg-sky-50 px-3 py-2">
+                <p className="text-[10px] text-sky-700 uppercase tracking-wide">
+                  También en {op}
+                </p>
+                <p className="mt-0.5 text-base font-bold text-sky-800">
+                  {formatPrice(info.price, info.currency || "clp")}
+                </p>
+              </div>
+            ))}
             {captacion.bedrooms && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
                 <p className="text-[10px] text-ink/50 uppercase tracking-wide">Dormitorios</p>
@@ -690,6 +748,31 @@ export function CaptacionDetailClient({
           )}
         </div>
       </div>
+
+      {/* Instrucciones del estado actual: visita presencial o revisión */}
+      {captacion.status === "field_visit" && captacion.revision_notes && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-5">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+            <MapPin size={15} />
+            Visita presencial — instrucciones
+          </h3>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-amber-900">
+            {captacion.revision_notes}
+          </p>
+          <p className="mt-2 text-xs text-amber-700">
+            No hay datos del dueño: hay que ir a la propiedad. Registra el
+            resultado en la pestaña Intentos.
+          </p>
+        </div>
+      )}
+      {captacion.status === "revision" && captacion.revision_notes && (
+        <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50/80 p-5">
+          <h3 className="text-sm font-semibold text-orange-800">Motivo de la revisión</h3>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-orange-900">
+            {captacion.revision_notes}
+          </p>
+        </div>
+      )}
 
       {/* Asignación (solo para admin) */}
       {isAdmin && (
@@ -812,21 +895,27 @@ export function CaptacionDetailClient({
                       </div>
                       <button
                         onClick={handleStatusChange}
-                        disabled={updatingStatus || !newStatus || (newStatus === "revision" && !revisionNotes.trim())}
+                        disabled={updatingStatus || !newStatus || ((newStatus === "revision" || newStatus === "field_visit") && !revisionNotes.trim())}
                         className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-50"
                       >
                         {updatingStatus ? "Actualizando..." : "Actualizar"}
                       </button>
                     </div>
-                    {newStatus === "revision" && (
+                    {(newStatus === "revision" || newStatus === "field_visit") && (
                       <div className="mt-3">
                         <label className="block text-xs font-medium text-ink/70 mb-1">
-                          Motivo de la revisión (requerido)
+                          {newStatus === "field_visit"
+                            ? "Instrucciones para ir a la propiedad (requerido)"
+                            : "Motivo de la revisión (requerido)"}
                         </label>
                         <textarea
                           value={revisionNotes}
                           onChange={(e) => setRevisionNotes(e.target.value)}
-                          placeholder="Ej: El teléfono no corresponde al dueño..."
+                          placeholder={
+                            newStatus === "field_visit"
+                              ? "Ej: Ir a la dirección, preguntar por el dueño al conserje, dejar carta si no hay nadie..."
+                              : "Ej: El teléfono no corresponde al dueño..."
+                          }
                           rows={2}
                           className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm focus:border-gold/50 focus:outline-none"
                         />
@@ -884,10 +973,15 @@ export function CaptacionDetailClient({
           {/* Resumen de datos */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             {captacion.price && (
-              <InfoRow label="Precio">
+              <InfoRow label={`Precio ${mainOperation === "arriendo" ? "Arriendo" : "Venta"}`}>
                 {formatPrice(captacion.price, captacion.currency || "clp")}
               </InfoRow>
             )}
+            {otherOperations.map(([op, info]) => (
+              <InfoRow key={op} label={`También en ${op}`}>
+                {formatPrice(info.price, info.currency || "clp")}
+              </InfoRow>
+            ))}
             {captacion.property_type && (
               <InfoRow label="Tipo">
                 {{
@@ -1513,7 +1607,28 @@ export function CaptacionDetailClient({
       {/* TAB: Logs */}
       {tab === "logs" && (
         <div className="rounded-2xl border border-gold/15 bg-white/70 p-6">
-          {isCaptadora && !loggingAttempt && (
+          {/* Próximo paso agendado del seguimiento */}
+          {captacion.next_action_at && (
+            <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                <Clock size={12} />
+                Próximo paso
+              </p>
+              <p className="mt-1 text-sm font-medium text-blue-900">
+                {new Date(captacion.next_action_at).toLocaleDateString("es-CL", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                {captacion.next_action_note && ` — ${captacion.next_action_note}`}
+              </p>
+            </div>
+          )}
+
+          {/* Registran intentos: captadora/ejecutivo asignado, creador y admin */}
+          {(isCaptadora || isAdmin || isCreator) && !loggingAttempt && (
             <button
               onClick={() => setLoggingAttempt(true)}
               className="mb-6 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
@@ -1552,6 +1667,11 @@ export function CaptacionDetailClient({
                     <option value="call_back">Llamar después</option>
                     <option value="wrong_number">Número incorrecto</option>
                     <option value="busy">Ocupado</option>
+                    <option value="owner_found">Dueño ubicado</option>
+                    <option value="visit_scheduled">Visita agendada</option>
+                    <option value="no_owner_data">Sin datos del dueño</option>
+                    <option value="left_note">Se dejó nota/carta</option>
+                    <option value="nobody_home">No había nadie</option>
                   </select>
                 </div>
               </div>
@@ -1574,6 +1694,34 @@ export function CaptacionDetailClient({
                   placeholder="Detalles de la conversación..."
                   className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm"
                 />
+              </div>
+
+              {/* Próximo paso: agenda el seguimiento (queda visible arriba) */}
+              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+                <p className="mb-2 text-xs font-semibold text-blue-800">
+                  Próximo paso (opcional)
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-ink/70 mb-1">¿Cuándo?</label>
+                    <input
+                      type="datetime-local"
+                      value={logForm.next_action_at}
+                      onChange={(e) => setLogForm({ ...logForm, next_action_at: e.target.value })}
+                      className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-ink/70 mb-1">¿Qué hacer?</label>
+                    <input
+                      type="text"
+                      value={logForm.next_action_note}
+                      onChange={(e) => setLogForm({ ...logForm, next_action_note: e.target.value })}
+                      placeholder="Volver a llamar, ir a la propiedad..."
+                      className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
               </div>
 
               {error && <ErrorBox>{error}</ErrorBox>}

@@ -7,9 +7,12 @@ import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
 // Debe coincidir con ALLOWED_TRANSITIONS del detail-client (frontend).
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ["assigned", "rejected"],
-  assigned: ["preliminary_data", "rejected"],
-  preliminary_data: ["contacting", "revision", "rejected"],
-  contacting: ["revision", "confirmed", "rejected"],
+  assigned: ["preliminary_data", "field_visit", "rejected"],
+  preliminary_data: ["contacting", "field_visit", "revision", "rejected"],
+  contacting: ["field_visit", "revision", "confirmed", "rejected"],
+  // Visita presencial: no hay datos del dueño, hay que ir a la propiedad.
+  // Las instrucciones de la visita van en notes (obligatorias).
+  field_visit: ["contacting", "preliminary_data", "confirmed", "rejected"],
   revision: ["preliminary_data", "contacting"],
   // converted_to_property NO se permite aquí: la conversión real (crear la
   // propiedad + copiar fotos) la hace POST /captaciones/[id]/convert.
@@ -98,12 +101,23 @@ export async function POST(
       );
     }
 
-    // Actualizar status
+    // Visita presencial requiere instrucciones (dirección, a quién preguntar,
+    // qué dejar si no hay nadie, etc.)
+    if (new_status === "field_visit" && !notes) {
+      return NextResponse.json(
+        { error: "Escribe las instrucciones para ir a la propiedad" },
+        { status: 400 }
+      );
+    }
+
+    // Actualizar status. revision_notes guarda el motivo/instrucciones del
+    // estado actual (revisión o visita presencial).
     const { data: updated, error: updateError } = await db
       .from("captaciones")
       .update({
         status: new_status,
-        revision_notes: new_status === "revision" ? notes : null,
+        revision_notes:
+          new_status === "revision" || new_status === "field_visit" ? notes : null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -124,7 +138,21 @@ export async function POST(
     // Enviar notificaciones según el nuevo estado
     const propertyTitle = captacion.title || "Captación";
 
-    if (new_status === "revision") {
+    if (new_status === "field_visit") {
+      // Notificar a la persona asignada (ejecutivo/captadora) que hay que ir
+      // presencialmente a la propiedad, con las instrucciones
+      const notifyUserId = captacion.assigned_to || captacion.created_by;
+      if (notifyUserId && notifyUserId !== profile.id) {
+        await db.from("crm_notifications").insert({
+          user_id: notifyUserId,
+          type: "captacion_field_visit",
+          title: "📍 Ir a la propiedad",
+          body: `${propertyTitle}: visita presencial requerida. ${notes}`,
+          link: `/cl/admin/captaciones/${id}`,
+          data: { captacion_id: id },
+        });
+      }
+    } else if (new_status === "revision") {
       // Notificar al agente que hay que revisar
       await db.from("crm_notifications").insert({
         user_id: captacion.created_by,
