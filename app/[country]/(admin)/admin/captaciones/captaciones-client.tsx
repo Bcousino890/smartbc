@@ -105,16 +105,19 @@ export function CaptacionesClient({
   }
 
   // A qué etapas se puede arrastrar una tarjeta: cualquier otra etapa de su
-  // mismo pipeline, excepto "converted" (solo vía conversión) y "draft"
-  // (nada vuelve al punto de entrada). "assign" solo si el usuario puede
-  // asignar. Ninguna etapa de origen es terminal: una tarjeta "rechazada" o
-  // "convertida" se puede seguir arrastrando a otra etapa.
+  // mismo pipeline es válida (todas las etapas son libres para moverse en
+  // cualquier dirección), con dos excepciones:
+  //  - "converted": reservada, solo la fija el flujo de conversión (crea una
+  //    propiedad real). No se puede arrastrar manualmente hacia ella, pero
+  //    sí se puede mover una tarjeta que ya está ahí a otra etapa.
+  //  - "assign": solo si el usuario puede asignar (permiso, no restricción
+  //    de tipo de etapa).
   function getValidDropTargets(c: Captacion): CaptacionStage[] {
     const current = stageMeta(c);
     if (!current) return [];
     return stagesOf(c.pipeline_id).filter((s) => {
       if (s.id === current.id) return false;
-      if (s.stage_type === "converted" || s.stage_type === "draft") return false;
+      if (s.stage_type === "converted") return false;
       if (s.stage_type === "assign" && !canAssign) return false;
       return true;
     });
