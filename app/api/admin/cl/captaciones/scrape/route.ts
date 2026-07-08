@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
           longitude: scraped.longitude,
           cover_photo_url: scraped.cover_photo_url,
           features: scraped.features,
+          broker_name: scraped.broker_name,
+          external_reference: scraped.external_reference,
           scrape_status: "scraped",
           scraped_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

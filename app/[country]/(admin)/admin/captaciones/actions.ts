@@ -60,6 +60,8 @@ export type Captacion = {
   address_verified: boolean;
   rol_propiedad: string | null;
   features: string[] | null;
+  broker_name: string | null;
+  external_reference: string | null;
   updated_at: string;
   contacts?: CaptacionContact[];
 };
@@ -136,6 +138,8 @@ export async function getCaptacion(id: string) {
     address_verified: data.address_verified ?? false,
     rol_propiedad: data.rol_propiedad ?? null,
     features: data.features ?? null,
+    broker_name: data.broker_name ?? null,
+    external_reference: data.external_reference ?? null,
     contacts,
   } as Captacion;
 }

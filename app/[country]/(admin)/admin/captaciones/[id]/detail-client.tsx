@@ -603,6 +603,28 @@ export function CaptacionDetailClient({
             {captacion.scrape_status === "pending" && (
               <span className="text-amber-600">Obteniendo datos del link...</span>
             )}
+            {/* Sin fotos no se renderiza el encabezado con imagen (donde vive
+                el botón Re-scrapear), así que se ofrece aquí */}
+            {allPhotos.length === 0 && !isCaptadora && (
+              <button
+                onClick={handleRescrape}
+                disabled={rescrapingAttempt}
+                className="flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-1 text-[11px] text-white transition hover:bg-blue-700 disabled:opacity-50"
+                title="Obtener datos nuevamente del link"
+              >
+                {rescrapingAttempt ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin" />
+                    Scrapeando...
+                  </>
+                ) : (
+                  <>
+                    <Navigation size={11} />
+                    Re-scrapear
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Stats grid */}
@@ -895,6 +917,12 @@ export function CaptacionDetailClient({
             )}
             {captacion.rol_propiedad && (
               <InfoRow label="Rol SII">{captacion.rol_propiedad}</InfoRow>
+            )}
+            {captacion.broker_name && (
+              <InfoRow label="Corredora">{captacion.broker_name}</InfoRow>
+            )}
+            {captacion.external_reference && (
+              <InfoRow label="Código de referencia">{captacion.external_reference}</InfoRow>
             )}
           </div>
 
