@@ -34,9 +34,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[captacion listings DELETE]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Error al eliminar aviso" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : (err as any)?.message || "Error al eliminar aviso";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

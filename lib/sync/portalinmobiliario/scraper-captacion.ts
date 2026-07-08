@@ -9,6 +9,7 @@ export type ScrapedCaptacion = {
   bedrooms: number | null;
   bathrooms: number | null;
   square_meters: number | null;
+  useful_square_meters: number | null;
   region: string | null;
   commune: string | null;
   zone: string | null;
@@ -83,16 +84,19 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
   let bedrooms: number | null = null;
   let bathrooms: number | null = null;
   let square_meters: number | null = null;
+  let useful_square_meters: number | null = null;
   const features: string[] = [];
 
   if (item.attributes && Array.isArray(item.attributes)) {
     for (const attr of item.attributes) {
       if (attr.name === "BEDROOMS" || attr.name === "Dormitorios") {
-        bedrooms = parseInt(attr.value_name || attr.value);
+        bedrooms = parseIntCl(String(attr.value_name || attr.value || ""));
       } else if (attr.name === "BATHROOMS" || attr.name === "Baños") {
-        bathrooms = parseInt(attr.value_name || attr.value);
+        bathrooms = parseIntCl(String(attr.value_name || attr.value || ""));
       } else if (attr.name === "TOTAL_AREA" || attr.name === "Superficie total") {
-        square_meters = parseInt(attr.value_name || attr.value);
+        square_meters = parseIntCl(String(attr.value_name || attr.value || ""));
+      } else if (attr.name === "COVERED_AREA" || attr.name === "Superficie útil") {
+        useful_square_meters = parseIntCl(String(attr.value_name || attr.value || ""));
       } else if (attr.name && attr.value_name) {
         // Resto de atributos de la ficha → características visibles
         // ("Piscina: Sí" se muestra como "Piscina"; los "No" se conservan
@@ -148,6 +152,7 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
     bedrooms,
     bathrooms,
     square_meters,
+    useful_square_meters,
     region,
     commune,
     address_scraped,
@@ -184,6 +189,14 @@ function parsePrice(text: string): { price: number | null; currency: "uf" | "clp
   }
 
   return { price: null, currency: null };
+}
+
+// parseInt directo rompe con separador de miles chileno: "1.142 m²" -> 1.
+function parseIntCl(text: string): number | null {
+  const match = text.match(/[\d.]+/);
+  if (!match) return null;
+  const num = parseInt(match[0].replace(/\./g, ""), 10);
+  return isNaN(num) ? null : num;
 }
 
 function extractLatLng(html: string): { lat: number | null; lng: number | null } {
@@ -276,6 +289,7 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
   let bedrooms: number | null = null;
   let bathrooms: number | null = null;
   let square_meters: number | null = null;
+  let useful_square_meters: number | null = null;
   const features: string[] = [];
   const seenFeatures = new Set<string>();
   const addFeature = (label: string, value: string) => {
@@ -287,11 +301,13 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
   const handleSpec = (label: string, value: string) => {
     if (!label || !value) return;
     if (/^dormitorios$/i.test(label)) {
-      bedrooms = bedrooms ?? (parseInt(value) || null);
+      bedrooms = bedrooms ?? parseIntCl(value);
     } else if (/^baños$/i.test(label)) {
-      bathrooms = bathrooms ?? (parseInt(value) || null);
+      bathrooms = bathrooms ?? parseIntCl(value);
     } else if (/^superficie total$/i.test(label)) {
-      square_meters = square_meters ?? (parseInt(value) || null);
+      square_meters = square_meters ?? parseIntCl(value);
+    } else if (/^superficie útil$/i.test(label)) {
+      useful_square_meters = useful_square_meters ?? parseIntCl(value);
     } else {
       addFeature(label, value);
     }
@@ -388,6 +404,7 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     bedrooms,
     bathrooms,
     square_meters,
+    useful_square_meters,
     region,
     commune,
     zone,
@@ -485,6 +502,7 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
           bedrooms: partial.bedrooms ?? null,
           bathrooms: partial.bathrooms ?? null,
           square_meters: partial.square_meters ?? null,
+          useful_square_meters: partial.useful_square_meters ?? null,
           region: partial.region ?? null,
           commune: partial.commune ?? null,
           zone: partial.zone ?? null,
@@ -562,6 +580,7 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
     bedrooms: partial.bedrooms ?? null,
     bathrooms: partial.bathrooms ?? null,
     square_meters: partial.square_meters ?? null,
+    useful_square_meters: partial.useful_square_meters ?? null,
     region: partial.region ?? null,
     commune: partial.commune ?? null,
     zone: partial.zone ?? null,

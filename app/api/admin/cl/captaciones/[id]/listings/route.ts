@@ -45,10 +45,8 @@ export async function GET(
     return NextResponse.json(data || []);
   } catch (err) {
     console.error("[captacion listings GET]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Error al obtener avisos" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : (err as any)?.message || "Error al obtener avisos";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -100,6 +98,7 @@ export async function POST(
       bedrooms: scraped.bedrooms,
       bathrooms: scraped.bathrooms,
       square_meters: scraped.square_meters,
+      useful_square_meters: scraped.useful_square_meters,
       region: scraped.region,
       commune: scraped.commune,
       zone: scraped.zone,
@@ -156,9 +155,9 @@ export async function POST(
     return NextResponse.json({ ...listing, prices: prices || [] }, { status: 201 });
   } catch (err) {
     console.error("[captacion listings POST]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Error al scrapear el aviso" },
-      { status: 500 }
-    );
+    // Los errores de PostgREST/Supabase no son instancias de Error: exponer
+    // el mensaje real (ej: tabla inexistente si falta aplicar la migración)
+    const msg = err instanceof Error ? err.message : (err as any)?.message || "Error al scrapear el aviso";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
