@@ -18,6 +18,8 @@ export type ScrapedCaptacion = {
   cover_photo_url: string | null;
   photo_urls: string[];
   features: string[];
+  broker_name: string | null;
+  external_reference: string | null;
   source_site: string;
 };
 
@@ -93,10 +95,11 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
         square_meters = parseInt(attr.value_name || attr.value);
       } else if (attr.name && attr.value_name) {
         // Resto de atributos de la ficha → características visibles
-        // ("Piscina: Sí" se muestra como "Piscina"; "No" se omite)
+        // ("Piscina: Sí" se muestra como "Piscina"; los "No" se conservan
+        // para que la ficha quede idéntica a la del portal)
         const value = String(attr.value_name).trim();
         if (/^s[ií]$/i.test(value)) features.push(attr.name);
-        else if (!/^no$/i.test(value)) features.push(`${attr.name}: ${value}`);
+        else features.push(`${attr.name}: ${value}`);
       }
     }
   }
@@ -267,14 +270,21 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     }
   }
 
-  // Specs: la tabla rayada trae TODAS las características de la ficha
+  // Specs: la tabla rayada trae TODAS las características de la ficha.
+  // Se incluyen también los "No" (Calefacción: No, etc.) para que la ficha
+  // quede idéntica a la sección "Características del inmueble" del portal.
   let bedrooms: number | null = null;
   let bathrooms: number | null = null;
   let square_meters: number | null = null;
   const features: string[] = [];
-  $(".ui-vpp-striped-specs__row").each((_, el) => {
-    const label = $(el).find("th").first().text().trim();
-    const value = $(el).find("td").first().text().trim();
+  const seenFeatures = new Set<string>();
+  const addFeature = (label: string, value: string) => {
+    const key = label.toLowerCase();
+    if (seenFeatures.has(key)) return;
+    seenFeatures.add(key);
+    features.push(/^s[ií]$/i.test(value) ? label : `${label}: ${value}`);
+  };
+  const handleSpec = (label: string, value: string) => {
     if (!label || !value) return;
     if (/^dormitorios$/i.test(label)) {
       bedrooms = bedrooms ?? (parseInt(value) || null);
@@ -283,13 +293,22 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     } else if (/^superficie total$/i.test(label)) {
       square_meters = square_meters ?? (parseInt(value) || null);
     } else {
-      const entry = /^s[ií]$/i.test(value)
-        ? label
-        : /^no$/i.test(value)
-          ? null
-          : `${label}: ${value}`;
-      if (entry && !features.includes(entry)) features.push(entry);
+      addFeature(label, value);
     }
+  };
+  $(".ui-vpp-striped-specs__row").each((_, el) => {
+    handleSpec(
+      $(el).find("th").first().text().trim(),
+      $(el).find("td").first().text().trim()
+    );
+  });
+  // Bloque destacado "Características del inmueble" (key-values con ícono).
+  // Algunos atributos solo aparecen aquí o con otro nombre (ej: Quincho).
+  $(".ui-vpp-highlighted-specs__key-value__labels__key-value").each((_, el) => {
+    const spans = $(el).find("span");
+    const label = spans.first().text().trim().replace(/:\s*$/, "");
+    const value = spans.last().text().trim();
+    handleSpec(label, value);
   });
 
   // Fallback dormitorios/baños/m² desde los specs destacados ("5 dorm.", "5 baños", "820 m² totales")
@@ -337,6 +356,14 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     $("#location_and_points .ui-pdp-media__title").filter((_, el) => $(el).text().includes(",")).first().text().trim() ||
     null;
 
+  // Corredora y código de referencia (para seguimiento del aviso). Viven en el
+  // JSON embebido del componente seller_profile de la página.
+  const broker_name =
+    html.match(/"seller_name":\{"title":\{"text":"([^"]+)"/)?.[1] || null;
+  const external_reference =
+    html.match(/"Código de la propiedad"[\s\S]{0,300}?"subtitles":\[\{"text":"([^"]+)"/)?.[1] ||
+    null;
+
   // Coordenadas reales: el mapa estático de Google del aviso trae center=lat,lng
   // (extractLatLng suele capturar el centro del mapa de Chile, no el aviso)
   let latitude: number | null = null;
@@ -370,6 +397,8 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     cover_photo_url: photoUrls[0] || null,
     photo_urls: photoUrls.slice(0, 30),
     features: features.slice(0, 60),
+    broker_name,
+    external_reference,
   };
 }
 
@@ -465,6 +494,8 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
           cover_photo_url: partial.cover_photo_url ?? null,
           photo_urls: partial.photo_urls ?? [],
           features: partial.features ?? [],
+          broker_name: partial.broker_name ?? null,
+          external_reference: partial.external_reference ?? null,
           source_site: site,
         };
       }
@@ -540,6 +571,8 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
     cover_photo_url: partial.cover_photo_url ?? null,
     photo_urls: partial.photo_urls ?? [],
     features: partial.features ?? [],
+    broker_name: partial.broker_name ?? null,
+    external_reference: partial.external_reference ?? null,
     source_site: site,
   };
 }
