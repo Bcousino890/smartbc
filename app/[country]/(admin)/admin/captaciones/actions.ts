@@ -306,7 +306,6 @@ export async function getChileAssignableUsers() {
   const { data, error } = await db
     .from("profiles")
     .select("id, full_name, role")
-    .eq("country", "cl")
     .in("role", [
       "owner",
       "admin",
