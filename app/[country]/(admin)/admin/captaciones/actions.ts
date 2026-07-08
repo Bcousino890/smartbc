@@ -63,6 +63,9 @@ export type Captacion = {
   features: string[] | null;
   broker_name: string | null;
   external_reference: string | null;
+  operation: "venta" | "arriendo" | null;
+  portal_publication_number: string | null;
+  published_ago: string | null;
   updated_at: string;
   contacts?: CaptacionContact[];
 };
