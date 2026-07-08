@@ -104,16 +104,18 @@ export function CaptacionesClient({
     return stagesOf(c.pipeline_id).find((s) => s.id === c.stage_id) || null;
   }
 
-  // A qué etapas se puede arrastrar una tarjeta: cualquier otra etapa de su
-  // mismo pipeline, excepto "converted" (solo vía conversión) y "draft"
-  // (nada vuelve al punto de entrada). "assign" solo si el usuario puede
-  // asignar.
+  // A qué etapas se puede arrastrar una tarjeta: CUALQUIER otra etapa de su
+  // mismo pipeline, sin importar desde dónde venga (incluso desde Rechazada
+  // o Convertida — la propiedad se mueve libremente por todo el pipeline).
+  // Las únicas dos excepciones son "converted" (solo vía el flujo de
+  // conversión, que crea la propiedad real) y "assign" cuando el usuario no
+  // tiene permiso para asignar.
   function getValidDropTargets(c: Captacion): CaptacionStage[] {
     const current = stageMeta(c);
-    if (!current || current.stage_type === "rejected" || current.stage_type === "converted") return [];
+    if (!current) return [];
     return stagesOf(c.pipeline_id).filter((s) => {
       if (s.id === current.id) return false;
-      if (s.stage_type === "converted" || s.stage_type === "draft") return false;
+      if (s.stage_type === "converted") return false;
       if (s.stage_type === "assign" && !canAssign) return false;
       return true;
     });
@@ -250,7 +252,7 @@ export function CaptacionesClient({
   function CardActions({ c }: { c: Captacion }) {
     const stage = stageMeta(c);
     if (!canAssign && !canDelete) return null;
-    const showAssign = canAssign && !c.assigned_to && stage?.stage_type !== "converted" && stage?.stage_type !== "rejected";
+    const showAssign = canAssign && !c.assigned_to && stage?.stage_type !== "converted";
     return (
       <div onClick={(e) => e.stopPropagation()} className="mt-2 space-y-1.5">
         {showAssign && (

@@ -97,10 +97,11 @@ export function CaptacionDetailClient({
   // Etapa actual dentro del pipeline configurable (reemplaza al status fijo)
   const currentStage = stages.find((s) => s.id === captacion.stage_id) || captacion.stage || null;
   const stageColor = currentStage ? pipelineColor(currentStage.color_key) : null;
-  // Destinos válidos para "Cambiar Estado": cualquier otra etapa del mismo
-  // pipeline, salvo "converted" (solo vía conversión) y "assign" (solo vía
-  // el flujo de asignación, arriba en esta misma página).
-  const allowedNextStages = currentStage && currentStage.stage_type !== "rejected" && currentStage.stage_type !== "converted"
+  // Destinos válidos para "Cambiar Etapa": cualquier otra etapa del mismo
+  // pipeline (la captación se mueve libremente, incluso desde Rechazada),
+  // salvo "converted" (solo vía conversión) y "assign" (solo vía el flujo
+  // de asignación, arriba en esta misma página).
+  const allowedNextStages = currentStage
     ? stages.filter((s) => s.id !== currentStage.id && s.stage_type !== "converted" && s.stage_type !== "assign")
     : [];
 
