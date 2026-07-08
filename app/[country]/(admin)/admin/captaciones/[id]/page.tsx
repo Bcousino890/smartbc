@@ -59,6 +59,9 @@ export default async function CaptacionDetailPage({
 
   const photos = photosResult.status === "fulfilled" ? (photosResult.value.data || []) : [];
   const logs = logsResult.status === "fulfilled" ? (logsResult.value.data || []) : [];
+  if (captadoras.status === "rejected") {
+    console.error("getChileAssignableUsers error:", captadoras.reason);
+  }
   const captadorasList = captadoras.status === "fulfilled" ? (captadoras.value || []) : [];
   const listingOperations =
     listingsResult.status === "fulfilled" ? (listingsResult.value.data || []) : [];

@@ -70,6 +70,7 @@ export async function POST(
       .single();
 
     if (captadoraError || !captadora) {
+      if (captadoraError) console.error("[captaciones assign] lookup error:", captadoraError);
       return NextResponse.json(
         { error: "Usuario no encontrado" },
         { status: 404 }
