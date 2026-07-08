@@ -101,53 +101,67 @@ export type Captacion = {
 // sin una consulta aparte por captación.
 const CAPTACION_SELECT_WITH_STAGE = "*, stage:captacion_pipeline_stages(id, key, label, color_key, stage_type, position, requires_notes)";
 
-export async function getCaptacionesForAgent(userId: string) {
+// Corre la query con el embed de etapa; si falla (ej. la migración 0078 de
+// pipelines todavía no se aplicó en este VPS y la relación no existe todavía
+// para PostgREST), reintenta sin el embed en vez de tirar toda la página con
+// un error 500. El listado se ve igual, solo sin datos de etapa hasta que se
+// aplique la migración.
+async function queryCaptaciones(
+  build: (query: any) => any
+): Promise<Captacion[]> {
   const db = createAdminClient() as any;
-  const { data, error } = await db
-    .from("captaciones")
-    .select(CAPTACION_SELECT_WITH_STAGE)
-    .eq("created_by", userId)
-    .eq("country", "cl")
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await build(db.from("captaciones").select(CAPTACION_SELECT_WITH_STAGE));
+    if (error) throw error;
+    return data as Captacion[];
+  } catch (err) {
+    console.warn("[captaciones] embed de etapa falló, usando fallback sin pipeline:", err);
+    const db2 = createAdminClient() as any;
+    const { data, error } = await build(db2.from("captaciones").select("*"));
+    if (error) throw error;
+    return data as Captacion[];
+  }
+}
 
-  if (error) throw error;
-  return data as Captacion[];
+export async function getCaptacionesForAgent(userId: string) {
+  return queryCaptaciones((q) =>
+    q.eq("created_by", userId).eq("country", "cl").order("created_at", { ascending: false })
+  );
 }
 
 export async function getCaptacionesForCaptadora(userId: string) {
-  const db = createAdminClient() as any;
-  const { data, error } = await db
-    .from("captaciones")
-    .select(CAPTACION_SELECT_WITH_STAGE)
-    .eq("assigned_to", userId)
-    .eq("country", "cl")
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return data as Captacion[];
+  return queryCaptaciones((q) =>
+    q.eq("assigned_to", userId).eq("country", "cl").order("created_at", { ascending: false })
+  );
 }
 
 export async function getCaptacionesAll() {
-  const db = createAdminClient() as any;
-  const { data, error } = await db
-    .from("captaciones")
-    .select(CAPTACION_SELECT_WITH_STAGE)
-    .eq("country", "cl")
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return data as Captacion[];
+  return queryCaptaciones((q) => q.eq("country", "cl").order("created_at", { ascending: false }));
 }
 
 export async function getCaptacion(id: string) {
   const db = createAdminClient() as any;
-  const { data, error } = await db
-    .from("captaciones")
-    .select(CAPTACION_SELECT_WITH_STAGE)
-    .eq("id", id)
-    .single();
-
-  if (error) throw error;
+  let data: any;
+  {
+    const { data: withStage, error } = await db
+      .from("captaciones")
+      .select(CAPTACION_SELECT_WITH_STAGE)
+      .eq("id", id)
+      .single();
+    if (error) {
+      // Fallback si la migración 0078 (pipelines) todavía no se aplicó
+      console.warn("[captaciones] embed de etapa falló en getCaptacion, usando fallback:", error);
+      const { data: plain, error: plainError } = await db
+        .from("captaciones")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (plainError) throw plainError;
+      data = plain;
+    } else {
+      data = withStage;
+    }
+  }
 
   // Cargar contactos (tabla puede no existir si migración pendiente)
   let contacts: any[] = [];
