@@ -9,6 +9,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Captacion, CaptacionContact, CaptacionExtraPhone } from "../actions";
 import { LocationSection } from "./location-section";
+import { ListingsSection } from "./listings-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 
 type Photo = { id: string; url: string; position: number };
@@ -91,7 +92,7 @@ export function CaptacionDetailClient({
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
   const hasFicha = Boolean(captacion.description || (captacion.features && captacion.features.length > 0));
-  const [tab, setTab] = useState<"ficha" | "info" | "location" | "photos" | "logs">(
+  const [tab, setTab] = useState<"ficha" | "info" | "location" | "photos" | "logs" | "listings">(
     hasFicha ? "ficha" : "info"
   );
   const [updatingData, setUpdatingData] = useState(false);
@@ -842,7 +843,7 @@ export function CaptacionDetailClient({
 
       {/* Tabs */}
       <div className="mb-4 flex gap-1 border-b border-ink/10 overflow-x-auto">
-        {(["ficha", "info", "location", "photos", "logs"] as const).map((t) => (
+        {(["ficha", "info", "location", "photos", "logs", "listings"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -858,6 +859,7 @@ export function CaptacionDetailClient({
             {t === "location" && "Ubicación"}
             {t === "photos" && `Fotos (${allPhotos.length})`}
             {t === "logs" && `Intentos (${logs.length})`}
+            {t === "listings" && "Corredoras"}
           </button>
         ))}
       </div>
@@ -1004,6 +1006,14 @@ export function CaptacionDetailClient({
       )}
 
       {/* TAB: Location */}
+      {/* TAB: Avisos por corredora (trazabilidad de la propiedad) */}
+      {tab === "listings" && (
+        <ListingsSection
+          captacionId={captacion.id}
+          canEdit={isAdmin || isCaptadora || isCreator}
+        />
+      )}
+
       {tab === "location" && (
         <LocationSection
           captacion={{
