@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
+import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
 
 export async function PUT(
   request: NextRequest,
@@ -74,6 +76,10 @@ export async function PUT(
         { status: 404 }
       );
     }
+
+    // Avisar al ejecutivo: los datos del propietario cambiaron
+    const profile = await getCurrentProfile().catch(() => null);
+    await notifyOwnerUpdated(db, id, profile?.id ?? null);
 
     return NextResponse.json(data);
   } catch (error) {
