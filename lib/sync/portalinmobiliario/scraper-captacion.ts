@@ -21,6 +21,9 @@ export type ScrapedCaptacion = {
   features: string[];
   broker_name: string | null;
   external_reference: string | null;
+  operation: "venta" | "arriendo" | null;
+  portal_publication_number: string | null;
+  published_ago: string | null;
   source_site: string;
 };
 
@@ -31,6 +34,39 @@ function detectSite(url: string): string {
   if (url.includes("yapo.cl")) return "yapo";
   if (url.includes("bienesraiceschile.cl")) return "bienesraiceschile";
   return "other";
+}
+
+// Venta o arriendo según la URL del aviso o el subtítulo/título de la página.
+// La misma propiedad suele estar publicada dos veces (un aviso por operación).
+function detectOperation(text: string): "venta" | "arriendo" | null {
+  if (/arriendo|arrienda|alquiler/i.test(text)) return "arriendo";
+  if (/venta|vende/i.test(text)) return "venta";
+  return null;
+}
+
+// Hay corredoras que no publican su código en el HTML del portal pero sí lo
+// ponen en la descripción (ej: "KR49345-AD" en la primera línea, o
+// "Código: AB-1234"). Se intenta con etiqueta explícita y, si no, con un
+// token tipo código (letras+números con guión) al inicio de la descripción.
+export function extractReferenceFromDescription(description: string | null): string | null {
+  if (!description) return null;
+  const labeled = description.match(
+    /(?:c[oó]d(?:igo)?|ref(?:erencia)?)\.?\s*(?:de\s+(?:la\s+)?propiedad)?\s*[:#]\s*([A-Za-z0-9][A-Za-z0-9\-\/.]{1,23})/i
+  );
+  if (labeled) return labeled[1].replace(/[.,;]+$/, "");
+  // Token solo en una de las primeras líneas: debe mezclar letras y números
+  // (evita capturar palabras o cifras sueltas)
+  const firstLines = description.split(/\n/, 4).map((l) => l.trim());
+  for (const line of firstLines) {
+    if (
+      /^[A-Za-z0-9][A-Za-z0-9\-\/.]{2,23}$/.test(line) &&
+      /[A-Za-z]/.test(line) &&
+      /\d/.test(line)
+    ) {
+      return line;
+    }
+  }
+  return null;
 }
 
 function extractMLId(url: string): string | null {
@@ -85,11 +121,14 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
   let bathrooms: number | null = null;
   let square_meters: number | null = null;
   let useful_square_meters: number | null = null;
+  let operation: "venta" | "arriendo" | null = null;
   const features: string[] = [];
 
   if (item.attributes && Array.isArray(item.attributes)) {
     for (const attr of item.attributes) {
-      if (attr.name === "BEDROOMS" || attr.name === "Dormitorios") {
+      if (attr.id === "OPERATION" || /^operaci[oó]n$/i.test(String(attr.name || ""))) {
+        operation = detectOperation(String(attr.value_name || attr.value || ""));
+      } else if (attr.name === "BEDROOMS" || attr.name === "Dormitorios") {
         bedrooms = parseIntCl(String(attr.value_name || attr.value || ""));
       } else if (attr.name === "BATHROOMS" || attr.name === "Baños") {
         bathrooms = parseIntCl(String(attr.value_name || attr.value || ""));
@@ -161,6 +200,9 @@ async function scrapeML(itemId: string): Promise<Partial<ScrapedCaptacion>> {
     cover_photo_url: photoUrls[0] || null,
     photo_urls: photoUrls,
     features,
+    operation: operation ?? detectOperation(title || ""),
+    portal_publication_number: itemId.replace(/^MLC/i, "") || null,
+    external_reference: extractReferenceFromDescription(description),
   };
 }
 
@@ -373,11 +415,27 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     null;
 
   // Corredora y código de referencia (para seguimiento del aviso). Viven en el
-  // JSON embebido del componente seller_profile de la página.
+  // JSON embebido del componente seller_profile de la página. Si el portal no
+  // trae el código, muchas corredoras lo ponen en la descripción.
   const broker_name =
     html.match(/"seller_name":\{"title":\{"text":"([^"]+)"/)?.[1] || null;
   const external_reference =
     html.match(/"Código de la propiedad"[\s\S]{0,300}?"subtitles":\[\{"text":"([^"]+)"/)?.[1] ||
+    extractReferenceFromDescription(description) ||
+    null;
+
+  // Subtítulo del aviso: "Casa en Venta  |  Publicado hace 2 meses" →
+  // operación (venta/arriendo) y antigüedad de la publicación.
+  const subtitle = $(".ui-pdp-subtitle").first().text().trim();
+  const operation = detectOperation(subtitle || title || "");
+  const published_ago =
+    subtitle.match(/publicado\s+(.+)$/i)?.[0]?.trim().replace(/\s+/g, " ") || null;
+
+  // Número de publicación del portal ("Publicación #3914632576"). Suele venir
+  // en el HTML; si no, el caller lo deriva del MLC de la URL.
+  const portal_publication_number =
+    html.match(/Publicaci[oó]n\s*#?\s*(\d{6,})/i)?.[1] ||
+    html.match(/"item_id"\s*:\s*"MLC(\d+)"/)?.[1] ||
     null;
 
   // Coordenadas reales: el mapa estático de Google del aviso trae center=lat,lng
@@ -416,6 +474,9 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     features: features.slice(0, 60),
     broker_name,
     external_reference,
+    operation,
+    portal_publication_number,
+    published_ago,
   };
 }
 
@@ -514,6 +575,10 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
           features: partial.features ?? [],
           broker_name: partial.broker_name ?? null,
           external_reference: partial.external_reference ?? null,
+          operation: partial.operation ?? detectOperation(url),
+          portal_publication_number:
+            partial.portal_publication_number ?? mlId.replace(/^MLC/i, ""),
+          published_ago: partial.published_ago ?? null,
           source_site: site,
         };
       }
@@ -591,7 +656,15 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
     photo_urls: partial.photo_urls ?? [],
     features: partial.features ?? [],
     broker_name: partial.broker_name ?? null,
-    external_reference: partial.external_reference ?? null,
+    external_reference:
+      partial.external_reference ??
+      extractReferenceFromDescription(partial.description ?? null),
+    operation: partial.operation ?? detectOperation(url),
+    portal_publication_number:
+      partial.portal_publication_number ??
+      extractMLId(url)?.replace(/^MLC/i, "") ??
+      null,
+    published_ago: partial.published_ago ?? null,
     source_site: site,
   };
 }

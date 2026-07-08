@@ -912,13 +912,26 @@ export function CaptacionDetailClient({
             {captacion.useful_square_meters != null && (
               <InfoRow label="Superficie útil">{captacion.useful_square_meters} m²</InfoRow>
             )}
-            {(captacion.commune || captacion.region) && (
-              <InfoRow label="Ubicación">
-                {[captacion.commune, captacion.region].filter(Boolean).join(", ")}
+            {captacion.operation && (
+              <InfoRow label="Operación">
+                {captacion.operation === "arriendo" ? "Arriendo" : "Venta"}
+              </InfoRow>
+            )}
+            {(captacion.zone || captacion.commune || captacion.region) && (
+              <InfoRow label="Ubicación (portal)">
+                {[captacion.zone, captacion.commune, captacion.region].filter(Boolean).join(", ")}
               </InfoRow>
             )}
             {captacion.address_scraped && (
               <InfoRow label="Dirección (del aviso)">{captacion.address_scraped}</InfoRow>
+            )}
+            {captacion.portal_publication_number && (
+              <InfoRow label="N° publicación portal">
+                #{captacion.portal_publication_number}
+              </InfoRow>
+            )}
+            {captacion.published_ago && (
+              <InfoRow label="Antigüedad del aviso">{captacion.published_ago}</InfoRow>
             )}
             {captacion.rol_propiedad && (
               <InfoRow label="Rol SII">{captacion.rol_propiedad}</InfoRow>

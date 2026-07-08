@@ -28,7 +28,7 @@ export async function GET(
     const db = createAdminClient() as any;
     const { data, error } = await db
       .from("captacion_listings")
-      .select("*, prices:captacion_listing_prices(price, currency, scraped_at)")
+      .select("*, prices:captacion_listing_prices(price, currency, source, scraped_at)")
       .eq("captacion_id", id)
       .order("created_at", { ascending: true });
 
@@ -91,6 +91,9 @@ export async function POST(
       source_site: scraped.source_site,
       broker_name: scraped.broker_name,
       external_reference: scraped.external_reference,
+      operation: scraped.operation,
+      portal_publication_number: scraped.portal_publication_number,
+      published_ago: scraped.published_ago,
       title: scraped.title,
       description: scraped.description,
       price: scraped.price,
@@ -128,6 +131,7 @@ export async function POST(
         .from("captacion_listing_prices")
         .select("price, currency")
         .eq("listing_id", listing.id)
+        .eq("source", "portal")
         .order("scraped_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -141,6 +145,7 @@ export async function POST(
           listing_id: listing.id,
           price: scraped.price,
           currency: scraped.currency || "clp",
+          source: "portal",
         });
       }
     }
@@ -148,7 +153,7 @@ export async function POST(
     // Devolver con historial de precios
     const { data: prices } = await db
       .from("captacion_listing_prices")
-      .select("price, currency, scraped_at")
+      .select("price, currency, source, scraped_at")
       .eq("listing_id", listing.id)
       .order("scraped_at", { ascending: false });
 
