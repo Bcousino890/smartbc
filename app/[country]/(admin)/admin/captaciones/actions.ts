@@ -124,9 +124,17 @@ async function queryCaptaciones(
   }
 }
 
+// Un agente (viewRestriction "confirmed_and_own") ve: las que creó, las
+// confirmadas (para poder convertirlas) y las que le asignaron a él —
+// esto último importa desde que cualquier staff puede recibir una
+// asignación, no solo captadoras: si no se incluye assigned_to, una
+// captación asignada a un agente simplemente no le aparece.
 export async function getCaptacionesForAgent(userId: string) {
   return queryCaptaciones((q) =>
-    q.eq("created_by", userId).eq("country", "cl").order("created_at", { ascending: false })
+    q
+      .eq("country", "cl")
+      .or(`created_by.eq.${userId},assigned_to.eq.${userId},owner_confirmed.eq.true`)
+      .order("created_at", { ascending: false })
   );
 }
 
