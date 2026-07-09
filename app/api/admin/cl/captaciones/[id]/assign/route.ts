@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { STAFF_ROLES } from "@/lib/permissions";
 
 export async function POST(
   request: NextRequest,
@@ -56,22 +57,21 @@ export async function POST(
     // perfil no siempre está seteado a 'cl' aunque el usuario trabaje en
     // captaciones (default histórico 'es'), y filtrar por él dejaba la
     // lista de asignables vacía.
+    //
+    // El filtro de rol se hace en JS, NO con .in("role", [...]) en la query:
+    // pasar literales del enum `user_role` a Postgres hace fallar la consulta
+    // entera con "invalid input value for enum user_role" cuando algún valor
+    // no existe todavía en el enum de la BD (mismo bug que dejaba vacío el
+    // selector "Asignar a"). Así la asignación funciona aunque el enum esté
+    // desincronizado.
     const { data: captadora, error: captadoraError } = await db
       .from("profiles")
       .select("id, full_name, role")
       .eq("id", captadora_id)
-      .in("role", [
-        "owner",
-        "admin",
-        "advisor",
-        "agent_junior",
-        "agent_senior",
-        "agent_admin",
-        "captadora",
-      ])
       .single();
 
-    if (captadoraError || !captadora) {
+    const staffRoles = new Set<string>(STAFF_ROLES as readonly string[]);
+    if (captadoraError || !captadora || !staffRoles.has(captadora.role)) {
       if (captadoraError) console.error("[captaciones assign] lookup error:", captadoraError);
       return NextResponse.json(
         { error: "Usuario no encontrado" },

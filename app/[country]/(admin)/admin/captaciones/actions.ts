@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { STAFF_ROLES } from "@/lib/permissions";
 
 export type CaptacionExtraPhone = {
   phone: string;
@@ -301,22 +302,24 @@ export async function attachDataQualityFlags(captaciones: Captacion[]): Promise<
 // Cualquier usuario staff de Chile puede recibir una captación para llamar
 // (no solo captadoras): agentes, admins, etc. Se usa en el selector "Asignar
 // a" del pipeline.
+//
+// IMPORTANTE: NO filtramos por rol dentro de la query con .in("role", [...]).
+// Ese filtro construye literales del enum `user_role` en Postgres y, si algún
+// valor todavía no existe en el enum de la BD (p. ej. 'owner' antes de aplicar
+// la migración 0079, o 'captadora' antes de la 0065), la query ENTERA falla
+// con "invalid input value for enum user_role" y el selector "Asignar a"
+// aparecía vacío. Traemos todos los perfiles y filtramos los roles staff en
+// JS, así el selector funciona aunque el enum de la BD esté desincronizado.
 export async function getChileAssignableUsers() {
   const db = createAdminClient() as any;
   const { data, error } = await db
     .from("profiles")
     .select("id, full_name, role")
-    .in("role", [
-      "owner",
-      "admin",
-      "advisor",
-      "agent_junior",
-      "agent_senior",
-      "agent_admin",
-      "captadora",
-    ])
     .order("full_name", { ascending: true });
 
   if (error) throw error;
-  return data as Array<{ id: string; full_name: string | null; role: string }>;
+  const staff = new Set<string>(STAFF_ROLES as readonly string[]);
+  return (data || []).filter((u: { role: string | null }) =>
+    u.role != null && staff.has(u.role)
+  ) as Array<{ id: string; full_name: string | null; role: string }>;
 }
