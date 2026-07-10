@@ -2,6 +2,7 @@ import {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
+  Inbox,
   MessageSquare,
 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
@@ -13,6 +14,7 @@ import {
   getVisitRequestsStats,
   getContactRequests,
 } from "@/lib/db/queries/clients";
+import { getIdealistaLeads } from "@/lib/db/queries/idealista-leads";
 import type { Country } from "@/lib/country-config";
 import { SolicitudesAdminClient } from "./solicitudes-admin-client";
 
@@ -22,10 +24,11 @@ export default async function AdminSolicitudesPage({
   params: Promise<{ country: Country }>;
 }) {
   const { country } = await params;
-  const [rows, stats, contactRows] = await Promise.all([
+  const [rows, stats, contactRows, idealistaLeads] = await Promise.all([
     getVisitRequests(country),
     getVisitRequestsStats(country),
     getContactRequests(), // contact_requests no tiene columna country → global
+    getIdealistaLeads(), // el inbox de Idealista es solo España → global
   ]);
   const requests = rows.map(visitRequestRowToLegacy);
 
@@ -36,7 +39,7 @@ export default async function AdminSolicitudesPage({
         subtitleKey="solicitudes.subtitle"
       />
 
-      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           icon={<CalendarDays size={20} strokeWidth={1.75} />}
           labelKey="solicitudes.stats.total"
@@ -57,9 +60,18 @@ export default async function AdminSolicitudesPage({
           labelKey="solicitudes.stats.thisWeek"
           value={contactRows.filter((r) => r.status === "pending").length}
         />
+        <StatCard
+          icon={<Inbox size={20} strokeWidth={1.75} />}
+          labelKey="solicitudes.stats.idealista"
+          value={idealistaLeads.filter((l) => l.status === "nuevo").length}
+        />
       </div>
 
-      <SolicitudesAdminClient requests={requests} contactRequests={contactRows} />
+      <SolicitudesAdminClient
+        requests={requests}
+        contactRequests={contactRows}
+        idealistaLeads={idealistaLeads}
+      />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

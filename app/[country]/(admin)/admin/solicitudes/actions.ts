@@ -23,6 +23,58 @@ export async function markContactRead(id: string) {
   return { ok: true };
 }
 
+export async function updateIdealistaLeadStatus(
+  id: string,
+  status: "nuevo" | "fichado" | "descartado",
+) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { error } = await supabase
+    .from("idealista_leads")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    console.error("updateIdealistaLeadStatus error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin/solicitudes");
+  revalidatePath("/es/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
+  return { ok: true };
+}
+
+export async function setIdealistaLeadType(
+  id: string,
+  leadType: "particular" | "agencia" | "relocation",
+) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { error } = await supabase
+    .from("idealista_leads")
+    .update({ lead_type: leadType, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    console.error("setIdealistaLeadType error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin/solicitudes");
+  revalidatePath("/es/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
+  return { ok: true };
+}
+
 export async function updateVisitStatus(
   id: string,
   status: "confirmed" | "cancelled" | "completed",
