@@ -1,7 +1,12 @@
-# SmartBC → Idealista Autopublish
+# SmartBC → Idealista
 
-Extensión de Chrome que rellena automáticamente el formulario de "Nueva propiedad"
-en Idealista con los datos preparados en SmartBC, incluida la subida de fotos.
+Extensión de Chrome con dos funciones:
+
+1. **Autopublicar**: rellena automáticamente el formulario de "Nueva propiedad"
+   en Idealista con los datos preparados en SmartBC, incluida la subida de fotos.
+2. **Leads del inbox**: captura los contactos del inbox de idealista/tools
+   (nombre, teléfono, mensaje, perfil de búsqueda y propiedad consultada) y los
+   envía a la pestaña **Idealista** de `/admin/solicitudes` en el portal.
 
 ## Instalación (una sola vez)
 
@@ -19,6 +24,34 @@ en Idealista con los datos preparados en SmartBC, incluida la subida de fotos.
 4. La extensión detecta que viene de SmartBC y rellena el formulario solo — verás
    un panel flotante arriba a la derecha con el progreso
 5. Cuando termine, **revisa los datos** y presiona tú mismo **"Guardar y publicar anuncio"**
+
+## Leads del inbox
+
+### Configuración (una sola vez)
+
+1. Con sesión de owner/admin en el portal, genera el token de la extensión:
+   ```
+   curl -X POST https://portal.bcousinoprop.com/api/admin/idealista/extension-token \
+     -H "Cookie: <tu sesión>"
+   ```
+   (o desde la consola del navegador logueado en el portal:
+   `fetch("/api/admin/idealista/extension-token", {method:"POST"}).then(r=>r.json()).then(console.log)`)
+2. Chrome → `chrome://extensions` → SmartBC → Idealista → **Opciones**
+3. Pega el token y pulsa **Guardar** (dura 1 año; se revoca rotando
+   `IDEALISTA_EXT_SECRET` en el VPS)
+
+### Uso
+
+- **Listado**: abre `idealista.com/inbox` → aparece el botón flotante
+  **"📤 Enviar a SmartBC"** abajo a la derecha → captura todos los contactos
+  visibles de la página (pagina y repite para el resto)
+- **Detalle**: al abrir cualquier conversación, la extensión captura
+  automáticamente el mensaje completo y el panel "Perfil para búsqueda de
+  vivienda" y enriquece el contacto en el portal (badge breve de confirmación)
+- Los contactos se deduplican por conversación: reenviar no crea duplicados
+- En el portal: `/es/admin/solicitudes` → pestaña **Idealista** → etiqueta el
+  tipo (Particular / Agencia / Relocation — con sugerencia automática) y usa
+  **Fichar** / **Descartar**
 
 ## Notas
 
