@@ -49,6 +49,18 @@ done
 echo "✅ $MIGRATION_COUNT migraciones procesadas ($ERROR_COUNT mensajes de advertencia)"
 echo ""
 
+# Recargar el schema cache de PostgREST: sin esto, la API de Supabase no "ve"
+# tablas/columnas nuevas creadas por las migraciones hasta reiniciar el
+# contenedor rest (error PGRST205 "Could not find the table ... in the schema
+# cache" → 500 en las rutas que las usan).
+echo "🔄 Recargando schema cache de PostgREST..."
+if echo "NOTIFY pgrst, 'reload schema';" | $DB_CMD > /dev/null 2>&1; then
+  echo "✅ Schema cache recargado"
+else
+  echo "⚠️  No se pudo recargar el schema — si la API no ve tablas nuevas, reinicia el contenedor rest: docker restart supabase-rest"
+fi
+echo ""
+
 # Instalar dependencias si es necesario
 if [ -f "package.json" ]; then
   echo "📦 Verificando dependencias..."

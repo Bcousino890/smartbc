@@ -94,7 +94,10 @@ export async function POST(req: Request) {
     .in("conversation_id", conversationIds);
   if (selectError) {
     console.error("idealista-leads select error:", selectError);
-    return Response.json({ error: "Error de base de datos" }, { status: 500, headers: corsHeaders() });
+    return Response.json(
+      { error: "Error de base de datos", detail: selectError.message, code: selectError.code },
+      { status: 500, headers: corsHeaders() },
+    );
   }
   const existingByConversation = new Map<string, any>(
     (existingRows ?? []).map((row: any) => [row.conversation_id, row]),
@@ -195,7 +198,10 @@ export async function POST(req: Request) {
   const { error: upsertError } = await db.from("idealista_leads").upsert(rows, { onConflict: "conversation_id" });
   if (upsertError) {
     console.error("idealista-leads upsert error:", upsertError);
-    return Response.json({ error: "Error guardando leads" }, { status: 500, headers: corsHeaders() });
+    return Response.json(
+      { error: "Error guardando leads", detail: upsertError.message, code: upsertError.code },
+      { status: 500, headers: corsHeaders() },
+    );
   }
 
   return Response.json(
