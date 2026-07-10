@@ -35,7 +35,7 @@
     return null;
   }
 
-  // ── Token ────────────────────────────────────────────────────────────────
+  // ── Token ──────────────────────────────────────────────────────────────────
   function getToken() {
     return new Promise((resolve) => {
       chrome.storage.local.get("smartbcLeadsToken", (data) => {
@@ -58,7 +58,7 @@
     return token || null;
   }
 
-  // ── UI de estado ─────────────────────────────────────────────────────────
+  // ── UI de estado ─────────────────────────────────────────────────────
   let badgeEl = null;
   let badgeTimer = null;
 
@@ -86,7 +86,7 @@
     }
   }
 
-  // ── Envío al portal ──────────────────────────────────────────────────────
+  // ── Envío al portal ────────────────────────────────────────────────
   async function sendLeads(source, leads) {
     const token = await requireToken();
     if (!token) {
@@ -107,7 +107,14 @@
         return null;
       }
       if (!res.ok) {
-        showBadge("Error del portal (" + res.status + ")", true, 8000);
+        let detail = "";
+        try {
+          const body = await res.json();
+          detail = body.detail || body.error || "";
+        } catch {
+          /* cuerpo no-JSON */
+        }
+        showBadge("Error del portal (" + res.status + ")" + (detail ? ": " + detail : ""), true, 12000);
         return null;
       }
       return await res.json();
@@ -117,7 +124,7 @@
     }
   }
 
-  // ── Extracción: vista LISTA ──────────────────────────────────────────────
+  // ── Extracción: vista LISTA ──────────────────────────────────────────
   function textLines(el) {
     return (el.innerText || "")
       .split("\n")
@@ -185,10 +192,10 @@
     return [...byId.values()];
   }
 
-  // ── Extracción: vista DETALLE ────────────────────────────────────────────
+  // ── Extracción: vista DETALLE ──────────────────────────────────────
   function findHeadingByText(prefix) {
     const norm = (s) =>
-      (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
     const target = norm(prefix);
     const nodes = document.querySelectorAll("h1, h2, h3, h4, strong, b, p, span, div");
     for (const el of nodes) {
@@ -293,7 +300,7 @@
     return lead;
   }
 
-  // ── Modo LISTA: botón flotante ───────────────────────────────────────────
+  // ── Modo LISTA: botón flotante ─────────────────────────────────────
   function ensureListButton() {
     if (document.getElementById("smartbc-send-leads")) return;
     const btn = document.createElement("button");
@@ -330,7 +337,7 @@
     if (btn) btn.remove();
   }
 
-  // ── Modo DETALLE: captura automática ─────────────────────────────────────
+  // ── Modo DETALLE: captura automática ─────────────────────────────────
   const sentDetails = new Set(); // conversationIds ya enviados en esta pestaña
 
   async function captureDetail(conversationId) {
