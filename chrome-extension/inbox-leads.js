@@ -292,11 +292,15 @@
       if (attrPhone.phoneCountry) lead.phoneCountry = attrPhone.phoneCountry;
     }
 
-    // Respaldo: si la clase semántica no existe (Idealista cambió el
-    // markup), se ancla al enlace "Convertir a demanda" — siempre está
+    // Panel de contacto (nombre/teléfono/perfil), calculado una sola vez:
+    // sirve de respaldo si las clases semánticas no existen (Idealista cambió
+    // el markup) y también para excluir su contenido de la extracción del
+    // mensaje más abajo.
+    const panel = findRightPanel();
+
+    // Respaldo: se ancla al enlace "Convertir a demanda" — siempre está
     // justo debajo del nombre y el teléfono en el panel de contacto.
     if (!lead.name || !lead.phone) {
-      const panel = findRightPanel();
       if (panel) {
         const allLines = textLines(panel);
         const anchorIdx = allLines.findIndex((l) => /convertir a demanda/i.test(l));
