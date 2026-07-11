@@ -17,7 +17,7 @@ import {
   setIdealistaLeadType,
 } from "./actions";
 
-// ─── Status config ─────────────────────────────────────────────────────────
+// ─── Status config ────────────────────────────────────────────────
 
 type TabKey = "pending" | "confirmed" | "completed" | "rejected" | "consultas" | "idealista";
 
@@ -56,7 +56,7 @@ const LEAD_TYPE_LABEL: Record<"particular" | "agencia" | "relocation", string> =
   relocation: "Relocation",
 };
 
-// ─── Main component ─────────────────────────────────────────────────────────
+// ─── Main component ──────────────────────────────────────────────────
 
 export function SolicitudesAdminClient({
   requests,
@@ -209,7 +209,7 @@ export function SolicitudesAdminClient({
   );
 }
 
-// ─── ContactCard ─────────────────────────────────────────────────────────────
+// ─── ContactCard ────────────────────────────────────────────────
 
 function ContactCard({ contact }: { contact: ContactRequestRow }) {
   const [isTransitioning, startTransition] = useTransition();
@@ -296,7 +296,7 @@ function ContactCard({ contact }: { contact: ContactRequestRow }) {
   );
 }
 
-// ─── FilterChip ──────────────────────────────────────────────────────────────
+// ─── FilterChip ───────────────────────────────────────────────────
 
 function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
@@ -315,7 +315,7 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
   );
 }
 
-// ─── IdealistaLeadCard ───────────────────────────────────────────────────────
+// ─── IdealistaLeadCard ─────────────────────────────────────────────────
 
 const LEAD_STATUS_BADGE: Record<IdealistaLeadRow["status"], string> = {
   nuevo: "border-blue-200 bg-blue-50 text-blue-700",
@@ -416,17 +416,32 @@ function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: (
 
         {/* Propiedad consultada */}
         {(lead.property_title || lead.property_ref || lead.idealista_code) && (
-          <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
-            <p className="text-[12px] font-medium text-ink/75 truncate">
-              📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
-            </p>
-            {(lead.property_ref || lead.idealista_code) && (
-              <p className="text-[11px] text-ink/40 mt-0.5">
-                {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+          <div className="mt-3 flex gap-2.5 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
+            {lead.property_image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={lead.property_image_url}
+                alt=""
+                className="h-11 w-14 shrink-0 rounded-md object-cover"
+              />
             )}
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium text-ink/75 truncate">
+                📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+              </p>
+              {(lead.property_ref || lead.idealista_code) && (
+                <p className="text-[11px] text-ink/40 mt-0.5">
+                  {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+              {lead.properties.length > 1 && (
+                <p className="text-[11px] font-semibold text-teal-700 mt-0.5">
+                  Consultó por {lead.properties.length} propiedades
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -542,7 +557,7 @@ function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: (
   );
 }
 
-// ─── IdealistaLeadModal ──────────────────────────────────────────────────────
+// ─── IdealistaLeadModal ─────────────────────────────────────────────
 
 function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose: () => void }) {
   const bullets = lead.profile?.bullets ?? [];
@@ -579,19 +594,46 @@ function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose
           </button>
         </div>
 
-        {(lead.property_title || lead.property_ref || lead.idealista_code) && (
-          <div className="mt-4 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2.5">
-            <p className="text-[13px] font-medium text-ink/80">
-              📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+        {lead.properties.length > 1 ? (
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+              Consultó por {lead.properties.length} propiedades
             </p>
-            {(lead.property_ref || lead.idealista_code) && (
-              <p className="text-[11px] text-ink/40 mt-0.5">
-                {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            )}
+            <div className="mt-1.5 space-y-1.5">
+              {lead.properties.map((p, i) => (
+                <div key={p.title ?? p.imageUrl ?? i} className="flex gap-2.5 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
+                  {p.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imageUrl} alt="" className="h-11 w-14 shrink-0 rounded-md object-cover" />
+                  )}
+                  <p className="min-w-0 text-[13px] font-medium text-ink/80 self-center">
+                    📍 {[p.title, p.price, p.type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
+        ) : (
+          (lead.property_title || lead.property_ref || lead.idealista_code) && (
+            <div className="mt-4 flex gap-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2.5">
+              {lead.property_image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={lead.property_image_url} alt="" className="h-14 w-18 shrink-0 rounded-md object-cover" />
+              )}
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink/80">
+                  📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+                </p>
+                {(lead.property_ref || lead.idealista_code) && (
+                  <p className="text-[11px] text-ink/40 mt-0.5">
+                    {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+              </div>
+            </div>
+          )
         )}
 
         {lead.message && (
@@ -644,7 +686,7 @@ function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose
   );
 }
 
-// ─── RequestCard ─────────────────────────────────────────────────────────────
+// ─── RequestCard ───────────────────────────────────────────────
 
 function RequestCard({ request }: { request: VisitRequest }) {
   const t = useT();
@@ -766,7 +808,7 @@ function RequestCard({ request }: { request: VisitRequest }) {
   );
 }
 
-// ─── StatusBadge ─────────────────────────────────────────────────────────────
+// ─── StatusBadge ─────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: VisitRequestStatus }) {
   const t = useT();
