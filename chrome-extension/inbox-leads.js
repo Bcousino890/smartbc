@@ -273,6 +273,25 @@
     return anchor.parentElement;
   }
 
+  // Fuente primaria del mensaje: cada burbuja del hilo trae data-qa
+  // "seeker-message" (el contacto) o "advertiser-message" (nuestras propias
+  // respuestas). Sin esto, la heurística de texto no distinguía quién
+  // escribió cada mensaje y mezclaba nuestras respuestas con las del
+  // contacto. Solo se toman los mensajes del contacto.
+  function extractSeekerMessages() {
+    const nodes = document.querySelectorAll('[data-qa="seeker-message"]');
+    if (nodes.length === 0) return null;
+    const texts = [...nodes]
+      .map((el) => {
+        const p = el.querySelector("p[data-kiwi-text]") || el.querySelector("p");
+        return ((p || el).innerText || "").trim();
+      })
+      .filter(Boolean);
+    const seen = new Set();
+    const unique = texts.filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
+    return unique.length > 0 ? unique.join("\n\n").slice(0, 50000) : null;
+  }
+
   function extractDetailLead(conversationId) {
     const lead = { conversationId };
     const bodyText = document.body.innerText || "";
@@ -333,38 +352,50 @@
 
     lead.profile = extractProfile();
 
-    // Mensaje completo: se concatenan TODAS las burbujas del hilo de chat, en
-    // orden. Antes solo se guardaba el bloque de texto más largo, así que si
-    // el contacto escribía en varios mensajes (a veces días distintos) solo
-    // quedaba uno y se perdían los demás.
-    // Se excluye por completo lo que esté dentro del panel de contacto
-    // (nombre/teléfono/perfil) en vez de listar cada texto de esa zona uno a
-    // uno, para no tener que perseguir cada etiqueta nueva que añada Idealista.
-    const NOISE_RE =
-      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|tienes nuevas respuestas|enviado|entregado|le[ií]do|visto|\d+\s+nuevo mensaje)$/i;
-    // Umbral bajo a propósito: respuestas cortas del contacto ("???", "Ok",
-    // "Vale") son mensajes reales y no deben perderse. El ruido de la
-    // interfaz (fechas, badges, "Traducir"...) ya lo filtran NOISE_RE/DATE_RE
-    // y la exclusión del panel de contacto, así que no hace falta un umbral
-    // de longitud alto para compensar.
-    const messageBlocks = [...document.querySelectorAll("p, div")]
-      .filter((el) => el.children.length === 0)
-      .filter((el) => !panel || !panel.contains(el))
-      .map((el) => (el.innerText || "").trim())
-      .filter(
-        (t) =>
-          t.length > 0 &&
-          t.length < 4000 &&
-          !/^\d+$/.test(t) &&
-          !DATE_RE.test(t) &&
-          !PRICE_RE.test(t) &&
-          !NOISE_RE.test(t) &&
-          !/^vio el anuncio/i.test(t),
-      );
-    const seenMessages = new Set();
-    const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
-    if (uniqueBlocks.length > 0) {
-      lead.message = uniqueBlocks.join("\n\n").slice(0, 12000);
+    // Mensaje completo: primero se intenta con data-qa="seeker-message"
+    // (solo lo que escribió el contacto, nunca nuestras propias respuestas).
+    const seekerMessage = extractSeekerMessages();
+    if (seekerMessage) {
+      lead.message = seekerMessage;
+    } else {
+      // Respaldo: se concatenan TODAS las burbujas de texto del hilo, en
+      // orden. Antes solo se guardaba el bloque de texto más largo, así que
+      // si el contacto escribía en varios mensajes (a veces días distintos)
+      // solo quedaba uno y se perdían los demás.
+      // Se excluye por completo lo que esté dentro del panel de contacto
+      // (nombre/teléfono/perfil) en vez de listar cada texto de esa zona uno
+      // a uno, para no tener que perseguir cada etiqueta nueva de Idealista.
+      // Nota: este respaldo no distingue nuestras respuestas de las del
+      // contacto (no hay atributo data-qa que lo indique fuera del caso
+      // anterior), así que solo se usa si el selector primario no existe.
+      const NOISE_RE =
+        /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|tienes nuevas respuestas|enviado|entregado|le[ií]do|visto|\d+\s+nuevo mensaje)$/i;
+      // Umbral bajo a propósito: respuestas cortas del contacto ("???", "Ok",
+      // "Vale") son mensajes reales y no deben perderse. El ruido de la
+      // interfaz (fechas, badges, "Traducir"...) ya lo filtran
+      // NOISE_RE/DATE_RE y la exclusión del panel de contacto.
+      const messageBlocks = [...document.querySelectorAll("p, div")]
+        .filter((el) => el.children.length === 0)
+        .filter((el) => !panel || !panel.contains(el))
+        .map((el) => (el.innerText || "").trim())
+        .filter(
+          (t) =>
+            t.length > 0 &&
+            t.length < 20000 &&
+            !/^\d+$/.test(t) &&
+            !DATE_RE.test(t) &&
+            !PRICE_RE.test(t) &&
+            !NOISE_RE.test(t) &&
+            !/^vio el anuncio/i.test(t),
+        );
+      const seenMessages = new Set();
+      const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
+      if (uniqueBlocks.length > 0) {
+        // Tope generoso (ninguna conversación real lo alcanza) como red de
+        // seguridad ante un cambio de markup que rompa la exclusión del
+        // panel de contacto y termine barriendo texto de toda la página.
+        lead.message = uniqueBlocks.join("\n\n").slice(0, 50000);
+      }
     }
 
     // Propiedad: tarjeta dentro del hilo — línea con € y la anterior como título
