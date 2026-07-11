@@ -6,6 +6,7 @@ import {
   fetchIdealistaPhoneViaAjax,
   normalizeSpanishPhone,
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import { extractPhoneFromHtmlDescription } from "@/lib/sync/particulares/phone-from-text";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
@@ -549,9 +550,39 @@ async function backfillPhonesViaAjax(
     }
 
     try {
-      const ajax = await fetchIdealistaPhoneViaAjax(adId, {
-        proxyUrl: await getProxyUrl(),
-      });
+      // Fuente 1 (barata): minar el teléfono de la descripción del anuncio.
+      // Descargamos el HTML con UA WhatsApp (pasa DataDome, sin proxy/CapSolver)
+      // y buscamos un teléfono escrito en el texto por el propio particular.
+      let phone: string | null = null;
+      let phoneConfidence: "high" | "medium" | null = null;
+      try {
+        const htmlRes = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
+          proxyUrl: await getProxyUrl(),
+        });
+        if (htmlRes.ok) {
+          const textPhone = extractPhoneFromHtmlDescription(htmlRes.html, adId.slice(-9));
+          if (textPhone.phone) {
+            phone = textPhone.phone;
+            phoneConfidence = "medium";
+            console.log(`[cron-particulares] teléfono en descripción ${adId}: ${phone}`);
+          }
+        }
+      } catch {
+        // Ignorar y caer al fallback AJAX.
+      }
+
+      // Fuente 2 (cara): endpoints AJAX "Ver teléfono" (proxy/CapSolver/Playwright).
+      if (!phone) {
+        const ajax = await fetchIdealistaPhoneViaAjax(adId, {
+          proxyUrl: await getProxyUrl(),
+        });
+        if (ajax.phone) {
+          phone = ajax.phone;
+          phoneConfidence = ajax.phone_confidence;
+        }
+      }
+
+      const ajax = { phone, phone_confidence: phoneConfidence };
       const values: Record<string, unknown> = ajax.phone
         ? {
             phone: ajax.phone,

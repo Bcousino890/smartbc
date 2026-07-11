@@ -81,11 +81,19 @@ export function extractPhoneWithConfidence(
   // estático pero oculto visualmente con CSS (clase hidden-contact-phones).
   // El número canónico está en href="tel:+34XXXXXXXXX" de los enlaces de llamada.
   //
-  // Patrón A: clase hidden-contact-phones-formatted-phone con href tel:
-  // <a class="icon-phone-outline hidden-contact-phones-formatted-phone _mobilePhone" href="tel:+34696165042">
-  pm = html.match(/hidden-contact-phones-formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
+  // Patrón A: clase (hidden-contact-phones-formatted-phone | *_formatted-phone)
+  // con href tel:. ⚠️ Idealista alterna el separador entre guion y guion bajo:
+  //   <a class="… hidden-contact-phones-formatted-phone _mobilePhone" href="tel:…">  (antiguo)
+  //   <a class="… hidden-contact-phones_formatted-phone _mobilePhone" href="tel:…">  (actual)
+  // Aceptamos AMBOS ([-_]) para no perder el teléfono que ya viene en el HTML.
+  pm = html.match(/hidden-contact-phones[-_]formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
   if (!pm) {
-    pm = html.match(/href=["']tel:([+\d][\d\s\-]{6,})["'][^>]*hidden-contact-phones-formatted-phone/);
+    pm = html.match(/href=["']tel:([+\d][\d\s\-]{6,})["'][^>]*hidden-contact-phones[-_]formatted-phone/);
+  }
+  if (!pm) {
+    // Variante genérica: cualquier clase que termine en `formatted-phone` (móvil
+    // o fijo) enlazada a un tel:. Cubre futuros renombrados de la clase.
+    pm = html.match(/formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
   }
   if (pm?.[1]) {
     const phone = acceptPhoneCandidate(pm[1], excludeReference);
@@ -701,6 +709,19 @@ export async function fetchIdealistaPhoneViaAjax(
       if (debug) {
         debug.push({ endpoint: "pageHtml-browser-ua", status: 0, bodySnippet: `no phone, htmlLen=${pageHtml.length}` });
       }
+    }
+
+    // Fuente adicional: teléfono escrito por el particular en la descripción del
+    // anuncio (truco habitual para saltarse el "chat only"). Se mina del mismo
+    // HTML ya descargado — sin coste de request extra.
+    const { extractPhoneFromHtmlDescription } = await import("./phone-from-text");
+    const descPhone = extractPhoneFromHtmlDescription(pageHtml, adId.slice(-9));
+    if (descPhone.phone) {
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía descripción: adId=${adId}, phone=${descPhone.phone}`);
+      if (debug) {
+        debug.push({ endpoint: "descripcion-texto", status: 200, bodySnippet: `phone=${descPhone.phone}` });
+      }
+      return { phone: descPhone.phone, phone_confidence: "high", contact_name: null, debug };
     }
   }
 
