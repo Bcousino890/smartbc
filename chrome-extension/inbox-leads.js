@@ -232,31 +232,53 @@
     return { bullets, presentacion };
   }
 
+  // Panel derecho del contacto: nombre y teléfono están SIEMPRE justo encima
+  // del enlace "Convertir a demanda" (a diferencia del texto "Perfil", que
+  // también matchea la pestaña de arriba y por eso no sirve como ancla).
+  function findRightPanel() {
+    const anchor = [...document.querySelectorAll("a, button")].find((el) =>
+      /convertir a demanda/i.test(el.textContent || ""),
+    );
+    if (!anchor) return null;
+    let panel = anchor.parentElement;
+    for (let i = 0; i < 6 && panel; i++) {
+      if (PHONE_RE.test(panel.innerText || "")) return panel;
+      panel = panel.parentElement;
+    }
+    return anchor.parentElement;
+  }
+
   function extractDetailLead(conversationId) {
     const lead = { conversationId };
     const bodyText = document.body.innerText || "";
 
-    // Panel derecho (Perfil): nombre + teléfono. El teléfono en detalle viene
-    // como "+39 366 400 5565 (Italia, IT)".
-    const phoneMatch = bodyText.match(/(\+?\d[\d\s().-]{7,}\d)\s*\(([^)]*?)\)/);
-    if (phoneMatch) {
-      lead.phone = phoneMatch[1].trim();
-      const country = phoneMatch[2].match(/([A-Z]{2})\s*$/);
-      if (country) lead.phoneCountry = country[1];
+    const panel = findRightPanel();
+    if (panel) {
+      const allLines = textLines(panel);
+      const anchorIdx = allLines.findIndex((l) => /convertir a demanda/i.test(l));
+      const headLines = (anchorIdx >= 0 ? allLines.slice(0, anchorIdx) : allLines).filter(
+        (l) => !/^(perfil|notas|actividades)$/i.test(l),
+      );
+
+      const phoneIdx = headLines.findIndex((l) => PHONE_RE.test(l));
+      if (phoneIdx >= 0) {
+        const phoneLine = headLines[phoneIdx];
+        lead.phone = (phoneLine.match(PHONE_RE) || [])[1] || null;
+        // Teléfonos internacionales vienen como "+39 366 400 5565 (Italia, IT)";
+        // los nacionales no llevan paréntesis con país.
+        const country = phoneLine.match(/\(([^)]*?)\)/);
+        if (country) {
+          const cc = country[1].match(/([A-Z]{2})\s*$/);
+          if (cc) lead.phoneCountry = cc[1];
+        }
+      }
+
+      const nameLine = headLines.find(
+        (l, i) => i !== phoneIdx && !/internacional/i.test(l) && !/^vio el anuncio/i.test(l),
+      );
+      if (nameLine) lead.name = nameLine;
     }
     lead.isInternational = /internacional/i.test(bodyText);
-
-    // Nombre: el heading del hilo (aparece también en el panel Perfil)
-    const perfilTab = findHeadingByText("perfil");
-    if (perfilTab) {
-      const panel = perfilTab.closest("aside, section, div");
-      if (panel) {
-        const lines = textLines(panel).filter(
-          (l) => !/^(perfil|notas|actividades|internacional)$/i.test(l) && !PHONE_RE.test(l),
-        );
-        if (lines.length > 0) lead.name = lines[0];
-      }
-    }
 
     lead.profile = extractProfile();
 
