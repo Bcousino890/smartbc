@@ -37,10 +37,10 @@ type IncomingLead = {
   messageDate?: unknown;
 };
 
-function asText(value: unknown): string | null {
+function asText(value: unknown, maxLength = 5000): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, 5000) : null;
+  return trimmed ? trimmed.slice(0, maxLength) : null;
 }
 
 // Los contactos nacionales de idealista.com no llevan prefijo de país
@@ -236,7 +236,7 @@ function normalizeLead(raw: IncomingLead) {
     phone: normalizePhone(asText(raw.phone)),
     phone_country: asText(raw.phoneCountry)?.slice(0, 8) ?? null,
     is_international: typeof raw.isInternational === "boolean" ? raw.isInternational : null,
-    message: asText(raw.message),
+    message: asText(raw.message, 12000),
     profile: asProfile(raw.profile ?? null),
     property_title: asText(raw.propertyTitle),
     property_price: asText(raw.propertyPrice),

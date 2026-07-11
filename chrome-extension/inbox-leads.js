@@ -341,15 +341,21 @@
     // (nombre/teléfono/perfil) en vez de listar cada texto de esa zona uno a
     // uno, para no tener que perseguir cada etiqueta nueva que añada Idealista.
     const NOISE_RE =
-      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|\d+\s+nuevo mensaje)$/i;
+      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|tienes nuevas respuestas|enviado|entregado|le[ií]do|visto|\d+\s+nuevo mensaje)$/i;
+    // Umbral bajo a propósito: respuestas cortas del contacto ("???", "Ok",
+    // "Vale") son mensajes reales y no deben perderse. El ruido de la
+    // interfaz (fechas, badges, "Traducir"...) ya lo filtran NOISE_RE/DATE_RE
+    // y la exclusión del panel de contacto, así que no hace falta un umbral
+    // de longitud alto para compensar.
     const messageBlocks = [...document.querySelectorAll("p, div")]
       .filter((el) => el.children.length === 0)
       .filter((el) => !panel || !panel.contains(el))
       .map((el) => (el.innerText || "").trim())
       .filter(
         (t) =>
-          t.length > 12 &&
+          t.length > 0 &&
           t.length < 4000 &&
+          !/^\d+$/.test(t) &&
           !DATE_RE.test(t) &&
           !PRICE_RE.test(t) &&
           !NOISE_RE.test(t) &&
@@ -358,7 +364,7 @@
     const seenMessages = new Set();
     const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
     if (uniqueBlocks.length > 0) {
-      lead.message = uniqueBlocks.join("\n\n").slice(0, 6000);
+      lead.message = uniqueBlocks.join("\n\n").slice(0, 12000);
     }
 
     // Propiedad: tarjeta dentro del hilo — línea con € y la anterior como título
