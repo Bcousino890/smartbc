@@ -347,8 +347,11 @@
         return ((p || el).innerText || "").trim();
       })
       .filter(Boolean);
-    const seen = new Set();
-    const unique = texts.filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
+    // Solo se descartan duplicados CONSECUTIVOS (artefactos de render).
+    // Un contacto puede mandar exactamente el mismo texto en días distintos
+    // (la misma plantilla a cada anuncio que consulta): esos son mensajes
+    // reales y deben conservarse todos.
+    const unique = texts.filter((t, i) => i === 0 || t !== texts[i - 1]);
     return unique.length > 0 ? unique.join("\n\n").slice(0, 50000) : null;
   }
 
@@ -454,8 +457,9 @@
             !NOISE_RE.test(t) &&
             !/^vio el anuncio/i.test(t),
         );
-      const seenMessages = new Set();
-      const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
+      // Igual que arriba: solo se descartan duplicados consecutivos; el
+      // mismo texto repetido en otra parte del hilo es un mensaje real.
+      const uniqueBlocks = messageBlocks.filter((t, i) => i === 0 || t !== messageBlocks[i - 1]);
       if (uniqueBlocks.length > 0) {
         // Tope generoso (ninguna conversación real lo alcanza) como red de
         // seguridad ante un cambio de markup que rompa la exclusión del
@@ -537,8 +541,8 @@
   // ── Modo DETALLE: captura automática ─────────────────────────────────
   const sentDetails = new Set(); // conversationIds ya enviados en esta pestaña
 
-  async function captureDetail(conversationId) {
-    if (sentDetails.has(conversationId)) return;
+  async function captureDetail(conversationId, force) {
+    if (!force && sentDetails.has(conversationId)) return;
     sentDetails.add(conversationId);
 
     // Esperar a que el hilo cargue (hay texto sustancial en pantalla)
@@ -552,6 +556,43 @@
     }
   }
 
+  // Botón de reenvío manual: la captura automática corre al abrir la
+  // conversación, pero Idealista carga los mensajes antiguos al hacer
+  // scroll hacia arriba — este botón permite recapturar cuando ya está
+  // TODO el hilo a la vista (o si la captura automática falló).
+  function ensureDetailButton(conversationId) {
+    const existing = document.getElementById("smartbc-resend-detail");
+    if (existing) {
+      existing.dataset.conversationId = conversationId;
+      return;
+    }
+    const btn = document.createElement("button");
+    btn.id = "smartbc-resend-detail";
+    btn.dataset.conversationId = conversationId;
+    btn.textContent = "🔄 Reenviar a SmartBC";
+    btn.style.cssText = [
+      "position:fixed", "bottom:24px", "right:16px", "z-index:999999",
+      "background:#1a1a1a", "color:#fff", "border:0", "cursor:pointer",
+      "padding:12px 18px", "border-radius:24px", "font:600 13px/1 -apple-system,sans-serif",
+      "box-shadow:0 8px 30px rgba(0,0,0,.3)",
+    ].join(";");
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        showBadge("Recapturando conversación…");
+        await captureDetail(btn.dataset.conversationId, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    document.body.appendChild(btn);
+  }
+
+  function removeDetailButton() {
+    const btn = document.getElementById("smartbc-resend-detail");
+    if (btn) btn.remove();
+  }
+
   // ── Router SPA ───────────────────────────────────────────────────────────
   let lastUrl = null;
 
@@ -560,11 +601,14 @@
     const conversation = url.match(CONVERSATION_RE);
     if (conversation) {
       removeListButton();
+      ensureDetailButton(conversation[1]);
       captureDetail(conversation[1]);
     } else if (/\/inbox\/?(\?|$)/.test(url)) {
+      removeDetailButton();
       ensureListButton();
     } else {
       removeListButton();
+      removeDetailButton();
     }
   }
 

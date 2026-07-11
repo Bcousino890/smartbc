@@ -29,13 +29,9 @@ Extensión de Chrome con dos funciones:
 
 ### Configuración (una sola vez)
 
-1. Con sesión de owner/admin en el portal, genera el token de la extensión:
-   ```
-   curl -X POST https://portal.bcousinoprop.com/api/admin/idealista/extension-token \
-     -H "Cookie: <tu sesión>"
-   ```
-   (o desde la consola del navegador logueado en el portal:
-   `fetch("/api/admin/idealista/extension-token", {method:"POST"}).then(r=>r.json()).then(console.log)`)
+1. En el portal (sesión de owner/admin): **Idealista → Configuración**
+   (`/es/admin/idealista/configuracion`) → sección **"Token de la extensión
+   de Chrome"** → **Generar token** → botón de copiar
 2. Chrome → `chrome://extensions` → SmartBC → Idealista → **Opciones**
 3. Pega el token y pulsa **Guardar** (dura 1 año; se revoca rotando
    `IDEALISTA_EXT_SECRET` en el VPS)
@@ -48,6 +44,10 @@ Extensión de Chrome con dos funciones:
 - **Detalle**: al abrir cualquier conversación, la extensión captura
   automáticamente el mensaje completo y el panel "Perfil para búsqueda de
   vivienda" y enriquece el contacto en el portal (badge breve de confirmación)
+- **Reenviar**: dentro de una conversación aparece el botón **"🔄 Reenviar a
+  SmartBC"** — útil si el hilo es largo (Idealista carga los mensajes viejos
+  al hacer scroll hacia arriba: sube hasta el inicio y pulsa Reenviar para
+  capturar TODO el historial)
 - Los contactos se deduplican por conversación: reenviar no crea duplicados
 - En el portal: `/es/admin/solicitudes` → pestaña **Idealista** → etiqueta el
   tipo (Particular / Agencia / Relocation — con sugerencia automática) y usa
