@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { IdealistaConfigClient } from "./config-client";
 import { AIConfigSection } from "./ai-config-section";
+import { ExtensionTokenSection } from "./extension-token-section";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,8 @@ export default async function IdealistaConfigPage({
 
         <IdealistaConfigClient initialConfig={initialConfig} />
       </div>
+
+      <ExtensionTokenSection />
 
       <AIConfigSection />
 
