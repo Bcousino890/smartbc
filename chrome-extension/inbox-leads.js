@@ -354,7 +354,7 @@
       .filter(
         (t) =>
           t.length > 0 &&
-          t.length < 4000 &&
+          t.length < 20000 &&
           !/^\d+$/.test(t) &&
           !DATE_RE.test(t) &&
           !PRICE_RE.test(t) &&
@@ -364,7 +364,10 @@
     const seenMessages = new Set();
     const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
     if (uniqueBlocks.length > 0) {
-      lead.message = uniqueBlocks.join("\n\n").slice(0, 12000);
+      // Tope generoso (ninguna conversación real lo alcanza) como red de
+      // seguridad ante un cambio de markup que rompa la exclusión del panel
+      // de contacto y termine barriendo texto de toda la página.
+      lead.message = uniqueBlocks.join("\n\n").slice(0, 50000);
     }
 
     // Propiedad: tarjeta dentro del hilo — línea con € y la anterior como título

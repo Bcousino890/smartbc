@@ -236,7 +236,7 @@ function normalizeLead(raw: IncomingLead) {
     phone: normalizePhone(asText(raw.phone)),
     phone_country: asText(raw.phoneCountry)?.slice(0, 8) ?? null,
     is_international: typeof raw.isInternational === "boolean" ? raw.isInternational : null,
-    message: asText(raw.message, 12000),
+    message: asText(raw.message, 50000),
     profile: asProfile(raw.profile ?? null),
     property_title: asText(raw.propertyTitle),
     property_price: asText(raw.propertyPrice),

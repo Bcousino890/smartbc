@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SmartBC → Idealista",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "Rellena y publica anuncios en Idealista con los datos de SmartBC, y captura los contactos del inbox hacia el portal.",
   "permissions": ["storage"],
   "host_permissions": [
