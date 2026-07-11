@@ -43,6 +43,18 @@ function asText(value: unknown): string | null {
   return trimmed ? trimmed.slice(0, 5000) : null;
 }
 
+// Los contactos nacionales de idealista.com no llevan prefijo de país
+// (ej. "664 36 92 01"); los internacionales sí lo traen desde la extensión
+// (ej. "+39 366 400 5565"). Si no hay "+", asumimos España.
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("+")) return trimmed;
+  if (trimmed.startsWith("00")) return `+${trimmed.slice(2)}`;
+  return `+34 ${trimmed}`;
+}
+
 function asProfile(value: IncomingLead["profile"]): { bullets: string[]; presentacion: string | null } | null {
   if (!value || typeof value !== "object") return null;
   const bullets = Array.isArray(value.bullets)
@@ -221,7 +233,7 @@ function normalizeLead(raw: IncomingLead) {
   return {
     conversation_id: conversationId,
     name: asText(raw.name),
-    phone: asText(raw.phone),
+    phone: normalizePhone(asText(raw.phone)),
     phone_country: asText(raw.phoneCountry)?.slice(0, 8) ?? null,
     is_international: typeof raw.isInternational === "boolean" ? raw.isInternational : null,
     message: asText(raw.message),

@@ -329,24 +329,32 @@
 
     lead.profile = extractProfile();
 
-    // Mensaje completo: el bloque de texto más largo de la zona de conversación,
-    // excluyendo los textos que pertenecen al panel de perfil
-    const profileTexts = new Set(
-      [...(lead.profile?.bullets ?? []), lead.profile?.presentacion].filter(Boolean),
-    );
-    const candidates = [...document.querySelectorAll("p, div")]
+    // Mensaje completo: se concatenan TODAS las burbujas del hilo de chat, en
+    // orden. Antes solo se guardaba el bloque de texto más largo, así que si
+    // el contacto escribía en varios mensajes (a veces días distintos) solo
+    // quedaba uno y se perdían los demás.
+    // Se excluye por completo lo que esté dentro del panel de contacto
+    // (nombre/teléfono/perfil) en vez de listar cada texto de esa zona uno a
+    // uno, para no tener que perseguir cada etiqueta nueva que añada Idealista.
+    const NOISE_RE =
+      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|\d+\s+nuevo mensaje)$/i;
+    const messageBlocks = [...document.querySelectorAll("p, div")]
       .filter((el) => el.children.length === 0)
+      .filter((el) => !panel || !panel.contains(el))
       .map((el) => (el.innerText || "").trim())
       .filter(
         (t) =>
-          t.length > 20 &&
+          t.length > 12 &&
           t.length < 4000 &&
-          !/escribe tu mensaje/i.test(t) &&
-          !profileTexts.has(t) &&
-          ![...profileTexts].some((p) => t.includes(p.slice(0, 40))),
+          !DATE_RE.test(t) &&
+          !PRICE_RE.test(t) &&
+          !NOISE_RE.test(t) &&
+          !/^vio el anuncio/i.test(t),
       );
-    if (candidates.length > 0) {
-      lead.message = candidates.reduce((a, b) => (b.length > a.length ? b : a), "");
+    const seenMessages = new Set();
+    const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
+    if (uniqueBlocks.length > 0) {
+      lead.message = uniqueBlocks.join("\n\n").slice(0, 6000);
     }
 
     // Propiedad: tarjeta dentro del hilo — línea con € y la anterior como título
