@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Mail, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Mail, RotateCcw, X, XCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
@@ -71,6 +71,7 @@ export function SolicitudesAdminClient({
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [leadStatusFilter, setLeadStatusFilter] = useState<LeadStatusFilter>("todos");
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>("todos");
+  const [selectedLead, setSelectedLead] = useState<IdealistaLeadRow | null>(null);
 
   const counts: Record<TabKey, number> = {
     pending: requests.filter((r) => r.status === "pending").length,
@@ -172,9 +173,12 @@ export function SolicitudesAdminClient({
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredLeads.map((lead) => (
-                  <IdealistaLeadCard key={lead.id} lead={lead} />
+                  <IdealistaLeadCard key={lead.id} lead={lead} onOpen={() => setSelectedLead(lead)} />
                 ))}
               </div>
+            )}
+            {selectedLead && (
+              <IdealistaLeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
             )}
           </>
         ) : activeTab === "consultas" ? (
@@ -325,7 +329,7 @@ const LEAD_STATUS_LABEL: Record<IdealistaLeadRow["status"], string> = {
   descartado: "Descartado",
 };
 
-function IdealistaLeadCard({ lead }: { lead: IdealistaLeadRow }) {
+function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: () => void }) {
   const [isTransitioning, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useOptimistic(lead.status);
   const [optimisticType, setOptimisticType] = useOptimistic(lead.lead_type);
@@ -357,119 +361,126 @@ function IdealistaLeadCard({ lead }: { lead: IdealistaLeadRow }) {
         isTransitioning && "opacity-60",
       )}
     >
-      {/* Header: avatar + nombre + teléfono + estado */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800">
-            {(lead.name || "??").slice(0, 2).toUpperCase()}
+      {/* Área clicable: abre el detalle completo. Las acciones quedan fuera. */}
+      <div onClick={onOpen} className="cursor-pointer" role="button" tabIndex={0}>
+        {/* Header: avatar + nombre + teléfono + estado */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800">
+              {(lead.name || "??").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-medium text-ink text-sm leading-tight">{lead.name || "Sin nombre"}</p>
+              {lead.phone && (
+                <a
+                  href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="block truncate text-[11px] text-ink/50 leading-tight mt-0.5 hover:text-amber-800 transition-colors"
+                >
+                  📞 {lead.phone}
+                  {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
+                </a>
+              )}
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="truncate font-medium text-ink text-sm leading-tight">{lead.name || "Sin nombre"}</p>
-            {lead.phone && (
-              <a
-                href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                className="block truncate text-[11px] text-ink/50 leading-tight mt-0.5 hover:text-amber-800 transition-colors"
-              >
-                📞 {lead.phone}
-                {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
-              </a>
+          <span
+            className={cn(
+              "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold",
+              LEAD_STATUS_BADGE[optimisticStatus],
+            )}
+          >
+            {LEAD_STATUS_LABEL[optimisticStatus]}
+          </span>
+        </div>
+
+        {/* Tipo: confirmado o sugerido */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {optimisticType ? (
+            <span className="rounded-full border border-teal-300 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800">
+              {LEAD_TYPE_LABEL[optimisticType]}
+            </span>
+          ) : lead.suggested_type ? (
+            <span
+              className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700"
+              title={lead.suggestion_keywords.length > 0 ? `Detectado por: ${lead.suggestion_keywords.join(", ")}` : undefined}
+            >
+              Sugerido: {LEAD_TYPE_LABEL[lead.suggested_type]}
+            </span>
+          ) : null}
+          {lead.detail_captured && (
+            <span className="rounded-full border border-ink/10 bg-ink/[0.04] px-2.5 py-0.5 text-[11px] text-ink/45" title="Perfil y mensaje completo capturados">
+              ● Detalle
+            </span>
+          )}
+        </div>
+
+        {/* Propiedad consultada */}
+        {(lead.property_title || lead.property_ref || lead.idealista_code) && (
+          <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
+            <p className="text-[12px] font-medium text-ink/75 truncate">
+              📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+            </p>
+            {(lead.property_ref || lead.idealista_code) && (
+              <p className="text-[11px] text-ink/40 mt-0.5">
+                {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
             )}
           </div>
-        </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold",
-            LEAD_STATUS_BADGE[optimisticStatus],
-          )}
-        >
-          {LEAD_STATUS_LABEL[optimisticStatus]}
-        </span>
-      </div>
-
-      {/* Tipo: confirmado o sugerido */}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {optimisticType ? (
-          <span className="rounded-full border border-teal-300 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800">
-            {LEAD_TYPE_LABEL[optimisticType]}
-          </span>
-        ) : lead.suggested_type ? (
-          <span
-            className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700"
-            title={lead.suggestion_keywords.length > 0 ? `Detectado por: ${lead.suggestion_keywords.join(", ")}` : undefined}
-          >
-            Sugerido: {LEAD_TYPE_LABEL[lead.suggested_type]}
-          </span>
-        ) : null}
-        {lead.detail_captured && (
-          <span className="rounded-full border border-ink/10 bg-ink/[0.04] px-2.5 py-0.5 text-[11px] text-ink/45" title="Perfil y mensaje completo capturados">
-            ● Detalle
-          </span>
         )}
-      </div>
 
-      {/* Propiedad consultada */}
-      {(lead.property_title || lead.property_ref || lead.idealista_code) && (
-        <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
-          <p className="text-[12px] font-medium text-ink/75 truncate">
-            📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
-          </p>
-          {(lead.property_ref || lead.idealista_code) && (
-            <p className="text-[11px] text-ink/40 mt-0.5">
-              {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Mensaje */}
-      {lead.message && (
-        <>
-          <p className={cn("mt-3 text-[12px] text-ink/70 leading-relaxed", !expanded && "line-clamp-3")}>
-            {lead.message}
-          </p>
-          {lead.message.length > 180 && (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="mt-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
-            >
-              {expanded ? "Ver menos" : "Ver más"}
-            </button>
-          )}
-        </>
-      )}
-
-      {/* Perfil de búsqueda */}
-      {(bullets.length > 0 || presentacion) && (
-        <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2">
-          <p className="text-[11px] font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
-          {bullets.length > 0 && (
-            <ul className="mt-1 space-y-0.5">
-              {bullets.slice(0, 5).map((b) => (
-                <li key={b} className="text-[11px] text-ink/60">
-                  • {b}
-                </li>
-              ))}
-            </ul>
-          )}
-          {presentacion && <p className="mt-1.5 text-[11px] italic text-ink/55 line-clamp-4">“{presentacion}”</p>}
-        </div>
-      )}
-
-      {/* Fechas */}
-      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/40">
-        {lead.message_date && (
+        {/* Mensaje */}
+        {lead.message && (
           <>
-            <span>🗓 {lead.message_date}</span>
-            <span className="text-ink/25">·</span>
+            <p className={cn("mt-3 text-[12px] text-ink/70 leading-relaxed whitespace-pre-line", !expanded && "line-clamp-3")}>
+              {lead.message}
+            </p>
+            {lead.message.length > 180 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+                className="mt-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+              >
+                {expanded ? "Ver menos" : "Ver más"}
+              </button>
+            )}
           </>
         )}
-        <span>
-          Capturado{" "}
-          {new Date(lead.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-        </span>
+
+        {/* Perfil de búsqueda */}
+        {(bullets.length > 0 || presentacion) && (
+          <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2">
+            <p className="text-[11px] font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
+            {bullets.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {bullets.slice(0, 5).map((b) => (
+                  <li key={b} className="text-[11px] text-ink/60">
+                    • {b}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {presentacion && <p className="mt-1.5 text-[11px] italic text-ink/55 line-clamp-4">“{presentacion}”</p>}
+          </div>
+        )}
+
+        {/* Fechas */}
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/40">
+          {lead.message_date && (
+            <>
+              <span>🗓 {lead.message_date}</span>
+              <span className="text-ink/25">·</span>
+            </>
+          )}
+          <span>
+            Capturado{" "}
+            {new Date(lead.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>
       </div>
 
       {/* Acciones */}
@@ -527,6 +538,108 @@ function IdealistaLeadCard({ lead }: { lead: IdealistaLeadRow }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── IdealistaLeadModal ──────────────────────────────────────────────────────
+
+function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose: () => void }) {
+  const bullets = lead.profile?.bullets ?? [];
+  const presentacion = lead.profile?.presentacion ?? null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/15 bg-cream-50 p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-ink text-base">{lead.name || "Sin nombre"}</p>
+            {lead.phone && (
+              <a
+                href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                className="mt-0.5 block text-[13px] text-ink/60 hover:text-amber-800 transition-colors"
+              >
+                📞 {lead.phone}
+                {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
+              </a>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-1.5 text-ink/40 transition hover:bg-ink/5 hover:text-ink/70"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {(lead.property_title || lead.property_ref || lead.idealista_code) && (
+          <div className="mt-4 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2.5">
+            <p className="text-[13px] font-medium text-ink/80">
+              📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+            </p>
+            {(lead.property_ref || lead.idealista_code) && (
+              <p className="text-[11px] text-ink/40 mt-0.5">
+                {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+          </div>
+        )}
+
+        {lead.message && (
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Mensaje</p>
+            <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-ink/75">{lead.message}</p>
+          </div>
+        )}
+
+        {(bullets.length > 0 || presentacion) && (
+          <div className="mt-4 rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2.5">
+            <p className="text-[12px] font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
+            {bullets.length > 0 && (
+              <ul className="mt-1.5 space-y-1">
+                {bullets.map((b) => (
+                  <li key={b} className="text-[12px] text-ink/65">
+                    • {b}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {presentacion && <p className="mt-2 text-[12px] italic text-ink/60">“{presentacion}”</p>}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/40">
+          {lead.message_date && (
+            <>
+              <span>🗓 {lead.message_date}</span>
+              <span className="text-ink/25">·</span>
+            </>
+          )}
+          <span>
+            Capturado{" "}
+            {new Date(lead.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>
+
+        <a
+          href={`https://www.idealista.com/inbox/CONVERSATION_${lead.conversation_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-gold hover:text-navy"
+        >
+          <ExternalLink size={14} strokeWidth={2} />
+          Abrir en Idealista
+        </a>
+      </div>
     </div>
   );
 }

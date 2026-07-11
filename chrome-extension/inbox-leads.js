@@ -35,6 +35,23 @@
     return null;
   }
 
+  // El botón de llamada de Idealista lleva el teléfono en crudo en el
+  // atributo appcallback_target_phone (ej. "603466878"), mucho más fiable
+  // que parsear el texto visible. scope puede ser una fila de la lista o
+  // todo el documento en la vista de detalle.
+  function extractPhoneFromScope(scope) {
+    const attrEl = scope.querySelector && scope.querySelector("[appcallback_target_phone]");
+    if (!attrEl) return null;
+    const text = (attrEl.innerText || "").trim();
+    const match = text.match(PHONE_RE);
+    if (!match) return null;
+    const result = { phone: match[1] };
+    const country = text.match(/\(([^)]*?)\)/);
+    const cc = country && country[1].match(/([A-Z]{2})\s*$/);
+    if (cc) result.phoneCountry = cc[1];
+    return result;
+  }
+
   // ── Token ──────────────────────────────────────────────────────────────────
   function getToken() {
     return new Promise((resolve) => {
@@ -160,6 +177,14 @@
     // Nombre: primera línea de la fila
     lead.name = lines[0] || null;
 
+    // El atributo appcallback_target_phone (si está presente en la fila) es
+    // más fiable que el regex sobre el texto visible.
+    const attrPhone = extractPhoneFromScope(row);
+    if (attrPhone) {
+      lead.phone = attrPhone.phone;
+      if (attrPhone.phoneCountry) lead.phoneCountry = attrPhone.phoneCountry;
+    }
+
     // Título de propiedad: línea inmediatamente anterior al precio
     if (priceIdx > 0) lead.propertyTitle = lines[priceIdx - 1];
 
@@ -232,52 +257,104 @@
     return { bullets, presentacion };
   }
 
+  // Panel derecho del contacto: nombre y teléfono están SIEMPRE justo encima
+  // del enlace "Convertir a demanda" (a diferencia del texto "Perfil", que
+  // también matchea la pestaña de arriba y por eso no sirve como ancla).
+  function findRightPanel() {
+    const anchor = [...document.querySelectorAll("a, button")].find((el) =>
+      /convertir a demanda/i.test(el.textContent || ""),
+    );
+    if (!anchor) return null;
+    let panel = anchor.parentElement;
+    for (let i = 0; i < 6 && panel; i++) {
+      if (PHONE_RE.test(panel.innerText || "")) return panel;
+      panel = panel.parentElement;
+    }
+    return anchor.parentElement;
+  }
+
   function extractDetailLead(conversationId) {
     const lead = { conversationId };
     const bodyText = document.body.innerText || "";
 
-    // Panel derecho (Perfil): nombre + teléfono. El teléfono en detalle viene
-    // como "+39 366 400 5565 (Italia, IT)".
-    const phoneMatch = bodyText.match(/(\+?\d[\d\s().-]{7,}\d)\s*\(([^)]*?)\)/);
-    if (phoneMatch) {
-      lead.phone = phoneMatch[1].trim();
-      const country = phoneMatch[2].match(/([A-Z]{2})\s*$/);
-      if (country) lead.phoneCountry = country[1];
+    // Fuente primaria: clases semánticas observadas en el HTML real de
+    // Idealista/tools (ver README). El sufijo hash del CSS module puede
+    // cambiar con cada build, pero el prefijo "_seeker-name"/"_seeker-phone"
+    // y el atributo appcallback_target_phone deberían ser estables.
+    const nameEl = document.querySelector('[class*="_seeker-name"]');
+    if (nameEl) {
+      const name = (nameEl.innerText || "").trim();
+      if (name) lead.name = name;
+    }
+    const attrPhone = extractPhoneFromScope(document);
+    if (attrPhone) {
+      lead.phone = attrPhone.phone;
+      if (attrPhone.phoneCountry) lead.phoneCountry = attrPhone.phoneCountry;
+    }
+
+    // Respaldo: si la clase semántica no existe (Idealista cambió el
+    // markup), se ancla al enlace "Convertir a demanda" — siempre está
+    // justo debajo del nombre y el teléfono en el panel de contacto.
+    if (!lead.name || !lead.phone) {
+      const panel = findRightPanel();
+      if (panel) {
+        const allLines = textLines(panel);
+        const anchorIdx = allLines.findIndex((l) => /convertir a demanda/i.test(l));
+        const headLines = (anchorIdx >= 0 ? allLines.slice(0, anchorIdx) : allLines).filter(
+          (l) => !/^(perfil|notas|actividades)$/i.test(l),
+        );
+
+        const phoneIdx = headLines.findIndex((l) => PHONE_RE.test(l));
+        if (!lead.phone && phoneIdx >= 0) {
+          const phoneLine = headLines[phoneIdx];
+          lead.phone = (phoneLine.match(PHONE_RE) || [])[1] || null;
+          // Teléfonos internacionales vienen como "+39 366 400 5565 (Italia, IT)";
+          // los nacionales no llevan paréntesis con país.
+          const country = phoneLine.match(/\(([^)]*?)\)/);
+          if (country) {
+            const cc = country[1].match(/([A-Z]{2})\s*$/);
+            if (cc) lead.phoneCountry = cc[1];
+          }
+        }
+
+        if (!lead.name) {
+          const nameLine = headLines.find(
+            (l, i) => i !== phoneIdx && !/internacional/i.test(l) && !/^vio el anuncio/i.test(l),
+          );
+          if (nameLine) lead.name = nameLine;
+        }
+      }
     }
     lead.isInternational = /internacional/i.test(bodyText);
 
-    // Nombre: el heading del hilo (aparece también en el panel Perfil)
-    const perfilTab = findHeadingByText("perfil");
-    if (perfilTab) {
-      const panel = perfilTab.closest("aside, section, div");
-      if (panel) {
-        const lines = textLines(panel).filter(
-          (l) => !/^(perfil|notas|actividades|internacional)$/i.test(l) && !PHONE_RE.test(l),
-        );
-        if (lines.length > 0) lead.name = lines[0];
-      }
-    }
-
     lead.profile = extractProfile();
 
-    // Mensaje completo: el bloque de texto más largo de la zona de conversación,
-    // excluyendo los textos que pertenecen al panel de perfil
-    const profileTexts = new Set(
-      [...(lead.profile?.bullets ?? []), lead.profile?.presentacion].filter(Boolean),
-    );
-    const candidates = [...document.querySelectorAll("p, div")]
+    // Mensaje completo: se concatenan TODAS las burbujas del hilo de chat, en
+    // orden. Antes solo se guardaba el bloque de texto más largo, así que si
+    // el contacto escribía en varios mensajes (a veces días distintos) solo
+    // quedaba uno y se perdían los demás.
+    // Se excluye por completo lo que esté dentro del panel de contacto
+    // (nombre/teléfono/perfil) en vez de listar cada texto de esa zona uno a
+    // uno, para no tener que perseguir cada etiqueta nueva que añada Idealista.
+    const NOISE_RE =
+      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|\d+\s+nuevo mensaje)$/i;
+    const messageBlocks = [...document.querySelectorAll("p, div")]
       .filter((el) => el.children.length === 0)
+      .filter((el) => !panel || !panel.contains(el))
       .map((el) => (el.innerText || "").trim())
       .filter(
         (t) =>
-          t.length > 20 &&
+          t.length > 12 &&
           t.length < 4000 &&
-          !/escribe tu mensaje/i.test(t) &&
-          !profileTexts.has(t) &&
-          ![...profileTexts].some((p) => t.includes(p.slice(0, 40))),
+          !DATE_RE.test(t) &&
+          !PRICE_RE.test(t) &&
+          !NOISE_RE.test(t) &&
+          !/^vio el anuncio/i.test(t),
       );
-    if (candidates.length > 0) {
-      lead.message = candidates.reduce((a, b) => (b.length > a.length ? b : a), "");
+    const seenMessages = new Set();
+    const uniqueBlocks = messageBlocks.filter((t) => (seenMessages.has(t) ? false : (seenMessages.add(t), true)));
+    if (uniqueBlocks.length > 0) {
+      lead.message = uniqueBlocks.join("\n\n").slice(0, 6000);
     }
 
     // Propiedad: tarjeta dentro del hilo — línea con € y la anterior como título
