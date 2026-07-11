@@ -161,11 +161,14 @@ export function extractPhoneFromHtmlDescription(
   );
   if (ogDesc?.[1]) candidates.push(ogDesc[1]);
 
-  // 3) Bloque .comment (descripción visible en el DOM de Idealista).
-  const commentBlock = html.match(
-    /class=["'][^"']*\bcomment\b[^"']*["'][^>]*>([\s\S]{20,2000}?)<\/div>/i,
-  );
-  if (commentBlock?.[1]) candidates.push(htmlToText(commentBlock[1]));
+  // 3) Contenedores del comentario del anunciante (así se renderiza en el DOM
+  // de Idealista, p.ej. cuando Playwright carga la página y dispara comment.ajax).
+  const commentContainerRe =
+    /class=["'][^"']*(?:advertiser-comment-container|commentsContainer|comment-container|\bcomment\b|adCommentData)[^"']*["'][^>]*>([\s\S]{20,4000}?)<\/(?:div|section|p)>/gi;
+  let cm: RegExpExecArray | null;
+  while ((cm = commentContainerRe.exec(html)) !== null) {
+    if (cm[1]) candidates.push(htmlToText(cm[1]));
+  }
 
   for (const c of candidates) {
     const res = extractPhoneFromText(c, excludeReference);

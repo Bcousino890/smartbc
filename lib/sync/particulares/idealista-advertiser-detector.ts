@@ -714,7 +714,7 @@ export async function fetchIdealistaPhoneViaAjax(
     // Fuente adicional: teléfono escrito por el particular en la descripción del
     // anuncio (truco habitual para saltarse el "chat only"). Se mina del mismo
     // HTML ya descargado — sin coste de request extra.
-    const { extractPhoneFromHtmlDescription } = await import("./phone-from-text");
+    const { extractPhoneFromText, extractPhoneFromHtmlDescription } = await import("./phone-from-text");
     const descPhone = extractPhoneFromHtmlDescription(pageHtml, adId.slice(-9));
     if (descPhone.phone) {
       console.log(`[idealista-phone-ajax] ✓ ÉXITO vía descripción: adId=${adId}, phone=${descPhone.phone}`);
@@ -722,6 +722,46 @@ export async function fetchIdealistaPhoneViaAjax(
         debug.push({ endpoint: "descripcion-texto", status: 200, bodySnippet: `phone=${descPhone.phone}` });
       }
       return { phone: descPhone.phone, phone_confidence: "high", contact_name: null, debug };
+    }
+
+    // Fuente adicional: el COMENTARIO del anunciante. Idealista NO lo incrusta en
+    // el HTML de la ficha — lo carga aparte vía /ajax/comment.ajax (protegido por
+    // DataDome). Lo pedimos con el mismo cookie-jar/proxy que ya pasó DataDome al
+    // cargar la página, y minamos el texto: muchos particulares escriben ahí su
+    // móvil ("interesados llamar al 6XX…") para saltarse el chat-only.
+    try {
+      const commentUrl = `https://www.idealista.com/ajax/comment.ajax?adId=${adId}`;
+      const commentRes = await fetchViaCurl(commentUrl, BROWSER_UA_FOR_PAGE, {
+        proxyUrl: options?.proxyUrl,
+        allowSmallBody: true,
+        timeoutSec: 15,
+        headers: [
+          "X-Requested-With: XMLHttpRequest",
+          "Accept: application/json, text/javascript, */*; q=0.01",
+          `Referer: ${pageUrl}`,
+          "Accept-Language: es-ES,es;q=0.9",
+        ],
+      });
+      if (commentRes.ok && commentRes.html) {
+        const { htmlToText } = await import("./phone-from-text");
+        const commentPhone = extractPhoneFromText(htmlToText(commentRes.html), adId.slice(-9));
+        if (commentPhone.phone) {
+          console.log(`[idealista-phone-ajax] ✓ ÉXITO vía comentario: adId=${adId}, phone=${commentPhone.phone}`);
+          if (debug) {
+            debug.push({ endpoint: "comment.ajax-texto", status: 200, bodySnippet: `phone=${commentPhone.phone}` });
+          }
+          return { phone: commentPhone.phone, phone_confidence: "high", contact_name: null, debug };
+        }
+        if (debug) {
+          debug.push({ endpoint: "comment.ajax-texto", status: 200, bodySnippet: `sin teléfono en comentario (${commentRes.html.length} chars)` });
+        }
+      } else if (debug) {
+        const reason = commentRes.ok ? "vacío" : commentRes.reason;
+        debug.push({ endpoint: "comment.ajax-texto", status: commentRes.ok ? 0 : commentRes.status, bodySnippet: reason });
+      }
+    } catch (commentErr) {
+      const msg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+      if (debug) debug.push({ endpoint: "comment.ajax-error", status: 0, bodySnippet: msg });
     }
   }
 

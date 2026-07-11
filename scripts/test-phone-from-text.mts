@@ -83,6 +83,11 @@ const htmlCases: Case[] = [
     expect: "+34633445566",
   },
   {
+    name: "HTML advertiser-comment-container",
+    text: `<div class="advertiser-comment-container"><p>Alquilo sin agencia. Interesados escribir al 655 44 33 22.</p></div>`,
+    expect: "+34655443322",
+  },
+  {
     name: "HTML description sin teléfono",
     text: JSON.stringify({ description: "Piso de 80 m2 con 3 habitaciones y 2 baños, precio 300.000" }),
     expect: null,
