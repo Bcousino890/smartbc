@@ -21,6 +21,13 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
 }
 
+type IncomingProperty = {
+  title?: unknown;
+  price?: unknown;
+  type?: unknown;
+  imageUrl?: unknown;
+};
+
 type IncomingLead = {
   conversationId?: unknown;
   name?: unknown;
@@ -32,6 +39,8 @@ type IncomingLead = {
   propertyTitle?: unknown;
   propertyPrice?: unknown;
   propertyType?: unknown;
+  propertyImageUrl?: unknown;
+  properties?: unknown;
   idealistaCode?: unknown;
   propertyRef?: unknown;
   messageDate?: unknown;
@@ -63,6 +72,42 @@ function asProfile(value: IncomingLead["profile"]): { bullets: string[]; present
   const presentacion = asText(value.presentacion);
   if (bullets.length === 0 && !presentacion) return null;
   return { bullets, presentacion };
+}
+
+type NormalizedProperty = { title: string | null; price: string | null; type: string | null; imageUrl: string | null };
+
+// Un mismo contacto puede preguntar por varias propiedades distintas en un
+// mismo hilo del inbox — se guardan todas, no solo la primera.
+function asProperties(value: unknown): NormalizedProperty[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((p): p is IncomingProperty => !!p && typeof p === "object")
+    .map((p) => ({
+      title: asText(p.title, 300),
+      price: asText(p.price, 100),
+      type: asText(p.type, 100),
+      imageUrl: asText(p.imageUrl, 1000),
+    }))
+    .filter((p) => p.title || p.price || p.imageUrl)
+    .slice(0, 30);
+}
+
+function propertyKey(p: NormalizedProperty): string {
+  return p.title || p.imageUrl || "";
+}
+
+// Merge de detalle: unión de lo ya guardado + lo nuevo, dedup por título
+// (o imagen si no hay título), preservando el orden de aparición.
+function mergeProperties(existing: NormalizedProperty[], incoming: NormalizedProperty[]): NormalizedProperty[] {
+  const merged: NormalizedProperty[] = [...existing];
+  const seen = new Set(existing.map(propertyKey).filter(Boolean));
+  for (const p of incoming) {
+    const key = propertyKey(p);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(p);
+  }
+  return merged.slice(0, 30);
 }
 
 export async function POST(req: Request) {
@@ -156,6 +201,10 @@ export async function POST(req: Request) {
       property_title: lead.property_title ?? existing?.property_title ?? null,
       property_price: lead.property_price ?? existing?.property_price ?? null,
       property_type: lead.property_type ?? existing?.property_type ?? null,
+      property_image_url: lead.property_image_url ?? existing?.property_image_url ?? null,
+      // Unión: el mismo contacto puede preguntar por varias propiedades a lo
+      // largo del hilo (ver mergeProperties), nunca se pisa lo ya guardado.
+      properties: mergeProperties((existing?.properties as NormalizedProperty[]) ?? [], lead.properties),
       message_date: lead.message_date ?? existing?.message_date ?? null,
       updated_at: now,
     };
@@ -238,9 +287,11 @@ function normalizeLead(raw: IncomingLead) {
     is_international: typeof raw.isInternational === "boolean" ? raw.isInternational : null,
     message: asText(raw.message, 50000),
     profile: asProfile(raw.profile ?? null),
-    property_title: asText(raw.propertyTitle),
-    property_price: asText(raw.propertyPrice),
-    property_type: asText(raw.propertyType),
+    property_title: asText(raw.propertyTitle, 300),
+    property_price: asText(raw.propertyPrice, 100),
+    property_type: asText(raw.propertyType, 100),
+    property_image_url: asText(raw.propertyImageUrl, 1000),
+    properties: asProperties(raw.properties),
     idealista_code: asText(raw.idealistaCode),
     property_ref: asText(raw.propertyRef),
     message_date: asText(raw.messageDate),

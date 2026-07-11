@@ -35,6 +35,40 @@
     return null;
   }
 
+  // Cada tarjeta de propiedad dentro del hilo trae una imagen con
+  // alt="Imagen del anuncio" — atributo semántico estable, a diferencia de
+  // las clases del botón contenedor (con hash de build). Un mismo contacto
+  // puede preguntar por varias propiedades distintas en un solo hilo, así
+  // que se devuelven TODAS las tarjetas encontradas, no solo la primera.
+  function extractPropertyCards(scope) {
+    const root = scope || document;
+    const cards = [...root.querySelectorAll("button, a")]
+      .filter((el) => el.querySelector('img[alt="Imagen del anuncio"]'))
+      .map((el) => {
+        const img = el.querySelector('img[alt="Imagen del anuncio"]');
+        const imageUrl = img ? img.currentSrc || img.getAttribute("src") || null : null;
+        const lines = ((el.innerText || "").trim()).split("\n").map((l) => l.trim()).filter(Boolean);
+        const priceLine = lines.find((l) => PRICE_RE.test(l) && l.includes("€"));
+        const price = priceLine ? (priceLine.match(PRICE_RE) || [])[1] || null : null;
+        const typeParts = priceLine
+          ? priceLine.split(/[|·–-]/).map((p) => p.trim()).filter((p) => p && !p.includes("€"))
+          : [];
+        const type = typeParts.length > 0 ? typeParts[typeParts.length - 1] : null;
+        const title = lines.find((l) => l !== priceLine) || null;
+        return { title, price, type, imageUrl };
+      })
+      .filter((c) => c.title || c.price || c.imageUrl);
+    // Dedup por título (la misma propiedad puede aparecer repetida si se
+    // menciona en más de un mensaje del hilo).
+    const seen = new Set();
+    return cards.filter((c) => {
+      const key = c.title || c.imageUrl;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
   // El botón de llamada de Idealista lleva el teléfono en crudo en el
   // atributo appcallback_target_phone (ej. "603466878"), mucho más fiable
   // que parsear el texto visible. scope puede ser una fila de la lista o
@@ -75,7 +109,7 @@
     return token || null;
   }
 
-  // ── UI de estado ─────────────────────────────────────────────────────
+  // ── UI de estado ──────────────────────────────────────────────────
   let badgeEl = null;
   let badgeTimer = null;
 
@@ -187,6 +221,17 @@
 
     // Título de propiedad: línea inmediatamente anterior al precio
     if (priceIdx > 0) lead.propertyTitle = lines[priceIdx - 1];
+
+    // La fila de listado normalmente solo muestra una tarjeta (la más
+    // reciente); si hay más de una se capturan todas igual.
+    const rowCards = extractPropertyCards(row);
+    if (rowCards.length > 0) {
+      lead.properties = rowCards;
+      lead.propertyTitle = rowCards[0].title || lead.propertyTitle;
+      lead.propertyPrice = rowCards[0].price || lead.propertyPrice;
+      lead.propertyType = rowCards[0].type || lead.propertyType;
+      lead.propertyImageUrl = rowCards[0].imageUrl || null;
+    }
 
     lead.isInternational = lines.some((l) => /internacional/i.test(l));
 
@@ -398,14 +443,27 @@
       }
     }
 
-    // Propiedad: tarjeta dentro del hilo — línea con € y la anterior como título
-    const lineList = bodyText.split("\n").map((l) => l.trim()).filter(Boolean);
-    const priceIdx = lineList.findIndex((l) => PRICE_RE.test(l) && l.includes("€"));
-    if (priceIdx > 0) {
-      lead.propertyTitle = lineList[priceIdx - 1];
-      lead.propertyPrice = (lineList[priceIdx].match(PRICE_RE) || [])[1] || null;
-      const typeParts = lineList[priceIdx].split(/[|·–-]/).map((p) => p.trim()).filter((p) => p && !p.includes("€"));
-      if (typeParts.length > 0) lead.propertyType = typeParts[typeParts.length - 1];
+    // Propiedades consultadas: un mismo contacto puede preguntar por varias
+    // en el mismo hilo (ver extractPropertyCards). Se capturan todas; los
+    // campos planos property* quedan como la primera para compatibilidad.
+    const propertyCards = extractPropertyCards(document);
+    if (propertyCards.length > 0) {
+      lead.properties = propertyCards;
+      lead.propertyTitle = propertyCards[0].title;
+      lead.propertyPrice = propertyCards[0].price;
+      lead.propertyType = propertyCards[0].type;
+      lead.propertyImageUrl = propertyCards[0].imageUrl;
+    } else {
+      // Respaldo: línea con € y la anterior como título (por si las
+      // tarjetas no tienen imagen o cambió el markup).
+      const lineList = bodyText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const priceIdx = lineList.findIndex((l) => PRICE_RE.test(l) && l.includes("€"));
+      if (priceIdx > 0) {
+        lead.propertyTitle = lineList[priceIdx - 1];
+        lead.propertyPrice = (lineList[priceIdx].match(PRICE_RE) || [])[1] || null;
+        const typeParts = lineList[priceIdx].split(/[|·–-]/).map((p) => p.trim()).filter((p) => p && !p.includes("€"));
+        if (typeParts.length > 0) lead.propertyType = typeParts[typeParts.length - 1];
+      }
     }
 
     // Cod./Ref. — visibles si el modal de la propiedad está abierto.
