@@ -556,6 +556,57 @@
     }
   }
 
+  // ── Modo AUTO: recorre las conversaciones con el botón "Anterior" ────
+  // Captura la conversación abierta, pulsa "Anterior" (la navegación
+  // propia de Idealista entre conversaciones), espera a que cargue la
+  // siguiente y repite hasta el final del inbox o hasta que se detenga.
+  let autoRun = null; // {captured: n} mientras está activo
+
+  function findNavButton(label) {
+    return [...document.querySelectorAll("button")].find((b) => {
+      const span = b.querySelector("span");
+      return span && (span.textContent || "").trim().toLowerCase() === label;
+    });
+  }
+
+  async function runAutoCapture(startId) {
+    autoRun = { captured: 0 };
+    updateAutoButton();
+    let currentId = startId;
+    const visited = new Set();
+    // Tope de seguridad por si la navegación entra en un ciclo
+    for (let i = 0; i < 500 && autoRun; i++) {
+      if (visited.has(currentId)) break;
+      visited.add(currentId);
+      await captureDetail(currentId, true);
+      if (!autoRun) break;
+      autoRun.captured++;
+      updateAutoButton();
+      showBadge("Auto: " + autoRun.captured + " conversaciones capturadas…");
+      const nav = findNavButton("anterior");
+      if (!nav || nav.disabled) break;
+      nav.click();
+      const next = await waitFor(() => {
+        const m = location.href.match(CONVERSATION_RE);
+        return m && m[1] !== currentId ? m[1] : null;
+      }, 10000, 200);
+      if (!next) break; // no navegó: fin del inbox
+      currentId = next;
+      await sleep(800); // pausa suave entre conversaciones
+    }
+    const total = autoRun ? autoRun.captured : 0;
+    autoRun = null;
+    updateAutoButton();
+    if (total > 0) showBadge("✓ Auto terminado: " + total + " conversaciones capturadas", false, 8000);
+  }
+
+  function updateAutoButton() {
+    const btn = document.getElementById("smartbc-auto-capture");
+    if (!btn) return;
+    btn.textContent = autoRun ? "⏹ Detener (" + autoRun.captured + ")" : "⏩ Capturar todas";
+    btn.style.background = autoRun ? "#8b1a1a" : "#1a1a1a";
+  }
+
   // Botón de reenvío manual: la captura automática corre al abrir la
   // conversación, pero Idealista carga los mensajes antiguos al hacer
   // scroll hacia arriba — este botón permite recapturar cuando ya está
@@ -564,18 +615,22 @@
     const existing = document.getElementById("smartbc-resend-detail");
     if (existing) {
       existing.dataset.conversationId = conversationId;
+      const autoBtn = document.getElementById("smartbc-auto-capture");
+      if (autoBtn) autoBtn.dataset.conversationId = conversationId;
       return;
     }
-    const btn = document.createElement("button");
-    btn.id = "smartbc-resend-detail";
-    btn.dataset.conversationId = conversationId;
-    btn.textContent = "🔄 Reenviar a SmartBC";
-    btn.style.cssText = [
-      "position:fixed", "bottom:24px", "right:16px", "z-index:999999",
+    const baseCss = [
+      "position:fixed", "bottom:24px", "z-index:999999",
       "background:#1a1a1a", "color:#fff", "border:0", "cursor:pointer",
       "padding:12px 18px", "border-radius:24px", "font:600 13px/1 -apple-system,sans-serif",
       "box-shadow:0 8px 30px rgba(0,0,0,.3)",
     ].join(";");
+
+    const btn = document.createElement("button");
+    btn.id = "smartbc-resend-detail";
+    btn.dataset.conversationId = conversationId;
+    btn.textContent = "🔄 Reenviar a SmartBC";
+    btn.style.cssText = baseCss + ";right:16px";
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
@@ -586,11 +641,32 @@
       }
     });
     document.body.appendChild(btn);
+
+    const autoBtn = document.createElement("button");
+    autoBtn.id = "smartbc-auto-capture";
+    autoBtn.dataset.conversationId = conversationId;
+    autoBtn.textContent = "⏩ Capturar todas";
+    autoBtn.style.cssText = baseCss + ";right:210px";
+    autoBtn.title =
+      "Captura esta conversación y pasa sola a la anterior (botón 'Anterior' de Idealista) hasta recorrer todo el inbox. Vuelve a pulsar para detener.";
+    autoBtn.addEventListener("click", () => {
+      if (autoRun) {
+        autoRun = null; // el bucle lo detecta y se detiene
+        updateAutoButton();
+        showBadge("Auto detenido", false, 3000);
+      } else {
+        runAutoCapture(autoBtn.dataset.conversationId);
+      }
+    });
+    document.body.appendChild(autoBtn);
   }
 
   function removeDetailButton() {
     const btn = document.getElementById("smartbc-resend-detail");
     if (btn) btn.remove();
+    const autoBtn = document.getElementById("smartbc-auto-capture");
+    if (autoBtn) autoBtn.remove();
+    autoRun = null;
   }
 
   // ── Router SPA ───────────────────────────────────────────────────────────
@@ -602,7 +678,9 @@
     if (conversation) {
       removeListButton();
       ensureDetailButton(conversation[1]);
-      captureDetail(conversation[1]);
+      // En modo auto el bucle ya captura cada conversación (con force);
+      // capturar también aquí duplicaría los envíos.
+      if (!autoRun) captureDetail(conversation[1]);
     } else if (/\/inbox\/?(\?|$)/.test(url)) {
       removeDetailButton();
       ensureListButton();
