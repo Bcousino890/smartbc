@@ -33,6 +33,7 @@ type IncomingLead = {
   name?: unknown;
   phone?: unknown;
   phoneCountry?: unknown;
+  avatarUrl?: unknown;
   isInternational?: unknown;
   message?: unknown;
   profile?: { bullets?: unknown; presentacion?: unknown } | null;
@@ -197,6 +198,7 @@ export async function POST(req: Request) {
       name: lead.name ?? existing?.name ?? "",
       phone: lead.phone ?? existing?.phone ?? null,
       phone_country: lead.phone_country ?? existing?.phone_country ?? null,
+      avatar_url: lead.avatar_url ?? existing?.avatar_url ?? null,
       is_international: lead.is_international ?? existing?.is_international ?? false,
       property_title: lead.property_title ?? existing?.property_title ?? null,
       property_price: lead.property_price ?? existing?.property_price ?? null,
@@ -284,6 +286,7 @@ function normalizeLead(raw: IncomingLead) {
     name: asText(raw.name),
     phone: normalizePhone(asText(raw.phone)),
     phone_country: asText(raw.phoneCountry)?.slice(0, 8) ?? null,
+    avatar_url: asText(raw.avatarUrl, 1000),
     is_international: typeof raw.isInternational === "boolean" ? raw.isInternational : null,
     message: asText(raw.message, 50000),
     profile: asProfile(raw.profile ?? null),

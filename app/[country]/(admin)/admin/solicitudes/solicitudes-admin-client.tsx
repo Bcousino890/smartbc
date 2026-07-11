@@ -366,9 +366,14 @@ function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: (
         {/* Header: avatar + nombre + teléfono + estado */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800">
-              {(lead.name || "??").slice(0, 2).toUpperCase()}
-            </div>
+            {lead.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={lead.avatar_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800">
+                {(lead.name || "??").slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <p className="truncate font-medium text-ink text-sm leading-tight">{lead.name || "Sin nombre"}</p>
               {lead.phone && (
@@ -573,17 +578,23 @@ function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/15 bg-cream-50 p-5 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-semibold text-ink text-base">{lead.name || "Sin nombre"}</p>
-            {lead.phone && (
-              <a
-                href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                className="mt-0.5 block text-[13px] text-ink/60 hover:text-amber-800 transition-colors"
-              >
-                📞 {lead.phone}
-                {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
-              </a>
+          <div className="flex items-center gap-3 min-w-0">
+            {lead.avatar_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={lead.avatar_url} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
             )}
+            <div className="min-w-0">
+              <p className="font-semibold text-ink text-base">{lead.name || "Sin nombre"}</p>
+              {lead.phone && (
+                <a
+                  href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                  className="mt-0.5 block text-[13px] text-ink/60 hover:text-amber-800 transition-colors"
+                >
+                  📞 {lead.phone}
+                  {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
+                </a>
+              )}
+            </div>
           </div>
           <button
             type="button"
