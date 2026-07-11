@@ -341,7 +341,7 @@
     // (nombre/teléfono/perfil) en vez de listar cada texto de esa zona uno a
     // uno, para no tener que perseguir cada etiqueta nueva que añada Idealista.
     const NOISE_RE =
-      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|\d+\s+nuevo mensaje)$/i;
+      /^(marcar como gestionado|convertir a demanda|crear nota|crear actividad|con perfil|perfil para b[uú]squeda de vivienda|traducir|internacional|reciente|anterior|archivar|escribe tu mensaje|tienes nuevas respuestas|\d+\s+nuevo mensaje)$/i;
     const messageBlocks = [...document.querySelectorAll("p, div")]
       .filter((el) => el.children.length === 0)
       .filter((el) => !panel || !panel.contains(el))
