@@ -48,6 +48,11 @@ Extensión de Chrome con dos funciones:
   SmartBC"** — útil si el hilo es largo (Idealista carga los mensajes viejos
   al hacer scroll hacia arriba: sube hasta el inicio y pulsa Reenviar para
   capturar TODO el historial)
+- **Capturar todas (auto)**: el botón **"⏩ Capturar todas"** captura la
+  conversación abierta y pasa sola a la siguiente con el botón "Anterior"
+  de Idealista, una por una, hasta recorrer todo el inbox. El botón cambia
+  a "⏹ Detener (N)" mientras corre — vuelve a pulsarlo para parar. Consejo:
+  abre la conversación más reciente y deja que recorra el resto.
 - Los contactos se deduplican por conversación: reenviar no crea duplicados
 - En el portal: `/es/admin/solicitudes` → pestaña **Idealista** → etiqueta el
   tipo (Particular / Agencia / Relocation — con sugerencia automática) y usa
