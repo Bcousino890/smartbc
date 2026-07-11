@@ -69,6 +69,18 @@
     });
   }
 
+  // Foto de perfil del contacto: la src apunta siempre a
+  // .../profilephotos/... (los contactos sin foto muestran iniciales, sin
+  // <img>). Se ancla a la URL y no a las clases _kiwi-avatar (hasheadas).
+  // scope acota la búsqueda (fila de lista o panel de contacto) para no
+  // confundir el avatar con otras imágenes de la página.
+  function extractAvatarUrl(scope) {
+    const root = scope || document;
+    const img = root.querySelector('img[src*="/profilephotos/"]');
+    if (!img) return null;
+    return img.currentSrc || img.getAttribute("src") || null;
+  }
+
   // El botón de llamada de Idealista lleva el teléfono en crudo en el
   // atributo appcallback_target_phone (ej. "603466878"), mucho más fiable
   // que parsear el texto visible. scope puede ser una fila de la lista o
@@ -235,6 +247,9 @@
 
     lead.isInternational = lines.some((l) => /internacional/i.test(l));
 
+    const avatarUrl = extractAvatarUrl(row);
+    if (avatarUrl) lead.avatarUrl = avatarUrl;
+
     // Mensaje: la línea más larga que no sea ninguna de las ya identificadas
     const used = new Set(
       [lead.name, lead.phone && lines[phoneIdx], lead.propertyTitle, priceIdx >= 0 ? lines[priceIdx] : null, lead.messageDate].filter(Boolean),
@@ -394,6 +409,12 @@
       }
     }
     lead.isInternational = /internacional/i.test(bodyText);
+
+    // El avatar del contacto vive en el panel derecho; si el panel no se
+    // encontró se busca en toda la página (en la vista de detalle la única
+    // foto de perfil visible es la del contacto abierto).
+    const avatarUrl = extractAvatarUrl(panel) || extractAvatarUrl(document);
+    if (avatarUrl) lead.avatarUrl = avatarUrl;
 
     lead.profile = extractProfile();
 

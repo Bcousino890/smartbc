@@ -7,6 +7,7 @@ export type IdealistaLeadRow = {
   name: string;
   phone: string | null;
   phone_country: string | null;
+  avatar_url: string | null;
   is_international: boolean;
   message: string | null;
   profile: { bullets?: string[]; presentacion?: string | null } | null;
@@ -36,7 +37,7 @@ export async function getIdealistaLeads(): Promise<IdealistaLeadRow[]> {
   const { data, error } = await admin
     .from("idealista_leads")
     .select(
-      "id, conversation_id, name, phone, phone_country, is_international, message, profile, property_title, property_price, property_type, property_image_url, properties, idealista_code, property_ref, matched_property_id, message_date, detail_captured, suggested_type, suggestion_keywords, lead_type, status, created_at, updated_at",
+      "id, conversation_id, name, phone, phone_country, avatar_url, is_international, message, profile, property_title, property_price, property_type, property_image_url, properties, idealista_code, property_ref, matched_property_id, message_date, detail_captured, suggested_type, suggestion_keywords, lead_type, status, created_at, updated_at",
     )
     .order("created_at", { ascending: false })
     .limit(500);
