@@ -75,6 +75,62 @@ export async function setIdealistaLeadType(
   return { ok: true };
 }
 
+export async function assignIdealistaLead(id: string, advisorId: string | null) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { error } = await supabase
+    .from("idealista_leads")
+    .update({
+      assigned_to: advisorId,
+      assigned_at: advisorId ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("assignIdealistaLead error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/es/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
+  return { ok: true };
+}
+
+export async function updateIdealistaLeadContactStatus(
+  id: string,
+  contactStatus:
+    | "ninguno"
+    | "contactado_whatsapp"
+    | "contactado_llamada"
+    | "contactado_email"
+    | "sin_respuesta",
+) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { error } = await supabase
+    .from("idealista_leads")
+    .update({ contact_status: contactStatus, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    console.error("updateIdealistaLeadContactStatus error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/es/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
+  return { ok: true };
+}
+
 export async function updateVisitStatus(
   id: string,
   status: "confirmed" | "cancelled" | "completed",

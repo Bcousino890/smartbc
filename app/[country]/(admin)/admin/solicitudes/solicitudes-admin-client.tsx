@@ -15,7 +15,11 @@ import {
   markContactRead,
   updateIdealistaLeadStatus,
   setIdealistaLeadType,
+  assignIdealistaLead,
+  updateIdealistaLeadContactStatus,
 } from "./actions";
+
+type StaffOption = { id: string; name: string };
 
 // ─── Status config ────────────────────────────────────────────────
 
@@ -56,16 +60,34 @@ const LEAD_TYPE_LABEL: Record<"particular" | "agencia" | "relocation", string> =
   relocation: "Relocation",
 };
 
+const CONTACT_STATUS_LABEL: Record<IdealistaLeadRow["contact_status"], string> = {
+  ninguno: "Sin contactar",
+  contactado_whatsapp: "Contactado por WhatsApp",
+  contactado_llamada: "Contactado por llamada",
+  contactado_email: "Contactado por email",
+  sin_respuesta: "Sin respuesta",
+};
+
+const CONTACT_STATUS_BADGE: Record<IdealistaLeadRow["contact_status"], string> = {
+  ninguno: "border-ink/10 bg-ink/[0.03] text-ink/45",
+  contactado_whatsapp: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  contactado_llamada: "border-blue-200 bg-blue-50 text-blue-700",
+  contactado_email: "border-violet-200 bg-violet-50 text-violet-700",
+  sin_respuesta: "border-amber-200 bg-amber-50 text-amber-700",
+};
+
 // ─── Main component ──────────────────────────────────────────────────
 
 export function SolicitudesAdminClient({
   requests,
   contactRequests,
   idealistaLeads = [],
+  staffOptions = [],
 }: {
   requests: VisitRequest[];
   contactRequests: ContactRequestRow[];
   idealistaLeads?: IdealistaLeadRow[];
+  staffOptions?: StaffOption[];
 }) {
   const t = useT();
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
@@ -173,12 +195,21 @@ export function SolicitudesAdminClient({
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredLeads.map((lead) => (
-                  <IdealistaLeadCard key={lead.id} lead={lead} onOpen={() => setSelectedLead(lead)} />
+                  <IdealistaLeadCard
+                    key={lead.id}
+                    lead={lead}
+                    staffOptions={staffOptions}
+                    onOpen={() => setSelectedLead(lead)}
+                  />
                 ))}
               </div>
             )}
             {selectedLead && (
-              <IdealistaLeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+              <IdealistaLeadModal
+                lead={selectedLead}
+                staffOptions={staffOptions}
+                onClose={() => setSelectedLead(null)}
+              />
             )}
           </>
         ) : activeTab === "consultas" ? (
@@ -329,10 +360,22 @@ const LEAD_STATUS_LABEL: Record<IdealistaLeadRow["status"], string> = {
   descartado: "Descartado",
 };
 
-function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: () => void }) {
+function IdealistaLeadCard({
+  lead,
+  staffOptions,
+  onOpen,
+}: {
+  lead: IdealistaLeadRow;
+  staffOptions: StaffOption[];
+  onOpen: () => void;
+}) {
   const [isTransitioning, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useOptimistic(lead.status);
   const [optimisticType, setOptimisticType] = useOptimistic(lead.lead_type);
+  const [optimisticAssignedTo, setOptimisticAssignedTo] = useOptimistic(lead.assigned_to);
+  const [optimisticContactStatus, setOptimisticContactStatus] = useOptimistic(
+    lead.contact_status,
+  );
   const [expanded, setExpanded] = useState(false);
 
   function handleStatus(status: IdealistaLeadRow["status"]) {
@@ -346,6 +389,20 @@ function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: (
     startTransition(async () => {
       setOptimisticType(type);
       await setIdealistaLeadType(lead.id, type);
+    });
+  }
+
+  function handleAssign(advisorId: string) {
+    startTransition(async () => {
+      setOptimisticAssignedTo(advisorId || null);
+      await assignIdealistaLead(lead.id, advisorId || null);
+    });
+  }
+
+  function handleContactStatus(status: IdealistaLeadRow["contact_status"]) {
+    startTransition(async () => {
+      setOptimisticContactStatus(status);
+      await updateIdealistaLeadContactStatus(lead.id, status);
     });
   }
 
@@ -503,6 +560,45 @@ function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: (
         </div>
       </div>
 
+      {/* Asignación + estado de contacto */}
+      <div
+        className="mt-3 grid grid-cols-2 gap-1.5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <select
+          value={optimisticAssignedTo ?? ""}
+          onChange={(e) => handleAssign(e.target.value)}
+          disabled={isTransitioning}
+          className="rounded-lg border border-ink/10 bg-white px-2 py-1.5 text-[11px] text-ink/75 focus:border-gold/55 focus:outline-none disabled:opacity-60"
+        >
+          <option value="">Sin asignar</option>
+          {staffOptions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={optimisticContactStatus}
+          onChange={(e) =>
+            handleContactStatus(e.target.value as IdealistaLeadRow["contact_status"])
+          }
+          disabled={isTransitioning}
+          className={cn(
+            "rounded-lg border px-2 py-1.5 text-[11px] font-medium focus:outline-none disabled:opacity-60",
+            CONTACT_STATUS_BADGE[optimisticContactStatus],
+          )}
+        >
+          {(Object.keys(CONTACT_STATUS_LABEL) as IdealistaLeadRow["contact_status"][]).map(
+            (s) => (
+              <option key={s} value={s}>
+                {CONTACT_STATUS_LABEL[s]}
+              </option>
+            ),
+          )}
+        </select>
+      </div>
+
       {/* Acciones */}
       {isNuevo ? (
         <>
@@ -564,9 +660,36 @@ function IdealistaLeadCard({ lead, onOpen }: { lead: IdealistaLeadRow; onOpen: (
 
 // ─── IdealistaLeadModal ─────────────────────────────────────────────
 
-function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose: () => void }) {
+function IdealistaLeadModal({
+  lead,
+  staffOptions,
+  onClose,
+}: {
+  lead: IdealistaLeadRow;
+  staffOptions: StaffOption[];
+  onClose: () => void;
+}) {
+  const [isTransitioning, startTransition] = useTransition();
+  const [optimisticAssignedTo, setOptimisticAssignedTo] = useOptimistic(lead.assigned_to);
+  const [optimisticContactStatus, setOptimisticContactStatus] = useOptimistic(
+    lead.contact_status,
+  );
   const bullets = lead.profile?.bullets ?? [];
   const presentacion = lead.profile?.presentacion ?? null;
+
+  function handleAssign(advisorId: string) {
+    startTransition(async () => {
+      setOptimisticAssignedTo(advisorId || null);
+      await assignIdealistaLead(lead.id, advisorId || null);
+    });
+  }
+
+  function handleContactStatus(status: IdealistaLeadRow["contact_status"]) {
+    startTransition(async () => {
+      setOptimisticContactStatus(status);
+      await updateIdealistaLeadContactStatus(lead.id, status);
+    });
+  }
 
   return (
     <div
@@ -603,6 +726,51 @@ function IdealistaLeadModal({ lead, onClose }: { lead: IdealistaLeadRow; onClose
           >
             <X size={18} />
           </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+              Asignado a
+            </p>
+            <select
+              value={optimisticAssignedTo ?? ""}
+              onChange={(e) => handleAssign(e.target.value)}
+              disabled={isTransitioning}
+              className="w-full rounded-lg border border-ink/10 bg-white px-2.5 py-2 text-[13px] text-ink/80 focus:border-gold/55 focus:outline-none disabled:opacity-60"
+            >
+              <option value="">Sin asignar</option>
+              {staffOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+              Estado de contacto
+            </p>
+            <select
+              value={optimisticContactStatus}
+              onChange={(e) =>
+                handleContactStatus(e.target.value as IdealistaLeadRow["contact_status"])
+              }
+              disabled={isTransitioning}
+              className={cn(
+                "w-full rounded-lg border px-2.5 py-2 text-[13px] font-medium focus:outline-none disabled:opacity-60",
+                CONTACT_STATUS_BADGE[optimisticContactStatus],
+              )}
+            >
+              {(Object.keys(CONTACT_STATUS_LABEL) as IdealistaLeadRow["contact_status"][]).map(
+                (s) => (
+                  <option key={s} value={s}>
+                    {CONTACT_STATUS_LABEL[s]}
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
         </div>
 
         {lead.properties.length > 1 ? (
