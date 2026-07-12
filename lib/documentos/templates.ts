@@ -210,8 +210,6 @@ const ordenArriendoCL: DocTemplate = {
   name: "Orden de Arriendo",
   subtitle: "Encargo de arriendo del propietario (Comitente) al Corredor.",
   roles: ["ejecutivo", "propietario"],
-  reviewNote:
-    "Borrador basado en el formato de Orden de Venta. Revisar comisión y condiciones antes de usar.",
   fields: [
     { key: "ciudad", label: "Ciudad", placeholder: "Santiago" },
     { key: "fecha", label: "Fecha", type: "date" },
@@ -447,8 +445,6 @@ const mandatoVentaES: DocTemplate = {
   name: "Mandato de Venta",
   subtitle: "Encargo de intermediación de compraventa del propietario a la Agencia.",
   roles: ["ejecutivo", "propietario"],
-  reviewNote:
-    "Borrador basado en el Mandato de Alquiler. Revisar honorarios y condiciones de exclusividad antes de usar.",
   fields: [
     { key: "ciudad", label: "Ciudad", placeholder: "Madrid" },
     { key: "fecha", label: "Fecha", type: "date" },
@@ -570,8 +566,6 @@ const personalShopperES: DocTemplate = {
   name: "Personal Shopper Inmobiliario",
   subtitle: "Encargo de búsqueda personalizada del cliente comprador/arrendatario a la Agencia.",
   roles: ["ejecutivo", "comprador", "arrendatario"],
-  reviewNote:
-    "Borrador de servicio Personal Shopper. Revisar honorarios (equivalentes a un mes de renta) antes de usar.",
   fields: [
     { key: "ciudad", label: "Ciudad", placeholder: "Madrid" },
     { key: "fecha", label: "Fecha", type: "date" },
