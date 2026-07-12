@@ -174,15 +174,21 @@ export async function getParticularesPage(_offset?: number, _pageSize?: number) 
   return { rows: enriched, total };
 }
 
-/** Opciones de staff para el desplegable de asignación. */
-export async function getStaffOptions(): Promise<
-  Array<{ id: string; name: string }>
-> {
+/**
+ * Opciones de staff para el desplegable de asignación.
+ * @param country Si se pasa, filtra a staff que puede acceder a ese país:
+ *   owner/admin (acceso total), usuarios marcados `multi_country`, o cuyo
+ *   `country` coincide. Sin `country`, devuelve todo el staff (comportamiento
+ *   histórico, usado por particulares que ya es España-only por su propia página).
+ */
+export async function getStaffOptions(
+  country?: "es" | "cl",
+): Promise<Array<{ id: string; name: string }>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
-  const { data } = await supabase
+  const query = supabase
     .from("profiles")
-    .select("id, full_name, email, role")
+    .select("id, full_name, email, role, country, multi_country")
     .in("role", [
       "owner",
       "admin",
@@ -192,6 +198,16 @@ export async function getStaffOptions(): Promise<
       "agent_admin",
     ])
     .order("full_name");
+  const { data: allData } = await query;
+  const data = country
+    ? (allData ?? []).filter(
+        (p: { role: string; country: string | null; multi_country: boolean | null }) =>
+          p.role === "owner" ||
+          p.role === "admin" ||
+          p.multi_country ||
+          (p.country ?? "es") === country,
+      )
+    : allData;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((p: any) => ({
     id: p.id as string,

@@ -16,6 +16,7 @@ import {
   getContactRequests,
 } from "@/lib/db/queries/clients";
 import { getIdealistaLeads } from "@/lib/db/queries/idealista-leads";
+import { getStaffOptions } from "@/lib/db/queries/particulares";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -31,11 +32,12 @@ export default async function AdminSolicitudesPage({
   if (!canAccess(currentProfile?.role ?? "", "solicitudes", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
-  const [rows, stats, contactRows, idealistaLeads] = await Promise.all([
+  const [rows, stats, contactRows, idealistaLeads, staffOptions] = await Promise.all([
     getVisitRequests(country),
     getVisitRequestsStats(country),
     getContactRequests(), // contact_requests no tiene columna country → global
     getIdealistaLeads(), // el inbox de Idealista es solo España → global
+    getStaffOptions("es"), // asignación de leads de Idealista: solo staff con acceso a España
   ]);
   const requests = rows.map(visitRequestRowToLegacy);
 
@@ -78,6 +80,7 @@ export default async function AdminSolicitudesPage({
         requests={requests}
         contactRequests={contactRows}
         idealistaLeads={idealistaLeads}
+        staffOptions={staffOptions}
       />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
