@@ -47,6 +47,9 @@ const cases: Case[] = [
   { name: "excluir referencia", text: "ref 611223344 del anuncio", ref: "611223344", expect: null },
   { name: "prefijo invalido (5)", text: "codigo 511223344 interno", expect: null },
   { name: "texto sin numeros", text: "Bonito piso exterior con ascensor", expect: null },
+  { name: "número gratuito 900 (institucional)", text: "Atención idealista 900 423 525", expect: null },
+  { name: "número 902 tarificación especial", text: "Info 902 10 20 30 gracias", expect: null },
+  { name: "fijo geográfico 91 sí válido", text: "Llamar al 917 01 40 30", expect: "+34917014030" },
 ];
 
 let pass = 0;

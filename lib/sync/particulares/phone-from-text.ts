@@ -112,6 +112,10 @@ export function extractPhoneFromText(
     const phone = normalizeSpanishPhone(digits);
     if (!phone) continue;
     if (excludeReference && phone.slice(-9) === excludeReference) continue;
+    // Descartar números no geográficos (gratuitos/tarificación especial 90x/80x):
+    // nunca son de un particular y en las fichas aparecen los institucionales
+    // del portal (p.ej. 900 423 525).
+    if (/^(?:90|80)/.test(phone.slice(-9))) continue;
     return { phone, confidence: "medium" };
   }
 

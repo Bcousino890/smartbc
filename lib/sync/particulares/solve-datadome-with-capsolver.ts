@@ -12,18 +12,18 @@ export type CapSolverResult = {
 export async function solveDatadomeWithCapSolver(
   captchaUrl: string,
   userAgent: string,
-  options?: { proxyUrl?: string; apiKey?: string },
+  options?: { proxyUrl?: string; apiKey?: string; websiteURL?: string },
 ): Promise<CapSolverResult> {
-  // CapSolver has a whitelist of supported user agents for DataDome tasks.
-  // If a custom UA is passed, validate it; otherwise use a CapSolver-approved default.
-  const supportedUAs = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  ];
-  const effectiveUA = supportedUAs.includes(userAgent) ? userAgent : supportedUAs[3];
+  // CapSolver rechaza UAs antiguos con ERROR_INVALID_TASK_DATA "unsupported
+  // userAgent". Chrome 119-121 (2023-24) ya no están soportados. Usamos un UA
+  // de Chrome reciente y estable para Windows como valor por defecto/forzado —
+  // CapSolver exige que coincida con un navegador real actual. Si el UA que
+  // llega ya es uno reciente (Chrome ≥124), lo respetamos; si no, lo forzamos.
+  const DEFAULT_UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const chromeVer = userAgent.match(/Chrome\/(\d+)/)?.[1];
+  const effectiveUA =
+    chromeVer && Number(chromeVer) >= 124 ? userAgent : DEFAULT_UA;
   let apiKey = options?.apiKey;
   if (!apiKey) {
     const { getCapSolverApiKey } = await import("./capsolver-config");
@@ -48,6 +48,9 @@ export async function solveDatadomeWithCapSolver(
         clientKey: apiKey,
         task: {
           type: "DatadomeSliderTask",
+          // websiteURL: la ficha; captchaUrl: la URL del reto DataDome
+          // (geo.captcha-delivery.com/captcha/?...). CapSolver necesita ambas.
+          websiteURL: options?.websiteURL ?? captchaUrl,
           captchaUrl,
           userAgent: effectiveUA,
           proxy: options?.proxyUrl ? parseProxyUrl(options.proxyUrl) : undefined,

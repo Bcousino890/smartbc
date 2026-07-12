@@ -19,6 +19,29 @@ const PHONE_ENDPOINTS = [
   "adContactInfoForMobileDevices",
 ];
 
+// Extrae la URL del reto DataDome (geo.captcha-delivery.com/captcha/?...) de la
+// página bloqueada. CapSolver la necesita como `captchaUrl` para resolver el
+// slider; sin ella no puede (pasarle la URL de la ficha no sirve). La buscamos
+// en los iframes cargados y, si no, en el HTML renderizado.
+async function extractDatadomeCaptchaUrl(page: Page): Promise<string | null> {
+  try {
+    for (const frame of page.frames()) {
+      const url = frame.url();
+      if (url && url.includes("geo.captcha-delivery.com")) return url;
+    }
+  } catch {
+    // ignorar
+  }
+  try {
+    const html = await page.content();
+    const m = html.match(/https?:\/\/geo\.captcha-delivery\.com\/captcha\/[^"'\s<>]+/);
+    if (m?.[0]) return m[0].replace(/&amp;/g, "&");
+  } catch {
+    // ignorar
+  }
+  return null;
+}
+
 function parsePhoneFromAjaxBody(text: string): { phone: string | null; contactName: string | null } {
   try {
     const json = JSON.parse(text) as Record<string, unknown>;
@@ -197,7 +220,12 @@ export async function fetchIdealistaPhoneViaPlaywright(
 
       try {
         const proxyUrl = await getResidentialProxyUrl();
-        const solverResult = await solveDatadomeWithCapSolver(pageUrl, BROWSER_UA, { proxyUrl });
+        const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
+        console.log(`[playwright-phone] DataDome captchaUrl: ${captchaUrl.slice(0, 80)}`);
+        const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
+          proxyUrl,
+          websiteURL: pageUrl,
+        });
 
         if (solverResult.token) {
           // Use token as cookie. DataDome typically uses "dd" or similar cookie name
@@ -317,7 +345,11 @@ export async function fetchIdealistaPhoneViaPlaywright(
 
       try {
         const proxyUrl = await getResidentialProxyUrl();
-        const solverResult = await solveDatadomeWithCapSolver(pageUrl, BROWSER_UA, { proxyUrl });
+        const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
+        const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
+          proxyUrl,
+          websiteURL: pageUrl,
+        });
 
         if (solverResult.token) {
           console.log(`[playwright-phone] CAPTCHA solved, applying token and retrying AJAX...`);

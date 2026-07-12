@@ -52,6 +52,14 @@ function acceptPhoneCandidate(
   const phone = normalizeSpanishPhone(raw);
   if (!phone) return null;
   if (excludeReference && phone.slice(-9) === excludeReference) return null;
+  // Descartar números NO geográficos españoles que nunca son de un anunciante
+  // particular: 90x/80x (gratuitos 900/800, tarificación especial 901/902/803/
+  // 806/807/905…). En las fichas de Idealista aparecen sus propios teléfonos
+  // institucionales (p.ej. 900 423 525, atención al cliente) y colarían como
+  // falso teléfono del particular. Los móviles (6/7) y fijos geográficos
+  // (91, 93, 95, 98…) sí se aceptan.
+  const national = phone.slice(-9);
+  if (/^(?:90|80)/.test(national)) return null;
   return phone;
 }
 
@@ -622,7 +630,12 @@ export async function fetchIdealistaPhoneViaAjax(
     WHATSAPP_UA_FOR_AJAX,
     {
       proxyUrl: phoneProxyUrl,
-      pageUserAgent: BROWSER_UA_FOR_PAGE, // Use real browser UA to fetch DataDome scripts
+      // ⚠️ La carga de página DEBE usar el UA de WhatsApp: DataDome deja pasar
+      // ese UA (whitelist de previews de enlaces) y devuelve el HTML completo
+      // (~175KB) con la clave DataDome (window.ddjskey) y las cookies. Con UA de
+      // Chrome, DataDome responde una página de bloqueo (~773 chars) sin clave
+      // ni cookies, y todo el flujo posterior (pre-auth, contact-phones) muere.
+      pageUserAgent: WHATSAPP_UA_FOR_AJAX,
       timeoutSec: 30,
       ajaxHeaders: [
         "X-Requested-With: XMLHttpRequest",
@@ -790,7 +803,12 @@ export async function fetchIdealistaPhoneViaAjax(
   if (pageHtml) {
     console.log(`[idealista-phone-ajax] Paso 2: Buscando DataDome auth code en HTML (${pageHtml.length} chars)...`);
     // Try multiple patterns for the auth code location
-    let authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    // La clave DataDome del sitio se expone como `window.ddjskey = 'AC81...'`
+    // en el HTML de Idealista. Es el `auth` que espera dd.idealista.com/is/.
+    let authMatch = pageHtml.match(/ddjskey\s*=\s*['"]([A-Za-z0-9_-]{10,})['"]/);
+    if (!authMatch) {
+      authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    }
     if (!authMatch) {
       authMatch = pageHtml.match(/auth=([A-Za-z0-9_-]{10,})/);
     }
