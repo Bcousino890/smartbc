@@ -130,6 +130,8 @@ export type Database = {
           title: string;
           description: string | null;
           operation: PropertyOperation;
+          operations: string[];
+          rent_price: number | null;
           stay: PropertyStay | null;
           status: PropertyStatus;
           price: number;
@@ -170,6 +172,8 @@ export type Database = {
           title: string;
           description?: string | null;
           operation: PropertyOperation;
+          operations?: string[];
+          rent_price?: number | null;
           stay?: PropertyStay | null;
           status?: PropertyStatus;
           price: number;

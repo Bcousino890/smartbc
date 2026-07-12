@@ -140,7 +140,13 @@ export function PropertiesAdminClient({
       ) {
         return false;
       }
-      if (operationFilter && p.operation !== operationFilter) return false;
+      if (
+        operationFilter &&
+        p.operation !== operationFilter &&
+        !(p.isDualOperation && operationFilter === "alquiler")
+      ) {
+        return false;
+      }
       if (statusFilter && p.status !== statusFilter) return false;
       if (zoneFilter && p.zone !== zoneFilter) return false;
       if (subzoneFilter && p.subzone !== subzoneFilter) return false;
@@ -733,18 +739,24 @@ function PropertyRow({
       <td className="px-3 py-3 text-ink/75">{property.agencyName || "—"}</td>
       <td className="px-3 py-3 text-ink/75">{property.zone}</td>
       <td className="px-3 py-3">
-        <span
-          className={cn(
-            "rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
-            isRent
-              ? "border-blue-200 bg-blue-50 text-blue-700"
-              : "border-amber-200 bg-amber-50 text-amber-700",
-          )}
-        >
-          {isRent
-            ? t("filters.operation.rent")
-            : t("filters.operation.sale")}
-        </span>
+        {property.isDualOperation ? (
+          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+            {t("filters.operation.sale")} + {t("filters.operation.rent")}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
+              isRent
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-amber-200 bg-amber-50 text-amber-700",
+            )}
+          >
+            {isRent
+              ? t("filters.operation.rent")
+              : t("filters.operation.sale")}
+          </span>
+        )}
       </td>
       <td className="px-3 py-3 text-center text-[12px] text-ink/75">
         {property.bedrooms} / {property.bathrooms} / {property.squareMeters}

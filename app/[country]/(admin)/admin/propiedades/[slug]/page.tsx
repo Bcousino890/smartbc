@@ -20,6 +20,8 @@ export default async function PropertyDetailPage({
         title: string;
         description: string | null;
         operation: "rent" | "sale";
+        operations: string[] | null;
+        rent_price: number | null;
         stay: "short" | "long" | null;
         status: "available" | "reserved" | "sold" | "archived";
         price: number;
@@ -95,6 +97,14 @@ export default async function PropertyDetailPage({
         title: property.title,
         description: property.description,
         operation: property.operation,
+        operations:
+          property.operations && property.operations.length > 0
+            ? property.operations
+            : [property.operation],
+        rent_price:
+          property.rent_price !== null && property.rent_price !== undefined
+            ? Number(property.rent_price)
+            : null,
         stay: property.stay,
         status: property.status,
         price: Number(property.price),

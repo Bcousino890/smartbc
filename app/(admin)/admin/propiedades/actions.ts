@@ -358,6 +358,12 @@ export type UpdatePropertyInput = {
   description?: string | null;
   price?: number;
   operation?: "rent" | "sale";
+  // Operaciones activas de la propiedad. Si incluye ambas ("sale" y "rent"),
+  // `operation` se guarda como "sale" (principal, para no romper el resto
+  // del código que asume una sola operación) y `rentPrice` guarda el precio
+  // de alquiler por separado (price sigue siendo el de venta).
+  operations?: ("rent" | "sale")[];
+  rentPrice?: number | null;
   stay?: "short" | "long" | null;
   availableFrom?: string | null;
   bedrooms?: number;
@@ -402,6 +408,14 @@ export async function updateProperty(
   if (input.description !== undefined)
     payload.description = input.description?.trim() || null;
   if (input.operation !== undefined) payload.operation = input.operation;
+  if (input.operations !== undefined) {
+    payload.operations = input.operations;
+    // "sale" manda como operación principal cuando hay ambas, para que el
+    // resto del código (que solo mira `operation`) siga viendo la propiedad
+    // como "en venta" y no deje de mostrarla en listados de venta.
+    payload.operation = input.operations.includes("sale") ? "sale" : "rent";
+  }
+  if (input.rentPrice !== undefined) payload.rent_price = input.rentPrice;
   if (input.stay !== undefined) payload.stay = input.stay;
   if (input.availableFrom !== undefined)
     payload.available_from = input.availableFrom || null;
