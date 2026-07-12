@@ -11,6 +11,7 @@ export async function PATCH(req: Request) {
     role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
     country?: "es" | "cl";
+    multiCountry?: boolean;
   };
 
   try {
@@ -19,7 +20,7 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "Cuerpo JSON inválido" }, { status: 400 });
   }
 
-  const { userId, firstName, lastName, phone, role, password, country } = body;
+  const { userId, firstName, lastName, phone, role, password, country, multiCountry } = body;
 
   if (!userId) {
     return Response.json({ error: "userId requerido" }, { status: 400 });
@@ -36,7 +37,7 @@ export async function PATCH(req: Request) {
 
   const supabase = createAdminClient();
 
-  const updates: Record<string, string> = {};
+  const updates: Record<string, string | boolean> = {};
   if (firstName !== undefined || lastName !== undefined) {
     const fullName = `${firstName ?? ""} ${lastName ?? ""}`.trim();
     if (fullName) updates.full_name = fullName;
@@ -49,6 +50,7 @@ export async function PATCH(req: Request) {
     }
     updates.country = country;
   }
+  if (multiCountry !== undefined) updates.multi_country = !!multiCountry;
 
   if (Object.keys(updates).length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

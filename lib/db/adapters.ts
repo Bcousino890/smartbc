@@ -256,6 +256,7 @@ export function profileRowToInternalUser(
     status: "active",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     country: row.country ?? "es",
+    multiCountry: row.multi_country ?? false,
   };
 }
 

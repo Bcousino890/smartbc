@@ -36,6 +36,7 @@ export type Database = {
           assigned_advisor_id: string | null;
           personal_shopper_terms_accepted_at: string | null;
           country: string;
+          multi_country: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -49,6 +50,7 @@ export type Database = {
           assigned_advisor_id?: string | null;
           personal_shopper_terms_accepted_at?: string | null;
           country?: string;
+          multi_country?: boolean;
           created_at?: string;
           updated_at?: string;
         };

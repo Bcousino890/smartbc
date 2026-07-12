@@ -70,6 +70,7 @@ function CreateUserModal({
   const [assignedAdvisor, setAssignedAdvisor] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [multiCountry, setMultiCountry] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -92,6 +93,7 @@ function CreateUserModal({
         password: modalType !== "client" ? password : undefined,
         // País por defecto = el árbol admin desde el que se creó el usuario.
         country,
+        multiCountry: modalType !== "client" ? multiCountry : undefined,
       };
 
       const res = await fetch("/api/admin/usuarios/create", {
@@ -241,6 +243,18 @@ function CreateUserModal({
               </>
             )}
 
+            {needsPassword && modalType !== "admin" && (
+              <label className="flex items-center gap-2 text-sm text-ink/75">
+                <input
+                  type="checkbox"
+                  checked={multiCountry}
+                  onChange={(e) => setMultiCountry(e.target.checked)}
+                  className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                />
+                Acceso a los 2 países (España y Chile)
+              </label>
+            )}
+
             {needsPassword && (
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
@@ -323,6 +337,7 @@ function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserMod
   // Si el perfil aún no tiene país asignado, el default de edición es el
   // árbol admin desde el que se abrió (no un país fijo).
   const [country, setCountry] = useState(user.country ?? defaultCountry);
+  const [multiCountry, setMultiCountry] = useState(user.multiCountry ?? false);
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -342,6 +357,7 @@ function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserMod
         lastName,
         role,
         country,
+        multiCountry: isClient ? undefined : multiCountry,
       };
       if (isClient && phone) payload.phone = phone;
       if (newPassword) payload.password = newPassword;
@@ -477,6 +493,18 @@ function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserMod
                   Define a qué dashboard (/es/admin o /cl/admin) accede el usuario.
                 </p>
               </div>
+            )}
+
+            {!isClient && role !== "owner" && role !== "admin" && (
+              <label className="flex items-center gap-2 text-sm text-ink/75">
+                <input
+                  type="checkbox"
+                  checked={multiCountry}
+                  onChange={(e) => setMultiCountry(e.target.checked)}
+                  className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                />
+                Acceso a los 2 países (España y Chile)
+              </label>
             )}
 
             <div>

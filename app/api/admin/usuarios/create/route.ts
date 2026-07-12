@@ -16,6 +16,9 @@ export async function POST(req: Request) {
     // raíz y España no cambian de comportamiento. El árbol de Chile envía
     // siempre 'cl'.
     country?: "es" | "cl";
+    // Usuarios que trabajan en ambos países (ej. algunos asesores/agentes)
+    // pueden alternar entre /es/admin y /cl/admin igual que un admin.
+    multiCountry?: boolean;
   };
 
   try {
@@ -33,6 +36,7 @@ export async function POST(req: Request) {
     password,
     assignedAdvisorId,
     country,
+    multiCountry,
   } = body;
 
   const role = roleInput;
@@ -147,6 +151,10 @@ export async function POST(req: Request) {
 
   if (country === "es" || country === "cl") {
     profileUpdate.country = country;
+  }
+
+  if (staffRoles.includes(role) && multiCountry !== undefined) {
+    profileUpdate.multi_country = !!multiCountry;
   }
 
   if (role === "client") {
