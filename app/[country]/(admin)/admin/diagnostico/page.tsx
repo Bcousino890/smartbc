@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { DiagnosticoClient } from "./diagnostico-client";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
@@ -12,6 +14,11 @@ export default async function AdminDiagnosticoPage({
   const { country } = await params;
   // El diagnóstico del scraper de Idealista es un módulo de España.
   if (country !== "es") redirect(getCountryConfig(country).prefix);
+
+  const currentProfile = await getCurrentProfile();
+  if (!canAccess(currentProfile?.role ?? "", "configuracion", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1100px] flex-col px-6 pb-10 lg:px-10">

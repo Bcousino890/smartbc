@@ -9,6 +9,7 @@ import {
   getStaffOptions,
 } from "@/lib/db/queries/particulares";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
@@ -27,6 +28,9 @@ export default async function AdminParticularesPage({
   if (country !== "es") redirect(`${getCountryConfig(country).prefix}/captaciones`);
 
   const currentProfile = await getCurrentProfile();
+  if (!canAccess(currentProfile?.role ?? "", "particulares", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
   await searchParams; // offset ya no se usa: se cargan TODOS los anuncios.
   const pageSize = 100;
   const offset = 0;

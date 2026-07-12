@@ -1,10 +1,13 @@
+import { redirect } from "next/navigation";
 import { Home, Tag } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { getMlTokens } from "@/lib/sync/portalinmobiliario/ml-config";
-import type { Country } from "@/lib/country-config";
+import { getCountryConfig, type Country } from "@/lib/country-config";
 import { PublicacionClient } from "./publicacion-client";
 import { PublicacionClClient } from "./publicacion-cl-client";
 
@@ -19,6 +22,10 @@ export default async function AdminPublicacionPage({
   params: Promise<{ country: Country }>;
 }) {
   const { country } = await params;
+  const currentProfile = await getCurrentProfile();
+  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
 
   if (country === "cl") {
     const db = createAdminClient() as any;

@@ -6,6 +6,8 @@ import { NewAgencyButton } from "@/components/admin/new-agency-button";
 import { PageFooter } from "@/components/ui/page-footer";
 import { agencyRowToLegacy } from "@/lib/db/adapters";
 import { getAgenciesWithStats } from "@/lib/db/queries/agencies";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { getAgenciesStats } from "@/lib/mock-agencies";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
@@ -17,6 +19,11 @@ export default async function AdminAgenciasPage({
   const { country } = await params;
   // Las agencias colaboradoras son un módulo de España; en Chile no aplica.
   if (country !== "es") redirect(getCountryConfig(country).prefix);
+
+  const currentProfile = await getCurrentProfile();
+  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
 
   const rows = await getAgenciesWithStats();
   const agencies = rows.map(agencyRowToLegacy);

@@ -4,6 +4,8 @@ import { Settings, Sparkles } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { createAdminClient } from "@/lib/db/admin";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { IdealistaClient } from "./idealista-client";
 
@@ -18,6 +20,11 @@ export default async function AdminIdealistaPage({
   // Idealista es un módulo exclusivo de España. En Chile la publicación en
   // portales se gestiona en /cl/admin/publicacion (Portal Inmobiliario).
   if (country !== "es") redirect(`${getCountryConfig(country).prefix}/publicacion`);
+
+  const currentProfile = await getCurrentProfile();
+  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
 
   const supabase = createAdminClient();
 
