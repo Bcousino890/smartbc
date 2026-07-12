@@ -496,8 +496,11 @@ async function scrapeMadridParticulares(
       // tengan teléfono oculto), luego sin teléfono en general. Con ~150/hora
       // total se cubre todo el stock en <1 día y de ahí en adelante cada anuncio
       // se re-verifica continuamente, captando teléfonos añadidos tras publicar.
-      const foundChatOnly = await backfillPhonesViaAjax(supabase, 75, true);
-      const foundNoPhone = await backfillPhonesViaAjax(supabase, 75, false);
+      // Deadline: reservamos ~120s del presupuesto (maxDuration=800s) para el
+      // resto del run; el backfill se detiene limpio al alcanzarlo.
+      const backfillDeadline = Date.now() + 680_000;
+      const foundChatOnly = await backfillPhonesViaAjax(supabase, 75, true, backfillDeadline);
+      const foundNoPhone = await backfillPhonesViaAjax(supabase, 75, false, backfillDeadline);
       const found = foundChatOnly + foundNoPhone;
       (results as Record<string, number>).telefonos_encontrados = found;
     }
@@ -519,6 +522,7 @@ async function backfillPhonesViaAjax(
   supabase: SupabaseLike,
   limit: number,
   chatOnlyFirst = false,
+  deadline?: number,
 ): Promise<number> {
   let query = supabase
     .from("particulares")
@@ -539,6 +543,14 @@ async function backfillPhonesViaAjax(
 
   let found = 0;
   for (const row of data as Array<{ id: string; source_url: string }>) {
+    // Guardia de tiempo: si nos acercamos al límite del cron (maxDuration),
+    // cerramos limpio para no perder el run entero por timeout. Cada ficha con
+    // fallback Playwright puede tardar ~30-60s; sin este guardia un lote lento
+    // agota el presupuesto y aborta antes de persistir lo encontrado.
+    if (deadline && Date.now() > deadline) {
+      console.log(`[cron-particulares] backfill: límite de tiempo alcanzado, cerrando run (procesadas hasta aquí)`);
+      break;
+    }
     const now = new Date().toISOString();
     const adId = row.source_url.match(/\/inmueble\/(\d+)/)?.[1];
     if (!adId) {
