@@ -15,7 +15,7 @@
 
 export type Country = "es" | "cl";
 
-export type DocFieldType = "text" | "date" | "number" | "textarea";
+export type DocFieldType = "text" | "date" | "number" | "textarea" | "select";
 
 export type DocField = {
   key: string;
@@ -26,6 +26,10 @@ export type DocField = {
   full?: boolean;
   /** Prefijo mostrado en el PDF antes del valor (p.ej. "+56 "). */
   prefix?: string;
+  /** Opciones para type "select". La primera es el valor por defecto. */
+  options?: string[];
+  /** Valor por defecto sugerido (se rellena en el formulario al abrir). */
+  defaultValue?: string;
 };
 
 // Bloques que consume el componente PDF.
@@ -86,6 +90,8 @@ const ordenVentaCL: DocTemplate = {
     { key: "comuna", label: "Comuna" },
     { key: "region", label: "Región" },
     { key: "precio_uf", label: "Precio de venta (UF)", type: "number", placeholder: "0" },
+    { key: "comision_pct", label: "Comisión (%)", type: "number", placeholder: "2", defaultValue: "2" },
+    { key: "exclusividad", label: "Exclusividad", type: "select", options: ["NO EXCLUSIVO", "EXCLUSIVO"], defaultValue: "NO EXCLUSIVO" },
     { key: "banco_hipoteca", label: "Banco hipoteca actual", placeholder: "Opcional" },
     { key: "uf_hipoteca", label: "UF aprox. hipoteca", placeholder: "Opcional" },
   ],
@@ -123,7 +129,7 @@ const ordenVentaCL: DocTemplate = {
       type: "clause",
       num: "4",
       text:
-        `COMISIÓN: "EL COMITENTE" pagará a "EL CORREDOR" una comisión ascendente al 2% más I.V.A. del precio final ` +
+        `COMISIÓN: "EL COMITENTE" pagará a "EL CORREDOR" una comisión ascendente al ${f(v, "comision_pct", "2")}% más I.V.A. del precio final ` +
         `de la compraventa. La comisión se devengará al momento de la inscripción de la propiedad a nombre del comprador ` +
         `en el Conservador de Bienes Raíces. Para dar cumplimiento a esta obligación "EL COMITENTE" dejará al momento ` +
         `de la firma de la promesa de compraventa en poder de la Corredora de Propiedades un cheque nominativo, cruzado ` +
@@ -136,11 +142,11 @@ const ordenVentaCL: DocTemplate = {
       type: "clause",
       num: "5",
       text:
-        `EXCLUSIVIDAD: La presente orden de venta tendrá el carácter de NO EXCLUSIVO. En caso de exclusividad y mientras ` +
+        `EXCLUSIVIDAD: La presente orden de venta tendrá el carácter de ${f(v, "exclusividad", "NO EXCLUSIVO")}. En caso de exclusividad y mientras ` +
         `se encuentre vigente la presente Orden de Venta, sólo Benjamín Cousiño Propiedades SpA. podrá ofrecer en venta ` +
         `la propiedad a que se refiere este instrumento. Si la orden es exclusiva y "EL COMITENTE" gestiona el negocio ` +
         `por intermedio de otro corredor y vendiere o prometiere vender la propiedad durante la vigencia de esta orden, ` +
-        `deberá pagar a Benjamín Cousiño Propiedades SpA., a título de multa, el 2% más IVA del precio de la compraventa, ` +
+        `deberá pagar a Benjamín Cousiño Propiedades SpA., a título de multa, el ${f(v, "comision_pct", "2")}% más IVA del precio de la compraventa, ` +
         `lo mismo ocurrirá si "EL COMITENTE", ya sea orden de venta exclusiva o no exclusiva, gestionase el negocio ` +
         `directamente con algún cliente enviado por Benjamín Cousiño Propiedades SpA. "EL COMITENTE" se hace responsable ` +
         `de la veracidad de los datos proporcionados a "EL CORREDOR", declarando que su propiedad tiene toda la ` +
@@ -221,6 +227,8 @@ const ordenArriendoCL: DocTemplate = {
     { key: "comuna", label: "Comuna" },
     { key: "region", label: "Región" },
     { key: "precio_arriendo", label: "Canon de arriendo mensual (UF)", type: "number", placeholder: "0" },
+    { key: "comision_pct", label: "Comisión (% del primer canon)", type: "number", placeholder: "50", defaultValue: "50" },
+    { key: "exclusividad", label: "Exclusividad", type: "select", options: ["NO EXCLUSIVO", "EXCLUSIVO"], defaultValue: "NO EXCLUSIVO" },
   ],
   build: (v) => [
     {
@@ -254,7 +262,7 @@ const ordenArriendoCL: DocTemplate = {
       type: "clause",
       num: "4",
       text:
-        `COMISIÓN: "EL COMITENTE" pagará a "EL CORREDOR" una comisión equivalente al 50% del primer canon de arriendo más ` +
+        `COMISIÓN: "EL COMITENTE" pagará a "EL CORREDOR" una comisión equivalente al ${f(v, "comision_pct", "50")}% del primer canon de arriendo más ` +
         `I.V.A., que se devengará al momento de la firma del contrato de arrendamiento. "EL COMITENTE" pagará la comisión ` +
         `aun cuando el negocio se formalice después de expirado el plazo de esta orden, si el arrendatario hubiese sido ` +
         `presentado por "EL CORREDOR" durante su vigencia.`,
@@ -263,7 +271,7 @@ const ordenArriendoCL: DocTemplate = {
       type: "clause",
       num: "5",
       text:
-        `EXCLUSIVIDAD: La presente orden de arriendo tendrá el carácter de NO EXCLUSIVO, salvo pacto expreso en contrario. ` +
+        `EXCLUSIVIDAD: La presente orden de arriendo tendrá el carácter de ${f(v, "exclusividad", "NO EXCLUSIVO")}, salvo pacto expreso en contrario. ` +
         `"EL COMITENTE" se hace responsable de la veracidad de los datos proporcionados, declarando que su propiedad tiene ` +
         `toda la documentación al día.`,
     },
@@ -321,6 +329,8 @@ const mandatoAlquilerES: DocTemplate = {
     { key: "propietario_dni", label: "DNI / NIE", placeholder: "00000000X" },
     { key: "propietario_domicilio", label: "Domicilio del propietario", placeholder: "Calle, nº, ciudad", full: true },
     { key: "inmueble_direccion", label: "Dirección del inmueble", placeholder: "Calle, nº, planta, ciudad", full: true },
+    { key: "duracion_dias", label: "Duración (días)", type: "number", placeholder: "30", defaultValue: "30" },
+    { key: "exclusividad", label: "Exclusividad", type: "select", options: ["exclusivo", "no exclusivo"], defaultValue: "exclusivo" },
   ],
   build: (v) => [
     { type: "paragraph", text: `En ${f(v, "ciudad", "Madrid")}, a ${f(v, "fecha")}.` },
@@ -377,7 +387,7 @@ const mandatoAlquilerES: DocTemplate = {
       type: "clause",
       num: "4",
       text:
-        `Duración del mandato. El presente mandato tendrá una vigencia inicial de 30 días naturales, prorrogable ` +
+        `Duración del mandato. El presente mandato tendrá una vigencia inicial de ${f(v, "duracion_dias", "30")} días naturales, prorrogable ` +
         `automáticamente salvo comunicación expresa de cualquiera de las partes con al menos 7 días de antelación.`,
     },
     {
@@ -385,7 +395,7 @@ const mandatoAlquilerES: DocTemplate = {
       num: "5",
       text:
         `Exclusividad. Durante la vigencia del presente mandato, EL PROPIETARIO encomienda a LA AGENCIA, con carácter ` +
-        `exclusivo, la promoción, comercialización e intermediación del arrendamiento del Inmueble, comprometiéndose a no ` +
+        `${f(v, "exclusividad", "exclusivo")}, la promoción, comercialización e intermediación del arrendamiento del Inmueble, comprometiéndose a no ` +
         `encargar dicha gestión a terceros, ya sean otras agencias, intermediarios o particulares, ni a formalizar el ` +
         `arrendamiento al margen de LA AGENCIA.`,
     },
@@ -453,7 +463,8 @@ const mandatoVentaES: DocTemplate = {
     { key: "propietario_domicilio", label: "Domicilio del propietario", placeholder: "Calle, nº, ciudad", full: true },
     { key: "inmueble_direccion", label: "Dirección del inmueble", placeholder: "Calle, nº, planta, ciudad", full: true },
     { key: "precio_venta", label: "Precio de venta (€)", type: "number", placeholder: "0" },
-    { key: "honorarios_pct", label: "Honorarios (%)", placeholder: "3" },
+    { key: "honorarios_pct", label: "Honorarios (%)", type: "number", placeholder: "3", defaultValue: "3" },
+    { key: "exclusividad", label: "Exclusividad", type: "select", options: ["exclusivo", "no exclusivo"], defaultValue: "exclusivo" },
   ],
   build: (v) => [
     { type: "paragraph", text: `En ${f(v, "ciudad", "Madrid")}, a ${f(v, "fecha")}.` },
@@ -518,7 +529,7 @@ const mandatoVentaES: DocTemplate = {
       num: "5",
       text:
         `Exclusividad. Durante la vigencia del presente mandato, EL PROPIETARIO encomienda a LA AGENCIA, con carácter ` +
-        `exclusivo, la promoción, comercialización e intermediación de la compraventa del Inmueble, comprometiéndose a no ` +
+        `${f(v, "exclusividad", "exclusivo")}, la promoción, comercialización e intermediación de la compraventa del Inmueble, comprometiéndose a no ` +
         `encargar dicha gestión a terceros ni a formalizar la venta al margen de LA AGENCIA.`,
     },
     {

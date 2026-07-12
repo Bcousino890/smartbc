@@ -2,11 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Building2, CheckCircle, Clock, FileText, Home, Pencil, Plus, Search, SlidersHorizontal, Star, XCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, CheckCircle, Clock, ClipboardList, FileSignature, FileText, Home, Pencil, Plus, Search, SlidersHorizontal, Star, XCircle } from "lucide-react";
 import type { ApplicationCountry, ApplicationOperation, ApplicationStatus } from "@/lib/property-applications/types";
+import type { Country } from "@/lib/country-config";
+import type { DocField, DocRole } from "@/lib/documentos/templates";
 import { ApplicationDetailModal } from "@/components/admin/property-applications/application-detail-modal";
 import { CreateApplicationModal } from "@/components/admin/property-applications/create-application-modal";
 import { EditApplicationModal } from "@/components/admin/property-applications/edit-application-modal";
+import { DocumentosPanel } from "@/components/admin/documentos/documentos-panel";
+
+type DocTemplateDTO = {
+  id: string;
+  category: "venta" | "alquiler" | "personal_shopper";
+  name: string;
+  subtitle: string;
+  roles: DocRole[];
+  fields: DocField[];
+  reviewNote?: string;
+};
 
 type ApplicationRow = {
   id: string;
@@ -48,6 +61,8 @@ type ApplicationRow = {
 type Props = {
   initialApplications: ApplicationRow[];
   totalCount: number;
+  country: Country;
+  docTemplates: DocTemplateDTO[];
 };
 
 const STATUS_CONFIG: Record<ApplicationStatus, { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; className: string }> = {
@@ -136,7 +151,8 @@ function AgeCell({ app }: { app: ApplicationRow }) {
 type SortKey = "smart" | "score" | "date";
 type SortDir = "asc" | "desc";
 
-export function SolicitudesDocumentacionClient({ initialApplications, totalCount }: Props) {
+export function SolicitudesDocumentacionClient({ initialApplications, totalCount, country, docTemplates }: Props) {
+  const [activeTab, setActiveTab] = useState<"solicitudes" | "documentos">("solicitudes");
   const router = useRouter();
   const [applications, setApplications] = useState(initialApplications);
   const [searchTerm, setSearchTerm] = useState("");
@@ -230,6 +246,28 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
 
   return (
     <div className="mt-7 space-y-5">
+      {/* Pestañas: solicitudes de clientes vs documentos tipo para firmar */}
+      <div className="flex gap-1 border-b border-ink/10">
+        <button
+          onClick={() => setActiveTab("solicitudes")}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${activeTab === "solicitudes" ? "border-gold text-ink" : "border-transparent text-ink/50 hover:text-ink/80"}`}
+        >
+          <ClipboardList size={15} />
+          Solicitudes
+        </button>
+        <button
+          onClick={() => setActiveTab("documentos")}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${activeTab === "documentos" ? "border-gold text-ink" : "border-transparent text-ink/50 hover:text-ink/80"}`}
+        >
+          <FileSignature size={15} />
+          Documentos tipo
+        </button>
+      </div>
+
+      {activeTab === "documentos" ? (
+        <DocumentosPanel country={country} templates={docTemplates} />
+      ) : (
+      <>
       {/* Stats rápidas — clicables: filtran la tabla */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <button
@@ -482,6 +520,8 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           />
         );
       })()}
+      </>
+      )}
     </div>
   );
 }

@@ -39,7 +39,7 @@ const CATEGORY_LABEL: Record<TemplateDTO["category"], string> = {
   personal_shopper: "Personal Shopper",
 };
 
-export function DocumentosClient({
+export function DocumentosPanel({
   country,
   templates,
 }: {
@@ -62,7 +62,7 @@ export function DocumentosClient({
   }
 
   return (
-    <div className="mt-8">
+    <div>
       <p className="mb-5 text-sm text-ink/55">
         {country === "cl"
           ? "Órdenes de venta y arriendo listas para rellenar, imprimir y firmar."
@@ -125,7 +125,15 @@ function DocumentEditor({
   template: TemplateDTO;
   onBack: () => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({});
+  // Precargamos los valores por defecto (comisión, exclusividad, etc.) para
+  // que el documento salga con las condiciones habituales pero editables.
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      template.fields
+        .filter((field) => field.defaultValue != null)
+        .map((field) => [field.key, field.defaultValue as string]),
+    ),
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -172,7 +180,7 @@ function DocumentEditor({
   }
 
   return (
-    <div className="mt-8">
+    <div>
       <button
         onClick={onBack}
         className="mb-5 inline-flex items-center gap-1.5 text-sm text-ink/60 transition-colors hover:text-ink"
@@ -203,7 +211,19 @@ function DocumentEditor({
                 <label className="mb-1 block text-[13px] font-medium text-ink/70">
                   {field.label}
                 </label>
-                {field.type === "textarea" ? (
+                {field.type === "select" ? (
+                  <select
+                    value={values[field.key] ?? field.options?.[0] ?? ""}
+                    onChange={(e) => set(field.key, e.target.value)}
+                    className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold/55"
+                  >
+                    {(field.options ?? []).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.type === "textarea" ? (
                   <textarea
                     rows={3}
                     value={values[field.key] ?? ""}
