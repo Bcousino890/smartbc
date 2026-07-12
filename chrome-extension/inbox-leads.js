@@ -541,13 +541,40 @@
   // ── Modo DETALLE: captura automática ─────────────────────────────────
   const sentDetails = new Set(); // conversationIds ya enviados en esta pestaña
 
+  // Idealista carga los mensajes antiguos del hilo solo al hacer scroll
+  // hacia arriba. Antes de capturar se sube el contenedor del hilo hasta
+  // arriba del todo (repetidamente, hasta que deje de crecer) para que
+  // estén TODOS los mensajes en el DOM.
+  async function scrollThreadToTop() {
+    const findScroller = () => {
+      const msg = document.querySelector('[data-qa="seeker-message"], [data-qa="advertiser-message"]');
+      let el = msg ? msg.parentElement : null;
+      while (el && el !== document.body) {
+        const style = getComputedStyle(el);
+        if (el.scrollHeight > el.clientHeight + 20 && /(auto|scroll)/.test(style.overflowY)) return el;
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const scroller = findScroller();
+    if (!scroller) return;
+    let lastHeight = -1;
+    for (let i = 0; i < 40; i++) {
+      scroller.scrollTop = 0;
+      await sleep(400);
+      if (scroller.scrollHeight === lastHeight) break; // ya no carga más
+      lastHeight = scroller.scrollHeight;
+    }
+  }
+
   async function captureDetail(conversationId, force) {
     if (!force && sentDetails.has(conversationId)) return;
     sentDetails.add(conversationId);
 
     // Esperar a que el hilo cargue (hay texto sustancial en pantalla)
     await waitFor(() => (document.body.innerText || "").length > 400, 8000, 300);
-    await sleep(1500); // margen para que la SPA termine de pintar el perfil
+    await sleep(1200); // margen para que la SPA termine de pintar el perfil
+    await scrollThreadToTop(); // cargar los mensajes viejos del hilo
 
     const lead = extractDetailLead(conversationId);
     const result = await sendLeads("detail", [lead]);
@@ -562,11 +589,44 @@
   // siguiente y repite hasta el final del inbox o hasta que se detenga.
   let autoRun = null; // {captured: n} mientras está activo
 
+  // Localiza el botón de navegación entre conversaciones ("Anterior" /
+  // "Reciente") por su texto — sus clases _kiwi-button_* llevan hash de
+  // build. Se ignoran botones ocultos, deshabilitados o sin caja visible.
   function findNavButton(label) {
     return [...document.querySelectorAll("button")].find((b) => {
-      const span = b.querySelector("span");
-      return span && (span.textContent || "").trim().toLowerCase() === label;
+      if (b.disabled || b.getAttribute("aria-hidden") === "true") return false;
+      if (b.offsetParent === null && b.getClientRects().length === 0) return false;
+      const text = (b.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+      return text === label || text.startsWith(label + " ") || text.endsWith(" " + label);
     });
+  }
+
+  // Navega a la conversación anterior pulsando el botón "Anterior".
+  // Devuelve el nuevo conversationId, o null si tras el intento (y un
+  // reintento sobre el <span> interno) la conversación no cambió.
+  // Un click nativo dispara los handlers de React; el reintento sobre el
+  // hijo cubre el caso en que el listener esté en el <span>, no en el
+  // <button>. NO se hacen los dos clicks a la vez para no saltarse una
+  // conversación o rebotar hacia atrás.
+  async function navigatePrev(currentId) {
+    const changed = () => {
+      const m = location.href.match(CONVERSATION_RE);
+      return m && m[1] !== currentId ? m[1] : null;
+    };
+    const nav = findNavButton("anterior");
+    if (!nav) return { next: null, reason: 'no encontré el botón "Anterior"' };
+    if (nav.disabled) return { next: null, reason: "fin del inbox (Anterior deshabilitado)" };
+
+    nav.click();
+    let next = await waitFor(changed, 4000, 150);
+    if (!next) {
+      // Reintento: algunos builds enganchan el click en el <span> hijo.
+      const again = findNavButton("anterior") || nav;
+      const inner = again.querySelector("span") || again;
+      inner.click();
+      next = await waitFor(changed, 8000, 150);
+    }
+    return { next, reason: next ? null : "la conversación no cambió al pulsar Anterior" };
   }
 
   async function runAutoCapture(startId) {
@@ -574,30 +634,32 @@
     updateAutoButton();
     let currentId = startId;
     const visited = new Set();
-    // Tope de seguridad por si la navegación entra en un ciclo
-    for (let i = 0; i < 500 && autoRun; i++) {
-      if (visited.has(currentId)) break;
+    let stopReason = "fin del inbox";
+    // El recorrido termina de forma natural cuando ya no hay botón
+    // "Anterior" (última consulta del inbox). El tope de 2000 y el set
+    // 'visited' son solo redes de seguridad ante un ciclo inesperado.
+    for (let i = 0; i < 2000 && autoRun; i++) {
+      if (visited.has(currentId)) { stopReason = "vuelta al inicio (ciclo)"; break; }
       visited.add(currentId);
+
       await captureDetail(currentId, true);
-      if (!autoRun) break;
+      if (!autoRun) { stopReason = "detenido por el usuario"; break; }
       autoRun.captured++;
       updateAutoButton();
-      showBadge("Auto: " + autoRun.captured + " conversaciones capturadas…");
-      const nav = findNavButton("anterior");
-      if (!nav || nav.disabled) break;
-      nav.click();
-      const next = await waitFor(() => {
-        const m = location.href.match(CONVERSATION_RE);
-        return m && m[1] !== currentId ? m[1] : null;
-      }, 10000, 200);
-      if (!next) break; // no navegó: fin del inbox
+      showBadge("Auto: " + autoRun.captured + " capturadas. Pasando a la siguiente…");
+
+      const { next, reason } = await navigatePrev(currentId);
+      if (!next) { stopReason = reason; break; }
+      // eslint-disable-next-line no-console
+      console.log("[SmartBC] auto:", autoRun.captured, "→ siguiente", next);
       currentId = next;
-      await sleep(800); // pausa suave entre conversaciones
+      await sleep(600); // pausa suave entre conversaciones
     }
     const total = autoRun ? autoRun.captured : 0;
     autoRun = null;
     updateAutoButton();
-    if (total > 0) showBadge("✓ Auto terminado: " + total + " conversaciones capturadas", false, 8000);
+    // Sin auto-hide: el motivo del fin queda visible para diagnosticar.
+    showBadge("✓ Auto terminado: " + total + " capturadas — " + stopReason);
   }
 
   function updateAutoButton() {
