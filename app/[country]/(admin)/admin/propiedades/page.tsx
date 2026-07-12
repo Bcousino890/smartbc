@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Building2, Home, Sparkles, Tag } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
@@ -6,7 +7,8 @@ import { propertyRowToAdminProperty } from "@/lib/db/adapters";
 import { getAgencies } from "@/lib/db/queries/agencies";
 import { getProperties } from "@/lib/db/queries/properties";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import type { Country } from "@/lib/country-config";
+import { canAccess } from "@/lib/permissions";
+import { getCountryConfig, type Country } from "@/lib/country-config";
 import { PropertiesAdminClient } from "./properties-admin-client";
 
 // Datos en vivo: el catálogo tiene que reflejar altas/ediciones/imports al
@@ -33,6 +35,9 @@ export default async function AdminPropiedadesPage({
     getAgencies(),
     getCurrentProfile(),
   ]);
+  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
   const properties = rows.map(propertyRowToAdminProperty);
   const agencies = ((agencyRows ?? []) as Array<{
     slug: string;

@@ -15,6 +15,8 @@ import {
   getFeedsWithAgency,
 } from "@/lib/db/queries/feeds";
 import { createClient } from "@/lib/db/server";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { getScraperByKey, listScraperKeys } from "@/lib/sync/scrapers";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
@@ -26,6 +28,11 @@ export default async function AdminSindicacionPage({
   const { country } = await params;
   // La sindicación de feeds (Idealista/Fotocasa) es solo de España.
   if (country !== "es") redirect(getCountryConfig(country).prefix);
+
+  const currentProfile = await getCurrentProfile();
+  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
 
   const [feeds, stats, allAgencies] = await Promise.all([
     getFeedsWithAgency(),

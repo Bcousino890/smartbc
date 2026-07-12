@@ -1,11 +1,13 @@
+import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { profileRowToInternalUser, deriveInitials } from "@/lib/db/adapters";
 import { getAllProfiles } from "@/lib/db/queries/clients";
 import { UsuariosClient } from "./usuarios-client";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import type { InternalUserRole } from "@/lib/types";
-import type { Country } from "@/lib/country-config";
+import { getCountryConfig, type Country } from "@/lib/country-config";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
   month: "short",
@@ -57,6 +59,10 @@ export default async function AdminUsuariosPage({
   )
     ? (currentUser!.role as InternalUserRole)
     : "viewer";
+
+  if (!canAccess(currentUserRole, "usuarios", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col px-6 pb-10 lg:px-10">

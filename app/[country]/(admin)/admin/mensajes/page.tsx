@@ -1,23 +1,32 @@
+import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { createClient } from "@/lib/db/server";
 import { deriveInitials } from "@/lib/db/adapters";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
+import { getCountryConfig, type Country } from "@/lib/country-config";
 import { AdminMensajesClient, type AdminConversation } from "./mensajes-admin-client";
 import { MensajesTabs } from "./mensajes-tabs";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminMensajesPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ country: Country }>;
   searchParams: Promise<{ c?: string; tab?: string }>;
 }) {
+  const { country } = await params;
   const { c: activeIdParam, tab } = await searchParams;
   const supabase = await createClient();
 
   // Get current user profile for team chat
   const profile = await getCurrentProfile();
+  if (!canAccess(profile?.role ?? "", "mensajes", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
   const currentUserId = profile?.id ?? "";
 
   // Conversaciones con info del cliente.

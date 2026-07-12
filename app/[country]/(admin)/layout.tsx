@@ -27,8 +27,12 @@ export default async function AdminLayout({
   if (!isStaffRole(profile.role)) redirect("/inicio");
 
   // Redirect a la sección del país que le corresponde al perfil.
-  // Los usuarios multi-país (rol admin) pueden ver ambos libremente.
-  const canSwitchCountry = profile.role === "admin";
+  // Los usuarios multi-país (rol admin, owner, o marcados como multi_country
+  // porque trabajan en ambos mercados) pueden ver ambos libremente.
+  const canSwitchCountry =
+    profile.role === "admin" ||
+    profile.role === "owner" ||
+    Boolean((profile as { multi_country?: boolean }).multi_country);
   const userCountry = (profile as any).country ?? "es";
   if (!canSwitchCountry && userCountry !== country) {
     redirect(`/${userCountry === "cl" ? "cl" : "es"}/admin`);

@@ -65,6 +65,8 @@ export type PropertyForEdit = {
   title: string;
   description: string | null;
   operation: "rent" | "sale";
+  operations: string[];
+  rent_price: number | null;
   stay: "short" | "long" | null;
   status: "available" | "reserved" | "sold" | "archived";
   price: number;
@@ -150,7 +152,32 @@ export function PropertyEditView({
   const [longitude, setLongitude] = useState<number>(property.longitude ?? 0);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
-  const [operation, setOperation] = useState(property.operation);
+  const [operations, setOperations] = useState<("rent" | "sale")[]>(
+    (property.operations.length > 0
+      ? property.operations
+      : [property.operation]) as ("rent" | "sale")[],
+  );
+  const [rentPrice, setRentPrice] = useState<number | "">(
+    property.rent_price ?? "",
+  );
+  // Operación "principal": venta si está en venta (con o sin alquiler
+  // también), alquiler si solo está en alquiler.
+  const operation: "rent" | "sale" = operations.includes("sale")
+    ? "sale"
+    : "rent";
+  const isDualOperation =
+    operations.includes("sale") && operations.includes("rent");
+
+  function toggleOperation(op: "rent" | "sale") {
+    setOperations((prev) => {
+      if (prev.includes(op)) {
+        // No permitir desmarcar la última operación activa.
+        if (prev.length === 1) return prev;
+        return prev.filter((o) => o !== op);
+      }
+      return [...prev, op];
+    });
+  }
   const [stay, setStay] = useState<"short" | "long" | "">(property.stay ?? "");
   const [availableFrom, setAvailableFrom] = useState(property.available_from ?? "");
   const [status, setStatus] = useState(property.status);
@@ -389,7 +416,10 @@ export function PropertyEditView({
         // Coordenadas fijadas en el mapa (0 = sin fijar → null).
         latitude: latitude || null,
         longitude: longitude || null,
-        operation,
+        operations,
+        rentPrice: isDualOperation
+          ? (rentPrice === "" ? null : Number(rentPrice))
+          : null,
         stay: stay || null,
         availableFrom: availableFrom || null,
         status,
@@ -579,7 +609,7 @@ export function PropertyEditView({
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Field
               label={
-                property.operation === "rent"
+                operation === "rent"
                   ? t("adminProps.detail.priceRent")
                   : t("adminProps.detail.priceSale")
               }
@@ -593,6 +623,22 @@ export function PropertyEditView({
                 className={inputClass}
               />
             </Field>
+            {isDualOperation && (
+              <Field label={t("adminProps.detail.priceRent")}>
+                <input
+                  type="number"
+                  value={rentPrice}
+                  onChange={(e) =>
+                    setRentPrice(
+                      e.target.value === "" ? "" : Number(e.target.value),
+                    )
+                  }
+                  min={0}
+                  required
+                  className={inputClass}
+                />
+              </Field>
+            )}
             <Field label={t("adminProps.detail.bedrooms")}>
               <input
                 type="number"
@@ -670,16 +716,26 @@ export function PropertyEditView({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Field label="Operación">
-              <select
-                value={operation}
-                onChange={(e) =>
-                  setOperation(e.target.value as "rent" | "sale")
-                }
-                className={inputClass}
-              >
-                <option value="rent">Alquiler</option>
-                <option value="sale">Venta</option>
-              </select>
+              <div className="flex h-[42px] items-center gap-4 rounded-xl border border-ink/10 bg-white px-3">
+                <label className="flex items-center gap-1.5 text-sm text-ink/75">
+                  <input
+                    type="checkbox"
+                    checked={operations.includes("sale")}
+                    onChange={() => toggleOperation("sale")}
+                    className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                  />
+                  Venta
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-ink/75">
+                  <input
+                    type="checkbox"
+                    checked={operations.includes("rent")}
+                    onChange={() => toggleOperation("rent")}
+                    className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                  />
+                  Alquiler
+                </label>
+              </div>
             </Field>
             <Field label="Modalidad">
               <select
@@ -688,7 +744,7 @@ export function PropertyEditView({
                   setStay(e.target.value as "short" | "long" | "")
                 }
                 className={inputClass}
-                disabled={operation === "sale"}
+                disabled={!operations.includes("rent")}
               >
                 <option value="">— No aplica —</option>
                 <option value="long">Larga estancia</option>

@@ -352,6 +352,8 @@ export type AdminProperty = {
   agencyId: string;
   agencyName: string;
   operation: Operation;
+  // true si la propiedad está publicada como venta Y alquiler a la vez.
+  isDualOperation?: boolean;
   // Tipo de estancia para alquileres: "larga" / "corta". null en ventas.
   stayType?: "larga" | "corta" | null;
   status: AdminPropertyStatus;
@@ -456,6 +458,7 @@ export type InternalUser = {
   lastLoginText?: string;
   joinedLabel: string;
   country?: string;
+  multiCountry?: boolean;
 };
 
 // Admin / Configuración

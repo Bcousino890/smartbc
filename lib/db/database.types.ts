@@ -12,7 +12,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type UserRole = "client" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "captadora";
+export type UserRole = "client" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "captadora" | "owner";
 export type PropertyOperation = "rent" | "sale";
 export type PropertyStay = "short" | "long";
 export type PropertyStatus = "available" | "reserved" | "sold" | "archived";
@@ -36,6 +36,7 @@ export type Database = {
           assigned_advisor_id: string | null;
           personal_shopper_terms_accepted_at: string | null;
           country: string;
+          multi_country: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -49,6 +50,7 @@ export type Database = {
           assigned_advisor_id?: string | null;
           personal_shopper_terms_accepted_at?: string | null;
           country?: string;
+          multi_country?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -128,6 +130,8 @@ export type Database = {
           title: string;
           description: string | null;
           operation: PropertyOperation;
+          operations: string[];
+          rent_price: number | null;
           stay: PropertyStay | null;
           status: PropertyStatus;
           price: number;
@@ -168,6 +172,8 @@ export type Database = {
           title: string;
           description?: string | null;
           operation: PropertyOperation;
+          operations?: string[];
+          rent_price?: number | null;
           stay?: PropertyStay | null;
           status?: PropertyStatus;
           price: number;
