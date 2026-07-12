@@ -596,6 +596,21 @@ export async function fetchIdealistaPhoneViaAjax(
   const debug: AjaxPhoneResult["debug"] = options?.debug ? [] : undefined;
   const endpoints = idealistaPhoneEndpoints(adId);
 
+  // ⚠️ Las llamadas sensibles a DataDome (contact-phones, comment.ajax, cookie
+  // pre-auth) requieren una IP RESIDENCIAL. `getProxyUrl()` (lo que pasan los
+  // callers en options.proxyUrl) puede devolver IPs de datacenter rotativas de
+  // la API de Smartproxy, que DataDome bloquea. Resolvemos aquí el proxy
+  // residencial estático y lo usamos para todo el flujo de teléfono; caemos a
+  // options.proxyUrl solo si no hay residencial configurado.
+  let phoneProxyUrl = options?.proxyUrl;
+  try {
+    const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+    const residential = await getResidentialProxyUrl();
+    if (residential) phoneProxyUrl = residential;
+  } catch {
+    // Sin residencial → usar el proxy recibido.
+  }
+
   console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);
 
   // Load the page once, then try all AJAX endpoints reusing the same cookie jar.
@@ -606,7 +621,7 @@ export async function fetchIdealistaPhoneViaAjax(
     endpoints,
     WHATSAPP_UA_FOR_AJAX,
     {
-      proxyUrl: options?.proxyUrl,
+      proxyUrl: phoneProxyUrl,
       pageUserAgent: BROWSER_UA_FOR_PAGE, // Use real browser UA to fetch DataDome scripts
       timeoutSec: 30,
       ajaxHeaders: [
@@ -732,7 +747,7 @@ export async function fetchIdealistaPhoneViaAjax(
     try {
       const commentUrl = `https://www.idealista.com/ajax/comment.ajax?adId=${adId}`;
       const commentRes = await fetchViaCurl(commentUrl, BROWSER_UA_FOR_PAGE, {
-        proxyUrl: options?.proxyUrl,
+        proxyUrl: phoneProxyUrl,
         allowSmallBody: true,
         timeoutSec: 15,
         headers: [
@@ -790,7 +805,7 @@ export async function fetchIdealistaPhoneViaAjax(
         debug.push({ endpoint: "datadome-auth", status: 0, bodySnippet: `auth=${ddAuth.slice(0, 20)}...` });
       }
 
-      const ddCookie = await fetchDataDomeCookie(ddAuth, adId, options?.proxyUrl);
+      const ddCookie = await fetchDataDomeCookie(ddAuth, adId, phoneProxyUrl);
       if (ddCookie) {
         console.log(`[idealista-phone-ajax] Cookie DataDome obtenida: ${ddCookie.slice(0, 40)}...`);
         // Retry the primary phone endpoint with the validated DataDome cookie.
@@ -798,7 +813,7 @@ export async function fetchIdealistaPhoneViaAjax(
         console.log(`[idealista-phone-ajax] Reintentando /contact-phones con cookie DataDome...`);
         try {
           const ddRes = await fetchViaCurl(primaryEndpoint, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", {
-            proxyUrl: options?.proxyUrl,
+            proxyUrl: phoneProxyUrl,
             headers: [
               `Cookie: ${ddCookie}`,
               "X-Requested-With: XMLHttpRequest",
