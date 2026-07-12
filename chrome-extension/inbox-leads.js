@@ -601,13 +601,32 @@
     });
   }
 
-  // Pulsa el botón y, si un simple click no dispara la navegación de la
-  // SPA, reintenta sobre el <span> interno (algunos handlers de React
-  // escuchan en el hijo, no en el <button>).
-  function clickNav(btn) {
-    btn.click();
-    const inner = btn.querySelector("span");
-    if (inner) inner.click();
+  // Navega a la conversación anterior pulsando el botón "Anterior".
+  // Devuelve el nuevo conversationId, o null si tras el intento (y un
+  // reintento sobre el <span> interno) la conversación no cambió.
+  // Un click nativo dispara los handlers de React; el reintento sobre el
+  // hijo cubre el caso en que el listener esté en el <span>, no en el
+  // <button>. NO se hacen los dos clicks a la vez para no saltarse una
+  // conversación o rebotar hacia atrás.
+  async function navigatePrev(currentId) {
+    const changed = () => {
+      const m = location.href.match(CONVERSATION_RE);
+      return m && m[1] !== currentId ? m[1] : null;
+    };
+    const nav = findNavButton("anterior");
+    if (!nav) return { next: null, reason: 'no encontré el botón "Anterior"' };
+    if (nav.disabled) return { next: null, reason: "fin del inbox (Anterior deshabilitado)" };
+
+    nav.click();
+    let next = await waitFor(changed, 4000, 150);
+    if (!next) {
+      // Reintento: algunos builds enganchan el click en el <span> hijo.
+      const again = findNavButton("anterior") || nav;
+      const inner = again.querySelector("span") || again;
+      inner.click();
+      next = await waitFor(changed, 8000, 150);
+    }
+    return { next, reason: next ? null : "la conversación no cambió al pulsar Anterior" };
   }
 
   async function runAutoCapture(startId) {
@@ -616,33 +635,31 @@
     let currentId = startId;
     const visited = new Set();
     let stopReason = "fin del inbox";
-    // Tope de seguridad por si la navegación entra en un ciclo
-    for (let i = 0; i < 500 && autoRun; i++) {
-      if (visited.has(currentId)) { stopReason = "vuelta al inicio"; break; }
+    // El recorrido termina de forma natural cuando ya no hay botón
+    // "Anterior" (última consulta del inbox). El tope de 2000 y el set
+    // 'visited' son solo redes de seguridad ante un ciclo inesperado.
+    for (let i = 0; i < 2000 && autoRun; i++) {
+      if (visited.has(currentId)) { stopReason = "vuelta al inicio (ciclo)"; break; }
       visited.add(currentId);
+
       await captureDetail(currentId, true);
-      if (!autoRun) { stopReason = "detenido"; break; }
+      if (!autoRun) { stopReason = "detenido por el usuario"; break; }
       autoRun.captured++;
       updateAutoButton();
       showBadge("Auto: " + autoRun.captured + " capturadas. Pasando a la siguiente…");
 
-      const nav = findNavButton("anterior");
-      if (!nav) { stopReason = 'no encontré el botón "Anterior"'; break; }
-      if (nav.disabled) { stopReason = "fin del inbox (no hay anterior)"; break; }
-      clickNav(nav);
-
-      const next = await waitFor(() => {
-        const m = location.href.match(CONVERSATION_RE);
-        return m && m[1] !== currentId ? m[1] : null;
-      }, 12000, 200);
-      if (!next) { stopReason = "la conversación no cambió al pulsar Anterior"; break; }
+      const { next, reason } = await navigatePrev(currentId);
+      if (!next) { stopReason = reason; break; }
+      // eslint-disable-next-line no-console
+      console.log("[SmartBC] auto:", autoRun.captured, "→ siguiente", next);
       currentId = next;
-      await sleep(800); // pausa suave entre conversaciones
+      await sleep(600); // pausa suave entre conversaciones
     }
     const total = autoRun ? autoRun.captured : 0;
     autoRun = null;
     updateAutoButton();
-    showBadge("✓ Auto terminado: " + total + " capturadas (" + stopReason + ")", false, 10000);
+    // Sin auto-hide: el motivo del fin queda visible para diagnosticar.
+    showBadge("✓ Auto terminado: " + total + " capturadas — " + stopReason);
   }
 
   function updateAutoButton() {
