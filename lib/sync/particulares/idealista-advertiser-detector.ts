@@ -909,40 +909,59 @@ export async function fetchIdealistaPhoneViaAjax(
   // primer t=bv: reintentamos con una IP sticky NUEVA (barato: solo llamadas
   // curl, sin gastar CapSolver) hasta CHALLENGE_RETRIES veces antes de caer al
   // fallback de Playwright.
-  const CHALLENGE_RETRIES = 3;
-  const { withStickySessionForce } = await import("@/lib/sync/proxy-config");
+  // El diagnóstico proxy-health (con país aleatorio) probó que ~1 de cada 3 IPs
+  // frescas da el slider resoluble (t=fe); las demás dan bloqueo duro (t=bv).
+  // Por eso reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe. Con
+  // 5 intentos, la probabilidad de acertar una t=fe supera el 85%.
+  const CHALLENGE_RETRIES = 5;
+  const { withStickySessionForce, getFreshResidentialProxyUrl: getFreshIp } = await import("@/lib/sync/proxy-config");
   for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
-    // A partir del segundo intento, generar una IP sticky nueva (la primera
-    // reutiliza la que ya cargó la página/cookie-jar más arriba). Se FUERZA
-    // el reemplazo (withStickySessionForce) porque phoneProxyUrl ya trae una
-    // sesión anclada del intento 1; withStickySession normal sería no-op.
+    // A partir del segundo intento, conseguir una IP NUEVA de verdad.
+    //  - Extracción API (URL sin usuario): pedir otra IP fresca — cada llamada
+    //    a getFreshResidentialProxyUrl devuelve una IP DISTINTA del pool.
+    //  - Gateway estático (URL con usuario): forzar nueva sesión en el username.
+    // El bug anterior: usar withStickySessionForce sobre una URL de la
+    // Extracción API (sin usuario) era un NO-OP → todos los reintentos reusaban
+    // la misma IP, y si esa era t=bv, no había forma de salir.
     let attemptProxyUrl = phoneProxyUrl;
     if (attempt > 0 && phoneProxyUrl) {
-      const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
+      if (phoneProxyUrl.includes("@")) {
+        const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
+      } else {
+        const freshIp = await getFreshIp(2);
+        if (freshIp) attemptProxyUrl = freshIp;
+      }
     }
 
-    // Si no capturamos el reto en el cookie-jar (solo aplica al intento 0), o
-    // es un reintento con IP nueva, pedimos /contact-phones fresco.
+    // Reto DataDome de /contact-phones para esta IP. Estrategia GANADORA
+    // (verificada en proxy-health): UA Chrome CONSISTENTE en carga de página +
+    // contact-phones, compartiendo cookie-jar (la mezcla UA WhatsApp+Chrome da
+    // t=bv). Por eso cargamos la ficha con Chrome y llamamos a contact-phones
+    // con Chrome reutilizando el mismo jar, todo por la misma IP del intento.
+    // El intento 0 reutiliza el challengeBody del cookie-jar inicial (WhatsApp),
+    // pero si vino vacío/null, rehacemos con Chrome consistente.
     let body403 = attempt === 0 ? challengeBody : null;
     if (!body403) {
       try {
         const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
-        const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
-          proxyUrl: attemptProxyUrl,
-          allowSmallBody: true,
-          returnBodyOnError: true,
-          timeoutSec: 15,
-          headers: [
-            "X-Requested-With: XMLHttpRequest",
-            "Accept: application/json, text/javascript, */*; q=0.01",
-            `Referer: ${pageUrl}`,
-            "Accept-Language: es-ES,es;q=0.9",
-          ],
-        });
-        // El reto DataDome viene en el cuerpo del 403 (returnBodyOnError) o en
-        // el 200 (poco común). Tomamos cualquiera de los dos.
-        body403 = ("html" in cpRes ? cpRes.html : cpRes.body) ?? null;
+        const { results: cpResults } = await fetchMultipleAjaxWithCookieJar(
+          pageUrl,
+          [cpUrl],
+          BROWSER_UA_FOR_PAGE,
+          {
+            proxyUrl: attemptProxyUrl,
+            pageUserAgent: BROWSER_UA_FOR_PAGE, // Chrome consistente (carga + AJAX)
+            timeoutSec: 25,
+            ajaxHeaders: [
+              "X-Requested-With: XMLHttpRequest",
+              "Accept: application/json, text/javascript, */*; q=0.01",
+              `Referer: ${pageUrl}`,
+              "Accept-Language: es-ES,es;q=0.9",
+            ],
+          },
+        );
+        body403 = cpResults[0]?.body ?? null;
       } catch { /* seguimos */ }
     }
 
