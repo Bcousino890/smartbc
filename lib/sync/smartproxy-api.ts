@@ -38,14 +38,20 @@ export type SmartproxyIP = {
  */
 export async function getSmartproxyIP(
   appKey: string,
-  options?: { life?: number; num?: number },
+  options?: { life?: number; num?: number; cc?: string },
 ): Promise<SmartproxyIP | null> {
   try {
     const life = options?.life ?? 30;
     const num = options?.num ?? 100;
+    // País de las IPs. Por defecto ALEATORIO (cc vacío): el pool de España está
+    // muy quemado por DataDome en Idealista (medido: 7/7 t=bv), así que IPs de
+    // otros países —aunque no sean españolas— suelen estar menos flageadas y dan
+    // el slider resoluble (t=fe). Se puede forzar un país con SMARTPROXY_COUNTRY
+    // (p.ej. "ES") o pasando options.cc.
+    const cc = options?.cc ?? process.env.SMARTPROXY_COUNTRY ?? "";
     // Llamada a la API de Smartproxy con app_key
     // Devuelve JSON con IPs disponibles: { "ips": [{"ip": "...", "port": ...}] }
-    const url = `https://www.smartproxy.org/web_v1/ip/get-ip-v3?app_key=${appKey}&pt=9&num=${num}&cc=ES&life=${life}&format=json&protocol=1`;
+    const url = `https://www.smartproxy.org/web_v1/ip/get-ip-v3?app_key=${appKey}&pt=9&num=${num}&cc=${cc}&life=${life}&format=json&protocol=1`;
 
     const { stdout } = await execFileAsync("curl", [
       "-sS",
@@ -116,7 +122,7 @@ export function buildProxyUrl(smartproxy: SmartproxyIP): string {
  */
 export async function getFreshProxyUrl(
   appKey: string,
-  options?: { life?: number; num?: number },
+  options?: { life?: number; num?: number; cc?: string },
 ): Promise<string | null> {
   const ip = await getSmartproxyIP(appKey, options);
   if (!ip) return null;

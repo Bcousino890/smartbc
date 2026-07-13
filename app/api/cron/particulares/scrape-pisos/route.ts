@@ -28,7 +28,7 @@ const SEARCH_BASES = [
   "https://www.pisos.com/venta/pisos-madrid_capital/particulares",
 ];
 
-const MAX_PAGES = Number.parseInt(process.env.PISOS_MAX_PAGES ?? "5", 10);
+const MAX_PAGES = Number.parseInt(process.env.PISOS_MAX_PAGES ?? "10", 10);
 
 // pisos.com respondió 200 sin bloqueo desde IP de datacenter, pero al escalar
 // puede rate-limitar; probamos directo primero y, si falla, con proxy rotativo.
