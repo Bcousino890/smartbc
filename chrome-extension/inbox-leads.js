@@ -19,7 +19,18 @@
   const COUNTRY_RE = /\(([A-Z]{2})\)/;
   const PRICE_RE = /([\d.,]+\s*€(?:\/mes)?)/;
   const DATE_RE = /^(\d{1,2}:\d{2}|\d{1,2}\s+\w{3,}\.?|hoy|ayer)$/i;
-  const CONVERSATION_RE = /CONVERSATION_(\d+)/;
+  // El inbox tiene dos tipos de hilo: mensajes (CONVERSATION_) y llamadas
+  // perdidas (CALL_). Ambos son leads. La "clave" de un hilo es el id
+  // numérico para las conversaciones y "call_<id>" para las llamadas, para
+  // que no colisionen en la base y poder reconstruir el enlace correcto.
+  function threadKeyFromUrl(url) {
+    const u = url || location.href;
+    const conv = u.match(/CONVERSATION_(\d+)/);
+    if (conv) return conv[1];
+    const call = u.match(/CALL_(\d+)/);
+    if (call) return "call_" + call[1];
+    return null;
+  }
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -263,16 +274,16 @@
   }
 
   function collectListLeads() {
-    const anchors = document.querySelectorAll('a[href*="/inbox/CONVERSATION_"]');
+    const anchors = document.querySelectorAll(
+      'a[href*="/inbox/CONVERSATION_"], a[href*="/inbox/CALL_"]',
+    );
     const byId = new Map();
     anchors.forEach((a) => {
-      const match = (a.getAttribute("href") || "").match(CONVERSATION_RE);
-      if (!match) return;
-      const conversationId = match[1];
-      if (byId.has(conversationId)) return;
+      const key = threadKeyFromUrl(a.getAttribute("href") || "");
+      if (!key || byId.has(key)) return;
       const row = a.closest("li, article, tr, [role='listitem']") || a;
-      const lead = extractLeadFromRow(row, conversationId);
-      if (lead) byId.set(conversationId, lead);
+      const lead = extractLeadFromRow(row, key);
+      if (lead) byId.set(key, lead);
     });
     return [...byId.values()];
   }
@@ -358,6 +369,32 @@
   function extractDetailLead(conversationId) {
     const lead = { conversationId };
     const bodyText = document.body.innerText || "";
+
+    // Llamadas perdidas (CALL_): no hay hilo de mensajes ni perfil, solo un
+    // aviso "Este número te llamó…", el teléfono y la propiedad consultada.
+    // El contacto llega "Sin nombre" (se deja el nombre vacío → el portal
+    // muestra su propio "Sin nombre").
+    if (conversationId.startsWith("call_")) {
+      const panel = findRightPanel();
+      const scopeText = (panel && panel.innerText) || bodyText;
+      const pm = scopeText.match(PHONE_RE);
+      if (pm) lead.phone = pm[1];
+      lead.isInternational = /internacional/i.test(bodyText);
+      lead.message = "☎ Llamada perdida — te llamó para pedir información sobre el inmueble y no fue respondida.";
+      const cards = extractPropertyCards(document);
+      if (cards.length > 0) {
+        lead.properties = cards;
+        lead.propertyTitle = cards[0].title;
+        lead.propertyPrice = cards[0].price;
+        lead.propertyType = cards[0].type;
+        lead.propertyImageUrl = cards[0].imageUrl;
+      }
+      const codM = bodyText.match(/Cod\.\s*:?\s*(\d{6,})/i);
+      if (codM) lead.idealistaCode = codM[1];
+      const refM = bodyText.match(/Ref\.\s*:?\s*([A-Za-z0-9_-]{2,20})/);
+      if (refM) lead.propertyRef = refM[1];
+      return lead;
+    }
 
     // Fuente primaria: clases semánticas observadas en el HTML real de
     // Idealista/tools (ver README). El sufijo hash del CSS module puede
@@ -610,8 +647,8 @@
   // conversación o rebotar hacia atrás.
   async function navigatePrev(currentId) {
     const changed = () => {
-      const m = location.href.match(CONVERSATION_RE);
-      return m && m[1] !== currentId ? m[1] : null;
+      const key = threadKeyFromUrl();
+      return key && key !== currentId ? key : null;
     };
     const nav = findNavButton("anterior");
     if (!nav) return { next: null, reason: 'no encontré el botón "Anterior"' };
@@ -736,13 +773,13 @@
 
   function onUrlChange() {
     const url = location.href;
-    const conversation = url.match(CONVERSATION_RE);
-    if (conversation) {
+    const threadKey = threadKeyFromUrl(url);
+    if (threadKey) {
       removeListButton();
-      ensureDetailButton(conversation[1]);
-      // En modo auto el bucle ya captura cada conversación (con force);
+      ensureDetailButton(threadKey);
+      // En modo auto el bucle ya captura cada hilo (con force);
       // capturar también aquí duplicaría los envíos.
-      if (!autoRun) captureDetail(conversation[1]);
+      if (!autoRun) captureDetail(threadKey);
     } else if (/\/inbox\/?(\?|$)/.test(url)) {
       removeDetailButton();
       ensureListButton();

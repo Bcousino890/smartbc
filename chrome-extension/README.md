@@ -53,6 +53,10 @@ Extensión de Chrome con dos funciones:
   de Idealista, una por una, hasta recorrer todo el inbox. El botón cambia
   a "⏹ Detener (N)" mientras corre — vuelve a pulsarlo para parar. Consejo:
   abre la conversación más reciente y deja que recorra el resto.
+- **Llamadas perdidas**: los hilos de tipo "Llamada perdida" (el contacto
+  llamó pidiendo información y no fue respondido) también se capturan —
+  llegan sin nombre pero con teléfono y la propiedad consultada, y el
+  mensaje indica "☎ Llamada perdida". Se recorren igual en el modo auto.
 - Los contactos se deduplican por conversación: reenviar no crea duplicados
 - En el portal: `/es/admin/solicitudes` → pestaña **Idealista** → etiqueta el
   tipo (Particular / Agencia / Relocation — con sugerencia automática) y usa

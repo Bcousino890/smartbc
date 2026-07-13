@@ -676,6 +676,11 @@ function IdealistaLeadModal({
   );
   const bullets = lead.profile?.bullets ?? [];
   const presentacion = lead.profile?.presentacion ?? null;
+  // Las llamadas perdidas se guardan con conversation_id "call_<id>" y su
+  // hilo en Idealista es /inbox/CALL_<id> (no CONVERSATION_).
+  const idealistaUrl = lead.conversation_id.startsWith("call_")
+    ? `https://www.idealista.com/inbox/CALL_${lead.conversation_id.slice(5)}`
+    : `https://www.idealista.com/inbox/CONVERSATION_${lead.conversation_id}`;
 
   function handleAssign(advisorId: string) {
     startTransition(async () => {
@@ -852,7 +857,7 @@ function IdealistaLeadModal({
         </div>
 
         <a
-          href={`https://www.idealista.com/inbox/CONVERSATION_${lead.conversation_id}`}
+          href={idealistaUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-gold hover:text-navy"
