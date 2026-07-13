@@ -619,18 +619,26 @@ export async function fetchIdealistaPhoneViaAjax(
     // Sin residencial → usar el proxy recibido.
   }
 
-  // ⚠️ CRÍTICO: anclar la IP (sticky session) para TODO el flujo de este adId.
-  // fetchMultipleAjaxWithCookieJar y las llamadas posteriores (pre-auth
-  // DataDome, comment.ajax) hacen procesos `curl` SEPARADOS — cada uno es una
-  // conexión nueva al proxy. Si el proxy es el endpoint rotativo, cada
-  // conexión sale por una IP residencial distinta aunque la URL sea la misma,
-  // y DataDome rechaza con bloqueo DURO en cuanto la cookie de la IP-A llega
-  // desde la IP-B (confirmado con soporte de Smartproxy: su puerto rotativo
-  // asigna IP nueva por conexión). withStickySession ancla la misma IP para
-  // todas las llamadas de este adId sin tocar otras búsquedas en paralelo.
+  // ⚠️ CRÍTICO: anclar la IP (sticky session) para TODO el flujo de ESTA
+  // llamada. fetchMultipleAjaxWithCookieJar y las llamadas posteriores
+  // (pre-auth DataDome, comment.ajax) hacen procesos `curl` SEPARADOS — cada
+  // uno es una conexión nueva al proxy. Si el proxy es el endpoint rotativo,
+  // cada conexión sale por una IP residencial distinta aunque la URL sea la
+  // misma, y DataDome rechaza con bloqueo DURO en cuanto la cookie de la IP-A
+  // llega desde la IP-B (confirmado con soporte de Smartproxy: su puerto
+  // rotativo asigna IP nueva por conexión).
+  //
+  // El sessionId NO puede ser solo el adId: si un mismo anuncio se reintenta
+  // varias veces (retries del cron, o el panel de test manual), usar siempre
+  // el mismo sessionId ancla SIEMPRE la misma IP — y si esa IP quedó marcada
+  // por DataDome en un intento anterior, el anuncio queda "quemado" para
+  // siempre sin importar cuántas veces se reintente. Añadimos un componente
+  // aleatorio por invocación: misma IP dentro de ESTA llamada (arregla el bug
+  // de cookie-IP-mismatch), pero una IP distinta en cada reintento/retry.
   if (phoneProxyUrl) {
     const { withStickySession } = await import("@/lib/sync/proxy-config");
-    phoneProxyUrl = withStickySession(phoneProxyUrl, adId);
+    const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    phoneProxyUrl = withStickySession(phoneProxyUrl, sessionId);
   }
 
   console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);

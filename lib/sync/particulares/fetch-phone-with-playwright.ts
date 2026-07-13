@@ -108,16 +108,28 @@ export async function fetchIdealistaPhoneViaPlaywright(
       ?? (rawProxyUrl?.includes("smartproxy.net") && rawProxyUrl.includes("@") ? rawProxyUrl : undefined)
       ?? rawProxyUrl;
 
-    let proxyConfig: { server: string; username?: string; password?: string } | undefined;
+    // Sticky session: TODO el flujo de este adId (navegación del browser +
+    // los reintentos de CapSolver más abajo) debe salir por la MISMA IP
+    // residencial. El navegador abre varias conexiones al proxy durante la
+    // carga (documento + XHR de "Ver teléfono"); sin anclar la sesión, cada
+    // conexión puede salir por una IP distinta si el endpoint es rotativo, y
+    // DataDome rechaza la cookie emitida para otra IP con bloqueo duro. Y si
+    // CapSolver resolviera el reto usando una IP DISTINTA a la que navegó el
+    // browser, el token tampoco sería válido para esa sesión. El sessionId
+    // incluye un componente aleatorio (no solo adId) para que un reintento
+    // tras fallo use una IP distinta en vez de quedar anclado para siempre a
+    // una IP que ya quedó marcada por DataDome. Ver withStickySession en
+    // proxy-config.ts.
+    let stickyProxyUrl = residentialProxyUrl;
     if (residentialProxyUrl) {
+      const { withStickySession } = await import("@/lib/sync/proxy-config");
+      const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      stickyProxyUrl = withStickySession(residentialProxyUrl, sessionId);
+    }
+
+    let proxyConfig: { server: string; username?: string; password?: string } | undefined;
+    if (stickyProxyUrl) {
       try {
-        // Sticky session: el navegador abre varias conexiones al proxy durante
-        // la carga (documento + XHR de "Ver teléfono"). Sin anclar la sesión al
-        // adId, cada conexión puede salir por una IP residencial distinta si el
-        // endpoint es rotativo, y DataDome rechaza la cookie emitida para otra
-        // IP con bloqueo duro. Ver withStickySession en proxy-config.ts.
-        const { withStickySession } = await import("@/lib/sync/proxy-config");
-        const stickyProxyUrl = withStickySession(residentialProxyUrl, adId);
         const u = new URL(stickyProxyUrl);
         proxyConfig = {
           server: `${u.protocol}//${u.host}`,
@@ -223,14 +235,15 @@ export async function fetchIdealistaPhoneViaPlaywright(
       // Try CapSolver to solve DataDome CAPTCHA
       console.log(`[playwright-phone] Attempting DataDome CAPTCHA solution via CapSolver...`);
       const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
-      const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
 
       try {
-        const proxyUrl = await getResidentialProxyUrl();
+        // Reutilizar la MISMA IP sticky que navegó el browser — CapSolver
+        // debe resolver el reto desde la misma IP que verá la cookie aplicada,
+        // si no, el token no será válido para esta sesión.
         const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
         console.log(`[playwright-phone] DataDome captchaUrl: ${captchaUrl.slice(0, 80)}`);
         const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
-          proxyUrl,
+          proxyUrl: stickyProxyUrl,
           websiteURL: pageUrl,
         });
 
@@ -348,13 +361,12 @@ export async function fetchIdealistaPhoneViaPlaywright(
     if (!phoneFromAjax && !clicked) {
       console.log(`[playwright-phone] AJAX blocked or not available. Attempting CapSolver to resolve CAPTCHA...`);
       const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
-      const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
 
       try {
-        const proxyUrl = await getResidentialProxyUrl();
+        // Misma IP sticky que el resto del flujo (ver comentario más arriba).
         const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
         const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
-          proxyUrl,
+          proxyUrl: stickyProxyUrl,
           websiteURL: pageUrl,
         });
 
