@@ -1,8 +1,8 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Mail, RotateCcw, X, XCircle } from "lucide-react";
-import { useParams } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { CheckCircle2, ExternalLink, Link2, Loader2, Mail, RotateCcw, Search, X, XCircle } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import { formatRelativeMinutes } from "@/lib/relative-time";
@@ -16,8 +16,16 @@ import {
   updateIdealistaLeadStatus,
   setIdealistaLeadType,
   assignIdealistaLead,
+  setIdealistaLeadMatchedProperty,
   updateIdealistaLeadContactStatus,
 } from "./actions";
+
+type PropertySearchResult = {
+  id: string;
+  title: string | null;
+  address: string | null;
+  bc_reference: string | null;
+};
 
 type StaffOption = { id: string; name: string };
 
@@ -93,7 +101,14 @@ export function SolicitudesAdminClient({
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [leadStatusFilter, setLeadStatusFilter] = useState<LeadStatusFilter>("todos");
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>("todos");
-  const [selectedLead, setSelectedLead] = useState<IdealistaLeadRow | null>(null);
+  // Id en lugar del objeto completo: así, tras un router.refresh() (ej. al
+  // vincular manualmente una ficha del sistema desde el modal), el modal
+  // vuelve a leer el lead actualizado del array recién llegado por props en
+  // vez de quedarse con la instancia vieja capturada al abrirlo.
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const selectedLead = selectedLeadId
+    ? idealistaLeads.find((l) => l.id === selectedLeadId) ?? null
+    : null;
 
   const counts: Record<TabKey, number> = {
     pending: requests.filter((r) => r.status === "pending").length,
@@ -199,7 +214,7 @@ export function SolicitudesAdminClient({
                     key={lead.id}
                     lead={lead}
                     staffOptions={staffOptions}
-                    onOpen={() => setSelectedLead(lead)}
+                    onOpen={() => setSelectedLeadId(lead.id)}
                   />
                 ))}
               </div>
@@ -208,7 +223,7 @@ export function SolicitudesAdminClient({
               <IdealistaLeadModal
                 lead={selectedLead}
                 staffOptions={staffOptions}
-                onClose={() => setSelectedLead(null)}
+                onClose={() => setSelectedLeadId(null)}
               />
             )}
           </>
@@ -497,6 +512,21 @@ function IdealistaLeadCard({
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+              )}
+              {lead.matched_property_slug ? (
+                <a
+                  href={`/es/admin/propiedades/${lead.matched_property_slug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+                >
+                  <ExternalLink size={11} />
+                  Ver ficha en el sistema
+                  {lead.matched_property_reference ? ` · ${lead.matched_property_reference}` : ""}
+                </a>
+              ) : (
+                (lead.property_ref || lead.idealista_code) && (
+                  <p className="mt-1 text-[11px] text-ink/35">Sin ficha vinculada en el sistema</p>
+                )
               )}
               {lead.properties.length > 1 && (
                 <p className="text-[11px] font-semibold text-teal-700 mt-0.5">
@@ -820,6 +850,8 @@ function IdealistaLeadModal({
           )
         )}
 
+        <PropertyMatchPicker lead={lead} />
+
         {lead.message && (
           <div className="mt-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Mensaje</p>
@@ -866,6 +898,165 @@ function IdealistaLeadModal({
           Abrir en Idealista
         </a>
       </div>
+    </div>
+  );
+}
+
+// ─── PropertyMatchPicker ─────────────────────────────────────────────
+//
+// Vínculo a la ficha del sistema. Si ya hay match automático (por Ref./Cód.,
+// ver api/extension/idealista-leads/route.ts) muestra el link y permite
+// cambiarlo; si no lo hay, muestra directamente el buscador para que el
+// admin lo vincule a mano.
+
+function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
+  const router = useRouter();
+  const [isTransitioning, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PropertySearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+    searchTimeout.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/admin/properties/search?q=${encodeURIComponent(query)}`);
+        const json = await res.json().catch(() => ({}));
+        setResults(json.data ?? []);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [query]);
+
+  function handleSelect(propertyId: string) {
+    startTransition(async () => {
+      await setIdealistaLeadMatchedProperty(lead.id, propertyId);
+      setEditing(false);
+      setQuery("");
+      setResults([]);
+      router.refresh();
+    });
+  }
+
+  function handleUnlink() {
+    startTransition(async () => {
+      await setIdealistaLeadMatchedProperty(lead.id, null);
+      router.refresh();
+    });
+  }
+
+  if (!editing) {
+    return (
+      <div className="mt-4 flex items-center gap-2">
+        {lead.matched_property_slug ? (
+          <>
+            <a
+              href={`/es/admin/propiedades/${lead.matched_property_slug}`}
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+            >
+              <ExternalLink size={12} />
+              Ver ficha en el sistema
+              {lead.matched_property_reference ? ` · ${lead.matched_property_reference}` : ""}
+            </a>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              disabled={isTransitioning}
+              className="text-[11px] text-ink/40 underline transition hover:text-ink/70 disabled:opacity-50"
+            >
+              Cambiar
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink/50 underline transition hover:text-teal-800"
+          >
+            <Link2 size={12} />
+            Vincular a una ficha del sistema
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-800">
+          Vincular a una ficha del sistema
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setQuery("");
+            setResults([]);
+          }}
+          className="text-ink/40 hover:text-ink/70"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div className="relative mt-2">
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/35" />
+        <input
+          type="text"
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar por título, dirección o referencia..."
+          className="w-full rounded-lg border border-ink/10 bg-white py-2 pl-8 pr-3 text-[13px] focus:border-teal-400 focus:outline-none"
+        />
+        {searching && (
+          <Loader2 size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-ink/35" />
+        )}
+      </div>
+      {results.length > 0 && (
+        <div className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+          {results.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handleSelect(p.id)}
+              disabled={isTransitioning}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition hover:bg-white disabled:opacity-50"
+            >
+              <span className="min-w-0 truncate text-ink/80">{p.title || p.address || "Sin título"}</span>
+              {p.bc_reference && (
+                <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/55">
+                  {p.bc_reference}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {query.trim() && !searching && results.length === 0 && (
+        <p className="mt-2 text-[11px] text-ink/40">Sin resultados</p>
+      )}
+      {lead.matched_property_slug && (
+        <button
+          type="button"
+          onClick={handleUnlink}
+          disabled={isTransitioning}
+          className="mt-2 text-[11px] text-rose-600 underline transition hover:text-rose-800 disabled:opacity-50"
+        >
+          Quitar vínculo actual
+        </button>
+      )}
     </div>
   );
 }
