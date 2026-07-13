@@ -19,6 +19,10 @@ export async function POST(req: Request) {
     // Usuarios que trabajan en ambos países (ej. algunos asesores/agentes)
     // pueden alternar entre /es/admin y /cl/admin igual que un admin.
     multiCountry?: boolean;
+    // Conjunto de países con acceso ('es' | 'cl'). Si viene, tiene prioridad:
+    // se escribe `countries`, `country` = default (body.country ?? countries[0])
+    // y `multi_country` se deriva (countries.length > 1).
+    countries?: string[];
   };
 
   try {
@@ -37,6 +41,7 @@ export async function POST(req: Request) {
     assignedAdvisorId,
     country,
     multiCountry,
+    countries,
   } = body;
 
   const role = roleInput;
@@ -149,12 +154,35 @@ export async function POST(req: Request) {
     email,
   };
 
-  if (country === "es" || country === "cl") {
-    profileUpdate.country = country;
-  }
-
-  if (staffRoles.includes(role) && multiCountry !== undefined) {
-    profileUpdate.multi_country = !!multiCountry;
+  // Modelo multi-país (nuevo): si viene `countries`, tiene prioridad sobre
+  // country/multiCountry. Se valida ⊆ {'es','cl'} y no vacío.
+  let hasCountries = false;
+  if (countries !== undefined) {
+    const valid =
+      Array.isArray(countries) &&
+      countries.length > 0 &&
+      countries.every((c) => c === "es" || c === "cl");
+    if (!valid) {
+      return Response.json(
+        { error: "countries debe ser un array no vacío de 'es' | 'cl'" },
+        { status: 400 }
+      );
+    }
+    const unique = Array.from(new Set(countries));
+    profileUpdate.countries = unique;
+    // País por defecto/landing: el enviado explícitamente o el primero del set.
+    profileUpdate.country =
+      country === "es" || country === "cl" ? country : unique[0];
+    // multi_country se deriva del tamaño del set (retrocompat).
+    profileUpdate.multi_country = unique.length > 1;
+    hasCountries = true;
+  } else {
+    if (country === "es" || country === "cl") {
+      profileUpdate.country = country;
+    }
+    if (staffRoles.includes(role) && multiCountry !== undefined) {
+      profileUpdate.multi_country = !!multiCountry;
+    }
   }
 
   if (role === "client") {
@@ -165,10 +193,23 @@ export async function POST(req: Request) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: profileError } = await (supabase as any)
+  let { error: profileError } = await (supabase as any)
     .from("profiles")
     .update(profileUpdate)
     .eq("id", userId);
+
+  // Escritura defensiva: si la columna `countries` aún no existe en el VPS, el
+  // UPDATE falla. Reintentamos sin ella conservando country + multi_country
+  // (derivados), para no bloquear la creación del usuario.
+  if (profileError && hasCountries) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    const { countries: _omitCountries, ...fallbackUpdate } = profileUpdate;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ error: profileError } = await (supabase as any)
+      .from("profiles")
+      .update(fallbackUpdate)
+      .eq("id", userId));
+  }
 
   if (profileError) {
     return Response.json(

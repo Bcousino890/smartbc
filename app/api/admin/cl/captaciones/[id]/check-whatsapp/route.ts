@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Gate de autorización: operar sobre una captación requiere captaciones/edit.
+  const gate = await requirePermission("captaciones", "edit");
+  if (!gate.ok) return gate.response;
+
   const { id } = await params;
   try {
     const body = await request.json();

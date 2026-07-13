@@ -1,9 +1,14 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function POST(req: Request) {
   try {
+    // Gate de autorización: guardar una publicación de Idealista requiere publicacion/edit.
+    const gate = await requirePermission("publicacion", "edit");
+    if (!gate.ok) return gate.response;
+
     const body = await req.json();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = createAdminClient() as any;

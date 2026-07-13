@@ -49,6 +49,9 @@ const ROLE_LABEL: Record<InternalUserRole, string> = {
   captadora:    "Captadora",
 };
 
+const COUNTRY_FLAG: Record<string, string> = { es: "🇪🇸", cl: "🇨🇱" };
+const COUNTRY_NAME: Record<string, string> = { es: "España", cl: "Chile" };
+
 type PermValue = true | false | "override_true" | "override_false";
 type PermMatrix = Record<string, Record<string, PermValue>>;
 
@@ -100,6 +103,23 @@ export function PermissionsDrawer({
   const [effective, setEffective] = useState<CellState | null>(null);
   const [defaults, setDefaults] = useState<DefaultState | null>(null);
 
+  // ── Dimensión país ───────────────────────────────────────────────────────
+  // Solo relevante si el usuario objetivo tiene más de un país. En ese caso los
+  // permisos se gestionan por país (GET/POST con ?country= / { country }).
+  const countries = useMemo(() => {
+    const list =
+      user.countries ??
+      (user.multiCountry ? ["es", "cl"] : user.country ? [user.country] : []);
+    return list.filter((c) => c === "es" || c === "cl");
+  }, [user.countries, user.multiCountry, user.country]);
+  const isMultiCountry = countries.length > 1;
+  const [activeCountry, setActiveCountry] = useState<string>(
+    () =>
+      (user.country && (countries as readonly string[]).includes(user.country)
+        ? user.country
+        : countries[0]) ?? "es",
+  );
+
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -109,7 +129,12 @@ export function PermissionsDrawer({
     setLoadState("loading");
     (async () => {
       try {
-        const res = await fetch(`/api/admin/usuarios/${user.id}/permissions`);
+        // Multi-país: se pide el set de overrides del país activo. Un solo país
+        // conserva el comportamiento global (sin parámetro country).
+        const url = isMultiCountry
+          ? `/api/admin/usuarios/${user.id}/permissions?country=${activeCountry}`
+          : `/api/admin/usuarios/${user.id}/permissions`;
+        const res = await fetch(url);
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) {
@@ -131,7 +156,7 @@ export function PermissionsDrawer({
     return () => {
       cancelled = true;
     };
-  }, [user.id]);
+  }, [user.id, activeCountry, isMultiCountry]);
 
   // ── ESC to close + focus management ──────────────────────────────────────────
   useEffect(() => {
@@ -228,7 +253,10 @@ export function PermissionsDrawer({
       const res = await fetch(`/api/admin/usuarios/${user.id}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides }),
+        // Multi-país: se persiste el país activo junto a sus overrides.
+        body: JSON.stringify(
+          isMultiCountry ? { overrides, country: activeCountry } : { overrides },
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -245,7 +273,7 @@ export function PermissionsDrawer({
       setSaveError(err instanceof Error ? err.message : "Error de red");
       setSaveState("error");
     }
-  }, [canEdit, overrides, user.id, onSaved]);
+  }, [canEdit, overrides, user.id, onSaved, isMultiCountry, activeCountry]);
 
   // ── Global master state ──────────────────────────────────────────────────────
   const allOn = useMemo(() => {
@@ -304,6 +332,42 @@ export function PermissionsDrawer({
             <X size={18} strokeWidth={2} />
           </button>
         </div>
+
+        {/* Conmutador de país (solo si el usuario tiene más de un país) */}
+        {isMultiCountry && (
+          <div className="flex items-center gap-2 border-b border-ink/10 bg-cream-50/60 px-5 py-2.5 sm:px-6">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink/50">
+              Permisos por país
+            </span>
+            <div className="ml-auto inline-flex rounded-xl border border-ink/10 bg-white/70 p-0.5">
+              {countries.map((c) => {
+                const active = c === activeCountry;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      if (c !== activeCountry) {
+                        setActiveCountry(c);
+                        setSaveState("idle");
+                      }
+                    }}
+                    aria-pressed={active}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition",
+                      active
+                        ? "bg-ink text-cream-50"
+                        : "text-ink/60 hover:text-ink",
+                    )}
+                  >
+                    <span>{COUNTRY_FLAG[c] ?? c}</span>
+                    <span>{COUNTRY_NAME[c] ?? c}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         {loadState === "loading" && (

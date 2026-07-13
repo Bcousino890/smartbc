@@ -42,6 +42,121 @@ const STATUS_BADGE: Record<InternalUserStatus, string> = {
   suspended: "bg-ink/30",
 };
 
+// Roles asignables desde el modal de edición. `owner`/`admin` se ofrecen solo a
+// quien ya es owner/admin (ver canAssignHighRoles). Incluye `captadora` y
+// `viewer`, que antes faltaban en el <select>.
+const ALL_ASSIGNABLE_ROLES: { value: InternalUserRole; label: string }[] = [
+  { value: "owner", label: "Propietario" },
+  { value: "admin", label: "Administrador" },
+  { value: "advisor", label: "Asesor" },
+  { value: "agent_admin", label: "Agente Admin" },
+  { value: "agent_senior", label: "Agente Senior" },
+  { value: "agent_junior", label: "Agente Junior" },
+  { value: "captadora", label: "Captadora" },
+  { value: "viewer", label: "Visualizador" },
+];
+
+// ─── País ─────────────────────────────────────────────────────────────────
+
+const COUNTRY_OPTIONS: { code: string; label: string; flag: string }[] = [
+  { code: "es", label: "España", flag: "🇪🇸" },
+  { code: "cl", label: "Chile", flag: "🇨🇱" },
+];
+const COUNTRY_FLAG: Record<string, string> = { es: "🇪🇸", cl: "🇨🇱" };
+const COUNTRY_NAME: Record<string, string> = { es: "España", cl: "Chile" };
+
+/**
+ * Multi-select de países (🇪🇸/🇨🇱) + selector de país por defecto (landing).
+ * Sustituye al antiguo checkbox binario "Acceso a los 2 países".
+ * Garantiza al menos un país seleccionado y mantiene el default dentro del set.
+ */
+function CountryPicker({
+  selected,
+  defaultCountry,
+  onChangeSelected,
+  onChangeDefault,
+}: {
+  selected: string[];
+  defaultCountry: string;
+  onChangeSelected: (next: string[]) => void;
+  onChangeDefault: (code: string) => void;
+}) {
+  const toggle = (code: string) => {
+    const has = selected.includes(code);
+    let next: string[];
+    if (has) {
+      // No permitir vaciar: siempre al menos un país.
+      if (selected.length === 1) return;
+      next = selected.filter((c) => c !== code);
+    } else {
+      next = [...selected, code];
+    }
+    onChangeSelected(next);
+    // Si el país por defecto ya no está en el set, reasignar al primero.
+    if (!next.includes(defaultCountry)) {
+      onChangeDefault(next[0]);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+          Países con acceso
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {COUNTRY_OPTIONS.map((opt) => {
+            const active = selected.includes(opt.code);
+            return (
+              <button
+                key={opt.code}
+                type="button"
+                onClick={() => toggle(opt.code)}
+                aria-pressed={active}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition",
+                  active
+                    ? "border-gold/55 bg-gold/10 text-ink"
+                    : "border-ink/10 bg-white text-ink/55 hover:border-ink/20",
+                )}
+              >
+                <span>{opt.flag}</span>
+                <span>{opt.label}</span>
+                {active && <Check size={14} strokeWidth={2.5} className="text-gold" />}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1 text-[11px] text-ink/40">
+          Elige uno o ambos países. El acceso multi-país se activa automáticamente al seleccionar dos.
+        </p>
+      </div>
+
+      {selected.length > 1 && (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+            País por defecto (landing)
+          </label>
+          <select
+            value={defaultCountry}
+            onChange={(e) => onChangeDefault(e.target.value)}
+            className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
+          >
+            {COUNTRY_OPTIONS.filter((o) => selected.includes(o.code)).map((o) => (
+              <option key={o.code} value={o.code}>
+                {o.flag} {o.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-ink/40">
+            Define a qué dashboard (/es/admin o /cl/admin) accede el usuario al iniciar sesión.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Modal crear usuario ──────────────────────────────────────────────────
 
 type ModalType = "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
@@ -70,7 +185,10 @@ function CreateUserModal({
   const [assignedAdvisor, setAssignedAdvisor] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [multiCountry, setMultiCountry] = useState(false);
+  // Multi-país: set de países con acceso + país por defecto (landing).
+  // Inicializa con el país del árbol admin desde el que se crea el usuario.
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([country]);
+  const [defaultCountry, setDefaultCountry] = useState(country);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -82,6 +200,9 @@ function CreateUserModal({
     setErrorMsg("");
 
     try {
+      // El selector multi-país solo aplica a staff no-admin (asesores/agentes).
+      // Admin accede a ambos países por rol; cliente es de un solo país.
+      const showCountryPicker = modalType !== "client" && modalType !== "admin";
       const payload = {
         email,
         firstName,
@@ -91,9 +212,11 @@ function CreateUserModal({
         assignedAdvisorId:
           modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
         password: modalType !== "client" ? password : undefined,
-        // País por defecto = el árbol admin desde el que se creó el usuario.
-        country,
-        multiCountry: modalType !== "client" ? multiCountry : undefined,
+        // País por defecto/landing: el elegido en el picker (si aplica) o el
+        // árbol admin desde el que se creó el usuario.
+        country: showCountryPicker ? defaultCountry : country,
+        // El backend deriva multi_country de countries.length > 1.
+        countries: showCountryPicker ? selectedCountries : undefined,
       };
 
       const res = await fetch("/api/admin/usuarios/create", {
@@ -244,15 +367,12 @@ function CreateUserModal({
             )}
 
             {needsPassword && modalType !== "admin" && (
-              <label className="flex items-center gap-2 text-sm text-ink/75">
-                <input
-                  type="checkbox"
-                  checked={multiCountry}
-                  onChange={(e) => setMultiCountry(e.target.checked)}
-                  className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
-                />
-                Acceso a los 2 países (España y Chile)
-              </label>
+              <CountryPicker
+                selected={selectedCountries}
+                defaultCountry={defaultCountry}
+                onChangeSelected={setSelectedCountries}
+                onChangeDefault={setDefaultCountry}
+              />
             )}
 
             {needsPassword && (
@@ -325,11 +445,12 @@ function CreateUserModal({
 interface EditUserModalProps {
   user: InternalUser;
   defaultCountry: string;
+  currentUserRole: InternalUserRole;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserModalProps) {
+function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSuccess }: EditUserModalProps) {
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
   const [phone, setPhone] = useState("");
@@ -337,13 +458,27 @@ function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserMod
   // Si el perfil aún no tiene país asignado, el default de edición es el
   // árbol admin desde el que se abrió (no un país fijo).
   const [country, setCountry] = useState(user.country ?? defaultCountry);
-  const [multiCountry, setMultiCountry] = useState(user.multiCountry ?? false);
+  // Set de países con acceso: derivado de countries/multiCountry/country.
+  const [selectedCountries, setSelectedCountries] = useState<string[]>(
+    user.countries ??
+      (user.multiCountry ? ["es", "cl"] : [user.country ?? defaultCountry]),
+  );
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   const isClient = user.roleKey === "client";
+
+  // Solo owner/admin pueden asignar los roles de staff más altos (owner/admin).
+  // El rol actual del usuario siempre se muestra para no invalidar el <select>.
+  const canAssignHighRoles = currentUserRole === "owner" || currentUserRole === "admin";
+  const roleOptions = ALL_ASSIGNABLE_ROLES.filter(
+    (r) =>
+      canAssignHighRoles ||
+      (r.value !== "owner" && r.value !== "admin") ||
+      r.value === user.roleKey,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -356,8 +491,10 @@ function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserMod
         firstName,
         lastName,
         role,
+        // País por defecto/landing.
         country,
-        multiCountry: isClient ? undefined : multiCountry,
+        // El backend deriva multi_country de countries.length > 1.
+        countries: isClient ? undefined : selectedCountries,
       };
       if (isClient && phone) payload.phone = phone;
       if (newPassword) payload.password = newPassword;
@@ -466,45 +603,22 @@ function EditUserModal({ user, defaultCountry, onClose, onSuccess }: EditUserMod
                   onChange={(e) => setRole(e.target.value as InternalUserRole)}
                   className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
                 >
-                  <option value="owner">Propietario</option>
-                  <option value="admin">Administrador</option>
-                  <option value="advisor">Asesor</option>
-                  <option value="agent_admin">Agente Admin</option>
-                  <option value="agent_senior">Agente Senior</option>
-                  <option value="agent_junior">Agente Junior</option>
+                  {roleOptions.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
 
             {!isClient && (
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
-                  País
-                </label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
-                >
-                  <option value="es">🇪🇸 España</option>
-                  <option value="cl">🇨🇱 Chile</option>
-                </select>
-                <p className="mt-1 text-[11px] text-ink/40">
-                  Define a qué dashboard (/es/admin o /cl/admin) accede el usuario.
-                </p>
-              </div>
-            )}
-
-            {!isClient && role !== "owner" && role !== "admin" && (
-              <label className="flex items-center gap-2 text-sm text-ink/75">
-                <input
-                  type="checkbox"
-                  checked={multiCountry}
-                  onChange={(e) => setMultiCountry(e.target.checked)}
-                  className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
-                />
-                Acceso a los 2 países (España y Chile)
-              </label>
+              <CountryPicker
+                selected={selectedCountries}
+                defaultCountry={country}
+                onChangeSelected={setSelectedCountries}
+                onChangeDefault={setCountry}
+              />
             )}
 
             <div>
@@ -602,6 +716,19 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
         </span>
       </td>
       <td className="px-3 py-3">
+        <div className="flex flex-wrap items-center gap-1">
+          {(user.countries ?? (user.country ? [user.country] : [])).map((c) => (
+            <span
+              key={c}
+              title={COUNTRY_NAME[c] ?? c}
+              className="inline-flex items-center rounded-md border border-ink/10 bg-white/70 px-1.5 py-0.5 text-[13px] leading-none"
+            >
+              {COUNTRY_FLAG[c] ?? c}
+            </span>
+          ))}
+        </div>
+      </td>
+      <td className="px-3 py-3">
         <span className="flex items-center gap-1.5 text-[12px] text-ink/75">
           <span className={cn("h-2 w-2 rounded-full", STATUS_BADGE[user.status])} />
           {user.status === "active"
@@ -683,6 +810,7 @@ function UsersTable({
           <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
             <th className="px-3 pb-2">Usuario</th>
             <th className="px-3 pb-2">Rol</th>
+            <th className="px-3 pb-2">País(es)</th>
             <th className="px-3 pb-2">Estado</th>
             <th className="px-3 pb-2">Último acceso</th>
             <th className="px-3 pb-2">Se unió</th>
@@ -802,6 +930,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
         <EditUserModal
           user={editUser}
           defaultCountry={country}
+          currentUserRole={currentUserRole}
           onClose={() => setEditUser(null)}
           onSuccess={handleSuccess}
         />

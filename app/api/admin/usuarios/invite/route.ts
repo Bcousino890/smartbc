@@ -1,7 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function POST(req: Request) {
+  // Gate de autorización: invitar usuarios requiere usuarios/create.
+  // (Sin gate, cualquiera podía crear un usuario con rol arbitrario, incl. admin.)
+  const gate = await requirePermission("usuarios", "create");
+  if (!gate.ok) return gate.response;
+
   let body: { email: string; role: string; firstName?: string; lastName?: string };
   try {
     body = await req.json();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requirePermission } from "@/lib/auth/guard";
 
 const STAFF_ROLES = ["owner", "admin", "advisor", "agent_admin", "agent_senior", "agent_junior"];
 
@@ -59,13 +60,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!STAFF_ROLES.includes(profile.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // Gate de autorización: crear eventos de calendario requiere calendario/create.
+  const gate = await requirePermission("calendario", "create");
+  if (!gate.ok) return gate.response;
 
   const supabase = await createClient();
 

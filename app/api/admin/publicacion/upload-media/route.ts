@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { randomUUID } from "crypto";
+import { requirePermission } from "@/lib/auth/guard";
 
 const MAX_FILE_SIZES = {
   photo: 10 * 1024 * 1024, // 10MB
@@ -10,6 +11,10 @@ const MAX_FILE_SIZES = {
 
 export async function POST(req: Request) {
   try {
+    // Gate de autorización: subir media a una publicación requiere publicacion/edit.
+    const gate = await requirePermission("publicacion", "edit");
+    if (!gate.ok) return gate.response;
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const propertyId = formData.get("propertyId") as string;

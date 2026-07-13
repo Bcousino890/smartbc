@@ -29,20 +29,41 @@ export default async function AdminLayout({
   // Redirect a la sección del país que le corresponde al perfil.
   // Los usuarios multi-país (rol admin, owner, o marcados como multi_country
   // porque trabajan en ambos mercados) pueden ver ambos libremente.
-  const canSwitchCountry =
-    profile.role === "admin" ||
-    profile.role === "owner" ||
-    Boolean((profile as { multi_country?: boolean }).multi_country);
+  const isOwnerOrAdmin =
+    profile.role === "admin" || profile.role === "owner";
+
+  // País por defecto/landing del perfil.
   const userCountry = (profile as any).country ?? "es";
-  if (!canSwitchCountry && userCountry !== country) {
+
+  // Conjunto de países con acceso. Lectura defensiva de `profiles.countries`
+  // (migración 0088): si no existe o viene vacía, caemos al país único.
+  // owner/admin acceden a ambos mercados por definición.
+  const rawCountries = (profile as any).countries;
+  let countries: string[] =
+    Array.isArray(rawCountries) && rawCountries.length
+      ? rawCountries
+      : [userCountry];
+  if (isOwnerOrAdmin) {
+    countries = Array.from(new Set([...countries, "es", "cl"]));
+  }
+
+  const canSwitchCountry =
+    isOwnerOrAdmin ||
+    Boolean((profile as { multi_country?: boolean }).multi_country) ||
+    countries.length > 1;
+
+  // Si el país solicitado no está en su conjunto de acceso (y no es owner/admin),
+  // le mandamos a su país por defecto en vez de dejarle ver otro mercado.
+  if (!isOwnerOrAdmin && !countries.includes(country)) {
     redirect(`/${userCountry === "cl" ? "cl" : "es"}/admin`);
   }
 
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
 
   // Permisos efectivos = defaults del rol + excepciones por usuario
-  // (user_permission_overrides). El sidebar oculta los módulos sin "view".
-  const permissions = await getEffectivePermissions(profile.id, profile.role);
+  // (user_permission_overrides) para el PAÍS ACTIVO. El sidebar oculta los
+  // módulos sin "view".
+  const permissions = await getEffectivePermissions(profile.id, profile.role, country);
 
   // Obtener visitas pendientes para el badge del sidebar
   // Wrapped in try-catch: migration 0027 may not be applied yet on the VPS

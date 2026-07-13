@@ -2,9 +2,14 @@ import "server-only";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const nodemailer = require('nodemailer');
 import { renderEmailLayout, escapeHtml } from "@/lib/email/templates";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function POST(req: Request) {
   try {
+    // Gate de autorización: probar la configuración de email requiere configuracion/edit.
+    const gate = await requirePermission("configuracion", "edit");
+    if (!gate.ok) return gate.response;
+
     const { smtpServer, smtpPort, smtpUser, smtpPassword, useSsl, fromEmail, fromName } =
       await req.json();
 

@@ -462,6 +462,10 @@ export type InternalUser = {
   joinedLabel: string;
   country?: string;
   multiCountry?: boolean;
+  // Conjunto de países con acceso ('es' | 'cl'). Reemplaza al flag binario
+  // `multiCountry` (que se deriva: countries.length > 1). `country` sigue
+  // siendo el país por defecto/landing. Opcional para retrocompat.
+  countries?: string[];
 };
 
 // Admin / Configuración

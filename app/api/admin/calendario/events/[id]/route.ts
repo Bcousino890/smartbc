@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/db/server";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Gate de autorización: editar eventos de calendario requiere calendario/edit.
+  const gate = await requirePermission("calendario", "edit");
+  if (!gate.ok) return gate.response;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const supabase = await createClient();
 
   const { id } = await params;
   const body = await request.json();
@@ -74,14 +72,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Gate de autorización: eliminar eventos de calendario requiere calendario/delete.
+  const gate = await requirePermission("calendario", "delete");
+  if (!gate.ok) return gate.response;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const supabase = await createClient();
 
   const { id } = await params;
 

@@ -1,17 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { requireSession } from "@/lib/db/auth-helpers";
-import { createClient } from "@/lib/db/server";
+import { requirePermission } from "@/lib/auth/guard";
 import type { ApplicationCountry, ApplicationOperation } from "@/lib/property-applications/types";
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const auth = await requireSession(supabase);
-    if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
-
-    const isStaff = ["admin", "owner", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(auth.role);
-    if (!isStaff) return Response.json({ error: "Sin permiso" }, { status: 403 });
+    // Gate de autorización: crear solicitudes requiere permiso solicitudes/create.
+    const gate = await requirePermission("solicitudes", "create");
+    if (!gate.ok) return gate.response;
 
     const body = await req.json() as {
       client_id: string;

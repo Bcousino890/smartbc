@@ -255,6 +255,12 @@ export type PermissionOverride = {
   resource: string;
   action: string;
   allowed: boolean;
+  /**
+   * País al que aplica la excepción.
+   *   null | undefined = override global (todos los países del usuario)
+   *   'es' | 'cl'      = override específico de ese país
+   */
+  country?: string | null;
 };
 
 export type EffectivePermissions = Record<
@@ -266,6 +272,9 @@ export type EffectivePermissions = Record<
  * Combina la matriz del rol con las excepciones por usuario guardadas en
  * `user_permission_overrides`. Una excepción siempre gana sobre el default
  * del rol (tanto para conceder como para denegar).
+ *
+ * NOTA: no filtra por país — aplica todos los overrides recibidos en orden.
+ * Para respetar el país activo usa `applyOverridesForCountry`.
  */
 export function applyOverrides(
   role: string,
@@ -284,6 +293,34 @@ export function applyOverrides(
     }
   }
   return effective;
+}
+
+/**
+ * Igual que `applyOverrides` pero respetando el país activo:
+ *   1. aplica primero los overrides globales (country null/undefined)
+ *   2. luego aplica los del país activo, que sobrescriben a los globales
+ *
+ * Si no se pasa `country`, sólo se aplican los overrides globales (los
+ * específicos de país no deben "colarse" fuera de su país). Para el
+ * comportamiento retrocompatible sin filtrar por país, usa `applyOverrides`.
+ */
+export function applyOverridesForCountry(
+  role: string,
+  overrides: PermissionOverride[],
+  country?: string | null,
+): EffectivePermissions {
+  const isGlobal = (o: PermissionOverride) =>
+    o.country === null || o.country === undefined;
+
+  // Globales primero; luego los del país activo (ganan sobre los globales).
+  const ordered = country
+    ? [
+        ...overrides.filter(isGlobal),
+        ...overrides.filter((o) => o.country === country),
+      ]
+    : overrides.filter(isGlobal);
+
+  return applyOverrides(role, ordered);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

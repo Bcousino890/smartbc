@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { createCipheriv, randomBytes, scryptSync } from "crypto";
+import { requirePermission } from "@/lib/auth/guard";
 
 const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
 
@@ -24,6 +25,10 @@ function encryptPassword(text: string): { encrypted: string; iv: string } {
 
 export async function POST(req: Request) {
   try {
+    // Gate de autorización: guardar la configuración de email requiere configuracion/edit.
+    const gate = await requirePermission("configuracion", "edit");
+    if (!gate.ok) return gate.response;
+
     const {
       smtpServer,
       smtpPort,

@@ -257,6 +257,11 @@ export function profileRowToInternalUser(
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     country: row.country ?? "es",
     multiCountry: row.multi_country ?? false,
+    // `countries` puede no existir todavía como columna en el VPS: se lee de
+    // forma defensiva y se deriva de multi_country/country si falta.
+    countries:
+      (row as { countries?: string[] | null }).countries ??
+      (row.multi_country ? ["es", "cl"] : [row.country ?? "es"]),
   };
 }
 
