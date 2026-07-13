@@ -101,6 +101,34 @@ export async function assignIdealistaLead(id: string, advisorId: string | null) 
   return { ok: true };
 }
 
+// Vínculo manual a una ficha del sistema cuando el match automático (por
+// Ref./Cód. de Idealista, ver api/extension/idealista-leads/route.ts) no
+// encontró nada — o para corregirlo si emparejó con la propiedad equivocada.
+export async function setIdealistaLeadMatchedProperty(
+  id: string,
+  propertyId: string | null,
+) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { error } = await supabase
+    .from("idealista_leads")
+    .update({ matched_property_id: propertyId, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    console.error("setIdealistaLeadMatchedProperty error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/es/admin/solicitudes");
+  revalidatePath("/cl/admin/solicitudes");
+  return { ok: true };
+}
+
 export async function updateIdealistaLeadContactStatus(
   id: string,
   contactStatus:
