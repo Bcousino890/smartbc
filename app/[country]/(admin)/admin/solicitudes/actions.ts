@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
+import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 
 export async function markContactRead(id: string) {
   const session = await createClient();
@@ -157,6 +158,42 @@ export async function updateIdealistaLeadContactStatus(
   revalidatePath("/es/admin/solicitudes");
   revalidatePath("/cl/admin/solicitudes");
   return { ok: true };
+}
+
+// Traduce al español el mensaje de un lead (Idealista recibe consultas en
+// inglés, francés, alemán…). Usa el cliente de IA multi-proveedor ya
+// configurado en el panel (ver lib/services/ai/chat.ts). On-demand: solo se
+// llama al pulsar "Traducir" en el modal, no en cada carga del inbox.
+export async function translateLeadMessage(text: string) {
+  const session = await createClient();
+  const auth = await requireStaff(session);
+  if (!auth.ok) return { ok: false as const, error: auth.error };
+
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return { ok: false as const, error: "Mensaje vacío" };
+
+  try {
+    const out = await aiComplete({
+      system:
+        "Eres un traductor profesional. Traduce al español de España el texto que te envíe el usuario. " +
+        "Devuelve ÚNICAMENTE la traducción: sin comillas, sin notas, sin explicaciones y sin el texto original. " +
+        "Conserva los saltos de línea. Si el texto ya está en español, devuélvelo tal cual.",
+      userText: trimmed,
+      maxTokens: 1200,
+    });
+    const translation = (out ?? "").trim();
+    if (!translation) return { ok: false as const, error: "No se pudo traducir" };
+    return { ok: true as const, translation };
+  } catch (err) {
+    if (err instanceof AINotConfiguredError) {
+      return {
+        ok: false as const,
+        error: "IA no configurada. Ve a Configuración → IA para activar la traducción.",
+      };
+    }
+    console.error("translateLeadMessage error:", err);
+    return { ok: false as const, error: "Error al traducir el mensaje" };
+  }
 }
 
 export async function updateVisitStatus(
