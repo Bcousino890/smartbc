@@ -22,7 +22,7 @@ const MAX_BUFFER = 12 * 1024 * 1024; // 12 MB — fichas Idealista pesan ~250KB
 
 export type CurlFetchResult =
   | { ok: true; html: string }
-  | { ok: false; status: number; reason: string };
+  | { ok: false; status: number; reason: string; body?: string };
 
 export type CurlFetchOptions = {
   timeoutSec?: number;
@@ -39,6 +39,9 @@ export type CurlFetchOptions = {
   // Los endpoints AJAX devuelven JSON corto (<200 chars); con esto no se
   // rechaza el body por "HTML vacío".
   allowSmallBody?: boolean;
+  // Devolver el cuerpo también en respuestas 4xx/5xx (en `body`). Necesario
+  // para capturar el reto DataDome, que viene en el cuerpo del 403.
+  returnBodyOnError?: boolean;
 };
 
 async function curlOnce(
@@ -48,6 +51,7 @@ async function curlOnce(
   proxyUrl?: string,
   headers?: string[],
   allowSmallBody?: boolean,
+  returnBodyOnError?: boolean,
 ): Promise<CurlFetchResult> {
   const args = [
     "-sS",
@@ -83,7 +87,9 @@ async function curlOnce(
       10,
     );
     if (code < 200 || code >= 300) {
-      return { ok: false, status: code, reason: `HTTP ${code}` };
+      return returnBodyOnError
+        ? { ok: false, status: code, reason: `HTTP ${code}`, body: html }
+        : { ok: false, status: code, reason: `HTTP ${code}` };
     }
     const minLength = allowSmallBody ? 2 : 200;
     if (!html || html.length < minLength) {
@@ -117,6 +123,7 @@ export async function fetchViaCurl(
       options?.proxyUrl,
       options?.headers,
       options?.allowSmallBody,
+      options?.returnBodyOnError,
     );
     if (last.ok) return last;
     // Reintentar solo en errores transitorios (TLS/red), no en 403/404.

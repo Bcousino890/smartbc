@@ -2,6 +2,10 @@ import "server-only";
 
 export type CapSolverResult = {
   token: string | null;
+  // Cookie DataDome completa a aplicar en las siguientes requests, p.ej.
+  // "datadome=XXXXX". Para DatadomeSliderTask CapSolver la devuelve en
+  // solution.cookie; es lo que de verdad desbloquea el endpoint.
+  cookie?: string | null;
   error?: string;
 };
 
@@ -117,17 +121,22 @@ export async function solveDatadomeWithCapSolver(
       }
 
       if (pollData.status === "ready") {
-        const token = pollData.solution?.token;
-        if (!token) {
-          console.error(`[capsolver] No token in solution: ${JSON.stringify(pollData.solution)}`);
+        // Para DatadomeSliderTask la solución trae `cookie` ("datadome=XXX"),
+        // que es lo que hay que reenviar. Algunas variantes usan `token`.
+        const cookie: string | null = pollData.solution?.cookie ?? null;
+        const token: string | null =
+          pollData.solution?.token ??
+          (cookie ? cookie.replace(/^datadome=/, "").split(";")[0] : null);
+        if (!cookie && !token) {
+          console.error(`[capsolver] No cookie/token in solution: ${JSON.stringify(pollData.solution)}`);
           return {
             token: null,
-            error: "No token in solution",
+            error: "No cookie/token in solution",
           };
         }
 
         console.log(`[capsolver] ✓ CAPTCHA solved (${i * 2}s)`);
-        return { token };
+        return { token, cookie };
       }
 
       if (pollData.status === "failed") {

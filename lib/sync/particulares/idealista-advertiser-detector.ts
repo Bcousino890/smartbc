@@ -410,6 +410,57 @@ export type AjaxPhoneResult = {
   debug?: Array<{ endpoint: string; status: number; bodySnippet: string }>;
 };
 
+// ─── Reto DataDome: extraer la URL del captcha RESOLUBLE (t=fe) ───────────────
+// Cuando un endpoint AJAX (p.ej. /contact-phones) está protegido, DataDome
+// devuelve HTTP 403 con el reto en el cuerpo. Hay dos formatos:
+//   1) JSON: {"url":"https://geo.captcha-delivery.com/captcha/?...&t=fe&..."}
+//   2) HTML interstitial con  var dd={'cid':'...','hsh':'...','t':'fe','s':N,
+//      'e':'...','host':'geo.captcha-delivery.com','cookie':'...'}
+// De ambos reconstruimos la URL del captcha que CapSolver necesita como
+// `captchaUrl`. IMPORTANTE: solo t=fe es resoluble (slider). t=bv es bloqueo
+// duro (IP baneada) y no tiene solución — lo detectamos para no gastar saldo.
+export function extractDatadomeChallengeUrl(
+  body: string,
+): { url: string | null; type: string | null } {
+  if (!body) return { url: null, type: null };
+
+  // Formato 1: JSON {"url":"...geo.captcha-delivery.com..."}
+  const jsonUrl = body.match(/"url"\s*:\s*"(https:\/\/geo\.captcha-delivery\.com\/captcha\/[^"]+)"/);
+  if (jsonUrl?.[1]) {
+    const url = jsonUrl[1].replace(/\\\//g, "/");
+    const t = url.match(/[?&]t=([a-z]+)/)?.[1] ?? null;
+    return { url, type: t };
+  }
+
+  // Formato 2: HTML interstitial con `var dd={...}`.
+  const ddBlock = body.match(/var\s+dd\s*=\s*\{([^}]+)\}/);
+  if (ddBlock?.[1]) {
+    const dd = ddBlock[1];
+    const get = (k: string) => dd.match(new RegExp(`'${k}'\\s*:\\s*'([^']*)'`))?.[1]
+      ?? dd.match(new RegExp(`'${k}'\\s*:\\s*(\\d+)`))?.[1]
+      ?? null;
+    const cid = get("cid");
+    const hsh = get("hsh");
+    const t = get("t");
+    const s = get("s");
+    const e = get("e");
+    const cookie = get("cookie");
+    const host = get("host") ?? "geo.captcha-delivery.com";
+    if (cid && hsh && t) {
+      const url =
+        `https://${host}/captcha/?initialCid=${encodeURIComponent(cid)}` +
+        `&hash=${encodeURIComponent(hsh)}` +
+        (cookie ? `&cid=${encodeURIComponent(cookie)}` : "") +
+        `&t=${t}` +
+        (s ? `&s=${s}` : "") +
+        (e ? `&e=${encodeURIComponent(e)}` : "");
+      return { url, type: t };
+    }
+  }
+
+  return { url: null, type: null };
+}
+
 // ─── DataDome pre-auth ───────────────────────────────────────────────────────
 // When the browser loads an Idealista listing, DataDome's JS snippet POSTs
 // to https://dd.idealista.com/is/ with browser fingerprint data and receives:
@@ -694,6 +745,10 @@ export async function fetchIdealistaPhoneViaAjax(
     /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
   ];
 
+  // Guardamos el cuerpo del reto DataDome de /contact-phones (403) para, si
+  // ningún endpoint dio el teléfono, resolverlo con CapSolver y reintentar.
+  let challengeBody: string | null = null;
+
   for (let i = 0; i < responses.length; i++) {
     const res = responses[i];
     const endpoint = endpoints[i];
@@ -706,6 +761,12 @@ export async function fetchIdealistaPhoneViaAjax(
     }
 
     console.log(`[idealista-phone-ajax] ${endpoint.split("/").slice(-2).join("/")} → HTTP ${res.status}`);
+
+    // Capturar el reto DataDome de contact-phones (aunque sea 403/no-ok) para
+    // resolverlo después con CapSolver.
+    if (endpoint.includes("contact-phones") && res.body && res.body.includes("captcha-delivery.com")) {
+      challengeBody = res.body;
+    }
 
     if (!res.ok || !res.body) continue;
 
@@ -812,6 +873,122 @@ export async function fetchIdealistaPhoneViaAjax(
     } catch (commentErr) {
       const msg = commentErr instanceof Error ? commentErr.message : String(commentErr);
       if (debug) debug.push({ endpoint: "comment.ajax-error", status: 0, bodySnippet: msg });
+    }
+  }
+
+  // Señaliza que DataDome dio bloqueo DURO (t=bv): la IP del proxy está baneada
+  // y no hay slider que resolver. En ese caso Playwright (misma IP) tampoco
+  // podrá — lo saltamos para no perder ~60s por nada.
+  let hardBlocked = false;
+
+  // ─── Step 1c: resolver el reto DataDome de /contact-phones con CapSolver ─────
+  // Este es el camino que DE VERDAD funciona (verificado contra Idealista):
+  //   1. /contact-phones responde 403 con el reto en el cuerpo. Para el endpoint
+  //      AJAX el reto es t=fe (SLIDER RESOLUBLE), a diferencia de la navegación
+  //      de página completa que da t=bv (bloqueo duro irresoluble).
+  //   2. Extraemos la URL del captcha (geo.captcha-delivery.com/captcha/?...t=fe)
+  //      del cuerpo del 403.
+  //   3. CapSolver la resuelve usando el MISMO proxy sticky (misma IP) → devuelve
+  //      la cookie datadome válida para esa IP.
+  //   4. Reintentamos /contact-phones con esa cookie desde la misma IP → teléfono.
+  {
+    // Si no capturamos el reto en el cookie-jar, pedimos /contact-phones ahora
+    // (con el mismo proxy sticky) para obtenerlo fresco.
+    let body403 = challengeBody;
+    if (!body403) {
+      try {
+        const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+        const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
+          proxyUrl: phoneProxyUrl,
+          allowSmallBody: true,
+          returnBodyOnError: true,
+          timeoutSec: 15,
+          headers: [
+            "X-Requested-With: XMLHttpRequest",
+            "Accept: application/json, text/javascript, */*; q=0.01",
+            `Referer: ${pageUrl}`,
+            "Accept-Language: es-ES,es;q=0.9",
+          ],
+        });
+        // El reto DataDome viene en el cuerpo del 403 (returnBodyOnError) o en
+        // el 200 (poco común). Tomamos cualquiera de los dos.
+        body403 = ("html" in cpRes ? cpRes.html : cpRes.body) ?? null;
+      } catch { /* seguimos */ }
+    }
+
+    const challenge = body403 ? extractDatadomeChallengeUrl(body403) : { url: null, type: null };
+    console.log(`[idealista-phone-ajax] Reto DataDome: type=${challenge.type ?? "?"} url=${challenge.url ? "sí" : "no"}`);
+    if (debug) {
+      debug.push({ endpoint: "datadome-challenge", status: 0, bodySnippet: `type=${challenge.type ?? "none"} url=${challenge.url ? challenge.url.slice(0, 60) : "none"}` });
+    }
+
+    if (challenge.url && challenge.type === "fe") {
+      // t=fe → slider resoluble. Llamar a CapSolver con el MISMO proxy sticky.
+      try {
+        const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
+        console.log(`[idealista-phone-ajax] Resolviendo slider DataDome con CapSolver...`);
+        const solved = await solveDatadomeWithCapSolver(challenge.url, BROWSER_UA_FOR_PAGE, {
+          proxyUrl: phoneProxyUrl,
+          websiteURL: pageUrl,
+        });
+        const ddCookieValue = solved.cookie
+          ? (solved.cookie.startsWith("datadome=") ? solved.cookie.split(";")[0] : `datadome=${solved.cookie.split(";")[0]}`)
+          : (solved.token ? `datadome=${solved.token}` : null);
+
+        if (ddCookieValue) {
+          console.log(`[idealista-phone-ajax] CapSolver resolvió, reintentando contact-phones con cookie...`);
+          const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+          const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
+            proxyUrl: phoneProxyUrl,
+            allowSmallBody: true,
+            returnBodyOnError: true,
+            timeoutSec: 15,
+            headers: [
+              `Cookie: ${ddCookieValue}`,
+              "X-Requested-With: XMLHttpRequest",
+              "Accept: application/json, text/javascript, */*; q=0.01",
+              `Referer: ${pageUrl}`,
+              "Accept-Language: es-ES,es;q=0.9",
+            ],
+          });
+          const solvedBody = "html" in cpRes ? cpRes.html : cpRes.body;
+          if (solvedBody) {
+            const structured = parseStructuredAjaxPhone(solvedBody, adId.slice(-9));
+            let phone = structured.phone;
+            let contact_name = structured.contact_name;
+            if (!phone) {
+              for (const pattern of phonePatterns) {
+                const m = solvedBody.match(pattern);
+                if (m?.[1]) { phone = acceptPhoneCandidate(m[1], adId.slice(-9)); if (phone) break; }
+              }
+              contact_name = solvedBody.match(/"contactName"\s*:\s*"([^"]{2,60})"/)?.[1]?.trim() ?? null;
+            }
+            if (phone) {
+              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía CapSolver+contact-phones: ${phone}`);
+              if (debug) debug.push({ endpoint: "capsolver-contact-phones", status: 200, bodySnippet: `phone=${phone}` });
+              return { phone, phone_confidence: "high", contact_name, debug };
+            }
+            if (debug) debug.push({ endpoint: "capsolver-contact-phones", status: 200, bodySnippet: `sin teléfono: ${solvedBody.slice(0, 120)}` });
+            console.log(`[idealista-phone-ajax] CapSolver OK pero contact-phones sin teléfono: ${solvedBody.slice(0, 120)}`);
+          } else if (debug) {
+            debug.push({ endpoint: "capsolver-contact-phones", status: 0, bodySnippet: "reintento sin cuerpo" });
+          }
+        } else {
+          console.log(`[idealista-phone-ajax] CapSolver no devolvió cookie: ${solved.error}`);
+          if (debug) debug.push({ endpoint: "capsolver-error", status: 0, bodySnippet: solved.error ?? "sin cookie" });
+        }
+      } catch (csErr) {
+        const msg = csErr instanceof Error ? csErr.message : String(csErr);
+        console.log(`[idealista-phone-ajax] Error CapSolver slider: ${msg}`);
+        if (debug) debug.push({ endpoint: "capsolver-error", status: 0, bodySnippet: msg });
+      }
+    } else if (challenge.type === "bv") {
+      // Bloqueo duro: la IP está baneada por DataDome. No gastar saldo de
+      // CapSolver (no hay slider). Señal clara de que el pool de proxy está
+      // quemado y hay que rotar/cambiar de proveedor.
+      hardBlocked = true;
+      console.log(`[idealista-phone-ajax] ⛔ DataDome bloqueo DURO (t=bv): IP del proxy baneada`);
+      if (debug) debug.push({ endpoint: "datadome-hard-block", status: 0, bodySnippet: "t=bv — IP del proxy baneada, rotar proxy" });
     }
   }
 
@@ -926,6 +1103,13 @@ export async function fetchIdealistaPhoneViaAjax(
     if (debug) {
       debug.push({ endpoint: "datadome-skipped", status: 0, bodySnippet: "no html" });
     }
+  }
+
+  // Si ya sabemos que la IP está en bloqueo duro (t=bv), Playwright con la misma
+  // IP tampoco pasará: no malgastar ~60s de navegador headless.
+  if (hardBlocked) {
+    console.log(`[idealista-phone-ajax] ✗ Bloqueo duro DataDome — saltando Playwright (misma IP baneada)`);
+    return { phone: null, phone_confidence: null, contact_name: null, debug };
   }
 
   console.log(`[idealista-phone-ajax] DataDome pre-auth fallido. Intentando Playwright...`);
