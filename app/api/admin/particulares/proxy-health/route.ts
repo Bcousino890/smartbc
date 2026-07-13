@@ -7,7 +7,9 @@ import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { extractDatadomeChallengeUrl } from "@/lib/sync/particulares/idealista-advertiser-detector";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 5 muestras × ~2 llamadas curl (~15-20s c/u en el peor caso) pueden acercarse
+// a 3-4 min; damos margen amplio (?samples=N permite ajustar desde el caller).
+export const maxDuration = 280;
 
 const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 const BROWSER_UA =
@@ -98,58 +100,81 @@ export async function GET(request: Request) {
   }
   out.proxy = proxyInfo;
 
-  // ── 3. DataDome: veredicto sobre contact-phones con el proxy sticky ──────────
+  // ── 3. DataDome: veredicto sobre contact-phones, MULTI-MUESTRA ───────────────
+  // Una sola llamada mide una sola IP del pool rotativo — puede ser buena o
+  // mala suerte. Probamos varias IPs sticky distintas (por defecto 5, o
+  // ?samples=N) para dar un % REAL de IPs resolubles (t=fe) vs baneadas (t=bv)
+  // del pool en este momento, en vez de una foto de una sola tirada de dado.
+  const samples = Math.min(10, Math.max(1, Number.parseInt(new URL(request.url).searchParams.get("samples") ?? "5", 10) || 5));
+  const ddSamples: Array<{ ip_session: string; challenge_type: string | null }> = [];
   try {
     const residential = await getResidentialProxyUrl();
-    const sticky = residential ? withStickySession(residential, `health-dd-${Date.now()}`) : undefined;
     const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
 
-    // Cargar la ficha (UA WhatsApp pasa DataDome) para sembrar cookies/IP.
-    await fetchViaCurl(pageUrl, WHATSAPP_UA, { proxyUrl: sticky, timeoutSec: 20 });
+    for (let i = 0; i < samples; i++) {
+      const sessionId = `health-dd-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+      const sticky = residential ? withStickySession(residential, sessionId) : undefined;
 
-    const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
-    const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA, {
-      proxyUrl: sticky,
-      allowSmallBody: true,
-      returnBodyOnError: true,
-      timeoutSec: 15,
-      headers: [
-        "X-Requested-With: XMLHttpRequest",
-        "Accept: application/json, text/javascript, */*; q=0.01",
-        `Referer: ${pageUrl}`,
-      ],
-    });
-    const body = "html" in cpRes ? cpRes.html : (cpRes.body ?? "");
-    const challenge = extractDatadomeChallengeUrl(body);
+      // Cargar la ficha (UA WhatsApp pasa DataDome) para sembrar cookies/IP.
+      await fetchViaCurl(pageUrl, WHATSAPP_UA, { proxyUrl: sticky, timeoutSec: 20 });
+
+      const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+      const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA, {
+        proxyUrl: sticky,
+        allowSmallBody: true,
+        returnBodyOnError: true,
+        timeoutSec: 15,
+        headers: [
+          "X-Requested-With: XMLHttpRequest",
+          "Accept: application/json, text/javascript, */*; q=0.01",
+          `Referer: ${pageUrl}`,
+        ],
+      });
+      const body = "html" in cpRes ? cpRes.html : (cpRes.body ?? "");
+      const challenge = extractDatadomeChallengeUrl(body);
+      ddSamples.push({ ip_session: sessionId, challenge_type: challenge.type });
+    }
+
+    const feCount = ddSamples.filter((s) => s.challenge_type === "fe").length;
+    const bvCount = ddSamples.filter((s) => s.challenge_type === "bv").length;
+    const otherCount = ddSamples.length - feCount - bvCount;
+    const fePercent = Math.round((feCount / ddSamples.length) * 100);
+
     out.datadome = {
-      status: "html" in cpRes ? 200 : cpRes.status,
-      challenge_type: challenge.type ?? "ninguno",
+      samples: ddSamples.length,
+      resoluble_fe: feCount,
+      bloqueado_bv: bvCount,
+      otro: otherCount,
+      porcentaje_resoluble: `${fePercent}%`,
+      detalle: ddSamples.map((s) => s.challenge_type ?? "ninguno"),
       verdict:
-        challenge.type === "fe"
-          ? "✅ slider RESOLUBLE por CapSolver — la IP no está baneada"
-          : challenge.type === "bv"
-            ? "⛔ bloqueo DURO (IP del proxy baneada por DataDome) — rota/cambia de proxy"
-            : "phone endpoint respondió sin reto (posible teléfono directo o auth)",
-      captcha_url_found: !!challenge.url,
+        fePercent >= 50
+          ? `✅ ${fePercent}% de las IPs del pool son resolubles — el pipeline debería estar sacando teléfonos con normalidad`
+          : fePercent > 0
+            ? `⚠️ Solo ${fePercent}% resolubles — el pool tiene una fracción alta de IPs baneadas; el sistema de reintentos (3 IPs por anuncio) compensa parcialmente, pero considera pedir a Smartproxy un pool más limpio`
+            : `⛔ 0% resolubles en esta muestra — pool muy degradado ahora mismo, o falso negativo transitorio; reintenta en unos minutos`,
     };
   } catch (err) {
-    out.datadome = { error: err instanceof Error ? err.message : String(err) };
+    out.datadome = { error: err instanceof Error ? err.message : String(err), samples_completed: ddSamples.length };
   }
 
   // ── Resumen ──────────────────────────────────────────────────────────────────
   const cs = out.capsolver as Record<string, unknown>;
   const px = out.proxy as Record<string, unknown>;
   const dd = out.datadome as Record<string, unknown>;
+  const resolubleFe = typeof dd?.resoluble_fe === "number" ? dd.resoluble_fe : 0;
+  const datadomeUsable = resolubleFe > 0; // basta con que ALGUNA IP del pool sea resoluble: el sistema reintenta con IPs nuevas hasta encontrar una
   out.resumen = {
     capsolver_ok: cs?.ok === true,
     proxy_conecta: px?.connects === true,
     proxy_sticky_ok: px?.sticky_supported === true,
-    datadome_resoluble: dd?.challenge_type === "fe",
+    datadome_porcentaje_resoluble: dd?.porcentaje_resoluble ?? null,
+    datadome_usable: datadomeUsable,
     todo_ok:
       cs?.ok === true &&
       px?.connects === true &&
       px?.sticky_supported === true &&
-      dd?.challenge_type === "fe",
+      datadomeUsable,
   };
 
   return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });

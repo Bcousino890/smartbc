@@ -876,9 +876,10 @@ export async function fetchIdealistaPhoneViaAjax(
     }
   }
 
-  // Señaliza que DataDome dio bloqueo DURO (t=bv): la IP del proxy está baneada
-  // y no hay slider que resolver. En ese caso Playwright (misma IP) tampoco
-  // podrá — lo saltamos para no perder ~60s por nada.
+  // Señaliza que DataDome dio bloqueo DURO (t=bv) en TODOS los intentos: la IP
+  // del proxy está baneada y no hay slider que resolver. En ese caso Playwright
+  // (que reintentaría con otra IP sticky de todos modos) sigue siendo válido,
+  // así que solo saltamos si agotamos los reintentos.
   let hardBlocked = false;
 
   // ─── Step 1c: resolver el reto DataDome de /contact-phones con CapSolver ─────
@@ -891,15 +892,35 @@ export async function fetchIdealistaPhoneViaAjax(
   //   3. CapSolver la resuelve usando el MISMO proxy sticky (misma IP) → devuelve
   //      la cookie datadome válida para esa IP.
   //   4. Reintentamos /contact-phones con esa cookie desde la misma IP → teléfono.
-  {
-    // Si no capturamos el reto en el cookie-jar, pedimos /contact-phones ahora
-    // (con el mismo proxy sticky) para obtenerlo fresco.
-    let body403 = challengeBody;
+  //
+  // El pool de proxy residencial es COMPARTIDO: una fracción de sus IPs puede
+  // estar marcada por DataDome (bloqueo duro t=bv) en un momento dado — esto
+  // es esperable y confirmado por el propio proveedor (Smartproxy no garantiza
+  // IPs "limpias" en un pool residencial rotativo). Por eso NO nos rendimos al
+  // primer t=bv: reintentamos con una IP sticky NUEVA (barato: solo llamadas
+  // curl, sin gastar CapSolver) hasta CHALLENGE_RETRIES veces antes de caer al
+  // fallback de Playwright.
+  const CHALLENGE_RETRIES = 3;
+  const { withStickySessionForce } = await import("@/lib/sync/proxy-config");
+  for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
+    // A partir del segundo intento, generar una IP sticky nueva (la primera
+    // reutiliza la que ya cargó la página/cookie-jar más arriba). Se FUERZA
+    // el reemplazo (withStickySessionForce) porque phoneProxyUrl ya trae una
+    // sesión anclada del intento 1; withStickySession normal sería no-op.
+    let attemptProxyUrl = phoneProxyUrl;
+    if (attempt > 0 && phoneProxyUrl) {
+      const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
+    }
+
+    // Si no capturamos el reto en el cookie-jar (solo aplica al intento 0), o
+    // es un reintento con IP nueva, pedimos /contact-phones fresco.
+    let body403 = attempt === 0 ? challengeBody : null;
     if (!body403) {
       try {
         const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
         const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
-          proxyUrl: phoneProxyUrl,
+          proxyUrl: attemptProxyUrl,
           allowSmallBody: true,
           returnBodyOnError: true,
           timeoutSec: 15,
@@ -917,18 +938,20 @@ export async function fetchIdealistaPhoneViaAjax(
     }
 
     const challenge = body403 ? extractDatadomeChallengeUrl(body403) : { url: null, type: null };
-    console.log(`[idealista-phone-ajax] Reto DataDome: type=${challenge.type ?? "?"} url=${challenge.url ? "sí" : "no"}`);
+    console.log(`[idealista-phone-ajax] Intento ${attempt + 1}/${CHALLENGE_RETRIES} — reto DataDome: type=${challenge.type ?? "?"} url=${challenge.url ? "sí" : "no"}`);
     if (debug) {
-      debug.push({ endpoint: "datadome-challenge", status: 0, bodySnippet: `type=${challenge.type ?? "none"} url=${challenge.url ? challenge.url.slice(0, 60) : "none"}` });
+      debug.push({ endpoint: `datadome-challenge-attempt${attempt + 1}`, status: 0, bodySnippet: `type=${challenge.type ?? "none"} url=${challenge.url ? challenge.url.slice(0, 60) : "none"}` });
     }
 
     if (challenge.url && challenge.type === "fe") {
-      // t=fe → slider resoluble. Llamar a CapSolver con el MISMO proxy sticky.
+      // t=fe → slider resoluble. Llamar a CapSolver con el MISMO proxy sticky
+      // de este intento.
+      hardBlocked = false;
       try {
         const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
         console.log(`[idealista-phone-ajax] Resolviendo slider DataDome con CapSolver...`);
         const solved = await solveDatadomeWithCapSolver(challenge.url, BROWSER_UA_FOR_PAGE, {
-          proxyUrl: phoneProxyUrl,
+          proxyUrl: attemptProxyUrl,
           websiteURL: pageUrl,
         });
         const ddCookieValue = solved.cookie
@@ -939,7 +962,7 @@ export async function fetchIdealistaPhoneViaAjax(
           console.log(`[idealista-phone-ajax] CapSolver resolvió, reintentando contact-phones con cookie...`);
           const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
           const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
-            proxyUrl: phoneProxyUrl,
+            proxyUrl: attemptProxyUrl,
             allowSmallBody: true,
             returnBodyOnError: true,
             timeoutSec: 15,
@@ -964,12 +987,16 @@ export async function fetchIdealistaPhoneViaAjax(
               contact_name = solvedBody.match(/"contactName"\s*:\s*"([^"]{2,60})"/)?.[1]?.trim() ?? null;
             }
             if (phone) {
-              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía CapSolver+contact-phones: ${phone}`);
+              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía CapSolver+contact-phones (intento ${attempt + 1}): ${phone}`);
               if (debug) debug.push({ endpoint: "capsolver-contact-phones", status: 200, bodySnippet: `phone=${phone}` });
               return { phone, phone_confidence: "high", contact_name, debug };
             }
+            // CapSolver resolvió el slider pero el anuncio de verdad no tiene
+            // teléfono (chat-only real) — no reintentar más, no es un problema
+            // de IP.
             if (debug) debug.push({ endpoint: "capsolver-contact-phones", status: 200, bodySnippet: `sin teléfono: ${solvedBody.slice(0, 120)}` });
             console.log(`[idealista-phone-ajax] CapSolver OK pero contact-phones sin teléfono: ${solvedBody.slice(0, 120)}`);
+            break;
           } else if (debug) {
             debug.push({ endpoint: "capsolver-contact-phones", status: 0, bodySnippet: "reintento sin cuerpo" });
           }
@@ -982,13 +1009,20 @@ export async function fetchIdealistaPhoneViaAjax(
         console.log(`[idealista-phone-ajax] Error CapSolver slider: ${msg}`);
         if (debug) debug.push({ endpoint: "capsolver-error", status: 0, bodySnippet: msg });
       }
+      // t=fe pero sin cookie/teléfono tras CapSolver: no es un problema de IP
+      // baneada, así que no tiene sentido rotar IP — salir del bucle.
+      break;
     } else if (challenge.type === "bv") {
-      // Bloqueo duro: la IP está baneada por DataDome. No gastar saldo de
-      // CapSolver (no hay slider). Señal clara de que el pool de proxy está
-      // quemado y hay que rotar/cambiar de proveedor.
+      // Bloqueo duro: esta IP concreta está baneada por DataDome. Reintentar
+      // con una IP sticky nueva (barato) en la siguiente vuelta del bucle.
       hardBlocked = true;
-      console.log(`[idealista-phone-ajax] ⛔ DataDome bloqueo DURO (t=bv): IP del proxy baneada`);
-      if (debug) debug.push({ endpoint: "datadome-hard-block", status: 0, bodySnippet: "t=bv — IP del proxy baneada, rotar proxy" });
+      console.log(`[idealista-phone-ajax] ⛔ Intento ${attempt + 1}: bloqueo DURO (t=bv) — IP baneada, rotando a IP nueva`);
+      if (debug) debug.push({ endpoint: `datadome-hard-block-attempt${attempt + 1}`, status: 0, bodySnippet: "t=bv — rotando IP" });
+      continue;
+    } else {
+      // Ni t=fe ni t=bv: no hay reto (posible error de red) — no rotar IP,
+      // salir para no gastar reintentos en algo que no es un problema de IP.
+      break;
     }
   }
 

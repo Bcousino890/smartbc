@@ -106,17 +106,42 @@ export function withStickySession(
     const u = new URL(proxyUrl);
     if (!u.username) return proxyUrl; // sin auth, no podemos anclar sesión
     if (/-session-/.test(u.username)) return proxyUrl; // ya trae sesión
-    // Sanitizar sessionId a alfanumérico (los proveedores rechazan símbolos).
-    const safeId = sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 32) || "default";
-    const newUsername = `${u.username}-session-${safeId}`;
-    // Reconstrucción manual (no u.toString()): WHATWG URL añade una barra "/"
-    // final cuando no hay pathname, y no queremos alterar el formato original
-    // de la URL de proxy que curl/Playwright reciben tal cual.
-    const auth = u.password ? `${newUsername}:${u.password}` : newUsername;
-    return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
+    return buildStickyUrl(u, sessionId);
   } catch {
     return proxyUrl;
   }
+}
+
+/**
+ * Variante que SIEMPRE reemplaza el sessionId, aunque la URL ya traiga uno
+ * anclado de una llamada anterior (withStickySession es no-op en ese caso).
+ * Necesaria para reintentos: cuando una IP sticky da bloqueo duro (t=bv) hay
+ * que rotar a una IP NUEVA, no seguir anclado a la misma IP quemada.
+ */
+export function withStickySessionForce(
+  proxyUrl: string,
+  sessionId: string,
+): string {
+  try {
+    const u = new URL(proxyUrl);
+    if (!u.username) return proxyUrl;
+    // Quitar cualquier `-session-<id>` previo del username antes de anclar el nuevo.
+    u.username = u.username.replace(/-session-[a-zA-Z0-9]+$/, "");
+    return buildStickyUrl(u, sessionId);
+  } catch {
+    return proxyUrl;
+  }
+}
+
+function buildStickyUrl(u: URL, sessionId: string): string {
+  // Sanitizar sessionId a alfanumérico (los proveedores rechazan símbolos).
+  const safeId = sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 32) || "default";
+  const newUsername = `${u.username}-session-${safeId}`;
+  // Reconstrucción manual (no u.toString()): WHATWG URL añade una barra "/"
+  // final cuando no hay pathname, y no queremos alterar el formato original
+  // de la URL de proxy que curl/Playwright reciben tal cual.
+  const auth = u.password ? `${newUsername}:${u.password}` : newUsername;
+  return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
 }
 
 /**
