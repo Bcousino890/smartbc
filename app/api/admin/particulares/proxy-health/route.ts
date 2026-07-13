@@ -91,6 +91,55 @@ export async function GET(request: Request) {
         proxyInfo.connects = false;
         proxyInfo.connect_error = e instanceof Error ? e.message : String(e);
       }
+
+      // ── Verificación REAL de sticky session ────────────────────────────────
+      // `sticky_supported` de arriba solo confirma que la URL tiene username
+      // (formato correcto); NO confirma que el proveedor de verdad RECONOZCA
+      // el modificador `-session-<id>` que le añadimos. Un proveedor que lo
+      // ignore silenciosamente seguiría conectando bien (falso positivo), pero
+      // rotaría IP en cada llamada igualmente — reintroduciendo el bug de
+      // cookie/IP-mismatch que todo este trabajo corrige.
+      // Prueba de control: 2 llamadas con la MISMA sesión → misma IP esperada;
+      // 2 llamadas con sesión DISTINTA → IP distinta esperada (si el pool
+      // rota de verdad). Si "misma sesión" da la MISMA IP en ambas llamadas,
+      // el proveedor SÍ honra el modificador de sesión.
+      if (proxyInfo.connects) {
+        try {
+          const getIp = async (proxyUrl: string): Promise<string | null> => {
+            const r = await fetchViaCurl("https://api.ipify.org?format=json", BROWSER_UA, {
+              proxyUrl,
+              allowSmallBody: true,
+              timeoutSec: 15,
+            });
+            if (!r.ok) return null;
+            return (r.html.match(/"ip"\s*:\s*"([^"]+)"/) ?? [])[1] ?? null;
+          };
+
+          const sessionA = `stickytest-${Date.now().toString(36)}-a`;
+          const proxyA = withStickySession(residential, sessionA);
+          const ipA1 = await getIp(proxyA);
+          const ipA2 = await getIp(proxyA); // misma sesión, misma URL → ¿misma IP?
+
+          const sessionB = `stickytest-${Date.now().toString(36)}-b-${Math.random().toString(36).slice(2, 6)}`;
+          const proxyB = withStickySession(residential, sessionB);
+          const ipB1 = await getIp(proxyB); // sesión distinta → ¿IP distinta?
+
+          const stickyHonored = !!ipA1 && !!ipA2 && ipA1 === ipA2;
+          proxyInfo.sticky_verificado = {
+            misma_sesion_ip1: ipA1,
+            misma_sesion_ip2: ipA2,
+            sesion_distinta_ip: ipB1,
+            honra_sticky: stickyHonored,
+            veredicto: stickyHonored
+              ? "✅ el proveedor SÍ ancla la IP con el modificador -session-<id> — el fix de sticky session funciona de verdad"
+              : ipA1 && ipA2
+                ? "⛔ CRÍTICO: misma sesión dio IPs DISTINTAS — el proveedor IGNORA el modificador -session-<id> (formato de username no reconocido). El fix de sticky session es un no-op silencioso; hay que confirmar con soporte el separador exacto para ESTE producto/cuenta."
+                : "⚠️ no se pudo verificar (fallo de conexión en alguna de las llamadas)",
+          };
+        } catch (e) {
+          proxyInfo.sticky_verificado = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
     } else {
       proxyInfo.format_ok = false;
       proxyInfo.note = "No hay proxy residencial configurado (app_settings['scraping.proxyUrl'])";
@@ -164,16 +213,21 @@ export async function GET(request: Request) {
   const dd = out.datadome as Record<string, unknown>;
   const resolubleFe = typeof dd?.resoluble_fe === "number" ? dd.resoluble_fe : 0;
   const datadomeUsable = resolubleFe > 0; // basta con que ALGUNA IP del pool sea resoluble: el sistema reintenta con IPs nuevas hasta encontrar una
+  const stickyCheck = px?.sticky_verificado as Record<string, unknown> | undefined;
+  // La verificación REAL (misma sesión → misma IP) es lo que de verdad importa;
+  // `sticky_supported` solo confirma que la URL tiene el formato correcto.
+  const stickyReallyWorks = stickyCheck?.honra_sticky === true;
   out.resumen = {
     capsolver_ok: cs?.ok === true,
     proxy_conecta: px?.connects === true,
-    proxy_sticky_ok: px?.sticky_supported === true,
+    proxy_sticky_formato_ok: px?.sticky_supported === true,
+    proxy_sticky_REALMENTE_funciona: stickyReallyWorks,
     datadome_porcentaje_resoluble: dd?.porcentaje_resoluble ?? null,
     datadome_usable: datadomeUsable,
     todo_ok:
       cs?.ok === true &&
       px?.connects === true &&
-      px?.sticky_supported === true &&
+      stickyReallyWorks &&
       datadomeUsable,
   };
 
