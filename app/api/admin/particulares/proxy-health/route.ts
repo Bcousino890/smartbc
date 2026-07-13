@@ -1,13 +1,17 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { getResidentialProxyUrl, getProxyUrl, withStickySession } from "@/lib/sync/proxy-config";
+import {
+  getResidentialProxyUrl,
+  getFreshResidentialProxyUrl,
+  withStickySession,
+} from "@/lib/sync/proxy-config";
 import { getCapSolverApiKey } from "@/lib/sync/particulares/capsolver-config";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { extractDatadomeChallengeUrl } from "@/lib/sync/particulares/idealista-advertiser-detector";
 
 export const runtime = "nodejs";
-// 5 muestras × ~2 llamadas curl (~15-20s c/u en el peor caso) pueden acercarse
+// N muestras × ~2 llamadas curl (~15-20s c/u en el peor caso) pueden acercarse
 // a 3-4 min; damos margen amplio (?samples=N permite ajustar desde el caller).
 export const maxDuration = 280;
 
@@ -15,17 +19,30 @@ const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-// Diagnóstico de salud del pipeline de teléfonos: confirma de una sola llamada
-// si el proxy residencial y CapSolver están bien configurados y operativos, y
-// qué veredicto da DataDome (slider resoluble t=fe vs bloqueo duro t=bv) sobre
-// la IP del proxy en ese momento. Solo Owner/Admin.
+async function getIp(proxyUrl: string): Promise<string | null> {
+  const r = await fetchViaCurl("https://api.ipify.org?format=json", BROWSER_UA, {
+    proxyUrl,
+    allowSmallBody: true,
+    timeoutSec: 15,
+  });
+  if (!r.ok) return null;
+  return (r.html.match(/"ip"\s*:\s*"([^"]+)"/) ?? [])[1] ?? null;
+}
+
+// Diagnóstico de salud del pipeline de teléfonos: confirma si CapSolver y el
+// proxy residencial (Extracción API — método preferido, sticky oficial vía
+// `life`; y gateway estático — fallback, sticky vía username) están bien
+// configurados y qué veredicto da DataDome sobre las IPs del pool AHORA
+// MISMO (slider resoluble t=fe vs bloqueo duro t=bv). Solo Owner/Admin.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile().catch(() => null);
   if (!profile || !["owner", "admin"].includes(profile.role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const adId = new URL(request.url).searchParams.get("adId") || "102383577";
+  const url = new URL(request.url);
+  const adId = url.searchParams.get("adId") || "102383577";
+  const samples = Math.min(10, Math.max(1, Number.parseInt(url.searchParams.get("samples") ?? "5", 10) || 5));
   const out: Record<string, unknown> = { adId, timestamp: new Date().toISOString() };
 
   // ── 1. CapSolver ────────────────────────────────────────────────────────────
@@ -52,117 +69,71 @@ export async function GET(request: Request) {
     out.capsolver = { configured: true, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  // ── 2. Proxy residencial: configuración + IP de salida + sticky ──────────────
-  const proxyInfo: Record<string, unknown> = {};
+  // ── 2a. Proxy MÉTODO PREFERIDO: Extracción API (app_key) ──────────────────────
+  // Sticky OFICIAL de este producto: pedir una IP con `life` corto y reutilizar
+  // la misma URL (sin usuario/contraseña). Verificamos: (a) que el app_key
+  // esté configurado y la API responda, (b) que reutilizar la URL devuelta dé
+  // la MISMA IP en llamadas sucesivas (confirma que `life` realmente ancla).
+  const apiInfo: Record<string, unknown> = {};
   try {
-    const residential = await getResidentialProxyUrl();
-    const rotating = await getProxyUrl();
-    proxyInfo.residential_configured = !!residential;
-    proxyInfo.rotating_configured = !!rotating;
-
-    if (residential) {
-      const hasAuth = residential.includes("@");
-      proxyInfo.format_ok = hasAuth;
-      proxyInfo.host = hasAuth ? residential.split("@")[1] : residential.replace(/^https?:\/\//, "");
-      // ¿Soporta sticky session? Necesita un username en la URL.
-      const sticky = withStickySession(residential, `health-${Date.now()}`);
-      proxyInfo.sticky_supported = sticky !== residential;
-      if (!proxyInfo.sticky_supported) {
-        proxyInfo.sticky_note =
-          "⚠️ La URL del proxy no tiene usuario (user:pass@host); sin eso NO se puede anclar la IP y el flujo de teléfono fallará con bloqueo duro. Formato esperado: http://usuario:password@host:puerto";
-      }
-
-      // IP de salida real a través del proxy (confirma que el proxy conecta).
-      try {
-        const ipRes = await fetchViaCurl("https://api.ipify.org?format=json", BROWSER_UA, {
-          proxyUrl: sticky,
-          allowSmallBody: true,
-          timeoutSec: 15,
-        });
-        if (ipRes.ok) {
-          const ip = (ipRes.html.match(/"ip"\s*:\s*"([^"]+)"/) ?? [])[1] ?? ipRes.html.slice(0, 40);
-          proxyInfo.exit_ip = ip;
-          proxyInfo.connects = true;
-        } else {
-          proxyInfo.connects = false;
-          proxyInfo.connect_error = ipRes.reason;
-        }
-      } catch (e) {
-        proxyInfo.connects = false;
-        proxyInfo.connect_error = e instanceof Error ? e.message : String(e);
-      }
-
-      // ── Verificación REAL de sticky session ────────────────────────────────
-      // `sticky_supported` de arriba solo confirma que la URL tiene username
-      // (formato correcto); NO confirma que el proveedor de verdad RECONOZCA
-      // el modificador `-session-<id>` que le añadimos. Un proveedor que lo
-      // ignore silenciosamente seguiría conectando bien (falso positivo), pero
-      // rotaría IP en cada llamada igualmente — reintroduciendo el bug de
-      // cookie/IP-mismatch que todo este trabajo corrige.
-      // Prueba de control: 2 llamadas con la MISMA sesión → misma IP esperada;
-      // 2 llamadas con sesión DISTINTA → IP distinta esperada (si el pool
-      // rota de verdad). Si "misma sesión" da la MISMA IP en ambas llamadas,
-      // el proveedor SÍ honra el modificador de sesión.
-      if (proxyInfo.connects) {
-        try {
-          const getIp = async (proxyUrl: string): Promise<string | null> => {
-            const r = await fetchViaCurl("https://api.ipify.org?format=json", BROWSER_UA, {
-              proxyUrl,
-              allowSmallBody: true,
-              timeoutSec: 15,
-            });
-            if (!r.ok) return null;
-            return (r.html.match(/"ip"\s*:\s*"([^"]+)"/) ?? [])[1] ?? null;
-          };
-
-          const sessionA = `stickytest-${Date.now().toString(36)}-a`;
-          const proxyA = withStickySession(residential, sessionA);
-          const ipA1 = await getIp(proxyA);
-          const ipA2 = await getIp(proxyA); // misma sesión, misma URL → ¿misma IP?
-
-          const sessionB = `stickytest-${Date.now().toString(36)}-b-${Math.random().toString(36).slice(2, 6)}`;
-          const proxyB = withStickySession(residential, sessionB);
-          const ipB1 = await getIp(proxyB); // sesión distinta → ¿IP distinta?
-
-          const stickyHonored = !!ipA1 && !!ipA2 && ipA1 === ipA2;
-          proxyInfo.sticky_verificado = {
-            misma_sesion_ip1: ipA1,
-            misma_sesion_ip2: ipA2,
-            sesion_distinta_ip: ipB1,
-            honra_sticky: stickyHonored,
-            veredicto: stickyHonored
-              ? "✅ el proveedor SÍ ancla la IP con el modificador -session-<id> — el fix de sticky session funciona de verdad"
-              : ipA1 && ipA2
-                ? "⛔ CRÍTICO: misma sesión dio IPs DISTINTAS — el proveedor IGNORA el modificador -session-<id> (formato de username no reconocido). El fix de sticky session es un no-op silencioso; hay que confirmar con soporte el separador exacto para ESTE producto/cuenta."
-                : "⚠️ no se pudo verificar (fallo de conexión en alguna de las llamadas)",
-          };
-        } catch (e) {
-          proxyInfo.sticky_verificado = { error: e instanceof Error ? e.message : String(e) };
-        }
-      }
+    const proxyUrl = await getFreshResidentialProxyUrl(2);
+    apiInfo.configured = !!proxyUrl;
+    if (proxyUrl) {
+      const ip1 = await getIp(proxyUrl);
+      const ip2 = await getIp(proxyUrl); // MISMA url devuelta → ¿misma IP?
+      apiInfo.exit_ip = ip1;
+      apiInfo.connects = !!ip1;
+      apiInfo.sticky_verificado = {
+        ip_llamada_1: ip1,
+        ip_llamada_2: ip2,
+        honra_sticky: !!ip1 && !!ip2 && ip1 === ip2,
+      };
     } else {
-      proxyInfo.format_ok = false;
-      proxyInfo.note = "No hay proxy residencial configurado (app_settings['scraping.proxyUrl'])";
+      apiInfo.note = "app_key no configurado (app_settings['scraping.smartproxy.app_key']) o la API no devolvió IP";
     }
   } catch (err) {
-    proxyInfo.error = err instanceof Error ? err.message : String(err);
+    apiInfo.error = err instanceof Error ? err.message : String(err);
   }
-  out.proxy = proxyInfo;
+  out.proxy_extraccion_api = apiInfo;
 
-  // ── 3. DataDome: veredicto sobre contact-phones, MULTI-MUESTRA ───────────────
-  // Una sola llamada mide una sola IP del pool rotativo — puede ser buena o
-  // mala suerte. Probamos varias IPs sticky distintas (por defecto 5, o
-  // ?samples=N) para dar un % REAL de IPs resolubles (t=fe) vs baneadas (t=bv)
-  // del pool en este momento, en vez de una foto de una sola tirada de dado.
-  const samples = Math.min(10, Math.max(1, Number.parseInt(new URL(request.url).searchParams.get("samples") ?? "5", 10) || 5));
-  const ddSamples: Array<{ ip_session: string; challenge_type: string | null }> = [];
+  // ── 2b. Proxy FALLBACK: gateway estático (usuario/contraseña) ─────────────────
+  const gatewayInfo: Record<string, unknown> = {};
   try {
     const residential = await getResidentialProxyUrl();
+    gatewayInfo.configured = !!residential;
+    if (residential) {
+      const hasAuth = residential.includes("@");
+      gatewayInfo.format_ok = hasAuth;
+      gatewayInfo.host = hasAuth ? residential.split("@")[1] : residential.replace(/^https?:\/\//, "");
+      if (!hasAuth) {
+        gatewayInfo.note = "⚠️ La URL no tiene usuario (user:pass@host); sin eso no se puede anclar sesión con withStickySession.";
+      } else {
+        const sessionA = `stickytest-${Date.now().toString(36)}-a`;
+        const proxyA = withStickySession(residential, sessionA);
+        const ip1 = await getIp(proxyA);
+        const ip2 = await getIp(proxyA);
+        gatewayInfo.sticky_verificado = {
+          ip_llamada_1: ip1,
+          ip_llamada_2: ip2,
+          honra_sticky: !!ip1 && !!ip2 && ip1 === ip2,
+        };
+      }
+    }
+  } catch (err) {
+    gatewayInfo.error = err instanceof Error ? err.message : String(err);
+  }
+  out.proxy_gateway_estatico = gatewayInfo;
+
+  // ── 3. DataDome: veredicto sobre contact-phones, MULTI-MUESTRA ───────────────
+  // Usamos el método PREFERIDO (Extracción API) para las muestras: cada
+  // llamada a getFreshResidentialProxyUrl da una IP nueva del pool (no hay
+  // que generar sessionIds manuales), así que N llamadas = N IPs distintas.
+  const ddSamples: Array<{ challenge_type: string | null }> = [];
+  try {
     const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
 
     for (let i = 0; i < samples; i++) {
-      const sessionId = `health-dd-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
-      const sticky = residential ? withStickySession(residential, sessionId) : undefined;
+      const sticky = (await getFreshResidentialProxyUrl(2)) ?? (await getResidentialProxyUrl());
 
       // Cargar la ficha (UA WhatsApp pasa DataDome) para sembrar cookies/IP.
       await fetchViaCurl(pageUrl, WHATSAPP_UA, { proxyUrl: sticky, timeoutSec: 20 });
@@ -181,7 +152,7 @@ export async function GET(request: Request) {
       });
       const body = "html" in cpRes ? cpRes.html : (cpRes.body ?? "");
       const challenge = extractDatadomeChallengeUrl(body);
-      ddSamples.push({ ip_session: sessionId, challenge_type: challenge.type });
+      ddSamples.push({ challenge_type: challenge.type });
     }
 
     const feCount = ddSamples.filter((s) => s.challenge_type === "fe").length;
@@ -200,7 +171,7 @@ export async function GET(request: Request) {
         fePercent >= 50
           ? `✅ ${fePercent}% de las IPs del pool son resolubles — el pipeline debería estar sacando teléfonos con normalidad`
           : fePercent > 0
-            ? `⚠️ Solo ${fePercent}% resolubles — el pool tiene una fracción alta de IPs baneadas; el sistema de reintentos (3 IPs por anuncio) compensa parcialmente, pero considera pedir a Smartproxy un pool más limpio`
+            ? `⚠️ Solo ${fePercent}% resolubles — el pool tiene una fracción alta de IPs baneadas; el sistema de reintentos compensa parcialmente, pero considera pedir a Smartproxy un pool más limpio`
             : `⛔ 0% resolubles en esta muestra — pool muy degradado ahora mismo, o falso negativo transitorio; reintenta en unos minutos`,
     };
   } catch (err) {
@@ -209,26 +180,23 @@ export async function GET(request: Request) {
 
   // ── Resumen ──────────────────────────────────────────────────────────────────
   const cs = out.capsolver as Record<string, unknown>;
-  const px = out.proxy as Record<string, unknown>;
+  const api = out.proxy_extraccion_api as Record<string, unknown>;
+  const gw = out.proxy_gateway_estatico as Record<string, unknown>;
   const dd = out.datadome as Record<string, unknown>;
   const resolubleFe = typeof dd?.resoluble_fe === "number" ? dd.resoluble_fe : 0;
   const datadomeUsable = resolubleFe > 0; // basta con que ALGUNA IP del pool sea resoluble: el sistema reintenta con IPs nuevas hasta encontrar una
-  const stickyCheck = px?.sticky_verificado as Record<string, unknown> | undefined;
-  // La verificación REAL (misma sesión → misma IP) es lo que de verdad importa;
-  // `sticky_supported` solo confirma que la URL tiene el formato correcto.
-  const stickyReallyWorks = stickyCheck?.honra_sticky === true;
+  const apiSticky = (api?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
+  const gwSticky = (gw?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
   out.resumen = {
     capsolver_ok: cs?.ok === true,
-    proxy_conecta: px?.connects === true,
-    proxy_sticky_formato_ok: px?.sticky_supported === true,
-    proxy_sticky_REALMENTE_funciona: stickyReallyWorks,
+    extraccion_api_configurada: api?.configured === true,
+    extraccion_api_sticky_funciona: apiSticky,
+    gateway_estatico_configurado: gw?.configured === true,
+    gateway_estatico_sticky_funciona: gwSticky,
+    metodo_sticky_activo: apiSticky ? "extraccion_api" : gwSticky ? "gateway_estatico" : "ninguno",
     datadome_porcentaje_resoluble: dd?.porcentaje_resoluble ?? null,
     datadome_usable: datadomeUsable,
-    todo_ok:
-      cs?.ok === true &&
-      px?.connects === true &&
-      stickyReallyWorks &&
-      datadomeUsable,
+    todo_ok: cs?.ok === true && (apiSticky || gwSticky) && datadomeUsable,
   };
 
   return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });

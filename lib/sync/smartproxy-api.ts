@@ -24,12 +24,28 @@ export type SmartproxyIP = {
  *
  * Endpoint: https://www.smartproxy.org/web_v1/ip/get-ip-v3
  * Requiere: app_key (autenticación generada en dashboard de Smartproxy)
+ *
+ * `life` (minutos, 1-120): mientras dure, esa IP concreta queda reservada y
+ * REUTILIZABLE — es el mecanismo de sticky session OFICIAL de este producto
+ * (confirmado en la doc de parámetros del dashboard de Smartproxy: "Tiempo
+ * máximo de extracción de IP única de 120 minutos"). Estas URLs NO llevan
+ * usuario/contraseña (http://ip:puerto directo) — el modificador de username
+ * `-session-<id>` (withStickySession) NO aplica aquí; la forma de anclar la
+ * IP es simplemente NO volver a llamar a este endpoint y REUTILIZAR la misma
+ * URL devuelta durante el `life` pedido. Default corto (2 min): de sobra para
+ * una búsqueda de teléfono (unos segundos de llamadas), y recicla rápido para
+ * no acumular abusos/flags de DataDome sobre una misma IP.
  */
-export async function getSmartproxyIP(appKey: string): Promise<SmartproxyIP | null> {
+export async function getSmartproxyIP(
+  appKey: string,
+  options?: { life?: number; num?: number },
+): Promise<SmartproxyIP | null> {
   try {
+    const life = options?.life ?? 30;
+    const num = options?.num ?? 100;
     // Llamada a la API de Smartproxy con app_key
     // Devuelve JSON con IPs disponibles: { "ips": [{"ip": "...", "port": ...}] }
-    const url = `https://www.smartproxy.org/web_v1/ip/get-ip-v3?app_key=${appKey}&pt=9&num=100&cc=ES&life=30&format=json&protocol=1`;
+    const url = `https://www.smartproxy.org/web_v1/ip/get-ip-v3?app_key=${appKey}&pt=9&num=${num}&cc=ES&life=${life}&format=json&protocol=1`;
 
     const { stdout } = await execFileAsync("curl", [
       "-sS",
@@ -93,11 +109,16 @@ export function buildProxyUrl(smartproxy: SmartproxyIP): string {
 
 /**
  * Obtiene una URL de proxy FRESCA del Smartproxy.
- * Cada llamada devuelve una IP diferente (rotación automática).
+ * Cada llamada devuelve una IP diferente (rotación automática) — para anclar
+ * la MISMA IP durante varias llamadas (sticky), llama UNA vez y reutiliza la
+ * URL devuelta; no vuelvas a llamar a esta función dentro del mismo flujo.
  * Requiere el app_key generado en https://www.smartproxy.org/
  */
-export async function getFreshProxyUrl(appKey: string): Promise<string | null> {
-  const ip = await getSmartproxyIP(appKey);
+export async function getFreshProxyUrl(
+  appKey: string,
+  options?: { life?: number; num?: number },
+): Promise<string | null> {
+  const ip = await getSmartproxyIP(appKey, options);
   if (!ip) return null;
   return buildProxyUrl(ip);
 }

@@ -13,38 +13,35 @@ import { getFreshProxyUrl } from "./smartproxy-api";
  *
  * If API fails, falls back to static URL in DB.
  */
+// Lee y normaliza el app_key de Smartproxy desde app_settings (acepta tanto
+// el key suelto como una URL completa con `app_key=` embebido).
+async function readSmartproxyAppKey(db: any): Promise<string | null> {
+  const { data: appKeyData } = await db
+    .from("app_settings")
+    .select("value")
+    .eq("key", "scraping.smartproxy.app_key")
+    .maybeSingle();
+
+  let appKey = appKeyData?.value as string | null;
+  if (appKey) appKey = appKey.replace(/^["']+|["']+$/g, "").trim();
+
+  if (appKey && appKey.includes("app_key=")) {
+    try {
+      const u = new URL(appKey);
+      const extracted = u.searchParams.get("app_key");
+      if (extracted) appKey = extracted;
+    } catch {
+      const m = appKey.match(/app_key=([a-f0-9]{16,})/i);
+      if (m?.[1]) appKey = m[1];
+    }
+  }
+  return appKey || null;
+}
+
 export async function getProxyUrl(): Promise<string | undefined> {
   try {
     const db = createAdminClient() as any;
-
-    // Try to get fresh IP from Smartproxy API
-    const { data: appKeyData } = await db
-      .from("app_settings")
-      .select("value")
-      .eq("key", "scraping.smartproxy.app_key")
-      .maybeSingle();
-
-    let appKey = appKeyData?.value as string | null;
-
-    // Strip surrounding quotes (e.g. if saved as '"value"' from JSON encoding)
-    if (appKey) appKey = appKey.replace(/^["']+|["']+$/g, "").trim();
-
-    // If the stored value is a full Smartproxy URL, extract just the app_key param.
-    // Handles the case where the admin UI saved the full API URL instead of just the key.
-    if (appKey && appKey.includes("app_key=")) {
-      try {
-        const u = new URL(appKey);
-        const extracted = u.searchParams.get("app_key");
-        if (extracted) {
-          console.log(`[proxy-config] Extracted app_key from URL`);
-          appKey = extracted;
-        }
-      } catch {
-        // Extract via regex if URL parsing fails
-        const m = appKey.match(/app_key=([a-f0-9]{16,})/i);
-        if (m?.[1]) appKey = m[1];
-      }
-    }
+    const appKey = await readSmartproxyAppKey(db);
 
     if (appKey) {
       console.log(`[proxy-config] Attempting to get fresh IP from Smartproxy API...`);
@@ -70,6 +67,40 @@ export async function getProxyUrl(): Promise<string | undefined> {
   } catch (err) {
     console.error(`[proxy-config] Error: ${err instanceof Error ? err.message : String(err)}`);
     return process.env.SMARTPROXY_URL || undefined;
+  }
+}
+
+/**
+ * Proxy STICKY para UNA búsqueda de teléfono: pide una IP fresca de la API de
+ * Smartproxy (app_key) con `life` corto (minutos) y la devuelve como
+ * `http://ip:puerto` — SIN usuario/contraseña, porque este producto (Extracción
+ * API) no los usa; el ancla de sesión de este producto es reutilizar la MISMA
+ * URL devuelta, no un modificador de username (por eso withStickySession no
+ * aplica aquí — sería un no-op inofensivo si se le pasa esta URL).
+ *
+ * Llamar UNA vez por búsqueda (p.ej. una vez por adId) y reutilizar el string
+ * devuelto en TODAS las llamadas de esa búsqueda. Si se llama varias veces se
+ * obtienen IPs distintas cada vez (rompe el anclaje).
+ *
+ * Devuelve undefined si no hay app_key configurado — el caller debe caer a
+ * getResidentialProxyUrl() + withStickySession() en ese caso.
+ */
+export async function getFreshResidentialProxyUrl(
+  lifeMinutes: number = 2,
+): Promise<string | undefined> {
+  try {
+    const db = createAdminClient() as any;
+    const appKey = await readSmartproxyAppKey(db);
+    if (!appKey) return undefined;
+
+    const freshUrl = await getFreshProxyUrl(appKey, { life: lifeMinutes, num: 50 });
+    if (freshUrl) {
+      console.log(`[proxy-config] ✓ IP sticky (life=${lifeMinutes}m) para búsqueda: ${freshUrl.split("//")[1]}`);
+    }
+    return freshUrl ?? undefined;
+  } catch (err) {
+    console.error(`[proxy-config] getFreshResidentialProxyUrl error: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
   }
 }
 

@@ -100,14 +100,6 @@ export async function fetchIdealistaPhoneViaPlaywright(
     chromium = pwChromium as unknown as typeof chromium;
     console.log(`[playwright-phone] Using playwright-extra + stealth`);
 
-    // For Playwright we prefer the static residential proxy (eu.smartproxy.net)
-    // because it uses real ISP IPs. The dynamic IP-list API returns datacenter
-    // IPs (Hetzner) that DataDome flags even with a perfect browser fingerprint.
-    const rawProxyUrl = options?.proxyUrl ?? process.env.SMARTPROXY_URL;
-    const residentialProxyUrl = process.env.SMARTPROXY_RESIDENTIAL_URL
-      ?? (rawProxyUrl?.includes("smartproxy.net") && rawProxyUrl.includes("@") ? rawProxyUrl : undefined)
-      ?? rawProxyUrl;
-
     // Sticky session: TODO el flujo de este adId (navegación del browser +
     // los reintentos de CapSolver más abajo) debe salir por la MISMA IP
     // residencial. El navegador abre varias conexiones al proxy durante la
@@ -115,16 +107,34 @@ export async function fetchIdealistaPhoneViaPlaywright(
     // conexión puede salir por una IP distinta si el endpoint es rotativo, y
     // DataDome rechaza la cookie emitida para otra IP con bloqueo duro. Y si
     // CapSolver resolviera el reto usando una IP DISTINTA a la que navegó el
-    // browser, el token tampoco sería válido para esa sesión. El sessionId
-    // incluye un componente aleatorio (no solo adId) para que un reintento
-    // tras fallo use una IP distinta en vez de quedar anclado para siempre a
-    // una IP que ya quedó marcada por DataDome. Ver withStickySession en
-    // proxy-config.ts.
-    let stickyProxyUrl = residentialProxyUrl;
-    if (residentialProxyUrl) {
-      const { withStickySession } = await import("@/lib/sync/proxy-config");
-      const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      stickyProxyUrl = withStickySession(residentialProxyUrl, sessionId);
+    // browser, el token tampoco sería válido para esa sesión.
+    //
+    // Preferimos la Extracción API (app_key) con `life` corto: es el
+    // mecanismo de sticky OFICIAL del proveedor (pedir una IP y reutilizarla),
+    // sin usuario/contraseña. Solo si no hay app_key configurado caemos al
+    // gateway estático + modificador de username (withStickySession, sticky
+    // no confirmado oficialmente para esta cuenta). El componente aleatorio
+    // en el sessionId del fallback evita que un reintento tras fallo quede
+    // anclado para siempre a una IP que ya quedó marcada por DataDome.
+    let stickyProxyUrl: string | undefined;
+    try {
+      const { getFreshResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+      // life=3: la sesión de Playwright (navegación + posible CapSolver) es
+      // algo más larga que el flujo curl puro; un poco de margen extra.
+      stickyProxyUrl = await getFreshResidentialProxyUrl(3);
+    } catch {
+      // seguimos al fallback
+    }
+    if (!stickyProxyUrl) {
+      const rawProxyUrl = options?.proxyUrl ?? process.env.SMARTPROXY_URL;
+      const residentialProxyUrl = process.env.SMARTPROXY_RESIDENTIAL_URL
+        ?? (rawProxyUrl?.includes("smartproxy.net") && rawProxyUrl.includes("@") ? rawProxyUrl : undefined)
+        ?? rawProxyUrl;
+      if (residentialProxyUrl) {
+        const { withStickySession } = await import("@/lib/sync/proxy-config");
+        const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        stickyProxyUrl = withStickySession(residentialProxyUrl, sessionId);
+      }
     }
 
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
