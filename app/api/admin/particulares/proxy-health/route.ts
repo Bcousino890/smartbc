@@ -128,19 +128,25 @@ export async function GET(request: Request) {
   // Usamos el método PREFERIDO (Extracción API) para las muestras: cada
   // llamada a getFreshResidentialProxyUrl da una IP nueva del pool (no hay
   // que generar sessionIds manuales), así que N llamadas = N IPs distintas.
-  const ddSamples: Array<{ challenge_type: string | null }> = [];
-  try {
-    const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
+  // Probamos VARIAS estrategias de UA/orden, cada una sobre su propia IP
+  // residencial fresca, para aislar qué combinación da t=fe (resoluble) vs
+  // t=bv (bloqueo duro). Hipótesis: el desajuste de UA entre la carga de
+  // página (WhatsApp) y contact-phones (Chrome) puede disparar el bloqueo
+  // duro; o quizá la carga previa "ensucia" la sesión y conviene ir directo.
+  const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+  const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
 
-    for (let i = 0; i < samples; i++) {
-      const sticky = (await getFreshResidentialProxyUrl(2)) ?? (await getResidentialProxyUrl());
-
-      // Cargar la ficha (UA WhatsApp pasa DataDome) para sembrar cookies/IP.
-      await fetchViaCurl(pageUrl, WHATSAPP_UA, { proxyUrl: sticky, timeoutSec: 20 });
-
-      const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
-      const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA, {
-        proxyUrl: sticky,
+  const probeContactPhones = async (
+    label: string,
+    proxyUrl: string | undefined,
+    strategy: { pageUA: string | null; contactUA: string },
+  ): Promise<{ estrategia: string; challenge_type: string | null; note?: string }> => {
+    try {
+      if (strategy.pageUA) {
+        await fetchViaCurl(pageUrl, strategy.pageUA, { proxyUrl, timeoutSec: 20 });
+      }
+      const cpRes = await fetchViaCurl(cpUrl, strategy.contactUA, {
+        proxyUrl,
         allowSmallBody: true,
         returnBodyOnError: true,
         timeoutSec: 15,
@@ -152,39 +158,56 @@ export async function GET(request: Request) {
       });
       const body = "html" in cpRes ? cpRes.html : (cpRes.body ?? "");
       const challenge = extractDatadomeChallengeUrl(body);
-      ddSamples.push({ challenge_type: challenge.type });
+      return { estrategia: label, challenge_type: challenge.type };
+    } catch (e) {
+      return { estrategia: label, challenge_type: null, note: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  try {
+    // Grupo 1: TODAS las estrategias sobre la MISMA IP fresca → aísla el efecto
+    // del UA del efecto de la IP. Si todas dan bv en la misma IP, es la IP
+    // (quemada); si alguna da fe, es cuestión de UA.
+    const ip1 = (await getFreshResidentialProxyUrl(3)) ?? (await getResidentialProxyUrl());
+    const mismaIp = [];
+    for (const [label, strat] of [
+      ["A_wa_page+chrome_contact", { pageUA: WHATSAPP_UA, contactUA: BROWSER_UA }],
+      ["B_chrome_page+chrome_contact", { pageUA: BROWSER_UA, contactUA: BROWSER_UA }],
+      ["C_wa_page+wa_contact", { pageUA: WHATSAPP_UA, contactUA: WHATSAPP_UA }],
+      ["D_sin_page+chrome_contact", { pageUA: null, contactUA: BROWSER_UA }],
+    ] as const) {
+      mismaIp.push(await probeContactPhones(label, ip1, strat));
     }
 
-    const feCount = ddSamples.filter((s) => s.challenge_type === "fe").length;
-    const bvCount = ddSamples.filter((s) => s.challenge_type === "bv").length;
-    const otherCount = ddSamples.length - feCount - bvCount;
-    const fePercent = Math.round((feCount / ddSamples.length) * 100);
+    // Grupo 2: la mejor estrategia (B, UA consistente Chrome) sobre 3 IPs
+    // frescas distintas → mide si el problema es del pool en general.
+    const variasIps = [];
+    for (let i = 0; i < 3; i++) {
+      const ipN = (await getFreshResidentialProxyUrl(2)) ?? (await getResidentialProxyUrl());
+      variasIps.push(await probeContactPhones(`ip${i + 1}_chrome_consistente`, ipN, { pageUA: BROWSER_UA, contactUA: BROWSER_UA }));
+    }
 
-    out.datadome = {
-      samples: ddSamples.length,
-      resoluble_fe: feCount,
-      bloqueado_bv: bvCount,
-      otro: otherCount,
-      porcentaje_resoluble: `${fePercent}%`,
-      detalle: ddSamples.map((s) => s.challenge_type ?? "ninguno"),
-      verdict:
-        fePercent >= 50
-          ? `✅ ${fePercent}% de las IPs del pool son resolubles — el pipeline debería estar sacando teléfonos con normalidad`
-          : fePercent > 0
-            ? `⚠️ Solo ${fePercent}% resolubles — el pool tiene una fracción alta de IPs baneadas; el sistema de reintentos compensa parcialmente, pero considera pedir a Smartproxy un pool más limpio`
-            : `⛔ 0% resolubles en esta muestra — pool muy degradado ahora mismo, o falso negativo transitorio; reintenta en unos minutos`,
+    const todos = [...mismaIp, ...variasIps];
+    const anyFe = todos.find((s) => s.challenge_type === "fe");
+    out.datadome_estrategias = {
+      misma_ip_distintos_ua: mismaIp,
+      distintas_ip_mismo_ua: variasIps,
+      estrategia_resoluble: anyFe?.estrategia ?? null,
+      verdict: anyFe
+        ? `✅ "${anyFe.estrategia}" da t=fe (resoluble) — CapSolver puede resolverlo. Ajustar el flujo real a esa combinación.`
+        : `⛔ Ninguna combinación de UA ni IP dio t=fe — el pool residencial de Smartproxy está genuinamente baneado por DataDome en Idealista. NO es problema de código/UA. Vías: (1) pedir a Smartproxy pool más limpio/mobile, (2) cross-portal (pisos.com/habitaclia no bloquean y exponen teléfono).`,
     };
   } catch (err) {
-    out.datadome = { error: err instanceof Error ? err.message : String(err), samples_completed: ddSamples.length };
+    out.datadome_estrategias = { error: err instanceof Error ? err.message : String(err) };
   }
 
   // ── Resumen ──────────────────────────────────────────────────────────────────
   const cs = out.capsolver as Record<string, unknown>;
   const api = out.proxy_extraccion_api as Record<string, unknown>;
   const gw = out.proxy_gateway_estatico as Record<string, unknown>;
-  const dd = out.datadome as Record<string, unknown>;
-  const resolubleFe = typeof dd?.resoluble_fe === "number" ? dd.resoluble_fe : 0;
-  const datadomeUsable = resolubleFe > 0; // basta con que ALGUNA IP del pool sea resoluble: el sistema reintenta con IPs nuevas hasta encontrar una
+  const est = out.datadome_estrategias as Record<string, unknown>;
+  const estrategiaResoluble = (est?.estrategia_resoluble as string | null) ?? null;
+  const datadomeUsable = !!estrategiaResoluble;
   const apiSticky = (api?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
   const gwSticky = (gw?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
   out.resumen = {
@@ -194,7 +217,7 @@ export async function GET(request: Request) {
     gateway_estatico_configurado: gw?.configured === true,
     gateway_estatico_sticky_funciona: gwSticky,
     metodo_sticky_activo: apiSticky ? "extraccion_api" : gwSticky ? "gateway_estatico" : "ninguno",
-    datadome_porcentaje_resoluble: dd?.porcentaje_resoluble ?? null,
+    datadome_estrategia_resoluble: estrategiaResoluble,
     datadome_usable: datadomeUsable,
     todo_ok: cs?.ok === true && (apiSticky || gwSticky) && datadomeUsable,
   };
