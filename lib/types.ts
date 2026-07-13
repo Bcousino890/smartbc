@@ -70,6 +70,9 @@ export type Property = {
   price: number;
   stayType: StayType;
   operation: Operation;
+  // true si la propiedad está en venta Y alquiler a la vez. El SmartLink
+  // público usa esto para conservar `?op=` al compartir/reenviar el enlace.
+  hasBothOperations?: boolean;
   badge?: PropertyBadge;
   image?: string;
   description?: string;

@@ -23,15 +23,21 @@ function formatPriceForOg(price: number, isRent: boolean): string {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ op?: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const { op } = await searchParams;
   const row = (await getPropertyBySlugPublic(slug)) as
     | {
         title: string;
+        title_rent: string | null;
         operation: "rent" | "sale";
+        operations: string[] | null;
         price: number;
+        rent_price: number | null;
         zone: string;
         bedrooms: number;
         bathrooms: number;
@@ -46,9 +52,22 @@ export async function generateMetadata({
     return { title: "Propiedad no disponible · Benjamín Cousiño Propiedades" };
   }
 
-  const isRent = row.operation === "rent";
-  const price = formatPriceForOg(Number(row.price), isRent);
-  const title = `${row.title} · ${price}`;
+  // Propiedad dual: `?op=rent` pide explícitamente la variante de alquiler
+  // (título/precio propios). Fuera de eso, se mantiene la operación
+  // "principal" de siempre (venta cuando aplica, si no alquiler).
+  const isDual =
+    Array.isArray(row.operations) &&
+    row.operations.includes("sale") &&
+    row.operations.includes("rent");
+  const isRent = isDual && op === "rent" ? true : row.operation === "rent";
+  const effectivePrice =
+    isDual && isRent && row.rent_price != null
+      ? Number(row.rent_price)
+      : Number(row.price);
+  const effectiveTitle =
+    isDual && isRent && row.title_rent ? row.title_rent : row.title;
+  const price = formatPriceForOg(effectivePrice, isRent);
+  const title = `${effectiveTitle} · ${price}`;
   const description = [
     `${row.bedrooms} hab · ${row.bathrooms} baños`,
     row.square_meters ? `${row.square_meters} m²` : null,
@@ -62,7 +81,10 @@ export async function generateMetadata({
   // como JPEG 1200×630 (formato más compatible que WebP para WhatsApp,
   // Twitter, Slack, etc.). El endpoint cachea por 24h.
   const ogImage = `${PORTAL_URL}/og/property/${slug}`;
-  const canonical = `${PORTAL_URL}/compartir/${slug}`;
+  const canonical =
+    isDual && isRent
+      ? `${PORTAL_URL}/compartir/${slug}?op=rent`
+      : `${PORTAL_URL}/compartir/${slug}`;
 
   return {
     title,
@@ -82,7 +104,7 @@ export async function generateMetadata({
           width: 1200,
           height: 630,
           type: "image/jpeg",
-          alt: row.title,
+          alt: effectiveTitle,
         },
       ],
     },
@@ -97,10 +119,13 @@ export async function generateMetadata({
 
 export default async function PublicSharePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ op?: string }>;
 }) {
   const { slug } = await params;
+  const { op } = await searchParams;
   // Bypasa RLS con service role (visitante no autenticado).
   const row = (await getPropertyBySlugPublic(slug)) as
     | (Parameters<typeof propertyRowToClientProperty>[0] & {
@@ -121,7 +146,7 @@ export default async function PublicSharePage({
     // nuevo para no romper SmartLinks ya enviados a clientes.
     const newSlug = await resolveLegacySlug(slug);
     if (newSlug && newSlug !== slug) {
-      redirect(`/compartir/${newSlug}`);
+      redirect(`/compartir/${newSlug}${op ? `?op=${op}` : ""}`);
     }
     notFound();
   }
@@ -137,7 +162,12 @@ export default async function PublicSharePage({
     cachedLng: row.longitude,
   });
 
-  const property = propertyRowToClientProperty(row);
+  // `?op=rent` pide la variante de alquiler cuando la propiedad es dual
+  // (venta + alquiler) — ver propertyRowToClientProperty.
+  const property = propertyRowToClientProperty(
+    row,
+    op === "rent" ? "rent" : op === "sale" ? "sale" : undefined,
+  );
   // Si geocoding devolvió coords pero el adapter aún no las tenía
   // (porque acabamos de cachearlas), las ponemos aquí.
   if (coords) {

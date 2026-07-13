@@ -49,7 +49,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   // Auth: solo staff puede generar PDFs (es info comercial).
@@ -60,10 +60,14 @@ export async function GET(
   }
 
   const { slug } = await params;
+  const opParam = new URL(req.url).searchParams.get("op");
   const row = (await getPropertyBySlugForAdmin(slug)) as
     | (Record<string, unknown> & {
         title: string;
+        title_rent: string | null;
         operation: "rent" | "sale";
+        operations: string[] | null;
+        rent_price: number | null;
         price: number;
         zone: string;
         bedrooms: number;
@@ -80,6 +84,24 @@ export async function GET(
   if (!row) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+
+  // Propiedad dual (venta + alquiler): `?op=rent` pide explícitamente el PDF
+  // de la variante de alquiler (título/precio propios), para que no haya
+  // ambigüedad sobre qué operación describe el documento.
+  const isDual =
+    Array.isArray(row.operations) &&
+    row.operations.includes("sale") &&
+    row.operations.includes("rent");
+  const effectiveOperation: "rent" | "sale" =
+    isDual && opParam === "rent" ? "rent" : row.operation;
+  const effectivePrice =
+    isDual && effectiveOperation === "rent" && row.rent_price != null
+      ? Number(row.rent_price)
+      : Number(row.price);
+  const effectiveTitle =
+    isDual && effectiveOperation === "rent" && row.title_rent
+      ? row.title_rent
+      : row.title;
 
   // Resolver portada y galería para el PDF. Bajamos en paralelo para no
   // alargar mucho la generación. Limitamos la galería a 5 extra (6 con
@@ -115,12 +137,12 @@ export async function GET(
   const smartLink = `${origin}/compartir/${shareSlug(
     slug,
     (row as { bc_reference?: string | null }).bc_reference,
-  )}`;
+  )}${isDual && effectiveOperation === "rent" ? "?op=rent" : ""}`;
 
   const data: PropertyPdfData = {
-    title: row.title,
-    operation: row.operation,
-    price: Number(row.price),
+    title: effectiveTitle,
+    operation: effectiveOperation,
+    price: effectivePrice,
     zone: row.zone,
     city: "Madrid",
     bedrooms: row.bedrooms,
@@ -143,7 +165,7 @@ export async function GET(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const buffer = await renderToBuffer(element as any);
 
-  const safeName = row.title
+  const safeName = effectiveTitle
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, "-")

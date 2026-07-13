@@ -63,6 +63,9 @@ export type PropertyForEdit = {
   id: string;
   slug: string;
   title: string;
+  // Título específico de la variante de alquiler cuando la propiedad tiene
+  // ambas operaciones activas (isDualOperation). Null → cae a `title`.
+  title_rent: string | null;
   description: string | null;
   operation: "rent" | "sale";
   operations: string[];
@@ -138,6 +141,9 @@ export function PropertyEditView({
 
   // Estado del form. Inicializamos con los valores actuales.
   const [title, setTitle] = useState(property.title);
+  const [titleRent, setTitleRent] = useState(
+    property.title_rent ?? property.title,
+  );
   const [description, setDescription] = useState(property.description ?? "");
   const [price, setPrice] = useState(property.price);
   const [bedrooms, setBedrooms] = useState(property.bedrooms);
@@ -191,7 +197,9 @@ export function PropertyEditView({
     property.features_manual ?? [],
   );
   const [newFeature, setNewFeature] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"rent" | "sale" | "single" | null>(
+    null,
+  );
   const [publishedWeb, setPublishedWeb] = useState(property.published_web);
 
   const addManualFeature = () => {
@@ -318,19 +326,29 @@ export function PropertyEditView({
   // slug (bc0871-…). En cliente usamos window.origin para que funcione tanto
   // en local (localhost) como en producción.
   const publicSlug = shareSlug(property.slug, property.bc_reference);
-  const smartLink =
+  const smartLinkBase =
     typeof window !== "undefined"
       ? `${window.location.origin}/compartir/${publicSlug}`
       : `/compartir/${publicSlug}`;
+  // Propiedad dual: cada operación tiene su propia variante del SmartLink
+  // (?op=sale / ?op=rent) para que el título, el precio y el PDF que ve el
+  // cliente correspondan a la operación que le interesa, sin ambigüedad.
+  const smartLinkFor = (op: "rent" | "sale") =>
+    isDualOperation ? `${smartLinkBase}?op=${op}` : smartLinkBase;
+  const pdfHrefFor = (op: "rent" | "sale") =>
+    isDualOperation
+      ? `/api/admin/properties/${property.slug}/pdf?op=${op}`
+      : `/api/admin/properties/${property.slug}/pdf`;
 
-  const handleCopyLink = async () => {
+  const handleCopyLink = async (op: "rent" | "sale" | "single") => {
+    const link = op === "single" ? smartLinkBase : smartLinkFor(op);
     try {
-      await navigator.clipboard.writeText(smartLink);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(link);
+      setCopied(op);
+      window.setTimeout(() => setCopied(null), 2000);
     } catch {
       // Fallback rudimentario si no hay permiso de portapapeles.
-      window.prompt(t("adminProps.detail.copyLinkFallback"), smartLink);
+      window.prompt(t("adminProps.detail.copyLinkFallback"), link);
     }
   };
   const cover =
@@ -406,6 +424,7 @@ export function PropertyEditView({
       const res = await updateProperty({
         slug: property.slug,
         title,
+        titleRent: isDualOperation ? titleRent || null : null,
         description: description || null,
         price,
         bedrooms,
@@ -528,48 +547,105 @@ export function PropertyEditView({
         </div>
       </header>
 
-      {/* Acciones rápidas: ver como cliente / copiar SmartLink / descargar PDF */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <a
-          href={`/compartir/${property.slug}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
-        >
-          <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
-          <span>{t("adminProps.detail.viewAsClient")}</span>
-        </a>
-        <button
-          type="button"
-          onClick={handleCopyLink}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[12px] font-medium transition",
-            copied
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-gold/30 bg-cream-50 text-ink hover:border-gold/55 hover:bg-white",
-          )}
-        >
-          {copied ? (
-            <Check size={13} strokeWidth={2} />
-          ) : (
-            <Link2 size={13} strokeWidth={1.75} className="text-gold-dark" />
-          )}
-          <span>
-            {copied
-              ? t("adminProps.detail.linkCopied")
-              : t("adminProps.detail.copyLink")}
-          </span>
-        </button>
-        <a
-          href={`/api/admin/properties/${property.slug}/pdf`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
-        >
-          <FileDown size={13} strokeWidth={1.75} className="text-gold-dark" />
-          <span>{t("adminProps.detail.downloadPdf")}</span>
-        </a>
-      </div>
+      {/* Acciones rápidas: ver como cliente / copiar SmartLink / descargar PDF.
+          Si la propiedad es dual (venta + alquiler), se separan en dos grupos
+          para que el título, precio y PDF que ve el cliente correspondan
+          siempre a una única operación, sin conflicto. */}
+      {isDualOperation ? (
+        <div className="mt-5 flex flex-col gap-3">
+          {(["sale", "rent"] as const).map((op) => (
+            <div
+              key={op}
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-ink/10 bg-white/60 p-2.5"
+            >
+              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-gold-dark">
+                {op === "sale" ? "Venta" : "Alquiler"}
+              </span>
+              <a
+                href={smartLinkFor(op)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+              >
+                <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
+                <span>{t("adminProps.detail.viewAsClient")}</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => handleCopyLink(op)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[12px] font-medium transition",
+                  copied === op
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border-gold/30 bg-cream-50 text-ink hover:border-gold/55 hover:bg-white",
+                )}
+              >
+                {copied === op ? (
+                  <Check size={13} strokeWidth={2} />
+                ) : (
+                  <Link2 size={13} strokeWidth={1.75} className="text-gold-dark" />
+                )}
+                <span>
+                  {copied === op
+                    ? t("adminProps.detail.linkCopied")
+                    : t("adminProps.detail.copyLink")}
+                </span>
+              </button>
+              <a
+                href={pdfHrefFor(op)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+              >
+                <FileDown size={13} strokeWidth={1.75} className="text-gold-dark" />
+                <span>{t("adminProps.detail.downloadPdf")}</span>
+              </a>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <a
+            href={smartLinkBase}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+          >
+            <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
+            <span>{t("adminProps.detail.viewAsClient")}</span>
+          </a>
+          <button
+            type="button"
+            onClick={() => handleCopyLink("single")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[12px] font-medium transition",
+              copied === "single"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-gold/30 bg-cream-50 text-ink hover:border-gold/55 hover:bg-white",
+            )}
+          >
+            {copied === "single" ? (
+              <Check size={13} strokeWidth={2} />
+            ) : (
+              <Link2 size={13} strokeWidth={1.75} className="text-gold-dark" />
+            )}
+            <span>
+              {copied === "single"
+                ? t("adminProps.detail.linkCopied")
+                : t("adminProps.detail.copyLink")}
+            </span>
+          </button>
+          <a
+            href={`/api/admin/properties/${property.slug}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+          >
+            <FileDown size={13} strokeWidth={1.75} className="text-gold-dark" />
+            <span>{t("adminProps.detail.downloadPdf")}</span>
+          </a>
+        </div>
+      )}
 
       {/* Aviso para propiedades sindicadas */}
       {isScraped && (
@@ -589,15 +665,38 @@ export function PropertyEditView({
           icon={<Info size={15} strokeWidth={1.75} />}
           title={t("adminProps.detail.basicData")}
         >
-          <Field label={t("adminProps.detail.title")}>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className={inputClass}
-            />
-          </Field>
+          {isDualOperation ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label={`${t("adminProps.detail.title")} — Venta`}>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  className={inputClass}
+                />
+              </Field>
+              <Field label={`${t("adminProps.detail.title")} — Alquiler`}>
+                <input
+                  type="text"
+                  value={titleRent}
+                  onChange={(e) => setTitleRent(e.target.value)}
+                  required
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          ) : (
+            <Field label={t("adminProps.detail.title")}>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                className={inputClass}
+              />
+            </Field>
+          )}
           <Field label={t("adminProps.detail.description")}>
             <textarea
               value={description}

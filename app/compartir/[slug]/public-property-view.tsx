@@ -78,7 +78,12 @@ export function PublicPropertyView({
   // mensaje de WhatsApp para que el cliente identifique el piso y BC sepa cuál.
   const portalUrl =
     process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.bcousinoprop.com";
-  const shareUrl = `${portalUrl}/compartir/${shareSlug(property.id, property.bcReference)}`;
+  // Si la propiedad es dual (venta + alquiler), conservamos `?op=` para que
+  // reenviar este link mantenga la misma variante (título/precio) que se
+  // está viendo, sin volver a la operación por defecto.
+  const shareUrl = `${portalUrl}/compartir/${shareSlug(property.id, property.bcReference)}${
+    property.hasBothOperations ? `?op=${isRent ? "rent" : "sale"}` : ""
+  }`;
   // Referencia sin guion (BC0871) para un mensaje más corto y directo.
   const ref = property.bcReference?.replace(/-/g, "") ?? "";
   const waText = encodeURIComponent(

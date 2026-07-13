@@ -14,7 +14,7 @@ export default async function PropiedadesPage() {
     getProperties({ includeUnavailable: false }, 2000),
     getCurrentUser(),
   ]);
-  const properties = rows.map(propertyRowToClientProperty);
+  const properties = rows.map((row) => propertyRowToClientProperty(row));
   const favoriteSlugs = user ? await getFavoriteSlugs(user.id) : [];
   return (
     <PropiedadesClient

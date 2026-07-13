@@ -128,6 +128,7 @@ export type Database = {
           external_id: string | null;
           slug: string;
           title: string;
+          title_rent: string | null;
           description: string | null;
           operation: PropertyOperation;
           operations: string[];
@@ -170,6 +171,7 @@ export type Database = {
           country?: string;
           slug: string;
           title: string;
+          title_rent?: string | null;
           description?: string | null;
           operation: PropertyOperation;
           operations?: string[];
