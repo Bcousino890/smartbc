@@ -78,6 +78,48 @@ export function invalidateProxyCache() {
 }
 
 /**
+ * Ancla una URL de proxy residencial ROTATIVO a una sola IP durante una
+ * "sesión" (sticky session), usando la convención estándar de
+ * Smartproxy/Decodo: incrustar `-session-<id>` en el username del proxy.
+ *
+ * Por qué hace falta: nuestro flujo de teléfono hace VARIAS llamadas curl
+ * seguidas (cargar la ficha → conseguir cookie DataDome → llamar a los
+ * endpoints AJAX) y cada invocación de `curl` es un proceso nuevo = una
+ * conexión nueva al proxy. Con el endpoint rotativo, cada conexión sale por
+ * una IP residencial DISTINTA — aunque la URL del proxy sea idéntica. Como
+ * DataDome ata la cookie de validación a la IP+fingerprint que resolvió el
+ * challenge, si la página carga por la IP-A y el AJAX llega desde la IP-B con
+ * la cookie de la IP-A, DataDome lo trata como robo de sesión y devuelve
+ * bloqueo DURO instantáneo (no un slider resoluble) — confirmado por Smartproxy:
+ * su puerto de rotación (1001) asigna una IP nueva por conexión; el sticky
+ * endpoint mantiene la misma IP durante la sesión configurada.
+ *
+ * `sessionId` debe ser el MISMO para todas las llamadas de una misma búsqueda
+ * de teléfono (p.ej. el adId) y distinto entre búsquedas distintas, para no
+ * sobrecargar una sola IP residencial con miles de fichas.
+ */
+export function withStickySession(
+  proxyUrl: string,
+  sessionId: string,
+): string {
+  try {
+    const u = new URL(proxyUrl);
+    if (!u.username) return proxyUrl; // sin auth, no podemos anclar sesión
+    if (/-session-/.test(u.username)) return proxyUrl; // ya trae sesión
+    // Sanitizar sessionId a alfanumérico (los proveedores rechazan símbolos).
+    const safeId = sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 32) || "default";
+    const newUsername = `${u.username}-session-${safeId}`;
+    // Reconstrucción manual (no u.toString()): WHATWG URL añade una barra "/"
+    // final cuando no hay pathname, y no queremos alterar el formato original
+    // de la URL de proxy que curl/Playwright reciben tal cual.
+    const auth = u.password ? `${newUsername}:${u.password}` : newUsername;
+    return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
+  } catch {
+    return proxyUrl;
+  }
+}
+
+/**
  * Returns the STATIC residential proxy URL for browser automation (Playwright).
  * Never returns a raw datacenter IP from the Smartproxy API — datacenter IPs
  * get blocked by DataDome even with a perfect browser fingerprint.

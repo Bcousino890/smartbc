@@ -111,7 +111,14 @@ export async function fetchIdealistaPhoneViaPlaywright(
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
     if (residentialProxyUrl) {
       try {
-        const u = new URL(residentialProxyUrl);
+        // Sticky session: el navegador abre varias conexiones al proxy durante
+        // la carga (documento + XHR de "Ver teléfono"). Sin anclar la sesión al
+        // adId, cada conexión puede salir por una IP residencial distinta si el
+        // endpoint es rotativo, y DataDome rechaza la cookie emitida para otra
+        // IP con bloqueo duro. Ver withStickySession en proxy-config.ts.
+        const { withStickySession } = await import("@/lib/sync/proxy-config");
+        const stickyProxyUrl = withStickySession(residentialProxyUrl, adId);
+        const u = new URL(stickyProxyUrl);
         proxyConfig = {
           server: `${u.protocol}//${u.host}`,
           username: decodeURIComponent(u.username) || undefined,

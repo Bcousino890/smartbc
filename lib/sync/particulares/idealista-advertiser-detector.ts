@@ -619,6 +619,20 @@ export async function fetchIdealistaPhoneViaAjax(
     // Sin residencial → usar el proxy recibido.
   }
 
+  // ⚠️ CRÍTICO: anclar la IP (sticky session) para TODO el flujo de este adId.
+  // fetchMultipleAjaxWithCookieJar y las llamadas posteriores (pre-auth
+  // DataDome, comment.ajax) hacen procesos `curl` SEPARADOS — cada uno es una
+  // conexión nueva al proxy. Si el proxy es el endpoint rotativo, cada
+  // conexión sale por una IP residencial distinta aunque la URL sea la misma,
+  // y DataDome rechaza con bloqueo DURO en cuanto la cookie de la IP-A llega
+  // desde la IP-B (confirmado con soporte de Smartproxy: su puerto rotativo
+  // asigna IP nueva por conexión). withStickySession ancla la misma IP para
+  // todas las llamadas de este adId sin tocar otras búsquedas en paralelo.
+  if (phoneProxyUrl) {
+    const { withStickySession } = await import("@/lib/sync/proxy-config");
+    phoneProxyUrl = withStickySession(phoneProxyUrl, adId);
+  }
+
   console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);
 
   // Load the page once, then try all AJAX endpoints reusing the same cookie jar.
