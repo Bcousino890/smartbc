@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (admin as any)
       .from("properties")
-      .select("id, title, address, bc_reference, cover_photo_url, price, operation")
+      .select("id, slug, title, address, bc_reference, cover_photo_url, price, operation")
       .order("created_at", { ascending: false })
       .limit(20);
 

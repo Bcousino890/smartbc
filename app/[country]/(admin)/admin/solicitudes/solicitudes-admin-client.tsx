@@ -1,11 +1,13 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Link2, Loader2, Mail, RotateCcw, Search, X, XCircle } from "lucide-react";
+import { Check, CheckCircle2, Copy, ExternalLink, Languages, Link2, Loader2, Mail, RotateCcw, Search, X, XCircle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
+import { detectLanguage } from "@/lib/lang-detect";
 import { formatRelativeMinutes } from "@/lib/relative-time";
+import { shareSlug } from "@/lib/share-slug";
 import type { VisitRequest, VisitRequestStatus } from "@/lib/types";
 import type { ContactRequestRow } from "@/lib/db/queries/clients";
 import type { IdealistaLeadRow } from "@/lib/db/queries/idealista-leads";
@@ -18,13 +20,18 @@ import {
   assignIdealistaLead,
   setIdealistaLeadMatchedProperty,
   updateIdealistaLeadContactStatus,
+  translateLeadMessage,
 } from "./actions";
 
 type PropertySearchResult = {
   id: string;
+  slug: string | null;
   title: string | null;
   address: string | null;
   bc_reference: string | null;
+  cover_photo_url: string | null;
+  price: number | null;
+  operation: string | null;
 };
 
 type StaffOption = { id: string; name: string };
@@ -361,6 +368,176 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
   );
 }
 
+// ─── CopyButton ───────────────────────────────────────────────────
+//
+// Copia texto al portapapeles (p.ej. nombre o teléfono) para pegarlo rápido
+// en Zinto. Muestra un tick verde 1,5 s al copiar.
+
+function CopyButton({
+  value,
+  title,
+  size = 12,
+  className,
+  label,
+}: {
+  value: string;
+  title: string;
+  size?: number;
+  className?: string;
+  label?: string; // si se da, se pinta como pill con texto en vez de solo icono
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      window.prompt(title, value);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  if (label) {
+    return (
+      <button
+        type="button"
+        onClick={handleCopy}
+        title={title}
+        aria-label={title}
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold transition",
+          copied
+            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+            : "border-ink/15 bg-white text-ink/70 hover:border-teal-300 hover:text-teal-700",
+          className,
+        )}
+      >
+        {copied ? <Check size={size} strokeWidth={2.5} /> : <Copy size={size} strokeWidth={2} />}
+        {copied ? "Copiado" : label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={title}
+      aria-label={title}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-md p-1 transition",
+        copied
+          ? "text-emerald-600"
+          : "text-ink/35 hover:bg-ink/5 hover:text-teal-700",
+        className,
+      )}
+    >
+      {copied ? <Check size={size} strokeWidth={2.5} /> : <Copy size={size} strokeWidth={2} />}
+    </button>
+  );
+}
+
+// Formatea el precio de una ficha para el previsualizador de propiedades.
+function formatFichaPrice(price: number | null, operation: string | null): string | null {
+  if (price == null) return null;
+  const n = new Intl.NumberFormat("es-ES").format(price);
+  return operation === "rent" ? `${n} €/mes` : `${n} €`;
+}
+
+// ─── LangBadge ────────────────────────────────────────────────────
+//
+// Muestra "el idioma que habla" el contacto, detectado del mensaje sin llamadas
+// de red. Solo se pinta cuando hay una pista fiable (no para "Desconocido").
+
+function LangBadge({ text, className }: { text: string | null | undefined; className?: string }) {
+  const lang = detectLanguage(text);
+  if (!lang || lang.code === "unknown") return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full border border-ink/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-ink/60",
+        className,
+      )}
+      title={`Idioma del mensaje: ${lang.label}`}
+    >
+      <span aria-hidden>{lang.flag}</span>
+      {lang.label}
+    </span>
+  );
+}
+
+// ─── LeadMessage ──────────────────────────────────────────────────
+//
+// Mensaje del lead con traducción al español bajo demanda (vía IA). Detecta el
+// idioma en cliente para decidir si ofrecer el botón "Traducir" y permite
+// alternar entre original y traducción una vez obtenida.
+
+function LeadMessage({ text }: { text: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  const lang = detectLanguage(text);
+  const isSpanish = lang?.code === "es";
+  const showingTranslation = translation != null && !showOriginal;
+
+  function handleTranslate() {
+    if (translation != null) {
+      setShowOriginal((v) => !v);
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const res = await translateLeadMessage(text);
+      if (res.ok) {
+        setTranslation(res.translation);
+        setShowOriginal(false);
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  const buttonLabel =
+    translation == null ? "Traducir" : showOriginal ? "Ver traducción" : "Ver original";
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Mensaje</p>
+        {!isSpanish && (
+          <button
+            type="button"
+            onClick={handleTranslate}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+          >
+            {isPending ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <Languages size={11} strokeWidth={2} />
+            )}
+            {buttonLabel}
+          </button>
+        )}
+      </div>
+      <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-ink/75">
+        {showingTranslation ? translation : text}
+      </p>
+      {showingTranslation && (
+        <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-teal-700/70">
+          Traducido al español
+        </p>
+      )}
+      {error && <p className="mt-1.5 text-[11px] text-rose-600">{error}</p>}
+    </div>
+  );
+}
+
 // ─── IdealistaLeadCard ─────────────────────────────────────────────────
 
 const LEAD_STATUS_BADGE: Record<IdealistaLeadRow["status"], string> = {
@@ -447,16 +624,22 @@ function IdealistaLeadCard({
               </div>
             )}
             <div className="min-w-0">
-              <p className="truncate font-medium text-ink text-sm leading-tight">{lead.name || "Sin nombre"}</p>
+              <div className="flex items-center gap-1">
+                <p className="truncate font-medium text-ink text-sm leading-tight">{lead.name || "Sin nombre"}</p>
+                {lead.name && <CopyButton value={lead.name} title="Copiar nombre" />}
+              </div>
               {lead.phone && (
-                <a
-                  href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="block truncate text-[11px] text-ink/50 leading-tight mt-0.5 hover:text-amber-800 transition-colors"
-                >
-                  📞 {lead.phone}
-                  {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
-                </a>
+                <div className="flex items-center gap-1">
+                  <a
+                    href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="block truncate text-[11px] text-ink/50 leading-tight mt-0.5 hover:text-amber-800 transition-colors"
+                  >
+                    📞 {lead.phone}
+                    {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
+                  </a>
+                  <CopyButton value={lead.phone.replace(/\s+/g, "")} title="Copiar teléfono" size={11} />
+                </div>
               )}
             </div>
           </div>
@@ -489,6 +672,7 @@ function IdealistaLeadCard({
               ● Detalle
             </span>
           )}
+          <LangBadge text={lead.message} />
         </div>
 
         {/* Propiedad consultada */}
@@ -742,16 +926,23 @@ function IdealistaLeadModal({
               <img src={lead.avatar_url} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
             )}
             <div className="min-w-0">
-              <p className="font-semibold text-ink text-base">{lead.name || "Sin nombre"}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="truncate font-semibold text-ink text-base">{lead.name || "Sin nombre"}</p>
+                {lead.name && <CopyButton value={lead.name} title="Copiar nombre" size={14} />}
+              </div>
               {lead.phone && (
-                <a
-                  href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                  className="mt-0.5 block text-[13px] text-ink/60 hover:text-amber-800 transition-colors"
-                >
-                  📞 {lead.phone}
-                  {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
-                </a>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <a
+                    href={`tel:${lead.phone.replace(/\s/g, "")}`}
+                    className="block text-[13px] text-ink/60 hover:text-amber-800 transition-colors"
+                  >
+                    📞 {lead.phone}
+                    {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
+                  </a>
+                  <CopyButton value={lead.phone.replace(/\s+/g, "")} title="Copiar teléfono" size={13} />
+                </div>
               )}
+              <LangBadge text={lead.message} className="mt-1.5" />
             </div>
           </div>
           <button
@@ -852,12 +1043,7 @@ function IdealistaLeadModal({
 
         <PropertyMatchPicker lead={lead} />
 
-        {lead.message && (
-          <div className="mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Mensaje</p>
-            <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-ink/75">{lead.message}</p>
-          </div>
-        )}
+        {lead.message && <LeadMessage text={lead.message} />}
 
         {(bullets.length > 0 || presentacion) && (
           <div className="mt-4 rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2.5">
@@ -916,28 +1102,36 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PropertySearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [origin, setOrigin] = useState("");
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  // Al abrir el picker (query vacía) carga y previsualiza las fichas guardadas
+  // más recientes; al teclear, busca con debounce. Así el admin puede elegir
+  // una ficha de un vistazo sin tener que escribir.
+  useEffect(() => {
+    if (!editing) return;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    searchTimeout.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/admin/properties/search?q=${encodeURIComponent(query)}`);
-        const json = await res.json().catch(() => ({}));
-        setResults(json.data ?? []);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
+    searchTimeout.current = setTimeout(
+      async () => {
+        setSearching(true);
+        try {
+          const res = await fetch(`/api/admin/properties/search?q=${encodeURIComponent(query)}`);
+          const json = await res.json().catch(() => ({}));
+          setResults(json.data ?? []);
+        } finally {
+          setSearching(false);
+        }
+      },
+      query.trim() ? 300 : 0,
+    );
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [query]);
+  }, [query, editing]);
 
   function handleSelect(propertyId: string) {
     startTransition(async () => {
@@ -956,28 +1150,71 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
     });
   }
 
+  // Enlace público (SmartLink) de la ficha ya vinculada, para copiar/abrir y
+  // pegarlo en Zinto/WhatsApp. Convención igual que la ficha de propiedad:
+  // /compartir/{bcref}-{slug}.
+  const publicSlug = lead.matched_property_slug
+    ? shareSlug(lead.matched_property_slug, lead.matched_property_reference)
+    : null;
+  const relativeShareUrl = publicSlug ? `/compartir/${publicSlug}` : null;
+  const absoluteShareUrl = publicSlug ? `${origin}/compartir/${publicSlug}` : null;
+
   if (!editing) {
     return (
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4">
         {lead.matched_property_slug ? (
-          <>
-            <a
-              href={`/es/admin/propiedades/${lead.matched_property_slug}`}
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
-            >
-              <ExternalLink size={12} />
-              Ver ficha en el sistema
-              {lead.matched_property_reference ? ` · ${lead.matched_property_reference}` : ""}
-            </a>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              disabled={isTransitioning}
-              className="text-[11px] text-ink/40 underline transition hover:text-ink/70 disabled:opacity-50"
-            >
-              Cambiar
-            </button>
-          </>
+          <div className="rounded-lg border border-teal-100 bg-teal-50/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <a
+                href={`/es/admin/propiedades/${lead.matched_property_slug}`}
+                className="inline-flex min-w-0 items-center gap-1 text-[12px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+              >
+                <ExternalLink size={12} className="shrink-0" />
+                <span className="truncate">
+                  Ver ficha en el sistema
+                  {lead.matched_property_reference ? ` · ${lead.matched_property_reference}` : ""}
+                </span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                disabled={isTransitioning}
+                className="shrink-0 text-[11px] text-ink/40 underline transition hover:text-ink/70 disabled:opacity-50"
+              >
+                Cambiar
+              </button>
+            </div>
+
+            {/* Enlace público / SmartLink para compartir */}
+            {relativeShareUrl && (
+              <>
+                <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-wide text-teal-800/70">
+                  Enlace público
+                </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="min-w-0 flex-1 truncate rounded-md border border-ink/10 bg-white px-2 py-1.5 font-mono text-[11px] text-ink/55">
+                    {relativeShareUrl}
+                  </span>
+                  {absoluteShareUrl && (
+                    <CopyButton
+                      value={absoluteShareUrl}
+                      title="Copiar enlace público"
+                      label="Copiar"
+                    />
+                  )}
+                  <a
+                    href={relativeShareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Abrir enlace público"
+                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-white px-2.5 text-ink/60 transition hover:border-teal-300 hover:text-teal-700"
+                  >
+                    <ExternalLink size={13} strokeWidth={2} />
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
         ) : (
           <button
             type="button"
@@ -1010,6 +1247,9 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
           <X size={14} />
         </button>
       </div>
+      <p className="mt-1 text-[11px] text-ink/45">
+        Elige una de tus fichas guardadas o busca por título, dirección o referencia.
+      </p>
       <div className="relative mt-2">
         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/35" />
         <input
@@ -1025,27 +1265,55 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
         )}
       </div>
       {results.length > 0 && (
-        <div className="mt-2 max-h-52 space-y-1 overflow-y-auto">
-          {results.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => handleSelect(p.id)}
-              disabled={isTransitioning}
-              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition hover:bg-white disabled:opacity-50"
-            >
-              <span className="min-w-0 truncate text-ink/80">{p.title || p.address || "Sin título"}</span>
-              {p.bc_reference && (
-                <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/55">
-                  {p.bc_reference}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
+          {results.map((p) => {
+            const price = formatFichaPrice(p.price, p.operation);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleSelect(p.id)}
+                disabled={isTransitioning}
+                className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition hover:bg-white disabled:opacity-50"
+              >
+                {p.cover_photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.cover_photo_url} alt="" className="h-10 w-12 shrink-0 rounded-md object-cover" />
+                ) : (
+                  <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md bg-ink/5 text-ink/30">
+                    <Link2 size={13} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-ink/80">
+                    {p.title || p.address || "Sin título"}
+                  </p>
+                  {(price || p.address) && (
+                    <p className="truncate text-[11px] text-ink/45">
+                      {[price, p.title ? p.address : null].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                </div>
+                {p.bc_reference && (
+                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/55">
+                    {p.bc_reference}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
-      {query.trim() && !searching && results.length === 0 && (
-        <p className="mt-2 text-[11px] text-ink/40">Sin resultados</p>
+      {searching && results.length === 0 && (
+        <div className="mt-3 flex items-center justify-center gap-2 py-2 text-[11px] text-ink/40">
+          <Loader2 size={13} className="animate-spin" />
+          Cargando fichas…
+        </div>
+      )}
+      {!searching && results.length === 0 && (
+        <p className="mt-2 text-[11px] text-ink/40">
+          {query.trim() ? "Sin resultados" : "No hay fichas guardadas todavía"}
+        </p>
       )}
       {lead.matched_property_slug && (
         <button
