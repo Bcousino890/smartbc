@@ -498,6 +498,21 @@ function IdealistaLeadCard({
                     .join(" · ")}
                 </p>
               )}
+              {lead.matched_property_slug ? (
+                <a
+                  href={`/es/admin/propiedades/${lead.matched_property_slug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+                >
+                  <ExternalLink size={11} />
+                  Ver ficha en el sistema
+                  {lead.matched_property_reference ? ` · ${lead.matched_property_reference}` : ""}
+                </a>
+              ) : (
+                (lead.property_ref || lead.idealista_code) && (
+                  <p className="mt-1 text-[11px] text-ink/35">Sin ficha vinculada en el sistema</p>
+                )
+              )}
               {lead.properties.length > 1 && (
                 <p className="text-[11px] font-semibold text-teal-700 mt-0.5">
                   Consultó por {lead.properties.length} propiedades
@@ -809,6 +824,18 @@ function IdealistaLeadModal({
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
+                )}
+                {lead.matched_property_slug ? (
+                  <a
+                    href={`/es/admin/propiedades/${lead.matched_property_slug}`}
+                    className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                    Ver ficha en el sistema
+                    {lead.matched_property_reference ? ` · ${lead.matched_property_reference}` : ""}
+                  </a>
+                ) : (
+                  <p className="mt-1 text-[11px] text-ink/35">Sin ficha vinculada en el sistema</p>
                 )}
               </div>
             </div>

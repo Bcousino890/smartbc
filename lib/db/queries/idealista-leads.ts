@@ -19,6 +19,9 @@ export type IdealistaLeadRow = {
   idealista_code: string | null;
   property_ref: string | null;
   matched_property_id: string | null;
+  matched_property_slug: string | null;
+  matched_property_title: string | null;
+  matched_property_reference: string | null;
   message_date: string | null;
   detail_captured: boolean;
   suggested_type: "particular" | "agencia" | "relocation" | null;
@@ -73,7 +76,7 @@ export async function getIdealistaLeads(): Promise<IdealistaLeadRow[]> {
   }
 
   const rows = (data ?? []) as Array<
-    Omit<IdealistaLeadRow, "assigned_name">
+    Omit<IdealistaLeadRow, "assigned_name" | "matched_property_slug" | "matched_property_title" | "matched_property_reference">
   >;
 
   const assignedIds = usingAssignment
@@ -92,11 +95,34 @@ export async function getIdealistaLeads(): Promise<IdealistaLeadRow[]> {
     }
   }
 
-  return rows.map((r) => ({
-    ...r,
-    contact_status: r.contact_status ?? "ninguno",
-    assigned_to: r.assigned_to ?? null,
-    assigned_at: r.assigned_at ?? null,
-    assigned_name: r.assigned_to ? (names.get(r.assigned_to) ?? null) : null,
-  })) as IdealistaLeadRow[];
+  // Ficha del sistema vinculada (ver route.ts de ingesta): para poder mostrar
+  // el link "Ver en el sistema" en /admin/solicitudes necesitamos el slug de
+  // la propiedad, no solo su id.
+  const matchedIds = Array.from(
+    new Set(rows.map((r) => r.matched_property_id).filter((id): id is string => !!id)),
+  );
+  const matchedProperties = new Map<string, { slug: string; title: string | null; property_reference: string | null }>();
+  if (matchedIds.length > 0) {
+    const { data: props } = await admin
+      .from("properties")
+      .select("id, slug, title, property_reference")
+      .in("id", matchedIds);
+    for (const p of props ?? []) {
+      matchedProperties.set(p.id, { slug: p.slug, title: p.title ?? null, property_reference: p.property_reference ?? null });
+    }
+  }
+
+  return rows.map((r) => {
+    const matched = r.matched_property_id ? matchedProperties.get(r.matched_property_id) : undefined;
+    return {
+      ...r,
+      contact_status: r.contact_status ?? "ninguno",
+      assigned_to: r.assigned_to ?? null,
+      assigned_at: r.assigned_at ?? null,
+      assigned_name: r.assigned_to ? (names.get(r.assigned_to) ?? null) : null,
+      matched_property_slug: matched?.slug ?? null,
+      matched_property_title: matched?.title ?? null,
+      matched_property_reference: matched?.property_reference ?? null,
+    };
+  }) as IdealistaLeadRow[];
 }

@@ -161,20 +161,32 @@ export async function POST(req: Request) {
     (existingRows ?? []).map((row: any) => [row.conversation_id, row]),
   );
 
-  // Match best-effort de propiedades por la referencia de agencia (Ref. bc386):
-  // primero contra idealista_listings.reference_code (la ref con la que se
-  // publicó el anuncio), con fallback a properties.bc_reference.
+  // Match best-effort de propiedades. Dos vías, según lo que haya capturado
+  // la extensión en el modal de detalle del anuncio:
+  // 1) Ref. bc386 (referencia de agencia) contra idealista_listings.reference_code,
+  //    con fallback a properties.bc_reference.
+  // 2) Cod. 12345678 (id del anuncio en idealista.com) contra
+  //    idealista_listings.idealista_property_id — se rellena solo al publicar
+  //    el anuncio desde SmartBC, así que solo empareja fichas publicadas por
+  //    nosotros mismos.
   const refs = [...new Set([...incoming.values()].map((l) => l.property_ref?.toLowerCase()).filter((r): r is string => !!r))];
+  const codes = [...new Set([...incoming.values()].map((l) => l.idealista_code).filter((c): c is string => !!c))];
   const propertyIdByRef = new Map<string, string>();
-  if (refs.length > 0) {
+  const propertyIdByCode = new Map<string, string>();
+  if (refs.length > 0 || codes.length > 0) {
     const { data: listings } = await db
       .from("idealista_listings")
-      .select("property_id, reference_code")
-      .not("property_id", "is", null)
-      .not("reference_code", "is", null);
+      .select("property_id, reference_code, idealista_property_id")
+      .not("property_id", "is", null);
     for (const l of listings ?? []) {
-      const code = String(l.reference_code).toLowerCase();
-      if (refs.includes(code) && !propertyIdByRef.has(code)) propertyIdByRef.set(code, l.property_id);
+      if (l.reference_code) {
+        const code = String(l.reference_code).toLowerCase();
+        if (refs.includes(code) && !propertyIdByRef.has(code)) propertyIdByRef.set(code, l.property_id);
+      }
+      if (l.idealista_property_id) {
+        const id = String(l.idealista_property_id);
+        if (codes.includes(id) && !propertyIdByCode.has(id)) propertyIdByCode.set(id, l.property_id);
+      }
     }
     const { data: props } = await db.from("properties").select("id, bc_reference");
     for (const p of props ?? []) {
@@ -250,9 +262,15 @@ export async function POST(req: Request) {
       merged.suggestion_keywords = existing?.suggestion_keywords ?? [];
     }
 
-    // Match de propiedad (solo si aún no hay match)
+    // Match de propiedad (solo si aún no hay match): primero por referencia
+    // de agencia, luego por código de anuncio de idealista.com.
     const ref = (merged.property_ref as string | null)?.toLowerCase();
-    merged.matched_property_id = existing?.matched_property_id ?? (ref ? propertyIdByRef.get(ref) ?? null : null);
+    const code = merged.idealista_code as string | null;
+    merged.matched_property_id =
+      existing?.matched_property_id ??
+      (ref ? propertyIdByRef.get(ref) : undefined) ??
+      (code ? propertyIdByCode.get(code) : undefined) ??
+      null;
 
     rows.push(merged);
     results.push({ conversationId: lead.conversation_id, action: existing ? "updated" : "inserted" });
