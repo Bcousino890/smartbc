@@ -25,7 +25,7 @@ export default async function FavoritosPage() {
   const properties = ((rows ?? []) as unknown as FavRow[])
     .map((r) => r.properties)
     .filter((p): p is NonNullable<FavRow["properties"]> => !!p && p.archived_at === null)
-    .map(propertyRowToClientProperty);
+    .map((row) => propertyRowToClientProperty(row));
 
   return <FavoritosClient properties={properties} />;
 }

@@ -265,8 +265,8 @@ export function profileRowToInternalUser(
 // descriptivo basado en tipo + zona para evitar mostrar "Titulo" al cliente.
 const GENERIC_TITLE_RE = /^(t[ií]tulos?|titles?|propiedad|sin t[ií]tulo|untitled|—|-)$/i;
 
-function displayPropertyTitle(row: PropertyRow): string {
-  const raw = row.title?.trim() ?? "";
+function displayPropertyTitle(row: PropertyRow, titleOverride?: string): string {
+  const raw = (titleOverride ?? row.title)?.trim() ?? "";
   if (raw && !GENERIC_TITLE_RE.test(raw)) return raw;
   const typ = row.property_type?.trim();
   const typeLabel =
@@ -304,7 +304,26 @@ export function propertyRowToClientProperty(
     agencies?: { name: string; slug: string } | null;
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   },
+  // Propiedad dual (venta + alquiler): permite pedir explícitamente la
+  // variante de alquiler (título, precio y operación de esa variante) vía
+  // `?op=rent` en el SmartLink/PDF. Se ignora si la propiedad no es dual.
+  opOverride?: "rent" | "sale",
 ): Property {
+  const isDual =
+    Array.isArray(row.operations) &&
+    row.operations.includes("sale") &&
+    row.operations.includes("rent");
+  const effectiveOp: "rent" | "sale" =
+    isDual && opOverride ? opOverride : row.operation;
+  const effectivePrice =
+    isDual && effectiveOp === "rent" && row.rent_price != null
+      ? Number(row.rent_price)
+      : Number(row.price);
+  const effectiveTitleRaw =
+    isDual && effectiveOp === "rent" && row.title_rent
+      ? row.title_rent
+      : row.title;
+
   const sortedPhotos = dedupePhotosByUrl(
     row.property_photos
       ?.slice()
@@ -331,16 +350,17 @@ export function propertyRowToClientProperty(
   const cover = photoUrls[0];
   return {
     id: row.slug,
-    title: displayPropertyTitle(row),
+    title: displayPropertyTitle(row, effectiveTitleRaw),
     zone: row.zone,
     subzone: row.subzone ?? null,
     city: "Madrid",
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters ?? 0,
-    price: Number(row.price),
+    price: effectivePrice,
     stayType: row.stay === "short" ? "corta" : "larga",
-    operation: row.operation === "rent" ? "alquiler" : "venta",
+    operation: effectiveOp === "rent" ? "alquiler" : "venta",
+    hasBothOperations: isDual,
     image: cover ?? undefined,
     description: row.description ?? undefined,
     photos: photoUrls,

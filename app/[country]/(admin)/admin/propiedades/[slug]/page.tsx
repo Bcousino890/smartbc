@@ -18,6 +18,7 @@ export default async function PropertyDetailPage({
         id: string;
         slug: string;
         title: string;
+        title_rent: string | null;
         description: string | null;
         operation: "rent" | "sale";
         operations: string[] | null;
@@ -95,6 +96,7 @@ export default async function PropertyDetailPage({
         id: property.id,
         slug: property.slug,
         title: property.title,
+        title_rent: property.title_rent,
         description: property.description,
         operation: property.operation,
         operations:

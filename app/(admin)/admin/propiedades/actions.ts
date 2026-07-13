@@ -355,6 +355,10 @@ export type UpdatePropertyInput = {
   // estos se sobrescriben en el siguiente sync. Para manuales son definitivos.
   // `null` (donde aplica) significa "limpiar el campo".
   title?: string;
+  // Título específico de la variante de alquiler cuando la propiedad tiene
+  // ambas operaciones activas. Si es null/vacío, la vista de alquiler cae a
+  // `title`. Se ignora cuando la propiedad no es dual.
+  titleRent?: string | null;
   description?: string | null;
   price?: number;
   operation?: "rent" | "sale";
@@ -405,6 +409,8 @@ export async function updateProperty(
   // Permitimos null explícito para limpiar un campo opcional.
   const payload: Record<string, unknown> = {};
   if (input.title !== undefined) payload.title = input.title.trim();
+  if (input.titleRent !== undefined)
+    payload.title_rent = input.titleRent?.trim() || null;
   if (input.description !== undefined)
     payload.description = input.description?.trim() || null;
   if (input.operation !== undefined) payload.operation = input.operation;
