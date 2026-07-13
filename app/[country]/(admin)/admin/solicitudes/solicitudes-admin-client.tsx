@@ -530,7 +530,7 @@ function LeadMessage({ text }: { text: string }) {
       </p>
       {showingTranslation && (
         <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-teal-700/70">
-          Traducido al español por IA
+          Traducido al español
         </p>
       )}
       {error && <p className="mt-1.5 text-[11px] text-rose-600">{error}</p>}
