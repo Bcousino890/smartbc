@@ -279,8 +279,11 @@ export async function POST(req: Request) {
 }
 
 function normalizeLead(raw: IncomingLead) {
+  // Las conversaciones usan el id numérico; las llamadas perdidas del inbox
+  // llegan como "call_<id>" para no colisionar con una conversación del
+  // mismo número.
   const conversationId = asText(raw.conversationId);
-  if (!conversationId || !/^\d+$/.test(conversationId)) return null;
+  if (!conversationId || !/^(call_)?\d+$/.test(conversationId)) return null;
   return {
     conversation_id: conversationId,
     name: asText(raw.name),
