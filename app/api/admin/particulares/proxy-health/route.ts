@@ -1,7 +1,12 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { getResidentialProxyUrl, getFreshResidentialProxyUrl } from "@/lib/sync/proxy-config";
+import {
+  getResidentialProxyUrl,
+  getFreshResidentialProxyUrl,
+  withStickySessionForce,
+  COUNTRY_ROTATION,
+} from "@/lib/sync/proxy-config";
 import { getCapSolverApiKey } from "@/lib/sync/particulares/capsolver-config";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { extractDatadomeChallengeUrl } from "@/lib/sync/particulares/idealista-advertiser-detector";
@@ -26,11 +31,12 @@ async function getIp(proxyUrl: string): Promise<string | null> {
 }
 
 // Diagnóstico de salud del pipeline de teléfonos: confirma si CapSolver y el
-// proxy residencial (Evomi — app_settings["scraping.proxyUrl"]) están bien
-// configurados, si la sticky session (modificador `_session-<id>_lifetime-<min>`
-// en el password) funciona de verdad, y qué veredicto da DataDome sobre las
-// IPs del pool AHORA MISMO (slider resoluble t=fe vs bloqueo duro t=bv).
-// Solo Owner/Admin.
+// proxy residencial (Geonode principal / Smartproxy respaldo —
+// app_settings["scraping.proxyUrl"]) están bien configurados, si la sticky
+// session funciona de verdad (misma IP en 2 llamadas de la misma sesión), y
+// qué veredicto da DataDome sobre las IPs del pool AHORA MISMO (slider
+// resoluble t=fe vs bloqueo duro t=bv). El formato de la sesión lo construye
+// proxy-config según el proveedor detectado por la URL. Solo Owner/Admin.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile().catch(() => null);
   if (!profile || !["owner", "admin"].includes(profile.role)) {
@@ -65,7 +71,7 @@ export async function GET(request: Request) {
     out.capsolver = { configured: true, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  // ── 2. Proxy Evomi: configuración + sticky session real ──────────────────────
+  // ── 2. Proxy residencial: configuración + sticky session real ────────────────
   const proxyInfo: Record<string, unknown> = {};
   try {
     const base = await getResidentialProxyUrl();
@@ -100,8 +106,8 @@ export async function GET(request: Request) {
   out.proxy = proxyInfo;
 
   // ── 3. DataDome: veredicto sobre contact-phones, MULTI-MUESTRA ───────────────
-  // Cada llamada a getFreshResidentialProxyUrl genera una sesión Evomi nueva
-  // (IP nueva del pool). Probamos varias estrategias de UA sobre la MISMA IP
+  // Cada llamada a getFreshResidentialProxyUrl genera una sesión nueva del
+  // proveedor (IP nueva del pool). Probamos varias estrategias de UA sobre la MISMA IP
   // (aísla el efecto del UA) y la mejor estrategia sobre varias IPs (mide si
   // el pool en general está limpio o baneado por DataDome).
   const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
@@ -136,9 +142,8 @@ export async function GET(request: Request) {
   };
 
   try {
-    // Grupo 1: TODAS las estrategias sobre la MISMA IP fresca → aísla el efecto
-    // del UA del efecto de la IP. Si todas dan bv en la misma IP, es la IP
-    // (quemada); si alguna da fe, es cuestión de UA.
+    // Grupo 1: TODAS las estrategias de UA sobre la MISMA IP fresca (país por
+    // defecto/worldwide) → aísla el efecto del UA del efecto de la IP.
     const ip1 = await getFreshResidentialProxyUrl(3);
     const mismaIp = [];
     for (const [label, strat] of [
@@ -150,23 +155,32 @@ export async function GET(request: Request) {
       mismaIp.push(await probeContactPhones(label, ip1, strat));
     }
 
-    // Grupo 2: la mejor estrategia (B, UA consistente Chrome) sobre 3 IPs
-    // frescas distintas → mide si el pool en general responde bien.
-    const variasIps = [];
-    for (let i = 0; i < 3; i++) {
-      const ipN = await getFreshResidentialProxyUrl(2);
-      variasIps.push(await probeContactPhones(`ip${i + 1}_chrome_consistente`, ipN, { pageUA: BROWSER_UA, contactUA: BROWSER_UA }));
+    // Grupo 2: ROTACIÓN DE PAÍS — la misma que usa el flujo real de teléfono
+    // (COUNTRY_ROTATION), con la estrategia de UA ganadora (Chrome
+    // consistente) sobre una IP fresca POR PAÍS. Esto es lo que de verdad
+    // importa: confirma si algún país del pool da t=fe cuando el país por
+    // defecto (Grupo 1, normalmente "worldwide") da t=bv.
+    const baseUrl = await getResidentialProxyUrl();
+    const porPais = [];
+    if (baseUrl) {
+      for (const country of COUNTRY_ROTATION) {
+        const sessionId = `health-${country}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const proxyForCountry = withStickySessionForce(baseUrl, sessionId, 2, country);
+        const result = await probeContactPhones(`country_${country}`, proxyForCountry, { pageUA: BROWSER_UA, contactUA: BROWSER_UA });
+        porPais.push(result);
+        if (result.challenge_type === "fe") break; // encontrado, no gastar más pruebas
+      }
     }
 
-    const todos = [...mismaIp, ...variasIps];
+    const todos = [...mismaIp, ...porPais];
     const anyFe = todos.find((s) => s.challenge_type === "fe");
     out.datadome_estrategias = {
       misma_ip_distintos_ua: mismaIp,
-      distintas_ip_mismo_ua: variasIps,
+      rotacion_pais: porPais,
       estrategia_resoluble: anyFe?.estrategia ?? null,
       verdict: anyFe
-        ? `✅ "${anyFe.estrategia}" da t=fe (resoluble) — CapSolver puede resolverlo. Ajustar el flujo real a esa combinación.`
-        : `⛔ Ninguna combinación de UA ni IP dio t=fe — el pool residencial (Evomi) está genuinamente baneado por DataDome en Idealista en este momento. Vías: (1) probar targeting de país distinto (_country-XX o worldwide), (2) cross-portal (pisos.com no bloquea y expone teléfono).`,
+        ? `✅ "${anyFe.estrategia}" da t=fe (resoluble) — CapSolver puede resolverlo. El flujo real ya rota por estos mismos países, así que debería encontrarlo también.`
+        : `⛔ Ninguna combinación de UA ni país (${COUNTRY_ROTATION.join(", ")}) dio t=fe — el pool residencial está genuinamente baneado por DataDome en Idealista ahora mismo, en TODOS los países probados. Vías: (1) pool móvil (4G/LTE) del proveedor si está disponible, (2) cross-portal (pisos.com no bloquea y expone teléfono).`,
     };
   } catch (err) {
     out.datadome_estrategias = { error: err instanceof Error ? err.message : String(err) };

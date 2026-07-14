@@ -109,8 +109,8 @@ export async function fetchIdealistaPhoneViaPlaywright(
     // CapSolver resolviera el reto usando una IP DISTINTA a la que navegó el
     // browser, el token tampoco sería válido para esa sesión.
     //
-    // Evomi: sesión sticky vía `getFreshResidentialProxyUrl` (genera un
-    // sessionId nuevo y lo ancla al password de la URL — ver proxy-config.ts).
+    // Sesión sticky vía `getFreshResidentialProxyUrl` (genera un sessionId
+    // nuevo y lo ancla según el proveedor detectado — ver proxy-config.ts).
     // life=3: la sesión de Playwright (navegación + posible CapSolver) es algo
     // más larga que el flujo curl puro; un poco de margen extra.
     let stickyProxyUrl: string | undefined;
