@@ -393,6 +393,13 @@ const WHATSAPP_UA_FOR_AJAX = "WhatsApp/2.23.20.0";
 // nunca se resuelve. Usamos el MISMO Chrome 131 en todo el flujo.
 const BROWSER_UA_FOR_PAGE = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
+// Lifetime de la IP sticky del flujo de teléfono. Debe cubrir TODO el flujo con
+// margen: pasada inicial + regenerar reto + CapSolver (hasta ~60s resolviendo) +
+// reintento de contact-phones. Si la IP rota mientras CapSolver resuelve, éste
+// carga el captcha desde una IP distinta a la del cid → "proxy ip has been
+// blocked". 2 min se quedaba corto; 5 min da margen de sobra.
+const PHONE_STICKY_LIFETIME_MIN = 5;
+
 function idealistaPhoneEndpoints(adId: string): string[] {
   return [
     // Variante actual (REST): /es/ajax/ads/{id}/contact-phone-numbers
@@ -683,7 +690,7 @@ export async function fetchIdealistaPhoneViaAjax(
     const residential = await getResidentialProxyUrl();
     if (residential) {
       const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      phoneProxyUrl = withStickySession(residential, sessionId);
+      phoneProxyUrl = withStickySession(residential, sessionId, PHONE_STICKY_LIFETIME_MIN);
     }
   } catch {
     // Sin proxy residencial disponible → usar el proxy recibido tal cual.
@@ -906,7 +913,7 @@ export async function fetchIdealistaPhoneViaAjax(
     if (attempt > 0 && phoneProxyUrl) {
       const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       const country = COUNTRY_ROTATION[attempt % COUNTRY_ROTATION.length];
-      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId, undefined, country);
+      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId, PHONE_STICKY_LIFETIME_MIN, country);
     }
 
     // Reto DataDome de /contact-phones para esta IP. Estrategia GANADORA
