@@ -6,7 +6,6 @@
  */
 
 import "server-only";
-import { createAdminClient } from "@/lib/db/admin";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 import {
   fetchIdealistaPhoneViaAjax,
@@ -26,31 +25,8 @@ async function testPhoneExtraction() {
   console.log("═".repeat(60));
 
   try {
-    // Step 1: Verificar app_key en BD
-    console.log("\n📋 Step 1: Verificando configuración de Smartproxy...");
-    const db = createAdminClient() as any;
-    const { data: appKeyData, error: appKeyError } = await db
-      .from("app_settings")
-      .select("value")
-      .eq("key", "scraping.smartproxy.app_key")
-      .maybeSingle();
-
-    if (appKeyError) {
-      console.error(`❌ Error consultando app_key: ${appKeyError.message}`);
-      return;
-    }
-
-    const appKey = appKeyData?.value as string | null;
-    if (!appKey) {
-      console.warn(
-        "⚠️  No hay app_key guardado en app_settings['scraping.smartproxy.app_key']"
-      );
-    } else {
-      console.log(`✅ App_key encontrado (${appKey.slice(0, 8)}...)`);
-    }
-
-    // Step 2: Obtener proxy URL fresca
-    console.log("\n🌐 Step 2: Obteniendo IP fresca de Smartproxy...");
+    // Step 1: Obtener proxy URL (Evomi — app_settings['scraping.proxyUrl'])
+    console.log("\n🌐 Step 1: Obteniendo URL de proxy...");
     const proxyUrl = await getProxyUrl();
     if (!proxyUrl) {
       console.warn(
@@ -61,8 +37,8 @@ async function testPhoneExtraction() {
       console.log(`✅ Proxy URL: ${ipPart}`);
     }
 
-    // Step 3: Llamar a fetchIdealistaPhoneViaAjax
-    console.log("\n📞 Step 3: Llamando a fetchIdealistaPhoneViaAjax...");
+    // Step 2: Llamar a fetchIdealistaPhoneViaAjax
+    console.log("\n📞 Step 2: Llamando a fetchIdealistaPhoneViaAjax...");
     console.log(`   URL: https://www.idealista.com/inmueble/${adId}/`);
     const result = await fetchIdealistaPhoneViaAjax(adId, {
       proxyUrl,

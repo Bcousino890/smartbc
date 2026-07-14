@@ -31,7 +31,6 @@ export default function ConfiguracionClient() {
   const mlConnected = searchParams.get("ml_connected");
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
-  const [scrapingAppKey, setScrapingAppKey] = useState("");
   const [scrapingCapSolverKey, setScrapingCapSolverKey] = useState("");
   const [mlClientSecret, setMlClientSecret] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,14 +49,6 @@ export default function ConfiguracionClient() {
         }));
         if (typeof data["scraping.proxyUrl"] === "string") {
           setScrapingProxyUrl(data["scraping.proxyUrl"]);
-        }
-        if (typeof data["scraping.smartproxy.app_key"] === "string") {
-          let key = data["scraping.smartproxy.app_key"] as string;
-          // Extract app_key if full URL was saved
-          if (key.includes("app_key=")) {
-            try { const u = new URL(key); key = u.searchParams.get("app_key") ?? key; } catch {}
-          }
-          setScrapingAppKey(key);
         }
         if (typeof data["ml.chile.client_secret"] === "string") {
           let secret = data["ml.chile.client_secret"] as string;
@@ -85,7 +76,6 @@ export default function ConfiguracionClient() {
           defaults: settings.defaults,
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
-          "scraping.smartproxy.app_key": scrapingAppKey,
           "scraping.capsolver.api_key": scrapingCapSolverKey,
           "ml.chile.client_secret": mlClientSecret,
         }),
@@ -289,15 +279,6 @@ export default function ConfiguracionClient() {
         >
           <div className="space-y-3">
             <p className="text-xs text-ink/55">
-              Smartproxy API para rotación automática de 100 IPs residenciales. Pega el <strong>app_key</strong> o la URL completa del dashboard — se extrae automáticamente.
-            </p>
-            <PasswordField
-              label="Smartproxy App Key"
-              value={scrapingAppKey}
-              onChange={setScrapingAppKey}
-              placeholder="9cf8f476185ea51d90a811dfedf19974"
-            />
-            <p className="text-xs text-ink/55 pt-3">
               CapSolver API Key para resolver CAPTCHAs de DataDome automáticamente:
             </p>
             <PasswordField
@@ -307,13 +288,13 @@ export default function ConfiguracionClient() {
               placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             />
             <p className="text-xs text-ink/55 pt-1">
-              URL de proxy estático (fallback si la API falla):
+              URL de proxy residencial (Evomi — usuario:contraseña@host:puerto, sin modificadores de sesión):
             </p>
             <PasswordField
-              label="URL del proxy (fallback)"
+              label="URL del proxy"
               value={scrapingProxyUrl}
               onChange={setScrapingProxyUrl}
-              placeholder="http://usuario:contraseña@eu.smartproxy.net:3120"
+              placeholder="http://usuario:contraseña@core-residential.evomi.com:1000"
             />
           </div>
         </SettingsSection>

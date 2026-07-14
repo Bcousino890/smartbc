@@ -14,22 +14,28 @@ if [ -z "$CRON_SECRET" ]; then
   exit 1
 fi
 
-ENDPOINT="$API_URL/api/cron/particulares/scrape"
 TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-echo "[$TIMESTAMP] Ejecutando: particulares/scrape"
+# Ejecuta un endpoint de cron y loguea el resultado (no aborta el script si uno
+# falla — así un fallo en Idealista no impide el scraping de pisos.com).
+run_endpoint() {
+  local name="$1"
+  local endpoint="$2"
+  echo "[$TIMESTAMP] Ejecutando: $name"
+  local response
+  response=$(curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" "$endpoint" 2>&1)
+  if echo "$response" | grep -q '"ok":true'; then
+    echo "[$TIMESTAMP] ✓ $name OK"
+    echo "$response" | jq . 2>/dev/null || echo "$response"
+  else
+    echo "[$TIMESTAMP] ✗ $name error"
+    echo "$response"
+  fi
+}
 
-# Hacer el request con el secret en el header
-RESPONSE=$(curl -s -X POST \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  "$ENDPOINT" 2>&1)
+# 1) Idealista (teléfono tras DataDome; puede fallar según estado del proxy).
+run_endpoint "particulares/scrape (idealista)" "$API_URL/api/cron/particulares/scrape"
 
-# Loguear resultado
-if echo "$RESPONSE" | grep -q '"ok":true'; then
-  echo "[$TIMESTAMP] ✓ Éxito"
-  echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
-else
-  echo "[$TIMESTAMP] ✗ Error"
-  echo "$RESPONSE"
-  exit 1
-fi
+# 2) pisos.com — fuente alternativa que expone el teléfono directo en el HTML
+#    (sin DataDome). Mucho más fiable para conseguir teléfonos de particulares.
+run_endpoint "particulares/scrape-pisos" "$API_URL/api/cron/particulares/scrape-pisos"

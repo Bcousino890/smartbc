@@ -662,40 +662,22 @@ export async function fetchIdealistaPhoneViaAjax(
   // DataDome rechaza con bloqueo DURO en cuanto la cookie de la IP-A llega
   // desde la IP-B.
   //
-  // Dos productos Smartproxy en la cuenta, con mecanismos de sticky DISTINTOS:
-  //  1) Extracción API (app_key): devuelve `http://ip:puerto` SIN usuario. El
-  //     ancla de sesión es simplemente pedir UNA IP con `life` corto y
-  //     REUTILIZAR esa misma URL — confirmado en la documentación oficial del
-  //     dashboard de Smartproxy. Es el método PREFERIDO (semántica de
-  //     stickiness confirmada por el proveedor, no una suposición nuestra).
-  //  2) Gateway estático (usuario:contraseña, scraping.proxyUrl): el ancla se
-  //     intenta vía modificador `-session-<id>` en el username
-  //     (withStickySession) — sin confirmación oficial de que el proveedor lo
-  //     honre para esta cuenta/producto. Fallback solo si no hay app_key.
+  // Proveedor: Evomi (docs.evomi.com). El ancla de sesión se hace añadiendo
+  // `_session-<id>_lifetime-<min>` al PASSWORD de la URL (confirmado en su
+  // documentación oficial — ver withStickySession en proxy-config.ts). El
+  // sessionId NO puede ser solo el adId: si un mismo anuncio se reintenta
+  // varias veces (retries del cron, o el panel de test manual), usar siempre
+  // el mismo sessionId ancla SIEMPRE la misma IP — y si esa IP quedó marcada
+  // por DataDome en un intento anterior, el anuncio queda "quemado" para
+  // siempre. Componente aleatorio por invocación: misma IP dentro de ESTA
+  // llamada, IP distinta en cada reintento.
   let phoneProxyUrl = options?.proxyUrl;
   try {
-    const { getFreshResidentialProxyUrl, getResidentialProxyUrl, withStickySession } = await import(
-      "@/lib/sync/proxy-config"
-    );
-
-    // 1) Preferido: Extracción API con life corto (sticky confirmado).
-    const freshSticky = await getFreshResidentialProxyUrl(2);
-    if (freshSticky) {
-      phoneProxyUrl = freshSticky;
-    } else {
-      // 2) Fallback: gateway estático + modificador de username. El
-      // sessionId NO puede ser solo el adId: si un mismo anuncio se
-      // reintenta varias veces (retries del cron, o el panel de test
-      // manual), usar siempre el mismo sessionId ancla SIEMPRE la misma
-      // IP — y si esa IP quedó marcada por DataDome en un intento
-      // anterior, el anuncio queda "quemado" para siempre. Componente
-      // aleatorio por invocación: misma IP dentro de ESTA llamada, IP
-      // distinta en cada reintento.
-      const residential = await getResidentialProxyUrl();
-      if (residential) {
-        const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        phoneProxyUrl = withStickySession(residential, sessionId);
-      }
+    const { getResidentialProxyUrl, withStickySession } = await import("@/lib/sync/proxy-config");
+    const residential = await getResidentialProxyUrl();
+    if (residential) {
+      const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      phoneProxyUrl = withStickySession(residential, sessionId);
     }
   } catch {
     // Sin proxy residencial disponible → usar el proxy recibido tal cual.
@@ -909,40 +891,54 @@ export async function fetchIdealistaPhoneViaAjax(
   // primer t=bv: reintentamos con una IP sticky NUEVA (barato: solo llamadas
   // curl, sin gastar CapSolver) hasta CHALLENGE_RETRIES veces antes de caer al
   // fallback de Playwright.
-  const CHALLENGE_RETRIES = 3;
-  const { withStickySessionForce } = await import("@/lib/sync/proxy-config");
+  // El diagnóstico proxy-health probó que solo una fracción de las IPs frescas
+  // da el slider resoluble (t=fe); las demás dan bloqueo duro (t=bv). Por eso
+  // reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe, y ADEMÁS
+  // rotamos el país en cada intento (Evomi soporta `_country-XX`): la reputación
+  // ante DataDome varía mucho por pool/país, así que probar varios sube la
+  // probabilidad de dar con un pool limpio.
+  const { withStickySessionForce, EVOMI_COUNTRY_ROTATION } = await import("@/lib/sync/proxy-config");
+  const CHALLENGE_RETRIES = Math.max(5, EVOMI_COUNTRY_ROTATION.length);
   for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
-    // A partir del segundo intento, generar una IP sticky nueva (la primera
-    // reutiliza la que ya cargó la página/cookie-jar más arriba). Se FUERZA
-    // el reemplazo (withStickySessionForce) porque phoneProxyUrl ya trae una
-    // sesión anclada del intento 1; withStickySession normal sería no-op.
+    // A partir del segundo intento, forzar una sesión NUEVA (IP nueva de
+    // verdad) con un país distinto de la rotación — withStickySessionForce
+    // reemplaza el `_session-`/`_country-` del password aunque la URL ya traiga
+    // uno anclado del intento anterior.
     let attemptProxyUrl = phoneProxyUrl;
     if (attempt > 0 && phoneProxyUrl) {
       const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
+      const country = EVOMI_COUNTRY_ROTATION[attempt % EVOMI_COUNTRY_ROTATION.length];
+      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId, undefined, country);
     }
 
-    // Si no capturamos el reto en el cookie-jar (solo aplica al intento 0), o
-    // es un reintento con IP nueva, pedimos /contact-phones fresco.
+    // Reto DataDome de /contact-phones para esta IP. Estrategia GANADORA
+    // (verificada en proxy-health): UA Chrome CONSISTENTE en carga de página +
+    // contact-phones, compartiendo cookie-jar (la mezcla UA WhatsApp+Chrome da
+    // t=bv). Por eso cargamos la ficha con Chrome y llamamos a contact-phones
+    // con Chrome reutilizando el mismo jar, todo por la misma IP del intento.
+    // El intento 0 reutiliza el challengeBody del cookie-jar inicial (WhatsApp),
+    // pero si vino vacío/null, rehacemos con Chrome consistente.
     let body403 = attempt === 0 ? challengeBody : null;
     if (!body403) {
       try {
         const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
-        const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
-          proxyUrl: attemptProxyUrl,
-          allowSmallBody: true,
-          returnBodyOnError: true,
-          timeoutSec: 15,
-          headers: [
-            "X-Requested-With: XMLHttpRequest",
-            "Accept: application/json, text/javascript, */*; q=0.01",
-            `Referer: ${pageUrl}`,
-            "Accept-Language: es-ES,es;q=0.9",
-          ],
-        });
-        // El reto DataDome viene en el cuerpo del 403 (returnBodyOnError) o en
-        // el 200 (poco común). Tomamos cualquiera de los dos.
-        body403 = ("html" in cpRes ? cpRes.html : cpRes.body) ?? null;
+        const { results: cpResults } = await fetchMultipleAjaxWithCookieJar(
+          pageUrl,
+          [cpUrl],
+          BROWSER_UA_FOR_PAGE,
+          {
+            proxyUrl: attemptProxyUrl,
+            pageUserAgent: BROWSER_UA_FOR_PAGE, // Chrome consistente (carga + AJAX)
+            timeoutSec: 25,
+            ajaxHeaders: [
+              "X-Requested-With: XMLHttpRequest",
+              "Accept: application/json, text/javascript, */*; q=0.01",
+              `Referer: ${pageUrl}`,
+              "Accept-Language: es-ES,es;q=0.9",
+            ],
+          },
+        );
+        body403 = cpResults[0]?.body ?? null;
       } catch { /* seguimos */ }
     }
 
