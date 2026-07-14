@@ -4,6 +4,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import { TestPhoneExtractor } from "@/components/admin/particulares/test-phone-extractor";
+import { TestCrossMatch } from "@/components/admin/particulares/test-cross-match";
 import {
   getParticularesPage,
   getStaffOptions,
@@ -108,8 +109,9 @@ export default async function AdminParticularesPage({
         />
       </div>
 
-      <div className="mt-7">
+      <div className="mt-7 space-y-4">
         <TestPhoneExtractor />
+        <TestCrossMatch />
       </div>
 
       <ParticularesClient
