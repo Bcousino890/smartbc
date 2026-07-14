@@ -2,43 +2,81 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Proxy residencial — Evomi (docs.evomi.com). Único proveedor: se dejó de usar
-// Smartproxy (se agotaron sus GB). Formato de Evomi confirmado en su
-// documentación oficial (proxy-instructions/residential-proxies/proxy-sessions
-// y .../geo-targetting/country):
+// Proxy residencial — MULTI-PROVEEDOR con autodetección por la URL guardada.
 //
-//   http://usuario:password_country-ES_session-<id>_lifetime-<min>@host:puerto
+// Proveedor PRINCIPAL: Geonode (docs.geonode.com). Respaldo: Smartproxy.
+// También se sigue soportando Evomi (se detecta por el host de la URL), por si
+// hay que volver atrás. NO hace falta tocar código para cambiar de proveedor:
+// basta con pegar la URL base del proveedor en app_settings["scraping.proxyUrl"]
+// vía /admin/configuracion; este módulo detecta el formato correcto por el host
+// (o por el prefijo del usuario) y construye las sesiones sticky/geo según la
+// documentación oficial de CADA proveedor, que son DISTINTAS entre sí:
 //
-// Los modificadores van AÑADIDOS AL PASSWORD (no al username, a diferencia de
-// Smartproxy/Decodo). Formato de la sesión:
-//   - Rotativa (IP nueva cada conexión): sin modificadores.
-//   - Sticky (misma IP N minutos):        _session-<id>_lifetime-<minutos> (máx 120)
-//   - Hard-sticky (máxima duración):       _hardsession-<id> (sin duración)
-// Geo-targeting opcional: _country-<ISO2> / _region-/_city-/_isp-/_asn-.
+//   • Geonode   → modificadores en el USERNAME, lifetime en SEGUNDOS.
+//       http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:10000
+//       Puertos: rotativo 9000-9010, sticky 10000 (HTTP). Sesión = 8 alfanum.
+//       country = ISO2 en minúscula. lifetime máx 86400s (24h).
+//   • Evomi     → modificadores en el PASSWORD, lifetime en MINUTOS.
+//       http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000
+//   • Smartproxy→ modificadores en el USERNAME (estilo Decodo), sesión sin
+//       duración fija en la propia URL de gateway.
+//       http://USER-session-<id>:PASS@host:puerto
 //
-// La URL base (usuario:password@host:puerto, SIN modificadores) se guarda en
-// app_settings["scraping.proxyUrl"] vía /admin/configuracion — mismo campo que
-// antes usaba Smartproxy, solo cambia el valor pegado ahí.
+// La URL base (sin modificadores) se guarda tal cual la da el panel de cada
+// proveedor. Este módulo limpia cualquier modificador previo antes de anclar
+// uno nuevo, así que es idempotente aunque se pegue una URL "ya con sesión".
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EVOMI_DEFAULT_LIFETIME_MIN = 2; // corto: solo dura una búsqueda de teléfono
+const DEFAULT_LIFETIME_MIN = 2; // corto: solo dura una búsqueda de teléfono
+
+// Puertos de Geonode (docs.geonode.com). El sticky necesita el puerto 10000;
+// si la URL base viene con un puerto rotativo (9000-9010) lo cambiamos al
+// sticky al anclar sesión, porque en Geonode el tipo de sesión también depende
+// del PUERTO, no solo del username.
+const GEONODE_STICKY_PORT = "10000";
+const GEONODE_ROTATING_PORTS = new Set([
+  "9000", "9001", "9002", "9003", "9004", "9005",
+  "9006", "9007", "9008", "9009", "9010",
+]);
+const GEONODE_MAX_LIFETIME_SEC = 86400; // 24h (máximo de Geonode)
 
 // Países a rotar en los reintentos del flujo de teléfono. DataDome puntúa por
 // reputación de IP, que varía mucho por pool/país; probar varios sube la
 // probabilidad de dar con un pool que sirva el slider resoluble (t=fe) en vez
 // del bloqueo duro (t=bv). "worldwide" = sin targeting (pool global). Se
 // prioriza ES (target real del anuncio) y worldwide, luego grandes pools UE.
-// Configurable con EVOMI_COUNTRY_ROTATION (lista separada por comas).
-export const EVOMI_COUNTRY_ROTATION: string[] = (
-  process.env.EVOMI_COUNTRY_ROTATION ?? "worldwide,ES,DE,FR,GB,IT,PT,US"
+// Configurable con PROXY_COUNTRY_ROTATION (o el antiguo EVOMI_COUNTRY_ROTATION).
+export const COUNTRY_ROTATION: string[] = (
+  process.env.PROXY_COUNTRY_ROTATION ??
+  process.env.EVOMI_COUNTRY_ROTATION ??
+  "worldwide,ES,DE,FR,GB,IT,PT,US"
 )
   .split(",")
   .map((c) => c.trim())
   .filter(Boolean);
 
-function randomSessionId(): string {
-  // Doc de Evomi: cadena alfanumérica de 6-10 caracteres.
-  return Math.random().toString(36).slice(2, 10);
+// Alias de compatibilidad: callers existentes importan EVOMI_COUNTRY_ROTATION.
+export const EVOMI_COUNTRY_ROTATION = COUNTRY_ROTATION;
+
+type ProxyProvider = "geonode" | "evomi" | "smartproxy" | "generic";
+
+function detectProvider(u: URL): ProxyProvider {
+  const host = u.host.toLowerCase();
+  const user = decodeURIComponent(u.username).toLowerCase();
+  if (host.includes("geonode") || user.startsWith("geonode")) return "geonode";
+  if (host.includes("evomi")) return "evomi";
+  if (host.includes("smartproxy") || host.includes("smart-proxy") || host.includes("decodo")) {
+    return "smartproxy";
+  }
+  return "generic";
+}
+
+function randomSessionId(len = 8): string {
+  // Geonode exige exactamente 8 caracteres alfanuméricos; el resto de
+  // proveedores aceptan alfanumérico de longitud flexible.
+  let s = "";
+  while (s.length < len) s += Math.random().toString(36).slice(2);
+  return s.slice(0, len);
 }
 
 async function readStaticProxyUrl(): Promise<string | undefined> {
@@ -51,16 +89,16 @@ async function readStaticProxyUrl(): Promise<string | undefined> {
       .maybeSingle();
     let url = data?.value as string | null | undefined;
     if (url) url = url.replace(/^["']+|["']+$/g, "").trim();
-    return url || process.env.EVOMI_PROXY_URL || undefined;
+    return url || process.env.PROXY_URL || process.env.EVOMI_PROXY_URL || undefined;
   } catch {
-    return process.env.EVOMI_PROXY_URL || undefined;
+    return process.env.PROXY_URL || process.env.EVOMI_PROXY_URL || undefined;
   }
 }
 
 /**
  * URL de proxy para scraping general (búsquedas/listados) — sin anclar sesión,
  * cada conexión rota a una IP nueva del pool (comportamiento por defecto de
- * Evomi cuando no se añaden modificadores de sesión al password).
+ * todos los proveedores cuando no se añaden modificadores de sesión).
  */
 export async function getProxyUrl(): Promise<string | undefined> {
   return readStaticProxyUrl();
@@ -79,8 +117,9 @@ export function invalidateProxyCache() {
 }
 
 /**
- * Ancla una URL de proxy Evomi a una sola IP durante `lifeMinutes` (sticky
- * session), añadiendo `_session-<id>_lifetime-<min>` al PASSWORD.
+ * Ancla una URL de proxy a una sola IP durante `lifeMinutes` (sticky session).
+ * Detecta el proveedor por la URL y aplica su formato oficial (modificadores en
+ * username o password según corresponda).
  *
  * Por qué hace falta: el flujo de teléfono hace VARIAS llamadas curl seguidas
  * (cargar la ficha → cookie DataDome → contact-phones) y cada invocación de
@@ -95,12 +134,12 @@ export function invalidateProxyCache() {
 export function withStickySession(
   proxyUrl: string,
   sessionId: string,
-  lifeMinutes: number = EVOMI_DEFAULT_LIFETIME_MIN,
+  lifeMinutes: number = DEFAULT_LIFETIME_MIN,
 ): string {
   try {
     const u = new URL(proxyUrl);
     if (!u.username && !u.password) return proxyUrl; // sin auth, no podemos anclar sesión
-    if (/_session-|_hardsession-/.test(u.password)) return proxyUrl; // ya trae sesión
+    if (alreadyHasSession(u)) return proxyUrl; // ya trae sesión → idempotente
     return buildStickyUrl(u, sessionId, lifeMinutes);
   } catch {
     return proxyUrl;
@@ -116,21 +155,45 @@ export function withStickySession(
 export function withStickySessionForce(
   proxyUrl: string,
   sessionId: string,
-  lifeMinutes: number = EVOMI_DEFAULT_LIFETIME_MIN,
+  lifeMinutes: number = DEFAULT_LIFETIME_MIN,
   country?: string,
 ): string {
   try {
     const u = new URL(proxyUrl);
     if (!u.username && !u.password) return proxyUrl;
-    // Quitar cualquier modificador previo del password antes de anclar el nuevo.
-    u.password = u.password.replace(
-      /_(?:country|region|city|isp|asn|continent|session|hardsession|lifetime)-[^_]*/g,
-      "",
-    );
+    stripModifiers(u); // quitar cualquier modificador previo antes de anclar el nuevo
     return buildStickyUrl(u, sessionId, lifeMinutes, country);
   } catch {
     return proxyUrl;
   }
+}
+
+/** ¿La URL ya trae un modificador de sesión anclado? (según el proveedor). */
+function alreadyHasSession(u: URL): boolean {
+  const provider = detectProvider(u);
+  if (provider === "geonode" || provider === "smartproxy") {
+    return /-session-|-sessionid-/.test(decodeURIComponent(u.username));
+  }
+  // Evomi / genérico: la sesión va en el password.
+  return /_session-|_hardsession-/.test(decodeURIComponent(u.password));
+}
+
+/** Quita cualquier modificador previo (sesión/país/lifetime) de la URL. */
+function stripModifiers(u: URL): void {
+  const provider = detectProvider(u);
+  if (provider === "geonode" || provider === "smartproxy") {
+    const user = decodeURIComponent(u.username);
+    u.username = user.replace(
+      /-(?:type|country|region|state|city|isp|asn|session|sessionid|lifetime)-[^-]*/g,
+      "",
+    );
+    return;
+  }
+  const pass = decodeURIComponent(u.password);
+  u.password = pass.replace(
+    /_(?:country|region|city|isp|asn|continent|session|hardsession|lifetime)-[^_]*/g,
+    "",
+  );
 }
 
 function buildStickyUrl(
@@ -139,29 +202,80 @@ function buildStickyUrl(
   lifeMinutes: number,
   countryOverride?: string,
 ): string {
-  // Sanitizar sessionId a alfanumérico de 6-10 chars (formato exigido por Evomi).
-  const safeId = (sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || randomSessionId()).padEnd(6, "0");
+  const provider = detectProvider(u);
+  const country = (countryOverride ?? process.env.PROXY_COUNTRY ?? process.env.EVOMI_COUNTRY ?? "").trim();
+  const useCountry = !!country && country.toLowerCase() !== "worldwide";
+
+  if (provider === "geonode") return buildGeonodeUrl(u, sessionId, lifeMinutes, country, useCountry);
+  if (provider === "smartproxy") return buildSmartproxyUrl(u, sessionId);
+  return buildEvomiUrl(u, sessionId, lifeMinutes, country, useCountry);
+}
+
+// ── Geonode: modificadores en el USERNAME, lifetime en SEGUNDOS ──────────────
+// http://USER-type-residential[-country-xx]-session-<8>-lifetime-<seg>:PASS@host:10000
+function buildGeonodeUrl(
+  u: URL,
+  sessionId: string,
+  lifeMinutes: number,
+  country: string,
+  useCountry: boolean,
+): string {
+  const base = decodeURIComponent(u.username); // ya viene sin modificadores (stripModifiers)
+  const safeId = geonodeSessionId(sessionId);
+  const lifeSec = Math.min(
+    GEONODE_MAX_LIFETIME_SEC,
+    Math.max(1, Math.round(lifeMinutes * 60)),
+  );
+  const geo = useCountry ? `-country-${country.toLowerCase()}` : "";
+  const newUser = `${base}-type-residential${geo}-session-${safeId}-lifetime-${lifeSec}`;
+  // El sticky de Geonode requiere el puerto 10000: si la URL base viene con un
+  // puerto rotativo (9000-9010) lo cambiamos; si trae otro puerto, se respeta.
+  let host = u.host;
+  if (GEONODE_ROTATING_PORTS.has(u.port)) {
+    host = `${u.hostname}:${GEONODE_STICKY_PORT}`;
+  }
+  const auth = `${newUser}:${u.password}`;
+  return `${u.protocol}//${auth}@${host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
+}
+
+/** Geonode exige exactamente 8 caracteres alfanuméricos para el session id. */
+function geonodeSessionId(sessionId: string): string {
+  const clean = sessionId.replace(/[^a-zA-Z0-9]/g, "");
+  if (clean.length >= 8) return clean.slice(0, 8);
+  return (clean + randomSessionId(8)).slice(0, 8);
+}
+
+// ── Smartproxy (respaldo): modificadores en el USERNAME (estilo Decodo) ──────
+// http://USER-session-<id>:PASS@host:puerto
+function buildSmartproxyUrl(u: URL, sessionId: string): string {
+  const base = decodeURIComponent(u.username);
+  const safeId = (sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || randomSessionId(8)).padEnd(6, "0");
+  const newUser = `${base}-session-${safeId}`;
+  const auth = `${newUser}:${u.password}`;
+  return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
+}
+
+// ── Evomi: modificadores en el PASSWORD, lifetime en MINUTOS ─────────────────
+// http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000
+function buildEvomiUrl(
+  u: URL,
+  sessionId: string,
+  lifeMinutes: number,
+  country: string,
+  useCountry: boolean,
+): string {
+  const safeId = (sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || randomSessionId(8)).padEnd(6, "0");
   const life = Math.min(120, Math.max(1, Math.round(lifeMinutes)));
-  // País: override explícito (rotación por reintento) → env → worldwide (vacío).
-  // "worldwide" / "" = sin targeting de país (pool global, recomendado tras el
-  // baneo del pool ES). Un ISO2 concreto (ES, US, DE…) restringe a ese país.
-  const country = (countryOverride ?? process.env.EVOMI_COUNTRY ?? "").trim();
-  const useCountry = country && country.toLowerCase() !== "worldwide";
   const modifiers = `${useCountry ? `_country-${country}` : ""}_session-${safeId}_lifetime-${life}`;
-  const newPassword = `${u.password}${modifiers}`;
-  // Reconstrucción manual (no u.toString()): WHATWG URL añade una barra "/"
-  // final cuando no hay pathname, y no queremos alterar el formato original
-  // de la URL de proxy que curl/Playwright reciben tal cual.
+  const newPassword = `${decodeURIComponent(u.password)}${modifiers}`;
   const auth = `${u.username}:${newPassword}`;
   return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
 }
 
 /**
  * Proxy STICKY para UNA búsqueda de teléfono: ancla una IP nueva (sesión
- * fresca) durante `lifeMinutes`. Reemplaza al antiguo mecanismo de Smartproxy
- * (pedir una IP a su "Extracción API" y reutilizar la URL cruda); con Evomi la
- * frescura y el anclaje se consiguen con el MISMO mecanismo: generar un
- * sessionId nuevo aleatorio cada vez que se llama a esta función.
+ * fresca) durante `lifeMinutes`. Genera un sessionId nuevo aleatorio cada vez,
+ * así que cada llamada sale por una IP distinta anclada durante la búsqueda.
  *
  * Llamar UNA vez por búsqueda (p.ej. una vez por adId) y reutilizar el string
  * devuelto en TODAS las llamadas de esa búsqueda.
@@ -171,8 +285,12 @@ export async function getFreshResidentialProxyUrl(
 ): Promise<string | undefined> {
   const base = await readStaticProxyUrl();
   if (!base) return undefined;
-  const sessionId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const sessionId = randomSessionId(8);
   const fresh = withStickySessionForce(base, sessionId, lifeMinutes);
-  console.log(`[proxy-config] ✓ IP sticky Evomi (life=${lifeMinutes}m): sesión ${sessionId}`);
+  let provider = "generic";
+  try {
+    provider = detectProvider(new URL(base));
+  } catch {}
+  console.log(`[proxy-config] ✓ IP sticky ${provider} (life=${lifeMinutes}m): sesión ${sessionId}`);
   return fresh;
 }

@@ -894,20 +894,21 @@ export async function fetchIdealistaPhoneViaAjax(
   // El diagnóstico proxy-health probó que solo una fracción de las IPs frescas
   // da el slider resoluble (t=fe); las demás dan bloqueo duro (t=bv). Por eso
   // reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe, y ADEMÁS
-  // rotamos el país en cada intento (Evomi soporta `_country-XX`): la reputación
-  // ante DataDome varía mucho por pool/país, así que probar varios sube la
-  // probabilidad de dar con un pool limpio.
-  const { withStickySessionForce, EVOMI_COUNTRY_ROTATION } = await import("@/lib/sync/proxy-config");
-  const CHALLENGE_RETRIES = Math.max(5, EVOMI_COUNTRY_ROTATION.length);
+  // rotamos el país en cada intento (el proveedor soporta targeting por país):
+  // la reputación ante DataDome varía mucho por pool/país, así que probar
+  // varios sube la probabilidad de dar con un pool limpio. El formato del
+  // modificador de país lo aplica proxy-config según el proveedor detectado.
+  const { withStickySessionForce, COUNTRY_ROTATION } = await import("@/lib/sync/proxy-config");
+  const CHALLENGE_RETRIES = Math.max(5, COUNTRY_ROTATION.length);
   for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
     // A partir del segundo intento, forzar una sesión NUEVA (IP nueva de
     // verdad) con un país distinto de la rotación — withStickySessionForce
-    // reemplaza el `_session-`/`_country-` del password aunque la URL ya traiga
-    // uno anclado del intento anterior.
+    // reemplaza la sesión/país anclados aunque la URL ya traiga uno del intento
+    // anterior.
     let attemptProxyUrl = phoneProxyUrl;
     if (attempt > 0 && phoneProxyUrl) {
       const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      const country = EVOMI_COUNTRY_ROTATION[attempt % EVOMI_COUNTRY_ROTATION.length];
+      const country = COUNTRY_ROTATION[attempt % COUNTRY_ROTATION.length];
       attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId, undefined, country);
     }
 

@@ -288,13 +288,17 @@ export default function ConfiguracionClient() {
               placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             />
             <p className="text-xs text-ink/55 pt-1">
-              URL de proxy residencial (Evomi — usuario:contraseña@host:puerto, sin modificadores de sesión):
+              URL de proxy residencial (Geonode principal / Smartproxy respaldo) —
+              usuario:contraseña@host:puerto, SIN modificadores de sesión. El
+              proveedor se detecta por la URL; los modificadores sticky/país los
+              añade el sistema automáticamente. Geonode: usa el puerto rotativo
+              (9000) — el sistema cambia al sticky (10000) cuando hace falta.
             </p>
             <PasswordField
               label="URL del proxy"
               value={scrapingProxyUrl}
               onChange={setScrapingProxyUrl}
-              placeholder="http://usuario:contraseña@core-residential.evomi.com:1000"
+              placeholder="http://geonode_USUARIO:CONTRASEÑA@proxy.geonode.io:9000"
             />
           </div>
         </SettingsSection>
