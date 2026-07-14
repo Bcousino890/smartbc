@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // distDir configurable por env para permitir builds ATÓMICOS en el deploy: el
+  // auto-deploy del VPS compila a `.next.new` (NEXT_BUILD_DIR) y solo lo
+  // intercambia por `.next` si el build tuvo ÉXITO. Así un build que muere a
+  // medias (p.ej. OOM en el VPS) nunca corrompe el `.next` que el proceso en
+  // producción está sirviendo. `next start` (sin la env) siempre lee `.next`.
+  distDir: process.env.NEXT_BUILD_DIR || ".next",
   experimental: {
     serverActions: {
       // Por defecto Next limita el body de las server actions a 1MB, lo que

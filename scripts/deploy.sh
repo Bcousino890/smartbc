@@ -28,8 +28,11 @@ rsync -az \
   --exclude 'tsconfig.tsbuildinfo' \
   "$REPO_DIR/" "$VPS:$APP_DIR/"
 
-echo "▶ [2/3] Instalando deps, compilando y reiniciando…"
-ssh "$VPS" "cd $APP_DIR && npm install && NODE_OPTIONS='--max-old-space-size=4096' npm run build && pm2 restart $PM2_APP"
+echo "▶ [2/3] Instalando deps, compilando (build atómico) y reiniciando…"
+# Build ATÓMICO: compila a `.next.new` sin tocar el `.next` en uso; solo si el
+# build tiene éxito hace el swap y reinicia. Si falla, `.next` queda intacto y
+# la app sigue con la build anterior (ver next.config.ts / vps-autodeploy.sh).
+ssh "$VPS" "cd $APP_DIR && npm install && rm -rf .next.new && NODE_OPTIONS='--max-old-space-size=4096' NEXT_BUILD_DIR=.next.new npm run build && rm -rf .next.old && { mv .next .next.old 2>/dev/null || true; } && mv .next.new .next && pm2 restart $PM2_APP && rm -rf .next.old"
 
 echo "▶ [3/3] Aplicando migraciones de BD pendientes…"
 ssh "$VPS" "bash $APP_DIR/scripts/apply-migrations.sh"

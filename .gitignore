@@ -13,6 +13,8 @@
 
 # next.js
 /.next/
+/.next.new/
+/.next.old/
 /out/
 
 # production
