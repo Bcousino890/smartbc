@@ -1,5 +1,6 @@
 import "server-only";
 import { ProxyAgent } from "undici";
+import { getResidentialProxyUrl } from "@/lib/sync/proxy-config";
 import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
 import { fetchHtmlWithWayback } from "./fetch-with-wayback";
 import { fetchViaCurl } from "./fetch-via-curl";
@@ -45,7 +46,6 @@ const DEFAULT_HEADERS: HeadersInit = {
 };
 
 const TIMEOUT_MS = 20_000;
-const PROXY_URL = process.env.SMARTPROXY_URL;
 
 // User-Agent del bot de WhatsApp. DataDome (el anti-bot de Idealista) lo
 // tiene en whitelist porque en España se comparten masivamente links de
@@ -218,6 +218,11 @@ async function maybeTryWayback(
 export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
   console.log(`[fetch-html] Iniciando para ${url}`);
 
+  // Proxy residencial (Evomi) desde app_settings["scraping.proxyUrl"]. Se
+  // resuelve por petición (no a nivel de módulo) para que un cambio en
+  // /admin/configuracion surta efecto sin reiniciar el proceso.
+  const PROXY_URL = await getResidentialProxyUrl();
+
   // Intento 0 (solo Idealista): fetch directo con el UA de WhatsApp, que
   // DataDome deja pasar. Es lo más rápido y fiable — evita proxy/Playwright/
   // Wayback por completo cuando funciona (que es casi siempre).
@@ -252,11 +257,11 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     directResult.error.kind === "blocked" && PROXY_URL;
   if (isBlocked) {
     try {
-      console.log(`[fetch-html] Intento 2: proxy Smartproxy`);
+      console.log(`[fetch-html] Intento 2: proxy Evomi`);
       const proxyAgent = new ProxyAgent(PROXY_URL);
       const proxyResult = await tryFetch(url, proxyAgent);
       if (proxyResult.ok) {
-        console.log(`[fetch-html] ✓ Proxy Smartproxy exitoso`);
+        console.log(`[fetch-html] ✓ Proxy Evomi exitoso`);
         return proxyResult;
       }
 

@@ -41,6 +41,47 @@ function randomSessionId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+/**
+ * Normaliza la URL de proxy a la forma canónica `http://usuario:password@host:puerto`
+ * que `new URL()` (y curl/undici/Playwright) esperan.
+ *
+ * El panel de Evomi entrega las credenciales en su formato nativo
+ * `host:puerto:usuario:password` (p.ej. `core-residential.evomi.com:1000:portalesX:secreto`),
+ * que NO es una URL válida: al pegarlo tal cual en /admin/configuracion,
+ * `new URL()` lanza "Invalid URL" y todo el proxy queda inutilizable. Aquí lo
+ * detectamos y lo reescribimos. Formas admitidas (con o sin esquema `http://`):
+ *   - `http://usuario:password@host:puerto`   → se deja igual (ya es canónica)
+ *   - `host:puerto:usuario:password`          → `http://usuario:password@host:puerto`
+ *   - `usuario:password@host:puerto`          → se le antepone el esquema
+ *   - `host:puerto`                           → se le antepone el esquema (sin auth)
+ */
+export function normalizeProxyUrl(
+  raw: string | null | undefined,
+): string | undefined {
+  if (!raw) return undefined;
+  let s = raw.replace(/^["'\s]+|["'\s]+$/g, "").trim();
+  if (!s) return undefined;
+
+  // Separar el esquema si viene (http://, https://, socks5://…). Default http.
+  let scheme = "http";
+  const schemeMatch = s.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+  if (schemeMatch) {
+    scheme = schemeMatch[1].toLowerCase();
+    s = s.slice(schemeMatch[0].length);
+  }
+
+  // Formato nativo de Evomi: host:puerto:usuario:password (el password es el
+  // resto y puede contener ':'). Se reordena a usuario:password@host:puerto.
+  const evomi = s.match(/^([^:/@\s]+):(\d{1,5}):([^:/@\s]+):(.+)$/);
+  if (evomi) {
+    const [, host, port, user, pass] = evomi;
+    return `${scheme}://${user}:${pass}@${host}:${port}`;
+  }
+
+  // Ya está en orden [usuario:password@]host:puerto → solo anteponer esquema.
+  return `${scheme}://${s}`;
+}
+
 async function readStaticProxyUrl(): Promise<string | undefined> {
   try {
     const db = createAdminClient() as any;
@@ -49,11 +90,10 @@ async function readStaticProxyUrl(): Promise<string | undefined> {
       .select("value")
       .eq("key", "scraping.proxyUrl")
       .maybeSingle();
-    let url = data?.value as string | null | undefined;
-    if (url) url = url.replace(/^["']+|["']+$/g, "").trim();
-    return url || process.env.EVOMI_PROXY_URL || undefined;
+    const url = data?.value as string | null | undefined;
+    return normalizeProxyUrl(url) ?? normalizeProxyUrl(process.env.EVOMI_PROXY_URL);
   } catch {
-    return process.env.EVOMI_PROXY_URL || undefined;
+    return normalizeProxyUrl(process.env.EVOMI_PROXY_URL);
   }
 }
 
