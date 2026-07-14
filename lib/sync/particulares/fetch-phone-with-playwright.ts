@@ -9,8 +9,12 @@ export type PlaywrightPhoneResult = {
   error?: string;
 };
 
+// Chrome 131: debe coincidir con el UA que CapSolver exige (fuerza >= Chrome
+// 124), porque el cid del reto DataDome queda ligado al UA de la navegación; si
+// el browser navega con Chrome 120 pero CapSolver resuelve con 131, DataDome
+// rechaza con "userAgent does not match".
 const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 const PHONE_ENDPOINTS = [
   "/contact-phones",
