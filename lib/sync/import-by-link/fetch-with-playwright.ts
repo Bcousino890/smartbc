@@ -1,4 +1,5 @@
 import "server-only";
+import { getResidentialProxyUrl } from "@/lib/sync/proxy-config";
 import type { ImportExtractError } from "./types";
 
 const BROWSER_UA =
@@ -34,7 +35,8 @@ export async function fetchHtmlWithPlaywright(
     // datacenter (Hetzner) y portales con DataDome (Idealista) la marcan
     // como bot incluso con un navegador real. La combinación
     // proxy-residencial + JS-real es la que pasa la mayoría de filtros.
-    const proxyUrl = process.env.SMARTPROXY_URL;
+    // Fuente: app_settings["scraping.proxyUrl"] (Evomi), vía proxy-config.
+    const proxyUrl = await getResidentialProxyUrl();
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
     if (proxyUrl) {
       try {
@@ -46,7 +48,7 @@ export async function fetchHtmlWithPlaywright(
         };
         console.log(`[playwright] Usando proxy ${u.host}`);
       } catch {
-        console.log(`[playwright] SMARTPROXY_URL inválida, lanzando sin proxy`);
+        console.log(`[playwright] URL de proxy inválida, lanzando sin proxy`);
       }
     }
 

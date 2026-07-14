@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { getResidentialProxyUrl } from "@/lib/sync/proxy-config";
 
 const TEST_URL = "https://www.idealista.com/inmueble/111564879/";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -15,7 +16,9 @@ export async function GET() {
     );
   }
 
-  const proxyUrl = process.env.SMARTPROXY_URL;
+  // Proxy residencial (Evomi) desde app_settings["scraping.proxyUrl"], ya
+  // normalizado a http://usuario:password@host:puerto.
+  const proxyUrl = await getResidentialProxyUrl();
 
   // Test directo sin proxy
   let directStatus: number | string = "no probado";
