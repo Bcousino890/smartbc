@@ -64,35 +64,52 @@ async function rescrapeParticularForPhone(
       proxyUrl,
     });
 
+    // La carga de PÁGINA COMPLETA suele dar 403/t=bv (bloqueo duro de DataDome)
+    // aunque el proxy funcione — es lo NORMAL. NO abortamos: el teléfono real se
+    // saca del flujo AJAX /contact-phones (fetchIdealistaPhoneViaAjax), que
+    // ancla su propia IP sticky, rota país y resuelve el slider con CapSolver.
+    // Solo el minado de teléfono desde la descripción necesita el HTML.
+    const pageHtml = curlRes.ok ? curlRes.html : "";
     if (!curlRes.ok) {
-      result.error = `Fetch failed: ${curlRes.reason}`;
-      return result;
+      console.log(
+        `[rescrape-missing-phones] Página 403/err (${curlRes.reason}) para ${particular.external_id} — sigo con AJAX`,
+      );
     }
 
-    // Try to extract phone from the fresh HTML
-    const advertiserInfo = detectAdvertiserFromHtml(curlRes.html);
+    // Try to extract phone from the fresh HTML (si cargó)
+    const advertiserInfo = pageHtml
+      ? detectAdvertiserFromHtml(pageHtml)
+      : { phone: null as string | null, phone_confidence: null as string | null };
 
     const adIdMatch = particular.source_url.match(/\/inmueble\/(\d+)/);
     const refDigits = adIdMatch?.[1] ? adIdMatch[1].slice(-9) : null;
 
     // Fuente adicional (barata): teléfono escrito por el particular en la
-    // descripción del anuncio. Ya tenemos el HTML descargado, así que lo minamos
-    // antes del fallback AJAX (que gasta proxy/CapSolver/Playwright).
-    if (!advertiserInfo.phone) {
-      const textPhone = extractPhoneFromHtmlDescription(curlRes.html, refDigits);
+    // descripción del anuncio. Solo si tenemos HTML; se mina antes del fallback
+    // AJAX (que gasta proxy/CapSolver/Playwright).
+    if (!advertiserInfo.phone && pageHtml) {
+      const textPhone = extractPhoneFromHtmlDescription(pageHtml, refDigits);
       if (textPhone.phone) {
         advertiserInfo.phone = textPhone.phone;
         advertiserInfo.phone_confidence = "medium";
       }
     }
 
-    // Fallback AJAX: many Idealista listings hide the phone behind "Ver teléfono"
+    // Fallback AJAX: la mayoría de anuncios esconden el teléfono tras "Ver
+    // teléfono". Se ejecuta SIEMPRE que falte teléfono, incluso si la página
+    // completa dio 403 (que es lo normal).
     if (!advertiserInfo.phone && adIdMatch?.[1]) {
       const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], { proxyUrl });
       if (ajax.phone) {
         advertiserInfo.phone = ajax.phone;
         advertiserInfo.phone_confidence = ajax.phone_confidence;
       }
+    }
+
+    // Si ni la página cargó ni el AJAX dio teléfono, reportar el fallo de red.
+    if (!advertiserInfo.phone && !curlRes.ok) {
+      result.error = `Fetch failed: ${curlRes.reason} (AJAX tampoco obtuvo teléfono)`;
+      return result;
     }
 
     if (advertiserInfo.phone) {
