@@ -3,6 +3,7 @@ import { ProxyAgent } from "undici";
 import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
 import { fetchHtmlWithWayback } from "./fetch-with-wayback";
 import { fetchViaCurl } from "./fetch-via-curl";
+import { getProxyUrl } from "../proxy-config";
 import type { ImportExtractError } from "./types";
 
 // Hosts donde merece la pena intentar el fallback final de Wayback Machine
@@ -45,7 +46,15 @@ const DEFAULT_HEADERS: HeadersInit = {
 };
 
 const TIMEOUT_MS = 20_000;
-const PROXY_URL = process.env.SMARTPROXY_URL;
+// El proxy residencial se resuelve en tiempo de ejecución vía getProxyUrl()
+// (fuente de verdad: app_settings.scraping.proxyUrl en /admin/configuracion,
+// con fallback a PROXY_URL/EVOMI_PROXY_URL). Antes se leía SMARTPROXY_URL
+// directamente aquí, pero la migración multi-proveedor (Smartproxy agotado →
+// Evomi → Geonode) dejó esa variable huérfana: el import-by-link seguía saliendo
+// por el Smartproxy sin GB → Idealista devolvía página parcial sin el JSON de
+// multimedia → el extractor caía al fallback DOM y solo captaba 1 foto.
+// SMARTPROXY_URL se mantiene como último fallback para no romper entornos que
+// aún dependan de ella.
 
 // User-Agent del bot de WhatsApp. DataDome (el anti-bot de Idealista) lo
 // tiene en whitelist porque en España se comparten masivamente links de
@@ -218,6 +227,10 @@ async function maybeTryWayback(
 export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
   console.log(`[fetch-html] Iniciando para ${url}`);
 
+  // Proxy residencial configurado (Geonode/Smartproxy/Evomi vía
+  // /admin/configuracion). Fallback legacy a SMARTPROXY_URL.
+  const proxyUrl = (await getProxyUrl()) ?? process.env.SMARTPROXY_URL;
+
   // Intento 0 (solo Idealista): fetch directo con el UA de WhatsApp, que
   // DataDome deja pasar. Es lo más rápido y fiable — evita proxy/Playwright/
   // Wayback por completo cuando funciona (que es casi siempre).
@@ -226,7 +239,7 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     // Vía curl (no fetch/undici): DataDome valida el TLS fingerprint además
     // del UA. El JA3 de curl + UA WhatsApp pasa; el de undici no.
     const curlResult = await fetchViaCurl(url, WHATSAPP_UA, {
-      proxyUrl: PROXY_URL,
+      proxyUrl,
     });
     if (curlResult.ok) {
       console.log(`[fetch-html] ✓ UA WhatsApp (curl) exitoso`);
@@ -249,11 +262,11 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
 
   // Si recibe 403/429 y tenemos proxy, reintentar con proxy
   const isBlocked =
-    directResult.error.kind === "blocked" && PROXY_URL;
+    directResult.error.kind === "blocked" && proxyUrl;
   if (isBlocked) {
     try {
-      console.log(`[fetch-html] Intento 2: proxy Smartproxy`);
-      const proxyAgent = new ProxyAgent(PROXY_URL);
+      console.log(`[fetch-html] Intento 2: proxy residencial`);
+      const proxyAgent = new ProxyAgent(proxyUrl);
       const proxyResult = await tryFetch(url, proxyAgent);
       if (proxyResult.ok) {
         console.log(`[fetch-html] ✓ Proxy Smartproxy exitoso`);

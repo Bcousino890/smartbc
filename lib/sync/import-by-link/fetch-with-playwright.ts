@@ -1,4 +1,5 @@
 import "server-only";
+import { getProxyUrl } from "../proxy-config";
 import type { ImportExtractError } from "./types";
 
 const BROWSER_UA =
@@ -34,7 +35,10 @@ export async function fetchHtmlWithPlaywright(
     // datacenter (Hetzner) y portales con DataDome (Idealista) la marcan
     // como bot incluso con un navegador real. La combinación
     // proxy-residencial + JS-real es la que pasa la mayoría de filtros.
-    const proxyUrl = process.env.SMARTPROXY_URL;
+    // Proxy residencial configurado (Geonode/Smartproxy/Evomi vía
+    // /admin/configuracion). Fallback legacy a SMARTPROXY_URL. Antes se leía
+    // solo SMARTPROXY_URL, que la migración multi-proveedor dejó huérfana.
+    const proxyUrl = (await getProxyUrl()) ?? process.env.SMARTPROXY_URL;
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
     if (proxyUrl) {
       try {
@@ -46,7 +50,7 @@ export async function fetchHtmlWithPlaywright(
         };
         console.log(`[playwright] Usando proxy ${u.host}`);
       } catch {
-        console.log(`[playwright] SMARTPROXY_URL inválida, lanzando sin proxy`);
+        console.log(`[playwright] URL de proxy inválida, lanzando sin proxy`);
       }
     }
 
