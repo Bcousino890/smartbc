@@ -50,10 +50,16 @@ los 3 formatos (18/18).
 
 ### Pendiente / próximos pasos
 
-1. **Pegar la URL de Geonode en `/admin/configuracion`** (campo "URL del
-   proxy"): `http://geonode_USUARIO:CONTRASEÑA@proxy.geonode.io:9000` (o el
-   host/puerto que dé el panel de Geonode). El sistema detecta que es Geonode
-   por el prefijo `geonode_` del usuario y por el host.
+1. **Pegar la credencial de Geonode en `/admin/configuracion`** (campo "URL del
+   proxy"). Se puede pegar **tal cual se copia del panel** — `normalizeProxyUrl`
+   admite varios formatos:
+   - la **línea de endpoint** de Geonode (botón copiar en «Endpoints format»):
+     `proxy.geonode.io:9000:geonode_USUARIO-type-residential:PASSWORD`
+   - o una URL: `http://geonode_USUARIO:PASSWORD@proxy.geonode.io:9000`
+
+   Usar el **puerto rotativo 9000**; el sistema detecta que es Geonode (por el
+   host / el prefijo `geonode_`), quita/normaliza los modificadores y cambia al
+   puerto sticky (10000-10900) cuando hace falta.
 2. **Verificar con `proxy-health`.** Ejecutar
    `GET /api/admin/particulares/proxy-health` y mirar
    `proxy.sticky_verificado.honra_sticky` (debe ser `true`) y

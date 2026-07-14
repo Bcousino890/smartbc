@@ -288,18 +288,20 @@ export default function ConfiguracionClient() {
               placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             />
             <p className="text-xs text-ink/55 pt-1">
-              URL de proxy residencial (Geonode principal / Smartproxy respaldo) —
-              usuario:contraseña@host:puerto, SIN modificadores de sesión. El
-              proveedor se detecta por la URL; los modificadores sticky/país los
-              añade el sistema automáticamente. Geonode: usa el puerto rotativo
-              (9000) — el sistema cambia a un puerto sticky (10000-10900) cuando
-              hace falta anclar la IP.
+              Proxy residencial (Geonode principal / Smartproxy respaldo). Pega la
+              credencial <strong>tal cual la copias del panel</strong>: sirve la
+              línea de endpoint de Geonode <code>host:puerto:usuario:password</code>
+              (botón copiar en «Endpoints format») o una URL{" "}
+              <code>http://usuario:password@host:puerto</code>. Usa el puerto
+              <strong> rotativo (9000)</strong>: el sistema detecta el proveedor,
+              cambia solo a un puerto sticky (10000-10900) y añade los
+              modificadores de sesión/país cuando hace falta anclar la IP.
             </p>
             <PasswordField
               label="URL del proxy"
               value={scrapingProxyUrl}
               onChange={setScrapingProxyUrl}
-              placeholder="http://geonode_USUARIO:CONTRASEÑA@proxy.geonode.io:9000"
+              placeholder="proxy.geonode.io:9000:geonode_USUARIO-type-residential:PASSWORD"
             />
           </div>
         </SettingsSection>

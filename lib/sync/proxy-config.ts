@@ -99,6 +99,45 @@ function randomSessionId(len = 8): string {
   return s.slice(0, len);
 }
 
+/**
+ * Normaliza a la forma canónica `http://usuario:password@host:puerto` cualquiera
+ * de los formatos que dan los paneles de proxy, para que el usuario pueda pegar
+ * la credencial TAL CUAL la copia (menos errores = menos fallos):
+ *
+ *   - `http://usuario:password@host:puerto`  (ya canónica → se respeta)
+ *   - `host:puerto:usuario:password`         (formato NATIVO de Geonode/Evomi,
+ *                                             el que Geonode deja copiar con un
+ *                                             botón en "Endpoints format")
+ *   - `usuario:password@host:puerto`         (sin esquema)
+ *   - `host:puerto`                          (sin auth)
+ *
+ * El password puede contener ":" (los de Geonode son UUID sin ":", pero se
+ * contempla por seguridad uniendo el resto de segmentos).
+ */
+export function normalizeProxyUrl(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  // Recortar espacios ANTES de quitar comillas (por si vienen `  "url"  `).
+  let s = raw.trim().replace(/^["']+|["']+$/g, "").trim();
+  if (!s) return undefined;
+
+  // Ya trae esquema http(s):// → confiar en él (formato canónico).
+  if (/^https?:\/\//i.test(s)) return s;
+
+  // Sin esquema pero con "@": usuario:password@host:puerto → solo anteponer http.
+  if (s.includes("@")) return `http://${s}`;
+
+  // Sin esquema y sin "@": puede ser el formato nativo host:puerto:usuario:password
+  // o simplemente host:puerto.
+  const parts = s.split(":");
+  if (parts.length >= 4) {
+    const [host, port, user, ...rest] = parts;
+    const pass = rest.join(":"); // por si el password tuviera ":"
+    return `http://${user}:${pass}@${host}:${port}`;
+  }
+  // host:puerto (sin auth) u otro → anteponer http y dejar que new URL() valide.
+  return `http://${s}`;
+}
+
 async function readStaticProxyUrl(): Promise<string | undefined> {
   try {
     const db = createAdminClient() as any;
@@ -107,11 +146,10 @@ async function readStaticProxyUrl(): Promise<string | undefined> {
       .select("value")
       .eq("key", "scraping.proxyUrl")
       .maybeSingle();
-    let url = data?.value as string | null | undefined;
-    if (url) url = url.replace(/^["']+|["']+$/g, "").trim();
-    return url || process.env.PROXY_URL || process.env.EVOMI_PROXY_URL || undefined;
+    const raw = (data?.value as string | null | undefined) ?? process.env.PROXY_URL ?? process.env.EVOMI_PROXY_URL;
+    return normalizeProxyUrl(raw);
   } catch {
-    return process.env.PROXY_URL || process.env.EVOMI_PROXY_URL || undefined;
+    return normalizeProxyUrl(process.env.PROXY_URL ?? process.env.EVOMI_PROXY_URL);
   }
 }
 

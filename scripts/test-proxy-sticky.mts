@@ -189,5 +189,30 @@ console.log("\n── Sin auth ──");
 const noAuth = "http://proxy.geonode.io:9000";
 check("sin auth → no-op (no se puede anclar)", withStickySession(noAuth, "x") === noAuth, noAuth);
 
+console.log("\n── normalizeProxyUrl (pegar credencial tal cual) ──");
+function normalizeProxyUrl(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  let s = raw.trim().replace(/^["']+|["']+$/g, "").trim();
+  if (!s) return undefined;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.includes("@")) return `http://${s}`;
+  const parts = s.split(":");
+  if (parts.length >= 4) {
+    const [host, port, user, ...rest] = parts;
+    return `http://${user}:${rest.join(":")}@${host}:${port}`;
+  }
+  return `http://${s}`;
+}
+check(
+  "geonode nativo host:port:user:pass → canónica",
+  normalizeProxyUrl("proxy.geonode.io:9000:geonode_x-type-residential:d8ca-uuid") ===
+    "http://geonode_x-type-residential:d8ca-uuid@proxy.geonode.io:9000",
+  normalizeProxyUrl("proxy.geonode.io:9000:geonode_x-type-residential:d8ca-uuid"),
+);
+check("url http:// canónica → no-op", normalizeProxyUrl("http://u:p@h:9000") === "http://u:p@h:9000", normalizeProxyUrl("http://u:p@h:9000"));
+check("user:pass@host:port (sin esquema) → +http", normalizeProxyUrl("u:p@h:9000") === "http://u:p@h:9000", normalizeProxyUrl("u:p@h:9000"));
+check("comillas y espacios se limpian", normalizeProxyUrl('  "http://u:p@h:9000"  ') === "http://u:p@h:9000", normalizeProxyUrl('  "http://u:p@h:9000"  '));
+check("vacío → undefined", normalizeProxyUrl("   ") === undefined, normalizeProxyUrl("   "));
+
 console.log(`\n${ok}/${ok + fail} tests OK${fail ? ` — ${fail} FALLIDOS` : ""}`);
 process.exit(fail ? 1 : 0);
