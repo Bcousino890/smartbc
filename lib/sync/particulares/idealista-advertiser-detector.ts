@@ -891,20 +891,24 @@ export async function fetchIdealistaPhoneViaAjax(
   // primer t=bv: reintentamos con una IP sticky NUEVA (barato: solo llamadas
   // curl, sin gastar CapSolver) hasta CHALLENGE_RETRIES veces antes de caer al
   // fallback de Playwright.
-  // El diagnóstico proxy-health (con país aleatorio) probó que ~1 de cada 3 IPs
-  // frescas da el slider resoluble (t=fe); las demás dan bloqueo duro (t=bv).
-  // Por eso reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe. Con
-  // 5 intentos, la probabilidad de acertar una t=fe supera el 85%.
-  const CHALLENGE_RETRIES = 5;
-  const { withStickySessionForce } = await import("@/lib/sync/proxy-config");
+  // El diagnóstico proxy-health probó que solo una fracción de las IPs frescas
+  // da el slider resoluble (t=fe); las demás dan bloqueo duro (t=bv). Por eso
+  // reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe, y ADEMÁS
+  // rotamos el país en cada intento (Evomi soporta `_country-XX`): la reputación
+  // ante DataDome varía mucho por pool/país, así que probar varios sube la
+  // probabilidad de dar con un pool limpio.
+  const { withStickySessionForce, EVOMI_COUNTRY_ROTATION } = await import("@/lib/sync/proxy-config");
+  const CHALLENGE_RETRIES = Math.max(5, EVOMI_COUNTRY_ROTATION.length);
   for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
     // A partir del segundo intento, forzar una sesión NUEVA (IP nueva de
-    // verdad) — withStickySessionForce reemplaza el `_session-<id>` del
-    // password aunque la URL ya traiga uno anclado del intento anterior.
+    // verdad) con un país distinto de la rotación — withStickySessionForce
+    // reemplaza el `_session-`/`_country-` del password aunque la URL ya traiga
+    // uno anclado del intento anterior.
     let attemptProxyUrl = phoneProxyUrl;
     if (attempt > 0 && phoneProxyUrl) {
       const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
+      const country = EVOMI_COUNTRY_ROTATION[attempt % EVOMI_COUNTRY_ROTATION.length];
+      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId, undefined, country);
     }
 
     // Reto DataDome de /contact-phones para esta IP. Estrategia GANADORA

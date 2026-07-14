@@ -11,11 +11,12 @@
 
 // Copia local de la lógica (sin imports de "server-only" para poder testear
 // standalone con node, igual que el resto de scripts de test de este repo).
-function buildStickyUrl(u: URL, sessionId: string, lifeMinutes: number): string {
+function buildStickyUrl(u: URL, sessionId: string, lifeMinutes: number, countryOverride?: string): string {
   const safeId = (sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "default").padEnd(6, "0");
   const life = Math.min(120, Math.max(1, Math.round(lifeMinutes)));
-  const country = process.env.EVOMI_COUNTRY;
-  const modifiers = `${country ? `_country-${country}` : ""}_session-${safeId}_lifetime-${life}`;
+  const country = (countryOverride ?? process.env.EVOMI_COUNTRY ?? "").trim();
+  const useCountry = country && country.toLowerCase() !== "worldwide";
+  const modifiers = `${useCountry ? `_country-${country}` : ""}_session-${safeId}_lifetime-${life}`;
   const newPassword = `${u.password}${modifiers}`;
   const auth = `${u.username}:${newPassword}`;
   return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
@@ -32,7 +33,7 @@ function withStickySession(proxyUrl: string, sessionId: string, lifeMinutes = 2)
   }
 }
 
-function withStickySessionForce(proxyUrl: string, sessionId: string, lifeMinutes = 2): string {
+function withStickySessionForce(proxyUrl: string, sessionId: string, lifeMinutes = 2, country?: string): string {
   try {
     const u = new URL(proxyUrl);
     if (!u.username && !u.password) return proxyUrl;
@@ -40,7 +41,7 @@ function withStickySessionForce(proxyUrl: string, sessionId: string, lifeMinutes
       /_(?:country|region|city|isp|asn|continent|session|hardsession|lifetime)-[^_]*/g,
       "",
     );
-    return buildStickyUrl(u, sessionId, lifeMinutes);
+    return buildStickyUrl(u, sessionId, lifeMinutes, country);
   } catch {
     return proxyUrl;
   }
@@ -90,6 +91,16 @@ check("lifetime configurable se refleja en la URL", r7.includes("_lifetime-5"), 
 
 const r8 = withStickySession(base, "capmax", 500);
 check("lifetime se capa a 120 (máximo de Evomi)", r8.includes("_lifetime-120"), r8);
+
+// Rotación de país en reintentos (Evomi `_country-XX`).
+const rC1 = withStickySessionForce(base, "sess1", 2, "DE");
+check("country override: añade _country-DE", rC1.includes("_country-DE_session-"), rC1);
+
+const rC2 = withStickySessionForce(rC1, "sess2", 2, "FR");
+check("country override: reemplaza DE por FR (no acumula)", rC2.includes("_country-FR") && !rC2.includes("_country-DE"), rC2);
+
+const rC3 = withStickySessionForce(base, "sess3", 2, "worldwide");
+check("country 'worldwide' → sin _country- (pool global)", !rC3.includes("_country-") && rC3.includes("_session-sess3"), rC3);
 
 console.log(`\n${ok}/${ok + fail} tests OK${fail ? ` — ${fail} FALLIDOS` : ""}`);
 process.exit(fail ? 1 : 0);

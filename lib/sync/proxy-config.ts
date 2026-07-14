@@ -23,6 +23,19 @@ import { createAdminClient } from "@/lib/db/admin";
 
 const EVOMI_DEFAULT_LIFETIME_MIN = 2; // corto: solo dura una búsqueda de teléfono
 
+// Países a rotar en los reintentos del flujo de teléfono. DataDome puntúa por
+// reputación de IP, que varía mucho por pool/país; probar varios sube la
+// probabilidad de dar con un pool que sirva el slider resoluble (t=fe) en vez
+// del bloqueo duro (t=bv). "worldwide" = sin targeting (pool global). Se
+// prioriza ES (target real del anuncio) y worldwide, luego grandes pools UE.
+// Configurable con EVOMI_COUNTRY_ROTATION (lista separada por comas).
+export const EVOMI_COUNTRY_ROTATION: string[] = (
+  process.env.EVOMI_COUNTRY_ROTATION ?? "worldwide,ES,DE,FR,GB,IT,PT,US"
+)
+  .split(",")
+  .map((c) => c.trim())
+  .filter(Boolean);
+
 function randomSessionId(): string {
   // Doc de Evomi: cadena alfanumérica de 6-10 caracteres.
   return Math.random().toString(36).slice(2, 10);
@@ -104,6 +117,7 @@ export function withStickySessionForce(
   proxyUrl: string,
   sessionId: string,
   lifeMinutes: number = EVOMI_DEFAULT_LIFETIME_MIN,
+  country?: string,
 ): string {
   try {
     const u = new URL(proxyUrl);
@@ -113,18 +127,27 @@ export function withStickySessionForce(
       /_(?:country|region|city|isp|asn|continent|session|hardsession|lifetime)-[^_]*/g,
       "",
     );
-    return buildStickyUrl(u, sessionId, lifeMinutes);
+    return buildStickyUrl(u, sessionId, lifeMinutes, country);
   } catch {
     return proxyUrl;
   }
 }
 
-function buildStickyUrl(u: URL, sessionId: string, lifeMinutes: number): string {
+function buildStickyUrl(
+  u: URL,
+  sessionId: string,
+  lifeMinutes: number,
+  countryOverride?: string,
+): string {
   // Sanitizar sessionId a alfanumérico de 6-10 chars (formato exigido por Evomi).
   const safeId = (sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || randomSessionId()).padEnd(6, "0");
   const life = Math.min(120, Math.max(1, Math.round(lifeMinutes)));
-  const country = process.env.EVOMI_COUNTRY; // opcional; vacío = worldwide (recomendado tras el baneo del pool ES en Smartproxy)
-  const modifiers = `${country ? `_country-${country}` : ""}_session-${safeId}_lifetime-${life}`;
+  // País: override explícito (rotación por reintento) → env → worldwide (vacío).
+  // "worldwide" / "" = sin targeting de país (pool global, recomendado tras el
+  // baneo del pool ES). Un ISO2 concreto (ES, US, DE…) restringe a ese país.
+  const country = (countryOverride ?? process.env.EVOMI_COUNTRY ?? "").trim();
+  const useCountry = country && country.toLowerCase() !== "worldwide";
+  const modifiers = `${useCountry ? `_country-${country}` : ""}_session-${safeId}_lifetime-${life}`;
   const newPassword = `${u.password}${modifiers}`;
   // Reconstrucción manual (no u.toString()): WHATWG URL añade una barra "/"
   // final cuando no hay pathname, y no queremos alterar el formato original
