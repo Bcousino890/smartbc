@@ -3,7 +3,7 @@ import { ProxyAgent } from "undici";
 import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
 import { fetchHtmlWithWayback } from "./fetch-with-wayback";
 import { fetchViaCurl } from "./fetch-via-curl";
-import { getProxyUrl } from "../proxy-config";
+import { getFreshResidentialProxyUrl } from "../proxy-config";
 import type { ImportExtractError } from "./types";
 
 // Hosts donde merece la pena intentar el fallback final de Wayback Machine
@@ -227,9 +227,14 @@ async function maybeTryWayback(
 export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
   console.log(`[fetch-html] Iniciando para ${url}`);
 
-  // Proxy residencial configurado (Geonode/Smartproxy/Evomi vía
-  // /admin/configuracion). Fallback legacy a SMARTPROXY_URL.
-  const proxyUrl = (await getProxyUrl()) ?? process.env.SMARTPROXY_URL;
+  // Proxy residencial con SESIÓN STICKY: una IP residencial anclada para toda la
+  // secuencia de fetch de este anuncio (curl → undici → Playwright). Geonode y
+  // Evomi requieren modificadores en usuario/contraseña + puerto sticky; la URL
+  // BASE cruda (getProxyUrl) no conecta → ERR_TUNNEL_CONNECTION_FAILED. Este
+  // helper aplica el formato correcto del proveedor (igual que el scraping de
+  // teléfonos, que sí pasa DataDome). Fallback legacy a SMARTPROXY_URL.
+  const proxyUrl =
+    (await getFreshResidentialProxyUrl(3)) ?? process.env.SMARTPROXY_URL;
 
   // Intento 0 (solo Idealista): fetch directo con el UA de WhatsApp, que
   // DataDome deja pasar. Es lo más rápido y fiable — evita proxy/Playwright/

@@ -1,5 +1,5 @@
 import "server-only";
-import { getProxyUrl } from "../proxy-config";
+import { getFreshResidentialProxyUrl } from "../proxy-config";
 import type { ImportExtractError } from "./types";
 
 const BROWSER_UA =
@@ -35,10 +35,12 @@ export async function fetchHtmlWithPlaywright(
     // datacenter (Hetzner) y portales con DataDome (Idealista) la marcan
     // como bot incluso con un navegador real. La combinación
     // proxy-residencial + JS-real es la que pasa la mayoría de filtros.
-    // Proxy residencial configurado (Geonode/Smartproxy/Evomi vía
-    // /admin/configuracion). Fallback legacy a SMARTPROXY_URL. Antes se leía
-    // solo SMARTPROXY_URL, que la migración multi-proveedor dejó huérfana.
-    const proxyUrl = (await getProxyUrl()) ?? process.env.SMARTPROXY_URL;
+    // Proxy residencial con SESIÓN STICKY (formato correcto del proveedor:
+    // Geonode/Evomi necesitan modificadores + puerto sticky; la URL base cruda
+    // da ERR_TUNNEL_CONNECTION_FAILED). Igual que el scraping de teléfonos.
+    // Fallback legacy a SMARTPROXY_URL.
+    const proxyUrl =
+      (await getFreshResidentialProxyUrl(3)) ?? process.env.SMARTPROXY_URL;
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
     if (proxyUrl) {
       try {
