@@ -17,6 +17,12 @@ const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mens
 // se protegían en el layout; el middleware ni los miraba.
 const ADMIN_PATHS = ["/admin", "/es/admin", "/cl/admin"];
 
+// www.bcousinoprop.com / bcousinoprop.com son el dominio público de marketing:
+// sirven el sitio que vive en app/web (mismo server que el CRM en
+// portal.bcousinoprop.com) vía rewrite, sin tocar nginx ni el DNS del deploy.
+const MARKETING_HOSTS = new Set(["www.bcousinoprop.com", "bcousinoprop.com"]);
+const MARKETING_PATHS = ["/propiedades", "/contacto", "/nosotros", "/off-market"];
+
 // Roles staff: se usa isStaffRole de lib/permissions como única fuente de
 // verdad (la copia local anterior no incluía 'captadora' y divergía).
 
@@ -30,6 +36,21 @@ function isPublicRoute(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // --- Dominio de marketing: www.bcousinoprop.com/(bcousinoprop.com) sirve
+  // el sitio público de app/web sin exponer el prefijo /web en el request
+  // original. Se resuelve antes que cualquier otra regla porque estas
+  // páginas son 100% públicas y no participan de la sesión/roles del CRM.
+  const host = request.headers.get("host")?.split(":")[0] ?? "";
+  if (
+    MARKETING_HOSTS.has(host) &&
+    !pathname.startsWith("/web") &&
+    (pathname === "/" || startsWithAny(pathname, MARKETING_PATHS))
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === "/" ? "/web" : `/web${pathname}`;
+    return NextResponse.rewrite(url);
+  }
 
   // --- IP Security: solo en rutas públicas, excluir /api/tracking ---
   // Las rutas de admin y cliente siguen el flujo normal de auth.
