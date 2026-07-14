@@ -29,16 +29,36 @@ import { createAdminClient } from "@/lib/db/admin";
 
 const DEFAULT_LIFETIME_MIN = 2; // corto: solo dura una búsqueda de teléfono
 
-// Puertos de Geonode (docs.geonode.com). El sticky necesita el puerto 10000;
-// si la URL base viene con un puerto rotativo (9000-9010) lo cambiamos al
-// sticky al anclar sesión, porque en Geonode el tipo de sesión también depende
-// del PUERTO, no solo del username.
-const GEONODE_STICKY_PORT = "10000";
+// Puertos de Geonode (docs.geonode.com/docs/guides/proxy-service-guide/proxy-usage):
+//   HTTP rotativo: 9000-9010   ·   HTTP sticky: 10000-10900
+// El sticky necesita un puerto del rango 10000-10900; si la URL base viene con
+// un puerto rotativo (9000-9010) lo cambiamos a uno sticky al anclar sesión,
+// porque en Geonode el tipo de sesión también depende del PUERTO, no solo del
+// username.
+//
+// IMPORTANTE (evita fallos): la doc de Geonode advierte que "cuando asignas un
+// puerto a un país concreto, ese puerto no puede reusarse para OTRO país hasta
+// que se borre la asignación previa". Como el flujo de teléfono ROTA países en
+// los reintentos, NO usamos un único puerto sticky para todos: derivamos el
+// puerto (dentro de 10000-10900) de un hash de sesión+país, de forma que:
+//   - la MISMA búsqueda (mismo sessionId+país) mantiene su puerto → misma IP
+//     anclada durante las 2-3 llamadas curl del flujo, y
+//   - cada país/reintento usa un puerto DISTINTO → sin conflicto de asignación.
 const GEONODE_ROTATING_PORTS = new Set([
   "9000", "9001", "9002", "9003", "9004", "9005",
   "9006", "9007", "9008", "9009", "9010",
 ]);
+const GEONODE_STICKY_PORT_MIN = 10000;
+const GEONODE_STICKY_PORT_SPAN = 901; // 10000-10900 inclusive
 const GEONODE_MAX_LIFETIME_SEC = 86400; // 24h (máximo de Geonode)
+
+// Puerto sticky determinista dentro de 10000-10900 a partir de una semilla
+// (sessionId+país). Determinista = la misma búsqueda reusa el mismo puerto.
+function geonodeStickyPort(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 31) + seed.charCodeAt(i)) >>> 0;
+  return String(GEONODE_STICKY_PORT_MIN + (h % GEONODE_STICKY_PORT_SPAN));
+}
 
 // Países a rotar en los reintentos del flujo de teléfono. DataDome puntúa por
 // reputación de IP, que varía mucho por pool/país; probar varios sube la
@@ -212,7 +232,8 @@ function buildStickyUrl(
 }
 
 // ── Geonode: modificadores en el USERNAME, lifetime en SEGUNDOS ──────────────
-// http://USER-type-residential[-country-xx]-session-<8>-lifetime-<seg>:PASS@host:10000
+// Geonode SIEMPRE es residencial → siempre añadimos `-type-residential`.
+// http://USER-type-residential[-country-xx]-session-<8>-lifetime-<seg>:PASS@host:1000X
 function buildGeonodeUrl(
   u: URL,
   sessionId: string,
@@ -228,11 +249,13 @@ function buildGeonodeUrl(
   );
   const geo = useCountry ? `-country-${country.toLowerCase()}` : "";
   const newUser = `${base}-type-residential${geo}-session-${safeId}-lifetime-${lifeSec}`;
-  // El sticky de Geonode requiere el puerto 10000: si la URL base viene con un
-  // puerto rotativo (9000-9010) lo cambiamos; si trae otro puerto, se respeta.
+  // El sticky de Geonode requiere un puerto de 10000-10900: si la URL base
+  // viene con un puerto rotativo (9000-9010) lo cambiamos a un puerto sticky
+  // derivado de sesión+país (geonodeStickyPort — evita el conflicto de "puerto
+  // asignado a un país" al rotar países); si trae otro puerto, se respeta.
   let host = u.host;
   if (GEONODE_ROTATING_PORTS.has(u.port)) {
-    host = `${u.hostname}:${GEONODE_STICKY_PORT}`;
+    host = `${u.hostname}:${geonodeStickyPort(`${safeId}-${country.toLowerCase()}`)}`;
   }
   const auth = `${newUser}:${u.password}`;
   return `${u.protocol}//${auth}@${host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;

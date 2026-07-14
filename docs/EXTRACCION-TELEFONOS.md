@@ -24,7 +24,7 @@ proveedor de las IPs.
 
 | Proveedor | Modificadores en | lifetime | Sticky | Ejemplo |
 |---|---|---|---|---|
-| **Geonode** (principal) | **USERNAME** | **segundos** (máx 86400) | puerto **10000** | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:10000` |
+| **Geonode** (principal) | **USERNAME** | **segundos** (máx 86400) | puerto **10000-10900** | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:1000X` |
 | **Smartproxy** (respaldo) | **USERNAME** | — | mismo puerto | `http://USER-session-<id>:PASS@host:puerto` |
 | **Evomi** (legacy) | **PASSWORD** | minutos (máx 120) | mismo puerto | `http://USER:PASS_country-XX_session-<id>_lifetime-<min>@host:1000` |
 
@@ -34,8 +34,13 @@ Detalles de **Geonode** (docs.geonode.com):
 - `-session-` = string **alfanumérico de exactamente 8 caracteres**.
 - `-lifetime-` = duración en **SEGUNDOS** (Evomi era minutos), máximo 86400 (24h).
 - `-country-` = ISO2 en **minúscula** (`-country-es`). "worldwide" = sin país.
-- Puertos: rotativo **9000-9010**, sticky **10000** (HTTP). El código cambia el
-  puerto rotativo por el sticky (10000) automáticamente al anclar sesión.
+- Geonode **siempre es residencial** → el código siempre añade `-type-residential`.
+- Puertos (HTTP): rotativo **9000-9010**, sticky **10000-10900**. El código
+  cambia el puerto rotativo por uno sticky automáticamente al anclar sesión.
+  Como Geonode advierte que "un puerto asignado a un país no puede reusarse para
+  otro país", y el flujo rota países en los reintentos, el puerto sticky se
+  **deriva de sesión+país** (dentro de 10000-10900): misma búsqueda = mismo
+  puerto (IP estable); distinto país/reintento = puerto distinto (sin conflicto).
 - La rotación de país en reintentos usa `COUNTRY_ROTATION`
   (worldwide, ES, DE, FR, GB, IT, PT, US), configurable con
   `PROXY_COUNTRY_ROTATION` (o el antiguo `EVOMI_COUNTRY_ROTATION`).

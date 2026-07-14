@@ -292,7 +292,8 @@ export default function ConfiguracionClient() {
               usuario:contraseña@host:puerto, SIN modificadores de sesión. El
               proveedor se detecta por la URL; los modificadores sticky/país los
               añade el sistema automáticamente. Geonode: usa el puerto rotativo
-              (9000) — el sistema cambia al sticky (10000) cuando hace falta.
+              (9000) — el sistema cambia a un puerto sticky (10000-10900) cuando
+              hace falta anclar la IP.
             </p>
             <PasswordField
               label="URL del proxy"

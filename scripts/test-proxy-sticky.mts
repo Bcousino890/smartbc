@@ -13,12 +13,19 @@
  * Ejecutar:  node --experimental-strip-types scripts/test-proxy-sticky.mts
  */
 
-const GEONODE_STICKY_PORT = "10000";
 const GEONODE_ROTATING_PORTS = new Set([
   "9000", "9001", "9002", "9003", "9004", "9005",
   "9006", "9007", "9008", "9009", "9010",
 ]);
+const GEONODE_STICKY_PORT_MIN = 10000;
+const GEONODE_STICKY_PORT_SPAN = 901; // 10000-10900
 const GEONODE_MAX_LIFETIME_SEC = 86400;
+
+function geonodeStickyPort(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 31) + seed.charCodeAt(i)) >>> 0;
+  return String(GEONODE_STICKY_PORT_MIN + (h % GEONODE_STICKY_PORT_SPAN));
+}
 
 type ProxyProvider = "geonode" | "evomi" | "smartproxy" | "generic";
 
@@ -65,7 +72,7 @@ function buildGeonodeUrl(u: URL, sessionId: string, lifeMinutes: number, country
   const geo = useCountry ? `-country-${country.toLowerCase()}` : "";
   const newUser = `${base}-type-residential${geo}-session-${safeId}-lifetime-${lifeSec}`;
   let host = u.host;
-  if (GEONODE_ROTATING_PORTS.has(u.port)) host = `${u.hostname}:${GEONODE_STICKY_PORT}`;
+  if (GEONODE_ROTATING_PORTS.has(u.port)) host = `${u.hostname}:${geonodeStickyPort(`${safeId}-${country.toLowerCase()}`)}`;
   return `${u.protocol}//${newUser}:${u.password}@${host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
 }
 
@@ -125,7 +132,8 @@ const geo = "http://geonode_testuser:pass-word-uuid@148.72.141.11:9000";
 const g1 = withStickySession(geo, "abc12345");
 check("geonode: sesión y lifetime en el USERNAME", /geonode_testuser-type-residential-session-abc12345-lifetime-120:/.test(g1), g1);
 check("geonode: lifetime en SEGUNDOS (2min→120s)", g1.includes("-lifetime-120"), g1);
-check("geonode: sticky cambia puerto 9000→10000", g1.includes("@148.72.141.11:10000"), g1);
+const g1Port = Number(g1.split("@")[1].split(":")[1]);
+check("geonode: sticky cambia 9000 a un puerto del rango 10000-10900", g1Port >= 10000 && g1Port <= 10900, g1);
 check("geonode: password intacto (no lleva modificadores)", g1.includes(":pass-word-uuid@"), g1);
 
 const g2 = withStickySession(g1, "otra1234");
@@ -146,6 +154,16 @@ check("geonode: worldwide → sin -country-", !gWorld.includes("-country-"), gWo
 
 const gEs = withStickySessionForce(geo, "esid1234", 2, "ES");
 check("geonode: country se pasa a minúscula (-country-es)", gEs.includes("-country-es"), gEs);
+
+// Conflicto de "puerto asignado a un país" (doc Geonode): al rotar países en
+// los reintentos, cada país debe salir por un puerto sticky DISTINTO, pero la
+// misma búsqueda (mismo sessionId+país) debe reusar el mismo puerto (misma IP).
+const portOf = (url: string) => url.split("@")[1].split(":")[1];
+const pEs = withStickySessionForce(geo, "rot00001", 2, "ES");
+const pDe = withStickySessionForce(geo, "rot00002", 2, "DE");
+const pEsAgain = withStickySessionForce(geo, "rot00001", 2, "ES");
+check("geonode: distinto país/sesión → distinto puerto sticky (sin conflicto)", portOf(pEs) !== portOf(pDe), { pEs: portOf(pEs), pDe: portOf(pDe) });
+check("geonode: misma sesión+país → mismo puerto (IP estable en la búsqueda)", portOf(pEs) === portOf(pEsAgain), { pEs: portOf(pEs), pEsAgain: portOf(pEsAgain) });
 
 // Usuario ya con -type-residential en la base (como lo muestra el panel).
 const geoTyped = "http://geonode_testuser-type-residential:pass-word-uuid@148.72.141.11:9000";
