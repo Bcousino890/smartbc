@@ -54,6 +54,7 @@ export async function GET(request: Request) {
   let inserted = 0;
   let updated = 0;
   let errors = 0;
+  const dbErrors: string[] = [];
 
   for (const listUrl of listingUrls) {
     try {
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
           .maybeSingle();
         if (existing) {
           const resolvedPhone = listing.phone ?? existing.phone;
-          await supabase.from("particulares").update({
+          const { error: updErr } = await supabase.from("particulares").update({
             source_url: listing.sourceUrl, zone: listing.zone, address: listing.address,
             price: listing.price, bedrooms: listing.bedrooms, bathrooms: listing.bathrooms,
             square_meters: listing.squareMeters, description: listing.description,
@@ -82,9 +83,10 @@ export async function GET(request: Request) {
             phone: resolvedPhone, phone_confidence: listing.phone ? "high" : undefined,
             chat_only: !resolvedPhone, is_active: true, taken_down_at: null, updated_at: now,
           }).eq("id", existing.id);
-          updated++;
+          if (updErr) { errors++; if (dbErrors.length < 3) dbErrors.push(`update: ${updErr.message}`); }
+          else updated++;
         } else {
-          await supabase.from("particulares").insert({
+          const { error: insErr } = await supabase.from("particulares").insert({
             portal: "pisos", external_id: listing.externalId, source_url: listing.sourceUrl,
             operation: listing.operation, zone: listing.zone, address: listing.address,
             price: listing.price, bedrooms: listing.bedrooms, bathrooms: listing.bathrooms,
@@ -94,11 +96,13 @@ export async function GET(request: Request) {
             chat_only: !listing.phone, features: [], photos: [],
             is_active: true, detected_at: now, updated_at: now,
           });
-          inserted++;
+          if (insErr) { errors++; if (dbErrors.length < 3) dbErrors.push(`insert: ${insErr.message}`); }
+          else inserted++;
         }
       }
-    } catch {
+    } catch (e) {
       errors++;
+      if (dbErrors.length < 3) dbErrors.push(`throw: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -109,6 +113,7 @@ export async function GET(request: Request) {
     con_telefono: conTelefono,
     persistido: persist ? { inserted, updated } : "no (persist=false)",
     errors,
+    db_errors: dbErrors,
     muestra,
   }, { headers: { "Cache-Control": "no-store" } });
 }

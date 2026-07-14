@@ -44,13 +44,18 @@ export async function getProxyUrl(): Promise<string | undefined> {
     const appKey = await readSmartproxyAppKey(db);
 
     if (appKey) {
-      console.log(`[proxy-config] Attempting to get fresh IP from Smartproxy API...`);
-      const freshUrl = await getFreshProxyUrl(appKey);
-      if (freshUrl) {
-        console.log(`[proxy-config] ✓ Got fresh IP: ${freshUrl.split("//")[1]}`);
-        return freshUrl;
+      // Reintentar la Extracción API varias veces: es el proxy que FUNCIONA
+      // (IPs aleatorias, sticky por life). El gateway estático de fallback está
+      // quemado/caído (targeting ES-Madrid → CONNECT tunnel failed 612), así
+      // que evitamos caer a él salvo que la API falle de verdad tras reintentos.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const freshUrl = await getFreshProxyUrl(appKey);
+        if (freshUrl) {
+          console.log(`[proxy-config] ✓ Got fresh IP: ${freshUrl.split("//")[1]}`);
+          return freshUrl;
+        }
       }
-      console.log(`[proxy-config] Smartproxy API failed, falling back to static URL`);
+      console.log(`[proxy-config] Smartproxy API falló tras 3 intentos, fallback a URL estática`);
     }
 
     // Fallback: use static proxy URL from DB
