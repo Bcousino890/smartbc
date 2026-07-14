@@ -1,11 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import {
-  getResidentialProxyUrl,
-  getFreshResidentialProxyUrl,
-  withStickySession,
-} from "@/lib/sync/proxy-config";
+import { getResidentialProxyUrl, getFreshResidentialProxyUrl } from "@/lib/sync/proxy-config";
 import { getCapSolverApiKey } from "@/lib/sync/particulares/capsolver-config";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
 import { extractDatadomeChallengeUrl } from "@/lib/sync/particulares/idealista-advertiser-detector";
@@ -30,10 +26,11 @@ async function getIp(proxyUrl: string): Promise<string | null> {
 }
 
 // Diagnóstico de salud del pipeline de teléfonos: confirma si CapSolver y el
-// proxy residencial (Extracción API — método preferido, sticky oficial vía
-// `life`; y gateway estático — fallback, sticky vía username) están bien
-// configurados y qué veredicto da DataDome sobre las IPs del pool AHORA
-// MISMO (slider resoluble t=fe vs bloqueo duro t=bv). Solo Owner/Admin.
+// proxy residencial (Evomi — app_settings["scraping.proxyUrl"]) están bien
+// configurados, si la sticky session (modificador `_session-<id>_lifetime-<min>`
+// en el password) funciona de verdad, y qué veredicto da DataDome sobre las
+// IPs del pool AHORA MISMO (slider resoluble t=fe vs bloqueo duro t=bv).
+// Solo Owner/Admin.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile().catch(() => null);
   if (!profile || !["owner", "admin"].includes(profile.role)) {
@@ -42,7 +39,6 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const adId = url.searchParams.get("adId") || "102383577";
-  const samples = Math.min(10, Math.max(1, Number.parseInt(url.searchParams.get("samples") ?? "5", 10) || 5));
   const out: Record<string, unknown> = { adId, timestamp: new Date().toISOString() };
 
   // ── 1. CapSolver ────────────────────────────────────────────────────────────
@@ -69,70 +65,45 @@ export async function GET(request: Request) {
     out.capsolver = { configured: true, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  // ── 2a. Proxy MÉTODO PREFERIDO: Extracción API (app_key) ──────────────────────
-  // Sticky OFICIAL de este producto: pedir una IP con `life` corto y reutilizar
-  // la misma URL (sin usuario/contraseña). Verificamos: (a) que el app_key
-  // esté configurado y la API responda, (b) que reutilizar la URL devuelta dé
-  // la MISMA IP en llamadas sucesivas (confirma que `life` realmente ancla).
-  const apiInfo: Record<string, unknown> = {};
+  // ── 2. Proxy Evomi: configuración + sticky session real ──────────────────────
+  const proxyInfo: Record<string, unknown> = {};
   try {
-    const proxyUrl = await getFreshResidentialProxyUrl(2);
-    apiInfo.configured = !!proxyUrl;
-    if (proxyUrl) {
-      const ip1 = await getIp(proxyUrl);
-      const ip2 = await getIp(proxyUrl); // MISMA url devuelta → ¿misma IP?
-      apiInfo.exit_ip = ip1;
-      apiInfo.connects = !!ip1;
-      apiInfo.sticky_verificado = {
-        ip_llamada_1: ip1,
-        ip_llamada_2: ip2,
-        honra_sticky: !!ip1 && !!ip2 && ip1 === ip2,
-      };
-    } else {
-      apiInfo.note = "app_key no configurado (app_settings['scraping.smartproxy.app_key']) o la API no devolvió IP";
-    }
-  } catch (err) {
-    apiInfo.error = err instanceof Error ? err.message : String(err);
-  }
-  out.proxy_extraccion_api = apiInfo;
-
-  // ── 2b. Proxy FALLBACK: gateway estático (usuario/contraseña) ─────────────────
-  const gatewayInfo: Record<string, unknown> = {};
-  try {
-    const residential = await getResidentialProxyUrl();
-    gatewayInfo.configured = !!residential;
-    if (residential) {
-      const hasAuth = residential.includes("@");
-      gatewayInfo.format_ok = hasAuth;
-      gatewayInfo.host = hasAuth ? residential.split("@")[1] : residential.replace(/^https?:\/\//, "");
+    const base = await getResidentialProxyUrl();
+    proxyInfo.configured = !!base;
+    if (base) {
+      const hasAuth = base.includes("@");
+      proxyInfo.format_ok = hasAuth;
+      proxyInfo.host = hasAuth ? base.split("@")[1] : base.replace(/^https?:\/\//, "");
       if (!hasAuth) {
-        gatewayInfo.note = "⚠️ La URL no tiene usuario (user:pass@host); sin eso no se puede anclar sesión con withStickySession.";
+        proxyInfo.note = "⚠️ La URL no tiene usuario:contraseña (formato esperado: http://usuario:password@host:puerto) — sin eso no se puede anclar sesión.";
       } else {
-        const sessionA = `stickytest-${Date.now().toString(36)}-a`;
-        const proxyA = withStickySession(residential, sessionA);
-        const ip1 = await getIp(proxyA);
-        const ip2 = await getIp(proxyA);
-        gatewayInfo.sticky_verificado = {
-          ip_llamada_1: ip1,
-          ip_llamada_2: ip2,
-          honra_sticky: !!ip1 && !!ip2 && ip1 === ip2,
-        };
+        // Sticky real: pedir DOS veces la misma sesión fresca → debe dar la MISMA IP.
+        const sticky = await getFreshResidentialProxyUrl(2);
+        if (sticky) {
+          const ip1 = await getIp(sticky);
+          const ip2 = await getIp(sticky); // misma URL (misma sesión) → ¿misma IP?
+          proxyInfo.exit_ip = ip1;
+          proxyInfo.connects = !!ip1;
+          proxyInfo.sticky_verificado = {
+            ip_llamada_1: ip1,
+            ip_llamada_2: ip2,
+            honra_sticky: !!ip1 && !!ip2 && ip1 === ip2,
+          };
+        }
       }
+    } else {
+      proxyInfo.note = "No hay URL de proxy configurada (app_settings['scraping.proxyUrl'])";
     }
   } catch (err) {
-    gatewayInfo.error = err instanceof Error ? err.message : String(err);
+    proxyInfo.error = err instanceof Error ? err.message : String(err);
   }
-  out.proxy_gateway_estatico = gatewayInfo;
+  out.proxy = proxyInfo;
 
   // ── 3. DataDome: veredicto sobre contact-phones, MULTI-MUESTRA ───────────────
-  // Usamos el método PREFERIDO (Extracción API) para las muestras: cada
-  // llamada a getFreshResidentialProxyUrl da una IP nueva del pool (no hay
-  // que generar sessionIds manuales), así que N llamadas = N IPs distintas.
-  // Probamos VARIAS estrategias de UA/orden, cada una sobre su propia IP
-  // residencial fresca, para aislar qué combinación da t=fe (resoluble) vs
-  // t=bv (bloqueo duro). Hipótesis: el desajuste de UA entre la carga de
-  // página (WhatsApp) y contact-phones (Chrome) puede disparar el bloqueo
-  // duro; o quizá la carga previa "ensucia" la sesión y conviene ir directo.
+  // Cada llamada a getFreshResidentialProxyUrl genera una sesión Evomi nueva
+  // (IP nueva del pool). Probamos varias estrategias de UA sobre la MISMA IP
+  // (aísla el efecto del UA) y la mejor estrategia sobre varias IPs (mide si
+  // el pool en general está limpio o baneado por DataDome).
   const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
   const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
 
@@ -168,7 +139,7 @@ export async function GET(request: Request) {
     // Grupo 1: TODAS las estrategias sobre la MISMA IP fresca → aísla el efecto
     // del UA del efecto de la IP. Si todas dan bv en la misma IP, es la IP
     // (quemada); si alguna da fe, es cuestión de UA.
-    const ip1 = (await getFreshResidentialProxyUrl(3)) ?? (await getResidentialProxyUrl());
+    const ip1 = await getFreshResidentialProxyUrl(3);
     const mismaIp = [];
     for (const [label, strat] of [
       ["A_wa_page+chrome_contact", { pageUA: WHATSAPP_UA, contactUA: BROWSER_UA }],
@@ -180,10 +151,10 @@ export async function GET(request: Request) {
     }
 
     // Grupo 2: la mejor estrategia (B, UA consistente Chrome) sobre 3 IPs
-    // frescas distintas → mide si el problema es del pool en general.
+    // frescas distintas → mide si el pool en general responde bien.
     const variasIps = [];
     for (let i = 0; i < 3; i++) {
-      const ipN = (await getFreshResidentialProxyUrl(2)) ?? (await getResidentialProxyUrl());
+      const ipN = await getFreshResidentialProxyUrl(2);
       variasIps.push(await probeContactPhones(`ip${i + 1}_chrome_consistente`, ipN, { pageUA: BROWSER_UA, contactUA: BROWSER_UA }));
     }
 
@@ -195,7 +166,7 @@ export async function GET(request: Request) {
       estrategia_resoluble: anyFe?.estrategia ?? null,
       verdict: anyFe
         ? `✅ "${anyFe.estrategia}" da t=fe (resoluble) — CapSolver puede resolverlo. Ajustar el flujo real a esa combinación.`
-        : `⛔ Ninguna combinación de UA ni IP dio t=fe — el pool residencial de Smartproxy está genuinamente baneado por DataDome en Idealista. NO es problema de código/UA. Vías: (1) pedir a Smartproxy pool más limpio/mobile, (2) cross-portal (pisos.com/habitaclia no bloquean y exponen teléfono).`,
+        : `⛔ Ninguna combinación de UA ni IP dio t=fe — el pool residencial (Evomi) está genuinamente baneado por DataDome en Idealista en este momento. Vías: (1) probar targeting de país distinto (_country-XX o worldwide), (2) cross-portal (pisos.com no bloquea y expone teléfono).`,
     };
   } catch (err) {
     out.datadome_estrategias = { error: err instanceof Error ? err.message : String(err) };
@@ -203,23 +174,18 @@ export async function GET(request: Request) {
 
   // ── Resumen ──────────────────────────────────────────────────────────────────
   const cs = out.capsolver as Record<string, unknown>;
-  const api = out.proxy_extraccion_api as Record<string, unknown>;
-  const gw = out.proxy_gateway_estatico as Record<string, unknown>;
+  const px = out.proxy as Record<string, unknown>;
   const est = out.datadome_estrategias as Record<string, unknown>;
   const estrategiaResoluble = (est?.estrategia_resoluble as string | null) ?? null;
   const datadomeUsable = !!estrategiaResoluble;
-  const apiSticky = (api?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
-  const gwSticky = (gw?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
+  const stickyFunciona = (px?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
   out.resumen = {
     capsolver_ok: cs?.ok === true,
-    extraccion_api_configurada: api?.configured === true,
-    extraccion_api_sticky_funciona: apiSticky,
-    gateway_estatico_configurado: gw?.configured === true,
-    gateway_estatico_sticky_funciona: gwSticky,
-    metodo_sticky_activo: apiSticky ? "extraccion_api" : gwSticky ? "gateway_estatico" : "ninguno",
+    proxy_configurado: px?.configured === true,
+    proxy_sticky_funciona: stickyFunciona,
     datadome_estrategia_resoluble: estrategiaResoluble,
     datadome_usable: datadomeUsable,
-    todo_ok: cs?.ok === true && (apiSticky || gwSticky) && datadomeUsable,
+    todo_ok: cs?.ok === true && stickyFunciona && datadomeUsable,
   };
 
   return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });

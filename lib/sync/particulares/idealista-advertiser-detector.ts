@@ -662,40 +662,22 @@ export async function fetchIdealistaPhoneViaAjax(
   // DataDome rechaza con bloqueo DURO en cuanto la cookie de la IP-A llega
   // desde la IP-B.
   //
-  // Dos productos Smartproxy en la cuenta, con mecanismos de sticky DISTINTOS:
-  //  1) Extracción API (app_key): devuelve `http://ip:puerto` SIN usuario. El
-  //     ancla de sesión es simplemente pedir UNA IP con `life` corto y
-  //     REUTILIZAR esa misma URL — confirmado en la documentación oficial del
-  //     dashboard de Smartproxy. Es el método PREFERIDO (semántica de
-  //     stickiness confirmada por el proveedor, no una suposición nuestra).
-  //  2) Gateway estático (usuario:contraseña, scraping.proxyUrl): el ancla se
-  //     intenta vía modificador `-session-<id>` en el username
-  //     (withStickySession) — sin confirmación oficial de que el proveedor lo
-  //     honre para esta cuenta/producto. Fallback solo si no hay app_key.
+  // Proveedor: Evomi (docs.evomi.com). El ancla de sesión se hace añadiendo
+  // `_session-<id>_lifetime-<min>` al PASSWORD de la URL (confirmado en su
+  // documentación oficial — ver withStickySession en proxy-config.ts). El
+  // sessionId NO puede ser solo el adId: si un mismo anuncio se reintenta
+  // varias veces (retries del cron, o el panel de test manual), usar siempre
+  // el mismo sessionId ancla SIEMPRE la misma IP — y si esa IP quedó marcada
+  // por DataDome en un intento anterior, el anuncio queda "quemado" para
+  // siempre. Componente aleatorio por invocación: misma IP dentro de ESTA
+  // llamada, IP distinta en cada reintento.
   let phoneProxyUrl = options?.proxyUrl;
   try {
-    const { getFreshResidentialProxyUrl, getResidentialProxyUrl, withStickySession } = await import(
-      "@/lib/sync/proxy-config"
-    );
-
-    // 1) Preferido: Extracción API con life corto (sticky confirmado).
-    const freshSticky = await getFreshResidentialProxyUrl(2);
-    if (freshSticky) {
-      phoneProxyUrl = freshSticky;
-    } else {
-      // 2) Fallback: gateway estático + modificador de username. El
-      // sessionId NO puede ser solo el adId: si un mismo anuncio se
-      // reintenta varias veces (retries del cron, o el panel de test
-      // manual), usar siempre el mismo sessionId ancla SIEMPRE la misma
-      // IP — y si esa IP quedó marcada por DataDome en un intento
-      // anterior, el anuncio queda "quemado" para siempre. Componente
-      // aleatorio por invocación: misma IP dentro de ESTA llamada, IP
-      // distinta en cada reintento.
-      const residential = await getResidentialProxyUrl();
-      if (residential) {
-        const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        phoneProxyUrl = withStickySession(residential, sessionId);
-      }
+    const { getResidentialProxyUrl, withStickySession } = await import("@/lib/sync/proxy-config");
+    const residential = await getResidentialProxyUrl();
+    if (residential) {
+      const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      phoneProxyUrl = withStickySession(residential, sessionId);
     }
   } catch {
     // Sin proxy residencial disponible → usar el proxy recibido tal cual.
@@ -914,24 +896,15 @@ export async function fetchIdealistaPhoneViaAjax(
   // Por eso reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe. Con
   // 5 intentos, la probabilidad de acertar una t=fe supera el 85%.
   const CHALLENGE_RETRIES = 5;
-  const { withStickySessionForce, getFreshResidentialProxyUrl: getFreshIp } = await import("@/lib/sync/proxy-config");
+  const { withStickySessionForce } = await import("@/lib/sync/proxy-config");
   for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
-    // A partir del segundo intento, conseguir una IP NUEVA de verdad.
-    //  - Extracción API (URL sin usuario): pedir otra IP fresca — cada llamada
-    //    a getFreshResidentialProxyUrl devuelve una IP DISTINTA del pool.
-    //  - Gateway estático (URL con usuario): forzar nueva sesión en el username.
-    // El bug anterior: usar withStickySessionForce sobre una URL de la
-    // Extracción API (sin usuario) era un NO-OP → todos los reintentos reusaban
-    // la misma IP, y si esa era t=bv, no había forma de salir.
+    // A partir del segundo intento, forzar una sesión NUEVA (IP nueva de
+    // verdad) — withStickySessionForce reemplaza el `_session-<id>` del
+    // password aunque la URL ya traiga uno anclado del intento anterior.
     let attemptProxyUrl = phoneProxyUrl;
     if (attempt > 0 && phoneProxyUrl) {
-      if (phoneProxyUrl.includes("@")) {
-        const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
-      } else {
-        const freshIp = await getFreshIp(2);
-        if (freshIp) attemptProxyUrl = freshIp;
-      }
+      const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId);
     }
 
     // Reto DataDome de /contact-phones para esta IP. Estrategia GANADORA
