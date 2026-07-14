@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
+import { assertPermission } from "@/lib/auth/guard";
 
 export async function markContactRead(id: string) {
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -27,6 +29,7 @@ export async function updateIdealistaLeadStatus(
   id: string,
   status: "nuevo" | "fichado" | "descartado",
 ) {
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -53,6 +56,7 @@ export async function setIdealistaLeadType(
   id: string,
   leadType: "particular" | "agencia" | "relocation",
 ) {
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -76,6 +80,7 @@ export async function setIdealistaLeadType(
 }
 
 export async function assignIdealistaLead(id: string, advisorId: string | null) {
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -108,6 +113,7 @@ export async function setIdealistaLeadMatchedProperty(
   id: string,
   propertyId: string | null,
 ) {
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -138,6 +144,7 @@ export async function updateIdealistaLeadContactStatus(
     | "contactado_email"
     | "sin_respuesta",
 ) {
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -165,6 +172,7 @@ export async function updateVisitStatus(
 ) {
   // Server actions son endpoints públicos: verificar que quien llama es staff
   // antes de tocar nada con el cliente service-role.
+  await assertPermission("solicitudes", "edit");
   const session = await createClient();
   const auth = await requireStaff(session);
   if (!auth.ok) return { ok: false, error: auth.error };

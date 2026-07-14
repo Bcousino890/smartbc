@@ -8,6 +8,7 @@ import type {
   ClientWithRelations,
   VisitRequestWithRelations,
 } from "../row-types";
+import { resolveViewScope, getAssignedClientIds } from "./view-scope";
 
 export type {
   ClientPreferencesRow,
@@ -22,6 +23,16 @@ export type {
 export async function getClients(country?: string): Promise<ClientWithRelations[]> {
   const supabase = await createClient();
 
+  // Scope de datos (own/team/all) para el recurso "clientes". Un cliente es
+  // "propio" si su `assigned_advisor_id` es el usuario actual. team ≈ own
+  // (sin modelo formal de equipos, ver ViewRestriction).
+  const { restriction, userId } = await resolveViewScope("clientes");
+  if (restriction === "none") return []; // p.ej. captadora: no ve clientes
+  // own_only / team / assigned_only → filtra por asesor asignado. Si por lo
+  // que sea no hay userId, NO filtramos (preferimos mostrar de más a ocultar).
+  const advisorFilter =
+    restriction !== "all" && userId ? userId : null;
+
   // Try full query with joins first (session client, respects RLS)
   let fullQ = supabase
     .from("profiles")
@@ -34,6 +45,7 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
     `)
     .eq("role", "client");
   if (country) fullQ = fullQ.eq("country", country);
+  if (advisorFilter) fullQ = fullQ.eq("assigned_advisor_id", advisorFilter);
   const { data, error } = await fullQ.order("created_at", { ascending: false });
 
   if (!error && data && data.length > 0) {
@@ -49,6 +61,7 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
     .select("*")
     .eq("role", "client");
   if (country) fallbackQ = fallbackQ.eq("country", country);
+  if (advisorFilter) fallbackQ = fallbackQ.eq("assigned_advisor_id", advisorFilter);
   const { data: fallback, error: fallbackErr } = await fallbackQ
     .order("created_at", { ascending: false });
 
@@ -65,6 +78,9 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
       .select("*")
       .eq("role", "client");
     if (country) adminQ = adminQ.eq("country", country);
+    // IMPORTANTE: el fallback admin salta las RLS, así que hay que reaplicar el
+    // scope aquí o un rol restringido vería toda la base vía service role.
+    if (advisorFilter) adminQ = adminQ.eq("assigned_advisor_id", advisorFilter);
     const { data: adminData, error: adminErr } = await adminQ
       .order("created_at", { ascending: false });
     if (!adminErr) {
@@ -82,6 +98,18 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
 // se mantiene el comportamiento histórico (raíz y España). Chile pasa 'cl'.
 export async function getVisitRequests(country?: string): Promise<VisitRequestWithRelations[]> {
   const supabase = await createClient();
+
+  // Scope de datos para "solicitudes". `visit_requests` no tiene columna de
+  // propietario propia: el dueño efectivo es el asesor asignado al cliente de
+  // la visita, así que restringimos por `client_id` ∈ (clientes del asesor).
+  const { restriction, userId } = await resolveViewScope("solicitudes");
+  if (restriction === "none") return [];
+  let clientIds: string[] | null = null;
+  if (restriction !== "all" && userId) {
+    clientIds = await getAssignedClientIds(userId, country);
+    if (clientIds.length === 0) return []; // sin cartera → sin solicitudes
+  }
+
   let query = supabase
     .from("visit_requests")
     .select(`
@@ -90,6 +118,7 @@ export async function getVisitRequests(country?: string): Promise<VisitRequestWi
       properties(id, slug, title, external_id)
     `);
   if (country) query = query.eq("country", country);
+  if (clientIds) query = query.in("client_id", clientIds);
   const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(200);

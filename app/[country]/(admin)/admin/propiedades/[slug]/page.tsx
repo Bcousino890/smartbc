@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { getSharesForProperty } from "@/lib/db/queries/shares";
+import { guardPage } from "@/lib/auth/guard";
+import type { Country } from "@/lib/country-config";
 import { PropertyEditView } from "./property-edit-view";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +10,10 @@ export const dynamic = "force-dynamic";
 export default async function PropertyDetailPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ slug: string; country: Country }>;
 }) {
-  const { slug } = await params;
+  const { slug, country } = await params;
+  await guardPage("properties", country);
   // Cast: supabase-js no infiere bien filas tipo `properties` con joins,
   // así que la respuesta llega como `never`. Forzamos el shape concreto.
   const property = (await getPropertyBySlugForAdmin(slug)) as

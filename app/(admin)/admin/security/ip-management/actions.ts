@@ -7,6 +7,7 @@ import {
   removeFromWhitelist,
 } from "@/lib/db/queries/security"
 import { revalidatePath } from "next/cache"
+import { assertPermission } from "@/lib/auth/guard"
 
 interface BlacklistEntry {
   ip: string
@@ -22,6 +23,7 @@ interface WhitelistEntry {
 }
 
 export async function addToBlacklistAction(entry: BlacklistEntry) {
+  await assertPermission("configuracion", "create")
   try {
     await addToBlacklist({
       ip: entry.ip,
@@ -39,6 +41,7 @@ export async function addToBlacklistAction(entry: BlacklistEntry) {
 }
 
 export async function removeFromBlacklistAction(id: string) {
+  await assertPermission("configuracion", "delete")
   try {
     await removeFromBlacklist(id)
     revalidatePath("/admin/security/ip-management")
@@ -49,6 +52,7 @@ export async function removeFromBlacklistAction(id: string) {
 }
 
 export async function addToWhitelistAction(entry: WhitelistEntry) {
+  await assertPermission("configuracion", "create")
   try {
     await addToWhitelist({
       ip: entry.ip,
@@ -63,6 +67,7 @@ export async function addToWhitelistAction(entry: WhitelistEntry) {
 }
 
 export async function removeFromWhitelistAction(id: string) {
+  await assertPermission("configuracion", "delete")
   try {
     await removeFromWhitelist(id)
     revalidatePath("/admin/security/ip-management")

@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
+import { resolveViewScope, getAssignedClientIds } from "./view-scope";
 import type {
   ApplicationCountry,
   ApplicationOperation,
@@ -145,6 +146,19 @@ export async function getApplicationsForAdmin(filters: {
   offset?: number;
 }) {
   const supabase = createAdminClient();
+
+  // Scope de datos para "solicitudes". Esta query usa service role (salta las
+  // RLS), así que el scope se aplica en código. `property_applications` no
+  // tiene columna de propietario propia: el dueño efectivo es el asesor
+  // asignado al cliente (`client_id` → `profiles.assigned_advisor_id`).
+  const { restriction, userId } = await resolveViewScope("solicitudes");
+  if (restriction === "none") return { data: [], count: 0 };
+  let clientIds: string[] | null = null;
+  if (restriction !== "all" && userId) {
+    clientIds = await getAssignedClientIds(userId, filters.country);
+    if (clientIds.length === 0) return { data: [], count: 0 };
+  }
+
   let query = supabase
     .from("property_applications")
     .select(
@@ -158,6 +172,7 @@ export async function getApplicationsForAdmin(filters: {
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
+  if (clientIds) query = query.in("client_id", clientIds);
   if (filters.country) query = query.eq("country", filters.country);
   if (filters.operation) query = query.eq("operation", filters.operation);
   if (filters.status) query = query.eq("status", filters.status);

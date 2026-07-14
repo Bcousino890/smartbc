@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function GET(
   request: NextRequest,
@@ -34,6 +35,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Gate de autorización: añadir contacto del propietario a una captación → captaciones/edit.
+  const gate = await requirePermission("captaciones", "edit");
+  if (!gate.ok) return gate.response;
+
   const { id } = await params;
   try {
     const body = await request.json();

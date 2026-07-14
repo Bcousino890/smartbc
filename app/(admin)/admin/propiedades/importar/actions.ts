@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
+import { assertPermission } from "@/lib/auth/guard";
 import { createClient } from "@/lib/db/server";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { insertImportedProperty } from "@/lib/sync/import-by-link/insert";
@@ -18,6 +19,7 @@ export type PreviewByLinkResult =
 export async function previewByLink(
   url: string,
 ): Promise<PreviewByLinkResult> {
+  await assertPermission("properties", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return { ok: false, error: auth.error, kind: "auth" };
@@ -89,6 +91,7 @@ export type ConfirmByLinkResult =
 export async function confirmByLink(
   input: ConfirmByLinkInput,
 ): Promise<ConfirmByLinkResult> {
+  await assertPermission("properties", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };

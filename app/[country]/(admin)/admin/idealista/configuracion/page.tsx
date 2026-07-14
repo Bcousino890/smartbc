@@ -3,6 +3,7 @@ import { Settings } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { createAdminClient } from "@/lib/db/admin";
+import { guardPage } from "@/lib/auth/guard";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { IdealistaConfigClient } from "./config-client";
 import { AIConfigSection } from "./ai-config-section";
@@ -17,6 +18,7 @@ export default async function IdealistaConfigPage({
 }) {
   const { country } = await params;
   if (country !== "es") redirect(getCountryConfig(country).prefix);
+  await guardPage("publicacion", country);
 
   const supabase = createAdminClient() as any;
 

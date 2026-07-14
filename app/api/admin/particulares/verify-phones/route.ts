@@ -6,7 +6,7 @@ import {
   normalizeSpanishPhone,
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requirePermission } from "@/lib/auth/guard";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 
 export const runtime = "nodejs";
@@ -30,15 +30,6 @@ type SupabaseLike = any;
 // UA de WhatsApp: DataDome lo deja pasar (whitelist por los previews de
 // links compartidos por WhatsApp).
 const WHATSAPP_UA = "WhatsApp/2.23.20.0";
-
-const STAFF_ROLES = [
-  "owner",
-  "admin",
-  "advisor",
-  "agent_admin",
-  "agent_senior",
-  "agent_junior",
-];
 
 // ─── Degradación elegante para la migración 0035 ─────────────────────────────
 // La columna `phone_confidence` se añade en la migración 0035, que puede NO
@@ -74,22 +65,14 @@ async function updateWithMigration0035Fallback(
   return first;
 }
 
-// ─── Auth: sesión de staff O Bearer CRON_SECRET ──────────────────────────────
+// ─── Auth: Bearer CRON_SECRET (cron/scripts del VPS) ─────────────────────────
 
-async function isAuthorized(req: Request): Promise<boolean> {
+function isCronAuthorized(req: Request): boolean {
   const authHeader = req.headers.get("Authorization");
-  if (
-    process.env.CRON_SECRET &&
+  return (
+    !!process.env.CRON_SECRET &&
     authHeader === `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return true;
-  }
-  try {
-    const profile = await getCurrentProfile();
-    return !!profile && STAFF_ROLES.includes(profile.role as string);
-  } catch {
-    return false;
-  }
+  );
 }
 
 type VerifyResponse = {
@@ -326,8 +309,11 @@ async function normalizeStoredPhones(
 }
 
 export async function POST(req: Request) {
-  if (!(await isAuthorized(req))) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  // Doble auth: Bearer CRON_SECRET (cron del VPS) O sesión con permiso
+  // particulares/edit (botón "Verificar teléfonos" del admin).
+  if (!isCronAuthorized(req)) {
+    const gate = await requirePermission("particulares", "edit");
+    if (!gate.ok) return gate.response;
   }
 
   const { searchParams } = new URL(req.url);

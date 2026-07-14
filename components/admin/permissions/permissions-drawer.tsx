@@ -3,6 +3,8 @@
 import {
   AlertCircle,
   Check,
+  ChevronDown,
+  History,
   Loader2,
   RotateCcw,
   ShieldCheck,
@@ -51,6 +53,69 @@ const ROLE_LABEL: Record<InternalUserRole, string> = {
 
 const COUNTRY_FLAG: Record<string, string> = { es: "🇪🇸", cl: "🇨🇱" };
 const COUNTRY_NAME: Record<string, string> = { es: "España", cl: "Chile" };
+
+// ── Historial de auditoría ───────────────────────────────────────────────────
+interface AuditEntry {
+  id: string;
+  eventType: string;
+  resource: string | null;
+  action: string | null;
+  country: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  createdAt: string;
+  actor: { id: string | null; name: string | null; email: string | null };
+}
+
+// Etiqueta legible en español para cada tipo de evento.
+const EVENT_LABEL: Record<string, string> = {
+  role_changed: "Cambio de rol",
+  country_changed: "Cambio de país",
+  permissions_updated: "Permisos actualizados",
+  user_created: "Usuario creado",
+};
+
+/** Fecha relativa breve en español (ej. "hace 5 min", "hace 2 d"). */
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diffSec = Math.round((Date.now() - then) / 1000);
+  if (diffSec < 60) return "hace un momento";
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const diffHour = Math.round(diffMin / 60);
+  if (diffHour < 24) return `hace ${diffHour} h`;
+  const diffDay = Math.round(diffHour / 24);
+  if (diffDay < 30) return `hace ${diffDay} d`;
+  return new Date(iso).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Nombre visible del actor de una entrada. */
+function actorName(actor: AuditEntry["actor"]): string {
+  return actor.name?.trim() || actor.email?.trim() || "Sistema";
+}
+
+/** Resumen breve de contexto (país / recurso·acción) para una entrada. */
+function entryDetail(entry: AuditEntry): string | null {
+  const parts: string[] = [];
+  if (entry.country) parts.push(COUNTRY_NAME[entry.country] ?? entry.country);
+  if (entry.resource) {
+    parts.push(entry.action ? `${entry.resource}·${entry.action}` : entry.resource);
+  }
+  // Cambio de rol: mostramos old → new si están disponibles.
+  if (entry.eventType === "role_changed") {
+    const nv = entry.newValue as { role?: string } | null;
+    const ov = entry.oldValue as { role?: string } | null;
+    if (ov?.role || nv?.role) {
+      parts.push(`${ov?.role ?? "—"} → ${nv?.role ?? "—"}`);
+    }
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
 
 type PermValue = true | false | "override_true" | "override_false";
 type PermMatrix = Record<string, Record<string, PermValue>>;
@@ -102,6 +167,13 @@ export function PermissionsDrawer({
 
   const [effective, setEffective] = useState<CellState | null>(null);
   const [defaults, setDefaults] = useState<DefaultState | null>(null);
+
+  // ── Historial de auditoría ─────────────────────────────────────────────────
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [auditState, setAuditState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  // Se incrementa tras guardar para refrescar el historial.
+  const [historyReload, setHistoryReload] = useState(0);
 
   // ── Dimensión país ───────────────────────────────────────────────────────
   // Solo relevante si el usuario objetivo tiene más de un país. En ese caso los
@@ -157,6 +229,36 @@ export function PermissionsDrawer({
       cancelled = true;
     };
   }, [user.id, activeCountry, isMultiCountry]);
+
+  // ── Fetch del historial de auditoría ────────────────────────────────────────
+  // Perezoso: solo se pide cuando la sección está abierta. Se refresca al
+  // guardar (historyReload) y al cambiar de usuario.
+  useEffect(() => {
+    if (!historyOpen) return;
+    let cancelled = false;
+    setAuditState("loading");
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/usuarios/${user.id}/permissions/audit`,
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setAuditState("error");
+          return;
+        }
+        setAuditEntries(Array.isArray(data.entries) ? data.entries : []);
+        setAuditState("ready");
+      } catch {
+        if (cancelled) return;
+        setAuditState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [historyOpen, user.id, historyReload]);
 
   // ── ESC to close + focus management ──────────────────────────────────────────
   useEffect(() => {
@@ -268,6 +370,8 @@ export function PermissionsDrawer({
       // effective stays as edited. Mark success.
       setSaveState("success");
       onSaved?.();
+      // Refresca el historial para reflejar el evento recién registrado.
+      setHistoryReload((n) => n + 1);
       setTimeout(() => setSaveState("idle"), 2500);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Error de red");
@@ -516,6 +620,94 @@ export function PermissionsDrawer({
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Historial de auditoría (colapsable) */}
+              <div className="mt-4 overflow-hidden rounded-2xl border border-ink/10 bg-white/55">
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen((o) => !o)}
+                  aria-expanded={historyOpen}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-cream-50/60"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink/5">
+                      <History size={16} strokeWidth={1.75} className="text-ink/55" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="font-serif text-[15px] font-semibold text-ink">
+                        Historial
+                      </h3>
+                      <p className="text-[12px] text-ink/55">
+                        Cambios de permisos, rol y país de este usuario.
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    strokeWidth={2}
+                    className={cn(
+                      "shrink-0 text-ink/40 transition-transform",
+                      historyOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+
+                {historyOpen && (
+                  <div className="border-t border-ink/8 px-4 py-3">
+                    {auditState === "loading" && (
+                      <div className="flex items-center gap-2 py-3 text-[13px] text-ink/55">
+                        <Loader2 size={15} className="animate-spin text-gold" />
+                        Cargando historial…
+                      </div>
+                    )}
+
+                    {auditState === "error" && (
+                      <p className="py-3 text-[13px] text-ink/55">
+                        No se pudo cargar el historial.
+                      </p>
+                    )}
+
+                    {auditState === "ready" && auditEntries.length === 0 && (
+                      <p className="py-3 text-[13px] text-ink/55">
+                        Sin cambios registrados todavía.
+                      </p>
+                    )}
+
+                    {auditState === "ready" && auditEntries.length > 0 && (
+                      <ul className="space-y-2.5">
+                        {auditEntries.map((entry) => {
+                          const detail = entryDetail(entry);
+                          return (
+                            <li
+                              key={entry.id}
+                              className="flex items-start gap-3 rounded-xl border border-ink/8 bg-cream-50/50 px-3 py-2.5"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="text-[13px] font-medium text-ink">
+                                    {EVENT_LABEL[entry.eventType] ?? entry.eventType}
+                                  </span>
+                                  {detail && (
+                                    <span className="rounded bg-ink/5 px-1.5 py-px text-[10px] font-medium text-ink/60">
+                                      {detail}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-[12px] text-ink/55">
+                                  {actorName(entry.actor)}
+                                </p>
+                              </div>
+                              <span className="shrink-0 whitespace-nowrap text-[11px] text-ink/45">
+                                {formatRelative(entry.createdAt)}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

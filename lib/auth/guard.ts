@@ -1,6 +1,8 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
+import { getCountryConfig, isCountry, type Country } from "@/lib/country-config";
 import type { ProfileRow } from "@/lib/db/queries/session";
 import type { PermissionResource, PermissionAction } from "@/lib/permissions";
 
@@ -61,6 +63,95 @@ export async function requirePermission(
   }
 
   return { ok: true, profile };
+}
+
+/**
+ * Gate de permisos para **server actions** (`"use server"`).
+ *
+ * A diferencia de `requirePermission` (que devuelve una `Response` para route
+ * handlers), aquí LANZAMOS: las server actions no devuelven una `Response`, así
+ * que propagan el `throw` como error de la acción. El componente/cliente que la
+ * invocó recibe el error y el efecto (INSERT/UPDATE/DELETE) nunca se ejecuta.
+ *
+ * Usa permisos EFECTIVOS (rol + overrides), opcionalmente por país.
+ *
+ *   "use server";
+ *   export async function crearAlgo(input) {
+ *     await assertPermission("clientes", "create");
+ *     // ...mutación, ya autorizada
+ *   }
+ *
+ * @throws Error("No autenticado") si no hay sesión/perfil.
+ * @throws Error("Sin permisos para <resource>.<action>") si el permiso es falso.
+ * @returns el `profile` autenticado y autorizado.
+ */
+export async function assertPermission(
+  resource: PermissionResource,
+  action: PermissionAction,
+  opts?: { country?: string },
+): Promise<ProfileRow> {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    throw new Error("No autenticado");
+  }
+
+  const effective = await getEffectivePermissions(
+    profile.id,
+    profile.role,
+    opts?.country,
+  );
+  const allowed = effective[resource]?.[action] ?? false;
+
+  if (!allowed) {
+    throw new Error(`Sin permisos para ${resource}.${action}`);
+  }
+
+  return profile;
+}
+
+/**
+ * Gate de permisos para **páginas server-component** del panel.
+ *
+ * El sidebar oculta módulos por rol, pero eso es cosmético: se puede entrar por
+ * URL directa. Este helper aplica el modelo de permisos (rol + overrides) a
+ * nivel de página. Si el usuario no tiene `view` efectivo sobre `resource`,
+ * redirige al home del país en vez de renderizar la página.
+ *
+ *   export default async function Page({ params }) {
+ *     const { country } = await params;
+ *     await guardPage("clientes", country);
+ *     // ...datos + render, ya autorizado
+ *   }
+ *
+ * `redirect()` lanza internamente (tipo `never`), así que tras llamarlo el
+ * `profile` queda garantizado no-nulo para el resto de la página.
+ *
+ * @returns el `profile` autenticado y autorizado.
+ */
+export async function guardPage(
+  resource: PermissionResource,
+  country: string,
+): Promise<ProfileRow> {
+  // País de destino para el redirect. Si llega algo que no es país válido,
+  // caemos a 'es' para tener un prefix seguro al que redirigir.
+  const safeCountry: Country = isCountry(country) ? country : "es";
+  const prefix = getCountryConfig(safeCountry).prefix;
+
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    redirect(prefix);
+  }
+
+  const effective = await getEffectivePermissions(
+    profile.id,
+    profile.role,
+    safeCountry,
+  );
+  if (!(effective[resource]?.view ?? false)) {
+    redirect(prefix);
+  }
+
+  return profile;
 }
 
 /**

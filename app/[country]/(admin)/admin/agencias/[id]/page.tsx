@@ -8,6 +8,7 @@ import {
 import { extractFloor } from "@/lib/floor";
 import { getAgencyDetail } from "@/lib/mock-agency-details";
 import type { AgencyPropertyRow } from "@/lib/types";
+import { guardPage } from "@/lib/auth/guard";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function AgencyDetailPage({
 }) {
   const { id, country } = await params;
   if (country !== "es") redirect(getCountryConfig(country).prefix);
+  await guardPage("properties", country);
 
   const dbAgency = await getAgencyBySlug(id);
   if (!dbAgency) notFound();

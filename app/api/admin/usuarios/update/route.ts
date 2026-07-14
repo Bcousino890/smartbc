@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { logPermissionEvent } from "@/lib/db/queries/audit";
 
 export async function PATCH(req: Request) {
   let body: {
@@ -39,6 +40,25 @@ export async function PATCH(req: Request) {
   }
 
   const supabase = createAdminClient();
+
+  // Snapshot previo del perfil para auditar SOLO cambios reales de rol/país.
+  // Best-effort: si falla la lectura, seguimos sin auditar esos campos.
+  let prevProfile: {
+    role?: string | null;
+    country?: string | null;
+    countries?: string[] | null;
+  } | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: prev } = await (supabase as any)
+      .from("profiles")
+      .select("role, country, countries")
+      .eq("id", userId)
+      .maybeSingle();
+    prevProfile = prev ?? null;
+  } catch {
+    prevProfile = null;
+  }
 
   const updates: Record<string, string | boolean | string[]> = {};
   if (firstName !== undefined || lastName !== undefined) {
@@ -100,6 +120,53 @@ export async function PATCH(req: Request) {
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
+    }
+
+    // ── Auditoría (best-effort) de cambios de rol y país ──────────────────────
+    // Solo registramos cuando el valor realmente cambia respecto al snapshot.
+    if (role !== undefined && prevProfile && role !== prevProfile.role) {
+      await logPermissionEvent({
+        actorId: currentProfile.id,
+        targetUserId: userId,
+        eventType: "role_changed",
+        oldValue: { role: prevProfile.role ?? null },
+        newValue: { role },
+      });
+    }
+
+    if (prevProfile) {
+      // País por defecto (landing).
+      const nextCountry =
+        typeof updates.country === "string" ? updates.country : undefined;
+      // Conjunto de países.
+      const nextCountries = Array.isArray(updates.countries)
+        ? updates.countries
+        : undefined;
+
+      const prevCountries = prevProfile.countries ?? null;
+      const countryChanged =
+        nextCountry !== undefined && nextCountry !== prevProfile.country;
+      const countriesChanged =
+        nextCountries !== undefined &&
+        JSON.stringify([...nextCountries].sort()) !==
+          JSON.stringify([...(prevCountries ?? [])].sort());
+
+      if (countryChanged || countriesChanged) {
+        await logPermissionEvent({
+          actorId: currentProfile.id,
+          targetUserId: userId,
+          eventType: "country_changed",
+          country: nextCountry ?? null,
+          oldValue: {
+            country: prevProfile.country ?? null,
+            countries: prevCountries,
+          },
+          newValue: {
+            country: nextCountry ?? prevProfile.country ?? null,
+            countries: nextCountries ?? prevCountries,
+          },
+        });
+      }
     }
   }
 

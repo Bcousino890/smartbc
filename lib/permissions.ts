@@ -425,6 +425,117 @@ export function getCaptacionViewRestriction(role: string): CaptacionViewRestrict
   }
 }
 
+// ─── Scope de datos general (own/team/all) ──────────────────────────────────
+/**
+ * Restricción de visibilidad GENERAL de un recurso, aplicable a cualquier
+ * listado del panel (no solo captaciones). Generaliza el mecanismo que hasta
+ * ahora solo existía para captaciones (`CaptacionViewRestriction`).
+ *
+ *   - "all"           → sin filtro: ve todos los registros.
+ *   - "team"          → su cartera + la de su equipo. Sin un modelo formal de
+ *                       equipos en el esquema, HOY se simplifica a "own_only"
+ *                       (los registros cuyo propietario/asesor es el usuario).
+ *                       Ver `getAssignedClientIds` en las queries.
+ *   - "own_only"      → solo los registros propios (creador/asesor asignado).
+ *   - "assigned_only" → solo los explícitamente asignados al usuario
+ *                       (usado por captaciones: `assigned_to` = captadora).
+ *   - "none"          → no ve nada de ese recurso.
+ */
+export type ViewRestriction =
+  | "all"
+  | "team"
+  | "own_only"
+  | "assigned_only"
+  | "none";
+
+/**
+ * Normaliza la restricción específica de captaciones al tipo general.
+ * `confirmed_and_own` es una particularidad de captaciones (propias +
+ * confirmadas para conversión); en el modelo general su equivalente más
+ * cercano y conservador es "own_only". La lógica fina de "confirmadas" sigue
+ * viviendo en `getCaptacionViewRestriction`, que NO se toca.
+ */
+function normalizeCaptacionRestriction(
+  r: CaptacionViewRestriction,
+): ViewRestriction {
+  switch (r) {
+    case "all":
+      return "all";
+    case "assigned_only":
+      return "assigned_only";
+    case "own_only":
+    case "confirmed_and_own":
+      return "own_only";
+    default:
+      return "all";
+  }
+}
+
+/**
+ * Restricción de visibilidad de un recurso según el rol. Decisiones de negocio
+ * por defecto, deliberadamente CONSERVADORAS: ante la duda se devuelve "all"
+ * para NO ocultar datos por error (comportamiento histórico).
+ *
+ * Mapa de decisiones (rol × recurso → restricción):
+ *
+ *   rol \ recurso     | properties | clientes   | solicitudes | captaciones
+ *   ------------------|------------|------------|-------------|-------------------
+ *   owner             | all        | all        | all         | all
+ *   admin             | all        | all        | all         | all
+ *   advisor           | all        | all        | all         | all
+ *   agent_admin       | all        | all        | all         | all
+ *   agent_senior      | all        | team       | team        | own_only (*)
+ *   agent_junior      | all        | own_only   | own_only    | own_only (*)
+ *   captadora         | none       | none       | none        | assigned_only
+ *   (desconocido)     | all        | all        | all         | all
+ *
+ *   (*) captaciones delega en `getCaptacionViewRestriction` (normalizado):
+ *       agent_senior/junior → `confirmed_and_own` → "own_only".
+ *
+ * Notas de negocio:
+ *   - `properties` es inventario COMPARTIDO: todo el staff que entra al panel
+ *     lo ve completo (para clientes/solicitudes sí se restringe por cartera).
+ *   - `agent_senior` = "team" y `agent_junior` = "own_only" SOLO en clientes y
+ *     solicitudes; cualquier otro recurso no listado aquí cae en "all" para no
+ *     restringir de más.
+ *   - `captadora` solo opera captaciones; el resto de recursos → "none".
+ *
+ * @param role     Rol del usuario (ej. "agent_junior", "admin").
+ * @param resource Recurso a consultar (ej. "clientes", "solicitudes").
+ */
+export function getViewRestriction(
+  role: string,
+  resource: PermissionResource,
+): ViewRestriction {
+  // Captaciones: reutiliza la lógica dedicada existente (coherencia total).
+  if (resource === "captaciones") {
+    return normalizeCaptacionRestriction(getCaptacionViewRestriction(role));
+  }
+
+  const isScopedBusinessData =
+    resource === "clientes" || resource === "solicitudes";
+
+  switch (role) {
+    case "owner":
+    case "admin":
+    case "advisor":
+    case "agent_admin":
+      return "all";
+    case "agent_senior":
+      // Inventario (properties) y demás recursos: todo. Cartera de negocio
+      // (clientes/solicitudes): su equipo (hoy simplificado a "own", ver tipo).
+      return isScopedBusinessData ? "team" : "all";
+    case "agent_junior":
+      return isScopedBusinessData ? "own_only" : "all";
+    case "captadora":
+      // Fuera de captaciones (ya resuelto arriba) no ve nada.
+      return "none";
+    default:
+      // Rol no contemplado: NO ocultar datos por error.
+      return "all";
+  }
+}
+
 /** Comprueba si un rol es un rol de agente inmobiliario */
 export function isAgentRole(role: string): role is AgentRole {
   return AGENT_ROLES.includes(role as AgentRole);

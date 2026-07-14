@@ -2,9 +2,17 @@ import { Link2 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { getAgencies } from "@/lib/db/queries/agencies";
+import { guardPage } from "@/lib/auth/guard";
+import type { Country } from "@/lib/country-config";
 import { ImportByLinkClient } from "./import-by-link-client";
 
-export default async function AdminImportByLinkPage() {
+export default async function AdminImportByLinkPage({
+  params,
+}: {
+  params: Promise<{ country: Country }>;
+}) {
+  const { country } = await params;
+  await guardPage("properties", country);
   const agencyRows = await getAgencies();
   const agencies = ((agencyRows ?? []) as Array<{
     slug: string;

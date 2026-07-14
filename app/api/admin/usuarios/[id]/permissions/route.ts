@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { logPermissionEvent } from "@/lib/db/queries/audit";
 import {
   canAccess,
   PERMISSION_ACTIONS,
@@ -203,6 +204,20 @@ export async function POST(
       return Response.json({ error: insertErr.message }, { status: 500 });
     }
   }
+
+  // Auditoría (best-effort): registra que se actualizaron los overrides de este
+  // usuario, con el país afectado (si vino) y un resumen del conjunto guardado.
+  await logPermissionEvent({
+    actorId: currentProfile.id,
+    targetUserId: userId,
+    eventType: "permissions_updated",
+    country,
+    newValue: {
+      country,
+      overrideCount: body.overrides.length,
+      overrides: body.overrides,
+    },
+  });
 
   return Response.json({ ok: true });
 }

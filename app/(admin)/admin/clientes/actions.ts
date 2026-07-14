@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { assertPermission } from "@/lib/auth/guard";
 import type { Operation, StayType } from "@/lib/types";
 
 export type SaveClientPreferencesInput = {
@@ -27,6 +28,7 @@ export type SaveClientPreferencesResult =
 export async function saveClientPreferences(
   input: SaveClientPreferencesInput,
 ): Promise<SaveClientPreferencesResult> {
+  await assertPermission("clientes", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -125,6 +127,7 @@ export type CreateClientResult =
 export async function createNewClient(
   input: CreateClientInput,
 ): Promise<CreateClientResult> {
+  await assertPermission("clientes", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth as CreateClientResult;
@@ -267,6 +270,7 @@ export type SaveClientPreferencesChileInput = {
 export async function saveClientPreferencesChile(
   input: SaveClientPreferencesChileInput,
 ): Promise<SaveClientPreferencesResult> {
+  await assertPermission("clientes", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;

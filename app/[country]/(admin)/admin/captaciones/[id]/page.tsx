@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { guardPage } from "@/lib/auth/guard";
 import { getCaptacion, getChileAssignableUsers } from "../actions";
 import { CaptacionDetailClient } from "./detail-client";
 import { createAdminClient } from "@/lib/db/admin";
@@ -16,6 +17,7 @@ export default async function CaptacionDetailPage({
   const { id, country } = await params;
   // Captaciones es un módulo exclusivo de Chile.
   if (country !== "cl") redirect(getCountryConfig(country).prefix);
+  await guardPage("captaciones", country);
 
   const profile = await getCurrentProfile();
 

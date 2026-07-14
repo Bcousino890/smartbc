@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { clientRowToAdminClient } from "@/lib/db/adapters";
 import { getClientById } from "@/lib/db/queries/clients";
+import { guardPage } from "@/lib/auth/guard";
+import type { Country } from "@/lib/country-config";
 import { ClientFichaView } from "./client-ficha-view";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +10,10 @@ export const dynamic = "force-dynamic";
 export default async function ClientFichaPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; country: Country }>;
 }) {
-  const { id } = await params;
+  const { id, country } = await params;
+  await guardPage("clientes", country);
   const rowData = await getClientById(id);
   if (!rowData) notFound();
 

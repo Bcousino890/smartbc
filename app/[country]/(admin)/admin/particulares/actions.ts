@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { assertPermission } from "@/lib/auth/guard";
 import { normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
 
 export type UpdatePhoneResult =
@@ -15,6 +16,7 @@ export async function updateParticularPhone(
   particularId: string,
   phone: string | null,
 ): Promise<UpdatePhoneResult> {
+  await assertPermission("particulares", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -74,6 +76,9 @@ function normalizeSlug(raw: string): string {
 export async function createPropertyFromParticular(
   particularId: string,
 ): Promise<CreateFromParticularResult> {
+  // Convierte un anuncio de particular en propiedad propia. Requiere poder
+  // crear propiedades, no solo trabajar el particular.
+  await assertPermission("properties", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -255,6 +260,7 @@ export async function logParticularContact(
   outcome: string | null,
   notes: string | null,
 ): Promise<LogContactResult> {
+  await assertPermission("particulares", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -292,6 +298,7 @@ export async function assignParticular(
   particularId: string,
   advisorId: string | null,
 ): Promise<AssignParticularResult> {
+  await assertPermission("particulares", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -326,6 +333,7 @@ export async function setParticularActive(
   particularId: string,
   active: boolean,
 ): Promise<SetActiveResult> {
+  await assertPermission("particulares", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -365,6 +373,7 @@ export type BulkActionResult =
 export async function markParticularAsVerified(
   particularIds: string[],
 ): Promise<BulkActionResult> {
+  await assertPermission("particulares", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -395,6 +404,7 @@ export async function markParticularAsVerified(
 export async function rescrapeParticularPhones(
   particularIds: string[],
 ): Promise<BulkActionResult> {
+  await assertPermission("particulares", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;

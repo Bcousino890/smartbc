@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { logPermissionEvent } from "@/lib/db/queries/audit";
 
 export async function POST(req: Request) {
   let body: {
@@ -217,6 +218,20 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+
+  // Auditoría (best-effort): registra la creación del usuario con su rol y país.
+  await logPermissionEvent({
+    actorId: currentProfile.id,
+    targetUserId: userId,
+    eventType: "user_created",
+    country:
+      typeof profileUpdate.country === "string" ? profileUpdate.country : null,
+    newValue: {
+      role,
+      country: profileUpdate.country ?? null,
+      countries: profileUpdate.countries ?? null,
+    },
+  });
 
   return Response.json({
     ok: true,

@@ -4,11 +4,16 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
+  // Gate de autorización: editar contacto del propietario → captaciones/edit.
+  const gate = await requirePermission("captaciones", "edit");
+  if (!gate.ok) return gate.response;
+
   const { id, contactId } = await params;
   try {
     const body = await request.json();
@@ -95,6 +100,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
+  // Gate de autorización: eliminar contacto del propietario → captaciones/delete.
+  const gate = await requirePermission("captaciones", "delete");
+  if (!gate.ok) return gate.response;
+
   const { id, contactId } = await params;
   try {
     const db = createAdminClient() as any;
