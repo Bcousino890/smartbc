@@ -385,7 +385,13 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
 // curl + UA de WhatsApp pasa DataDome; el fetch de Node es rechazado con 403).
 
 const WHATSAPP_UA_FOR_AJAX = "WhatsApp/2.23.20.0";
-const BROWSER_UA_FOR_PAGE = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+// ⚠️ DEBE coincidir EXACTAMENTE con el DEFAULT_UA de solve-datadome-with-capsolver.
+// El reto DataDome (cid) queda ligado al UA con el que se hizo la petición a
+// /contact-phones. CapSolver rechaza UAs < Chrome 124 y los fuerza a Chrome 131;
+// si las peticiones reales usaran Chrome 120, el cid iría con Chrome 120 pero
+// CapSolver resolvería con Chrome 131 → "userAgent does not match" y el slider
+// nunca se resuelve. Usamos el MISMO Chrome 131 en todo el flujo.
+const BROWSER_UA_FOR_PAGE = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 function idealistaPhoneEndpoints(adId: string): string[] {
   return [
@@ -736,9 +742,6 @@ export async function fetchIdealistaPhoneViaAjax(
     /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
   ];
 
-  // Guardamos el cuerpo del reto DataDome de /contact-phones (403) para, si
-  // ningún endpoint dio el teléfono, resolverlo con CapSolver y reintentar.
-  let challengeBody: string | null = null;
 
   for (let i = 0; i < responses.length; i++) {
     const res = responses[i];
@@ -752,12 +755,6 @@ export async function fetchIdealistaPhoneViaAjax(
     }
 
     console.log(`[idealista-phone-ajax] ${endpoint.split("/").slice(-2).join("/")} → HTTP ${res.status}`);
-
-    // Capturar el reto DataDome de contact-phones (aunque sea 403/no-ok) para
-    // resolverlo después con CapSolver.
-    if (endpoint.includes("contact-phones") && res.body && res.body.includes("captcha-delivery.com")) {
-      challengeBody = res.body;
-    }
 
     if (!res.ok || !res.body) continue;
 
@@ -917,9 +914,13 @@ export async function fetchIdealistaPhoneViaAjax(
     // contact-phones, compartiendo cookie-jar (la mezcla UA WhatsApp+Chrome da
     // t=bv). Por eso cargamos la ficha con Chrome y llamamos a contact-phones
     // con Chrome reutilizando el mismo jar, todo por la misma IP del intento.
-    // El intento 0 reutiliza el challengeBody del cookie-jar inicial (WhatsApp),
-    // pero si vino vacío/null, rehacemos con Chrome consistente.
-    let body403 = attempt === 0 ? challengeBody : null;
+    //
+    // ⚠️ SIEMPRE regeneramos el reto con Chrome (BROWSER_UA_FOR_PAGE), incluso
+    // en el intento 0. NO reutilizamos el reto de la pasada inicial (que usa UA
+    // de WhatsApp): el cid del reto queda ligado al UA que hizo la petición, y
+    // CapSolver resuelve con Chrome 131 → si el cid fuera de WhatsApp daría
+    // "userAgent does not match" y el slider nunca se resolvería.
+    let body403: string | null = null;
     if (!body403) {
       try {
         const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
