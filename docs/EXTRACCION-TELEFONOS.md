@@ -2,8 +2,49 @@
 
 > Documento técnico del trabajo de extracción de teléfonos: qué hace el sistema,
 > qué se probó, qué **no** funcionó y por qué, y cómo está montada la
-> infraestructura (Smartproxy API + CapSolver). Sirve de referencia para
-> retomar el problema y para hablar con soporte de Smartproxy.
+> infraestructura (proxy residencial + CapSolver). Sirve de referencia para
+> retomar el problema.
+
+## 0. Estado actual (actualización — proveedor de proxy migrado a Evomi)
+
+**Smartproxy se agotó (GB consumidos) y se migró a [Evomi](https://evomi.com)**
+como único proveedor de proxy residencial. El resto de este documento (§1-§9)
+describe el trabajo original hecho con Smartproxy — sigue siendo válido para
+entender el *problema* (cómo esconde Idealista el teléfono, el mecanismo
+`t=fe`/`t=bv` de DataDome, CapSolver), pero las referencias concretas a
+"Smartproxy" / "Extracción API" / gateway con sticky por *username* ya no
+aplican al código actual. Ver `lib/sync/proxy-config.ts` para la
+implementación vigente.
+
+**Diferencia de formato Evomi vs Smartproxy** (confirmada en
+`docs.evomi.com`, no adivinada): los modificadores de sesión van en el
+**password**, no en el username:
+```
+http://usuario:password_country-XX_session-<id>_lifetime-<min>@core-residential.evomi.com:1000
+```
+- Sticky NATIVO y confirmado (no una suposición): pedir 2 veces la misma
+  sesión da la MISMA IP — verificado con `proxy-health`.
+- El flujo de teléfono ahora **rota país en cada reintento**
+  (`EVOMI_COUNTRY_ROTATION`: worldwide, ES, DE, FR, GB, IT, PT, US) porque la
+  reputación de IP ante DataDome varía mucho por pool/país.
+
+### Pendiente / próximos pasos
+
+1. **Verificar si la rotación de país resuelve el bloqueo.** Última medición
+   (`proxy-health`, solo país por defecto/worldwide): 6/7 muestras dieron
+   `t=bv` (bloqueo duro) con Evomi — igual que le pasaba al pool de España de
+   Smartproxy. La rotación por país (recién añadida) no se había probado
+   todavía en el momento de escribir esto. Ejecutar
+   `GET /api/admin/particulares/proxy-health` y mirar
+   `datadome_estrategias.rotacion_pais` / `.verdict`.
+2. **Si ningún país resuelve `t=fe`:** evaluar el pool **móvil (4G/LTE)** de
+   Evomi si está disponible (los proxies móviles casi nunca reciben bloqueo
+   duro de DataDome), o seguir apoyándose en la fuente cross-portal
+   `pisos.com` (ver §5 más abajo / `lib/sync/particulares/pisos-scraper.ts`),
+   que no depende de DataDome en absoluto y ya está funcionando en producción.
+3. **Confirmar en producción con el cron real** (`/api/cron/particulares/scrape`)
+   que el número de particulares "con teléfono" sube de forma sostenida tras
+   la migración, no solo en el diagnóstico puntual.
 
 ## 1. El objetivo
 
