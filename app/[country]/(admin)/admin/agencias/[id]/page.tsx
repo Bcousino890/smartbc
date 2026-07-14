@@ -20,7 +20,7 @@ export default async function AgencyDetailPage({
 }) {
   const { id, country } = await params;
   if (country !== "es") redirect(getCountryConfig(country).prefix);
-  await guardPage("properties", country);
+  await guardPage("agencias", country);
 
   const dbAgency = await getAgencyBySlug(id);
   if (!dbAgency) notFound();

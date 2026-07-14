@@ -14,6 +14,7 @@
 
 export type PermissionResource =
   | "properties"
+  | "agencias"
   | "particulares"
   | "publicacion"
   | "captaciones"
@@ -24,16 +25,19 @@ export type PermissionResource =
   | "reportes"
   | "usuarios"
   | "configuracion"
+  | "sindicacion"
+  | "diagnostico"
   | "calendario";
 
 export type PermissionAction = "view" | "create" | "edit" | "delete" | "export";
 
-type PermissionMatrix = Record<PermissionResource, Record<PermissionAction, boolean>>;
+export type PermissionMatrix = Record<PermissionResource, Record<PermissionAction, boolean>>;
 
 // ─── Orden canónico (para iterar de forma estable en API y UI) ────────────────
 
 export const PERMISSION_RESOURCES: readonly PermissionResource[] = [
   "properties",
+  "agencias",
   "particulares",
   "publicacion",
   "captaciones",
@@ -44,6 +48,8 @@ export const PERMISSION_RESOURCES: readonly PermissionResource[] = [
   "reportes",
   "usuarios",
   "configuracion",
+  "sindicacion",
+  "diagnostico",
   "calendario",
 ] as const;
 
@@ -59,6 +65,7 @@ export const PERMISSION_ACTIONS: readonly PermissionAction[] = [
 
 export const RESOURCE_LABELS: Record<PermissionResource, string> = {
   properties:    "Propiedades",
+  agencias:      "Agencias",
   particulares:  "Particulares",
   publicacion:   "Publicación",
   captaciones:   "Captaciones",
@@ -69,13 +76,16 @@ export const RESOURCE_LABELS: Record<PermissionResource, string> = {
   reportes:      "Reportes",
   usuarios:      "Usuarios",
   configuracion: "Configuración",
+  sindicacion:   "Sindicación",
+  diagnostico:   "Diagnóstico",
   calendario:    "Calendario",
 };
 
 export const RESOURCE_DESCRIPTIONS: Record<PermissionResource, string> = {
   properties:    "Cartera de propiedades de la agencia.",
+  agencias:      "Agencias colaboradoras y condiciones de comisión.",
   particulares:  "Captaciones y anuncios de particulares.",
-  publicacion:   "Publicación de propiedades en portales.",
+  publicacion:   "Publicación de propiedades en portales (Idealista, PortalInmobiliario…).",
   captaciones:   "Gestión de captaciones inmobiliarias.",
   clientes:      "Base de datos de clientes y leads.",
   solicitudes:   "Solicitudes de información y visitas.",
@@ -84,6 +94,8 @@ export const RESOURCE_DESCRIPTIONS: Record<PermissionResource, string> = {
   reportes:      "Informes y métricas del negocio.",
   usuarios:      "Equipo interno y gestión de cuentas.",
   configuracion: "Ajustes generales de la cuenta.",
+  sindicacion:   "Feeds de sindicación a portales externos.",
+  diagnostico:   "Herramientas de diagnóstico técnico.",
   calendario:    "Agenda, citas y eventos.",
 };
 
@@ -107,6 +119,7 @@ export const ACTION_DESCRIPTIONS: Record<PermissionAction, string> = {
 
 const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true,  create: false, edit: false, delete: false, export: false },
+  agencias:      { view: false, create: false, edit: false, delete: false, export: false },
   particulares:  { view: true,  create: false, edit: false, delete: false, export: false },
   publicacion:   { view: true,  create: false, edit: false, delete: false, export: false },
   captaciones:   { view: false, create: false, edit: false, delete: false, export: false },
@@ -117,11 +130,14 @@ const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: false, create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
   configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
   calendario:    { view: true,  create: false, edit: false, delete: false, export: false },
 };
 
 const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true,  create: true,  edit: true,  delete: false, export: true  },
+  agencias:      { view: true,  create: false, edit: false, delete: false, export: false },
   particulares:  { view: true,  create: true,  edit: true,  delete: false, export: false },
   publicacion:   { view: true,  create: true,  edit: true,  delete: false, export: false },
   captaciones:   { view: true,  create: true,  edit: true,  delete: false, export: false },
@@ -132,11 +148,14 @@ const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: true,  create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
   configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
   calendario:    { view: true,  create: true,  edit: true,  delete: false, export: false },
 };
 
 const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true, create: true,  edit: true, delete: true,  export: true  },
+  agencias:      { view: true, create: true,  edit: true, delete: false, export: false },
   particulares:  { view: true, create: true,  edit: true, delete: true,  export: true  },
   publicacion:   { view: true, create: true,  edit: true, delete: true,  export: true  },
   captaciones:   { view: true, create: true,  edit: true, delete: true,  export: true  },
@@ -147,12 +166,15 @@ const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
   usuarios:      { view: true, create: true,  edit: true, delete: false, export: false },
   configuracion: { view: true, create: false, edit: true, delete: false, export: false },
+  sindicacion:   { view: true, create: false, edit: false, delete: false, export: false },
+  diagnostico:   { view: true, create: false, edit: false, delete: false, export: false },
   calendario:    { view: true, create: true,  edit: true, delete: true,  export: false },
 };
 
 // Roles con acceso total (owner, admin) — todo permitido
 const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true, create: true, edit: true, delete: true, export: true },
+  agencias:      { view: true, create: true, edit: true, delete: true, export: true },
   particulares:  { view: true, create: true, edit: true, delete: true, export: true },
   publicacion:   { view: true, create: true, edit: true, delete: true, export: true },
   captaciones:   { view: true, create: true, edit: true, delete: true, export: true },
@@ -163,12 +185,15 @@ const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: true, create: true, edit: true, delete: true, export: true },
   usuarios:      { view: true, create: true, edit: true, delete: true, export: true },
   configuracion: { view: true, create: true, edit: true, delete: true, export: true },
+  sindicacion:   { view: true, create: true, edit: true, delete: true, export: true },
+  diagnostico:   { view: true, create: true, edit: true, delete: true, export: true },
   calendario:    { view: true, create: true, edit: true, delete: true, export: true },
 };
 
 // Advisor: similar a full access pero sin gestión total de usuarios/config
 const ADVISOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true, create: true,  edit: true,  delete: true,  export: true  },
+  agencias:      { view: true, create: false, edit: false, delete: false, export: false },
   particulares:  { view: true, create: true,  edit: true,  delete: true,  export: true  },
   publicacion:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
   captaciones:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
@@ -179,12 +204,15 @@ const ADVISOR_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
   usuarios:      { view: true, create: false, edit: false, delete: false, export: false },
   configuracion: { view: true, create: false, edit: true,  delete: false, export: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
   calendario:    { view: true, create: true,  edit: true,  delete: true,  export: false },
 };
 
 // Rol "captadora" — operaria de captaciones (solo ve y edita asignadas a ella)
 const CAPTADORA_PERMISSIONS: PermissionMatrix = {
   properties:    { view: false, create: false, edit: false, delete: false, export: false },
+  agencias:      { view: false, create: false, edit: false, delete: false, export: false },
   particulares:  { view: false, create: false, edit: false, delete: false, export: false },
   publicacion:   { view: false, create: false, edit: false, delete: false, export: false },
   captaciones:   { view: true,  create: false, edit: true,  delete: false, export: false },
@@ -195,12 +223,15 @@ const CAPTADORA_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: false, create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
   configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
   calendario:    { view: false, create: false, edit: false, delete: false, export: false },
 };
 
 // Sin acceso (client, viewer, roles desconocidos)
 const NO_ACCESS_PERMISSIONS: PermissionMatrix = {
   properties:    { view: false, create: false, edit: false, delete: false, export: false },
+  agencias:      { view: false, create: false, edit: false, delete: false, export: false },
   particulares:  { view: false, create: false, edit: false, delete: false, export: false },
   publicacion:   { view: false, create: false, edit: false, delete: false, export: false },
   captaciones:   { view: false, create: false, edit: false, delete: false, export: false },
@@ -211,6 +242,8 @@ const NO_ACCESS_PERMISSIONS: PermissionMatrix = {
   reportes:      { view: false, create: false, edit: false, delete: false, export: false },
   usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
   configuracion: { view: false, create: false, edit: false, delete: false, export: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
   calendario:    { view: false, create: false, edit: false, delete: false, export: false },
 };
 
@@ -249,6 +282,16 @@ export function canAccess(
   return resourcePerms[action as PermissionAction] ?? false;
 }
 
+/**
+ * Igual que `PERMISSIONS_BY_ROLE[role] ?? NO_ACCESS_PERMISSIONS`, expuesto
+ * como función para que `lib/db/queries/permissions.ts` pueda resolver la
+ * matriz base de un rol (incluido el rol efectivo por país) sin importar el
+ * mapa privado directamente.
+ */
+export function PERMISSIONS_BY_ROLE_FALLBACK(role: string): PermissionMatrix {
+  return PERMISSIONS_BY_ROLE[role] ?? NO_ACCESS_PERMISSIONS;
+}
+
 // ─── Permisos efectivos (rol + excepciones por usuario) ──────────────────────
 
 export type PermissionOverride = {
@@ -275,12 +318,18 @@ export type EffectivePermissions = Record<
  *
  * NOTA: no filtra por país — aplica todos los overrides recibidos en orden.
  * Para respetar el país activo usa `applyOverridesForCountry`.
+ *
+ * @param baseMatrix - Matriz base explícita (opcional). Cuando se pasa, se usa
+ *   en vez de `PERMISSIONS_BY_ROLE[role]` — la usan los roles personalizados
+ *   (`custom_roles.matrix`) y el rol efectivo por país resuelto en
+ *   `lib/db/queries/permissions.ts`. Sin ella, comportamiento actual.
  */
 export function applyOverrides(
   role: string,
   overrides: PermissionOverride[],
+  baseMatrix?: PermissionMatrix,
 ): EffectivePermissions {
-  const matrix = PERMISSIONS_BY_ROLE[role] ?? NO_ACCESS_PERMISSIONS;
+  const matrix = baseMatrix ?? PERMISSIONS_BY_ROLE[role] ?? NO_ACCESS_PERMISSIONS;
   const effective = {} as EffectivePermissions;
   for (const resource of PERMISSION_RESOURCES) {
     effective[resource] = { ...matrix[resource] };
@@ -308,6 +357,7 @@ export function applyOverridesForCountry(
   role: string,
   overrides: PermissionOverride[],
   country?: string | null,
+  baseMatrix?: PermissionMatrix,
 ): EffectivePermissions {
   const isGlobal = (o: PermissionOverride) =>
     o.country === null || o.country === undefined;
@@ -320,7 +370,35 @@ export function applyOverridesForCountry(
       ]
     : overrides.filter(isGlobal);
 
-  return applyOverrides(role, ordered);
+  return applyOverrides(role, ordered, baseMatrix);
+}
+
+// ─── Roles personalizados ──────────────────────────────────────────────────
+
+/**
+ * Construye una `PermissionMatrix` completa (todas las celdas presentes) a
+ * partir de un valor arbitrario (típicamente `custom_roles.matrix`, jsonb
+ * leído de la base de datos). Tolerante con datos parciales o corruptos:
+ * cualquier celda ausente o con tipo inesperado cae a `false` en vez de
+ * lanzar o dejar huecos — así un roles personalizado mal guardado nunca
+ * concede más de lo que declara explícitamente.
+ */
+export function normalizeMatrix(input: unknown): PermissionMatrix {
+  const src = (input && typeof input === "object" ? input : {}) as Record<
+    string,
+    unknown
+  >;
+  const out = {} as PermissionMatrix;
+  for (const resource of PERMISSION_RESOURCES) {
+    const srcResource = (src[resource] && typeof src[resource] === "object"
+      ? src[resource]
+      : {}) as Record<string, unknown>;
+    out[resource] = {} as Record<PermissionAction, boolean>;
+    for (const action of PERMISSION_ACTIONS) {
+      out[resource][action] = srcResource[action] === true;
+    }
+  }
+  return out;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

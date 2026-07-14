@@ -136,6 +136,7 @@ interface PermissionsDrawerProps {
 function buildStates(
   perms: PermMatrix,
   role: string,
+  roleDefaults?: PermMatrix,
 ): { effective: CellState; defaults: DefaultState } {
   const effective = {} as CellState;
   const defaults = {} as DefaultState;
@@ -145,10 +146,15 @@ function buildStates(
     for (const action of PERMISSION_ACTIONS) {
       const raw = perms[resource]?.[action];
       const effectiveOn = raw === true || raw === "override_true";
-      // Role default is computed independently so the "modificado" chip is
-      // accurate even if a stored override happens to match the role default.
       effective[resource][action] = effectiveOn;
-      defaults[resource][action] = canAccess(role, resource, action);
+      // La base "modificado"/"restablecer" viene del servidor
+      // (`roleDefaults`, ver resolveBaseMatrix): es la única fuente correcta
+      // cuando el usuario tiene rol personalizado o rol por país, que
+      // `canAccess(role, ...)` (estático, solo el rol de perfil) no conoce.
+      // Fallback a canAccess si el endpoint aún no envía roleDefaults.
+      const fromServer = roleDefaults?.[resource]?.[action];
+      defaults[resource][action] =
+        typeof fromServer === "boolean" ? fromServer : canAccess(role, resource, action);
     }
   }
   return { effective, defaults };
@@ -215,7 +221,11 @@ export function PermissionsDrawer({
           return;
         }
         const role: string = data.role ?? user.roleKey;
-        const { effective: eff, defaults: def } = buildStates(data.permissions ?? {}, role);
+        const { effective: eff, defaults: def } = buildStates(
+          data.permissions ?? {},
+          role,
+          data.roleDefaults,
+        );
         setEffective(eff);
         setDefaults(def);
         setLoadState("ready");

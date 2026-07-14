@@ -49,22 +49,27 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
-  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "agencias",     onlyCountry: "es" },
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
   // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
   { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
-  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
+  // Antes apuntaba a "properties": el toggle "Publicación" del panel de
+  // permisos no controlaba este enlace ni coincidía con el recurso que ya
+  // usan las rutas /api/admin/publicacion/* (requirePermission("publicacion", ...)).
+  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "publicacion"   },
   { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "captaciones",  onlyCountry: "cl" },
-  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
+  // Idealista es la integración de publicación con ese portal → mismo
+  // recurso que /admin/publicacion (antes "properties", desalineado).
+  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "publicacion",  onlyCountry: "es" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
   { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "solicitudes"   },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
-  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "sindicacion",  onlyCountry: "es" },
   { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
-  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion", onlyCountry: "es" },
+  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "diagnostico",  onlyCountry: "es" },
   { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];

@@ -23,7 +23,7 @@ export default async function AdminPublicacionPage({
 }) {
   const { country } = await params;
   const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+  if (!canAccess(currentProfile?.role ?? "", "publicacion", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
 

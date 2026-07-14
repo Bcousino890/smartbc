@@ -30,7 +30,7 @@ export default async function AdminSindicacionPage({
   if (country !== "es") redirect(getCountryConfig(country).prefix);
 
   const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+  if (!canAccess(currentProfile?.role ?? "", "sindicacion", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
 

@@ -463,6 +463,10 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
     user.countries ??
       (user.multiCountry ? ["es", "cl"] : [user.country ?? defaultCountry]),
   );
+  // Rol efectivo por país (solo relevante con >1 país): "" = usa el rol base.
+  const [countryRoleOverrides, setCountryRoleOverrides] = useState<Record<string, string>>(
+    user.countryRoles ?? {},
+  );
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -486,6 +490,20 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
     setErrorMsg("");
 
     try {
+      // countryRoles: valor para cada país actualmente seleccionado (el
+      // override elegido, o null = usa el rol base) + null para países que
+      // tenía asignados y ya no están seleccionados (limpia la fila vieja).
+      let countryRolesPayload: Record<string, string | null> | undefined;
+      if (!isClient && selectedCountries.length > 1) {
+        countryRolesPayload = {};
+        for (const c of selectedCountries) {
+          countryRolesPayload[c] = countryRoleOverrides[c] || null;
+        }
+        for (const c of Object.keys(user.countryRoles ?? {})) {
+          if (!selectedCountries.includes(c)) countryRolesPayload[c] = null;
+        }
+      }
+
       const payload: Record<string, unknown> = {
         userId: user.id,
         firstName,
@@ -495,6 +513,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
         country,
         // El backend deriva multi_country de countries.length > 1.
         countries: isClient ? undefined : selectedCountries,
+        countryRoles: countryRolesPayload,
       };
       if (isClient && phone) payload.phone = phone;
       if (newPassword) payload.password = newPassword;
@@ -619,6 +638,43 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                 onChangeSelected={setSelectedCountries}
                 onChangeDefault={setCountry}
               />
+            )}
+
+            {!isClient && selectedCountries.length > 1 && (
+              <div className="space-y-2 rounded-xl border border-ink/10 bg-white/50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  Rol por país (opcional)
+                </p>
+                <p className="text-[11px] text-ink/40">
+                  Por defecto usa el rol de arriba en ambos países. Elige un
+                  rol distinto solo si este usuario debe tener más o menos
+                  acceso en un país concreto (ej. senior en Chile, junior en
+                  España).
+                </p>
+                {selectedCountries.map((c) => (
+                  <div key={c} className="flex items-center gap-2">
+                    <span className="w-8 shrink-0 text-center text-base leading-none">
+                      {COUNTRY_FLAG[c]}
+                    </span>
+                    <select
+                      value={countryRoleOverrides[c] ?? ""}
+                      onChange={(e) =>
+                        setCountryRoleOverrides((prev) => ({ ...prev, [c]: e.target.value }))
+                      }
+                      className="w-full rounded-lg border border-ink/10 bg-white px-2.5 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+                    >
+                      <option value="">(usar rol base: {ROLE_LABEL[role]})</option>
+                      {ALL_ASSIGNABLE_ROLES.filter(
+                        (r) => r.value !== "owner" && r.value !== "admin",
+                      ).map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             )}
 
             <div>

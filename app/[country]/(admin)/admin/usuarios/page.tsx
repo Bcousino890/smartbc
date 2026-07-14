@@ -3,6 +3,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { profileRowToInternalUser, deriveInitials } from "@/lib/db/adapters";
 import { getAllProfiles } from "@/lib/db/queries/clients";
+import { getCountryRolesMap } from "@/lib/db/queries/permissions";
 import { UsuariosClient } from "./usuarios-client";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
@@ -35,7 +36,16 @@ export default async function AdminUsuariosPage({
   const staffRows = profileRows.filter((row) => STAFF_ROLES.includes(row.role ?? ""));
   const otherRows = profileRows.filter((row) => !STAFF_ROLES.includes(row.role ?? ""));
 
-  const staffUsers = staffRows.map(profileRowToInternalUser);
+  // Rol por país (solo relevante para staff con acceso a >1 país): una query
+  // batch en vez de una por fila. Defensivo si la migración 0090 no está
+  // aplicada aún en el VPS (devuelve mapa vacío).
+  const countryRolesMap = await getCountryRolesMap(staffRows.map((r) => r.id)).catch(
+    () => ({}) as Record<string, Record<string, string>>,
+  );
+  const staffUsers = staffRows.map((row) => ({
+    ...profileRowToInternalUser(row),
+    countryRoles: countryRolesMap[row.id],
+  }));
   const otherUsers = otherRows.map((row) => ({
     id: row.id,
     firstName: row.full_name?.split(" ")[0] ?? "",

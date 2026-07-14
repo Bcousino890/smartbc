@@ -16,7 +16,7 @@ export default async function AdminDiagnosticoPage({
   if (country !== "es") redirect(getCountryConfig(country).prefix);
 
   const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "configuracion", "view")) {
+  if (!canAccess(currentProfile?.role ?? "", "diagnostico", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
 

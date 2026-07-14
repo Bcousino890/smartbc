@@ -466,6 +466,13 @@ export type InternalUser = {
   // `multiCountry` (que se deriva: countries.length > 1). `country` sigue
   // siendo el país por defecto/landing. Opcional para retrocompat.
   countries?: string[];
+  // Rol efectivo por país, cuando difiere del rol global (roleKey). Ej.
+  // { cl: "agent_senior" } para un usuario "agent_junior" en España pero
+  // senior en Chile. Sin entrada para un país = usa roleKey.
+  countryRoles?: Record<string, string>;
+  // Rol personalizado asignado (custom_roles.id), si tiene uno. Cuando está
+  // definido, la matriz de permisos real viene de esa entidad, no de roleKey.
+  customRoleId?: string | null;
 };
 
 // Admin / Configuración

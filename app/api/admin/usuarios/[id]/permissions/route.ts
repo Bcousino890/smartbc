@@ -2,8 +2,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
+import { resolveBaseMatrix } from "@/lib/db/queries/permissions";
 import {
-  canAccess,
   PERMISSION_ACTIONS,
   PERMISSION_RESOURCES,
 } from "@/lib/permissions";
@@ -62,6 +62,16 @@ export async function GET(
 
   const role: string = profile.role;
 
+  // Matriz base: rol personalizado (custom_roles) o rol por país si aplica,
+  // si no el rol tal cual — ver resolveBaseMatrix() para el orden de
+  // precedencia. Defensivo: si las tablas de la migración 0090 no existen
+  // aún en el VPS, equivale a canAccess(role, ...) de siempre.
+  const { matrix: roleMatrix, isCustomRole } = await resolveBaseMatrix(
+    userId,
+    role,
+    country ?? undefined,
+  );
+
   // Fetch per-user overrides. Si se filtra por país incluimos también la
   // columna `country` para poder aplicar globales + país.
   let overridesQuery = db
@@ -107,7 +117,7 @@ export async function GET(
   for (const resource of RESOURCES) {
     permissions[resource] = {};
     for (const action of ACTIONS) {
-      const roleDefault = canAccess(role, resource, action);
+      const roleDefault = roleMatrix[resource][action];
       const hasOverride =
         overrideMap[resource] !== undefined &&
         overrideMap[resource][action] !== undefined;
@@ -123,7 +133,12 @@ export async function GET(
     }
   }
 
-  return Response.json({ role, permissions });
+  // `roleDefaults` = la matriz base real (rol / rol por país / rol
+  // personalizado), SIN overrides. La UI la usa como referencia para el
+  // badge "modificado" y para "Restablecer a valores del rol" — si usara
+  // canAccess(role,...) en cliente (solo estático) daría una base incorrecta
+  // para usuarios con rol personalizado o rol por país.
+  return Response.json({ role, permissions, isCustomRole, roleDefaults: roleMatrix });
 }
 
 export async function POST(

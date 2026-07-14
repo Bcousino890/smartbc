@@ -262,6 +262,9 @@ export function profileRowToInternalUser(
     countries:
       (row as { countries?: string[] | null }).countries ??
       (row.multi_country ? ["es", "cl"] : [row.country ?? "es"]),
+    // `custom_role_id` puede no existir todavía como columna en el VPS
+    // (migración 0090 pendiente): lectura defensiva.
+    customRoleId: (row as { custom_role_id?: string | null }).custom_role_id ?? null,
   };
 }
 

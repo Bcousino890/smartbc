@@ -21,7 +21,7 @@ export default async function AdminAgenciasPage({
   if (country !== "es") redirect(getCountryConfig(country).prefix);
 
   const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+  if (!canAccess(currentProfile?.role ?? "", "agencias", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
 

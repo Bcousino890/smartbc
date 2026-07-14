@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
+import { STAFF_ROLES } from "@/lib/permissions";
 
 export async function PATCH(req: Request) {
   let body: {
@@ -16,6 +17,15 @@ export async function PATCH(req: Request) {
     // Conjunto de países con acceso ('es' | 'cl'). Si viene, tiene prioridad:
     // se escribe `countries`, `country` = default y `multi_country` derivado.
     countries?: string[];
+    // Rol efectivo por país (opcional): { es: "agent_senior", cl: null }.
+    // Un valor de rol upsertea profiles_country_roles(user_id,country); null
+    // borra la fila (vuelve a usar `role` para ese país). Solo tiene sentido
+    // para usuarios con acceso a más de un país.
+    countryRoles?: Record<string, string | null>;
+    // Rol personalizado (custom_roles.id) o null para quitarlo. Cuando está
+    // definido, gana sobre `role`/countryRoles para la MATRIZ de permisos
+    // (ver resolveBaseMatrix); `role` se conserva para el acceso staff/país.
+    customRoleId?: string | null;
   };
 
   try {
@@ -24,7 +34,19 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "Cuerpo JSON inválido" }, { status: 400 });
   }
 
-  const { userId, firstName, lastName, phone, role, password, country, multiCountry, countries } = body;
+  const {
+    userId,
+    firstName,
+    lastName,
+    phone,
+    role,
+    password,
+    country,
+    multiCountry,
+    countries,
+    countryRoles,
+    customRoleId,
+  } = body;
 
   if (!userId) {
     return Response.json({ error: "userId requerido" }, { status: 400 });
@@ -60,13 +82,33 @@ export async function PATCH(req: Request) {
     prevProfile = null;
   }
 
-  const updates: Record<string, string | boolean | string[]> = {};
+  const updates: Record<string, string | boolean | string[] | null> = {};
   if (firstName !== undefined || lastName !== undefined) {
     const fullName = `${firstName ?? ""} ${lastName ?? ""}`.trim();
     if (fullName) updates.full_name = fullName;
   }
   if (role !== undefined) updates.role = role;
   if (phone !== undefined) updates.phone = phone;
+
+  // customRoleId: string (uuid) para asignar, "" o null para quitar.
+  let hasCustomRoleId = false;
+  if (customRoleId !== undefined) {
+    updates.custom_role_id = customRoleId || (null as unknown as string);
+    hasCustomRoleId = true;
+  }
+
+  // Validación de countryRoles: solo países válidos y roles de staff
+  // conocidos (no tiene sentido asignar "client"/"viewer" como rol de país).
+  if (countryRoles !== undefined) {
+    for (const [c, r] of Object.entries(countryRoles)) {
+      if (c !== "es" && c !== "cl") {
+        return Response.json({ error: `País inválido en countryRoles: ${c}` }, { status: 400 });
+      }
+      if (r !== null && !STAFF_ROLES.includes(r as (typeof STAFF_ROLES)[number])) {
+        return Response.json({ error: `Rol inválido en countryRoles: ${r}` }, { status: 400 });
+      }
+    }
+  }
 
   // Modelo multi-país (nuevo): si viene `countries`, tiene prioridad sobre
   // country/multiCountry. Se valida ⊆ {'es','cl'} y no vacío.
@@ -106,11 +148,13 @@ export async function PATCH(req: Request) {
       .update(updates)
       .eq("id", userId);
 
-    // Escritura defensiva: si la columna `countries` aún no existe en el VPS,
-    // reintentamos sin ella conservando country + multi_country (derivados).
-    if (error && hasCountries) {
+    // Escritura defensiva: si `countries` y/o `custom_role_id` aún no existen
+    // en el VPS (migraciones 0084/0090 pendientes), reintentamos sin esas
+    // columnas para no bloquear el resto de la actualización.
+    if (error && (hasCountries || hasCustomRoleId)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-      const { countries: _omitCountries, ...fallbackUpdates } = updates;
+      const { countries: _omitCountries, custom_role_id: _omitCustomRoleId, ...fallbackUpdates } =
+        updates as Record<string, unknown>;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ({ error } = await (supabase as any)
         .from("profiles")
@@ -120,6 +164,35 @@ export async function PATCH(req: Request) {
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
+    }
+
+    // ── Rol por país (best-effort, defensivo) ──────────────────────────────
+    // Upsertea/borra filas de profiles_country_roles según countryRoles. Si
+    // la tabla aún no existe (migración 0090 pendiente), se ignora en
+    // silencio: el resto de la actualización ya se aplicó arriba.
+    if (countryRoles !== undefined) {
+      for (const [c, r] of Object.entries(countryRoles)) {
+        try {
+          if (r === null) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any)
+              .from("profiles_country_roles")
+              .delete()
+              .eq("user_id", userId)
+              .eq("country", c);
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any)
+              .from("profiles_country_roles")
+              .upsert(
+                { user_id: userId, country: c, role: r, created_by: currentProfile.id },
+                { onConflict: "user_id,country" },
+              );
+          }
+        } catch {
+          // profiles_country_roles aún no existe: se ignora, sin romper el resto.
+        }
+      }
     }
 
     // ── Auditoría (best-effort) de cambios de rol y país ──────────────────────

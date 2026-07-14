@@ -22,7 +22,7 @@ export default async function AdminIdealistaPage({
   if (country !== "es") redirect(`${getCountryConfig(country).prefix}/publicacion`);
 
   const currentProfile = await getCurrentProfile();
-  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+  if (!canAccess(currentProfile?.role ?? "", "publicacion", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
 
