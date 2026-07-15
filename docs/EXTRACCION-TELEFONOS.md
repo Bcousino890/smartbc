@@ -45,9 +45,19 @@ Detalles de **Evomi** (docs.evomi.com):
 - `normalizeProxyUrl` repara el error típico de copiar/pegar sin el `@` antes
   del host (`http://user:pass:host:puerto` → `http://user:pass@host:puerto`) y
   quita cualquier modificador que haya quedado pegado en la credencial base.
+- **"Expert settings" OPCIONALES (contra el t=bv):** Evomi permite filtrar el
+  pool para dar IPs más limpias, lo que puede reducir el bloqueo duro de
+  DataDome. Van APAGADOS por defecto porque cada filtro **multiplica el consumo
+  de ancho de banda** (coste). Se activan por env (sin tocar código ni la
+  credencial guardada):
+  - `EVOMI_FRAUDSCORE=N` → añade `_fraudscore-N` (Scamalytics 0-100, **menor =
+    IP más limpia**; sugerido 10-25). Es la palanca más directa contra el t=bv.
+  - `EVOMI_MIN_UPTIME_MIN=N` → añade `_activesince-N` (IP conectada ≥N min).
+  Doc: docs.evomi.com/proxy-instructions/residential-proxies/expert-settings.
 
-Tests: `node --experimental-strip-types scripts/test-proxy-sticky.mts` y
-`node --experimental-strip-types scripts/test-evomi-sticky.mts`.
+Tests: `node --experimental-strip-types scripts/test-proxy-sticky.mts`,
+`node --experimental-strip-types scripts/test-evomi-sticky.mts` y
+`node --experimental-strip-types scripts/test-evomi-expert-settings.mts`.
 
 ### Pendiente / próximos pasos
 

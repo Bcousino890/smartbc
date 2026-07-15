@@ -302,7 +302,10 @@ function stripModifiers(u: URL): void {
   }
   const pass = decodeURIComponent(u.password);
   u.password = pass.replace(
-    /_(?:country|region|city|isp|asn|continent|session|hardsession|lifetime)-[^_]*/g,
+    // Incluye los "expert settings" de Evomi (fraudscore/activesince/latency/
+    // device/zip/http3/localdns) además de los básicos, para que la limpieza
+    // sea idempotente aunque la credencial pegada ya traiga alguno.
+    /_(?:country|region|city|isp|asn|continent|session|hardsession|lifetime|fraudscore|activesince|latency|device|zip|http3|localdns)-[^_]*/g,
     "",
   );
 }
@@ -371,6 +374,31 @@ function buildSmartproxyUrl(u: URL, sessionId: string): string {
 
 // ── Evomi: modificadores en el PASSWORD, lifetime en MINUTOS ─────────────────
 // http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000
+//
+// "Expert settings" OPCIONALES (docs.evomi.com/proxy-instructions/residential-
+// proxies/expert-settings): filtran el pool para dar IPs más "limpias", lo que
+// puede reducir el bloqueo duro (t=bv) de DataDome. Van APAGADOS por defecto
+// porque cada filtro MULTIPLICA el consumo de ancho de banda (coste). Se
+// activan por env, solo si el usuario decide pagarlos:
+//   • EVOMI_FRAUDSCORE=N   → `_fraudscore-N` (Scamalytics 0-100; MENOR = IP más
+//     limpia). Recomendado 10-25 para colarse por debajo del umbral de DataDome.
+//   • EVOMI_MIN_UPTIME_MIN=N → `_activesince-N` (IP conectada ≥N minutos: más
+//     estable, menos "recién levantada" que es señal típica de proxy).
+function evomiExpertModifiers(): string {
+  let mods = "";
+  const rawFraud = (process.env.EVOMI_FRAUDSCORE ?? process.env.PROXY_FRAUDSCORE ?? "").trim();
+  if (rawFraud) {
+    const n = Math.round(Number(rawFraud));
+    if (Number.isFinite(n) && n >= 0 && n <= 100) mods += `_fraudscore-${n}`;
+  }
+  const rawUptime = (process.env.EVOMI_MIN_UPTIME_MIN ?? "").trim();
+  if (rawUptime) {
+    const n = Math.round(Number(rawUptime));
+    if (Number.isFinite(n) && n > 0) mods += `_activesince-${n}`;
+  }
+  return mods;
+}
+
 function buildEvomiUrl(
   u: URL,
   sessionId: string,
@@ -380,7 +408,7 @@ function buildEvomiUrl(
 ): string {
   const safeId = (sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || randomSessionId(8)).padEnd(6, "0");
   const life = Math.min(120, Math.max(1, Math.round(lifeMinutes)));
-  const modifiers = `${useCountry ? `_country-${country}` : ""}_session-${safeId}_lifetime-${life}`;
+  const modifiers = `${useCountry ? `_country-${country}` : ""}${evomiExpertModifiers()}_session-${safeId}_lifetime-${life}`;
   const newPassword = `${decodeURIComponent(u.password)}${modifiers}`;
   const auth = `${u.username}:${newPassword}`;
   return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
