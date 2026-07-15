@@ -28,12 +28,27 @@ export async function POST(req: Request) {
   const db = createAdminClient() as any;
 
   for (const [key, value] of Object.entries(body)) {
+    // Si se guarda scraping.proxyConfigs, extraer el config activo y ponerlo en scraping.proxyUrl
+    if (key === "scraping.proxyConfigs" && typeof value === "string") {
+      try {
+        const configs = JSON.parse(value);
+        const activeConfig = configs.find((c: any) => c.enabled);
+        if (activeConfig && activeConfig.url) {
+          await db
+            .from("app_settings")
+            .upsert({ key: "scraping.proxyUrl", value: activeConfig.url }, { onConflict: "key" });
+        }
+      } catch (e) {
+        console.error("Failed to parse proxyConfigs:", e);
+      }
+    }
+
     await db
       .from("app_settings")
       .upsert({ key, value }, { onConflict: "key" });
   }
 
-  if ("scraping.proxyUrl" in body) {
+  if ("scraping.proxyUrl" in body || "scraping.proxyConfigs" in body) {
     invalidateProxyCache();
   }
 

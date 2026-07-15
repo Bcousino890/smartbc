@@ -18,6 +18,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { EmailConfigClient } from "./email-config-client";
 import { ZintoConfigClient } from "./zinto-config-client";
+import { ProxyConfigClient, type ProxyConfig, type ProxyProvider } from "./proxy-config-client";
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
 import { useT } from "@/lib/i18n/provider";
@@ -32,6 +33,8 @@ export default function ConfiguracionClient() {
   const mlConnected = searchParams.get("ml_connected");
   const [settings, setSettings] = useState<AppSettings>(mockAppSettings);
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
+  const [proxyConfigs, setProxyConfigs] = useState<ProxyConfig[]>([]);
+  const [activeProxyProvider, setActiveProxyProvider] = useState<ProxyProvider>("evomi");
   const [scrapingCapSolverKey, setScrapingCapSolverKey] = useState("");
   const [mlClientSecret, setMlClientSecret] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,6 +53,20 @@ export default function ConfiguracionClient() {
         }));
         if (typeof data["scraping.proxyUrl"] === "string") {
           setScrapingProxyUrl(data["scraping.proxyUrl"]);
+        }
+        if (typeof data["scraping.proxyConfigs"] === "string") {
+          try {
+            const parsed = JSON.parse(data["scraping.proxyConfigs"] as string);
+            if (Array.isArray(parsed)) {
+              setProxyConfigs(parsed);
+              const active = parsed.find((c: ProxyConfig) => c.enabled);
+              if (active) {
+                setActiveProxyProvider(active.provider);
+              }
+            }
+          } catch (e) {
+            // Ignore parse errors, use defaults
+          }
         }
         if (typeof data["ml.chile.client_secret"] === "string") {
           let secret = data["ml.chile.client_secret"] as string;
@@ -77,6 +94,7 @@ export default function ConfiguracionClient() {
           defaults: settings.defaults,
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
+          "scraping.proxyConfigs": JSON.stringify(proxyConfigs),
           "scraping.capsolver.api_key": scrapingCapSolverKey,
           "ml.chile.client_secret": mlClientSecret,
         }),
@@ -288,22 +306,11 @@ export default function ConfiguracionClient() {
               onChange={setScrapingCapSolverKey}
               placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             />
-            <p className="text-xs text-ink/55 pt-1">
-              Proxy residencial (Evomi principal / Smartproxy respaldo). Pega
-              solo la <strong>credencial base</strong>, sin país ni sesión —
-              el sistema los añade solo en cada llamada:{" "}
-              <code>http://usuario:password@core-residential.evomi.com:1000</code>
-              . También acepta la línea de endpoint de Geonode{" "}
-              <code>host:puerto:usuario:password</code> (botón copiar en
-              «Endpoints format») si hace falta volver a ese proveedor. El
-              sistema detecta el proveedor por la URL, ancla la sesión sticky
-              y añade los modificadores de sesión/país que hagan falta.
-            </p>
-            <PasswordField
-              label="URL del proxy"
-              value={scrapingProxyUrl}
-              onChange={setScrapingProxyUrl}
-              placeholder="http://USUARIO:PASSWORD@core-residential.evomi.com:1000"
+            <ProxyConfigClient
+              configs={proxyConfigs}
+              activeProvider={activeProxyProvider}
+              onConfigsChange={setProxyConfigs}
+              onActiveProviderChange={setActiveProxyProvider}
             />
           </div>
         </SettingsSection>
