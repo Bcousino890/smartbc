@@ -36,6 +36,7 @@ export type WhatsAppConversation = {
   unreadCount: number;
   contactMessage?: string | null;
   propertyTitle?: string | null;
+  country?: 'es' | 'cl';
 };
 
 export type WhatsAppMessage = {
@@ -215,7 +216,12 @@ export function WhatsAppChat({
                     <p className="truncate font-serif text-base font-semibold text-ink">
                       {active.displayName}
                     </p>
-                    <p className="text-[11px] text-ink/55">+{active.phoneNumber}</p>
+                    <div className="flex items-center gap-2 text-[11px] text-ink/55">
+                      <span>+{active.phoneNumber}</span>
+                      <span className="inline-block rounded-full bg-gold/20 px-1.5 py-0.5 font-medium">
+                        {active.country === 'cl' ? '🇨🇱 Chile' : '🇪🇸 España'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -413,8 +419,11 @@ function NewConversationModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  const params = useParams<{ country?: string }>();
+  const currentCountry = isCountry(params?.country) ? params.country : "es";
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<'es' | 'cl'>(currentCountry);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -422,7 +431,7 @@ function NewConversationModal({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await startWhatsAppConversation(phone, name);
+      const result = await startWhatsAppConversation(phone, name, selectedCountry);
       if (result.ok) {
         onCreated(result.id);
       } else {
@@ -477,6 +486,19 @@ function NewConversationModal({
               placeholder="Nombre del contacto"
               className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium text-ink/65">
+              País
+            </span>
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value as 'es' | 'cl')}
+              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            >
+              <option value="es">🇪🇸 España (WhatsApp #4)</option>
+              <option value="cl">🇨🇱 Chile (WhatsApp #50)</option>
+            </select>
           </label>
           {error && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">

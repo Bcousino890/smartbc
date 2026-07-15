@@ -19,7 +19,8 @@ export async function getOrCreateConversation(
   clientId: string,
   phoneNumber: string,
   channelId: number = 4,
-  meta?: ConversationMeta
+  meta?: ConversationMeta,
+  country: 'es' | 'cl' = 'es'
 ): Promise<ZintoConversation> {
   const supabase = getSupabaseClient();
 
@@ -28,6 +29,7 @@ export async function getOrCreateConversation(
     .select('*')
     .eq('client_id', clientId)
     .eq('phone_number', phoneNumber)
+    .eq('country', country)
     .single();
 
   if (existing) {
@@ -49,7 +51,7 @@ export async function getOrCreateConversation(
     return existing as ZintoConversation;
   }
 
-  // Upsert on the unique (client_id, phone_number) pair so concurrent inbound
+  // Upsert on the unique (client_id, phone_number, country) tuple so concurrent inbound
   // messages can't create duplicate conversations (race-safe).
   const { data: newConv, error } = await supabase
     .from('zinto_conversations')
@@ -58,12 +60,13 @@ export async function getOrCreateConversation(
         client_id: clientId,
         phone_number: phoneNumber,
         channel_id: channelId,
+        country,
         contact_name: meta?.contactName ?? null,
         contact_message: meta?.contactMessage ?? null,
         property_title: meta?.propertyTitle ?? null,
         lead_id: meta?.leadId ?? null,
       },
-      { onConflict: 'client_id,phone_number', ignoreDuplicates: false }
+      { onConflict: 'client_id,phone_number,country', ignoreDuplicates: false }
     )
     .select()
     .single();
@@ -75,6 +78,7 @@ export async function getOrCreateConversation(
       .select('*')
       .eq('client_id', clientId)
       .eq('phone_number', phoneNumber)
+      .eq('country', country)
       .single();
     if (raced) return raced as ZintoConversation;
     throw new Error(`Failed to create conversation: ${error.message}`);
@@ -84,13 +88,20 @@ export async function getOrCreateConversation(
 }
 
 export async function findConversationByPhone(
-  phoneNumber: string
+  phoneNumber: string,
+  country?: 'es' | 'cl'
 ): Promise<ZintoConversation | null> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('zinto_conversations')
     .select('*')
-    .eq('phone_number', phoneNumber)
+    .eq('phone_number', phoneNumber);
+
+  if (country) {
+    query = query.eq('country', country);
+  }
+
+  const { data, error } = await query
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -201,6 +212,26 @@ export async function getAllConversations(
   const { data, error } = await supabase
     .from('zinto_conversations')
     .select('*')
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    throw new Error(`Failed to fetch conversations: ${error.message}`);
+  }
+
+  return data as ZintoConversation[];
+}
+
+export async function getConversationsByCountry(
+  country: 'es' | 'cl',
+  limit: number = 20,
+  offset: number = 0
+): Promise<ZintoConversation[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('zinto_conversations')
+    .select('*')
+    .eq('country', country)
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
 

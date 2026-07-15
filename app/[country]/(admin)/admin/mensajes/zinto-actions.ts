@@ -109,6 +109,7 @@ export type StartConversationResult =
 export async function startWhatsAppConversation(
   phone: string,
   name?: string,
+  country: 'es' | 'cl' = 'es',
 ): Promise<StartConversationResult> {
   await assertPermission("mensajes", "create");
 
@@ -119,9 +120,10 @@ export async function startWhatsAppConversation(
 
   try {
     const config = await getZintoConfig();
-    const conv = await getOrCreateConversation(normalized, normalized, config?.channelId || 4, {
+    const channelId = country === 'cl' ? (config?.channelIdCl || 50) : (config?.channelIdEs || 4);
+    const conv = await getOrCreateConversation(normalized, normalized, channelId, {
       contactName: name?.trim() || null,
-    });
+    }, country);
     revalidatePath("/es/admin/mensajes");
     revalidatePath("/cl/admin/mensajes");
     return { ok: true, id: conv.id };

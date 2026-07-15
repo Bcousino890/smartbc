@@ -29,6 +29,8 @@ export interface ZintoConfig {
   apiKey: string;
   baseUrl: string;
   channelId: number;
+  channelIdEs?: number;
+  channelIdCl?: number;
   webhookSecret: string;
   inboundToken: string;
   /** true when the config came from the DB (not just env fallback). */
@@ -64,6 +66,8 @@ export async function getZintoConfig(): Promise<ZintoConfig | null> {
           apiKey,
           baseUrl: data.base_url || "https://crm.zinto.app/api/v1",
           channelId: data.channel_id || 4,
+          channelIdEs: data.channel_id_es || 4,
+          channelIdCl: data.channel_id_cl || 50,
           webhookSecret,
           inboundToken,
           fromDb: true,
@@ -81,6 +85,8 @@ export async function getZintoConfig(): Promise<ZintoConfig | null> {
     apiKey,
     baseUrl: process.env.ZINTO_BASE_URL || "https://crm.zinto.app/api/v1",
     channelId: parseInt(process.env.ZINTO_CHANNEL_ID || "4"),
+    channelIdEs: parseInt(process.env.ZINTO_CHANNEL_ID_ES || "4"),
+    channelIdCl: parseInt(process.env.ZINTO_CHANNEL_ID_CL || "50"),
     webhookSecret: process.env.ZINTO_WEBHOOK_SECRET || "",
     inboundToken: process.env.ZINTO_INBOUND_TOKEN || "",
     fromDb: false,

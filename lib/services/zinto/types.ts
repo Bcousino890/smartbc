@@ -61,6 +61,7 @@ export interface ZintoConversation {
   client_id: string;
   phone_number: string;
   channel_id: number;
+  country?: 'es' | 'cl';
   last_message_at?: string;
   last_message?: string;
   unread_count?: number;
