@@ -5,11 +5,11 @@
 > infraestructura (proxy residencial + CapSolver). Sirve de referencia para
 > retomar el problema.
 
-## 0. Estado actual (proveedor PRINCIPAL: Geonode · RESPALDO: Smartproxy)
+## 0. Estado actual (proveedor PRINCIPAL: Evomi · RESPALDO: Geonode · TERCERO: Smartproxy)
 
-**Proveedor actual: [Geonode](https://geonode.com) (principal), con Smartproxy
-de respaldo.** Historial: Smartproxy (se agotaron los GB) → Evomi (se agotaron
-los GB) → **Geonode**. `lib/sync/proxy-config.ts` es ahora **multi-proveedor**:
+**Proveedor actual: [Evomi](https://evomi.com) (principal), con Geonode
+de respaldo y Smartproxy como tercer fallback.** Historial: Smartproxy (se agotaron los GB) → Evomi (se agotaron
+los GB) → Geonode → **Evomi** (volver al original, más eficiente). `lib/sync/proxy-config.ts` es **multi-proveedor**:
 detecta el proveedor por la URL guardada en `app_settings["scraping.proxyUrl"]`
 y aplica el formato de sesión sticky/país oficial de CADA proveedor (son
 DISTINTOS entre sí). Para cambiar de proveedor **no hace falta tocar código**:
@@ -24,9 +24,9 @@ proveedor de las IPs.
 
 | Proveedor | Modificadores en | lifetime | Sticky | Ejemplo |
 |---|---|---|---|---|
-| **Geonode** (principal) | **USERNAME** | **segundos** (máx 86400) | puerto **10000-10900** | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:1000X` |
-| **Smartproxy** (respaldo) | **USERNAME** | — | mismo puerto | `http://USER-session-<id>:PASS@host:puerto` |
-| **Evomi** (legacy) | **PASSWORD** | minutos (máx 120) | mismo puerto | `http://USER:PASS_country-XX_session-<id>_lifetime-<min>@host:1000` |
+| **Evomi** (principal) | **PASSWORD** | **minutos** (máx 120) | mismo puerto | `http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000` |
+| **Geonode** (respaldo) | **USERNAME** | segundos (máx 86400) | puerto 10000-10900 | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:10000` |
+| **Smartproxy** (tercero) | **USERNAME** | — | mismo puerto | `http://USER-session-<id>:PASS@host:puerto` |
 
 Detalles de **Geonode** (docs.geonode.com):
 - Los modificadores van AÑADIDOS AL USERNAME (`-type-residential`, `-country-`,
@@ -50,27 +50,31 @@ los 3 formatos (18/18).
 
 ### Pendiente / próximos pasos
 
-1. **Pegar la credencial de Geonode en `/admin/configuracion`** (campo "URL del
-   proxy"). Se puede pegar **tal cual se copia del panel** — `normalizeProxyUrl`
-   admite varios formatos:
-   - la **línea de endpoint** de Geonode (botón copiar en «Endpoints format»):
-     `proxy.geonode.io:9000:geonode_USUARIO-type-residential:PASSWORD`
-   - o una URL: `http://geonode_USUARIO:PASSWORD@proxy.geonode.io:9000`
+**ACTUALIZACIÓN (julio 2026):** Se confirmó que **TODOS los proxies residenciales
+(Geonode, Smartproxy, Evomi, etc.) están bloqueados por DataDome** con `t=bv` 
+(hard ban) en Idealista. Esto significa que la vía de proxy residencial NO es viable
+en este momento. Se recomienda:
 
-   Usar el **puerto rotativo 9000**; el sistema detecta que es Geonode (por el
-   host / el prefijo `geonode_`), quita/normaliza los modificadores y cambia al
-   puerto sticky (10000-10900) cuando hace falta.
-2. **Verificar con `proxy-health`.** Ejecutar
-   `GET /api/admin/particulares/proxy-health` y mirar
-   `proxy.sticky_verificado.honra_sticky` (debe ser `true`) y
-   `datadome_estrategias.verdict` (si algún país da `t=fe`, CapSolver resuelve).
-3. **Si ningún país resuelve `t=fe`:** evaluar el pool **móvil (4G/LTE)** de
-   Geonode (los proxies móviles casi nunca reciben bloqueo duro de DataDome), o
-   seguir apoyándose en la fuente cross-portal `pisos.com` (ver §5 /
-   `lib/sync/particulares/pisos-scraper.ts`), que no depende de DataDome y ya
-   está funcionando en producción.
-4. **Confirmar en producción con el cron real** (`/api/cron/particulares/scrape`)
-   que el número de particulares "con teléfono" sube de forma sostenida.
+1. **Cross-match desde pisos.com** (RECOMENDADO — ya implementado) — ver §5.5
+   más abajo. Empareja anuncios de Idealista sin teléfono con anuncios de
+   pisos.com que SÍ tienen teléfono (misma propiedad). No depende de DataDome y
+   funciona con lógica pura de base de datos. Panel de prueba en
+   `/admin/particulares` → "Cross-match de teléfonos".
+
+2. **Proxy móvil (4G/LTE)** — si es crítico extraer desde Idealista directamente.
+   DataImpulse, HydraProxy, LTESocks ofrecen pools móviles. Son más caros
+   (~$2–5/GB), pero DataDome casi nunca los bloquea. Probable método de Casafari.
+
+3. **Playwright + Patchright** — navegador real desde el VPS sin proxy premium.
+   Técnicamente viable pero lento (~3-5s/anuncio) y requiere cookie-harvesting
+   para reutilizar la cookie DataDome entre reintentos.
+
+**Configuración de Evomi:** Para usar Evomi como principal, pega en
+`/admin/configuracion` → "URL del proxy":
+```
+http://USUARIO:PASSWORD@proxy.evomi.com:1000
+```
+El sistema auto-detecta Evomi y aplica los modificadores de PASSWORD automáticamente.
 
 ## 1. El objetivo
 
@@ -192,6 +196,8 @@ URL irresoluble.
 
 Además de `contact-phones`, el extractor mina el teléfono de donde sea gratis:
 
+### 5.1 HTML estático, descripción, comentarios
+
 - **HTML estático:** algunas fichas sí traen el `href="tel:+34…"` prerrenderado.
   Se corrigió un bug de clase CSS (`hidden-contact-phones_formatted-phone` con
   guion bajo vs guion) que hacía perder esos números.
@@ -201,6 +207,81 @@ Además de `contact-phones`, el extractor mina el teléfono de donde sea gratis:
   guardas anti falsos positivos (precios, m², años, referencias, números
   institucionales 90x/80x del propio portal como el 900 423 525).
 - **`/ajax/comment.ajax`:** se pide con el mismo proxy sticky y se mina el texto.
+
+### 5.2 Cross-match desde pisos.com (FUENTE PRINCIPAL — julio 2026+)
+
+**La fuente más efectiva y fiable ahora mismo: emparejamiento entre portales.**
+
+Muchos particulares publican el **MISMO PISO en Idealista Y en pisos.com**. La
+diferencia clave: pisos.com expone el teléfono del particular **directamente en
+el JSON**, sin DataDome. El cross-match usa lógica pura de base de datos (sin
+red ni anti-bot) para encontrar coincidencias.
+
+#### Mecanismo (conservative matching)
+
+Para cada anuncio de Idealista **SIN teléfono**, busca entre todos los de
+pisos.com **CON teléfono** si alguno es la **misma propiedad física** con
+**alta confianza**. Requiere UNA DE:
+
+- **Ruta A (clave fuerte):** Misma dirección CON número (calle+portal),
+  matching fuzzy (tolera "Calle de Apodaca" vs "Calle Apodaca"). El precio
+  exacto ya debe coincidir (validado).
+- **Ruta B (múltiples señales):** Precio exacto + operación (alquiler/venta) +
+  zona normalizada + habitaciones exactas + m² dentro de ±1 metro.
+
+**Desambiguación:** Si múltiples candidatos de pisos.com casan CON DIFERENTES
+teléfonos, se rechaza (prefiere no rellenar a poner uno equivocado).
+
+#### Resultados esperados
+
+- Tasa de relleno: varía según cobertura de pisos.com en la zona
+  (Madrid capital: 10-20%, otras ciudades: menos).
+- Confianza: "medium" (no verificado en origen, pero coincidencia múltiple =
+  probabilidad muy alta).
+- Sin costeo de api-calls o proxy.
+
+#### Panel de testing
+
+`/admin/particulares` → sección "Cross-match de teléfonos". Permite:
+- Ejecutar batch con límite configurable (1-5000 anuncios).
+- Ver % de relleno, candidatos utilizados, ejemplos.
+- Revisar qué anuncios se rellenaron y de dónde procedieron los teléfonos.
+
+#### Archivos de implementación
+
+| Archivo | Rol |
+|---|---|
+| `lib/sync/particulares/cross-match-phone.ts` | Lógica pura: normalización, matching, desambiguación |
+| `lib/sync/particulares/cross-match-runner.ts` | Orquestación: index por precio, búsqueda, actualización BD |
+| `app/api/cron/particulares/cross-match-phones/route.ts` | Cron: ejecuta batch cada N horas |
+| `app/api/admin/particulares/cross-match-phones/route.ts` | Admin manual: ejecuta on-demand |
+| `components/admin/particulares/test-cross-match.tsx` | UI: panel de testing con resultados en vivo |
+
+#### Cómo activar
+
+Cross-match se ejecuta **automáticamente en el cron cada N horas** (configurable
+en `/admin/configuracion`). Para ejecutar manualmente:
+
+```bash
+# Vía admin panel (recomendado)
+POST /api/admin/particulares/cross-match-phones
+
+# Vía cron API (requiere CRON_SECRET)
+POST /api/cron/particulares/cross-match-phones?limit=5000
+  Authorization: Bearer <CRON_SECRET>
+```
+
+Ambas endpoints devuelven resumen JSON con métricas: `targets_sin_telefono`,
+`candidatos_con_telefono`, `rellenados`, ejemplos.
+
+### 5.3 Pisos.com como fuente de candidatos
+
+El scraper de pisos.com (`lib/sync/particulares/pisos-scraper.ts`) corre en el
+cron y rellena la tabla `particulares` con `portal="pisos"`. Es la cantera de
+teléfonos para el cross-match.
+
+Cobertura actual: Madrid capital (10 páginas). Para maximizar cross-match,
+expandir a más ciudades/regiones (en configuración).
 
 ## 6. Estado actual y problema abierto
 
@@ -233,17 +314,36 @@ sobre la misma IP y sobre IPs distintas (`datadome_estrategias`): si alguna da
    DataDome. Se añadió como fuente secundaria (`portal="pisos"`). Es la vía más
    fiable mientras el proxy de Idealista no coopere.
 
-## 8. Herramientas de diagnóstico
+## 8. Herramientas de diagnóstico y testing
 
-- `GET /api/admin/particulares/proxy-health` (Owner/Admin) — estado de
-  CapSolver, ambos métodos de proxy, verificación real de sticky, y % de IPs del
-  pool resolubles (`t=fe`) vs baneadas (`t=bv`) ahora mismo.
-- `GET /api/admin/particulares/extract-phone?adId=…&debug=1` — traza completa
-  del flujo de teléfono para una ficha (qué endpoint respondió qué, tipo de
-  reto, resultado de CapSolver).
-- Panel "Testear extracción de teléfono" en `/admin/particulares`.
+### 8.1 Extracción via Idealista (proxy + CapSolver)
+
+- `POST /api/admin/particulares/extract-phone` (Owner/Admin) — testa la
+  extracción de teléfono de UN anuncio vía API AJAX + CapSolver. Devuelve JSON
+  con teléfono (si encontrado), debug (endpoints probados, tipo de reto,
+  confianza).
+  - UI en `/admin/particulares` → "Testear extracción de teléfono".
+
+- `GET /api/admin/particulares/proxy-health` (Owner/Admin) — diagnóstico:
+  estado de CapSolver, proxy (sticky), verificación real de IP stability, % de
+  IPs del pool resolubles (`t=fe`) vs baneadas (`t=bv`), estrategias de UA.
+
+### 8.2 Cross-match (pisos.com → Idealista)
+
+- `POST /api/admin/particulares/cross-match-phones` (Owner/Admin) — ejecuta
+  batch de cross-match on-demand. Parámetro `limit` en body (por defecto 5000).
+  Devuelve JSON con métricas: cuántos sin teléfono, cuántos candidatos (con
+  teléfono en pisos), cuántos rellenados, ejemplos.
+  - UI en `/admin/particulares` → "Cross-match de teléfonos". Interfaz con
+    input de límite, botón de ejecución, resultados en vivo (% relleno, lista
+    de ejemplos).
+
+- `POST /api/cron/particulares/cross-match-phones?limit=5000` (requiere
+  `CRON_SECRET`) — versión cron, ejecuta batch. Respuesta igual que admin.
 
 ## 9. Archivos clave
+
+### 9.1 Extracción de teléfono (Idealista + proxy + CapSolver)
 
 | Archivo | Rol |
 |---|---|
@@ -252,6 +352,22 @@ sobre la misma IP y sobre IPs distintas (`datadome_estrategias`): si alguna da
 | `lib/sync/particulares/solve-datadome-with-capsolver.ts` | Integración con CapSolver (DatadomeSliderTask) |
 | `lib/sync/particulares/phone-from-text.ts` | Minado de teléfono desde texto libre |
 | `lib/sync/smartproxy-api.ts` | Extracción API de Smartproxy (IP fresca con `life`) |
-| `lib/sync/proxy-config.ts` | Resolución de proxy (Extracción API preferida, gateway fallback) |
-| `app/api/cron/particulares/scrape/route.ts` | Cron de scraping de Idealista |
-| `app/api/admin/particulares/proxy-health/route.ts` | Diagnóstico de salud del pipeline |
+| `lib/sync/proxy-config.ts` | Resolución de proxy: auto-detecta proveedor (Geonode/Smartproxy/Evomi), formatos sticky |
+| `app/api/cron/particulares/scrape/route.ts` | Cron de scraping de Idealista (htmll HTML parsing + AJAX + CapSolver + cross-match) |
+| `app/api/admin/particulares/proxy-health/route.ts` | Diagnóstico de salud: CapSolver, proxy sticky, % `t=fe` vs `t=bv` |
+| `app/api/admin/particulares/extract-phone/route.ts` | Test de extracción de UN anuncio (endpoint manual) |
+
+### 9.2 Cross-match (pisos.com → Idealista)
+
+| Archivo | Rol |
+|---|---|
+| `lib/sync/particulares/cross-match-phone.ts` | Lógica pura: normalización de texto, matching de propiedades (dirección, precio, bedrooms, m²) |
+| `lib/sync/particulares/cross-match-runner.ts` | Orquestación: lee candidates (con teléfono), targets (sin teléfono), empareja, actualiza BD |
+| `app/api/cron/particulares/cross-match-phones/route.ts` | Cron: ejecuta cross-match batch periódicamente |
+| `app/api/admin/particulares/cross-match-phones/route.ts` | Admin: ejecuta cross-match on-demand |
+| `components/admin/particulares/test-cross-match.tsx` | UI: panel en `/admin/particulares` para testing interactivo |
+
+### 9.3 Scripts de testing
+
+- `scripts/test-proxy-sticky.mts` — 25 tests de formatos proxy (Geonode, Smartproxy, Evomi)
+- `scripts/test-cross-match-phone.mts` — 19 tests de lógica de matching
