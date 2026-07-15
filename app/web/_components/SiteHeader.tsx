@@ -26,13 +26,10 @@ export function SiteHeader() {
     >
       <div className="container-luxe flex items-center justify-between py-5">
         <Link href="/web" className="flex items-center py-1" aria-label="Benjamín Cousiño Propiedades">
-          <Image
+          <img
             src="/logo.png"
             alt="Benjamín Cousiño Propiedades"
-            width={280}
-            height={60}
             className="h-9 w-auto"
-            priority
           />
         </Link>
 
