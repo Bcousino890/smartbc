@@ -9,17 +9,12 @@ import {
   getOrCreateConversation,
 } from '@/lib/db/zinto';
 import { normalizePhoneNumber } from '@/lib/services/zinto/client';
+import { getZintoConfig } from '@/lib/services/zinto/config';
 
-const ZINTO_WEBHOOK_SECRET = process.env.ZINTO_WEBHOOK_SECRET || '';
-const ZINTO_INBOUND_TOKEN = process.env.ZINTO_INBOUND_TOKEN || '';
-const ZINTO_CHANNEL_ID = parseInt(process.env.ZINTO_CHANNEL_ID || '4');
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-function hmacEquals(input: string, signature: string): boolean {
-  const expected = crypto
-    .createHmac('sha256', ZINTO_WEBHOOK_SECRET)
-    .update(input)
-    .digest('hex');
+function hmacEquals(secret: string, input: string, signature: string): boolean {
+  const expected = crypto.createHmac('sha256', secret).update(input).digest('hex');
   const a = Buffer.from(expected);
   const b = Buffer.from(signature || '');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -28,27 +23,33 @@ function hmacEquals(input: string, signature: string): boolean {
 /**
  * Verify the HMAC signature that Zinto attaches to its native STATUS webhooks.
  * The docs show HMAC-SHA256 over JSON.stringify(payload); we also accept the
- * raw request body to tolerate any whitespace/key-order differences in how
- * Zinto serializes before signing.
+ * raw request body to tolerate any whitespace/key-order differences.
  */
-function verifyStatusSignature(payload: unknown, rawBody: string, signature: string): boolean {
-  if (!ZINTO_WEBHOOK_SECRET) {
+function verifyStatusSignature(
+  secret: string,
+  payload: unknown,
+  rawBody: string,
+  signature: string,
+): boolean {
+  if (!secret) {
     // Fail closed in production: never accept unverified status webhooks.
     return !IS_PRODUCTION;
   }
-  return hmacEquals(JSON.stringify(payload), signature) || hmacEquals(rawBody, signature);
+  return (
+    hmacEquals(secret, JSON.stringify(payload), signature) ||
+    hmacEquals(secret, rawBody, signature)
+  );
 }
 
 /**
  * Inbound (customer → CRM) messages arrive via a Zinto Flow "Webhook" node,
- * whose body and headers WE configure. We authenticate them with a shared
- * token sent in a custom header (X-Zinto-Token) rather than the HMAC signature.
+ * authenticated with a shared token in a custom header (X-Zinto-Token).
  */
-function verifyInboundToken(token: string): boolean {
-  if (!ZINTO_INBOUND_TOKEN) {
+function verifyInboundToken(expected: string, token: string): boolean {
+  if (!expected) {
     return !IS_PRODUCTION;
   }
-  const a = Buffer.from(ZINTO_INBOUND_TOKEN);
+  const a = Buffer.from(expected);
   const b = Buffer.from(token || '');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
@@ -63,8 +64,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     }
 
+    const config = await getZintoConfig();
+    const webhookSecret = config?.webhookSecret || '';
+    const inboundToken = config?.inboundToken || '';
+    const channelId = config?.channelId || 4;
+
     const signature = req.headers.get('x-webhook-signature') || '';
-    const inboundToken = req.headers.get('x-zinto-token') || '';
+    const tokenHeader = req.headers.get('x-zinto-token') || '';
 
     // An inbound message carries actual message text + a sender phone number.
     // A status webhook only carries event/messageId/status (no message body).
@@ -72,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     if (isInbound) {
       // ---- Inbound message from a customer (via Zinto Flow) ----
-      if (!verifyInboundToken(inboundToken)) {
+      if (!verifyInboundToken(inboundToken, tokenHeader)) {
         return NextResponse.json({ error: 'Invalid inbound token' }, { status: 401 });
       }
 
@@ -81,10 +87,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing sender phone' }, { status: 400 });
       }
 
-      // Find an existing conversation for this phone, or create one.
       let conversation = await findConversationByPhone(fromPhone);
       if (!conversation) {
-        conversation = await getOrCreateConversation(fromPhone, fromPhone, ZINTO_CHANNEL_ID);
+        conversation = await getOrCreateConversation(fromPhone, fromPhone, channelId);
       }
 
       await saveMessage(
@@ -94,7 +99,7 @@ export async function POST(req: NextRequest) {
         payload.message!,
         'received',
         'delivered',
-        conversation.channel_id
+        conversation.channel_id,
       );
       await updateConversationLastMessage(conversation.id, payload.message!, true);
 
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ---- Delivery-status webhook (Zinto native) ----
-    if (!verifyStatusSignature(payload, rawBody, signature)) {
+    if (!verifyStatusSignature(webhookSecret, payload, rawBody, signature)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 

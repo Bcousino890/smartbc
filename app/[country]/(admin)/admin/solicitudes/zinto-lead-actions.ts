@@ -3,8 +3,7 @@
 import { assertPermission } from "@/lib/auth/guard";
 import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/services/zinto/client";
 import { getOrCreateConversation } from "@/lib/db/zinto";
-
-const ZINTO_CHANNEL_ID = parseInt(process.env.ZINTO_CHANNEL_ID || "4");
+import { getZintoConfig } from "@/lib/services/zinto/config";
 
 export type OpenWhatsAppResult =
   | { ok: true; id: string }
@@ -27,7 +26,8 @@ export async function openWhatsAppConversation(
   }
 
   try {
-    const conv = await getOrCreateConversation(normalized, normalized, ZINTO_CHANNEL_ID);
+    const config = await getZintoConfig();
+    const conv = await getOrCreateConversation(normalized, normalized, config?.channelId || 4);
     return { ok: true, id: conv.id };
   } catch (error) {
     return {

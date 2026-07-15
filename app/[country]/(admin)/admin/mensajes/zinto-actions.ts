@@ -15,9 +15,8 @@ import {
   updateConversationLastMessage,
   markConversationRead,
 } from "@/lib/db/zinto";
+import { getZintoConfig } from "@/lib/services/zinto/config";
 import type { ZintoMessageRecord } from "@/lib/services/zinto/types";
-
-const ZINTO_CHANNEL_ID = parseInt(process.env.ZINTO_CHANNEL_ID || "4");
 
 export type SendZintoResult =
   | { ok: true; id: string }
@@ -39,7 +38,8 @@ export async function sendZintoMessage(
   const conversation = await getConversationById(conversationId);
   if (!conversation) return { ok: false, error: "conversation_not_found" };
 
-  const channelId = conversation.channel_id || ZINTO_CHANNEL_ID;
+  const config = await getZintoConfig();
+  const channelId = conversation.channel_id || config?.channelId || 4;
 
   try {
     const channel = await getActiveChannel(channelId);

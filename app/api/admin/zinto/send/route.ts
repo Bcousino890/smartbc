@@ -8,8 +8,7 @@ import {
   ZINTO_MAX_MESSAGE_LENGTH,
 } from '@/lib/services/zinto/client';
 import { saveMessage, getConversationById, updateConversationLastMessage } from '@/lib/db/zinto';
-
-const ZINTO_CHANNEL_ID = parseInt(process.env.ZINTO_CHANNEL_ID || '4');
+import { getZintoConfig } from '@/lib/services/zinto/config';
 
 export async function POST(req: NextRequest) {
   const supabase = createClient(
@@ -72,7 +71,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const channelId = conversation.channel_id || ZINTO_CHANNEL_ID;
+    const config = await getZintoConfig();
+    const channelId = conversation.channel_id || config?.channelId || 4;
 
     // Verify the channel exists and is active before sending
     const channel = await getActiveChannel(channelId);

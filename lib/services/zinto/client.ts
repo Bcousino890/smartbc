@@ -1,6 +1,5 @@
 import { ZintoMessage, ZintoChannelsResponse, ZintoChannel } from './types';
-
-const ZINTO_BASE_URL = process.env.ZINTO_BASE_URL || 'https://crm.zinto.app/api/v1';
+import { getZintoConfig } from './config';
 
 /** Max message length per Zinto spec (MESSAGE_TOO_LONG). */
 export const ZINTO_MAX_MESSAGE_LENGTH = 4096;
@@ -37,14 +36,14 @@ export class ZintoApiError extends Error {
 }
 
 async function zintoFetch(endpoint: string, options: RequestInit = {}) {
-  const ZINTO_API_KEY = process.env.ZINTO_API_KEY;
-  if (!ZINTO_API_KEY) {
-    throw new Error('ZINTO_API_KEY environment variable is not set');
+  const config = await getZintoConfig();
+  if (!config?.apiKey) {
+    throw new ZintoApiError(400, 'Zinto is not configured', 'NOT_CONFIGURED');
   }
 
-  const url = `${ZINTO_BASE_URL}${endpoint}`;
+  const url = `${config.baseUrl}${endpoint}`;
   const headers = {
-    Authorization: `Bearer ${ZINTO_API_KEY}`,
+    Authorization: `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
     ...options.headers,
   };

@@ -3,18 +3,33 @@
 Conecta el CRM (smartbc) con Zinto para **enviar y recibir** WhatsApp desde
 `/admin/mensajes` y desde el botón "WhatsApp" en `/admin/solicitudes`.
 
-## 1. Variables de entorno (`.env.local` en el VPS)
+## 1. Configuración de las claves — dos opciones
+
+### Opción A (recomendada): panel admin — sin tocar el VPS
+
+En `/es/admin/configuracion` → sección **WhatsApp (Zinto)**:
+- Pega la **API Key**, el **Channel ID** (4), el **Webhook Secret** y el
+  **Inbound Token** (`X-Zinto-Token`).
+- Se guardan **cifradas** (AES-256-GCM) en la tabla `zinto_config`. Nunca van a git.
+- Botón **Probar Conexión** → llama a `GET /channels` y lista tus canales.
+
+> Requiere que `EMAIL_ENCRYPTION_KEY` ya esté configurada en el VPS (ya lo está,
+> la usa el email). El código lee de la BD primero y cae a variables de entorno
+> si la tabla está vacía.
+
+### Opción B: variables de entorno (`.env.local` en el VPS)
 
 ```bash
 ZINTO_API_KEY=pcp_...            # Clave API de Zinto (Configuraciones → API)
 ZINTO_BASE_URL=https://crm.zinto.app/api/v1
 ZINTO_CHANNEL_ID=4               # ID del canal WhatsApp (GET /channels)
-ZINTO_WEBHOOK_SECRET=...         # Secreto HMAC para webhooks de ESTADO (opcional pero recomendado)
-ZINTO_INBOUND_TOKEN=...          # Token propio para autenticar mensajes ENTRANTES (elige uno largo y aleatorio)
+ZINTO_WEBHOOK_SECRET=...         # Secreto HMAC para webhooks de ESTADO
+ZINTO_INBOUND_TOKEN=...          # Token para autenticar mensajes ENTRANTES
 ```
 
 > La API key nunca se commitea. En producción, sin `ZINTO_WEBHOOK_SECRET` /
-> `ZINTO_INBOUND_TOKEN` el webhook **rechaza** las peticiones (fail-closed).
+> `ZINTO_INBOUND_TOKEN` (ni en BD ni en env) el webhook **rechaza** las
+> peticiones (fail-closed).
 
 ## 2. Confirmar el canal
 
