@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Nosotros — Personal Shopper a su medida. Dos países.",
-  description: "Más de 7 años acompañando a ejecutivos, diplomáticos y familias internacionales en su reubicación a España y Chile.",
+  title: "Nosotros — Personal Shopper a tu medida. Dos países.",
+  description: "Más de 7 años acompañando a ejecutivos, diplomáticos y familias internacionales en tu reubicación a España y Chile.",
 };
 
 export default function About() {
@@ -12,11 +12,11 @@ export default function About() {
       <section className="container-luxe pt-20 pb-16">
         <p className="eyebrow">Quiénes Somos</p>
         <h1 className="mt-6 font-display text-5xl md:text-8xl leading-[1.02] text-navy max-w-5xl">
-          Personal Shopper <span className="italic-display">a su medida.</span><br />
+          Personal Shopper <span className="italic-display">a tu medida.</span><br />
           Dos países.
         </h1>
         <p className="mt-10 max-w-2xl text-base text-navy/80 leading-relaxed">
-          Más de 7 años acompañando a ejecutivos, diplomáticos y estudiantes internacionales en su reubicación a Chile y España. Sin idiomas ajenos, sin culturas desconocidas.
+          Más de 7 años acompañando a ejecutivos, diplomáticos y estudiantes internacionales en tu reubicación a Chile y España. Sin idiomas ajenos, sin culturas desconocidas.
         </p>
       </section>
 
@@ -30,7 +30,7 @@ export default function About() {
             Más de 7 años <span className="italic-display">encontrando hogares.</span>
           </h2>
           <p className="mt-8 text-navy/80 leading-relaxed">
-            Fundada en Santiago en 2018, Benjamín Cousiño Propiedades nació para acompañar a quienes llegan a Chile o España desde cualquier parte del mundo. Sabemos cómo vive en su país — y queremos que viva igual o mejor.
+            Fundada en Santiago en 2018, Benjamín Cousiño Propiedades nació para acompañar a quienes llegan a Chile o España desde cualquier parte del mundo. Sabemos cómo vives en tu país — y queremos que vivas igual o mejor.
           </p>
           <p className="mt-4 text-navy/80 leading-relaxed">
             En 2025 abrimos nuestra primera oficina en Europa, en <strong className="text-navy">Calle Serrano 19, Madrid</strong> — en el corazón de lo que se conoce como <em className="italic-display text-gold">La Milla de Oro</em>.
@@ -78,13 +78,13 @@ export default function About() {
           Atención <span className="italic-display">1 a 1</span>
         </h2>
         <p className="mt-6 max-w-2xl text-navy/80 leading-relaxed">
-          Desde el primer contacto tiene asignado un único asesor que conoce su caso, su presupuesto y sus preferencias.
+          Desde el primer contacto tienes asignado un único asesor que conoce tu caso, tu presupuesto y tus preferencias.
         </p>
         <div className="mt-16 grid md:grid-cols-3 gap-px bg-stone-200">
           {[
             { n: "01", t: "Un asesor, todo el proceso", d: "Desde la primera llamada hasta la firma ante notario. Sin intermediarios internos ni cambios de interlocutor." },
-            { n: "02", t: "Disponible cuando lo necesite", d: "Coordinamos con el huso horario de Chile y España. Videollamadas, WhatsApp, email — como prefiera." },
-            { n: "03", t: "Su idioma, su cultura", d: "Hablamos su idioma — literalmente y culturalmente. Nos adaptamos a sus ritmos, referencias y expectativas." },
+            { n: "02", t: "Disponible cuando lo necesites", d: "Coordinamos con el huso horario de Chile y España. Videollamadas, WhatsApp, email — como prefieras." },
+            { n: "03", t: "Tu idioma, tu cultura", d: "Hablamos tu idioma — literalmente y culturalmente. Nos adaptamos a tus ritmos, referencias y expectativas." },
           ].map((s) => (
             <div key={s.n} className="bg-cream p-10">
               <p className="font-display text-5xl text-gold">{s.n}</p>
