@@ -11,14 +11,64 @@ export type PlaywrightFetchResult =
   | { ok: true; html: string; finalUrl: string }
   | { ok: false; error: ImportExtractError };
 
+type PwProxy = { server: string; username?: string; password?: string };
+
 export async function fetchHtmlWithPlaywright(
   url: string,
+): Promise<PlaywrightFetchResult> {
+  // Proxy residencial con SESIÓN STICKY (formato correcto del proveedor:
+  // Geonode/Evomi necesitan modificadores + puerto sticky; la URL base cruda
+  // da ERR_TUNNEL_CONNECTION_FAILED). Igual que el scraping de teléfonos.
+  // Fallback legacy a SMARTPROXY_URL.
+  const proxyUrl =
+    (await getFreshResidentialProxyUrl(3)) ?? process.env.SMARTPROXY_URL;
+  let proxyConfig: PwProxy | undefined;
+  if (proxyUrl) {
+    try {
+      const u = new URL(proxyUrl);
+      proxyConfig = {
+        server: `${u.protocol}//${u.host}`,
+        username: decodeURIComponent(u.username) || undefined,
+        password: decodeURIComponent(u.password) || undefined,
+      };
+    } catch {
+      console.log(`[playwright] URL de proxy inválida, lanzando sin proxy`);
+    }
+  }
+
+  // Intento 1: con proxy (si hay). Intento 2 (rescate): SIN proxy. Muchos
+  // portales (p.ej. Ukio, protegido por el reto JS de Vercel) NO bloquean por
+  // IP — su reto se pasa con navegador real sin proxy. Así, si el proxy
+  // residencial está caído (túnel/conexión), el reintento sin proxy los rescata
+  // en vez de tumbar el import entero. Para portales que SÍ exigen IP
+  // residencial (Idealista/DataDome) el 2º intento fallará igual, sin coste real.
+  const first = await attemptPlaywright(url, proxyConfig);
+  if (first.ok || !proxyConfig) return first;
+
+  const reason = first.error.reason.toLowerCase();
+  const looksLikeProxyIssue =
+    /tunnel|proxy|err_connection|econnrefused|error de conexi|net::err_failed|no response/.test(
+      reason,
+    );
+  if (!looksLikeProxyIssue) return first;
+
+  console.log(
+    `[playwright] falló con proxy (${first.error.reason}); reintento SIN proxy`,
+  );
+  return attemptPlaywright(url, undefined);
+}
+
+async function attemptPlaywright(
+  url: string,
+  proxyConfig: PwProxy | undefined,
 ): Promise<PlaywrightFetchResult> {
   let browser;
   let page;
 
   try {
-    console.log(`[playwright] Iniciando navegador para ${url}`);
+    console.log(
+      `[playwright] Iniciando navegador para ${url}${proxyConfig ? ` (proxy ${proxyConfig.server})` : " (sin proxy)"}`,
+    );
     // playwright-extra + stealth plugin: parchea fingerprints típicos de
     // bot (navigator.webdriver, plugins, canvas, WebGL, …) que DataDome y
     // similares usan para detectar headless. Sin esto, Playwright recibe
@@ -29,32 +79,6 @@ export async function fetchHtmlWithPlaywright(
       stealthMod as unknown as { default: () => unknown }
     ).default();
     (chromium as unknown as { use: (p: unknown) => void }).use(stealth);
-
-    // Si hay proxy residencial configurado, mandamos el tráfico de
-    // Playwright a través de él. Sin esto, Chromium sale por la IP del
-    // datacenter (Hetzner) y portales con DataDome (Idealista) la marcan
-    // como bot incluso con un navegador real. La combinación
-    // proxy-residencial + JS-real es la que pasa la mayoría de filtros.
-    // Proxy residencial con SESIÓN STICKY (formato correcto del proveedor:
-    // Geonode/Evomi necesitan modificadores + puerto sticky; la URL base cruda
-    // da ERR_TUNNEL_CONNECTION_FAILED). Igual que el scraping de teléfonos.
-    // Fallback legacy a SMARTPROXY_URL.
-    const proxyUrl =
-      (await getFreshResidentialProxyUrl(3)) ?? process.env.SMARTPROXY_URL;
-    let proxyConfig: { server: string; username?: string; password?: string } | undefined;
-    if (proxyUrl) {
-      try {
-        const u = new URL(proxyUrl);
-        proxyConfig = {
-          server: `${u.protocol}//${u.host}`,
-          username: decodeURIComponent(u.username) || undefined,
-          password: decodeURIComponent(u.password) || undefined,
-        };
-        console.log(`[playwright] Usando proxy ${u.host}`);
-      } catch {
-        console.log(`[playwright] URL de proxy inválida, lanzando sin proxy`);
-      }
-    }
 
     browser = await chromium.launch({
       headless: true,
