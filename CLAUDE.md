@@ -32,3 +32,4 @@
      ```
   3. `docker compose up -d storage` (reinicia el contenedor)
   4. O usa YouTube/Vimeo + enlace (que ya funciona en SmartLinks)
+
