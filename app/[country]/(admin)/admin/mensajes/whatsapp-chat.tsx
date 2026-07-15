@@ -10,6 +10,8 @@ import {
   Plus,
   Home,
   X,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -20,6 +22,8 @@ import {
   getZintoThread,
   markZintoConversationRead,
   startWhatsAppConversation,
+  updateConversationName,
+  deleteConversation,
 } from "./zinto-actions";
 
 export type WhatsAppConversation = {
@@ -77,6 +81,8 @@ export function WhatsAppChat({
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>(initialMessages);
   const [showNew, setShowNew] = useState(false);
+  const [showEditName, setShowEditName] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
@@ -167,6 +173,28 @@ export function WhatsAppChat({
           }}
         />
       )}
+      {showEditName && active && (
+        <EditNameModal
+          currentName={active.displayName}
+          onClose={() => setShowEditName(false)}
+          conversationId={active.id}
+          onUpdated={() => {
+            setShowEditName(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {showDeleteConfirm && active && (
+        <DeleteConfirmModal
+          contactName={active.displayName}
+          onClose={() => setShowDeleteConfirm(false)}
+          conversationId={active.id}
+          onDeleted={() => {
+            setShowDeleteConfirm(false);
+            router.push(`${config.prefix}/mensajes?tab=whatsapp`);
+          }}
+        />
+      )}
       <WhatsAppList
         conversations={conversations}
         activeId={activeId}
@@ -178,15 +206,35 @@ export function WhatsAppChat({
         {active ? (
           <>
             <header className="border-b border-gold/15 bg-cream-50/85 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 font-serif text-xs font-medium text-[#128C7E]">
-                  {active.initials}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-serif text-base font-semibold text-ink">
-                    {active.displayName}
-                  </p>
-                  <p className="text-[11px] text-ink/55">+{active.phoneNumber}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 font-serif text-xs font-medium text-[#128C7E]">
+                    {active.initials}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-serif text-base font-semibold text-ink">
+                      {active.displayName}
+                    </p>
+                    <p className="text-[11px] text-ink/55">+{active.phoneNumber}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditName(true)}
+                    title="Editar nombre"
+                    className="flex items-center justify-center rounded-lg p-1.5 text-ink/50 transition hover:bg-gold/10 hover:text-ink"
+                  >
+                    <Edit2 size={16} strokeWidth={1.75} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    title="Borrar chat"
+                    className="flex items-center justify-center rounded-lg p-1.5 text-ink/50 transition hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 size={16} strokeWidth={1.75} />
+                  </button>
                 </div>
               </div>
               {(active.propertyTitle || active.contactMessage) && (
@@ -538,4 +586,171 @@ function formatRelative(iso: string): string {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function EditNameModal({
+  currentName,
+  onClose,
+  conversationId,
+  onUpdated,
+}: {
+  currentName: string;
+  onClose: () => void;
+  conversationId: string;
+  onUpdated: () => void;
+}) {
+  const [name, setName] = useState(currentName);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newName = name.trim();
+    if (!newName) {
+      setError("El nombre no puede estar vacío.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateConversationName(conversationId, newName);
+      if (result.ok) {
+        onUpdated();
+      } else {
+        setError(result.error || "No se pudo actualizar el nombre.");
+      }
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-gold/20 bg-cream-50 p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-serif text-base font-semibold text-ink">
+            Editar nombre
+          </h3>
+          <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium text-ink/65">
+              Nombre del contacto
+            </span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre"
+              autoFocus
+              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            />
+          </label>
+          {error && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-gold/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/5"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={pending || name.trim().length === 0}
+              className="flex items-center gap-2 rounded-xl bg-[#128C7E] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0e6f64] disabled:opacity-50"
+            >
+              {pending && <Loader2 size={14} className="animate-spin" />}
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({
+  contactName,
+  onClose,
+  conversationId,
+  onDeleted,
+}: {
+  contactName: string;
+  onClose: () => void;
+  conversationId: string;
+  onDeleted: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleDelete = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteConversation(conversationId);
+      if (result.ok) {
+        onDeleted();
+      } else {
+        setError(result.error || "No se pudo borrar la conversación.");
+      }
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-red-200 bg-cream-50 p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-serif text-base font-semibold text-red-600">
+            Borrar conversación
+          </h3>
+          <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="mt-3 text-sm text-ink/70">
+          ¿Estás seguro de que deseas borrar la conversación con{" "}
+          <strong>{contactName}</strong>? Se eliminarán todos los mensajes y esta acción no se puede deshacer.
+        </p>
+        {error && (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+            {error}
+          </p>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-gold/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/5"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={pending}
+            className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+          >
+            {pending && <Loader2 size={14} className="animate-spin" />}
+            Borrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

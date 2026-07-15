@@ -132,3 +132,90 @@ export async function startWhatsAppConversation(
     };
   }
 }
+
+export type UpdateConversationResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Update the contact name of a WhatsApp conversation (admin only).
+ */
+export async function updateConversationName(
+  conversationId: string,
+  newName: string,
+): Promise<UpdateConversationResult> {
+  await assertPermission("mensajes", "edit");
+
+  try {
+    const supabase = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { error } = await supabase
+      .from("zinto_conversations")
+      .update({ contact_name: newName.trim() || null })
+      .eq("id", conversationId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}
+
+export type DeleteConversationResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Delete a WhatsApp conversation and all its messages (admin only).
+ */
+export async function deleteConversation(
+  conversationId: string,
+): Promise<DeleteConversationResult> {
+  await assertPermission("mensajes", "delete");
+
+  try {
+    const supabase = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Delete messages first (foreign key constraint)
+    const { error: msgError } = await supabase
+      .from("zinto_messages")
+      .delete()
+      .eq("conversation_id", conversationId);
+
+    if (msgError) {
+      return { ok: false, error: msgError.message };
+    }
+
+    // Delete conversation
+    const { error: convError } = await supabase
+      .from("zinto_conversations")
+      .delete()
+      .eq("id", conversationId);
+
+    if (convError) {
+      return { ok: false, error: convError.message };
+    }
+
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}
