@@ -5,10 +5,11 @@ export function SiteFooter() {
     <footer className="bg-navy text-cream/90 mt-24">
       <div className="container-luxe py-20 grid gap-12 md:grid-cols-4">
         <div className="md:col-span-2 max-w-md">
-          <div className="flex flex-col mb-6">
-            <span className="font-display text-3xl text-cream tracking-[0.08em]">BC</span>
-            <span className="text-[9px] tracking-[0.26em] uppercase text-cream/50 leading-tight mt-0.5">Benjamín Cousiño Propiedades</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="Benjamín Cousiño Propiedades"
+            className="h-8 w-auto brightness-0 invert mb-6"
+          />
 
           <p className="mt-4 font-display italic text-2xl leading-snug text-cream/90">
             &ldquo;Nos adaptamos a ti.<br />No al revés.&rdquo;
