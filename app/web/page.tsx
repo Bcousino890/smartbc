@@ -38,23 +38,35 @@ const moments = [
   },
 ];
 
-const universities = [
-  { name: "IE Business School", domain: "ie.edu" },
-  { name: "Universidad Nebrija", domain: "nebrija.com" },
-  { name: "CEU San Pablo", domain: "uspceu.com" },
-  { name: "ESIC Business School", domain: "esic.edu" },
-  { name: "URJC — Rey Juan Carlos", domain: "urjc.es" },
-  { name: "IED Madrid", domain: "iedmadrid.com" },
-  { name: "Universidad Europea de Madrid", domain: "universidadeuropea.com" },
-  { name: "Comillas ICAI · ICADE", domain: "comillas.edu" },
-  { name: "UAM — Autónoma de Madrid", domain: "uam.es" },
-  { name: "UCM — Complutense", domain: "ucm.es" },
-  { name: "UC3M — Carlos III", domain: "uc3m.es" },
-  { name: "UAH — Alcalá", domain: "uah.es" },
-  { name: "UAX — Alfonso X", domain: "uax.es" },
+const institutions = [
+  { name: "IE University", domain: "ie.edu" },
+  { name: "IESE Business School", domain: "iese.edu" },
+  { name: "ESCP Business School", domain: "escp.eu" },
+  { name: "ESADE Business School", domain: "esade.edu" },
+  { name: "Comillas ICADE–ICAI", domain: "comillas.edu" },
+  { name: "Universidad de Navarra", domain: "unav.edu" },
   { name: "CUNEF Universidad", domain: "cunef.edu" },
+  { name: "Universidad Carlos III", domain: "uc3m.es" },
+  { name: "Universidad Autónoma de Madrid", domain: "uam.es" },
+  { name: "Universidad Complutense", domain: "ucm.es" },
+  { name: "Universidad Politécnica de Madrid", domain: "upm.es" },
+  { name: "Universidad de Alcalá", domain: "uah.es" },
+  { name: "Universidad CEU San Pablo", domain: "uspceu.com" },
+  { name: "Universidad Nebrija", domain: "nebrija.com" },
+  { name: "ESIC University", domain: "esic.edu" },
+  { name: "Universidad Europea", domain: "universidadeuropea.com" },
+  { name: "Universidad Francisco de Vitoria", domain: "ufv.es" },
+  { name: "Universidad Alfonso X", domain: "uax.com" },
+  { name: "Universidad Rey Juan Carlos", domain: "urjc.es" },
+  { name: "IED Madrid", domain: "ied.es" },
   { name: "EAE Business School", domain: "eae.es" },
-  { name: "UFV — Francisco de Vitoria", domain: "ufv.es" },
+  { name: "Saint Louis University Madrid", domain: "slu.edu" },
+  { name: "Centro de Estudios Garrigues", domain: "centrogarrigues.com" },
+  { name: "IEB", domain: "ieb.es" },
+  { name: "CEMFI", domain: "cemfi.es" },
+  { name: "ISDE", domain: "isde.es" },
+  { name: "EOI Business School", domain: "eoi.es" },
+  { name: "Deusto Business School", domain: "deusto.es" }
 ];
 
 const faqs = [
@@ -267,21 +279,24 @@ export default function Home() {
         <div className="mt-16 overflow-hidden relative">
           <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-cream to-transparent z-10" />
           <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-cream to-transparent z-10" />
-          <div className="flex gap-px bg-stone-200/50 animate-marquee w-max">
-            {[...universities, ...universities].map((u, i) => {
-              const [main, sub] = u.name.split(/\s—\s|\s·\s/);
-              return (
-                <div key={i} className="bg-cream w-60 h-32 px-6 flex flex-col items-center justify-center shrink-0 border-t border-b border-navy/5 group">
-                  <span className="font-display text-navy text-xl leading-tight text-center group-hover:text-gold transition-colors">
-                    {main}
-                  </span>
-                  {sub && (
-                    <span className="mt-1 text-[10px] tracking-[0.22em] uppercase text-navy/50 text-center">{sub}</span>
-                  )}
-                  <span className="mt-2 block h-px w-8 bg-gold/60" />
-                </div>
-              );
-            })}
+          <div className="flex w-max animate-marquee gap-px bg-stone-200/50">
+            {[...institutions, ...institutions].map((institution, index) => (
+              <div
+                key={`${institution.domain}-${index}`}
+                className="flex h-32 w-60 shrink-0 flex-col items-center justify-center border border-navy/5 bg-cream px-6"
+              >
+                <img
+                  src={`https://img.logo.dev/${institution.domain}?token=${process.env.NEXT_PUBLIC_LOGO_DEV_KEY}&size=256&format=png`}
+                  alt={`Logo de ${institution.name}`}
+                  loading="lazy"
+                  className="h-14 w-36 object-contain grayscale opacity-70 transition hover:grayscale-0 hover:opacity-100"
+                />
+
+                <span className="mt-3 text-center text-sm text-navy">
+                  {institution.name}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
