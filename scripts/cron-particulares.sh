@@ -39,3 +39,11 @@ run_endpoint "particulares/scrape (idealista)" "$API_URL/api/cron/particulares/s
 # 2) pisos.com — fuente alternativa que expone el teléfono directo en el HTML
 #    (sin DataDome). Mucho más fiable para conseguir teléfonos de particulares.
 run_endpoint "particulares/scrape-pisos" "$API_URL/api/cron/particulares/scrape-pisos"
+
+# 3) cross-match — copia los teléfonos recién scrapeados de pisos.com a los
+#    anuncios de Idealista SIN teléfono que son (con alta confianza) la misma
+#    propiedad física (mismo precio/zona/dirección). DEBE ir DESPUÉS de
+#    scrape-pisos: primero se pueblan los teléfonos de pisos.com, luego se
+#    cruzan. No toca DataDome — es la vía que rellena teléfonos de forma fiable
+#    mientras el pool residencial esté baneado (t=bv).
+run_endpoint "particulares/cross-match-phones" "$API_URL/api/cron/particulares/cross-match-phones"
