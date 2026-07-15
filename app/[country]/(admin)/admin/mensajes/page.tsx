@@ -6,6 +6,14 @@ import { deriveInitials } from "@/lib/db/adapters";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import {
+  getAllConversations,
+  getConversationMessages,
+} from "@/lib/db/zinto";
+import type {
+  WhatsAppConversation,
+  WhatsAppMessage,
+} from "./whatsapp-chat";
 import { AdminMensajesClient, type AdminConversation } from "./mensajes-admin-client";
 import { MensajesTabs } from "./mensajes-tabs";
 
@@ -16,10 +24,10 @@ export default async function AdminMensajesPage({
   searchParams,
 }: {
   params: Promise<{ country: Country }>;
-  searchParams: Promise<{ c?: string; tab?: string }>;
+  searchParams: Promise<{ c?: string; w?: string; tab?: string }>;
 }) {
   const { country } = await params;
-  const { c: activeIdParam, tab } = await searchParams;
+  const { c: activeIdParam, w: waActiveIdParam, tab } = await searchParams;
   const supabase = await createClient();
 
   // Get current user profile for team chat
@@ -93,7 +101,50 @@ export default async function AdminMensajesPage({
     await convTbl.update({ unread_count_advisor: 0 }).eq("id", activeId);
   }
 
-  const activeTab = tab === "equipo" ? "equipo" : "clientes";
+  const activeTab =
+    tab === "equipo" ? "equipo" : tab === "whatsapp" ? "whatsapp" : "clientes";
+
+  // ---- WhatsApp (Zinto) conversations ----
+  let whatsappConversations: WhatsAppConversation[] = [];
+  let whatsappActiveId: string | null = null;
+  let whatsappMessages: WhatsAppMessage[] = [];
+
+  try {
+    const zintoConvs = await getAllConversations(100, 0);
+    whatsappConversations = zintoConvs.map((c) => {
+      const display = c.phone_number ? `+${c.phone_number}` : "—";
+      // Avatar shows the last two digits of the phone (no name available yet).
+      const digits = (c.phone_number || "").replace(/\D/g, "");
+      const initials = digits.slice(-2) || "WA";
+      return {
+        id: c.id,
+        phoneNumber: c.phone_number,
+        displayName: display,
+        initials,
+        lastTimestamp: c.last_message_at ?? null,
+        lastMessage: c.last_message ?? null,
+        unreadCount: c.unread_count ?? 0,
+      };
+    });
+
+    whatsappActiveId = waActiveIdParam ?? whatsappConversations[0]?.id ?? null;
+
+    if (whatsappActiveId) {
+      const rows = await getConversationMessages(whatsappActiveId, 200, 0);
+      whatsappMessages = rows.map((m) => ({
+        id: m.id,
+        body: m.message_text,
+        fromClient: m.type === "received",
+        time: formatTime(m.created_at),
+        status: m.status,
+      }));
+    }
+  } catch {
+    // Zinto not configured yet — leave WhatsApp tab empty instead of crashing.
+    whatsappConversations = [];
+    whatsappActiveId = null;
+    whatsappMessages = [];
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
@@ -109,6 +160,9 @@ export default async function AdminMensajesPage({
           activeId={activeId}
           messages={messages}
           currentUserId={currentUserId}
+          whatsappConversations={whatsappConversations}
+          whatsappActiveId={whatsappActiveId}
+          whatsappMessages={whatsappMessages}
         />
       </div>
 

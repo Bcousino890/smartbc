@@ -17,6 +17,7 @@ import { useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { EmailConfigClient } from "./email-config-client";
+import { ZintoConfigClient } from "./zinto-config-client";
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
 import { useT } from "@/lib/i18n/provider";
@@ -348,6 +349,9 @@ export default function ConfiguracionClient() {
 
         {/* Email Configuration */}
         <EmailConfigClient />
+
+        {/* Zinto WhatsApp Configuration */}
+        <ZintoConfigClient />
 
         {/* Save bar */}
         <div className="flex justify-end">
