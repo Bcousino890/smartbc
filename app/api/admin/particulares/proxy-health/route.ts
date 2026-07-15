@@ -31,7 +31,7 @@ async function getIp(proxyUrl: string): Promise<string | null> {
 }
 
 // Diagnóstico de salud del pipeline de teléfonos: confirma si CapSolver y el
-// proxy residencial (Geonode principal / Smartproxy respaldo —
+// proxy residencial (Evomi principal / Smartproxy respaldo —
 // app_settings["scraping.proxyUrl"]) están bien configurados, si la sticky
 // session funciona de verdad (misma IP en 2 llamadas de la misma sesión), y
 // qué veredicto da DataDome sobre las IPs del pool AHORA MISMO (slider
