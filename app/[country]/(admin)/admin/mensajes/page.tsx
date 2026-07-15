@@ -7,7 +7,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import {
-  getAllConversations,
+  getConversationsByCountry,
   getConversationMessages,
 } from "@/lib/db/zinto";
 import type {
@@ -110,7 +110,7 @@ export default async function AdminMensajesPage({
   let whatsappMessages: WhatsAppMessage[] = [];
 
   try {
-    const zintoConvs = await getAllConversations(100, 0);
+    const zintoConvs = await getConversationsByCountry(country, 100, 0);
     whatsappConversations = zintoConvs.map((c) => {
       const name = c.contact_name?.trim();
       const display = name || (c.phone_number ? `+${c.phone_number}` : "—");
@@ -126,6 +126,7 @@ export default async function AdminMensajesPage({
         unreadCount: c.unread_count ?? 0,
         contactMessage: c.contact_message ?? null,
         propertyTitle: c.property_title ?? null,
+        country: (c.country as 'es' | 'cl') || 'es',
       };
     });
 
