@@ -519,7 +519,10 @@ async function fetchDataDomeCookie(
         "-H", `Referer: https://www.idealista.com/inmueble/${adId}/`,
         "-H", "Accept: */*",
         "-H", "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
-        "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        // UA moderno y CONSISTENTE con el reintento de contact-phones y con
+        // CapSolver (Chrome 131): DataDome liga la cookie al UA, y un UA viejo
+        // (Chrome 120, 2023) sube la probabilidad de bloqueo duro (t=bv).
+        "-A", BROWSER_UA_FOR_PAGE,
         "--data", body,
         "--max-time", "12",
         ...proxyArgs,
@@ -1077,7 +1080,10 @@ export async function fetchIdealistaPhoneViaAjax(
         const primaryEndpoint = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
         console.log(`[idealista-phone-ajax] Reintentando /contact-phones con cookie DataDome...`);
         try {
-          const ddRes = await fetchViaCurl(primaryEndpoint, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", {
+          // Mismo UA (Chrome 131) con el que se pidió la cookie DataDome arriba:
+          // DataDome valida la cookie contra el UA de la petición, así que deben
+          // coincidir o rechaza el contact-phones aunque la cookie sea válida.
+          const ddRes = await fetchViaCurl(primaryEndpoint, BROWSER_UA_FOR_PAGE, {
             proxyUrl: phoneProxyUrl,
             headers: [
               `Cookie: ${ddCookie}`,
