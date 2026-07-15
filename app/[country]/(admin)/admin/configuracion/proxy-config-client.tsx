@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ProxyProvider = "evomi" | "smartproxy" | "geonode" | "decodo";
