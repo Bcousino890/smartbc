@@ -88,6 +88,17 @@ export function WhatsAppChat({
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 
+  // Auto-generate greeting message when conversation changes
+  useEffect(() => {
+    if (active && messages.length === 0 && !draft) {
+      const name = active.displayName.split(" ")[0] || "Cliente";
+      const greeting = active.propertyTitle
+        ? `Hola ${name}, ¿cómo estás? 👋 Nos consultaste por este piso:\n\n${active.propertyTitle}`
+        : `Hola ${name}, ¿cómo estás? 👋`;
+      setDraft(greeting);
+    }
+  }, [active?.id, messages.length, draft]);
+
   // Track the currently-viewed conversation so in-flight polls can be discarded
   // if the user switches away before the request resolves (avoids showing the
   // wrong thread / setState races).
@@ -244,16 +255,16 @@ export function WhatsAppChat({
                 </div>
               </div>
               {(active.propertyTitle || active.contactMessage) && (
-                <div className="mt-2.5 rounded-lg border border-gold/15 bg-white/60 px-3 py-2">
+                <div className="mt-3 space-y-2 rounded-lg border border-gold/15 bg-white/60 px-3 py-2">
                   {active.propertyTitle && (
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-ink/70">
-                      <Home size={12} strokeWidth={1.75} className="text-[#128C7E]" />
-                      <span className="truncate">{active.propertyTitle}</span>
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                      <Home size={14} strokeWidth={2} className="text-[#128C7E]" />
+                      {active.propertyTitle}
                     </p>
                   )}
                   {active.contactMessage && (
-                    <p className="mt-1 line-clamp-2 text-[11px] italic text-ink/55">
-                      “{active.contactMessage}”
+                    <p className="line-clamp-2 text-xs italic text-ink/60">
+                      {active.contactMessage}
                     </p>
                   )}
                 </div>
@@ -608,6 +619,22 @@ function formatRelative(iso: string): string {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function generateGreeting(conversation: WhatsAppConversation): string {
+  const name = conversation.displayName.split(" ")[0] || "Cliente";
+  const property = conversation.propertyTitle || "";
+  const originalMessage = conversation.contactMessage || "";
+
+  if (!property && !originalMessage) {
+    return `Hola ${name}, ¿cómo estás?`;
+  }
+
+  if (property) {
+    return `Hola ${name}, ¿cómo estás? 👋 Nos consultaste por este piso:\n\n${property}`;
+  }
+
+  return `Hola ${name}, ¿cómo estás? 👋 Vi tu consulta anterior:\n\n"${originalMessage}"`;
 }
 
 function EditNameModal({
