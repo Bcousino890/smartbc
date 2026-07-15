@@ -16,10 +16,27 @@ create index if not exists idx_zinto_conversations_client_id on zinto_conversati
 create index if not exists idx_zinto_conversations_phone_number on zinto_conversations(phone_number);
 create index if not exists idx_zinto_conversations_created_at on zinto_conversations(created_at desc);
 
+-- Prevent duplicate conversations for the same client/phone (race-safe upsert target).
+create unique index if not exists uq_zinto_conversations_client_phone
+  on zinto_conversations(client_id, phone_number);
+
+-- Atomic unread-count increment (avoids read-modify-write races on inbound bursts).
+create or replace function zinto_increment_unread(conv_id uuid)
+returns void as $$
+  update zinto_conversations
+    set unread_count = coalesce(unread_count, 0) + 1,
+        updated_at = now()
+  where id = conv_id;
+$$ language sql;
+
 -- Enable RLS
 alter table zinto_conversations enable row level security;
 
 -- RLS policies (admins only can access conversations)
+drop policy if exists "Admins can view all conversations" on zinto_conversations;
+drop policy if exists "Admins can insert conversations" on zinto_conversations;
+drop policy if exists "Admins can update conversations" on zinto_conversations;
+
 create policy "Admins can view all conversations" on zinto_conversations
   for select using (
     exists (

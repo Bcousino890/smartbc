@@ -15,7 +15,6 @@ export async function getOrCreateConversation(
 ): Promise<ZintoConversation> {
   const supabase = getSupabaseClient();
 
-  // Try to find existing conversation
   const { data: existing } = await supabase
     .from('zinto_conversations')
     .select('*')
@@ -27,25 +26,56 @@ export async function getOrCreateConversation(
     return existing as ZintoConversation;
   }
 
-  // Create new conversation
+  // Upsert on the unique (client_id, phone_number) pair so concurrent inbound
+  // messages can't create duplicate conversations (race-safe).
   const { data: newConv, error } = await supabase
     .from('zinto_conversations')
-    .insert([
+    .upsert(
       {
         client_id: clientId,
         phone_number: phoneNumber,
         channel_id: channelId,
       },
-    ])
+      { onConflict: 'client_id,phone_number', ignoreDuplicates: false }
+    )
     .select()
     .single();
 
   if (error) {
+    // If a parallel request won the insert, fall back to selecting it.
+    const { data: raced } = await supabase
+      .from('zinto_conversations')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('phone_number', phoneNumber)
+      .single();
+    if (raced) return raced as ZintoConversation;
     throw new Error(`Failed to create conversation: ${error.message}`);
   }
 
-  return (newConv || {}) as ZintoConversation;
+  return newConv as ZintoConversation;
 }
+
+export async function findConversationByPhone(
+  phoneNumber: string
+): Promise<ZintoConversation | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('zinto_conversations')
+    .select('*')
+    .eq('phone_number', phoneNumber)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to find conversation: ${error.message}`);
+  }
+
+  return (data as ZintoConversation) || null;
+}
+
+const ALLOWED_STATUSES = ['pending', 'sent', 'delivered', 'failed'];
 
 export async function saveMessage(
   conversationId: string,
@@ -54,9 +84,14 @@ export async function saveMessage(
   messageText: string,
   type: 'sent' | 'received',
   status: string = 'pending',
+  channelId: number = 4,
   zintoMessageId?: string
 ): Promise<ZintoMessageRecord> {
   const supabase = getSupabaseClient();
+  // Clamp to the values allowed by the DB CHECK constraint. Zinto may report
+  // a status (e.g. "read") that the schema doesn't track; never fail an insert
+  // for a message that was actually sent.
+  const safeStatus = ALLOWED_STATUSES.includes(status) ? status : 'sent';
   const { data, error } = await supabase
     .from('zinto_messages')
     .insert([
@@ -66,9 +101,9 @@ export async function saveMessage(
         to_number: toNumber,
         message_text: messageText,
         type,
-        status,
+        status: safeStatus,
         zinto_message_id: zintoMessageId,
-        channel_id: 4,
+        channel_id: channelId,
         timestamp_sent: new Date().toISOString(),
       },
     ])
@@ -82,18 +117,29 @@ export async function saveMessage(
   return data as ZintoMessageRecord;
 }
 
-export async function updateMessageStatus(
-  zintoMessageId: string,
-  status: 'sent' | 'delivered' | 'read' | 'failed'
+/**
+ * Update the delivery status of a sent message from a status webhook.
+ *
+ * Zinto's docs are internally inconsistent about the message identifier:
+ * POST /messages/send returns a string ("msg_xxx") while the status webhook
+ * reports a numeric id. Since there is no documented mapping between the two,
+ * we match best-effort against BOTH columns: the numeric webhook id
+ * (`zinto_numeric_id`) and the stored string id (`zinto_message_id`) compared
+ * to the webhook id in string form. Whichever the real API populates will hit.
+ */
+export async function updateMessageStatusFromWebhook(
+  webhookMessageId: number | string,
+  status: 'sent' | 'delivered' | 'failed'
 ): Promise<void> {
   const supabase = getSupabaseClient();
+  const asString = String(webhookMessageId).replace(/[^\w.-]/g, '');
+  const asNumber = Number(webhookMessageId);
+  const numericFilter = Number.isFinite(asNumber) ? asNumber : -1;
+
   const { error } = await supabase
     .from('zinto_messages')
-    .update({
-      status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('zinto_message_id', zintoMessageId);
+    .update({ status, updated_at: new Date().toISOString() })
+    .or(`zinto_numeric_id.eq.${numericFilter},zinto_message_id.eq.${asString}`);
 
   if (error) {
     throw new Error(`Failed to update message status: ${error.message}`);
@@ -138,7 +184,9 @@ export async function getAllConversations(
   return data as ZintoConversation[];
 }
 
-export async function getConversationById(conversationId: string): Promise<ZintoConversation | null> {
+export async function getConversationById(
+  conversationId: string
+): Promise<ZintoConversation | null> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('zinto_conversations')
@@ -150,24 +198,50 @@ export async function getConversationById(conversationId: string): Promise<Zinto
     throw new Error(`Failed to fetch conversation: ${error.message}`);
   }
 
-  return data as ZintoConversation | null;
+  return (data as ZintoConversation) || null;
 }
 
 export async function updateConversationLastMessage(
   conversationId: string,
-  message: string
+  message: string,
+  incrementUnread: boolean = false
 ): Promise<void> {
   const supabase = getSupabaseClient();
+
+  const update: Record<string, unknown> = {
+    last_message: message,
+    last_message_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
   const { error } = await supabase
     .from('zinto_conversations')
-    .update({
-      last_message: message,
-      last_message_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq('id', conversationId);
 
   if (error) {
     throw new Error(`Failed to update conversation: ${error.message}`);
+  }
+
+  if (incrementUnread) {
+    // Atomic increment via SQL function (avoids read-modify-write races).
+    const { error: incErr } = await supabase.rpc('zinto_increment_unread', {
+      conv_id: conversationId,
+    });
+    if (incErr) {
+      throw new Error(`Failed to increment unread count: ${incErr.message}`);
+    }
+  }
+}
+
+export async function markConversationRead(conversationId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('zinto_conversations')
+    .update({ unread_count: 0, updated_at: new Date().toISOString() })
+    .eq('id', conversationId);
+
+  if (error) {
+    throw new Error(`Failed to mark conversation read: ${error.message}`);
   }
 }
