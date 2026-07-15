@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./portal.css";
 import { SiteHeader } from "./_components/SiteHeader";
 import { SiteFooter } from "./_components/SiteFooter";
+import { ZintoWebChat } from "@/components/zinto-webchat";
 
 export const metadata: Metadata = {
   title: {
@@ -22,6 +23,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
       <SiteHeader />
       <main className="flex-1">{children}</main>
       <SiteFooter />
+      <ZintoWebChat />
     </div>
   );
 }
