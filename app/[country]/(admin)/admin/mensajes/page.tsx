@@ -6,7 +6,6 @@ import { deriveInitials } from "@/lib/db/adapters";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
-import { deriveInitials as deriveInitialsFn } from "@/lib/db/adapters";
 import {
   getAllConversations,
   getConversationMessages,
@@ -114,11 +113,14 @@ export default async function AdminMensajesPage({
     const zintoConvs = await getAllConversations(100, 0);
     whatsappConversations = zintoConvs.map((c) => {
       const display = c.phone_number ? `+${c.phone_number}` : "—";
+      // Avatar shows the last two digits of the phone (no name available yet).
+      const digits = (c.phone_number || "").replace(/\D/g, "");
+      const initials = digits.slice(-2) || "WA";
       return {
         id: c.id,
         phoneNumber: c.phone_number,
         displayName: display,
-        initials: deriveInitialsFn(display),
+        initials,
         lastTimestamp: c.last_message_at ?? null,
         lastMessage: c.last_message ?? null,
         unreadCount: c.unread_count ?? 0,
@@ -140,6 +142,8 @@ export default async function AdminMensajesPage({
   } catch {
     // Zinto not configured yet — leave WhatsApp tab empty instead of crashing.
     whatsappConversations = [];
+    whatsappActiveId = null;
+    whatsappMessages = [];
   }
 
   return (

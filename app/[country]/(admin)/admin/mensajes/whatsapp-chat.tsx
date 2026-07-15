@@ -67,6 +67,14 @@ export function WhatsAppChat({
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 
+  // Track the currently-viewed conversation so in-flight polls can be discarded
+  // if the user switches away before the request resolves (avoids showing the
+  // wrong thread / setState races).
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
   // Reset thread when switching conversation.
   useEffect(() => {
     setMessages(initialMessages);
@@ -74,14 +82,18 @@ export function WhatsAppChat({
 
   // Poll the active thread for inbound replies (delivered via Zinto webhook).
   const refreshThread = useCallback(async () => {
-    if (!activeId) return;
+    const idAtCall = activeIdRef.current;
+    if (!idAtCall) return;
     try {
-      const rows = await getZintoThread(activeId);
-      setMessages(toView(rows));
+      const rows = await getZintoThread(idAtCall);
+      // Only apply if we're still viewing the same conversation.
+      if (idAtCall === activeIdRef.current) {
+        setMessages(toView(rows));
+      }
     } catch {
       // ignore transient polling errors
     }
-  }, [activeId]);
+  }, []);
 
   useEffect(() => {
     if (!activeId) return;
@@ -89,12 +101,14 @@ export function WhatsAppChat({
     return () => clearInterval(interval);
   }, [activeId, refreshThread]);
 
-  // Mark read on open.
+  // Mark read on open, then refresh so the list badge clears.
   useEffect(() => {
     if (activeId) {
-      markZintoConversationRead(activeId).catch(() => {});
+      markZintoConversationRead(activeId)
+        .then(() => router.refresh())
+        .catch(() => {});
     }
-  }, [activeId]);
+  }, [activeId, router]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -105,8 +119,9 @@ export function WhatsAppChat({
 
   const selectConversation = (id: string) => {
     const next = new URLSearchParams(searchParams);
+    next.set("tab", "whatsapp");
     next.set("w", id);
-    router.push(`${config.prefix}/mensajes?tab=whatsapp&${next.toString()}`);
+    router.push(`${config.prefix}/mensajes?${next.toString()}`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {

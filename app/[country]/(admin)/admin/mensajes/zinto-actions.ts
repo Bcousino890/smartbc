@@ -90,4 +90,5 @@ export async function markZintoConversationRead(
   await assertPermission("mensajes", "view");
   await markConversationRead(conversationId);
   revalidatePath("/es/admin/mensajes");
+  revalidatePath("/cl/admin/mensajes");
 }
