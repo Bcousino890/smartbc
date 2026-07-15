@@ -112,10 +112,10 @@ export default async function AdminMensajesPage({
   try {
     const zintoConvs = await getAllConversations(100, 0);
     whatsappConversations = zintoConvs.map((c) => {
-      const display = c.phone_number ? `+${c.phone_number}` : "—";
-      // Avatar shows the last two digits of the phone (no name available yet).
+      const name = c.contact_name?.trim();
+      const display = name || (c.phone_number ? `+${c.phone_number}` : "—");
       const digits = (c.phone_number || "").replace(/\D/g, "");
-      const initials = digits.slice(-2) || "WA";
+      const initials = name ? deriveInitials(name) : digits.slice(-2) || "WA";
       return {
         id: c.id,
         phoneNumber: c.phone_number,
@@ -124,6 +124,8 @@ export default async function AdminMensajesPage({
         lastTimestamp: c.last_message_at ?? null,
         lastMessage: c.last_message ?? null,
         unreadCount: c.unread_count ?? 0,
+        contactMessage: c.contact_message ?? null,
+        propertyTitle: c.property_title ?? null,
       };
     });
 

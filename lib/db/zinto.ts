@@ -8,10 +8,18 @@ function getSupabaseClient() {
   );
 }
 
+export interface ConversationMeta {
+  contactName?: string | null;
+  contactMessage?: string | null;
+  propertyTitle?: string | null;
+  leadId?: string | null;
+}
+
 export async function getOrCreateConversation(
   clientId: string,
   phoneNumber: string,
-  channelId: number = 4
+  channelId: number = 4,
+  meta?: ConversationMeta
 ): Promise<ZintoConversation> {
   const supabase = getSupabaseClient();
 
@@ -23,6 +31,21 @@ export async function getOrCreateConversation(
     .single();
 
   if (existing) {
+    // Enrich an existing conversation with lead info if we now have it.
+    const patch: Record<string, unknown> = {};
+    if (meta?.contactName && !existing.contact_name) patch.contact_name = meta.contactName;
+    if (meta?.contactMessage && !existing.contact_message) patch.contact_message = meta.contactMessage;
+    if (meta?.propertyTitle && !existing.property_title) patch.property_title = meta.propertyTitle;
+    if (meta?.leadId && !existing.lead_id) patch.lead_id = meta.leadId;
+    if (Object.keys(patch).length > 0) {
+      const { data: updated } = await supabase
+        .from('zinto_conversations')
+        .update(patch)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      return (updated || existing) as ZintoConversation;
+    }
     return existing as ZintoConversation;
   }
 
@@ -35,6 +58,10 @@ export async function getOrCreateConversation(
         client_id: clientId,
         phone_number: phoneNumber,
         channel_id: channelId,
+        contact_name: meta?.contactName ?? null,
+        contact_message: meta?.contactMessage ?? null,
+        property_title: meta?.propertyTitle ?? null,
+        lead_id: meta?.leadId ?? null,
       },
       { onConflict: 'client_id,phone_number', ignoreDuplicates: false }
     )

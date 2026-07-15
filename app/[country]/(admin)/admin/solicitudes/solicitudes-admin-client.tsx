@@ -640,7 +640,14 @@ function IdealistaLeadCard({
                     {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
                   </a>
                   <CopyButton value={lead.phone.replace(/\s+/g, "")} title="Copiar teléfono" size={11} />
-                  <WhatsAppLeadButton phone={lead.phone} size={11} />
+                  <WhatsAppLeadButton
+                    phone={lead.phone}
+                    name={lead.name}
+                    message={lead.message}
+                    propertyTitle={lead.matched_property_title || lead.property_title}
+                    leadId={lead.id}
+                    size={11}
+                  />
                 </div>
               )}
             </div>
@@ -942,7 +949,14 @@ function IdealistaLeadModal({
                     {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
                   </a>
                   <CopyButton value={lead.phone.replace(/\s+/g, "")} title="Copiar teléfono" size={13} />
-                  <WhatsAppLeadButton phone={lead.phone} size={13} />
+                  <WhatsAppLeadButton
+                    phone={lead.phone}
+                    name={lead.name}
+                    message={lead.message}
+                    propertyTitle={lead.matched_property_title || lead.property_title}
+                    leadId={lead.id}
+                    size={13}
+                  />
                 </div>
               )}
               <LangBadge text={lead.message} className="mt-1.5" />
