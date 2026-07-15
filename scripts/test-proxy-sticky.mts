@@ -247,16 +247,16 @@ check("user:pass@host:port (sin esquema) → +http", normalizeProxyUrl("u:p@h:90
 check("comillas y espacios se limpian", normalizeProxyUrl('  "http://u:p@h:9000"  ') === "http://u:p@h:9000", normalizeProxyUrl('  "http://u:p@h:9000"  '));
 check("vacío → undefined", normalizeProxyUrl("   ") === undefined, normalizeProxyUrl("   "));
 
-// Caso real: credencial de Evomi pegada con "http://" pero SIN "@" antes del
-// host, y con una lista de países "_country-ES,FR,IT" (Evomi solo admite UN
-// país por sesión) pegada del generador de endpoint del panel en vez de la
-// credencial base.
+// Caso real (credenciales de EJEMPLO, no reales): credencial de Evomi pegada
+// con "http://" pero SIN "@" antes del host, y con una lista de países
+// "_country-ES,FR,IT" (Evomi solo admite UN país por sesión) pegada del
+// generador de endpoint del panel en vez de la credencial base.
 const evomiTypo = normalizeProxyUrl(
-  "http://portales3:zfnFYTJH0gySHcr07Rf4_country-ES,FR,IT:core-residential.evomi.com:1000",
+  "http://testuser:testpass_country-ES,FR,IT:core-residential.evomi.com:1000",
 );
 check(
   "evomi: repara el '@' que falta y limpia el '_country-ES,FR,IT' pegado",
-  evomiTypo === "http://portales3:zfnFYTJH0gySHcr07Rf4@core-residential.evomi.com:1000",
+  evomiTypo === "http://testuser:testpass@core-residential.evomi.com:1000",
   evomiTypo,
 );
 check(

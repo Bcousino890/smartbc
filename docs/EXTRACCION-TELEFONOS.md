@@ -139,6 +139,19 @@ búsqueda y se reutiliza).
   `ERROR_INVALID_TASK_DATA: unsupported userAgent`. Chrome 119-121 (2023-24) ya
   no están soportados. Se fuerza **Chrome 131**. Probado: con Chrome 131 el
   error desaparece y CapSolver pasa a validar el proxy.
+- **Segundo bug encontrado y corregido (jul 2026):** `parseProxyUrl()` en
+  `solve-datadome-with-capsolver.ts` era un no-op que reenviaba
+  `http://usuario:password@host:puerto` tal cual en el campo `proxy` de
+  `DatadomeSliderTask`. CapSolver documenta el formato
+  `host:puerto:usuario:password` para ese task
+  (docs.capsolver.com/en/guide/captcha/datadome/, ejemplo
+  `"158.120.100.23:334:user:pass"`), así que terminaba resolviendo el slider
+  desde una IP distinta a la que emitió el reto — mismatch. Esto explica el
+  error real visto en producción al migrar a Evomi, con un `t=fe` real
+  (resoluble) en mano: `"Poll error 1: load captcha page error: userAgent
+  does not match or your proxy ip has been blocked"`. Corregido para convertir
+  la URL al formato documentado. Tests:
+  `node --experimental-strip-types scripts/test-capsolver-proxy-format.mts`.
 
 ## 4. El mecanismo de reto DataDome: `t=fe` vs `t=bv` (breakthrough)
 

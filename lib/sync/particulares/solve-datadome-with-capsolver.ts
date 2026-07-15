@@ -166,12 +166,21 @@ export async function solveDatadomeWithCapSolver(
 }
 
 /**
- * Parses proxy URL (http://user:pass@host:port) into CapSolver format.
+ * Convierte `http://usuario:password@host:puerto` al formato que documenta
+ * CapSolver para DatadomeSliderTask: `host:puerto:usuario:password` (ver
+ * docs.capsolver.com/en/guide/captcha/datadome/, ejemplo
+ * "158.120.100.23:334:user:pass"). Antes esta función era un no-op que
+ * reenviaba la URL con esquema tal cual — CapSolver no la interpreta como
+ * proxy válido, así que terminaba resolviendo el slider desde una IP
+ * distinta a la que recibió el reto (mismatch), dando el error real que
+ * veíamos en producción: "userAgent does not match or your proxy ip has
+ * been blocked".
  */
 function parseProxyUrl(proxyUrl: string): string {
   try {
-    // CapSolver expects: http://user:pass@host:port or socks5://host:port
-    return proxyUrl;
+    const u = new URL(proxyUrl);
+    if (!u.username) return `${u.hostname}:${u.port}`;
+    return `${u.hostname}:${u.port}:${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`;
   } catch {
     return proxyUrl;
   }
