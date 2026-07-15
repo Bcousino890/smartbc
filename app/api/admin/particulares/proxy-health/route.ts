@@ -113,11 +113,19 @@ export async function GET(request: Request) {
   const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
   const pageUrl = `https://www.idealista.com/inmueble/${adId}/`;
 
+  type Probe = {
+    estrategia: string;
+    challenge_type: string | null;
+    challenge_url?: string | null;
+    proxy_used?: string;
+    ua_used?: string;
+    note?: string;
+  };
   const probeContactPhones = async (
     label: string,
     proxyUrl: string | undefined,
     strategy: { pageUA: string | null; contactUA: string },
-  ): Promise<{ estrategia: string; challenge_type: string | null; note?: string }> => {
+  ): Promise<Probe> => {
     try {
       if (strategy.pageUA) {
         await fetchViaCurl(pageUrl, strategy.pageUA, { proxyUrl, timeoutSec: 20 });
@@ -135,7 +143,13 @@ export async function GET(request: Request) {
       });
       const body = "html" in cpRes ? cpRes.html : (cpRes.body ?? "");
       const challenge = extractDatadomeChallengeUrl(body);
-      return { estrategia: label, challenge_type: challenge.type };
+      return {
+        estrategia: label,
+        challenge_type: challenge.type,
+        challenge_url: challenge.url,
+        proxy_used: proxyUrl,
+        ua_used: strategy.contactUA,
+      };
     } catch (e) {
       return { estrategia: label, challenge_type: null, note: e instanceof Error ? e.message : String(e) };
     }
@@ -182,6 +196,46 @@ export async function GET(request: Request) {
         ? `✅ "${anyFe.estrategia}" da t=fe (resoluble) — CapSolver puede resolverlo. El flujo real ya rota por estos mismos países, así que debería encontrarlo también.`
         : `⛔ Ninguna combinación de UA ni país (${COUNTRY_ROTATION.join(", ")}) dio t=fe — el pool residencial está genuinamente baneado por DataDome en Idealista ahora mismo, en TODOS los países probados. Vías: (1) pool móvil (4G/LTE) del proveedor si está disponible, (2) cross-portal (pisos.com no bloquea y expone teléfono).`,
     };
+
+    // ── 3b. Prueba END-TO-END de CapSolver ────────────────────────────────────
+    // Si alguna estrategia dio un reto RESOLUBLE (t=fe), lo mandamos a CapSolver
+    // con el MISMO proxy sticky que lo generó. Es la única prueba real de que
+    // el pipeline completo (proxy → reto → CapSolver → cookie) funciona: hasta
+    // ahora el diagnóstico detectaba el t=fe pero NUNCA llegaba a resolverlo, así
+    // que un error de formato de proxy hacia CapSolver (como el corregido en el
+    // fix host:puerto:usuario:password) pasaba desapercibido aquí y solo se veía
+    // al ejecutar la extracción real. Solo corre cuando hay t=fe (no gasta saldo
+    // de CapSolver en baneos duros t=bv).
+    if (anyFe?.challenge_url && anyFe.proxy_used) {
+      try {
+        const { solveDatadomeWithCapSolver } = await import(
+          "@/lib/sync/particulares/solve-datadome-with-capsolver"
+        );
+        const solved = await solveDatadomeWithCapSolver(anyFe.challenge_url, anyFe.ua_used ?? BROWSER_UA, {
+          proxyUrl: anyFe.proxy_used,
+          websiteURL: pageUrl,
+        });
+        const cookie = solved.cookie ?? (solved.token ? `datadome=${solved.token}` : null);
+        out.capsolver_end_to_end = {
+          intentado: true,
+          estrategia: anyFe.estrategia,
+          ok: !!cookie,
+          cookie_recibida: cookie ? `${cookie.slice(0, 24)}…` : null,
+          error: solved.error ?? null,
+          verdict: cookie
+            ? "✅ CapSolver resolvió el slider y devolvió cookie DataDome — pipeline proxy+CapSolver OK de punta a punta."
+            : `⛔ CapSolver NO resolvió el reto (${solved.error ?? "sin cookie"}). Si el error menciona 'userAgent'/'proxy ip', revisar el formato de proxy que se le pasa a CapSolver.`,
+        };
+      } catch (e) {
+        out.capsolver_end_to_end = { intentado: true, ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    } else {
+      out.capsolver_end_to_end = {
+        intentado: false,
+        ok: null,
+        note: "No apareció ningún t=fe resoluble en esta corrida, así que no se probó CapSolver (no se gasta saldo en t=bv). Reintentar cuando el pool dé algún t=fe.",
+      };
+    }
   } catch (err) {
     out.datadome_estrategias = { error: err instanceof Error ? err.message : String(err) };
   }
@@ -190,15 +244,21 @@ export async function GET(request: Request) {
   const cs = out.capsolver as Record<string, unknown>;
   const px = out.proxy as Record<string, unknown>;
   const est = out.datadome_estrategias as Record<string, unknown>;
+  const e2e = out.capsolver_end_to_end as Record<string, unknown> | undefined;
   const estrategiaResoluble = (est?.estrategia_resoluble as string | null) ?? null;
   const datadomeUsable = !!estrategiaResoluble;
   const stickyFunciona = (px?.sticky_verificado as Record<string, unknown> | undefined)?.honra_sticky === true;
+  // Pipeline verificado de punta a punta = CapSolver resolvió un t=fe real con
+  // el proxy sticky. `null` cuando no hubo t=fe que resolver en esta corrida
+  // (no es fallo — el plumbing sigue OK, solo el pool está en t=bv ahora).
+  const pipelineE2E = e2e?.intentado === true ? e2e.ok === true : null;
   out.resumen = {
     capsolver_ok: cs?.ok === true,
     proxy_configurado: px?.configured === true,
     proxy_sticky_funciona: stickyFunciona,
     datadome_estrategia_resoluble: estrategiaResoluble,
     datadome_usable: datadomeUsable,
+    capsolver_pipeline_e2e: pipelineE2E,
     todo_ok: cs?.ok === true && stickyFunciona && datadomeUsable,
   };
 
