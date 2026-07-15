@@ -190,29 +190,80 @@ const noAuth = "http://proxy.geonode.io:9000";
 check("sin auth → no-op (no se puede anclar)", withStickySession(noAuth, "x") === noAuth, noAuth);
 
 console.log("\n── normalizeProxyUrl (pegar credencial tal cual) ──");
+function repairMissingAt(s: string): string | null {
+  const scheme = s.match(/^https?:\/\//i)?.[0];
+  if (!scheme) return null;
+  const parts = s.slice(scheme.length).split(":");
+  if (parts.length < 3) return null;
+  const port = parts[parts.length - 1];
+  const host = parts[parts.length - 2];
+  if (!/^\d+$/.test(port) || !host.includes(".")) return null;
+  const userInfo = parts.slice(0, -2).join(":");
+  if (!userInfo) return null;
+  return `${scheme}${userInfo}@${host}:${port}`;
+}
+function stripStrayModifiers(url: string): string {
+  try {
+    const u = new URL(url);
+    if (!u.username && !u.password) return url;
+    stripModifiers(u);
+    const auth = u.password ? `${u.username}:${u.password}` : u.username;
+    return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
+  } catch {
+    return url;
+  }
+}
 function normalizeProxyUrl(raw: string | null | undefined): string | undefined {
   if (!raw) return undefined;
   let s = raw.trim().replace(/^["']+|["']+$/g, "").trim();
   if (!s) return undefined;
-  if (/^https?:\/\//i.test(s)) return s;
-  if (s.includes("@")) return `http://${s}`;
-  const parts = s.split(":");
-  if (parts.length >= 4) {
-    const [host, port, user, ...rest] = parts;
-    return `http://${user}:${rest.join(":")}@${host}:${port}`;
+
+  let canonical: string;
+  if (/^https?:\/\//i.test(s)) {
+    canonical = s.includes("@") ? s : (repairMissingAt(s) ?? s);
+  } else if (s.includes("@")) {
+    canonical = `http://${s}`;
+  } else {
+    const parts = s.split(":");
+    if (parts.length >= 4) {
+      const [host, port, user, ...rest] = parts;
+      canonical = `http://${user}:${rest.join(":")}@${host}:${port}`;
+    } else {
+      canonical = `http://${s}`;
+    }
   }
-  return `http://${s}`;
+  return stripStrayModifiers(canonical);
 }
 check(
-  "geonode nativo host:port:user:pass → canónica",
+  // "-type-residential" se quita como modificador sobrante: buildGeonodeUrl lo
+  // vuelve a añadir siempre, así que da igual que el usuario lo pegue o no.
+  "geonode nativo host:port:user:pass → canónica (sin modificadores sobrantes)",
   normalizeProxyUrl("proxy.geonode.io:9000:geonode_x-type-residential:d8ca-uuid") ===
-    "http://geonode_x-type-residential:d8ca-uuid@proxy.geonode.io:9000",
+    "http://geonode_x:d8ca-uuid@proxy.geonode.io:9000",
   normalizeProxyUrl("proxy.geonode.io:9000:geonode_x-type-residential:d8ca-uuid"),
 );
 check("url http:// canónica → no-op", normalizeProxyUrl("http://u:p@h:9000") === "http://u:p@h:9000", normalizeProxyUrl("http://u:p@h:9000"));
 check("user:pass@host:port (sin esquema) → +http", normalizeProxyUrl("u:p@h:9000") === "http://u:p@h:9000", normalizeProxyUrl("u:p@h:9000"));
 check("comillas y espacios se limpian", normalizeProxyUrl('  "http://u:p@h:9000"  ') === "http://u:p@h:9000", normalizeProxyUrl('  "http://u:p@h:9000"  '));
 check("vacío → undefined", normalizeProxyUrl("   ") === undefined, normalizeProxyUrl("   "));
+
+// Caso real: credencial de Evomi pegada con "http://" pero SIN "@" antes del
+// host, y con una lista de países "_country-ES,FR,IT" (Evomi solo admite UN
+// país por sesión) pegada del generador de endpoint del panel en vez de la
+// credencial base.
+const evomiTypo = normalizeProxyUrl(
+  "http://portales3:zfnFYTJH0gySHcr07Rf4_country-ES,FR,IT:core-residential.evomi.com:1000",
+);
+check(
+  "evomi: repara el '@' que falta y limpia el '_country-ES,FR,IT' pegado",
+  evomiTypo === "http://portales3:zfnFYTJH0gySHcr07Rf4@core-residential.evomi.com:1000",
+  evomiTypo,
+);
+check(
+  "sin '@' y sin patrón host:puerto reconocible → se deja intacta (no se adivina mal)",
+  normalizeProxyUrl("http://esto-no-es-una-url-valida") === "http://esto-no-es-una-url-valida",
+  normalizeProxyUrl("http://esto-no-es-una-url-valida"),
+);
 
 console.log(`\n${ok}/${ok + fail} tests OK${fail ? ` — ${fail} FALLIDOS` : ""}`);
 process.exit(fail ? 1 : 0);

@@ -4,9 +4,9 @@ import { createAdminClient } from "@/lib/db/admin";
 // ─────────────────────────────────────────────────────────────────────────────
 // Proxy residencial — MULTI-PROVEEDOR con autodetección por la URL guardada.
 //
-// Proveedor PRINCIPAL: Geonode (docs.geonode.com). Respaldo: Smartproxy.
-// También se sigue soportando Evomi (se detecta por el host de la URL), por si
-// hay que volver atrás. NO hace falta tocar código para cambiar de proveedor:
+// Proveedor PRINCIPAL: Evomi (docs.evomi.com). Respaldo: Smartproxy.
+// También se sigue soportando Geonode (se detecta por el host/username de la
+// URL), por si hay que volver atrás. NO hace falta tocar código para cambiar de proveedor:
 // basta con pegar la URL base del proveedor en app_settings["scraping.proxyUrl"]
 // vía /admin/configuracion; este módulo detecta el formato correcto por el host
 // (o por el prefijo del usuario) y construye las sesiones sticky/geo según la
@@ -109,10 +109,21 @@ function randomSessionId(len = 8): string {
  *                                             el que Geonode deja copiar con un
  *                                             botón en "Endpoints format")
  *   - `usuario:password@host:puerto`         (sin esquema)
+ *   - `http://usuario:password:host:puerto`  (esquema pegado a mano SIN el "@";
+ *                                             typo común al copiar del panel de
+ *                                             Evomi — se repara si los últimos
+ *                                             dos segmentos parecen host:puerto)
  *   - `host:puerto`                          (sin auth)
  *
  * El password puede contener ":" (los de Geonode son UUID sin ":", pero se
  * contempla por seguridad uniendo el resto de segmentos).
+ *
+ * Además, si la credencial pegada ya trae modificadores de sesión/país (p.ej.
+ * se copió del generador de endpoint del panel en vez de la credencial base,
+ * o quedó un `_country-ES,FR,IT` — Evomi solo admite UN país por sesión, no
+ * una lista), se limpian: la URL guardada debe ser siempre una base "pelada",
+ * porque `withStickySession(Force)` es quien decide sesión/país en cada
+ * llamada real.
  */
 export function normalizeProxyUrl(raw: string | null | undefined): string | undefined {
   if (!raw) return undefined;
@@ -120,22 +131,64 @@ export function normalizeProxyUrl(raw: string | null | undefined): string | unde
   let s = raw.trim().replace(/^["']+|["']+$/g, "").trim();
   if (!s) return undefined;
 
-  // Ya trae esquema http(s):// → confiar en él (formato canónico).
-  if (/^https?:\/\//i.test(s)) return s;
-
-  // Sin esquema pero con "@": usuario:password@host:puerto → solo anteponer http.
-  if (s.includes("@")) return `http://${s}`;
-
-  // Sin esquema y sin "@": puede ser el formato nativo host:puerto:usuario:password
-  // o simplemente host:puerto.
-  const parts = s.split(":");
-  if (parts.length >= 4) {
-    const [host, port, user, ...rest] = parts;
-    const pass = rest.join(":"); // por si el password tuviera ":"
-    return `http://${user}:${pass}@${host}:${port}`;
+  let canonical: string;
+  if (/^https?:\/\//i.test(s)) {
+    if (s.includes("@")) {
+      canonical = s; // ya canónica → se respeta
+    } else {
+      canonical = repairMissingAt(s) ?? s;
+    }
+  } else if (s.includes("@")) {
+    // Sin esquema pero con "@": usuario:password@host:puerto → solo anteponer http.
+    canonical = `http://${s}`;
+  } else {
+    // Sin esquema y sin "@": puede ser el formato nativo host:puerto:usuario:password
+    // o simplemente host:puerto.
+    const parts = s.split(":");
+    if (parts.length >= 4) {
+      const [host, port, user, ...rest] = parts;
+      const pass = rest.join(":"); // por si el password tuviera ":"
+      canonical = `http://${user}:${pass}@${host}:${port}`;
+    } else {
+      // host:puerto (sin auth) u otro → anteponer http y dejar que new URL() valide.
+      canonical = `http://${s}`;
+    }
   }
-  // host:puerto (sin auth) u otro → anteponer http y dejar que new URL() valide.
-  return `http://${s}`;
+
+  return stripStrayModifiers(canonical);
+}
+
+/**
+ * Repara `http://usuario:password:host:puerto` (falta el "@" antes del host)
+ * a `http://usuario:password@host:puerto`, SOLO si los últimos dos segmentos
+ * separados por ":" parecen host (con punto) y puerto (numérico). Si no
+ * encaja el patrón, devuelve null y se deja la URL tal cual para que
+ * `new URL()` falle explícitamente en vez de adivinar mal.
+ */
+function repairMissingAt(s: string): string | null {
+  const scheme = s.match(/^https?:\/\//i)?.[0];
+  if (!scheme) return null;
+  const parts = s.slice(scheme.length).split(":");
+  if (parts.length < 3) return null;
+  const port = parts[parts.length - 1];
+  const host = parts[parts.length - 2];
+  if (!/^\d+$/.test(port) || !host.includes(".")) return null;
+  const userInfo = parts.slice(0, -2).join(":");
+  if (!userInfo) return null;
+  return `${scheme}${userInfo}@${host}:${port}`;
+}
+
+/** Quita modificadores de sesión/país que hayan quedado pegados en la credencial base. */
+function stripStrayModifiers(url: string): string {
+  try {
+    const u = new URL(url);
+    if (!u.username && !u.password) return url; // sin auth, nada que limpiar
+    stripModifiers(u);
+    const auth = u.password ? `${u.username}:${u.password}` : u.username;
+    return `${u.protocol}//${auth}@${u.host}${u.pathname !== "/" ? u.pathname : ""}${u.search}`;
+  } catch {
+    return url;
+  }
 }
 
 async function readStaticProxyUrl(): Promise<string | undefined> {

@@ -5,15 +5,17 @@
 > infraestructura (proxy residencial + CapSolver). Sirve de referencia para
 > retomar el problema.
 
-## 0. Estado actual (proveedor PRINCIPAL: Geonode · RESPALDO: Smartproxy)
+## 0. Estado actual (proveedor PRINCIPAL: Evomi · RESPALDO: Smartproxy)
 
-**Proveedor actual: [Geonode](https://geonode.com) (principal), con Smartproxy
+**Proveedor actual: [Evomi](https://evomi.com) (principal), con Smartproxy
 de respaldo.** Historial: Smartproxy (se agotaron los GB) → Evomi (se agotaron
-los GB) → **Geonode**. `lib/sync/proxy-config.ts` es ahora **multi-proveedor**:
-detecta el proveedor por la URL guardada en `app_settings["scraping.proxyUrl"]`
-y aplica el formato de sesión sticky/país oficial de CADA proveedor (son
-DISTINTOS entre sí). Para cambiar de proveedor **no hace falta tocar código**:
-basta pegar la URL base del proveedor en `/admin/configuracion`.
+los GB) → Geonode → **Evomi** (de nuevo, producto "core residential").
+`lib/sync/proxy-config.ts` es **multi-proveedor**: detecta el proveedor por la
+URL guardada en `app_settings["scraping.proxyUrl"]` y aplica el formato de
+sesión sticky/país oficial de CADA proveedor (son DISTINTOS entre sí). Para
+cambiar de proveedor **no hace falta tocar código**: basta pegar la URL base
+del proveedor en `/admin/configuracion`. Geonode se sigue soportando (se
+detecta por host/username) por si hace falta volver a él.
 
 El resto de este documento (§1-§9) describe el trabajo original con Smartproxy —
 sigue siendo válido para entender el *problema* (cómo esconde Idealista el
@@ -24,49 +26,43 @@ proveedor de las IPs.
 
 | Proveedor | Modificadores en | lifetime | Sticky | Ejemplo |
 |---|---|---|---|---|
-| **Geonode** (principal) | **USERNAME** | **segundos** (máx 86400) | puerto **10000-10900** | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:1000X` |
+| **Evomi** (principal) | **PASSWORD** | minutos (máx 120) | mismo puerto | `http://USER:PASS_country-XX_session-<id>_lifetime-<min>@core-residential.evomi.com:1000` |
 | **Smartproxy** (respaldo) | **USERNAME** | — | mismo puerto | `http://USER-session-<id>:PASS@host:puerto` |
-| **Evomi** (legacy) | **PASSWORD** | minutos (máx 120) | mismo puerto | `http://USER:PASS_country-XX_session-<id>_lifetime-<min>@host:1000` |
+| **Geonode** (soportado) | **USERNAME** | **segundos** (máx 86400) | puerto **10000-10900** | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:1000X` |
 
-Detalles de **Geonode** (docs.geonode.com):
-- Los modificadores van AÑADIDOS AL USERNAME (`-type-residential`, `-country-`,
-  `-session-`, `-lifetime-`), NO al password (opuesto a Evomi).
-- `-session-` = string **alfanumérico de exactamente 8 caracteres**.
-- `-lifetime-` = duración en **SEGUNDOS** (Evomi era minutos), máximo 86400 (24h).
-- `-country-` = ISO2 en **minúscula** (`-country-es`). "worldwide" = sin país.
-- Geonode **siempre es residencial** → el código siempre añade `-type-residential`.
-- Puertos (HTTP): rotativo **9000-9010**, sticky **10000-10900**. El código
-  cambia el puerto rotativo por uno sticky automáticamente al anclar sesión.
-  Como Geonode advierte que "un puerto asignado a un país no puede reusarse para
-  otro país", y el flujo rota países en los reintentos, el puerto sticky se
-  **deriva de sesión+país** (dentro de 10000-10900): misma búsqueda = mismo
-  puerto (IP estable); distinto país/reintento = puerto distinto (sin conflicto).
-- La rotación de país en reintentos usa `COUNTRY_ROTATION`
-  (worldwide, ES, DE, FR, GB, IT, PT, US), configurable con
-  `PROXY_COUNTRY_ROTATION` (o el antiguo `EVOMI_COUNTRY_ROTATION`).
+Detalles de **Evomi** (docs.evomi.com):
+- Los modificadores van AÑADIDOS AL PASSWORD (`_country-`, `_session-`,
+  `_lifetime-`), separados por `_`, NO al username (opuesto a Geonode/Smartproxy).
+- `_country-` = **UN solo país** por sesión (`_country-ES`) — Evomi NO admite
+  listas de países separadas por coma en un mismo credential; si hace falta
+  probar varios, se hace uno por reintento (ver `COUNTRY_ROTATION`).
+- `_session-` = id alfanumérico (6-10 caracteres).
+- `_lifetime-` = duración en **MINUTOS**, máximo 120.
+- Endpoint del producto "core residential" contratado: `core-residential.evomi.com:1000`
+  (HTTP). La credencial base (usuario/contraseña) se pega **sin modificadores**
+  en `/admin/configuracion` — el código añade `_country-`/`_session-`/`_lifetime-`
+  en cada llamada real.
+- `normalizeProxyUrl` repara el error típico de copiar/pegar sin el `@` antes
+  del host (`http://user:pass:host:puerto` → `http://user:pass@host:puerto`) y
+  quita cualquier modificador que haya quedado pegado en la credencial base.
 
-Tests: `node --experimental-strip-types scripts/test-proxy-sticky.mts` cubre
-los 3 formatos (18/18).
+Tests: `node --experimental-strip-types scripts/test-proxy-sticky.mts` y
+`node --experimental-strip-types scripts/test-evomi-sticky.mts`.
 
 ### Pendiente / próximos pasos
 
-1. **Pegar la credencial de Geonode en `/admin/configuracion`** (campo "URL del
-   proxy"). Se puede pegar **tal cual se copia del panel** — `normalizeProxyUrl`
-   admite varios formatos:
-   - la **línea de endpoint** de Geonode (botón copiar en «Endpoints format»):
-     `proxy.geonode.io:9000:geonode_USUARIO-type-residential:PASSWORD`
-   - o una URL: `http://geonode_USUARIO:PASSWORD@proxy.geonode.io:9000`
-
-   Usar el **puerto rotativo 9000**; el sistema detecta que es Geonode (por el
-   host / el prefijo `geonode_`), quita/normaliza los modificadores y cambia al
-   puerto sticky (10000-10900) cuando hace falta.
+1. **Pegar la credencial de Evomi en `/admin/configuracion`** (campo "URL del
+   proxy"), **solo la base** (usuario/contraseña, sin país ni sesión):
+   `http://USUARIO:PASSWORD@core-residential.evomi.com:1000`. `normalizeProxyUrl`
+   tolera errores comunes de copiado (falta de `@`, modificadores sobrantes),
+   pero lo más simple es pegar la credencial base tal cual.
 2. **Verificar con `proxy-health`.** Ejecutar
    `GET /api/admin/particulares/proxy-health` y mirar
    `proxy.sticky_verificado.honra_sticky` (debe ser `true`) y
    `datadome_estrategias.verdict` (si algún país da `t=fe`, CapSolver resuelve).
-3. **Si ningún país resuelve `t=fe`:** evaluar el pool **móvil (4G/LTE)** de
-   Geonode (los proxies móviles casi nunca reciben bloqueo duro de DataDome), o
-   seguir apoyándose en la fuente cross-portal `pisos.com` (ver §5 /
+3. **Si ningún país resuelve `t=fe`:** evaluar el pool **móvil (4G/LTE)** del
+   proveedor (los proxies móviles casi nunca reciben bloqueo duro de DataDome),
+   o seguir apoyándose en la fuente cross-portal `pisos.com` (ver §5 /
    `lib/sync/particulares/pisos-scraper.ts`), que no depende de DataDome y ya
    está funcionando en producción.
 4. **Confirmar en producción con el cron real** (`/api/cron/particulares/scrape`)
