@@ -1,6 +1,16 @@
 "use client";
 
-import { Check, CheckCheck, Clock, Loader2, Send, AlertCircle } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  Clock,
+  Loader2,
+  Send,
+  AlertCircle,
+  Plus,
+  Home,
+  X,
+} from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
@@ -9,6 +19,7 @@ import {
   sendZintoMessage,
   getZintoThread,
   markZintoConversationRead,
+  startWhatsAppConversation,
 } from "./zinto-actions";
 
 export type WhatsAppConversation = {
@@ -19,6 +30,8 @@ export type WhatsAppConversation = {
   lastTimestamp: string | null;
   lastMessage: string | null;
   unreadCount: number;
+  contactMessage?: string | null;
+  propertyTitle?: string | null;
 };
 
 export type WhatsAppMessage = {
@@ -63,6 +76,7 @@ export function WhatsAppChat({
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>(initialMessages);
+  const [showNew, setShowNew] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
@@ -144,25 +158,52 @@ export function WhatsAppChat({
 
   return (
     <section className="grid min-h-[640px] grid-cols-1 overflow-hidden rounded-2xl border border-gold/15 bg-cream-50/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:grid-cols-[320px_1fr] md:[height:640px]">
+      {showNew && (
+        <NewConversationModal
+          onClose={() => setShowNew(false)}
+          onCreated={(id) => {
+            setShowNew(false);
+            selectConversation(id);
+          }}
+        />
+      )}
       <WhatsAppList
         conversations={conversations}
         activeId={activeId}
         onSelect={selectConversation}
+        onNew={() => setShowNew(true)}
       />
 
       <div className="flex min-h-[440px] flex-col bg-cream-50/40 md:min-h-0 md:border-l md:border-gold/15">
         {active ? (
           <>
-            <header className="flex items-center gap-3 border-b border-gold/15 bg-cream-50/85 px-4 py-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 font-serif text-xs font-medium text-[#128C7E]">
-                {active.initials}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate font-serif text-base font-semibold text-ink">
-                  {active.displayName}
-                </p>
-                <p className="text-[11px] text-ink/55">+{active.phoneNumber}</p>
+            <header className="border-b border-gold/15 bg-cream-50/85 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 font-serif text-xs font-medium text-[#128C7E]">
+                  {active.initials}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-serif text-base font-semibold text-ink">
+                    {active.displayName}
+                  </p>
+                  <p className="text-[11px] text-ink/55">+{active.phoneNumber}</p>
+                </div>
               </div>
+              {(active.propertyTitle || active.contactMessage) && (
+                <div className="mt-2.5 rounded-lg border border-gold/15 bg-white/60 px-3 py-2">
+                  {active.propertyTitle && (
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-ink/70">
+                      <Home size={12} strokeWidth={1.75} className="text-[#128C7E]" />
+                      <span className="truncate">{active.propertyTitle}</span>
+                    </p>
+                  )}
+                  {active.contactMessage && (
+                    <p className="mt-1 line-clamp-2 text-[11px] italic text-ink/55">
+                      “{active.contactMessage}”
+                    </p>
+                  )}
+                </div>
+              )}
             </header>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5">
@@ -237,23 +278,41 @@ function WhatsAppList({
   conversations,
   activeId,
   onSelect,
+  onNew,
 }: {
   conversations: WhatsAppConversation[];
   activeId: string | null;
   onSelect: (id: string) => void;
+  onNew: () => void;
 }) {
+  const header = (
+    <li className="flex items-center justify-between border-b border-gold/15 px-4 py-3">
+      <p className="font-serif text-sm font-semibold text-ink">WhatsApp</p>
+      <button
+        type="button"
+        onClick={onNew}
+        title="Nueva conversación"
+        className="flex items-center gap-1 rounded-lg bg-[#128C7E] px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-[#0e6f64]"
+      >
+        <Plus size={13} strokeWidth={2} />
+        Nueva
+      </button>
+    </li>
+  );
+
   if (conversations.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-ink/55">
-        No hay conversaciones de WhatsApp todavía.
-      </div>
+      <ul className="flex flex-col overflow-y-auto md:max-h-full">
+        {header}
+        <li className="flex flex-1 items-center justify-center p-6 text-center text-sm text-ink/55">
+          No hay conversaciones de WhatsApp todavía.
+        </li>
+      </ul>
     );
   }
   return (
     <ul className="flex flex-col overflow-y-auto md:max-h-full">
-      <li className="border-b border-gold/15 px-4 py-3">
-        <p className="font-serif text-sm font-semibold text-ink">WhatsApp</p>
-      </li>
+      {header}
       {conversations.map((c) => {
         const active = c.id === activeId;
         return (
@@ -296,6 +355,106 @@ function WhatsAppList({
         );
       })}
     </ul>
+  );
+}
+
+function NewConversationModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const result = await startWhatsAppConversation(phone, name);
+      if (result.ok) {
+        onCreated(result.id);
+      } else {
+        setError(
+          result.error === "invalid_phone"
+            ? "Número inválido. Usa prefijo internacional (ej. 34612345678)."
+            : "No se pudo crear la conversación.",
+        );
+      }
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-gold/20 bg-cream-50 p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-serif text-base font-semibold text-ink">
+            Nueva conversación
+          </h3>
+          <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium text-ink/65">
+              Número de WhatsApp (prefijo internacional)
+            </span>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="34612345678"
+              autoFocus
+              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium text-ink/65">
+              Nombre (opcional)
+            </span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre del contacto"
+              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            />
+          </label>
+          {error && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-gold/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/5"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={pending || phone.trim().length === 0}
+              className="flex items-center gap-2 rounded-xl bg-[#128C7E] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0e6f64] disabled:opacity-50"
+            >
+              {pending && <Loader2 size={14} className="animate-spin" />}
+              Abrir chat
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 

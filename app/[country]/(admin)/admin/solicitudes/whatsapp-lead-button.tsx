@@ -12,9 +12,17 @@ import { openWhatsAppConversation } from "./zinto-lead-actions";
  */
 export function WhatsAppLeadButton({
   phone,
+  name,
+  message,
+  propertyTitle,
+  leadId,
   size = 11,
 }: {
   phone: string;
+  name?: string | null;
+  message?: string | null;
+  propertyTitle?: string | null;
+  leadId?: string | null;
   size?: number;
 }) {
   const [pending, startTransition] = useTransition();
@@ -28,7 +36,12 @@ export function WhatsAppLeadButton({
     e.stopPropagation();
     setError(false);
     startTransition(async () => {
-      const result = await openWhatsAppConversation(phone);
+      const result = await openWhatsAppConversation(phone, {
+        name,
+        message,
+        propertyTitle,
+        leadId,
+      });
       if (result.ok) {
         router.push(`${config.prefix}/mensajes?tab=whatsapp&w=${result.id}`);
       } else {

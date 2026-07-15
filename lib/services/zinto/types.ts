@@ -64,6 +64,10 @@ export interface ZintoConversation {
   last_message_at?: string;
   last_message?: string;
   unread_count?: number;
+  contact_name?: string | null;
+  contact_message?: string | null;
+  property_title?: string | null;
+  lead_id?: string | null;
   created_at: string;
   updated_at?: string;
 }
