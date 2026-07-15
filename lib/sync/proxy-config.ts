@@ -4,20 +4,20 @@ import { createAdminClient } from "@/lib/db/admin";
 // ─────────────────────────────────────────────────────────────────────────────
 // Proxy residencial — MULTI-PROVEEDOR con autodetección por la URL guardada.
 //
-// Proveedor PRINCIPAL: Geonode (docs.geonode.com). Respaldo: Smartproxy.
-// También se sigue soportando Evomi (se detecta por el host de la URL), por si
-// hay que volver atrás. NO hace falta tocar código para cambiar de proveedor:
-// basta con pegar la URL base del proveedor en app_settings["scraping.proxyUrl"]
-// vía /admin/configuracion; este módulo detecta el formato correcto por el host
-// (o por el prefijo del usuario) y construye las sesiones sticky/geo según la
-// documentación oficial de CADA proveedor, que son DISTINTAS entre sí:
+// Proveedor PRINCIPAL: Evomi (evomi.com). Respaldo: Geonode (docs.geonode.com).
+// También se sigue soportando Smartproxy como tercer respaldo. NO hace falta
+// tocar código para cambiar de proveedor: basta con pegar la URL base del
+// proveedor en app_settings["scraping.proxyUrl"] vía /admin/configuracion;
+// este módulo detecta el formato correcto por el host (o por el prefijo del
+// usuario) y construye las sesiones sticky/geo según la documentación oficial
+// de CADA proveedor, que son DISTINTAS entre sí:
 //
+//   • Evomi     → modificadores en el PASSWORD, lifetime en MINUTOS.
+//       http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000
 //   • Geonode   → modificadores en el USERNAME, lifetime en SEGUNDOS.
 //       http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:10000
 //       Puertos: rotativo 9000-9010, sticky 10000 (HTTP). Sesión = 8 alfanum.
 //       country = ISO2 en minúscula. lifetime máx 86400s (24h).
-//   • Evomi     → modificadores en el PASSWORD, lifetime en MINUTOS.
-//       http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000
 //   • Smartproxy→ modificadores en el USERNAME (estilo Decodo), sesión sin
 //       duración fija en la propia URL de gateway.
 //       http://USER-session-<id>:PASS@host:puerto

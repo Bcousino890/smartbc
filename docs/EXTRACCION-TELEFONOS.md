@@ -5,11 +5,11 @@
 > infraestructura (proxy residencial + CapSolver). Sirve de referencia para
 > retomar el problema.
 
-## 0. Estado actual (proveedor PRINCIPAL: Geonode · RESPALDO: Smartproxy)
+## 0. Estado actual (proveedor PRINCIPAL: Evomi · RESPALDO: Geonode · TERCERO: Smartproxy)
 
-**Proveedor actual: [Geonode](https://geonode.com) (principal), con Smartproxy
-de respaldo.** Historial: Smartproxy (se agotaron los GB) → Evomi (se agotaron
-los GB) → **Geonode**. `lib/sync/proxy-config.ts` es ahora **multi-proveedor**:
+**Proveedor actual: [Evomi](https://evomi.com) (principal), con Geonode
+de respaldo y Smartproxy como tercer fallback.** Historial: Smartproxy (se agotaron los GB) → Evomi (se agotaron
+los GB) → Geonode → **Evomi** (volver al original, más eficiente). `lib/sync/proxy-config.ts` es **multi-proveedor**:
 detecta el proveedor por la URL guardada en `app_settings["scraping.proxyUrl"]`
 y aplica el formato de sesión sticky/país oficial de CADA proveedor (son
 DISTINTOS entre sí). Para cambiar de proveedor **no hace falta tocar código**:
@@ -24,9 +24,9 @@ proveedor de las IPs.
 
 | Proveedor | Modificadores en | lifetime | Sticky | Ejemplo |
 |---|---|---|---|---|
-| **Geonode** (principal) | **USERNAME** | **segundos** (máx 86400) | puerto **10000-10900** | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:1000X` |
-| **Smartproxy** (respaldo) | **USERNAME** | — | mismo puerto | `http://USER-session-<id>:PASS@host:puerto` |
-| **Evomi** (legacy) | **PASSWORD** | minutos (máx 120) | mismo puerto | `http://USER:PASS_country-XX_session-<id>_lifetime-<min>@host:1000` |
+| **Evomi** (principal) | **PASSWORD** | **minutos** (máx 120) | mismo puerto | `http://USER:PASS_country-ES_session-<id>_lifetime-<min>@host:1000` |
+| **Geonode** (respaldo) | **USERNAME** | segundos (máx 86400) | puerto 10000-10900 | `http://USER-type-residential-country-es-session-<8>-lifetime-<seg>:PASS@host:10000` |
+| **Smartproxy** (tercero) | **USERNAME** | — | mismo puerto | `http://USER-session-<id>:PASS@host:puerto` |
 
 Detalles de **Geonode** (docs.geonode.com):
 - Los modificadores van AÑADIDOS AL USERNAME (`-type-residential`, `-country-`,
@@ -51,9 +51,9 @@ los 3 formatos (18/18).
 ### Pendiente / próximos pasos
 
 **ACTUALIZACIÓN (julio 2026):** Se confirmó que **TODOS los proxies residenciales
-(Geonode, Smartproxy, etc.) están bloqueados por DataDome** con `t=bv` (hard ban)
-en Idealista. Esto significa que la vía de proxy residencial NO es viable en este
-momento. Se recomienda:
+(Geonode, Smartproxy, Evomi, etc.) están bloqueados por DataDome** con `t=bv` 
+(hard ban) en Idealista. Esto significa que la vía de proxy residencial NO es viable
+en este momento. Se recomienda:
 
 1. **Cross-match desde pisos.com** (RECOMENDADO — ya implementado) — ver §5.5
    más abajo. Empareja anuncios de Idealista sin teléfono con anuncios de
@@ -62,12 +62,19 @@ momento. Se recomienda:
    `/admin/particulares` → "Cross-match de teléfonos".
 
 2. **Proxy móvil (4G/LTE)** — si es crítico extraer desde Idealista directamente.
-   Geonode, IPRoyal, Bright Data, Oxylabs ofrecen pools móviles. Son más caros
-   (~$2–5/GB), pero DataDome casi nunca los bloquea.
+   DataImpulse, HydraProxy, LTESocks ofrecen pools móviles. Son más caros
+   (~$2–5/GB), pero DataDome casi nunca los bloquea. Probable método de Casafari.
 
 3. **Playwright + Patchright** — navegador real desde el VPS sin proxy premium.
    Técnicamente viable pero lento (~3-5s/anuncio) y requiere cookie-harvesting
    para reutilizar la cookie DataDome entre reintentos.
+
+**Configuración de Evomi:** Para usar Evomi como principal, pega en
+`/admin/configuracion` → "URL del proxy":
+```
+http://USUARIO:PASSWORD@proxy.evomi.com:1000
+```
+El sistema auto-detecta Evomi y aplica los modificadores de PASSWORD automáticamente.
 
 ## 1. El objetivo
 
