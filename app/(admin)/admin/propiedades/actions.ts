@@ -50,7 +50,7 @@ function normalizeSlug(raw: string): string {
 export async function createProperty(
   input: CreatePropertyInput,
 ): Promise<CreatePropertyResult> {
-  await assertPermission("properties", "create");
+  await assertPermission("properties", "create", { country: input.country });
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -142,7 +142,8 @@ export type UploadPropertyPhotoResult =
 export async function uploadPropertyPhoto(
   formData: FormData,
 ): Promise<UploadPropertyPhotoResult> {
-  await assertPermission("properties", "edit");
+  const country = String(formData.get("country") ?? "") || undefined;
+  await assertPermission("properties", "edit", { country });
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;

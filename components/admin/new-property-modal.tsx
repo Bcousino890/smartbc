@@ -138,7 +138,14 @@ export function NewPropertyModal({
     agencySlug.length > 0 &&
     price > 0 &&
     !isPending &&
-    (!isCL || commune.trim().length > 0);
+    (!isCL ||
+      (commune.trim().length > 0 &&
+        region.trim().length > 0 &&
+        address.trim().length > 0 &&
+        description.trim().length > 0 &&
+        propertyType.length > 0 &&
+        currency.length > 0 &&
+        photos.length >= 4));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,59 +153,68 @@ export function NewPropertyModal({
     setFeedback({ kind: "idle" });
 
     startTransition(async () => {
-      const result = await createProperty({
-        title: title.trim(),
-        agencySlug,
-        operation,
-        stayType: operation === "alquiler" ? stayType : undefined,
-        price,
-        bedrooms,
-        bathrooms,
-        squareMeters: squareMeters || undefined,
-        coveredAreaM2: isCL && coveredAreaM2 > 0 ? coveredAreaM2 : undefined,
-        parkingLots: isCL && parkingLots > 0 ? parkingLots : undefined,
-        zone: isCL ? (commune.trim() || region) : zone,
-        address: isCL ? address.trim() || undefined : undefined,
-        commune: isCL ? commune.trim() || undefined : undefined,
-        region: isCL ? region : undefined,
-        propertyType: isCL ? propertyType : undefined,
-        currency: isCL ? currency : undefined,
-        country,
-        description: description.trim() || undefined,
-        externalReference: externalReference.trim() || undefined,
-      });
-      if (!result.ok) {
-        setFeedback({ kind: "error", msg: humanError(t, result.error) });
-        return;
-      }
-
-      // La propiedad ya existe: subimos las fotos con su slug. uploadPropertyPhoto
-      // necesita el slug para resolver el property_id, por eso no se puede subir
-      // antes de crearla. La primera foto se marca como portada (is_cover).
-      let photoError = false;
-      if (photos.length > 0) {
-        setUploadingPhotos(true);
-        for (let i = 0; i < photos.length; i++) {
-          const fd = new FormData();
-          fd.set("slug", result.slug);
-          fd.set("file", photos[i].file);
-          fd.set("isCover", i === 0 ? "true" : "false");
-          const up = await uploadPropertyPhoto(fd);
-          if (!up.ok) photoError = true;
+      try {
+        const result = await createProperty({
+          title: title.trim(),
+          agencySlug,
+          operation,
+          stayType: operation === "alquiler" ? stayType : undefined,
+          price,
+          bedrooms,
+          bathrooms,
+          squareMeters: squareMeters || undefined,
+          coveredAreaM2: isCL && coveredAreaM2 > 0 ? coveredAreaM2 : undefined,
+          parkingLots: isCL && parkingLots > 0 ? parkingLots : undefined,
+          zone: isCL ? (commune.trim() || region) : zone,
+          address: isCL ? address.trim() || undefined : undefined,
+          commune: isCL ? commune.trim() || undefined : undefined,
+          region: isCL ? region : undefined,
+          propertyType: isCL ? propertyType : undefined,
+          currency: isCL ? currency : undefined,
+          country,
+          description: description.trim() || undefined,
+          externalReference: externalReference.trim() || undefined,
+        });
+        if (!result.ok) {
+          setFeedback({ kind: "error", msg: humanError(t, result.error) });
+          return;
         }
-        setUploadingPhotos(false);
-      }
 
-      if (photoError) {
-        // La propiedad se creó igualmente; dejamos el modal abierto avisando para
-        // que el admin pueda reintentar las fotos restantes desde su ficha.
-        setFeedback({ kind: "error", msg: t("adminProps.new.photos.uploadFailed") });
+        // La propiedad ya existe: subimos las fotos con su slug. uploadPropertyPhoto
+        // necesita el slug para resolver el property_id, por eso no se puede subir
+        // antes de crearla. La primera foto se marca como portada (is_cover).
+        let photoError = false;
+        if (photos.length > 0) {
+          setUploadingPhotos(true);
+          for (let i = 0; i < photos.length; i++) {
+            const fd = new FormData();
+            fd.set("slug", result.slug);
+            fd.set("file", photos[i].file);
+            fd.set("isCover", i === 0 ? "true" : "false");
+            fd.set("country", country);
+            const up = await uploadPropertyPhoto(fd);
+            if (!up.ok) photoError = true;
+          }
+          setUploadingPhotos(false);
+        }
+
+        if (photoError) {
+          // La propiedad se creó igualmente; dejamos el modal abierto avisando para
+          // que el admin pueda reintentar las fotos restantes desde su ficha.
+          setFeedback({ kind: "error", msg: t("adminProps.new.photos.uploadFailed") });
+          router.refresh();
+          return;
+        }
+
+        onClose();
         router.refresh();
-        return;
+      } catch (err) {
+        // assertPermission lanza en vez de devolver { ok:false }; sin este catch
+        // el error quedaba silencioso y el botón "no hacía nada" para el usuario.
+        setUploadingPhotos(false);
+        const msg = err instanceof Error ? err.message : String(err);
+        setFeedback({ kind: "error", msg });
       }
-
-      onClose();
-      router.refresh();
     });
   };
 
