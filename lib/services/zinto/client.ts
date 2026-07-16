@@ -1,4 +1,4 @@
-import { ZintoMessage, ZintoChannelsResponse, ZintoChannel } from './types';
+import { ZintoMessage, ZintoChannelsResponse, ZintoChannel, ZintoMessageStatus } from './types';
 import { getZintoConfig } from './config';
 
 /** Max message length per Zinto spec (MESSAGE_TOO_LONG). */
@@ -35,24 +35,35 @@ export class ZintoApiError extends Error {
   }
 }
 
-async function zintoFetch(endpoint: string, options: RequestInit = {}) {
+interface ZintoFetchOptions extends RequestInit {
+  /** Sent as the `Idempotency-Key` header for safe retries of writes. */
+  idempotencyKey?: string;
+}
+
+/**
+ * Low-level Zinto API call. Adds Bearer auth, optional Idempotency-Key, and
+ * parses the documented error envelope: { error: { code, message, details, request_id } }.
+ */
+export async function zintoFetch(endpoint: string, options: ZintoFetchOptions = {}) {
   const config = await getZintoConfig();
   if (!config?.apiKey) {
     throw new ZintoApiError(400, 'Zinto is not configured', 'NOT_CONFIGURED');
   }
 
+  const { idempotencyKey, ...init } = options;
   const url = `${config.baseUrl}${endpoint}`;
-  const headers = {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+    ...(init.headers as Record<string, string>),
   };
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...init, headers });
 
   if (!response.ok) {
-    // Parse Zinto's documented error envelope:
-    // { success: false, error: { code, message, details } }
+    // Parse Zinto's documented error envelope. `details` may be a string
+    // (legacy) or an array of { field, issue } objects (current spec).
     let code: string | undefined;
     let message = `Zinto API error (${response.status})`;
     let details: string | undefined;
@@ -61,7 +72,12 @@ async function zintoFetch(endpoint: string, options: RequestInit = {}) {
       if (body?.error) {
         code = body.error.code;
         message = body.error.message || message;
-        details = body.error.details;
+        details =
+          typeof body.error.details === 'string'
+            ? body.error.details
+            : body.error.details
+              ? JSON.stringify(body.error.details)
+              : undefined;
       }
     } catch {
       // non-JSON body; keep generic message
@@ -73,13 +89,47 @@ async function zintoFetch(endpoint: string, options: RequestInit = {}) {
     throw new ZintoApiError(response.status, message, code, details, retryAfter);
   }
 
+  // 204 No Content etc.
+  if (response.status === 204) return null;
   return response.json();
+}
+
+/** Optional context stored alongside a message so inbound replies map back. */
+export interface SendMessageMetadata {
+  crm_contact_id?: string;
+  crm_lead_id?: string;
+  source?: string;
+}
+
+/**
+ * Normalize the /messages/send response. The live API may return either a
+ * wrapped envelope { success, data:{ messageId, status, ... } } or a flat
+ * { status:"accepted", message_id, channel_id, to, queued_at }. Callers rely
+ * on the { success, data } shape.
+ */
+function normalizeSendResponse(raw: any, channelId: number, to: string): ZintoMessage {
+  const data = raw?.data ?? raw ?? {};
+  const rawStatus: string = data.status ?? raw?.status ?? 'sent';
+  // "accepted"/"queued" mean the message was taken but not yet delivered.
+  const status: ZintoMessageStatus =
+    rawStatus === 'accepted' || rawStatus === 'queued' ? 'sent' : (rawStatus as ZintoMessageStatus);
+  return {
+    success: raw?.success !== false,
+    data: {
+      messageId: data.messageId ?? data.message_id ?? raw?.message_id ?? raw?.messageId ?? '',
+      status,
+      channelId: data.channelId ?? data.channel_id ?? channelId,
+      to: data.to ?? to,
+      sentAt: data.sentAt ?? data.queued_at ?? raw?.queued_at ?? new Date().toISOString(),
+    },
+  };
 }
 
 export async function sendWhatsAppMessage(
   channelId: number,
   to: string,
-  message: string
+  message: string,
+  opts?: { idempotencyKey?: string; metadata?: SendMessageMetadata }
 ): Promise<ZintoMessage> {
   const normalizedTo = normalizePhoneNumber(to);
 
@@ -99,14 +149,19 @@ export async function sendWhatsAppMessage(
     );
   }
 
-  return zintoFetch('/messages/send', {
+  const raw = await zintoFetch('/messages/send', {
     method: 'POST',
+    idempotencyKey: opts?.idempotencyKey,
     body: JSON.stringify({
-      channelId,
+      // Documented contract; the phone number is sent WITHOUT a leading "+".
+      channel_id: channelId,
       to: normalizedTo,
-      message,
+      message: { type: 'text', text: message },
+      ...(opts?.metadata ? { metadata: opts.metadata } : {}),
     }),
   });
+
+  return normalizeSendResponse(raw, channelId, normalizedTo);
 }
 
 export async function getZintoChannels(): Promise<ZintoChannelsResponse> {
@@ -117,8 +172,9 @@ export async function getZintoChannels(): Promise<ZintoChannelsResponse> {
 export async function getActiveChannel(channelId: number): Promise<ZintoChannel | null> {
   try {
     const response = await getZintoChannels();
-    const channel = response.data.find((c) => c.id === channelId);
-    if (channel && channel.status === 'active') {
+    const channel = (response.data || []).find((c) => Number(c.id) === Number(channelId));
+    // Treat missing/unknown status as active — the real API may omit it.
+    if (channel && channel.status !== 'inactive') {
       return channel;
     }
     return null;

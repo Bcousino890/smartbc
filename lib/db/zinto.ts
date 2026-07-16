@@ -113,7 +113,7 @@ export async function findConversationByPhone(
   return (data as ZintoConversation) || null;
 }
 
-const ALLOWED_STATUSES = ['pending', 'sent', 'delivered', 'failed'];
+const ALLOWED_STATUSES = ['pending', 'sent', 'delivered', 'read', 'failed'];
 
 export async function saveMessage(
   conversationId: string,
@@ -158,16 +158,16 @@ export async function saveMessage(
 /**
  * Update the delivery status of a sent message from a status webhook.
  *
- * Zinto's docs are internally inconsistent about the message identifier:
- * POST /messages/send returns a string ("msg_xxx") while the status webhook
- * reports a numeric id. Since there is no documented mapping between the two,
- * we match best-effort against BOTH columns: the numeric webhook id
- * (`zinto_numeric_id`) and the stored string id (`zinto_message_id`) compared
- * to the webhook id in string form. Whichever the real API populates will hit.
+ * The current Zinto contract uses the SAME string id everywhere: POST
+ * /messages/send returns `message_id` ("msg_xxx") and the status webhook
+ * reports `message.id` with that same value, so the primary match is the
+ * stored string id (`zinto_message_id`). We still OR in the legacy numeric
+ * column (`zinto_numeric_id`) so older instances that send a numeric id keep
+ * working.
  */
 export async function updateMessageStatusFromWebhook(
   webhookMessageId: number | string,
-  status: 'sent' | 'delivered' | 'failed'
+  status: 'sent' | 'delivered' | 'read' | 'failed'
 ): Promise<void> {
   const supabase = getSupabaseClient();
   const asString = String(webhookMessageId).replace(/[^\w.-]/g, '');

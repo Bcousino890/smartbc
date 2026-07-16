@@ -65,12 +65,20 @@ los mensajes que el cliente te escribe **entren al CRM**, se usa un **Flujo**:
      > necesita `from` (teléfono) y `message` (texto).
 4. **Guardar** y **activar** el flujo.
 
-## 4. Webhook de estado (opcional)
+## 4. Webhook de estado (sent/delivered/read/failed)
 
-Si Zinto permite configurar un webhook de estado (sent/delivered/failed) con
-firma `X-Webhook-Signature`, apúntalo también a
+Apunta el webhook de estado también a
 `https://portal.bcousinoprop.com/api/webhooks/zinto` y usa `ZINTO_WEBHOOK_SECRET`.
-El endpoint distingue automáticamente estado vs. mensaje entrante.
+El endpoint distingue automáticamente estado vs. mensaje entrante vs. evento de
+lead (por el header `X-Zinto-Event` o por la forma del payload).
+
+**Firma (HMAC-SHA256).** El handler acepta el esquema documentado por Zinto y el
+antiguo, para no romperse ante un cambio de config:
+- Header `X-Zinto-Signature: sha256=<hex>` con base `X-Zinto-Timestamp + "." + body`.
+- (compat) Header `X-Webhook-Signature` con base = body crudo o `JSON.stringify`.
+
+Estados soportados: `sent`, `delivered`, `read`, `failed`. El match del mensaje
+es por el `message.id` string (`msg_…`) que devuelve `/messages/send`.
 
 ## 5. Aplicar migraciones
 
@@ -87,6 +95,33 @@ Las tablas `zinto_conversations` y `zinto_messages` se crean con
 3. **Recibir:** responde desde el WhatsApp del cliente → en ~5 s aparece en el
    chat (polling) y la conversación sube con contador de no leídos.
 4. **BD:** `select * from zinto_messages order by created_at desc limit 5;`
+
+## 7. Leads / campañas / sincronización (módulo de la plataforma Zinto)
+
+Además de WhatsApp, la integración soporta el lado de **leads** de Zinto (la
+plataforma de prospección que alimenta al CRM). Misma API key y `ZINTO_BASE_URL`;
+la key debe tener habilitados los scopes `campaigns:*`, `leads:*`, `sync:*`.
+
+**Enviar (CRM → Zinto)** — funciones en `lib/services/zinto/leads.ts`:
+- `createCampaign()` → `POST /campaigns`
+- `upsertLead()` → `POST /leads` (idempotente por `external_id`)
+- `syncPreview()` → `POST /sync/preview` (dry-run: elegibles, duplicados, inválidos)
+- `syncExecute()` → `POST /sync/execute` (ejecuta el preview aprobado)
+
+Todas las escrituras envían `Idempotency-Key`, así que reintentar nunca duplica.
+
+**Recibir (Zinto → CRM)** — eventos `lead.*` al mismo webhook
+`/api/webhooks/zinto` (firmados con `ZINTO_WEBHOOK_SECRET`). Eventos soportados:
+`lead.created`, `lead.qualified`, `lead.approved_for_crm`, `lead.sent_to_crm`,
+`lead.accepted_by_crm`, `lead.duplicate`, `lead.rejected`, `lead.converted`,
+`lead.sync_failed`. El handler hace upsert en `zinto_leads` (match por
+`external_id` → `zinto_id` → teléfono), guarda auditoría en `zinto_lead_events`
+y responde `{ status: "accepted", crm_record_id, crm_event_id }` (o
+`{ status: "duplicate", ... }` si el lead ya existía).
+
+Tablas: `zinto_campaigns`, `zinto_leads`, `zinto_lead_events`, `zinto_sync_jobs`
+(migración `0097_zinto_leads.sql`). El estado `read` de WhatsApp se habilita con
+`0096_zinto_messages_read_status.sql`.
 
 ## Notas / limitaciones conocidas
 
