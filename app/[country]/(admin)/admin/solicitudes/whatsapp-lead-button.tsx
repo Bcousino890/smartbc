@@ -36,12 +36,16 @@ export function WhatsAppLeadButton({
     e.stopPropagation();
     setError(false);
     startTransition(async () => {
-      const result = await openWhatsAppConversation(phone, {
-        name,
-        message,
-        propertyTitle,
-        leadId,
-      });
+      const result = await openWhatsAppConversation(
+        phone,
+        {
+          name,
+          message,
+          propertyTitle,
+          leadId,
+        },
+        country,
+      );
       if (result.ok) {
         router.push(`${config.prefix}/mensajes?tab=whatsapp&w=${result.id}`);
       } else {
@@ -51,19 +55,26 @@ export function WhatsAppLeadButton({
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={pending}
-      title={error ? "No se pudo abrir el chat" : "Escribir por WhatsApp"}
-      className="inline-flex items-center gap-1 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
-    >
-      {pending ? (
-        <Loader2 size={size} strokeWidth={2} className="animate-spin" />
-      ) : (
-        <MessageCircle size={size} strokeWidth={2} />
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={pending}
+        title={error ? "No se pudo abrir el chat" : "Escribir por WhatsApp"}
+        className="inline-flex items-center gap-1 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+      >
+        {pending ? (
+          <Loader2 size={size} strokeWidth={2} className="animate-spin" />
+        ) : (
+          <MessageCircle size={size} strokeWidth={2} />
+        )}
+        WhatsApp
+      </button>
+      {error && (
+        <span className="text-[10px] font-medium text-red-500">
+          No se pudo abrir el chat
+        </span>
       )}
-      WhatsApp
-    </button>
+    </span>
   );
 }
