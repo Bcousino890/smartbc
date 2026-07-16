@@ -874,12 +874,6 @@ export async function fetchIdealistaPhoneViaAjax(
     }
   }
 
-  // Señaliza que DataDome dio bloqueo DURO (t=bv) en TODOS los intentos: la IP
-  // del proxy está baneada y no hay slider que resolver. En ese caso Playwright
-  // (que reintentaría con otra IP sticky de todos modos) sigue siendo válido,
-  // así que solo saltamos si agotamos los reintentos.
-  let hardBlocked = false;
-
   // ─── Step 1c: resolver el reto DataDome de /contact-phones con CapSolver ─────
   // Este es el camino que DE VERDAD funciona (verificado contra Idealista):
   //   1. /contact-phones responde 403 con el reto en el cuerpo. Para el endpoint
@@ -963,7 +957,6 @@ export async function fetchIdealistaPhoneViaAjax(
     if (challenge.url && challenge.type === "fe") {
       // t=fe → slider resoluble. Llamar a CapSolver con el MISMO proxy sticky
       // de este intento.
-      hardBlocked = false;
       try {
         const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
         console.log(`[idealista-phone-ajax] Resolviendo slider DataDome con CapSolver...`);
@@ -1032,7 +1025,6 @@ export async function fetchIdealistaPhoneViaAjax(
     } else if (challenge.type === "bv") {
       // Bloqueo duro: esta IP concreta está baneada por DataDome. Reintentar
       // con una IP sticky nueva (barato) en la siguiente vuelta del bucle.
-      hardBlocked = true;
       console.log(`[idealista-phone-ajax] ⛔ Intento ${attempt + 1}: bloqueo DURO (t=bv) — IP baneada, rotando a IP nueva`);
       if (debug) debug.push({ endpoint: `datadome-hard-block-attempt${attempt + 1}`, status: 0, bodySnippet: "t=bv — rotando IP" });
       continue;
@@ -1159,14 +1151,16 @@ export async function fetchIdealistaPhoneViaAjax(
     }
   }
 
-  // Si ya sabemos que la IP está en bloqueo duro (t=bv), Playwright con la misma
-  // IP tampoco pasará: no malgastar ~60s de navegador headless.
-  if (hardBlocked) {
-    console.log(`[idealista-phone-ajax] ✗ Bloqueo duro DataDome — saltando Playwright (misma IP baneada)`);
-    return { phone: null, phone_confidence: null, contact_name: null, debug };
-  }
-
-  console.log(`[idealista-phone-ajax] DataDome pre-auth fallido. Intentando Playwright...`);
+  // NOTA: antes se saltaba Playwright si `curl` recibía bloqueo duro (t=bv),
+  // asumiendo que el veredicto es puramente por reputación de IP y que un
+  // browser real en la MISMA IP recibiría el mismo bloqueo. Esa asunción no
+  // está verificada: DataDome también fingerprint-ea el cliente TLS/HTTP a
+  // nivel de handshake (JA3), y `curl` tiene una huella claramente distinta a
+  // la de Chrome real. `fetchIdealistaPhoneViaPlaywright` navega con Chromium
+  // real (playwright-extra + stealth), así que puede recibir un veredicto
+  // DISTINTO al de curl en la misma IP. Se prueba siempre; el coste (~60s) ya
+  // se paga cuando el resto de rutas fallan.
+  console.log(`[idealista-phone-ajax] DataDome pre-auth fallido. Intentando Playwright (independiente del veredicto de curl)...`);
 
   try {
     const { fetchIdealistaPhoneViaPlaywright } = await import(
