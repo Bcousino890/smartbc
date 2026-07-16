@@ -36,11 +36,18 @@ async function getIp(proxyUrl: string): Promise<string | null> {
 // session funciona de verdad (misma IP en 2 llamadas de la misma sesión), y
 // qué veredicto da DataDome sobre las IPs del pool AHORA MISMO (slider
 // resoluble t=fe vs bloqueo duro t=bv). El formato de la sesión lo construye
-// proxy-config según el proveedor detectado por la URL. Solo Owner/Admin.
+// proxy-config según el proveedor detectado por la URL. Owner/Admin logueado,
+// o `Authorization: Bearer ${CRON_SECRET}` (mismo patrón que los endpoints de
+// /api/cron/*) para poder disparar el diagnóstico sin sesión de navegador.
 export async function GET(request: Request) {
-  const profile = await getCurrentProfile().catch(() => null);
-  if (!profile || !["owner", "admin"].includes(profile.role)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const authHeader = request.headers.get("Authorization");
+  const hasCronSecret =
+    !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  if (!hasCronSecret) {
+    const profile = await getCurrentProfile().catch(() => null);
+    if (!profile || !["owner", "admin"].includes(profile.role)) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
   }
 
   const url = new URL(request.url);
