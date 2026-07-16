@@ -214,6 +214,72 @@ export function ProxyConfigClient({
           <li>The system auto-detects the provider and applies sticky sessions</li>
         </ul>
       </div>
+
+      <PhoneExtractionTester />
+    </div>
+  );
+}
+
+function PhoneExtractionTester() {
+  const [url, setUrl] = useState("https://www.idealista.com/inmueble/102383577/");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const runTest = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/particulares/extract-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div>
+        <h3 className="font-semibold text-sm">Testear extracción de teléfono (Idealista)</h3>
+        <p className="text-xs text-gray-500">
+          Corre el flujo real (proxy + CapSolver + fallback Playwright) contra un anuncio concreto.
+          Puede tardar hasta 40s.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://www.idealista.com/inmueble/XXXXXXXX/"
+          className="flex-1 px-3 py-2 border rounded text-sm font-mono"
+        />
+        <button
+          onClick={runTest}
+          disabled={loading}
+          className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+        >
+          {loading ? "Probando..." : "Test"}
+        </button>
+      </div>
+      {error && (
+        <div className="rounded bg-red-50 border border-red-200 p-2 text-xs text-red-700">
+          Error: {error}
+        </div>
+      )}
+      {result && (
+        <pre className="bg-gray-900 text-green-400 p-3 rounded text-xs overflow-x-auto max-h-96 overflow-y-auto">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }
