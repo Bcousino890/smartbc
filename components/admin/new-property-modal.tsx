@@ -137,15 +137,7 @@ export function NewPropertyModal({
     title.trim().length > 0 &&
     agencySlug.length > 0 &&
     price > 0 &&
-    !isPending &&
-    (!isCL ||
-      (commune.trim().length > 0 &&
-        region.trim().length > 0 &&
-        address.trim().length > 0 &&
-        description.trim().length > 0 &&
-        propertyType.length > 0 &&
-        currency.length > 0 &&
-        photos.length >= 4));
+    !isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

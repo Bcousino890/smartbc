@@ -181,6 +181,7 @@ export async function uploadPropertyPhoto(
     });
 
   if (uploadResult.error) {
+    console.error("[uploadPropertyPhoto] storage error:", uploadResult.error);
     return { ok: false, error: uploadResult.error.message };
   }
 
@@ -213,6 +214,7 @@ export async function uploadPropertyPhoto(
     is_cover: isCover,
   });
   if (photoInsert.error) {
+    console.error("[uploadPropertyPhoto] insert error:", photoInsert.error);
     return { ok: false, error: photoInsert.error.message };
   }
 

@@ -50,9 +50,13 @@ export function PropertyPhotosModal({
     setError(null);
 
     startTransition(async () => {
-      // Subimos en serie: cada upload depende del estado de cover anterior
-      // y queremos detectar el primer error sin condiciones de carrera.
+      // Subimos en serie (cada upload depende del estado de cover anterior),
+      // pero SIN abortar el lote ante el primer error: antes un solo fallo
+      // (p.ej. un archivo que supera el límite del storage) cortaba el resto
+      // en silencio y el admin veía "se subieron 64, quedaron 11" sin saber
+      // por qué. Ahora seguimos con el resto y reportamos cuáles fallaron.
       let coverAssigned = hasCover;
+      const failed: string[] = [];
       for (const file of files) {
         const formData = new FormData();
         formData.set("slug", slug);
@@ -65,9 +69,13 @@ export function PropertyPhotosModal({
           coverAssigned = coverAssigned || isCover;
           setPhotos((prev) => [...prev, { url: result.url, isCover }]);
         } else {
-          setError(result.error);
-          break;
+          failed.push(`${file.name}: ${result.error}`);
         }
+      }
+      if (failed.length > 0) {
+        setError(
+          `${failed.length} de ${files.length} fotos no se pudieron subir:\n${failed.join("\n")}`,
+        );
       }
       router.refresh();
       if (inputRef.current) inputRef.current.value = "";
@@ -189,7 +197,7 @@ export function PropertyPhotosModal({
         </div>
 
         {error && (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+          <p className="mt-3 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
             {error}
           </p>
         )}
