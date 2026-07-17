@@ -884,6 +884,7 @@ export async function deletePropertyMedia(
   mediaId: string,
   storagePath: string,
 ): Promise<DeleteMediaResult> {
+  await assertPermission("properties", "edit");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;

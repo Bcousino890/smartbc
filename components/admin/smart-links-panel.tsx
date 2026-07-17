@@ -54,12 +54,16 @@ export function SmartLinksPanel({
     e.preventDefault();
     setError(null);
     startCreate(async () => {
-      const res = await createShareLink(slug, label || null);
-      if (res.ok) {
-        setLabel("");
-        router.refresh();
-      } else {
-        setError(res.error);
+      try {
+        const res = await createShareLink(slug, label || null);
+        if (res.ok) {
+          setLabel("");
+          router.refresh();
+        } else {
+          setError(res.error);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo crear el SmartLink.");
       }
     });
   };
@@ -139,8 +143,13 @@ function LinkRow({ link, slug }: { link: SmartLinkRow; slug: string }) {
   const handleDelete = () => {
     if (!confirm(t("adminProps.smartLinks.confirmDelete"))) return;
     startTransition(async () => {
-      const res = await deleteShareLink(link.id, slug);
-      if (res.ok) router.refresh();
+      try {
+        const res = await deleteShareLink(link.id, slug);
+        if (res.ok) router.refresh();
+        else window.alert(res.error);
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "No se pudo eliminar el SmartLink.");
+      }
     });
   };
 
