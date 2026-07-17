@@ -228,20 +228,29 @@ export function PropertyEditView({
     if (!videoUrl.trim()) return;
     setAddingVideo(true);
     setVideoError(null);
-    const res = await addPropertyVideo(property.slug, videoUrl.trim());
-    if (res.ok) {
-      setVideos((v) => [...v, res.item]);
-      setVideoUrl("");
-    } else {
-      setVideoError(res.error);
+    try {
+      const res = await addPropertyVideo(property.slug, videoUrl.trim());
+      if (res.ok) {
+        setVideos((v) => [...v, res.item]);
+        setVideoUrl("");
+      } else {
+        setVideoError(res.error);
+      }
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "No se pudo añadir el vídeo.");
+    } finally {
+      setAddingVideo(false);
     }
-    setAddingVideo(false);
   }
 
   async function handleDeleteVideo(item: MediaItem) {
     if (!confirm("¿Eliminar este video?")) return;
-    await deletePropertyMedia(property.slug, item.id, item.storage_path);
-    setVideos((v) => v.filter((x) => x.id !== item.id));
+    try {
+      await deletePropertyMedia(property.slug, item.id, item.storage_path);
+      setVideos((v) => v.filter((x) => x.id !== item.id));
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "No se pudo eliminar el vídeo.");
+    }
   }
 
   async function handleVideoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -284,22 +293,31 @@ export function PropertyEditView({
     if (!files.length) return;
     setPlanError(null);
     setUploadingPlan(true);
-    for (const file of files) {
-      const fd = new FormData();
-      fd.set("slug", property.slug);
-      fd.set("file", file);
-      const res = await uploadPropertyPlan(fd);
-      if (res.ok) setPlans((p) => [...p, res.item]);
-      else { setPlanError(res.error); break; }
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.set("slug", property.slug);
+        fd.set("file", file);
+        const res = await uploadPropertyPlan(fd);
+        if (res.ok) setPlans((p) => [...p, res.item]);
+        else { setPlanError(res.error); break; }
+      }
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "No se pudo subir el plano.");
+    } finally {
+      setUploadingPlan(false);
+      if (planInputRef.current) planInputRef.current.value = "";
     }
-    setUploadingPlan(false);
-    if (planInputRef.current) planInputRef.current.value = "";
   }
 
   async function handleDeletePlan(item: MediaItem) {
     if (!confirm("¿Eliminar este plano?")) return;
-    await deletePropertyMedia(property.slug, item.id, item.storage_path);
-    setPlans((p) => p.filter((x) => x.id !== item.id));
+    try {
+      await deletePropertyMedia(property.slug, item.id, item.storage_path);
+      setPlans((p) => p.filter((x) => x.id !== item.id));
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "No se pudo eliminar el plano.");
+    }
   }
 
   function getEmbedUrl(url: string): string | null {
@@ -421,39 +439,46 @@ export function PropertyEditView({
     e.preventDefault();
     setSaveState({ kind: "idle" });
     startTransition(async () => {
-      const res = await updateProperty({
-        slug: property.slug,
-        title,
-        titleRent: isDualOperation ? titleRent || null : null,
-        description: description || null,
-        price,
-        bedrooms,
-        bathrooms,
-        squareMeters: squareMeters === "" ? null : Number(squareMeters),
-        zone,
-        address: address || null,
-        // Coordenadas fijadas en el mapa (0 = sin fijar → null).
-        latitude: latitude || null,
-        longitude: longitude || null,
-        operations,
-        rentPrice: isDualOperation
-          ? (rentPrice === "" ? null : Number(rentPrice))
-          : null,
-        stay: stay || null,
-        availableFrom: availableFrom || null,
-        status,
-        ownerName: ownerName || null,
-        ownerPhone: ownerPhone || null,
-        ownerEmail: ownerEmail || null,
-        internalNotes: internalNotes || null,
-        featuresManual,
-        publishedWeb,
-      });
-      if (res.ok) {
-        setSaveState({ kind: "saved", at: Date.now() });
-        router.refresh();
-      } else {
-        setSaveState({ kind: "error", msg: res.error });
+      try {
+        const res = await updateProperty({
+          slug: property.slug,
+          title,
+          titleRent: isDualOperation ? titleRent || null : null,
+          description: description || null,
+          price,
+          bedrooms,
+          bathrooms,
+          squareMeters: squareMeters === "" ? null : Number(squareMeters),
+          zone,
+          address: address || null,
+          // Coordenadas fijadas en el mapa (0 = sin fijar → null).
+          latitude: latitude || null,
+          longitude: longitude || null,
+          operations,
+          rentPrice: isDualOperation
+            ? (rentPrice === "" ? null : Number(rentPrice))
+            : null,
+          stay: stay || null,
+          availableFrom: availableFrom || null,
+          status,
+          ownerName: ownerName || null,
+          ownerPhone: ownerPhone || null,
+          ownerEmail: ownerEmail || null,
+          internalNotes: internalNotes || null,
+          featuresManual,
+          publishedWeb,
+        });
+        if (res.ok) {
+          setSaveState({ kind: "saved", at: Date.now() });
+          router.refresh();
+        } else {
+          setSaveState({ kind: "error", msg: res.error });
+        }
+      } catch (err) {
+        setSaveState({
+          kind: "error",
+          msg: err instanceof Error ? err.message : "No se pudo guardar la propiedad.",
+        });
       }
     });
   };

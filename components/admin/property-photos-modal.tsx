@@ -57,28 +57,33 @@ export function PropertyPhotosModal({
       // por qué. Ahora seguimos con el resto y reportamos cuáles fallaron.
       let coverAssigned = hasCover;
       const failed: string[] = [];
-      for (const file of files) {
-        const formData = new FormData();
-        formData.set("slug", slug);
-        formData.set("file", file);
-        formData.set("isCover", String(!coverAssigned));
+      try {
+        for (const file of files) {
+          const formData = new FormData();
+          formData.set("slug", slug);
+          formData.set("file", file);
+          formData.set("isCover", String(!coverAssigned));
 
-        const result = await uploadPropertyPhoto(formData);
-        if (result.ok) {
-          const isCover = !coverAssigned;
-          coverAssigned = coverAssigned || isCover;
-          setPhotos((prev) => [...prev, { url: result.url, isCover }]);
-        } else {
-          failed.push(`${file.name}: ${result.error}`);
+          const result = await uploadPropertyPhoto(formData);
+          if (result.ok) {
+            const isCover = !coverAssigned;
+            coverAssigned = coverAssigned || isCover;
+            setPhotos((prev) => [...prev, { url: result.url, isCover }]);
+          } else {
+            failed.push(`${file.name}: ${result.error}`);
+          }
         }
+        if (failed.length > 0) {
+          setError(
+            `${failed.length} de ${files.length} fotos no se pudieron subir:\n${failed.join("\n")}`,
+          );
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudieron subir las fotos.");
+      } finally {
+        router.refresh();
+        if (inputRef.current) inputRef.current.value = "";
       }
-      if (failed.length > 0) {
-        setError(
-          `${failed.length} de ${files.length} fotos no se pudieron subir:\n${failed.join("\n")}`,
-        );
-      }
-      router.refresh();
-      if (inputRef.current) inputRef.current.value = "";
     });
   };
 
@@ -91,12 +96,16 @@ export function PropertyPhotosModal({
     }
     setError(null);
     startTransition(async () => {
-      const result = await deletePropertyPhoto({ slug, photoUrl: url });
-      if (result.ok) {
-        setPhotos((prev) => prev.filter((p) => p.url !== url));
-        router.refresh();
-      } else {
-        setError(result.error);
+      try {
+        const result = await deletePropertyPhoto({ slug, photoUrl: url });
+        if (result.ok) {
+          setPhotos((prev) => prev.filter((p) => p.url !== url));
+          router.refresh();
+        } else {
+          setError(result.error);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo eliminar la foto.");
       }
     });
   };
@@ -106,12 +115,16 @@ export function PropertyPhotosModal({
     setPhotos(next);
     setError(null);
     startTransition(async () => {
-      const res = await reorderPropertyPhotos(
-        slug,
-        next.map((p) => p.url),
-      );
-      if (!res.ok) setError(res.error);
-      router.refresh();
+      try {
+        const res = await reorderPropertyPhotos(
+          slug,
+          next.map((p) => p.url),
+        );
+        if (!res.ok) setError(res.error);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo reordenar las fotos.");
+      }
     });
   };
 
@@ -135,12 +148,16 @@ export function PropertyPhotosModal({
   const persistCurrentOrder = () => {
     setError(null);
     startTransition(async () => {
-      const res = await reorderPropertyPhotos(
-        slug,
-        orderRef.current.map((p) => p.url),
-      );
-      if (!res.ok) setError(res.error);
-      router.refresh();
+      try {
+        const res = await reorderPropertyPhotos(
+          slug,
+          orderRef.current.map((p) => p.url),
+        );
+        if (!res.ok) setError(res.error);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo reordenar las fotos.");
+      }
     });
   };
 
