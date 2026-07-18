@@ -56,23 +56,33 @@ function ClickHandler({ onSelect }: { onSelect: (lat: number, lng: number) => vo
   return null;
 }
 
+// Centro de fallback cuando la propiedad no tiene coordenadas: capital de
+// cada país, para no arrancar el mapa en Madrid al editar una propiedad en Chile.
+const DEFAULT_CENTER: Record<string, [number, number]> = {
+  es: [40.4168, -3.7038], // Madrid
+  cl: [-33.4489, -70.6693], // Santiago
+};
+
 export default function MapPicker({
   lat,
   lng,
   onChange,
   realLat,
   realLng,
+  country = "es",
 }: {
   lat: number;
   lng: number;
   onChange: (lat: number, lng: number) => void;
   realLat?: number;
   realLng?: number;
+  country?: string;
 }) {
   const hasGreen = lat !== 0 || lng !== 0;
   const hasBlue = (realLat !== undefined && realLat !== 0) || (realLng !== undefined && realLng !== 0);
-  const centerLat = hasGreen ? lat : hasBlue ? realLat! : 40.4168;
-  const centerLng = hasGreen ? lng : hasBlue ? realLng! : -3.7038;
+  const [fallbackLat, fallbackLng] = DEFAULT_CENTER[country] ?? DEFAULT_CENTER.es;
+  const centerLat = hasGreen ? lat : hasBlue ? realLat! : fallbackLat;
+  const centerLng = hasGreen ? lng : hasBlue ? realLng! : fallbackLng;
 
   const handleDragEnd = (e: L.LeafletEvent) => {
     const { lat: newLat, lng: newLng } = (e.target as L.Marker).getLatLng();
