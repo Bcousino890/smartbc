@@ -32,6 +32,12 @@ export default async function PropertyDetailPage({
         bedrooms: number;
         bathrooms: number;
         square_meters: number | null;
+        covered_area_m2: number | null;
+        parking_lots: number | null;
+        floors: number | null;
+        is_condominium: boolean | null;
+        construction_year: number | null;
+        sector: string | null;
         available_from: string | null;
         zone: string;
         address: string | null;
@@ -116,6 +122,12 @@ export default async function PropertyDetailPage({
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
         square_meters: property.square_meters,
+        covered_area_m2: property.covered_area_m2,
+        parking_lots: property.parking_lots,
+        floors: property.floors,
+        is_condominium: property.is_condominium,
+        construction_year: property.construction_year,
+        sector: property.sector,
         available_from: property.available_from,
         zone: property.zone,
         address: property.address,

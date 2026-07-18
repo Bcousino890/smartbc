@@ -20,9 +20,14 @@ export type CreatePropertyInput = {
   squareMeters?: number;
   coveredAreaM2?: number;
   parkingLots?: number;
+  floors?: number;
+  isCondominium?: boolean;
+  constructionYear?: number;
   zone: string;
   address?: string;
   commune?: string;
+  // Sector/subzona dentro de la comuna (ej. Chicureo dentro de Colina).
+  sector?: string;
   region?: string;
   propertyType?: string;
   currency?: string;
@@ -108,9 +113,13 @@ export async function createProperty(
       square_meters: input.squareMeters ?? null,
       covered_area_m2: input.coveredAreaM2 ?? null,
       parking_lots: input.parkingLots ?? null,
+      floors: input.floors ?? null,
+      is_condominium: input.isCondominium ?? null,
+      construction_year: input.constructionYear ?? null,
       zone: input.zone.trim(),
       address: input.address?.trim() || null,
       commune: input.commune?.trim() || null,
+      sector: input.sector?.trim() || null,
       region: input.region?.trim() || null,
       property_type: input.propertyType || null,
       currency: input.currency || null,
@@ -400,6 +409,13 @@ export type UpdatePropertyInput = {
   bedrooms?: number;
   bathrooms?: number;
   squareMeters?: number | null;
+  coveredAreaM2?: number | null;
+  parkingLots?: number | null;
+  floors?: number | null;
+  isCondominium?: boolean | null;
+  constructionYear?: number | null;
+  // Sector/subzona dentro de la comuna (ej. Chicureo dentro de Colina).
+  sector?: string | null;
   zone?: string;
   address?: string | null;
   // Coordenadas fijadas a mano en el mapa del editor. Tienen prioridad sobre el
@@ -458,6 +474,12 @@ export async function updateProperty(
   if (input.bathrooms !== undefined) payload.bathrooms = input.bathrooms;
   if (input.squareMeters !== undefined)
     payload.square_meters = input.squareMeters;
+  if (input.coveredAreaM2 !== undefined) payload.covered_area_m2 = input.coveredAreaM2;
+  if (input.parkingLots !== undefined) payload.parking_lots = input.parkingLots;
+  if (input.floors !== undefined) payload.floors = input.floors;
+  if (input.isCondominium !== undefined) payload.is_condominium = input.isCondominium;
+  if (input.constructionYear !== undefined) payload.construction_year = input.constructionYear;
+  if (input.sector !== undefined) payload.sector = input.sector?.trim() || null;
   if (input.zone !== undefined) {
     payload.zone = input.zone.trim();
     // Si cambia la zona, invalidamos las coords cacheadas para que el
