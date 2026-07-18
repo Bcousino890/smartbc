@@ -1349,6 +1349,7 @@ export function PropertyEditView({
         onClose={() => setPhotosOpen(false)}
         slug={property.slug}
         title={property.title}
+        country={country}
         initialPhotos={property.photos.map((p) => ({
           url: p.url,
           isCover: p.is_cover,

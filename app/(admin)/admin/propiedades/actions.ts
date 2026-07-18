@@ -235,6 +235,10 @@ export async function uploadPropertyPhoto(
 
   revalidatePath("/admin/propiedades");
   revalidatePath(`/admin/propiedades/${slug}`);
+  if (country) {
+    revalidatePath(`/${country}/admin/propiedades`);
+    revalidatePath(`/${country}/admin/propiedades/${slug}`);
+  }
   return { ok: true, url: publicUrl };
 }
 
@@ -246,8 +250,9 @@ export type ReorderPhotosResult = { ok: true } | { ok: false; error: string };
 export async function reorderPropertyPhotos(
   slug: string,
   orderedUrls: string[],
+  country?: string,
 ): Promise<ReorderPhotosResult> {
-  await assertPermission("properties", "edit");
+  await assertPermission("properties", "edit", { country });
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -289,12 +294,17 @@ export async function reorderPropertyPhotos(
 
   revalidatePath("/admin/propiedades");
   revalidatePath(`/admin/propiedades/${slug}`);
+  if (country) {
+    revalidatePath(`/${country}/admin/propiedades`);
+    revalidatePath(`/${country}/admin/propiedades/${slug}`);
+  }
   return { ok: true };
 }
 
 export type DeletePropertyPhotoInput = {
   slug: string;
   photoUrl: string;
+  country?: string;
 };
 
 export type DeletePropertyPhotoResult =
@@ -304,7 +314,7 @@ export type DeletePropertyPhotoResult =
 export async function deletePropertyPhoto(
   input: DeletePropertyPhotoInput,
 ): Promise<DeletePropertyPhotoResult> {
-  await assertPermission("properties", "edit");
+  await assertPermission("properties", "edit", { country: input.country });
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -354,6 +364,11 @@ export async function deletePropertyPhoto(
   }
 
   revalidatePath("/admin/propiedades");
+  revalidatePath(`/admin/propiedades/${input.slug}`);
+  if (input.country) {
+    revalidatePath(`/${input.country}/admin/propiedades`);
+    revalidatePath(`/${input.country}/admin/propiedades/${input.slug}`);
+  }
   return { ok: true };
 }
 
