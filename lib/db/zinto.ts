@@ -115,6 +115,14 @@ export async function findConversationByPhone(
 
 const ALLOWED_STATUSES = ['pending', 'sent', 'delivered', 'read', 'failed'];
 
+export interface SaveMessageMedia {
+  url?: string | null;
+  type?: string | null; // image | audio | document | ...
+  mime?: string | null;
+  filename?: string | null;
+  caption?: string | null;
+}
+
 export async function saveMessage(
   conversationId: string,
   fromNumber: string,
@@ -123,13 +131,15 @@ export async function saveMessage(
   type: 'sent' | 'received',
   status: string = 'pending',
   channelId: number = 4,
-  zintoMessageId?: string
+  zintoMessageId?: string,
+  extra?: { media?: SaveMessageMedia; externalProviderId?: string | null }
 ): Promise<ZintoMessageRecord> {
   const supabase = getSupabaseClient();
   // Clamp to the values allowed by the DB CHECK constraint. Zinto may report
   // a status (e.g. "read") that the schema doesn't track; never fail an insert
   // for a message that was actually sent.
   const safeStatus = ALLOWED_STATUSES.includes(status) ? status : 'sent';
+  const media = extra?.media;
   const { data, error } = await supabase
     .from('zinto_messages')
     .insert([
@@ -141,7 +151,13 @@ export async function saveMessage(
         type,
         status: safeStatus,
         zinto_message_id: zintoMessageId,
+        external_provider_id: extra?.externalProviderId ?? null,
         channel_id: channelId,
+        media_url: media?.url ?? null,
+        media_type: media?.type ?? null,
+        media_mime: media?.mime ?? null,
+        media_filename: media?.filename ?? null,
+        media_caption: media?.caption ?? null,
         timestamp_sent: new Date().toISOString(),
       },
     ])
@@ -153,6 +169,25 @@ export async function saveMessage(
   }
 
   return data as ZintoMessageRecord;
+}
+
+/**
+ * Record a webhook delivery id for replay/duplicate protection. Returns true if
+ * this delivery is NEW (should be processed), false if it was already seen.
+ * Best-effort: on unexpected errors we allow processing (return true).
+ */
+export async function recordWebhookDelivery(deliveryId: string): Promise<boolean> {
+  if (!deliveryId) return true;
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('zinto_webhook_deliveries')
+    .insert({ delivery_id: deliveryId });
+  if (error) {
+    // 23505 = unique violation → already processed (duplicate delivery).
+    if ((error as { code?: string }).code === '23505') return false;
+    return true;
+  }
+  return true;
 }
 
 /**

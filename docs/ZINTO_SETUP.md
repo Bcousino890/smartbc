@@ -123,6 +123,34 @@ Tablas: `zinto_campaigns`, `zinto_leads`, `zinto_lead_events`, `zinto_sync_jobs`
 (migración `0097_zinto_leads.sql`). El estado `read` de WhatsApp se habilita con
 `0096_zinto_messages_read_status.sql`.
 
+## 8. Plantillas, media y protección de replay
+
+**Plantillas de WhatsApp.** Fuera de la ventana de 24 h (o en primer contacto)
+la API exige una plantilla aprobada (`MESSAGE_TEMPLATE_REQUIRED`). Helpers en
+`lib/services/zinto/client.ts`:
+- `sendWhatsAppTemplate(channelId, to, template)` → `message.type:"template"`
+  con `name`, `language.code` y `components[].parameters`.
+- `getChannelTemplates(channelId)` → `GET /channels/{id}/templates` (lista las
+  aprobadas). El `name` debe estar `approved`; se gestionan en el panel de Zinto
+  o en Meta Business Manager.
+
+**Media.** `sendWhatsAppMedia(channelId, to, { type:'image'|'document', link,
+caption, filename })` envía por URL HTTPS (no base64). Los mensajes entrantes de
+tipo `image/audio/document` llegan con `message.media.url` (y `content:null`); el
+webhook los guarda en las columnas `media_*` de `zinto_messages` y muestra un
+placeholder `[tipo]` en el inbox.
+
+**Sync jobs.** Tras `syncExecute()`, `getSyncJob(jobId)` y
+`getSyncJobRecords(jobId)` consultan estado y resultado por registro
+(`GET /sync/jobs/{id}` y `/records`). Los eventos `sync.job.completed` /
+`sync.job.failed` llegan al webhook y actualizan `zinto_sync_jobs`.
+
+**Firma y replay.** El webhook valida HMAC-SHA256 con base
+`X-Zinto-Timestamp + "." + body`, rechaza eventos firmados fuera de la ventana
+de **5 minutos** y deduplica por `X-Zinto-Delivery-Id` (tabla
+`zinto_webhook_deliveries`, migración `0099`). La idempotencia de escrituras usa
+el header `Idempotency-Key`.
+
 ## Notas / limitaciones conocidas
 
 - El identificador de mensaje difiere entre el envío (`msg_xxx`, string) y el

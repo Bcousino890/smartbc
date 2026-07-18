@@ -198,3 +198,55 @@ export async function syncExecute(
     }),
   });
 }
+
+// ------------------------------------------------------------
+// Sync job status / per-record results
+// ------------------------------------------------------------
+
+export interface ZintoSyncJobStatus {
+  job: {
+    id: string;
+    type?: string;
+    state: string; // queued | running | completed | completed_with_errors | failed | cancelled
+    campaign_id?: string;
+    target?: string;
+    created_at?: string;
+    started_at?: string;
+    finished_at?: string;
+  };
+  summary?: {
+    total?: number;
+    accepted?: number;
+    duplicates?: number;
+    failed?: number;
+    pending?: number;
+  };
+}
+
+export interface ZintoSyncJobRecord {
+  lead_id: string;
+  external_id?: string;
+  status: string; // pending | sent | accepted | duplicate | rejected | failed | retrying
+  crm_record_id?: string;
+  attempts?: number;
+  last_error?: { code?: string; message?: string } | null;
+}
+
+export interface ZintoSyncJobRecordsResult {
+  data: ZintoSyncJobRecord[];
+  pagination?: { limit?: number; next_cursor?: string | null };
+}
+
+/** Poll the status + summary of a sync job created by syncExecute(). */
+export async function getSyncJob(jobId: string): Promise<ZintoSyncJobStatus> {
+  return zintoFetch(`/sync/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' });
+}
+
+/** Fetch the per-record outcome of a sync job (cursor-paginated). */
+export async function getSyncJobRecords(
+  jobId: string,
+  cursor?: string,
+): Promise<ZintoSyncJobRecordsResult> {
+  const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return zintoFetch(`/sync/jobs/${encodeURIComponent(jobId)}/records${qs}`, { method: 'GET' });
+}

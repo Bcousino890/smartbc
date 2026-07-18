@@ -257,6 +257,76 @@ export async function handleLeadWebhookEvent(
 }
 
 // ------------------------------------------------------------
+// Sync job events (sync.job.completed / sync.job.failed)
+// ------------------------------------------------------------
+
+export interface ZintoSyncEventPayload {
+  event?: string;
+  event_id?: string;
+  occurred_at?: string;
+  job?: {
+    id?: string;
+    type?: string;
+    state?: string;
+    target?: string;
+    campaign_id?: string;
+    campaign_external_id?: string;
+    record_count?: number;
+    direction?: string;
+  };
+  summary?: {
+    total?: number;
+    accepted?: number;
+    duplicates?: number;
+    failed?: number;
+    pending?: number;
+  };
+}
+
+/**
+ * Handle a `sync.*` webhook: upsert the job row (matched by Zinto's job id)
+ * with its latest state + summary so the CRM can show sync outcomes.
+ */
+export async function handleSyncWebhookEvent(
+  eventName: string,
+  payload: ZintoSyncEventPayload,
+): Promise<LeadWebhookResult> {
+  const job = payload.job || {};
+  if (!job.id) {
+    return { status: 'received', message: 'Sync event without job id ignored' };
+  }
+  const supabase = getSupabaseClient();
+
+  const { data: existing } = await supabase
+    .from('zinto_sync_jobs')
+    .select('id')
+    .eq('zinto_job_id', job.id)
+    .maybeSingle();
+
+  const row = {
+    zinto_job_id: job.id,
+    campaign_external_id: job.campaign_external_id ?? null,
+    direction: job.direction ?? null,
+    state: job.state ?? eventName.replace(/^sync\.job\./, ''),
+    record_count: typeof job.record_count === 'number' ? job.record_count : null,
+    summary: (payload.summary ?? null) as Record<string, unknown> | null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing) {
+    await supabase.from('zinto_sync_jobs').update(row).eq('id', existing.id);
+  } else {
+    await supabase.from('zinto_sync_jobs').insert(row);
+  }
+
+  return {
+    status: 'accepted',
+    crm_event_id: payload.event_id,
+    message: 'Sync event recorded',
+  };
+}
+
+// ------------------------------------------------------------
 // Reads for the admin UI
 // ------------------------------------------------------------
 

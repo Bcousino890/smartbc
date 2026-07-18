@@ -1,4 +1,12 @@
-import { ZintoMessage, ZintoChannelsResponse, ZintoChannel, ZintoMessageStatus } from './types';
+import {
+  ZintoMessage,
+  ZintoChannelsResponse,
+  ZintoChannel,
+  ZintoMessageStatus,
+  ZintoOutboundMessage,
+  ZintoTemplatePayload,
+  ZintoTemplatesResponse,
+} from './types';
 import { getZintoConfig } from './config';
 
 /** Max message length per Zinto spec (MESSAGE_TOO_LONG). */
@@ -125,38 +133,33 @@ function normalizeSendResponse(raw: any, channelId: number, to: string): ZintoMe
   };
 }
 
-export async function sendWhatsAppMessage(
+export interface SendOptions {
+  idempotencyKey?: string;
+  metadata?: SendMessageMetadata;
+}
+
+/**
+ * Core send: POST /messages/send with any documented message object
+ * (text | template | image | document). The phone is normalized (no "+").
+ */
+export async function sendRawMessage(
   channelId: number,
   to: string,
-  message: string,
-  opts?: { idempotencyKey?: string; metadata?: SendMessageMetadata }
+  message: ZintoOutboundMessage,
+  opts?: SendOptions
 ): Promise<ZintoMessage> {
   const normalizedTo = normalizePhoneNumber(to);
-
   if (!isValidPhoneNumber(normalizedTo)) {
     throw new ZintoApiError(400, 'The phone number format is invalid', 'INVALID_PHONE_NUMBER');
-  }
-
-  if (!message || message.length === 0) {
-    throw new ZintoApiError(400, 'Message cannot be empty', 'INVALID_REQUEST');
-  }
-
-  if (message.length > ZINTO_MAX_MESSAGE_LENGTH) {
-    throw new ZintoApiError(
-      400,
-      `Message exceeds ${ZINTO_MAX_MESSAGE_LENGTH} characters`,
-      'MESSAGE_TOO_LONG'
-    );
   }
 
   const raw = await zintoFetch('/messages/send', {
     method: 'POST',
     idempotencyKey: opts?.idempotencyKey,
     body: JSON.stringify({
-      // Documented contract; the phone number is sent WITHOUT a leading "+".
       channel_id: channelId,
       to: normalizedTo,
-      message: { type: 'text', text: message },
+      message,
       ...(opts?.metadata ? { metadata: opts.metadata } : {}),
     }),
   });
@@ -164,8 +167,73 @@ export async function sendWhatsAppMessage(
   return normalizeSendResponse(raw, channelId, normalizedTo);
 }
 
+/** Send a free-text WhatsApp message (only valid inside the 24h window). */
+export async function sendWhatsAppMessage(
+  channelId: number,
+  to: string,
+  message: string,
+  opts?: SendOptions
+): Promise<ZintoMessage> {
+  if (!message || message.length === 0) {
+    throw new ZintoApiError(400, 'Message cannot be empty', 'INVALID_REQUEST');
+  }
+  if (message.length > ZINTO_MAX_MESSAGE_LENGTH) {
+    throw new ZintoApiError(
+      400,
+      `Message exceeds ${ZINTO_MAX_MESSAGE_LENGTH} characters`,
+      'MESSAGE_TOO_LONG'
+    );
+  }
+  return sendRawMessage(channelId, to, { type: 'text', text: message }, opts);
+}
+
+/**
+ * Send an approved WhatsApp template (required for first contact / outside the
+ * 24h window). `template.name` must be an approved template for the channel.
+ */
+export async function sendWhatsAppTemplate(
+  channelId: number,
+  to: string,
+  template: ZintoTemplatePayload,
+  opts?: SendOptions
+): Promise<ZintoMessage> {
+  if (!template?.name) {
+    throw new ZintoApiError(400, 'Template name is required', 'INVALID_REQUEST');
+  }
+  return sendRawMessage(channelId, to, { type: 'template', template }, opts);
+}
+
+export interface SendMediaInput {
+  type: 'image' | 'document';
+  link: string;
+  caption?: string;
+  filename?: string;
+}
+
+/** Send an image or document by HTTPS link (Zinto discourages base64). */
+export async function sendWhatsAppMedia(
+  channelId: number,
+  to: string,
+  media: SendMediaInput,
+  opts?: SendOptions
+): Promise<ZintoMessage> {
+  if (!media?.link) {
+    throw new ZintoApiError(400, 'Media link is required', 'INVALID_REQUEST');
+  }
+  const message: ZintoOutboundMessage =
+    media.type === 'document'
+      ? { type: 'document', document: { link: media.link, filename: media.filename, caption: media.caption } }
+      : { type: 'image', image: { link: media.link, caption: media.caption } };
+  return sendRawMessage(channelId, to, message, opts);
+}
+
 export async function getZintoChannels(): Promise<ZintoChannelsResponse> {
   return zintoFetch('/channels', { method: 'GET' });
+}
+
+/** List the WhatsApp templates configured for a channel (approved + pending). */
+export async function getChannelTemplates(channelId: number): Promise<ZintoTemplatesResponse> {
+  return zintoFetch(`/channels/${channelId}/templates`, { method: 'GET' });
 }
 
 /** Return the channel if it exists AND is active, otherwise null. */

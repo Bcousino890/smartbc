@@ -87,6 +87,16 @@ export interface ZintoStatusWebhookPayload {
  *  - Native Zinto push: { event:"whatsapp.message.received",
  *      contact:{ phone, name }, message:{ content, id, type }, channel:{...} }
  */
+/** Media descriptor attached to an inbound image/audio/document message. */
+export interface ZintoInboundMedia {
+  url?: string;
+  mime_type?: string;
+  filename?: string;
+  size_bytes?: number;
+  sha256?: string;
+  expires_at?: string;
+}
+
 export interface ZintoInboundWebhookPayload {
   event?: string;
   // Flow-node flat form.
@@ -98,8 +108,9 @@ export interface ZintoInboundWebhookPayload {
         id?: string;
         direction?: string;
         type?: string;
-        content?: string;
+        content?: string | null;
         timestamp?: string;
+        media?: ZintoInboundMedia;
       };
   channelId?: number;
   timestamp?: string;
@@ -141,8 +152,58 @@ export interface ZintoMessageRecord {
   status: ZintoMessageStatus;
   zinto_message_id?: string;
   zinto_numeric_id?: number;
+  external_provider_id?: string | null;
   channel_id: number;
+  // Media (image/audio/document); message_text holds the caption/placeholder.
+  media_url?: string | null;
+  media_type?: string | null;
+  media_mime?: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
   timestamp_sent?: string;
   created_at: string;
   updated_at?: string;
+}
+
+// ------------------------------------------------------------
+// Outbound message payloads (text / template / media)
+// ------------------------------------------------------------
+
+export interface ZintoTemplateParameter {
+  type: 'text' | 'image' | 'document' | 'video' | 'currency' | 'date_time';
+  text?: string;
+  image?: { link: string };
+  document?: { link: string; filename?: string };
+}
+
+export interface ZintoTemplateComponent {
+  type: 'header' | 'body' | 'button';
+  sub_type?: string;
+  index?: string;
+  parameters?: ZintoTemplateParameter[];
+}
+
+export interface ZintoTemplatePayload {
+  name: string;
+  language: { code: string };
+  components?: ZintoTemplateComponent[];
+}
+
+export type ZintoOutboundMessage =
+  | { type: 'text'; text: string }
+  | { type: 'template'; template: ZintoTemplatePayload }
+  | { type: 'image'; image: { link: string; caption?: string } }
+  | { type: 'document'; document: { link: string; filename?: string; caption?: string } };
+
+/** One template as returned by GET /channels/{id}/templates. */
+export interface ZintoTemplate {
+  name: string;
+  language: string;
+  status: string; // "approved" | "pending" | "rejected" | ...
+  category?: string; // MARKETING | UTILITY | AUTHENTICATION
+  components?: string[];
+}
+
+export interface ZintoTemplatesResponse {
+  data: ZintoTemplate[];
 }
