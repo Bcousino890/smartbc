@@ -50,6 +50,7 @@ import {
 } from "@/components/admin/smart-links-panel";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { propertyFeaturesForCountry } from "@/lib/property-features";
+import { sectorsForCommune } from "@/lib/mock-properties";
 import { useT } from "@/lib/i18n/provider";
 import { shareSlug } from "@/lib/share-slug";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,12 @@ export type PropertyForEdit = {
   bedrooms: number;
   bathrooms: number;
   square_meters: number | null;
+  covered_area_m2: number | null;
+  parking_lots: number | null;
+  floors: number | null;
+  is_condominium: boolean | null;
+  construction_year: number | null;
+  sector: string | null;
   zone: string;
   address: string | null;
   features: string[];
@@ -157,6 +164,20 @@ export function PropertyEditView({
   const [squareMeters, setSquareMeters] = useState<number | "">(
     property.square_meters ?? "",
   );
+  const [coveredAreaM2, setCoveredAreaM2] = useState<number | "">(
+    property.covered_area_m2 ?? "",
+  );
+  const [parkingLots, setParkingLots] = useState<number | "">(
+    property.parking_lots ?? "",
+  );
+  const [floors, setFloors] = useState<number | "">(property.floors ?? "");
+  const [isCondominium, setIsCondominium] = useState<boolean>(
+    property.is_condominium ?? false,
+  );
+  const [constructionYear, setConstructionYear] = useState<number | "">(
+    property.construction_year ?? "",
+  );
+  const [sector, setSector] = useState(property.sector ?? "");
   const [zone, setZone] = useState(property.zone);
   const [address, setAddress] = useState(property.address ?? "");
   // Coordenadas editables (fijar el punto exacto en el mapa). 0 = sin fijar.
@@ -440,10 +461,16 @@ export function PropertyEditView({
           country,
           operation,
           zone,
+          sector: sector || undefined,
           address,
           squareMeters: squareMeters === "" ? undefined : squareMeters,
+          coveredAreaM2: coveredAreaM2 === "" ? undefined : coveredAreaM2,
           bedrooms,
           bathrooms,
+          parkingLots: parkingLots === "" ? undefined : parkingLots,
+          floors: floors === "" ? undefined : floors,
+          isCondominium,
+          constructionYear: constructionYear === "" ? undefined : constructionYear,
           price,
           features: [...property.features, ...featuresManual],
           photos: property.photos.map((p) => p.url),
@@ -506,6 +533,12 @@ export function PropertyEditView({
           bedrooms,
           bathrooms,
           squareMeters: squareMeters === "" ? null : Number(squareMeters),
+          coveredAreaM2: coveredAreaM2 === "" ? null : Number(coveredAreaM2),
+          parkingLots: parkingLots === "" ? null : Number(parkingLots),
+          floors: floors === "" ? null : Number(floors),
+          isCondominium,
+          constructionYear: constructionYear === "" ? null : Number(constructionYear),
+          sector: sector || null,
           zone,
           address: address || null,
           // Coordenadas fijadas en el mapa (0 = sin fijar → null).
@@ -917,6 +950,90 @@ export function PropertyEditView({
               placeholder={t("adminProps.detail.addressPlaceholder")}
             />
           </Field>
+
+          {isCL && (
+            <Field label="Sector / subzona">
+              <input
+                type="text"
+                list="edit-cl-sectors"
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                placeholder="Ej. Chicureo, Huinganal, Los Trapenses…"
+                className={inputClass}
+              />
+              <datalist id="edit-cl-sectors">
+                {sectorsForCommune(zone).map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </Field>
+          )}
+
+          {isCL && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Field label="Sup. útil m²">
+                <input
+                  type="number"
+                  value={coveredAreaM2}
+                  onChange={(e) =>
+                    setCoveredAreaM2(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  min={0}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Estacionamientos">
+                <input
+                  type="number"
+                  value={parkingLots}
+                  onChange={(e) =>
+                    setParkingLots(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  min={0}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="N.º de pisos">
+                <input
+                  type="number"
+                  value={floors}
+                  onChange={(e) => setFloors(e.target.value === "" ? "" : Number(e.target.value))}
+                  min={0}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          )}
+
+          {isCL && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Field label="Año de construcción">
+                <input
+                  type="number"
+                  value={constructionYear}
+                  onChange={(e) =>
+                    setConstructionYear(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  min={1800}
+                  max={2100}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="¿Está en condominio?">
+                <div className="flex h-[42px] items-center gap-2 rounded-xl border border-ink/10 bg-white px-3">
+                  <label className="flex items-center gap-1.5 text-sm text-ink/75">
+                    <input
+                      type="checkbox"
+                      checked={isCondominium}
+                      onChange={(e) => setIsCondominium(e.target.checked)}
+                      className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                    />
+                    Sí, está en condominio
+                  </label>
+                </div>
+              </Field>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Field label="Operación">

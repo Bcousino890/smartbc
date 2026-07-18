@@ -8,7 +8,7 @@ import {
   uploadPropertyPhoto,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { Modal } from "@/components/ui/modal";
-import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO } from "@/lib/mock-properties";
+import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO, sectorsForCommune } from "@/lib/mock-properties";
 import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { useT } from "@/lib/i18n/provider";
 import type { Operation, StayType } from "@/lib/types";
@@ -65,11 +65,15 @@ export function NewPropertyModal({
   const [squareMeters, setSquareMeters] = useState<number>(0);
   const [coveredAreaM2, setCoveredAreaM2] = useState<number>(0);
   const [parkingLots, setParkingLots] = useState<number>(0);
+  const [floors, setFloors] = useState<number>(0);
+  const [isCondominium, setIsCondominium] = useState(false);
+  const [constructionYear, setConstructionYear] = useState<number>(0);
   const [externalReference, setExternalReference] = useState("");
   const [description, setDescription] = useState("");
   // Chile / ML VIS fields
   const [address, setAddress] = useState("");
   const [commune, setCommune] = useState("");
+  const [sector, setSector] = useState("");
   const [region, setRegion] = useState<string>(CHILE_REGIONS[0]);
   const [propertyType, setPropertyType] = useState<string>(PROPERTY_TYPE_OPTIONS[0].value);
   const [currency, setCurrency] = useState<string>(CURRENCY_OPTIONS_CL[0].value);
@@ -119,10 +123,14 @@ export function NewPropertyModal({
       setSquareMeters(0);
       setCoveredAreaM2(0);
       setParkingLots(0);
+      setFloors(0);
+      setIsCondominium(false);
+      setConstructionYear(0);
       setExternalReference("");
       setDescription("");
       setAddress("");
       setCommune("");
+      setSector("");
       setRegion(CHILE_REGIONS[0]);
       setPropertyType(PROPERTY_TYPE_OPTIONS[0].value);
       setCurrency(CURRENCY_OPTIONS_CL[0].value);
@@ -188,9 +196,13 @@ export function NewPropertyModal({
           squareMeters: squareMeters || undefined,
           coveredAreaM2: isCL && coveredAreaM2 > 0 ? coveredAreaM2 : undefined,
           parkingLots: isCL && parkingLots > 0 ? parkingLots : undefined,
+          floors: isCL && floors > 0 ? floors : undefined,
+          isCondominium: isCL ? isCondominium : undefined,
+          constructionYear: isCL && constructionYear > 0 ? constructionYear : undefined,
           zone: isCL ? (commune.trim() || region) : zone,
           address: isCL ? address.trim() || undefined : undefined,
           commune: isCL ? commune.trim() || undefined : undefined,
+          sector: isCL ? sector.trim() || undefined : undefined,
           region: isCL ? region : undefined,
           propertyType: isCL ? propertyType : undefined,
           currency: isCL ? currency : undefined,
@@ -382,6 +394,23 @@ export function NewPropertyModal({
               <Field label="Estacionamientos">
                 <NumberInput value={parkingLots} onChange={setParkingLots} min={0} />
               </Field>
+              <Field label="N.º de pisos">
+                <NumberInput value={floors} onChange={setFloors} min={0} />
+              </Field>
+              <Field label="Año de construcción">
+                <NumberInput value={constructionYear} onChange={setConstructionYear} min={1800} />
+              </Field>
+              <Field label="¿Está en condominio?">
+                <div className="flex h-[38px] items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3">
+                  <input
+                    type="checkbox"
+                    checked={isCondominium}
+                    onChange={(e) => setIsCondominium(e.target.checked)}
+                    className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                  />
+                  <span className="text-[13px] text-ink/75">Sí</span>
+                </div>
+              </Field>
             </>
           )}
         </Section>
@@ -412,6 +441,21 @@ export function NewPropertyModal({
                 <datalist id="cl-communes">
                   {CHILE_COMMUNES_SANTIAGO.map((c) => (
                     <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Sector / subzona">
+                <input
+                  type="text"
+                  list="cl-sectors"
+                  value={sector}
+                  onChange={(e) => setSector(e.target.value)}
+                  placeholder="Ej. Chicureo, Huinganal, Los Trapenses…"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                />
+                <datalist id="cl-sectors">
+                  {sectorsForCommune(commune).map((s) => (
+                    <option key={s} value={s} />
                   ))}
                 </datalist>
               </Field>

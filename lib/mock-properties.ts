@@ -55,6 +55,44 @@ export const CHILE_COMMUNES_SANTIAGO = [
   "Talagante",
 ] as const;
 
+// Sectores/subzonas dentro de cada comuna (ej. Chicureo está dentro de la
+// comuna de Colina, Huinganal y Los Trapenses dentro de Lo Barnechea). No es
+// exhaustivo: cubre los sectores más habituales del sector oriente y
+// periurbano de Santiago; se puede seguir ampliando por comuna.
+export const CHILE_SECTORS_BY_COMMUNE: Record<string, string[]> = {
+  "Colina": ["Chicureo", "Piedra Roja", "Santa Elena", "El Vínculo", "Esmeralda", "Chamisero"],
+  "Lo Barnechea": [
+    "Los Trapenses",
+    "Huinganal",
+    "La Dehesa",
+    "El Arrayán",
+    "Camino a Farellones",
+    "Valle Escondido",
+    "El Rosario",
+  ],
+  "Las Condes": [
+    "El Golf",
+    "Los Dominicos",
+    "San Carlos de Apoquindo",
+    "Escuela Militar",
+    "Estoril",
+    "Colón Oriente",
+    "Apoquindo",
+    "Reyes Lo Barnechea",
+  ],
+  "Vitacura": ["Jardín del Este", "Bicentenario", "Lo Curro", "Tabancura"],
+  "Providencia": ["Los Leones", "Pedro de Valdivia", "Manuel Montt", "Los Guindos"],
+  "Ñuñoa": ["Plaza Ñuñoa", "Villa Frei", "Estadio Nacional", "Chile-España"],
+  "La Reina": ["Príncipe de Gales", "Larraín", "Vespucio"],
+  "Chicureo": ["Piedra Roja", "Santa Elena", "El Vínculo"],
+  "Peñalolén": ["Peñalolén Alto", "Lo Hermida", "La Faena"],
+  "Pirque": ["El Principal", "San Vicente"],
+};
+
+export function sectorsForCommune(commune: string): string[] {
+  return CHILE_SECTORS_BY_COMMUNE[commune] ?? [];
+}
+
 export const MADRID_ZONES = [
   "Salamanca",
   "Chamberí",
