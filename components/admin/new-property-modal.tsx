@@ -9,6 +9,7 @@ import {
 } from "@/app/(admin)/admin/propiedades/actions";
 import { Modal } from "@/components/ui/modal";
 import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO } from "@/lib/mock-properties";
+import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { useT } from "@/lib/i18n/provider";
 import type { Operation, StayType } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,34 @@ export function NewPropertyModal({
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Características: mismo campo `features_manual` que se edita después en la
+  // ficha de la propiedad, para que lo marcado al crear no se pierda/duplique.
+  const [features, setFeatures] = useState<string[]>([]);
+  const [newFeature, setNewFeature] = useState("");
+  const checklistFeatures = propertyFeaturesForCountry(country);
+
+  const toggleFeature = (f: string) => {
+    setFeatures((prev) =>
+      prev.some((x) => x.toLowerCase() === f.toLowerCase())
+        ? prev.filter((x) => x.toLowerCase() !== f.toLowerCase())
+        : [...prev, f],
+    );
+  };
+
+  const addManualFeature = () => {
+    const f = newFeature.trim();
+    if (!f) return;
+    if (features.some((x) => x.toLowerCase() === f.toLowerCase())) {
+      setNewFeature("");
+      return;
+    }
+    setFeatures((prev) => [...prev, f]);
+    setNewFeature("");
+  };
+
+  const removeFeature = (f: string) => {
+    setFeatures((prev) => prev.filter((x) => x !== f));
+  };
 
   useEffect(() => {
     if (!open) {
@@ -97,6 +126,8 @@ export function NewPropertyModal({
       setRegion(CHILE_REGIONS[0]);
       setPropertyType(PROPERTY_TYPE_OPTIONS[0].value);
       setCurrency(CURRENCY_OPTIONS_CL[0].value);
+      setFeatures([]);
+      setNewFeature("");
       setFeedback({ kind: "idle" });
       setUploadingPhotos(false);
       setDragActive(false);
@@ -166,6 +197,7 @@ export function NewPropertyModal({
           country,
           description: description.trim() || undefined,
           externalReference: externalReference.trim() || undefined,
+          featuresManual: features.length > 0 ? features : undefined,
         });
         if (!result.ok) {
           setFeedback({ kind: "error", msg: humanError(t, result.error) });
@@ -412,6 +444,78 @@ export function NewPropertyModal({
               placeholder={isCL ? "Describe la propiedad en detalle (requerido por PortalInmobiliario)" : t("adminProps.new.field.description.placeholder")}
             />
           </Field>
+        </Section>
+
+        <Section title="Características">
+          <div className="sm:col-span-3">
+            <div className="flex flex-wrap gap-1.5">
+              {checklistFeatures.map((f) => {
+                const active = features.some((x) => x.toLowerCase() === f.toLowerCase());
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => toggleFeature(f)}
+                    aria-pressed={active}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition",
+                      active
+                        ? "border-gold/50 bg-gold/15 text-ink"
+                        : "border-ink/12 bg-white/50 text-ink/60 hover:border-gold/40 hover:text-ink",
+                    )}
+                  >
+                    {active && <Check size={11} strokeWidth={2.5} className="text-gold-dark" />}
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+            {features.filter((f) => !checklistFeatures.some((c) => c.toLowerCase() === f.toLowerCase())).length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {features
+                  .filter((f) => !checklistFeatures.some((c) => c.toLowerCase() === f.toLowerCase()))
+                  .map((f) => (
+                    <span
+                      key={f}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-[12px] text-ink"
+                    >
+                      {f}
+                      <button
+                        type="button"
+                        onClick={() => removeFeature(f)}
+                        className="text-ink/55 hover:text-rose-700"
+                        aria-label={`Quitar ${f}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+              </div>
+            )}
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={newFeature}
+                onChange={(e) => setNewFeature(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addManualFeature();
+                  }
+                }}
+                placeholder="Otra característica…"
+                className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={addManualFeature}
+                disabled={!newFeature.trim()}
+                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+              >
+                Añadir
+              </button>
+            </div>
+          </div>
         </Section>
 
         <Section title={`${t("adminProps.new.section.photos")}${isCL ? " (mín. 4 ★)" : ""}`}>

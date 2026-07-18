@@ -32,6 +32,9 @@ export type CreatePropertyInput = {
   // el admin de Chile quedaban con el default 'es' y nunca aparecían en
   // Publicación CL ni en Portal Inmobiliario.
   country?: string;
+  // Características marcadas al crear (checklist + texto libre). Mismo campo
+  // que edita updateProperty después — así lo elegido al crear no se pierde.
+  featuresManual?: string[];
 };
 
 export type CreatePropertyResult =
@@ -113,6 +116,7 @@ export async function createProperty(
       currency: input.currency || null,
       country: input.country === "cl" ? "cl" : "es",
       description: input.description?.trim() || null,
+      features_manual: input.featuresManual?.filter((f) => f.trim().length > 0) ?? [],
     })
     .select("id, slug")
     .maybeSingle();

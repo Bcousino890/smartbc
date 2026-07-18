@@ -17,6 +17,7 @@ import {
   Plus,
   Save,
   Send,
+  Sparkles,
   Trash2,
   User,
   Video,
@@ -48,6 +49,7 @@ import {
   SmartLinksPanel,
 } from "@/components/admin/smart-links-panel";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
+import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { useT } from "@/lib/i18n/provider";
 import { shareSlug } from "@/lib/share-slug";
 import { cn } from "@/lib/utils";
@@ -119,6 +121,8 @@ export function PropertyEditView({
   const params = useParams<{ country?: string }>();
   const country = isCountry(params?.country) ? params.country : "es";
   const config = getCountryConfig(country);
+  const isCL = country === "cl";
+  const checklistFeatures = propertyFeaturesForCountry(country);
   const [isPending, startTransition] = useTransition();
   const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
   const [photosOpen, setPhotosOpen] = useState(false);
@@ -145,6 +149,8 @@ export function PropertyEditView({
     property.title_rent ?? property.title,
   );
   const [description, setDescription] = useState(property.description ?? "");
+  const [generatingDesc, setGeneratingDesc] = useState(false);
+  const [descError, setDescError] = useState<string | null>(null);
   const [price, setPrice] = useState(property.price);
   const [bedrooms, setBedrooms] = useState(property.bedrooms);
   const [bathrooms, setBathrooms] = useState(property.bathrooms);
@@ -221,6 +227,20 @@ export function PropertyEditView({
 
   const removeManualFeature = (f: string) => {
     setFeaturesManual((prev) => prev.filter((x) => x !== f));
+  };
+
+  // Activa/desactiva una característica del checklist. Mismo criterio de
+  // deduplicación (case-insensitive) que addManualFeature.
+  const toggleFeature = (f: string) => {
+    const already = featuresManual.some(
+      (x) => x.toLowerCase() === f.toLowerCase(),
+    );
+    if (already) {
+      removeManualFeature(f);
+      return;
+    }
+    if (property.features.some((x) => x.toLowerCase() === f.toLowerCase())) return;
+    setFeaturesManual((prev) => [...prev, f]);
   };
 
   // ─── Video handlers ────────────────────────────────────────────────────
@@ -379,7 +399,8 @@ export function PropertyEditView({
   // importaciones sin coordenadas: escribes/confirmas la dirección y de ahí
   // sale el punto de partida, que luego se afina arrastrando el pin.
   const geocodeFromAddress = async () => {
-    const q = [address, zone, "España"].filter(Boolean).join(", ");
+    const countryName = country === "cl" ? "Chile" : "España";
+    const q = [address, zone, countryName].filter(Boolean).join(", ");
     if (!q.trim()) {
       setGeocodeError("Escribe una dirección o zona primero.");
       return;
@@ -402,6 +423,42 @@ export function PropertyEditView({
       setGeocodeError("Error al buscar la dirección. Coloca el pin a mano.");
     } finally {
       setGeocoding(false);
+    }
+  };
+
+  // Genera la descripción con IA a partir de los datos del formulario + las
+  // características marcadas (auto-detectadas y manuales) + las fotos ya
+  // subidas, para que la IA "vea" el inmueble en vez de inventar.
+  const generateDescription = async () => {
+    setGeneratingDesc(true);
+    setDescError(null);
+    try {
+      const res = await fetch("/api/admin/propiedades/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          country,
+          operation,
+          zone,
+          address,
+          squareMeters: squareMeters === "" ? undefined : squareMeters,
+          bedrooms,
+          bathrooms,
+          price,
+          features: [...property.features, ...featuresManual],
+          photos: property.photos.map((p) => p.url),
+        }),
+      });
+      const data = (await res.json()) as { description?: string; error?: string };
+      if (!res.ok || !data.description) {
+        setDescError(data.error ?? "No se pudo generar la descripción.");
+        return;
+      }
+      setDescription(data.description);
+    } catch {
+      setDescError("Error al generar la descripción.");
+    } finally {
+      setGeneratingDesc(false);
     }
   };
 
@@ -722,14 +779,37 @@ export function PropertyEditView({
               />
             </Field>
           )}
-          <Field label={t("adminProps.detail.description")}>
+          <label className="flex flex-col gap-1.5 text-[12px] font-medium text-ink/80">
+            <span className="flex items-center justify-between gap-2">
+              {t("adminProps.detail.description")}
+              <button
+                type="button"
+                onClick={generateDescription}
+                disabled={generatingDesc}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-2.5 py-1 text-[11px] font-semibold text-gold-dark transition hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingDesc ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Sparkles size={12} />
+                )}
+                {generatingDesc
+                  ? "Generando…"
+                  : description
+                    ? "Regenerar con IA"
+                    : "Generar con IA"}
+              </button>
+            </span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={6}
               className={cn(inputClass, "resize-y")}
             />
-          </Field>
+            {descError && (
+              <span className="text-[11px] text-orange-600">{descError}</span>
+            )}
+          </label>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Field
               label={
@@ -916,6 +996,7 @@ export function PropertyEditView({
                   setLongitude(ln);
                   setGeocodeError(null);
                 }}
+                country={country}
               />
             </div>
             <p className="text-[11px] text-ink/45">
@@ -995,6 +1076,35 @@ export function PropertyEditView({
               </div>
             </div>
           )}
+          <div className="mb-4">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+              Checklist ({isCL ? "PortalInmobiliario" : "habituales"})
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {checklistFeatures.map((f) => {
+                const active =
+                  featuresManual.some((x) => x.toLowerCase() === f.toLowerCase()) ||
+                  property.features.some((x) => x.toLowerCase() === f.toLowerCase());
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => toggleFeature(f)}
+                    aria-pressed={active}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition",
+                      active
+                        ? "border-gold/50 bg-gold/15 text-ink"
+                        : "border-ink/12 bg-white/50 text-ink/60 hover:border-gold/40 hover:text-ink",
+                    )}
+                  >
+                    {active && <Check size={11} strokeWidth={2.5} className="text-gold-dark" />}
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div>
             <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
               Manuales
