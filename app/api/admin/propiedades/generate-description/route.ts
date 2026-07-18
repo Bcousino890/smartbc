@@ -51,6 +51,17 @@ function buildFacts(d: DescInput): string {
   return lines.join("\n");
 }
 
+const CL_VOCAB = `Vocabulario y convenciones de Chile (úsalos, NO los equivalentes de España):
+- "Departamento", nunca "piso" (en Chile "piso" es el suelo, no la vivienda).
+- "Arriendo"/"arrendar", nunca "alquiler"/"alquilar".
+- "Estacionamiento", nunca "plaza de garaje" ni "parking".
+- "Living" o "living-comedor", no "salón".
+- "Bodega" para el trastero.
+- "Cotizar"/"agendar una visita", registro cercano pero profesional: trata de "usted" salvo que el tono de la agencia sea explícitamente informal.
+- Comuna en vez de barrio/distrito cuando corresponda (ej. "en pleno Las Condes").
+- Si el precio está en UF, exprésalo como "UF X" (no "€X"); si es en pesos, "$X" o "CLP X".
+- Evita modismos/jerga (nada de "bacán", "la firme", "cuático"): registro premium pero natural para el mercado chileno, no una traducción literal del español de España.`;
+
 function systemPrompt(country?: string): string {
   const isCL = country === "cl";
   const market = isCL ? "chileno" : "español";
@@ -58,8 +69,8 @@ function systemPrompt(country?: string): string {
   return `Eres el redactor de anuncios de ${AGENCY_NAME}, una inmobiliaria premium en ${isCL ? "Chile" : "España"}.
 
 Escribe la descripción del anuncio con un registro PREMIUM e inmobiliario de alta gama, elegante, aspiracional y evocador, sin caer en superlativos huecos ni promesas que los datos no respalden, adaptado al mercado residencial ${market} y a ${portal}.
-
-FORMATO FIJO (180-240 palabras, 3-4 párrafos, español ${isCL ? "de Chile (sin \"vosotros\", usa \"tú\"/\"usted\" neutro)" : "de España"}):
+${isCL ? `\n${CL_VOCAB}\n` : ""}
+FORMATO FIJO (180-240 palabras, 3-4 párrafos, español ${isCL ? "de Chile: vocabulario y tono chilenos (ver arriba), no un español neutro ni de España" : "de España"}):
 1) Apertura: presenta el tipo de vivienda y, si se conoce, la zona/comuna. Un gancho que transmita estilo de vida.
 2) La vivienda: distribución, luz, estancias, calidades y detalles que se aprecien en las fotos o los datos aportados (incluidas las características marcadas). Concreto y sensorial.
 3) El entorno / estilo de vida: qué ofrece la zona (solo si se conoce); si no, habla del carácter del inmueble.
