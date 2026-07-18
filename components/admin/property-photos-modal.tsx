@@ -27,12 +27,14 @@ export function PropertyPhotosModal({
   onClose,
   slug,
   title,
+  country,
   initialPhotos,
 }: {
   open: boolean;
   onClose: () => void;
   slug: string;
   title: string;
+  country?: string;
   initialPhotos: PropertyPhoto[];
 }) {
   const t = useT();
@@ -63,6 +65,7 @@ export function PropertyPhotosModal({
           formData.set("slug", slug);
           formData.set("file", file);
           formData.set("isCover", String(!coverAssigned));
+          if (country) formData.set("country", country);
 
           const result = await uploadPropertyPhoto(formData);
           if (result.ok) {
@@ -97,7 +100,7 @@ export function PropertyPhotosModal({
     setError(null);
     startTransition(async () => {
       try {
-        const result = await deletePropertyPhoto({ slug, photoUrl: url });
+        const result = await deletePropertyPhoto({ slug, photoUrl: url, country });
         if (result.ok) {
           setPhotos((prev) => prev.filter((p) => p.url !== url));
           router.refresh();
@@ -119,6 +122,7 @@ export function PropertyPhotosModal({
         const res = await reorderPropertyPhotos(
           slug,
           next.map((p) => p.url),
+          country,
         );
         if (!res.ok) setError(res.error);
         router.refresh();
@@ -152,6 +156,7 @@ export function PropertyPhotosModal({
         const res = await reorderPropertyPhotos(
           slug,
           orderRef.current.map((p) => p.url),
+          country,
         );
         if (!res.ok) setError(res.error);
         router.refresh();
