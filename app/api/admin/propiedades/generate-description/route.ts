@@ -1,5 +1,6 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 import { AGENCY_NAME } from "@/lib/services/idealista/description-style";
 
@@ -137,7 +138,7 @@ ${isCL ? CL_STRUCTURED_FORMAT : ES_PROSE_FORMAT}`;
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
   if (!profile) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!canAccess(profile.role, "properties", "edit")) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

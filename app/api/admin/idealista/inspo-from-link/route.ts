@@ -1,5 +1,6 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/db/admin";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
 import { downloadAndWatermark } from "@/lib/sync/watermark";
@@ -38,7 +39,7 @@ const CONCURRENCY = 8;
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
   if (!profile) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!canAccess(profile.role, "properties", "edit")) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

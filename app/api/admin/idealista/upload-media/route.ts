@@ -1,6 +1,7 @@
 import "server-only";
 import { extname } from "node:path";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/db/admin";
 
 export const maxDuration = 30;
@@ -13,7 +14,7 @@ export async function POST(req: Request) {
   if (!profile) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!canAccess(profile.role, "properties", "edit")) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
