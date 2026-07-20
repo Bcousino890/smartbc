@@ -449,7 +449,7 @@ function NewConversationModal({
         setError(
           result.error === "invalid_phone"
             ? "Número inválido. Usa prefijo internacional (ej. 34612345678)."
-            : "No se pudo crear la conversación.",
+            : `No se pudo crear la conversación: ${result.error}`,
         );
       }
     });
