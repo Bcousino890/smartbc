@@ -153,13 +153,20 @@ export async function sendRawMessage(
     throw new ZintoApiError(400, 'The phone number format is invalid', 'INVALID_PHONE_NUMBER');
   }
 
+  // Text uses the wire format PROVEN to work on this instance: `message` as a
+  // plain string. Template/media (new capabilities, no proven baseline) send
+  // the documented message object. We send BOTH `channelId` (proven) and
+  // `channel_id` (documented) so either API variant is satisfied.
+  const wireMessage: unknown = message.type === 'text' ? message.text : message;
+
   const raw = await zintoFetch('/messages/send', {
     method: 'POST',
     idempotencyKey: opts?.idempotencyKey,
     body: JSON.stringify({
+      channelId,
       channel_id: channelId,
       to: normalizedTo,
-      message,
+      message: wireMessage,
       ...(opts?.metadata ? { metadata: opts.metadata } : {}),
     }),
   });
