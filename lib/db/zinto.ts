@@ -175,6 +175,10 @@ export async function saveMessage(
  * Record a webhook delivery id for replay/duplicate protection. Returns true if
  * this delivery is NEW (should be processed), false if it was already seen.
  * Best-effort: on unexpected errors we allow processing (return true).
+ *
+ * NOTE: the caller records the delivery BEFORE processing (so concurrent
+ * retries can't both run), then calls `deleteWebhookDelivery` if processing
+ * fails, so Zinto's next retry can reprocess instead of being dropped.
  */
 export async function recordWebhookDelivery(deliveryId: string): Promise<boolean> {
   if (!deliveryId) return true;
@@ -190,6 +194,17 @@ export async function recordWebhookDelivery(deliveryId: string): Promise<boolean
   return true;
 }
 
+/** Undo a recordWebhookDelivery when processing failed, so a retry can rerun. */
+export async function deleteWebhookDelivery(deliveryId: string): Promise<void> {
+  if (!deliveryId) return;
+  try {
+    const supabase = getSupabaseClient();
+    await supabase.from('zinto_webhook_deliveries').delete().eq('delivery_id', deliveryId);
+  } catch {
+    // best-effort; a stale row only risks dropping one retry
+  }
+}
+
 /**
  * Update the delivery status of a sent message from a status webhook.
  *
@@ -202,16 +217,21 @@ export async function recordWebhookDelivery(deliveryId: string): Promise<boolean
  */
 export async function updateMessageStatusFromWebhook(
   webhookMessageId: number | string,
-  status: 'sent' | 'delivered' | 'read' | 'failed'
+  status: 'sent' | 'delivered' | 'read' | 'failed',
+  externalProviderId?: string | null
 ): Promise<void> {
   const supabase = getSupabaseClient();
   const asString = String(webhookMessageId).replace(/[^\w.-]/g, '');
   const asNumber = Number(webhookMessageId);
   const numericFilter = Number.isFinite(asNumber) ? asNumber : -1;
 
+  const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+  // Store the provider (Meta/wamid) id when the webhook includes it.
+  if (externalProviderId) patch.external_provider_id = externalProviderId;
+
   const { error } = await supabase
     .from('zinto_messages')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(patch)
     .or(`zinto_numeric_id.eq.${numericFilter},zinto_message_id.eq.${asString}`);
 
   if (error) {

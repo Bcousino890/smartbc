@@ -8,6 +8,7 @@ import {
   findConversationByPhone,
   getOrCreateConversation,
   recordWebhookDelivery,
+  deleteWebhookDelivery,
 } from '@/lib/db/zinto';
 import { handleLeadWebhookEvent, handleSyncWebhookEvent } from '@/lib/db/zinto-leads';
 import { normalizePhoneNumber } from '@/lib/services/zinto/client';
@@ -128,6 +129,9 @@ function extractStatus(payload: ZintoWebhookPayload): {
 const STATUS_VALUES = ['sent', 'delivered', 'read', 'failed'];
 
 export async function POST(req: NextRequest) {
+  // Hoisted so the catch handler can undo a recorded delivery on failure,
+  // letting Zinto's retry reprocess instead of being dropped as a duplicate.
+  let deliveryId = '';
   try {
     const rawBody = await req.text();
     let payload: ZintoWebhookPayload;
@@ -141,10 +145,11 @@ export async function POST(req: NextRequest) {
     const webhookSecret = config?.webhookSecret || '';
     const inboundToken = config?.inboundToken || '';
     const defaultChannelId = config?.channelId || 4;
+    const clChannelId = config?.channelIdCl || 50;
 
     const eventName = (req.headers.get('x-zinto-event') || payload.event || '').toLowerCase();
     const timestamp = req.headers.get('x-zinto-timestamp') || '';
-    const deliveryId = req.headers.get('x-zinto-delivery-id') || '';
+    deliveryId = req.headers.get('x-zinto-delivery-id') || '';
     const signature =
       req.headers.get('x-zinto-signature') || req.headers.get('x-webhook-signature') || '';
     const tokenHeader = req.headers.get('x-zinto-token') || '';
@@ -201,11 +206,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing message content' }, { status: 400 });
       }
 
-      let conversation = await findConversationByPhone(fromPhone);
+      // Route to the right channel/country using the channel the message came in
+      // on (native payload carries channel.id). CL uses #50, ES the default #4.
+      const incomingChannelId = payload.channel?.id != null ? Number(payload.channel.id) : defaultChannelId;
+      const channelId = Number.isFinite(incomingChannelId) ? incomingChannelId : defaultChannelId;
+      const country: 'es' | 'cl' = Number(channelId) === Number(clChannelId) ? 'cl' : 'es';
+
+      let conversation = await findConversationByPhone(fromPhone, country);
       if (!conversation) {
-        conversation = await getOrCreateConversation(fromPhone, fromPhone, defaultChannelId, {
-          contactName: inbound.name || null,
-        });
+        conversation = await getOrCreateConversation(
+          fromPhone,
+          fromPhone,
+          channelId,
+          { contactName: inbound.name || null },
+          country,
+        );
       }
 
       // Media messages carry no text; show a compact placeholder in the inbox.
@@ -244,15 +259,21 @@ export async function POST(req: NextRequest) {
     const dup = await replay();
     if (dup) return dup;
 
-    const { id, status } = extractStatus(payload);
+    const { id, status, externalProviderId } = extractStatus(payload);
     if (id != null && status && STATUS_VALUES.includes(status)) {
-      await updateMessageStatusFromWebhook(id, status as 'sent' | 'delivered' | 'read' | 'failed');
+      await updateMessageStatusFromWebhook(
+        id,
+        status as 'sent' | 'delivered' | 'read' | 'failed',
+        externalProviderId,
+      );
     }
 
     return NextResponse.json({ status: 'received' }, { status: 200 });
   } catch (error) {
     console.error('Zinto webhook processing error:', error);
-    // Return 500 so Zinto retries (with backoff) on transient failures.
+    // Undo the recorded delivery so Zinto's retry can reprocess (not be dropped
+    // as a duplicate), then return 500 to trigger that retry with backoff.
+    await deleteWebhookDelivery(deliveryId);
     return NextResponse.json({ error: 'Processing error' }, { status: 500 });
   }
 }

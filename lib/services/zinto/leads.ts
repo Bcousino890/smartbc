@@ -6,7 +6,6 @@
 // payloads follow Zinto's technical response (crm.zinto.app/api/v1).
 // ============================================================
 
-import { randomUUID } from 'crypto';
 import { zintoFetch } from './client';
 
 // ------------------------------------------------------------
@@ -190,7 +189,9 @@ export async function syncExecute(
 ): Promise<ZintoSyncExecuteResult> {
   return zintoFetch('/sync/execute', {
     method: 'POST',
-    idempotencyKey: idempotencyKey || `smartbc-sync-${input.preview_id}-${randomUUID()}`,
+    // Stable key derived from the (single-use) preview id so a retry of the
+    // SAME execution is deduped by Zinto instead of running the sync twice.
+    idempotencyKey: idempotencyKey || `smartbc-sync-${input.preview_id}`,
     body: JSON.stringify({
       preview_id: input.preview_id,
       mode: input.mode || 'execute_valid_records',

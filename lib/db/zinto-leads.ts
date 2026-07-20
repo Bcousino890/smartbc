@@ -207,21 +207,47 @@ export async function handleLeadWebhookEvent(
     updated_at: new Date().toISOString(),
   };
 
+  // Only overwrite columns we actually received (don't null out known data).
+  const patch = Object.fromEntries(
+    Object.entries(row).filter(([, v]) => v !== null && v !== undefined),
+  );
+
   let leadRecordId: string | undefined;
   if (existing) {
-    // Only overwrite columns we actually received (don't null out known data).
-    const patch = Object.fromEntries(
-      Object.entries(row).filter(([, v]) => v !== null && v !== undefined),
-    );
     await supabase.from('zinto_leads').update(patch).eq('id', existing.id);
     leadRecordId = existing.id;
   } else {
-    const { data: inserted } = await supabase
+    const { data: inserted, error: insertErr } = await supabase
       .from('zinto_leads')
       .insert(row)
       .select('id')
       .single();
-    leadRecordId = inserted?.id;
+    if (insertErr) {
+      // A concurrent delivery may have inserted the same lead first (unique
+      // violation) — fall back to updating the row that won the race.
+      const key = lead.external_id
+        ? { column: 'external_id', value: lead.external_id }
+        : lead.id
+          ? { column: 'zinto_id', value: lead.id }
+          : contact.phone
+            ? { column: 'phone', value: contact.phone }
+            : null;
+      if (!key) throw new Error(`Failed to save lead: ${insertErr.message}`);
+      const { data: raced } = await supabase
+        .from('zinto_leads')
+        .select('id')
+        .eq(key.column, key.value)
+        .maybeSingle();
+      if (raced) {
+        await supabase.from('zinto_leads').update(patch).eq('id', raced.id);
+        leadRecordId = raced.id;
+        matchedBy = matchedBy ?? key.column;
+      } else {
+        throw new Error(`Failed to save lead: ${insertErr.message}`);
+      }
+    } else {
+      leadRecordId = inserted?.id;
+    }
   }
 
   // Audit trail of the raw event (best-effort; never block the ack on this).
