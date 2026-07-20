@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { publishPropertyToML } from "@/lib/sync/portalinmobiliario/ml-publisher";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import type { MlPropertyInput } from "@/lib/sync/portalinmobiliario/ml-publisher";
+import { watermarkPhotosForPortal } from "@/lib/services/portalinmobiliario/watermark-photos";
 
 export async function POST(request: Request) {
   try {
@@ -55,6 +56,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Publicar las fotos con el logo de la agencia (Benjamín Cousiño
+    // Propiedades). MercadoLibre las descarga desde su URL, así que servimos
+    // versiones ya marcadas. Tolerante a fallos: si alguna no se puede marcar,
+    // cae a la original.
+    const brandedImageUrls = await watermarkPhotosForPortal(db, propertyId, imageUrls);
+
     const mlCurrency = (property.currency === "clp" ? "CLP" : property.currency === "usd" ? "USD" : "UF") as "CLP" | "UF" | "USD";
     const input: MlPropertyInput = {
       title: property.title,
@@ -71,7 +78,7 @@ export async function POST(request: Request) {
       totalAreaM2: property.square_meters ?? undefined,
       coveredAreaM2: property.covered_area_m2 ?? undefined,
       parkingLots: property.parking_lots ?? undefined,
-      imageUrls,
+      imageUrls: brandedImageUrls,
       listingType: "gold_special",
     };
 
