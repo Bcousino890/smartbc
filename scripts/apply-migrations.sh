@@ -50,3 +50,13 @@ if [ "$applied" -eq 0 ]; then
 else
   echo "  $applied migración(es) aplicada(s)."
 fi
+
+# Recargar el schema cache de PostgREST: sin esto, la API de Supabase no "ve"
+# las tablas/columnas nuevas creadas por las migraciones hasta reiniciar el
+# contenedor rest (error PGRST205 "Could not find the table ... in the schema
+# cache" → 500 en /admin/leads y en el webhook de leads). Es barato e idempotente.
+if psql_run -q -c "NOTIFY pgrst, 'reload schema';" >/dev/null 2>&1; then
+  echo "  🔄 Schema cache de PostgREST recargado."
+else
+  echo "  ⚠️  No se pudo recargar el schema — si la API no ve tablas nuevas: docker restart supabase-rest"
+fi
