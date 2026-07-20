@@ -1,11 +1,12 @@
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/db/admin";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!canAccess(profile.role, "properties", "edit")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

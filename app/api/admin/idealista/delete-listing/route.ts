@@ -1,6 +1,7 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/db/admin";
 
 export async function POST(req: Request) {
@@ -8,7 +9,7 @@ export async function POST(req: Request) {
   if (!profile) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!canAccess(profile.role, "properties", "delete")) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
