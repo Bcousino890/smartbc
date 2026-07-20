@@ -1,4 +1,5 @@
 import "server-only";
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/db/admin";
 
 // Cliente de IA multi-proveedor. La configuración se guarda en la tabla
@@ -102,26 +103,99 @@ export type AICompleteOpts = {
   jsonSchema?: Record<string, unknown>; // si se da, se pide salida JSON conforme al esquema
 };
 
+// Antes de mandar fotos a la IA las descargamos y reescalamos en el servidor
+// a un tamaño acotado, y las enviamos ya incrustadas en base64 (no como URL).
+// Motivos:
+//  - Los proveedores (OpenRouter/Gemini/Anthropic) descargan la imagen desde la
+//    URL y rechazan con 413 cualquier archivo mayor de ~30 MB ("Downloaded image
+//    content cannot exceed 30MB"). Las fotos originales de las fichas pueden
+//    superarlo, y ese era el error de "Regenerar con IA". Al mandar la imagen ya
+//    reescalada, el proveedor no descarga nada y el límite deja de aplicar.
+//  - Los modelos de visión no aprovechan más de ~1.5k px de lado: reescalar
+//    reduce coste, latencia y peso sin perder calidad de análisis.
+const VISION_MAX_DIMENSION = 1536; // px del lado largo (Anthropic reescala a 1568)
+const VISION_JPEG_QUALITY = 82;
+const IMAGE_FETCH_TIMEOUT_MS = 20_000;
+
+type PreparedImage =
+  | { kind: "url"; url: string } // documentos (PDF) u otros no-imagen: se pasan por URL
+  | { kind: "base64"; mediaType: string; data: string };
+
+// Descarga una imagen y la reescala/recomprime con sharp. Devuelve base64 para
+// incrustarla en la petición y evitar así que el proveedor descargue el original.
+async function fetchAndDownscaleImage(url: string): Promise<PreparedImage> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), IMAGE_FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)" },
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error(`fetch_${res.status}`);
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  const data = (
+    await sharp(buf, { failOn: "none" })
+      .rotate() // respeta la orientación EXIF antes de reescalar
+      .resize({
+        width: VISION_MAX_DIMENSION,
+        height: VISION_MAX_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .flatten({ background: "#ffffff" }) // planos PNG con transparencia → fondo blanco
+      .jpeg({ quality: VISION_JPEG_QUALITY })
+      .toBuffer()
+  ).toString("base64");
+  return { kind: "base64", mediaType: "image/jpeg", data };
+}
+
+// Prepara la lista de imágenes/documentos para enviarlos a la IA. Los PDFs (y
+// otros no-imagen) se pasan por URL como hasta ahora. Las imágenes se descargan
+// y reescalan; si una foto concreta falla (red, formato ilegible), se OMITE en
+// vez de tumbar toda la generación: mejor una descripción con menos fotos que un
+// error para el usuario.
+async function prepareImages(urls: string[], isDocument: boolean): Promise<PreparedImage[]> {
+  if (isDocument) return urls.map((url) => ({ kind: "url", url }));
+  const settled = await Promise.all(
+    urls.map((url) =>
+      fetchAndDownscaleImage(url).catch((err) => {
+        console.error("[ai] No se pudo preparar la imagen para la IA:", url, err);
+        return null;
+      }),
+    ),
+  );
+  return settled.filter((p): p is PreparedImage => p !== null);
+}
+
 // Devuelve el texto de la respuesta (para JSON, el string que el llamador parsea).
 export async function aiComplete(opts: AICompleteOpts): Promise<string> {
   const cfg = await resolveConfig();
   const images = opts.images ?? [];
+  const isDocument = opts.fileMediaType === "application/pdf";
+  const prepared = images.length ? await prepareImages(images, isDocument) : [];
   const maxTokens = opts.maxTokens ?? 1500;
 
   if (cfg.kind === "anthropic") {
-    const isDocument = opts.fileMediaType === "application/pdf";
-    const content = images.length
+    const content = prepared.length
       ? [
-          ...images.map((url) =>
-            isDocument
-              ? { type: "document", source: { type: "url", url } }
-              : { type: "image", source: { type: "url", url } }
+          ...prepared.map((img) =>
+            img.kind === "url"
+              ? isDocument
+                ? { type: "document", source: { type: "url", url: img.url } }
+                : { type: "image", source: { type: "url", url: img.url } }
+              : { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } }
           ),
           { type: "text", text: opts.userText },
         ]
       : opts.userText;
     const body: Record<string, unknown> = {
-      model: images.length ? cfg.visionModel : cfg.model,
+      model: prepared.length ? cfg.visionModel : cfg.model,
       max_tokens: maxTokens,
       system: opts.system,
       messages: [{ role: "user", content }],
@@ -154,14 +228,19 @@ export async function aiComplete(opts: AICompleteOpts): Promise<string> {
   }
 
   // OpenAI-compatible (OpenRouter / NVIDIA / Ollama / OpenAI)
-  const userContent = images.length
+  const userContent = prepared.length
     ? [
         { type: "text", text: opts.userText },
-        ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+        ...prepared.map((img) => ({
+          type: "image_url",
+          image_url: {
+            url: img.kind === "url" ? img.url : `data:${img.mediaType};base64,${img.data}`,
+          },
+        })),
       ]
     : opts.userText;
   const body: Record<string, unknown> = {
-    model: images.length ? cfg.visionModel : cfg.model,
+    model: prepared.length ? cfg.visionModel : cfg.model,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: opts.system },
