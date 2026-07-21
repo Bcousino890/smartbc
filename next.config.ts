@@ -56,6 +56,15 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "urbantechome.com",
       },
+      {
+        // CDN de MercadoLibre/PortalInmobiliario: origen de las fotos
+        // scrapeadas de una captación (CL). Al "Convertir a propiedad" se
+        // re-alojan a nuestro storage (ver convert/route.ts), pero esta
+        // entrada evita que queden en blanco las que ya se convirtieron
+        // antes de ese fix, o si el re-alojado de alguna foto falla.
+        protocol: "https",
+        hostname: "http2.mlstatic.com",
+      },
     ],
   },
 };
