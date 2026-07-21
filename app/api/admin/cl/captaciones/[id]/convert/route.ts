@@ -1,7 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+
+const PHOTOS_BUCKET = "properties-photos";
+
+// Re-aloja una foto scrapeada (CDN externo, ej. http2.mlstatic.com de
+// MercadoLibre/PortalInmobiliario) en nuestro storage. Necesario porque:
+//  - La galería de Propiedades usa next/image, que solo carga dominios en el
+//    allowlist de next.config.ts — las fotos de captaciones quedaban en
+//    blanco ahí (aunque sí se veían en Captaciones, que usa <img> normal).
+//  - El anuncio de origen suele darse de baja poco después de confirmarse la
+//    captación, así que depender de esa URL externa es frágil.
+// Si falla la descarga/subida, se devuelve la URL original (mejor mostrarla
+// sin re-alojar que perder la foto).
+async function rehostCaptacionPhoto(
+  db: ReturnType<typeof createAdminClient>,
+  sourceUrl: string,
+  captacionId: string,
+  index: number,
+): Promise<string> {
+  try {
+    const res = await fetch(sourceUrl, { cache: "no-store" });
+    if (!res.ok) throw new Error(`fetch_${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const webp = await sharp(buf, { failOn: "none" }).rotate().webp({ quality: 82 }).toBuffer();
+    const path = `captaciones/${captacionId}/${index}.webp`;
+    const { error: uploadError } = await db.storage
+      .from(PHOTOS_BUCKET)
+      .upload(path, webp, { contentType: "image/webp", upsert: true });
+    if (uploadError) throw uploadError;
+    const { data } = db.storage.from(PHOTOS_BUCKET).getPublicUrl(path);
+    return data.publicUrl;
+  } catch (err) {
+    console.error("[captaciones convert] no se pudo re-alojar foto:", sourceUrl, err);
+    return sourceUrl;
+  }
+}
 
 // Convierte una captación CONFIRMADA en una propiedad real del catálogo de
 // Chile. Antes la transición confirmed → converted_to_property solo cambiaba
@@ -130,7 +166,8 @@ export async function POST(
       );
     }
 
-    // Copiar fotos snapshot de la captación a la propiedad.
+    // Copiar fotos snapshot de la captación a la propiedad, re-alojándolas en
+    // nuestro storage (ver rehostCaptacionPhoto).
     const { data: photos } = await db
       .from("captacion_photos")
       .select("url, position")
@@ -138,18 +175,23 @@ export async function POST(
       .order("position", { ascending: true });
 
     if (photos && photos.length > 0) {
+      const typedPhotos = photos as Array<{ url: string; position: number | null }>;
+      const rehostedUrls = await Promise.all(
+        typedPhotos.map((p, i) => rehostCaptacionPhoto(db, p.url, id, i)),
+      );
+
       await db.from("property_photos").insert(
-        photos.map((p: { url: string; position: number | null }, i: number) => ({
+        rehostedUrls.map((url, i) => ({
           property_id: property.id,
-          url: p.url,
-          position: p.position ?? i,
+          url,
+          position: typedPhotos[i].position ?? i,
           is_cover: i === 0,
         }))
       );
       if (!captacion.cover_photo_url) {
         await db
           .from("properties")
-          .update({ cover_photo_url: photos[0].url })
+          .update({ cover_photo_url: rehostedUrls[0] })
           .eq("id", property.id);
       }
     }
