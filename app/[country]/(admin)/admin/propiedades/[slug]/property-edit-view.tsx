@@ -762,6 +762,20 @@ export function PropertyEditView({
         </div>
       )}
 
+      {/* Descargar fotos (con el logo superpuesto): las fotos no dependen de
+          la operación, así que este botón va una sola vez, sea o no dual. */}
+      {property.photos.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <a
+            href={`/api/admin/properties/${property.slug}/download-photos`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+          >
+            <ImageIcon size={13} strokeWidth={1.75} className="text-gold-dark" />
+            <span>{t("adminProps.detail.downloadPhotos")}</span>
+          </a>
+        </div>
+      )}
+
       {/* Aviso para propiedades sindicadas */}
       {isScraped && (
         <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-gold/30 bg-gold/10 p-3.5 text-[12px] text-ink/80">
