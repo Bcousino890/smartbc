@@ -725,6 +725,7 @@ const es: Strings = {
   "adminProps.detail.linkCopied": "¡Enlace copiado!",
   "adminProps.detail.copyLinkFallback": "Copia este enlace:",
   "adminProps.detail.downloadPdf": "Descargar PDF",
+  "adminProps.detail.downloadPhotos": "Descargar fotos",
   "adminProps.smartLinks.title": "SmartLinks (enlaces personalizados)",
   "adminProps.smartLinks.help":
     "Genera un enlace único por cliente o canal. Cada apertura se registra y puedes ver cuántas veces se ha abierto.",
@@ -1730,6 +1731,7 @@ const en: Strings = {
   "adminProps.detail.linkCopied": "Link copied!",
   "adminProps.detail.copyLinkFallback": "Copy this link:",
   "adminProps.detail.downloadPdf": "Download PDF",
+  "adminProps.detail.downloadPhotos": "Download photos",
   "adminProps.smartLinks.title": "SmartLinks (personalised links)",
   "adminProps.smartLinks.help":
     "Generate a unique link per client or channel. Each open is tracked.",
@@ -2697,6 +2699,7 @@ const fr: Strings = {
   "adminProps.detail.linkCopied": "Lien copié !",
   "adminProps.detail.copyLinkFallback": "Copie ce lien :",
   "adminProps.detail.downloadPdf": "Télécharger le PDF",
+  "adminProps.detail.downloadPhotos": "Télécharger les photos",
   "adminProps.smartLinks.title": "SmartLinks (liens personnalisés)",
   "adminProps.smartLinks.help":
     "Génère un lien unique par client ou canal. Chaque ouverture est enregistrée.",
@@ -3656,6 +3659,7 @@ const de: Strings = {
   "adminProps.detail.linkCopied": "Link kopiert!",
   "adminProps.detail.copyLinkFallback": "Kopiere diesen Link:",
   "adminProps.detail.downloadPdf": "PDF herunterladen",
+  "adminProps.detail.downloadPhotos": "Fotos herunterladen",
   "adminProps.smartLinks.title": "SmartLinks (personalisierte Links)",
   "adminProps.smartLinks.help":
     "Erstelle einen einzigartigen Link pro Kunde oder Kanal. Jedes Öffnen wird erfasst.",
