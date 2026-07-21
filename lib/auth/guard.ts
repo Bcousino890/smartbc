@@ -81,6 +81,14 @@ export async function requirePermission(
  *     // ...mutación, ya autorizada
  *   }
  *
+ * ⚠️ En producción, Next.js sustituye el mensaje de cualquier excepción no
+ * capturada que salga de una server action por uno genérico ("An error
+ * occurred in the Server Components render...") antes de que llegue al
+ * cliente — así que un `throw` aquí deja al usuario sin saber que el
+ * problema es de permisos (parecía "no me deja subir/guardar" sin más
+ * explicación). Si la action ya devuelve un `{ ok: false; error: string }`,
+ * usa `checkPermission` en su lugar para que el motivo real SÍ le llegue.
+ *
  * @throws Error("No autenticado") si no hay sesión/perfil.
  * @throws Error("Sin permisos para <resource>.<action>") si el permiso es falso.
  * @returns el `profile` autenticado y autorizado.
@@ -107,6 +115,54 @@ export async function assertPermission(
   }
 
   return profile;
+}
+
+/** Resultado de `checkPermission`: o pasa (con el profile) o trae un mensaje listo para mostrar. */
+export type PermissionCheckResult =
+  | { ok: true; profile: ProfileRow }
+  | { ok: false; error: string };
+
+/**
+ * Igual que `assertPermission`, pero NO lanza: devuelve `{ ok: false, error }`
+ * en vez de un `throw`. Pensada para server actions cuyo tipo de retorno ya es
+ * `{ ok: true; ... } | { ok: false; error: string }` — al no lanzar, evitamos
+ * que Next.js redacte el mensaje en producción (ver nota en `assertPermission`)
+ * y el usuario ve el motivo real ("no tienes permiso...") en vez de un error
+ * genérico sin explicación.
+ *
+ *   "use server";
+ *   export async function crearAlgo(input): Promise<CrearAlgoResult> {
+ *     const gate = await checkPermission("clientes", "create");
+ *     if (!gate.ok) return gate;
+ *     // ...mutación, ya autorizada (gate.profile si hace falta)
+ *   }
+ */
+export async function checkPermission(
+  resource: PermissionResource,
+  action: PermissionAction,
+  opts?: { country?: string },
+): Promise<PermissionCheckResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return { ok: false, error: "No autenticado" };
+  }
+
+  const effective = await getEffectivePermissions(
+    profile.id,
+    profile.role,
+    opts?.country,
+  );
+  const allowed = effective[resource]?.[action] ?? false;
+
+  if (!allowed) {
+    return {
+      ok: false,
+      error:
+        "No tienes permiso para esta acción. Pide a un administrador que te dé acceso desde Usuarios.",
+    };
+  }
+
+  return { ok: true, profile };
 }
 
 /**

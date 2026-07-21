@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
-import { assertPermission } from "@/lib/auth/guard";
+import { checkPermission } from "@/lib/auth/guard";
 import { shareSlug } from "@/lib/share-slug";
 import type { Operation, StayType } from "@/lib/types";
 
@@ -58,7 +58,8 @@ function normalizeSlug(raw: string): string {
 export async function createProperty(
   input: CreatePropertyInput,
 ): Promise<CreatePropertyResult> {
-  await assertPermission("properties", "create", { country: input.country });
+  const gate = await checkPermission("properties", "create", { country: input.country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -156,7 +157,8 @@ export async function uploadPropertyPhoto(
   formData: FormData,
 ): Promise<UploadPropertyPhotoResult> {
   const country = String(formData.get("country") ?? "") || undefined;
-  await assertPermission("properties", "edit", { country });
+  const gate = await checkPermission("properties", "edit", { country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -265,7 +267,8 @@ export async function reorderPropertyPhotos(
   orderedUrls: string[],
   country?: string,
 ): Promise<ReorderPhotosResult> {
-  await assertPermission("properties", "edit", { country });
+  const gate = await checkPermission("properties", "edit", { country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -327,7 +330,8 @@ export type DeletePropertyPhotoResult =
 export async function deletePropertyPhoto(
   input: DeletePropertyPhotoInput,
 ): Promise<DeletePropertyPhotoResult> {
-  await assertPermission("properties", "edit", { country: input.country });
+  const gate = await checkPermission("properties", "edit", { country: input.country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -442,7 +446,8 @@ export type UpdatePropertyResult =
 export async function updateProperty(
   input: UpdatePropertyInput,
 ): Promise<UpdatePropertyResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -611,7 +616,8 @@ export async function createShareLink(
   slug: string,
   label: string | null,
 ): Promise<CreateShareResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -649,7 +655,8 @@ export async function deleteShareLink(
   shareId: string,
   slug: string,
 ): Promise<DeleteShareResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -673,7 +680,8 @@ export async function archiveProperty(
 ): Promise<ArchivePropertyResult> {
   // Archivar = borrado lógico (status archived, reversible). Se trata como
   // edición para alinearlo con el mismo cambio vía updateProperty(status).
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -718,7 +726,8 @@ export async function addPropertyVideo(
   slug: string,
   videoUrl: string,
 ): Promise<AddVideoResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -764,7 +773,8 @@ export async function addPropertyVideo(
 export async function uploadPropertyVideo(
   formData: FormData,
 ): Promise<UploadVideoResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -856,7 +866,8 @@ export async function uploadPropertyVideo(
 export async function uploadPropertyPlan(
   formData: FormData,
 ): Promise<UploadPlanResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -925,7 +936,8 @@ export async function deletePropertyMedia(
   mediaId: string,
   storagePath: string,
 ): Promise<DeleteMediaResult> {
-  await assertPermission("properties", "edit");
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
