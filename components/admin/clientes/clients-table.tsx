@@ -5,9 +5,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { deleteClient } from "@/app/(admin)/admin/clientes/actions";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient, ClientProfileType, ClientStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -199,8 +201,20 @@ function ClientRow({
   onSelect: (id: string) => void;
 }) {
   const t = useT();
+  const [isDeleting, startDeleteTransition] = useTransition();
   const isActive = client.status === "active";
   const fullName = `${client.firstName} ${client.lastName}`;
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(t("clientes.table.confirmDelete", { name: fullName }))) return;
+    startDeleteTransition(async () => {
+      const result = await deleteClient(client.id);
+      if (!result.ok) {
+        alert(t("clientes.table.deleteError", { error: result.error }));
+      }
+    });
+  };
 
   return (
     <tr
@@ -257,14 +271,26 @@ function ClientRow({
       </td>
       <td className="px-3 py-3 text-ink/75">{client.assignedAdvisor}</td>
       <td className="rounded-r-xl px-3 py-3 text-right">
-        <Link
-          href={`/admin/clientes/${client.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
-        >
-          <span>{t("clientes.table.viewDetails")}</span>
-          <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
-        </Link>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            title={t("clientes.table.delete")}
+            aria-label={t("clientes.table.delete")}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-ink/10 bg-white/85 text-ink/45 transition hover:border-rose-300/60 hover:text-rose-600 disabled:opacity-50"
+          >
+            <Trash2 size={12} strokeWidth={2} />
+          </button>
+          <Link
+            href={`/admin/clientes/${client.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+          >
+            <span>{t("clientes.table.viewDetails")}</span>
+            <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
+          </Link>
+        </div>
       </td>
     </tr>
   );

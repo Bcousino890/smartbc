@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
-import { assertPermission } from "@/lib/auth/guard";
+import { assertPermission, checkPermission } from "@/lib/auth/guard";
 import type { Operation, StayType } from "@/lib/types";
 
 export type SaveClientPreferencesInput = {
@@ -241,6 +241,33 @@ export async function createNewClient(
   revalidatePath("/admin/clientes");
   revalidatePath("/cl/admin/clientes");
   return { ok: true, clientId };
+}
+
+export type DeleteClientResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function deleteClient(
+  clientId: string,
+): Promise<DeleteClientResult> {
+  const gate = await checkPermission("clientes", "delete");
+  if (!gate.ok) return gate;
+
+  const adminClient = createAdminClient();
+
+  // Borra el usuario de auth; `profiles.id` referencia auth.users(id) ON
+  // DELETE CASCADE, y el resto de tablas de cliente (preferencias, favoritos,
+  // visitas, tags…) referencian profiles(id) también ON DELETE CASCADE.
+  const { error } = await adminClient.auth.admin.deleteUser(clientId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin/clientes");
+  revalidatePath("/cl/admin/clientes");
+  revalidatePath("/es/admin/clientes");
+  return { ok: true };
 }
 
 // ─── Preferencias Chile ──────────────────────────────────────────────────────
