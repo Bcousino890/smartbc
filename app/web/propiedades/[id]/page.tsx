@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, Heart, MapPin } from "lucide-react";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
+import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { PropertyCard } from "../../_components/PropertyCard";
 import { PropertyGallery } from "../../_components/PropertyGallery";
 import { PropertyVideos } from "../../_components/PropertyVideos";
@@ -19,7 +20,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .eq("slug", slug)
     .in("status", ["available", "reserved"])
@@ -50,10 +51,11 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const office = countryCode === "es" ? "Madrid" : "Santiago";
   const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
   const priceNum = Number(p.price);
-  const priceStr =
-    countryCode === "cl"
-      ? `USD ${priceNum.toLocaleString("en-US")}`
-      : `€ ${priceNum.toLocaleString("es-ES")}`;
+  const priceStr = getCountryConfig(isCountry(countryCode) ? countryCode : "es").formatPrice(
+    priceNum,
+    (p.currency as string | null) ?? null,
+    p.operation as string | null,
+  );
 
   return {
     id: p.slug as string,
@@ -78,6 +80,8 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       ...((p.features_manual as string[]) ?? []),
     ],
     address: (p.address as string | null) ?? (p.zone as string),
+    latitude: p.latitude != null ? Number(p.latitude) : null,
+    longitude: p.longitude != null ? Number(p.longitude) : null,
     office: office as "Madrid" | "Santiago",
     phone,
   };
@@ -89,7 +93,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .in("status", ["available", "reserved"])
     .is("archived_at", null)
@@ -121,10 +125,11 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
     const office = countryCode === "es" ? "Madrid" : "Santiago";
     const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
     const priceNum = Number(p.price);
-    const priceStr =
-      countryCode === "cl"
-        ? `USD ${priceNum.toLocaleString("en-US")}`
-        : `€ ${priceNum.toLocaleString("es-ES")}`;
+    const priceStr = getCountryConfig(isCountry(countryCode) ? countryCode : "es").formatPrice(
+      priceNum,
+      (p.currency as string | null) ?? null,
+      p.operation as string | null,
+    );
     return {
       id: p.slug as string,
       ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
@@ -193,7 +198,7 @@ export default async function PropertyDetail({ params }: Props) {
             </div>
             <p className="text-sm text-gray-500 flex items-center gap-2">
               <MapPin size={14} className="text-gold" />
-              {p.address}, {p.city}, {p.country}
+              {p.zone}, {p.city}, {p.country}
             </p>
           </div>
 
@@ -234,10 +239,21 @@ export default async function PropertyDetail({ params }: Props) {
 
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>
-            <PropertyLocationMap address={p.address} city={p.city} country={p.country} />
+            <PropertyLocationMap
+              zone={p.zone}
+              city={p.city}
+              country={p.country}
+              latitude={p.latitude}
+              longitude={p.longitude}
+            />
           </section>
 
-          <CampusDistance city={p.city} address={p.address} />
+          <CampusDistance
+            city={p.city}
+            zone={p.zone}
+            latitude={p.latitude}
+            longitude={p.longitude}
+          />
         </article>
 
         {/* SIDEBAR */}

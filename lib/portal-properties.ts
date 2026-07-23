@@ -20,6 +20,8 @@ export type Property = {
   description: string;
   features: string[];
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   office: "Madrid" | "Santiago";
   phone: string;
 };
