@@ -126,13 +126,27 @@ const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
   Santiago: { lat: -33.4489, lng: -70.6693 },
 };
 
-export function CampusDistance({ city, address }: { city: string; address: string }) {
+export function CampusDistance({
+  city,
+  zone,
+  latitude,
+  longitude,
+}: {
+  city: string;
+  zone: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}) {
   const universities = city === "Santiago" ? UNIVERSITIES_SANTIAGO : UNIVERSITIES_MADRID;
   const [selected, setSelected] = useState<University>(universities[0]);
   const times = getTransportTimes(selected);
 
-  // Approximate property location (city center for now)
-  const propertyCoords = CITY_CENTERS[city] || { lat: 40.4168, lng: -3.7038 };
+  // Coordenadas reales de la propiedad (geocoding cacheado) si están
+  // disponibles; si no, caemos al centro de la ciudad como aproximación.
+  const hasPreciseCoords = latitude != null && longitude != null;
+  const propertyCoords = hasPreciseCoords
+    ? { lat: latitude!, lng: longitude! }
+    : CITY_CENTERS[city] || { lat: 40.4168, lng: -3.7038 };
 
   // Calculate bounds to fit both markers with some padding
   const bounds = useMemo(() => {
@@ -149,7 +163,11 @@ export function CampusDistance({ city, address }: { city: string; address: strin
     ] as [[number, number], [number, number]];
   }, [propertyCoords, selected]);
 
-  const mapsDirectionsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(address + "," + city)}/${selected.lat},${selected.lng}`;
+  // Usamos coordenadas cuando las tenemos (no expone la dirección exacta en
+  // la URL); si no, caemos a la zona/comuna, nunca a la dirección privada.
+  const mapsDirectionsUrl = hasPreciseCoords
+    ? `https://www.google.com/maps/dir/${propertyCoords.lat},${propertyCoords.lng}/${selected.lat},${selected.lng}`
+    : `https://www.google.com/maps/dir/${encodeURIComponent(zone + "," + city)}/${selected.lat},${selected.lng}`;
 
   return (
     <section className="mt-16">
@@ -188,7 +206,7 @@ export function CampusDistance({ city, address }: { city: string; address: strin
 
               {/* Marcador de propiedad */}
               <Marker position={[propertyCoords.lat, propertyCoords.lng]}>
-                <Popup>📍 Propiedad: {address}</Popup>
+                <Popup>📍 Propiedad: {zone}</Popup>
               </Marker>
 
               {/* Círculo de área referencial alrededor de la propiedad */}
@@ -226,7 +244,7 @@ export function CampusDistance({ city, address }: { city: string; address: strin
         {/* Tiempos de transporte */}
         <div>
           <p className="text-[11px] tracking-[0.24em] uppercase text-gray-400 mb-4">
-            Tiempos aproximados desde {address.split(",")[0]}
+            Tiempos aproximados desde {zone}
           </p>
           <div className="space-y-4">
             {times.map((time) => {

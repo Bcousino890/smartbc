@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface PropertyGalleryProps {
@@ -25,6 +25,19 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
   const goToNext = () => {
     setCurrentIndex((prev) => (prev === allImages.length - 1 ? 0 : prev + 1));
   };
+
+  // Keyboard navigation (fullscreen)
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") goToPrevious();
+      else if (e.key === "ArrowRight") goToNext();
+      else if (e.key === "Escape") setIsFullscreen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullscreen, allImages.length]);
 
   // Swipe handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -178,7 +191,7 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
 
           {/* Image */}
           <div
-            className="flex-1 flex items-center justify-center overflow-auto"
+            className="relative flex-1 flex items-center justify-center overflow-auto"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
@@ -190,18 +203,32 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
               onDragStart={handleDragStart}
               onCopy={handleCopy}
             />
+
+            {/* Prev/next arrows — centered on the image edges so they never
+                collide with corner-docked widgets (e.g. the chat bubble) */}
+            {allImages.length > 1 && (
+              <>
+                <button
+                  onClick={goToPrevious}
+                  className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 text-white bg-black/30 hover:bg-white/10 p-2 transition-colors"
+                  aria-label="Foto anterior"
+                >
+                  <ChevronLeft size={28} />
+                </button>
+                <button
+                  onClick={goToNext}
+                  className="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 text-white bg-black/30 hover:bg-white/10 p-2 transition-colors"
+                  aria-label="Foto siguiente"
+                >
+                  <ChevronRight size={28} />
+                </button>
+              </>
+            )}
           </div>
 
-          {/* Navigation */}
+          {/* Dots */}
           {allImages.length > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-white/10">
-              <button
-                onClick={goToPrevious}
-                className="text-white hover:bg-white/10 p-2 transition-colors"
-                aria-label="Anterior"
-              >
-                <ChevronLeft size={24} />
-              </button>
+            <div className="flex items-center justify-center p-4 border-t border-white/10">
               <div className="flex gap-2 flex-wrap justify-center">
                 {allImages.map((_, i) => (
                   <button
@@ -214,13 +241,6 @@ export function PropertyGallery({ cover, gallery, title }: PropertyGalleryProps)
                   />
                 ))}
               </div>
-              <button
-                onClick={goToNext}
-                className="text-white hover:bg-white/10 p-2 transition-colors"
-                aria-label="Siguiente"
-              >
-                <ChevronRight size={24} />
-              </button>
             </div>
           )}
         </div>

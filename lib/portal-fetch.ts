@@ -2,12 +2,11 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { featuredProperties } from "@/lib/portal-properties";
 import type { Property } from "@/lib/portal-properties";
+import { getCountryConfig, isCountry } from "@/lib/country-config";
 
-function formatPrice(price: number, country: string): string {
-  if (country === "cl") {
-    return `USD ${Number(price).toLocaleString("en-US")}`;
-  }
-  return `€ ${Number(price).toLocaleString("es-ES")}`;
+function formatPrice(price: number, country: string, currency: string | null, operation: string | null): string {
+  const config = getCountryConfig(isCountry(country) ? country : "es");
+  return config.formatPrice(price, currency, operation);
 }
 
 function ensureAbsoluteUrl(url: string): string {
@@ -21,7 +20,7 @@ export async function fetchPortalProperties(): Promise<Property[]> {
   try {
     const admin = createAdminClient();
     const selectStr =
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (admin as any)
@@ -74,7 +73,7 @@ export async function fetchPortalProperties(): Promise<Property[]> {
         zone: p.zone as string,
         city,
         country: countryLabel as "España" | "Chile",
-        price: formatPrice(Number(p.price), countryCode),
+        price: formatPrice(Number(p.price), countryCode, (p.currency as string | null) ?? null, p.operation as string | null),
         priceNum: Number(p.price),
         operation: ((p.operation as string) === "sale" ? "Venta" : "Alquiler") as "Venta" | "Alquiler",
         type: "Apartamento" as const,
