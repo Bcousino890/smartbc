@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Heart } from "lucide-react";
 import type { Property } from "@/lib/portal-properties";
+import { Price } from "./Price";
 
 export function PropertyCard({ p }: { p: Property }) {
   return (
@@ -33,7 +34,9 @@ export function PropertyCard({ p }: { p: Property }) {
         </p>
         <h3 className="font-display text-2xl text-navy mt-2 leading-tight">{p.title}</h3>
         <div className="flex items-end justify-between mt-4 pt-4 border-t border-stone-200/60">
-          <p className="font-display text-xl text-navy">{p.price}</p>
+          <p className="font-display text-xl text-navy">
+            <Price amount={p.priceNum} currency={p.currency} operation={p.operation} />
+          </p>
           <p className="text-xs text-gray-500 tracking-wider">
             {p.beds} hab · {p.baths} baños · {p.sqm} m²
           </p>

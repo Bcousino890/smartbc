@@ -7,6 +7,10 @@ export type Property = {
   country: "España" | "Chile";
   price: string;
   priceNum: number;
+  /** Moneda nativa en la que está cargado el precio (eur/clp/uf/usd) — se
+   * usa para poder reconvertir el precio si el visitante cambia de moneda
+   * con el selector del header. */
+  currency?: string | null;
   operation: "Venta" | "Alquiler";
   type: "Apartamento" | "Penthouse" | "Casa / Villa";
   badge?: string;

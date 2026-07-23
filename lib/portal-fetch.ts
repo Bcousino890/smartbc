@@ -66,6 +66,10 @@ export async function fetchPortalProperties(): Promise<Property[]> {
         .filter((m) => m.type === "video" && m.url)
         .map((m) => ({ url: ensureAbsoluteUrl(m.url), title: m.file_name || "Video" }));
 
+      // Moneda nativa efectiva: España siempre está en euros; en Chile es la
+      // que tenga cargada la propiedad (uf/usd/clp), por defecto clp.
+      const nativeCurrency = countryCode === "es" ? "eur" : ((p.currency as string | null) ?? "clp");
+
       return {
         id: p.slug as string,
         ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
@@ -75,6 +79,7 @@ export async function fetchPortalProperties(): Promise<Property[]> {
         country: countryLabel as "España" | "Chile",
         price: formatPrice(Number(p.price), countryCode, (p.currency as string | null) ?? null, p.operation as string | null),
         priceNum: Number(p.price),
+        currency: nativeCurrency,
         operation: ((p.operation as string) === "sale" ? "Venta" : "Alquiler") as "Venta" | "Alquiler",
         type: "Apartamento" as const,
         beds: Number(p.bedrooms),
