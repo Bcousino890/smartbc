@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import "./portal.css";
 import { SiteHeader } from "./_components/SiteHeader";
 import { SiteFooter } from "./_components/SiteFooter";
+import { CurrencyProvider } from "./_components/CurrencyProvider";
+import { GoogleTranslate } from "./_components/GoogleTranslate";
 import { ZintoWebChat } from "@/components/zinto-webchat";
+import { fetchExchangeRates } from "@/lib/exchange-rates";
 
 export const metadata: Metadata = {
   title: {
@@ -17,12 +20,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PortalLayout({ children }: { children: ReactNode }) {
+export default async function PortalLayout({ children }: { children: ReactNode }) {
+  const rates = await fetchExchangeRates();
   return (
     <div className="portal-web flex min-h-screen flex-col bg-cream text-navy">
-      <SiteHeader />
-      <main className="flex-1">{children}</main>
-      <SiteFooter />
+      <CurrencyProvider rates={rates}>
+        <SiteHeader />
+        <main className="flex-1">{children}</main>
+        <SiteFooter />
+      </CurrencyProvider>
+      <GoogleTranslate />
       <ZintoWebChat />
     </div>
   );

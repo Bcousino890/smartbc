@@ -10,6 +10,7 @@ import { PropertyGallery } from "../../_components/PropertyGallery";
 import { PropertyVideos } from "../../_components/PropertyVideos";
 import { CampusDistance } from "../../_components/CampusDistance";
 import { PropertyLocationMap } from "../../_components/PropertyLocationMap";
+import { Price } from "../../_components/Price";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -56,6 +57,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
     (p.currency as string | null) ?? null,
     p.operation as string | null,
   );
+  const nativeCurrency = countryCode === "es" ? "eur" : ((p.currency as string | null) ?? "clp");
 
   return {
     id: p.slug as string,
@@ -66,6 +68,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
     country: countryCode === "es" ? "España" : "Chile",
     price: priceStr,
     priceNum,
+    currency: nativeCurrency,
     operation: (p.operation as string) === "sale" ? "Venta" : "Alquiler",
     type: "Apartamento",
     beds: Number(p.bedrooms),
@@ -130,6 +133,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
       (p.currency as string | null) ?? null,
       p.operation as string | null,
     );
+    const nativeCurrency = countryCode === "es" ? "eur" : ((p.currency as string | null) ?? "clp");
     return {
       id: p.slug as string,
       ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
@@ -139,6 +143,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
       country: countryCode === "es" ? "España" : "Chile",
       price: priceStr,
       priceNum,
+      currency: nativeCurrency,
       operation: (p.operation as string) === "sale" ? "Venta" : "Alquiler",
       type: "Apartamento",
       beds: Number(p.bedrooms),
@@ -193,7 +198,9 @@ export default async function PropertyDetail({ params }: Props) {
           <h1 className="mt-4 font-display text-5xl md:text-7xl text-navy leading-tight">{p.title}</h1>
           <div className="mt-6 flex items-end justify-between gap-6 flex-wrap pb-6 border-b border-stone-200">
             <div>
-              <p className="font-display text-4xl text-navy">{p.price}</p>
+              <p className="font-display text-4xl text-navy">
+                <Price amount={p.priceNum} currency={p.currency} operation={p.operation} />
+              </p>
               <p className="mt-1 text-[11px] tracking-[0.24em] uppercase text-gray-400">{p.operation}</p>
             </div>
             <p className="text-sm text-gray-500 flex items-center gap-2">
