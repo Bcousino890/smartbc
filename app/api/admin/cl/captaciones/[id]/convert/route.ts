@@ -19,6 +19,11 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
+    // Cualquier usuario con permiso para cambiar el estado de captaciones
+    // (admin, agent_admin, agent_senior, owner…) puede convertir una
+    // captación confirmada — no solo el creador original. Así un agente
+    // senior puede convertir las captaciones confirmadas que ve, aunque las
+    // haya creado otra persona.
     const editPerms = getCaptacionEditPermissions(profile.role);
     const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
     if (!isAdmin && !editPerms.fields.canEditStatus) {
@@ -38,13 +43,6 @@ export async function POST(
 
     if (fetchError || !captacion) {
       return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
-    }
-
-    if (!isAdmin && captacion.created_by !== profile.id) {
-      return NextResponse.json(
-        { error: "Solo el creador o un admin puede convertirla" },
-        { status: 403 }
-      );
     }
 
     let convertedStageId: string | null = null;
@@ -93,9 +91,20 @@ export async function POST(
         .replace(/^-+|-+$/g, "") || "propiedad";
     const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
 
+    // La captación guarda la operación en español ('venta' | 'arriendo'); la
+    // propiedad usa el enum en inglés ('sale' | 'rent'). Respetamos el arriendo
+    // en vez de asumir venta siempre.
+    const operation = captacion.operation === "arriendo" ? "rent" : "sale";
+
     // status 'archived' + archived_at null = "Borrador" en el admin (así lo
     // mapea lib/db/adapters). La ficha no sale al público hasta que el agente
     // la complete y la marque como disponible.
+    //
+    // Volcamos TODA la ficha de la captación en la propiedad: datos del inmueble,
+    // ubicación, datos internos del dueño (owner_*) y notas internas, para que el
+    // agente no tenga que re-tipear nada. Los campos owner_* / internal_notes son
+    // siempre del admin y el motor de sindicación (diff-engine) nunca los pisa
+    // (ver migración 0006).
     const { data: property, error: insertError } = await db
       .from("properties")
       .insert({
@@ -103,7 +112,9 @@ export async function POST(
         slug,
         source: "manual",
         status: "archived",
-        operation: "sale",
+        operation,
+        operations: [operation],
+        property_type: captacion.property_type ?? null,
         country: "cl",
         price: captacion.price ?? 0,
         currency: captacion.currency || "clp",
@@ -111,6 +122,7 @@ export async function POST(
         bathrooms: captacion.bathrooms ?? 0,
         square_meters: captacion.square_meters ?? null,
         zone: captacion.commune || captacion.zone || captacion.region || "Chile",
+        subzone: captacion.subzone ?? null,
         address: captacion.address_real || captacion.address_scraped || null,
         commune: captacion.commune ?? null,
         region: captacion.region ?? null,
@@ -119,6 +131,11 @@ export async function POST(
         description: captacion.description ?? null,
         cover_photo_url: captacion.cover_photo_url ?? null,
         source_url: captacion.source_url ?? null,
+        // Datos internos del dueño (solo visibles para el equipo).
+        owner_name: captacion.owner_name ?? null,
+        owner_phone: captacion.owner_phone ?? null,
+        owner_email: captacion.owner_contact ?? null,
+        internal_notes: captacion.notes ?? null,
       })
       .select("id, slug")
       .single();

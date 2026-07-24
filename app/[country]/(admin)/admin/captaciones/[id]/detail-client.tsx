@@ -12,6 +12,7 @@ import { LocationSection } from "./location-section";
 import { ListingsSection } from "./listings-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
+import { getCaptacionEditableFields } from "@/lib/permissions";
 
 // Descripciones cortas por tipo de etapa (las etapas "normal" son libres, así
 // que no tienen una descripción fija: el nombre que le puso el admin ya es
@@ -93,6 +94,13 @@ export function CaptacionDetailClient({
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
+  // Roles con permiso para cambiar la etapa de una captación (agent_admin,
+  // agent_senior, owner…) — no solo el creador. Habilita confirmar y convertir
+  // a quienes ven captaciones confirmadas de otros.
+  const canManageStatus =
+    isAdmin ||
+    userRole === "agent_admin" ||
+    getCaptacionEditableFields(userRole).canEditStatus;
 
   // Etapa actual dentro del pipeline configurable (reemplaza al status fijo)
   const currentStage = stages.find((s) => s.id === captacion.stage_id) || captacion.stage || null;
@@ -825,7 +833,7 @@ export function CaptacionDetailClient({
 
       {/* Conversión a propiedad: paso final del flujo de captación. Crea la
           ficha real (borrador) con datos + fotos y enlaza la captación. */}
-      {currentStage?.stage_type === "confirmed" && (isAdmin || isCreator) && (
+      {currentStage?.stage_type === "confirmed" && (canManageStatus || isCreator) && (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -850,8 +858,9 @@ export function CaptacionDetailClient({
         </div>
       )}
 
-      {/* Cambio de etapa (solo admin) */}
-      {isAdmin && (
+      {/* Cambio de etapa: admin y roles con permiso para cambiar el estado
+          (agent_senior, owner…), además del creador de la captación. */}
+      {(canManageStatus || isCreator) && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
           <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Etapa</h3>
           {(() => {
