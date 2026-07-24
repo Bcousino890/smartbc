@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
+import {
+  persistCaptacionPhotos,
+  removePersistedCaptacionPhotos,
+} from "@/lib/captaciones/persist-photos";
 
 export async function POST(request: NextRequest) {
   let captacion_id: string | undefined;
@@ -60,13 +64,25 @@ export async function POST(request: NextRequest) {
         .eq("id", captacion_id);
 
       if (scraped.photo_urls.length > 0) {
+        // Re-scrape: limpia primero las copias del bucket de las fotos previas
+        // para no acumular huérfanos, luego borra las filas.
+        await removePersistedCaptacionPhotos(captacion_id, db);
         await db.from("captacion_photos").delete().eq("captacion_id", captacion_id);
-        const photos = scraped.photo_urls.slice(0, 30).map((photoUrl, i) => ({
+        // Descarga y persiste las fotos en el bucket (no se quedan como URLs
+        // externas que vencen).
+        const rows = await persistCaptacionPhotos(
           captacion_id,
-          url: photoUrl,
-          position: i,
-        }));
-        await db.from("captacion_photos").insert(photos);
+          scraped.photo_urls.slice(0, 30),
+          db
+        );
+        await db.from("captacion_photos").insert(rows);
+        // La portada apunta a la copia persistida de la primera foto.
+        if (rows[0]?.url) {
+          await db
+            .from("captaciones")
+            .update({ cover_photo_url: rows[0].url })
+            .eq("id", captacion_id);
+        }
       }
     }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
+import { persistCaptacionPhotos } from "@/lib/captaciones/persist-photos";
 import { canAccess } from "@/lib/permissions";
 import { getDefaultPipeline, getStagesForPipeline } from "@/lib/captaciones/pipeline";
 
@@ -126,12 +127,21 @@ async function scrapeAndUpdate(captacionId: string, url: string) {
       .eq("id", captacionId);
 
     if (scraped.photo_urls.length > 0) {
-      const photos = scraped.photo_urls.slice(0, 30).map((photoUrl, i) => ({
-        captacion_id: captacionId,
-        url: photoUrl,
-        position: i,
-      }));
-      await db.from("captacion_photos").insert(photos);
+      // Descarga y persiste las fotos en el bucket para que no dependan de las
+      // URLs externas del portal (que vencen). Guarda la copia permanente.
+      const rows = await persistCaptacionPhotos(
+        captacionId,
+        scraped.photo_urls.slice(0, 30),
+        db
+      );
+      await db.from("captacion_photos").insert(rows);
+      // Portada = copia persistida de la primera foto.
+      if (rows[0]?.url) {
+        await db
+          .from("captaciones")
+          .update({ cover_photo_url: rows[0].url })
+          .eq("id", captacionId);
+      }
     }
   } catch (err) {
     await db

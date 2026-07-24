@@ -21,6 +21,7 @@ import { ZintoConfigClient } from "./zinto-config-client";
 import { ProxyConfigClient, type ProxyConfig, type ProxyProvider } from "./proxy-config-client";
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
+import { RepairConversionsManager } from "./repair-conversions-manager";
 import { useT } from "@/lib/i18n/provider";
 import { mockAppSettings } from "@/lib/mock-admin-extras";
 import type { AppSettings } from "@/lib/types";
@@ -354,6 +355,9 @@ export default function ConfiguracionClient() {
 
         {/* Migrations Manager */}
         <MigrationsManager />
+
+        {/* Reparar propiedades ya convertidas (fotos + datos del dueño) */}
+        <RepairConversionsManager />
 
         {/* Email Configuration */}
         <EmailConfigClient />

@@ -41,6 +41,7 @@ import {
   uploadPropertyPlan,
   uploadPropertyVideo,
   deletePropertyMedia,
+  deleteProperty,
   type MediaItem,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
@@ -135,6 +136,32 @@ export function PropertyEditView({
   const [photosOpen, setPhotosOpen] = useState(false);
   const [cleaningWatermark, setCleaningWatermark] = useState(false);
   const [watermarkMsg, setWatermarkMsg] = useState<string | null>(null);
+  const [deletingProperty, setDeletingProperty] = useState(false);
+
+  async function handleDeleteProperty() {
+    if (
+      !window.confirm(
+        `¿Eliminar la propiedad "${property.title}"? Esta acción no se puede deshacer. Se borrarán sus fotos. Si vino de una captación, esa captación volverá a "confirmada" para poder re-convertirla.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingProperty(true);
+    try {
+      const res = await deleteProperty(property.slug, country);
+      if (res.ok) {
+        router.push(`/${country}/admin/propiedades`);
+      } else {
+        window.alert(`No se pudo eliminar: ${res.error}`);
+        setDeletingProperty(false);
+      }
+    } catch (e) {
+      window.alert(
+        `Error al eliminar: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      setDeletingProperty(false);
+    }
+  }
 
   // Videos state
   const [videos, setVideos] = useState<MediaItem[]>(initialVideos);
@@ -764,8 +791,8 @@ export function PropertyEditView({
 
       {/* Descargar fotos (con el logo superpuesto): las fotos no dependen de
           la operación, así que este botón va una sola vez, sea o no dual. */}
-      {property.photos.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {property.photos.length > 0 && (
           <a
             href={`/api/admin/properties/${property.slug}/download-photos`}
             className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
@@ -773,8 +800,17 @@ export function PropertyEditView({
             <ImageIcon size={13} strokeWidth={1.75} className="text-gold-dark" />
             <span>{t("adminProps.detail.downloadPhotos")}</span>
           </a>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          onClick={handleDeleteProperty}
+          disabled={deletingProperty}
+          className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-[12px] font-medium text-red-700 transition hover:border-red-400 hover:bg-red-100 disabled:opacity-50"
+        >
+          <Trash2 size={13} strokeWidth={1.75} />
+          <span>{deletingProperty ? "Eliminando..." : "Eliminar propiedad"}</span>
+        </button>
+      </div>
 
       {/* Aviso para propiedades sindicadas */}
       {isScraped && (

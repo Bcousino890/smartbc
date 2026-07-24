@@ -56,11 +56,16 @@ export async function POST(
     const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
     const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
     const isCreator = captacion.created_by === profile.id;
+    // Los roles con permiso para cambiar el estado (agent_senior, owner…)
+    // pueden mover cualquier captación que ven a una nueva etapa (p. ej.
+    // confirmarla para luego convertirla), no solo la que crearon o tienen
+    // asignada.
+    const canManageStatus = isAdmin || editPerms.fields.canEditStatus;
 
-    if (!isAdmin && !isCaptadora && !isCreator) {
+    if (!isAdmin && !isCaptadora && !isCreator && !canManageStatus) {
       return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
-    if (!isAdmin && !editPerms.fields.canEditStatus) {
+    if (!canManageStatus) {
       return NextResponse.json({ error: "No tienes permisos para cambiar el estado" }, { status: 403 });
     }
 

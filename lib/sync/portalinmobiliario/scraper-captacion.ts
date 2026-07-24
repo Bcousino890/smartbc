@@ -233,11 +233,32 @@ function parsePrice(text: string): { price: number | null; currency: "uf" | "clp
   return { price: null, currency: null };
 }
 
-// parseInt directo rompe con separador de miles chileno: "1.142 m²" -> 1.
+// Parsea un número chileno a entero redondeado. Hay que distinguir el "."
+// como separador de MILES ("1.142 m²" = 1142) del "." como DECIMAL, porque la
+// API de MercadoLibre devuelve la superficie con punto decimal ("232.33 m²").
+// Reglas:
+//   - Si hay coma, la coma es el decimal y los puntos son miles ("1.234,56").
+//   - Si solo hay puntos y el último grupo tiene 1-2 dígitos, ese punto es
+//     decimal ("232.33" -> 232.33); si tiene 3, es separador de miles
+//     ("1.142" -> 1142, "23.000" -> 23000).
+// Las columnas de superficie son enteras, así que redondeamos al final. Esto
+// evita el bug de inflar "232.33" a 23233.
 function parseIntCl(text: string): number | null {
-  const match = text.match(/[\d.]+/);
+  const match = text.match(/[\d][\d.,]*/);
   if (!match) return null;
-  const num = parseInt(match[0].replace(/\./g, ""), 10);
+  let raw = match[0].replace(/[.,]+$/, ""); // quita separadores colgantes
+  if (raw.includes(",")) {
+    raw = raw.replace(/\./g, "").replace(",", ".");
+  } else {
+    const parts = raw.split(".");
+    const last = parts[parts.length - 1];
+    if (parts.length > 1 && last.length <= 2) {
+      raw = parts.slice(0, -1).join("") + "." + last;
+    } else {
+      raw = raw.replace(/\./g, "");
+    }
+  }
+  const num = Math.round(parseFloat(raw));
   return isNaN(num) ? null : num;
 }
 
@@ -375,8 +396,8 @@ function scrapeMLPage($: cheerio.CheerioAPI, html: string): Partial<ScrapedCapta
     let m: RegExpMatchArray | null;
     if (bedrooms == null && (m = text.match(/(\d+)\s*dorm/i))) bedrooms = parseInt(m[1]);
     if (bathrooms == null && (m = text.match(/(\d+)\s*baño/i))) bathrooms = parseInt(m[1]);
-    if (square_meters == null && (m = text.match(/([\d.]+)\s*m²/i)))
-      square_meters = parseInt(m[1].replace(/\./g, ""));
+    if (square_meters == null && (m = text.match(/([\d.,]+)\s*m²/i)))
+      square_meters = parseIntCl(m[1]);
   });
 
   // Descripción completa de la ficha (no los meta tags truncados)
@@ -621,7 +642,12 @@ export async function scrapeCaptacionUrl(url: string): Promise<ScrapedCaptacion>
     const mlId = extractMLId(url);
     if (mlId) {
       const galleryPhotos = await fetchMLGalleryPhotos(mlId);
-      if (galleryPhotos.length > (partial.photo_urls?.length ?? 0)) {
+      // El modal de galería lista SOLO las fotos de este aviso, así que es la
+      // fuente autoritativa del conteo. El regex del HTML (partial.photo_urls)
+      // sobre-captura: las miniaturas de avisos recomendados usan el mismo
+      // patrón D_NQ_NP y colaban fotos de más (p. ej. 21 en vez de 16). Por eso
+      // preferimos la galería siempre que devuelva algo, no solo cuando trae más.
+      if (galleryPhotos.length > 0) {
         const coverId = partial.cover_photo_url?.match(/\d{6}-MLC\d+(?:_\d{6})?/)?.[0];
         if (coverId) {
           const coverUrl = `https://http2.mlstatic.com/D_NQ_NP_${coverId}-F.webp`;

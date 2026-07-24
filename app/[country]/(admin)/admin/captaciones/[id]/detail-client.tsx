@@ -2,7 +2,7 @@
 
 import {
   ArrowLeft, Phone, MapPin, Check, Image, Clock,
-  MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit,
+  MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit, Copy,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { LocationSection } from "./location-section";
 import { ListingsSection } from "./listings-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
+import { getCaptacionEditableFields } from "@/lib/permissions";
 
 // Descripciones cortas por tipo de etapa (las etapas "normal" son libres, así
 // que no tienen una descripción fija: el nombre que le puso el admin ya es
@@ -80,6 +81,35 @@ function formatPrice(price: number | null, currency: string): string | null {
   return `$${(price / 1_000_000).toFixed(1)}M`;
 }
 
+// Botón para copiar un valor (nombre, RUT, teléfono, email…) al portapapeles.
+function CopyButton({ value, label }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const done = () => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        };
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(value).then(done).catch(() => {});
+        }
+      }}
+      title={label ? `Copiar ${label}` : "Copiar"}
+      className="inline-flex shrink-0 items-center rounded p-0.5 text-ink/40 transition hover:text-ink hover:bg-ink/5"
+    >
+      {copied ? (
+        <Check size={12} className="text-emerald-600" />
+      ) : (
+        <Copy size={12} />
+      )}
+    </button>
+  );
+}
+
 export function CaptacionDetailClient({
   captacion,
   userRole,
@@ -93,6 +123,13 @@ export function CaptacionDetailClient({
   const isCaptadora = userRole === "captadora";
   const isAdmin = userRole === "admin";
   const isCreator = currentUserId === captacion.created_by;
+  // Roles con permiso para cambiar la etapa de una captación (agent_admin,
+  // agent_senior, owner…) — no solo el creador. Habilita confirmar y convertir
+  // a quienes ven captaciones confirmadas de otros.
+  const canManageStatus =
+    isAdmin ||
+    userRole === "agent_admin" ||
+    getCaptacionEditableFields(userRole).canEditStatus;
 
   // Etapa actual dentro del pipeline configurable (reemplaza al status fijo)
   const currentStage = stages.find((s) => s.id === captacion.stage_id) || captacion.stage || null;
@@ -825,7 +862,7 @@ export function CaptacionDetailClient({
 
       {/* Conversión a propiedad: paso final del flujo de captación. Crea la
           ficha real (borrador) con datos + fotos y enlaza la captación. */}
-      {currentStage?.stage_type === "confirmed" && (isAdmin || isCreator) && (
+      {currentStage?.stage_type === "confirmed" && (canManageStatus || isCreator) && (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -850,8 +887,9 @@ export function CaptacionDetailClient({
         </div>
       )}
 
-      {/* Cambio de etapa (solo admin) */}
-      {isAdmin && (
+      {/* Cambio de etapa: admin y roles con permiso para cambiar el estado
+          (agent_senior, owner…), además del creador de la captación. */}
+      {(canManageStatus || isCreator) && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
           <h3 className="text-sm font-semibold text-ink mb-4">Cambiar Etapa</h3>
           {(() => {
@@ -1373,51 +1411,65 @@ export function CaptacionDetailClient({
                             )}
                           </div>
                           {contact.contact_name && (
-                            <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
+                              <CopyButton value={contact.contact_name} label="nombre" />
+                            </div>
                           )}
                           {contact.rut && (
-                            <p className="text-xs text-ink/50">RUT: {contact.rut}</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-xs text-ink/50">RUT: {contact.rut}</p>
+                              <CopyButton value={contact.rut} label="RUT" />
+                            </div>
                           )}
                           <div className="mt-1 flex items-center gap-3 flex-wrap">
                             {contact.phone && (
-                              <a
-                                href={`tel:${contact.phone}`}
-                                className="flex items-center gap-1 text-xs text-gold hover:underline"
-                              >
-                                <Phone size={12} />
-                                {contact.phone}
-                                {contact.has_whatsapp && (
-                                  <span title="Tiene WhatsApp">
-                                    <MessageCircle size={12} className="text-emerald-600" />
-                                  </span>
-                                )}
-                              </a>
+                              <span className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${contact.phone}`}
+                                  className="flex items-center gap-1 text-xs text-gold hover:underline"
+                                >
+                                  <Phone size={12} />
+                                  {contact.phone}
+                                  {contact.has_whatsapp && (
+                                    <span title="Tiene WhatsApp">
+                                      <MessageCircle size={12} className="text-emerald-600" />
+                                    </span>
+                                  )}
+                                </a>
+                                <CopyButton value={contact.phone} label="teléfono" />
+                              </span>
                             )}
                             {(contact.extra_phones || []).map((extra, i) => (
-                              <a
-                                key={`${extra.phone}-${i}`}
-                                href={`tel:${extra.phone}`}
-                                className="flex items-center gap-1 text-xs text-gold hover:underline"
-                              >
-                                <Phone size={12} />
-                                {extra.phone}
-                                {extra.has_whatsapp && (
-                                  <span title="Tiene WhatsApp">
-                                    <MessageCircle size={12} className="text-emerald-600" />
-                                  </span>
-                                )}
-                                {extra.label && (
-                                  <span className="text-ink/40">({extra.label})</span>
-                                )}
-                              </a>
+                              <span key={`${extra.phone}-${i}`} className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${extra.phone}`}
+                                  className="flex items-center gap-1 text-xs text-gold hover:underline"
+                                >
+                                  <Phone size={12} />
+                                  {extra.phone}
+                                  {extra.has_whatsapp && (
+                                    <span title="Tiene WhatsApp">
+                                      <MessageCircle size={12} className="text-emerald-600" />
+                                    </span>
+                                  )}
+                                  {extra.label && (
+                                    <span className="text-ink/40">({extra.label})</span>
+                                  )}
+                                </a>
+                                <CopyButton value={extra.phone} label="teléfono" />
+                              </span>
                             ))}
                             {contact.email && (
-                              <a
-                                href={`mailto:${contact.email}`}
-                                className="text-xs text-gold hover:underline truncate"
-                              >
-                                {contact.email}
-                              </a>
+                              <span className="flex items-center gap-1 min-w-0">
+                                <a
+                                  href={`mailto:${contact.email}`}
+                                  className="text-xs text-gold hover:underline truncate"
+                                >
+                                  {contact.email}
+                                </a>
+                                <CopyButton value={contact.email} label="email" />
+                              </span>
                             )}
                           </div>
                         </div>
