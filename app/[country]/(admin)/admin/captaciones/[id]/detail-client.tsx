@@ -2,7 +2,7 @@
 
 import {
   ArrowLeft, Phone, MapPin, Check, Image, Clock,
-  MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit,
+  MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit, Copy,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -79,6 +79,35 @@ function formatPrice(price: number | null, currency: string): string | null {
   if (!price) return null;
   if (currency === "uf") return `UF ${price.toLocaleString("es-CL")}`;
   return `$${(price / 1_000_000).toFixed(1)}M`;
+}
+
+// Botón para copiar un valor (nombre, RUT, teléfono, email…) al portapapeles.
+function CopyButton({ value, label }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const done = () => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        };
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(value).then(done).catch(() => {});
+        }
+      }}
+      title={label ? `Copiar ${label}` : "Copiar"}
+      className="inline-flex shrink-0 items-center rounded p-0.5 text-ink/40 transition hover:text-ink hover:bg-ink/5"
+    >
+      {copied ? (
+        <Check size={12} className="text-emerald-600" />
+      ) : (
+        <Copy size={12} />
+      )}
+    </button>
+  );
 }
 
 export function CaptacionDetailClient({
@@ -1382,51 +1411,65 @@ export function CaptacionDetailClient({
                             )}
                           </div>
                           {contact.contact_name && (
-                            <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-sm font-medium text-ink">{contact.contact_name}</p>
+                              <CopyButton value={contact.contact_name} label="nombre" />
+                            </div>
                           )}
                           {contact.rut && (
-                            <p className="text-xs text-ink/50">RUT: {contact.rut}</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-xs text-ink/50">RUT: {contact.rut}</p>
+                              <CopyButton value={contact.rut} label="RUT" />
+                            </div>
                           )}
                           <div className="mt-1 flex items-center gap-3 flex-wrap">
                             {contact.phone && (
-                              <a
-                                href={`tel:${contact.phone}`}
-                                className="flex items-center gap-1 text-xs text-gold hover:underline"
-                              >
-                                <Phone size={12} />
-                                {contact.phone}
-                                {contact.has_whatsapp && (
-                                  <span title="Tiene WhatsApp">
-                                    <MessageCircle size={12} className="text-emerald-600" />
-                                  </span>
-                                )}
-                              </a>
+                              <span className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${contact.phone}`}
+                                  className="flex items-center gap-1 text-xs text-gold hover:underline"
+                                >
+                                  <Phone size={12} />
+                                  {contact.phone}
+                                  {contact.has_whatsapp && (
+                                    <span title="Tiene WhatsApp">
+                                      <MessageCircle size={12} className="text-emerald-600" />
+                                    </span>
+                                  )}
+                                </a>
+                                <CopyButton value={contact.phone} label="teléfono" />
+                              </span>
                             )}
                             {(contact.extra_phones || []).map((extra, i) => (
-                              <a
-                                key={`${extra.phone}-${i}`}
-                                href={`tel:${extra.phone}`}
-                                className="flex items-center gap-1 text-xs text-gold hover:underline"
-                              >
-                                <Phone size={12} />
-                                {extra.phone}
-                                {extra.has_whatsapp && (
-                                  <span title="Tiene WhatsApp">
-                                    <MessageCircle size={12} className="text-emerald-600" />
-                                  </span>
-                                )}
-                                {extra.label && (
-                                  <span className="text-ink/40">({extra.label})</span>
-                                )}
-                              </a>
+                              <span key={`${extra.phone}-${i}`} className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${extra.phone}`}
+                                  className="flex items-center gap-1 text-xs text-gold hover:underline"
+                                >
+                                  <Phone size={12} />
+                                  {extra.phone}
+                                  {extra.has_whatsapp && (
+                                    <span title="Tiene WhatsApp">
+                                      <MessageCircle size={12} className="text-emerald-600" />
+                                    </span>
+                                  )}
+                                  {extra.label && (
+                                    <span className="text-ink/40">({extra.label})</span>
+                                  )}
+                                </a>
+                                <CopyButton value={extra.phone} label="teléfono" />
+                              </span>
                             ))}
                             {contact.email && (
-                              <a
-                                href={`mailto:${contact.email}`}
-                                className="text-xs text-gold hover:underline truncate"
-                              >
-                                {contact.email}
-                              </a>
+                              <span className="flex items-center gap-1 min-w-0">
+                                <a
+                                  href={`mailto:${contact.email}`}
+                                  className="text-xs text-gold hover:underline truncate"
+                                >
+                                  {contact.email}
+                                </a>
+                                <CopyButton value={contact.email} label="email" />
+                              </span>
                             )}
                           </div>
                         </div>

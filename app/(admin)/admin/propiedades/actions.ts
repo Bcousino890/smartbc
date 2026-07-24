@@ -389,6 +389,100 @@ export async function deletePropertyPhoto(
   return { ok: true };
 }
 
+export type DeletePropertyResult = { ok: true } | { ok: false; error: string };
+
+// Borra una propiedad por completo: sus fotos del bucket, sus filas hijas (que
+// caen por ON DELETE CASCADE) y la fila de la propiedad. Requiere permiso
+// `properties.delete`. Las captaciones que la habían convertido se desvinculan
+// y vuelven a "confirmada" para poder re-convertirlas.
+export async function deleteProperty(
+  slug: string,
+  country?: string,
+): Promise<DeletePropertyResult> {
+  const gate = await checkPermission("properties", "delete", { country });
+  if (!gate.ok) return gate;
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id, cover_photo_url")
+    .eq("slug", slug)
+    .maybeSingle();
+  const propRow = propLookup.data as
+    | { id: string; cover_photo_url: string | null }
+    | null;
+  if (!propRow) return { ok: false, error: "property_not_found" };
+
+  const admin = createAdminClient() as any;
+
+  // Rutas de storage de las fotos: las filas de property_photos caen por
+  // ON DELETE CASCADE, pero los archivos del bucket no, así que se borran a mano.
+  const marker = "/properties-photos/";
+  const { data: photoRows } = await admin
+    .from("property_photos")
+    .select("url")
+    .eq("property_id", propRow.id);
+  const paths: string[] = [];
+  const addPath = (url: string | null) => {
+    if (!url) return;
+    const idx = url.indexOf(marker);
+    if (idx === -1) return;
+    const p = url.slice(idx + marker.length);
+    if (p && !paths.includes(p)) paths.push(p);
+  };
+  for (const r of (photoRows || []) as { url: string }[]) addPath(r.url);
+  addPath(propRow.cover_photo_url);
+  if (paths.length > 0) {
+    await admin.storage.from("properties-photos").remove(paths);
+  }
+
+  // Desvincular captaciones que apuntaban a esta propiedad y devolverlas a
+  // "confirmada" (converted_to_property_id tiene FK sin cascade, hay que
+  // limpiarlo antes de borrar).
+  const { data: linkedCaptaciones } = await admin
+    .from("captaciones")
+    .select("id, pipeline_id")
+    .eq("converted_to_property_id", propRow.id);
+  for (const cap of (linkedCaptaciones || []) as {
+    id: string;
+    pipeline_id: string | null;
+  }[]) {
+    let confirmedStageId: string | null = null;
+    if (cap.pipeline_id) {
+      const { data: st } = await admin
+        .from("captacion_pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", cap.pipeline_id)
+        .eq("stage_type", "confirmed")
+        .limit(1)
+        .maybeSingle();
+      confirmedStageId = st?.id ?? null;
+    }
+    await admin
+      .from("captaciones")
+      .update({
+        converted_to_property_id: null,
+        status: "confirmed",
+        completed_at: null,
+        ...(confirmedStageId ? { stage_id: confirmedStageId } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", cap.id);
+  }
+
+  const { error: delErr } = await admin
+    .from("properties")
+    .delete()
+    .eq("id", propRow.id);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  revalidatePath("/admin/propiedades");
+  if (country) revalidatePath(`/${country}/admin/propiedades`);
+  return { ok: true };
+}
+
 export type UpdatePropertyInput = {
   slug: string;
   // Campos sindicados: si la propiedad viene de una agencia (source='scrape')
