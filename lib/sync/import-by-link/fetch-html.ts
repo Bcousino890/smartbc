@@ -90,6 +90,33 @@ function isAntibotRedirect(originalUrl: string, finalUrl: string): boolean {
   return !inputIds.some((id) => finalUrl.includes(id));
 }
 
+// Airbnb responde a veces (depende del dominio pedido y de la geo del servidor)
+// una interstitial de ~900 bytes en vez de la ficha: un <form> POST a
+// /v2/domain_switch/handoff que solo se envía con JavaScript. Ese HTML no lleva
+// datos ni fotos, y como pesa >200 bytes pasaba nuestro filtro y el extractor
+// devolvía una ficha vacía. Un navegador terminaría en el MISMO anuncio bajo el
+// dominio local, así que reconstruimos ese destino (host del form + redirect_path
+// del payload) y reintentamos una vez.
+function domainSwitchTarget(html: string): string | null {
+  if (html.length > 5_000 || !html.includes("domain_switch/handoff")) return null;
+  const origin = html.match(
+    /action="(https?:\/\/[^"]+?)\/v2\/domain_switch\/handoff"/i,
+  )?.[1];
+  const payload = html.match(/name="payload"\s+value="([^"]+)"/i)?.[1];
+  if (!origin || !payload) return null;
+  try {
+    // El payload es `<base64url(JSON)>.<firma>`.
+    const claims = JSON.parse(
+      Buffer.from(payload.split(".")[0], "base64url").toString("utf8"),
+    ) as { redirect_path?: string; redirect_query_raw?: string };
+    if (!claims.redirect_path) return null;
+    const query = claims.redirect_query_raw ? `?${claims.redirect_query_raw}` : "";
+    return `${origin}${claims.redirect_path}${query}`;
+  } catch {
+    return null;
+  }
+}
+
 export type FetchHtmlResult =
   | { ok: true; html: string; finalUrl: string }
   | { ok: false; error: ImportExtractError };
@@ -102,6 +129,8 @@ async function tryFetch(
   // ve UA de WhatsApp junto a headers de navegador (Sec-Fetch-*, Accept
   // text/html, Upgrade-Insecure-Requests…). WhatsApp manda un set mínimo.
   customHeaders?: Record<string, string>,
+  // Reintentos ya consumidos siguiendo interstitials (domain_switch de Airbnb).
+  hops = 0,
 ): Promise<FetchHtmlResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -148,6 +177,14 @@ async function tryFetch(
     }
 
     const html = await res.text();
+
+    // Interstitial de cambio de dominio (Airbnb): seguimos el destino real.
+    const switchTo = hops < 1 ? domainSwitchTarget(html) : null;
+    if (switchTo && switchTo !== url) {
+      console.log(`[fetch-html] Interstitial de dominio → ${switchTo}`);
+      return tryFetch(switchTo, dispatcher, customHeaders, hops + 1);
+    }
+
     if (!html || html.length < 200) {
       return {
         ok: false,

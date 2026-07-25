@@ -170,7 +170,10 @@ export function previewToInspo(
       features,
       title: preview.title,
       raw: preview.rawAttributes,
-      propertyTypeHint: null,
+      // Pista de tipo si el extractor la dejó en rawAttributes ("Tipo de
+      // inmueble: piso" en Idealista, "Alojamiento entero: apartamento en
+      // París" en Airbnb). El título a secas rara vez dice el tipo.
+      propertyTypeHint: rawAttr(preview.rawAttributes, "tipo de inmueble", "tipo"),
     }),
     // Localización
     addressStreet: street,

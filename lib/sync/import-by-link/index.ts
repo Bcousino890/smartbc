@@ -10,6 +10,7 @@ import { extractIdealista } from "./extractors/idealista";
 import { extractInmoweb } from "./extractors/inmoweb";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
+import { extractAirbnb, normalizeAirbnbUrl } from "./extractors/airbnb";
 import { extractVideos, dedupeVideos } from "./extract-videos";
 import { dedupKey } from "../scrapers/image-utils";
 import { getProxyUrl } from "../proxy-config";
@@ -104,6 +105,13 @@ export async function extractFromUrl(
     detected.url = normalizeClikaliaUrl(detected.url);
   }
 
+  // Airbnb: forzamos www.airbnb.es + locale es-ES y tiramos los parámetros del
+  // link (check_in, modal=PHOTO_TOUR…). Pegar un link de www.airbnb.com devuelve
+  // una interstitial JS de cambio de dominio sin datos ni fotos.
+  if (detected.portal === "airbnb") {
+    detected.url = normalizeAirbnbUrl(detected.url);
+  }
+
   const fetched = await fetchHtml(detected.url.toString());
   if (!fetched.ok) return { ok: false, error: fetched.error };
 
@@ -129,6 +137,9 @@ export async function extractFromUrl(
       break;
     case "ukio":
       preview = extractUkio($, finalUrl);
+      break;
+    case "airbnb":
+      preview = extractAirbnb($, finalUrl);
       break;
     case "mobilia":
     case "generic":

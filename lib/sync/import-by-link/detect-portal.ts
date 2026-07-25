@@ -36,6 +36,12 @@ const RULES: { match: (host: string) => boolean; portal: ImportPortal }[] = [
     match: (h) => /(^|\.)ukio\.[a-z.]+$/i.test(h),
     portal: "ukio",
   },
+  {
+    // Cubre todos los dominios de Airbnb: www.airbnb.com, es.airbnb.com,
+    // airbnb.es, airbnb.com.mx, abnb.me (links cortos compartidos)…
+    match: (h) => /(^|\.)airbnb\.[a-z.]+$/i.test(h) || /(^|\.)abnb\.me$/i.test(h),
+    portal: "airbnb",
+  },
 ];
 
 export function detectPortal(rawUrl: string): {

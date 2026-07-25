@@ -15,6 +15,7 @@ export type ImportPortal =
   | "urbantechome"
   | "yaencontre"
   | "ukio"
+  | "airbnb"
   | "generic";
 
 export type ImportPhoto = {
