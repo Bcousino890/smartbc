@@ -265,6 +265,42 @@ const inputCls =
 const selectCls =
   "w-full rounded-lg border border-ink/12 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none transition";
 
+/**
+ * Campo de importe en euros. Existe porque `<input type="number">` es una
+ * trampa para escribir precios en español: al teclear "1.490.000" el navegador
+ * lo marca inválido ("Enter a valid value") y "1.490000" lo interpreta como
+ * 1,49 €, así que el precio se guardaba mal sin que se notara.
+ *
+ * Aquí el input es de texto (sin validación del navegador ni rueda del ratón
+ * cambiando cifras): se aceptan puntos, comas y espacios como separadores de
+ * miles, se ignora todo lo que no sea dígito y se muestra formateado
+ * ("1.490.000") mientras el valor que viaja al formulario es un entero limpio.
+ */
+function MoneyInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={value ? value.toLocaleString("es-ES") : ""}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/\D/g, "");
+        // Tope de 12 dígitos: evita desbordar el entero por un pegado raro.
+        onChange(digits ? Number(digits.slice(0, 12)) : 0);
+      }}
+      placeholder={placeholder}
+      className={inputCls}
+    />
+  );
+}
+
 function RadioGroup<T extends string>({
   label,
   options,
@@ -1238,24 +1274,18 @@ export function IdealistaForm({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label>Precio de venta (€)</Label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.price || ""}
-                  onChange={(e) => set("price", Number(e.target.value))}
-                  placeholder="250000"
-                  className={inputCls}
+                <MoneyInput
+                  value={form.price}
+                  onChange={(v) => set("price", v)}
+                  placeholder="250.000"
                 />
               </div>
               <div>
                 <Label>Gastos de comunidad (€/mes)</Label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.communityFees || ""}
-                  onChange={(e) => set("communityFees", Number(e.target.value))}
+                <MoneyInput
+                  value={form.communityFees}
+                  onChange={(v) => set("communityFees", v)}
                   placeholder="80"
-                  className={inputCls}
                 />
               </div>
             </div>
@@ -1264,13 +1294,10 @@ export function IdealistaForm({
           <>
             <div>
               <Label>Precio total con gastos (€/mes)</Label>
-              <input
-                type="number"
-                min={0}
-                value={form.totalRentalPrice || ""}
-                onChange={(e) => set("totalRentalPrice", Number(e.target.value))}
-                placeholder="1200"
-                className={inputCls}
+              <MoneyInput
+                value={form.totalRentalPrice}
+                onChange={(v) => set("totalRentalPrice", v)}
+                placeholder="1.200"
               />
             </div>
             <RadioGroup
