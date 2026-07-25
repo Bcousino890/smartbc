@@ -41,9 +41,14 @@ export default async function CaptacionDetailPage({
 
   const [photosResult, logsResult, captadoras, assignedProfileResult, listingsResult] = await Promise.allSettled([
     db.from("captacion_photos").select("*").eq("captacion_id", id).order("position"),
+    // OJO: no se puede embeber `profiles:created_by(...)` aquí. La FK de
+    // captacion_logs.created_by apunta a auth.users, no a profiles, así que
+    // PostgREST no encuentra la relación y devuelve error → el historial salía
+    // siempre vacío ("Sin intentos registrados") aunque el intento sí se
+    // hubiera guardado. El nombre del autor se resuelve aparte, más abajo.
     db
       .from("captacion_logs")
-      .select("*, profiles:created_by(full_name)")
+      .select("*")
       .eq("captacion_id", id)
       .order("created_at", { ascending: false }),
     getChileAssignableUsers(),
@@ -60,7 +65,35 @@ export default async function CaptacionDetailPage({
   ]);
 
   const photos = photosResult.status === "fulfilled" ? (photosResult.value.data || []) : [];
-  const logs = logsResult.status === "fulfilled" ? (logsResult.value.data || []) : [];
+  if (photosResult.status === "fulfilled" && photosResult.value.error) {
+    console.error("captacion_photos error:", photosResult.value.error);
+  }
+  if (logsResult.status === "rejected") {
+    console.error("captacion_logs error:", logsResult.reason);
+  } else if (logsResult.value.error) {
+    console.error("captacion_logs error:", logsResult.value.error);
+  }
+  const logs: any[] = logsResult.status === "fulfilled" ? (logsResult.value.data || []) : [];
+
+  // Nombre de quien registró cada intento. Se consulta por separado porque la
+  // FK de created_by apunta a auth.users y PostgREST no puede embeber profiles.
+  const logAuthorIds = [...new Set(logs.map((l) => l.created_by).filter(Boolean))];
+  if (logAuthorIds.length > 0) {
+    const { data: authors, error: authorsError } = await db
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", logAuthorIds);
+    if (authorsError) {
+      console.error("captacion_logs authors error:", authorsError);
+    }
+    const authorById = new Map(
+      (authors || []).map((a: { id: string; full_name: string | null }) => [a.id, a])
+    );
+    for (const log of logs) {
+      const author = authorById.get(log.created_by) as { full_name: string | null } | undefined;
+      log.profiles = { full_name: author?.full_name ?? null };
+    }
+  }
   if (captadoras.status === "rejected") {
     console.error("getChileAssignableUsers error:", captadoras.reason);
   }

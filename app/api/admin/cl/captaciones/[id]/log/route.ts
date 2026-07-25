@@ -80,7 +80,16 @@ export async function POST(
       captacionUpdates.next_action_at = body.next_action_at || null;
       captacionUpdates.next_action_note = body.next_action_note || null;
     }
-    await db.from("captaciones").update(captacionUpdates).eq("id", id);
+    // El intento ya quedó guardado; si la actualización de seguimiento falla
+    // (ej: una migración pendiente en el VPS) se registra pero no se aborta,
+    // para no perder el intento recién creado.
+    const { error: updateError } = await db
+      .from("captaciones")
+      .update(captacionUpdates)
+      .eq("id", id);
+    if (updateError) {
+      console.error("[captaciones log] update captacion:", updateError);
+    }
 
     // Notificar al resto del equipo de la captación (creador y asignado,
     // excepto quien registró el intento)
@@ -92,7 +101,7 @@ export async function POST(
         uid && uid !== profile.id && arr.indexOf(uid) === i
     );
     for (const uid of notifyIds) {
-      await db.from("crm_notifications").insert({
+      const { error: notifyError } = await db.from("crm_notifications").insert({
         user_id: uid,
         type: "captacion_contact_attempt",
         title: `${attemptTypeLabel}: ${resultLabel}`,
@@ -104,6 +113,9 @@ export async function POST(
           result: body.result,
         },
       });
+      if (notifyError) {
+        console.error("[captaciones log] notificación:", notifyError);
+      }
     }
 
     return NextResponse.json(data);
