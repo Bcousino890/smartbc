@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
-import { canAccess } from "@/lib/permissions";
+import { getCaptacionEditableFields } from "@/lib/permissions";
+import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
 import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
 
 export async function POST(
@@ -16,13 +16,10 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    // Verificar permiso base: ¿tiene "edit" en captaciones?
-    if (!canAccess(profile.role, "captaciones", "edit")) {
-      return NextResponse.json(
-        { error: "No tienes permisos para editar captaciones" },
-        { status: 403 }
-      );
-    }
+    // Permisos EFECTIVOS (rol por país + rol personalizado + excepciones del
+    // usuario). Antes se miraba `profile.role` a pelo, así que un rol de Chile
+    // o un rol personalizado con permiso de edición recibía 403 al guardar.
+    const actor = await getCaptacionActor(profile);
 
     const body = await request.json();
     const db = createAdminClient() as any;
@@ -43,20 +40,18 @@ export async function POST(
     const stages = captacion.pipeline_id ? await getStagesForPipeline(captacion.pipeline_id) : [];
     const currentStage = stages.find((s) => s.id === captacion.stage_id) || null;
 
-    // Obtener permisos granulares del rol
-    const editPerms = getCaptacionEditPermissions(profile.role);
-
-    // Validar acceso a la captación: creador, asignado (captadora), o admin
-    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
-    const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
-    const isCreator = profile.id === captacion.created_by;
-
-    if (!isAdmin && !isCaptadora && !isCreator) {
+    // Validar acceso a ESTA captación: asignado, creador o permiso de edición.
+    if (!actorCanWorkCaptacion(actor, captacion)) {
       return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
 
-    // Validar restricciones de campos editables por rol
-    const fieldRestrictions = editPerms.fields;
+    // Restricciones de campos por rol efectivo (ficha y estado siguen siendo
+    // de los roles con mando; los datos del dueño los edita quien trabaja la
+    // captación).
+    const isAdmin = actor.isAdmin;
+    const fieldRestrictions = getCaptacionEditableFields(actor.role);
+    const canEditPropertyFields = isAdmin || fieldRestrictions.canEditPropertyFields;
+    const canEditStatusField = isAdmin || fieldRestrictions.canEditStatus;
 
     // Detectar qué tipo de campos intenta editar
     // (commune se excluye: la captadora la corrige desde la pestaña Ubicación)
@@ -67,20 +62,18 @@ export async function POST(
 
     const isEditingStatus = "status" in body && body.status !== undefined;
 
-    // Captadora solo puede editar owner fields
-    if (isCaptadora && !isAdmin) {
-      if (isEditingPropertyFields) {
-        return NextResponse.json(
-          { error: "Solo puedes editar los datos del propietario" },
-          { status: 403 }
-        );
-      }
-      if (isEditingStatus) {
-        return NextResponse.json(
-          { error: "No puedes cambiar el estado de la captación" },
-          { status: 403 }
-        );
-      }
+    // Quien no tiene mando sobre la ficha solo edita los datos del dueño
+    if (isEditingPropertyFields && !canEditPropertyFields) {
+      return NextResponse.json(
+        { error: "Solo puedes editar los datos del propietario" },
+        { status: 403 }
+      );
+    }
+    if (isEditingStatus && !canEditStatusField) {
+      return NextResponse.json(
+        { error: "No puedes cambiar el estado de la captación" },
+        { status: 403 }
+      );
     }
 
     const wasConfirmed = captacion.owner_confirmed;
@@ -105,8 +98,8 @@ export async function POST(
     if (body.latitude !== undefined && body.latitude !== null) updates.latitude = body.latitude;
     if (body.longitude !== undefined && body.longitude !== null) updates.longitude = body.longitude;
 
-    // Campos que solo admin puede editar
-    if (isAdmin) {
+    // Campos de la ficha: solo quien tiene mando sobre ella
+    if (canEditPropertyFields) {
       if (body.title !== undefined) updates.title = body.title || null;
       if (body.price !== undefined) updates.price = body.price || null;
       if (body.currency !== undefined) updates.currency = body.currency || null;
@@ -131,8 +124,9 @@ export async function POST(
     }
 
     // Al llenar los primeros datos del dueño desde la etapa de asignación,
-    // avanza a la primera etapa de trabajo en curso del pipeline
-    if (isCaptadora && currentStage?.stage_type === "assign" && (body.owner_phone || body.owner_name)) {
+    // avanza a la primera etapa de trabajo en curso del pipeline (lo haga
+    // quien lo haga: el trabajo ya empezó, igual que al registrar un intento)
+    if (currentStage?.stage_type === "assign" && (body.owner_phone || body.owner_name)) {
       const workingStage = pickWorkingStage(stages);
       if (workingStage) updates.stage_id = workingStage.id;
     }

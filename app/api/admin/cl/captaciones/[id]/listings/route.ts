@@ -4,7 +4,9 @@ import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
 
 const ALLOWED_ROLES = [
+  "owner",
   "admin",
+  "advisor",
   "agent",
   "agent_junior",
   "agent_senior",

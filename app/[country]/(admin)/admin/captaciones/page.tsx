@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { CaptacionesClient } from "./captaciones-client";
 import { getCaptacionesForAgent, getCaptacionesForCaptadora, getCaptacionesAll, getChileAssignableUsers, attachDataQualityFlags, type Captacion } from "./actions";
-import { canAccess } from "@/lib/permissions";
-import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { getCaptacionEditableFields, getCaptacionViewRestriction } from "@/lib/permissions";
+import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getPipelinesForCountry, getStagesForPipeline } from "@/lib/captaciones/pipeline";
 
@@ -25,8 +25,12 @@ export default async function CaptacionesPage({
     return <div className="p-10 text-center">No autorizado</div>;
   }
 
+  // Permisos EFECTIVOS en Chile (rol por país + rol personalizado +
+  // excepciones del usuario), no el rol global a pelo.
+  const actor = await getCaptacionActor(profile);
+
   // Verificar permiso base de visualización
-  if (!canAccess(profile.role, "captaciones", "view")) {
+  if (!(actor.effective.captaciones?.view ?? false)) {
     return (
       <div className="p-10 text-center">
         <p className="text-ink/55">No tienes acceso a las captaciones.</p>
@@ -34,9 +38,8 @@ export default async function CaptacionesPage({
     );
   }
 
-  // Aplicar filtrado según rol y permisos granulares
-  const editPerms = getCaptacionEditPermissions(profile.role);
-  const viewRestriction = editPerms.viewRestriction;
+  // Aplicar filtrado según rol efectivo
+  const viewRestriction = getCaptacionViewRestriction(actor.role);
 
   let captaciones: Captacion[];
   switch (viewRestriction) {
@@ -68,8 +71,9 @@ export default async function CaptacionesPage({
   // Para asignación rápida desde el pipeline (solo quien puede asignar).
   // Cualquier usuario staff de Chile puede recibir la captación, no solo
   // captadoras.
-  const canAssign = editPerms.fields.canAssignCaptadora === true;
-  const canDelete = canAccess(profile.role, "captaciones", "delete");
+  const canAssign =
+    actor.isAdmin || getCaptacionEditableFields(actor.role).canAssignCaptadora === true;
+  const canDelete = actor.effective.captaciones?.delete ?? false;
   let assignableUsers: Array<{ id: string; full_name: string | null; role: string }> = [];
   if (canAssign) {
     try {
@@ -91,12 +95,12 @@ export default async function CaptacionesPage({
   } catch {
     pipelines = [];
   }
-  const canConfigurePipelines = ["admin", "owner", "agent_admin"].includes(profile.role);
+  const canConfigurePipelines = actor.isAdmin;
 
   return (
     <CaptacionesClient
       captaciones={captaciones}
-      userRole={profile.role}
+      userRole={actor.role}
       assignableUsers={assignableUsers}
       canAssign={canAssign}
       canDelete={canDelete}

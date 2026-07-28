@@ -492,6 +492,9 @@ export function getCaptacionViewRestriction(role: string): CaptacionViewRestrict
     case "admin":
     case "owner":
     case "agent_admin":
+    // El advisor tiene la misma matriz que un admin en captaciones (ver/crear/
+    // editar/borrar); dejarlo fuera de "all" le vaciaba el listado.
+    case "advisor":
       return "all";
     case "agent_senior":
     case "agent_junior":

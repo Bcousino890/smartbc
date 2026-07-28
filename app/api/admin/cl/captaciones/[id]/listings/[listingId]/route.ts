@@ -3,7 +3,9 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 
 const ALLOWED_ROLES = [
+  "owner",
   "admin",
+  "advisor",
   "agent",
   "agent_junior",
   "agent_senior",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
+import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
 
 export async function POST(
   request: NextRequest,
@@ -27,15 +28,13 @@ export async function POST(
       return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
     }
 
-    // Pueden registrar intentos: la captadora/ejecutivo asignado, el creador
-    // (agente) y los admins — antes solo captadoras, pero el seguimiento
-    // también lo hacen los ejecutivos que llaman.
-    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
-    const isAssigned = captacion.assigned_to === profile.id;
-    const isCreator = captacion.created_by === profile.id;
-    if (!isAdmin && !isAssigned && !isCreator) {
+    // Pueden registrar intentos: quien tiene la captación asignada, quien la
+    // creó y cualquiera con permiso efectivo de edición en captaciones. Misma
+    // regla exacta que usa la UI para enseñar el botón "+ Registrar Intento".
+    const actor = await getCaptacionActor(profile);
+    if (!actorCanWorkCaptacion(actor, captacion)) {
       return NextResponse.json(
-        { error: "No tienes acceso a esta captación" },
+        { error: "No tienes permiso para registrar intentos en esta captación" },
         { status: 403 }
       );
     }

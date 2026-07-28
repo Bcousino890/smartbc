@@ -20,16 +20,15 @@ type LocationSectionProps = {
     commune: string | null;
   };
   captacionId: string;
-  isCaptadora: boolean;
-  isAdmin: boolean;
+  /** Ya resuelto en el servidor con la regla de `lib/captaciones/access.ts`. */
+  canEdit: boolean;
   onUpdate: (data: any) => Promise<void>;
 };
 
 export function LocationSection({
   captacion,
   captacionId,
-  isCaptadora,
-  isAdmin,
+  canEdit,
   onUpdate,
 }: LocationSectionProps) {
   const [editing, setEditing] = useState(false);
@@ -47,8 +46,6 @@ export function LocationSection({
     rol_propiedad: captacion.rol_propiedad || "",
     commune: captacion.commune || "",
   });
-
-  const canEdit = isCaptadora || isAdmin;
 
   async function handleGeocodeFromAddress() {
     if (!geocodingAddress.trim()) return;

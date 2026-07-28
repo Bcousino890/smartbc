@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCurrentProfile } from "@/lib/db/queries/session";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
-import { requirePermission } from "@/lib/auth/guard";
+import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
-  // Gate de autorización: editar contacto del propietario → captaciones/edit.
-  const gate = await requirePermission("captaciones", "edit");
+  const { id, contactId } = await params;
+  // Gate de autorización: quien trabaja la captación edita sus contactos.
+  const gate = await requireCaptacionWork(id);
   if (!gate.ok) return gate.response;
 
-  const { id, contactId } = await params;
   try {
     const body = await request.json();
     const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones, rut } = body;
@@ -83,8 +82,7 @@ export async function PUT(
     }
 
     // Avisar al ejecutivo: los datos del propietario cambiaron
-    const profile = await getCurrentProfile().catch(() => null);
-    await notifyOwnerUpdated(db, id, profile?.id ?? null);
+    await notifyOwnerUpdated(db, id, gate.profile.id);
 
     return NextResponse.json(data);
   } catch (error) {
@@ -100,11 +98,18 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
-  // Gate de autorización: eliminar contacto del propietario → captaciones/delete.
-  const gate = await requirePermission("captaciones", "delete");
-  if (!gate.ok) return gate.response;
-
   const { id, contactId } = await params;
+  // Gate de autorización: además de trabajar la captación, eliminar un contacto
+  // exige el permiso efectivo `captaciones.delete`.
+  const gate = await requireCaptacionWork(id);
+  if (!gate.ok) return gate.response;
+  if (!(gate.actor.effective.captaciones?.delete ?? false)) {
+    return NextResponse.json(
+      { error: "No tienes permiso para eliminar contactos" },
+      { status: 403 },
+    );
+  }
+
   try {
     const db = createAdminClient() as any;
     const { error } = await db
