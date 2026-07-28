@@ -5,6 +5,7 @@ import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captac
 import { persistCaptacionPhotos } from "@/lib/captaciones/persist-photos";
 import { canAccess } from "@/lib/permissions";
 import { getDefaultPipeline, getStagesForPipeline } from "@/lib/captaciones/pipeline";
+import { autoDistributeNewCaptacion } from "@/lib/captaciones/auto-distribution";
 
 export async function POST(request: Request) {
   try {
@@ -73,6 +74,26 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    // Reparto automático: si el admin lo activó, la captación se asigna sola
+    // al usuario del pool con menos carga. No crítico: si falla, se crea igual
+    // sin asignar y el admin la reparte a mano.
+    let created = captacion;
+    try {
+      const assigned = await autoDistributeNewCaptacion(
+        db,
+        {
+          id: captacion.id,
+          title: captacion.title,
+          pipeline_id: captacion.pipeline_id,
+          assigned_to: captacion.assigned_to,
+        },
+        { id: profile.id, full_name: profile.full_name }
+      );
+      if (assigned) created = assigned;
+    } catch (e) {
+      console.error("[captaciones create auto-distribution]", e);
+    }
+
     // Auto-scrape in background (fire-and-forget, don't block response)
     if (body.source_url) {
       scrapeAndUpdate(captacion.id, body.source_url).catch((e) =>
@@ -80,7 +101,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(captacion);
+    return NextResponse.json(created);
   } catch (err) {
     console.error("[captaciones create]", err);
     return NextResponse.json(

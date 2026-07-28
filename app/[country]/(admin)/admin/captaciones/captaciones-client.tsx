@@ -5,13 +5,14 @@ import {
   LayoutGrid, List as ListIcon, UserPlus, X, Filter, Settings,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { cn } from "@/lib/utils";
 import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
 import { CreateCaptacionModal } from "./create-captacion-modal";
+import { AutoDistributionPanel } from "./auto-distribution-panel";
 import type { Captacion, CaptacionStage } from "./actions";
 
 type AssignableUser = { id: string; full_name: string | null; role: string };
@@ -25,6 +26,8 @@ type CaptacionesClientProps = {
   canDelete: boolean;
   pipelines: PipelineWithStages[];
   canConfigurePipelines: boolean;
+  canConfigureDistribution: boolean;
+  distributionConfig: { enabled: boolean; user_ids: string[] };
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -62,6 +65,8 @@ export function CaptacionesClient({
   canDelete,
   pipelines,
   canConfigurePipelines,
+  canConfigureDistribution,
+  distributionConfig,
 }: CaptacionesClientProps) {
   const router = useRouter();
   const [captaciones, setCaptaciones] = useState(initialCaptaciones);
@@ -142,9 +147,36 @@ export function CaptacionesClient({
 
   function applyUpdatedCaptacion(updated: any) {
     setCaptaciones((prev) =>
-      prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+      prev.map((x) => {
+        if (x.id !== updated.id) return x;
+        const merged = { ...x, ...updated };
+        // Re-embeber la etapa desde los pipelines cuando cambia stage_id, para
+        // que la UI derivada (conteo del reparto automático, que ignora
+        // convertidas/rechazadas) no quede desincronizada tras mover/asignar.
+        if (updated.stage_id !== undefined) {
+          merged.stage =
+            pipelines
+              .find((p) => p.id === merged.pipeline_id)
+              ?.stages.find((s) => s.id === updated.stage_id) ?? null;
+        }
+        return merged;
+      })
     );
   }
+
+  // Conteo de captaciones ACTIVAS (sin convertidas ni rechazadas) por usuario
+  // asignado, para el panel de reparto (solo-admin). Se recalcula solo al
+  // asignar/mover tarjetas porque depende del estado `captaciones`.
+  const assignedCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of captaciones) {
+      if (!c.assigned_to) continue;
+      const type = c.stage?.stage_type;
+      if (type === "converted" || type === "rejected") continue;
+      counts[c.assigned_to] = (counts[c.assigned_to] || 0) + 1;
+    }
+    return counts;
+  }, [captaciones]);
 
   // Asignación rápida al ejecutivo/captadora (selector de la tarjeta o modal
   // de arrastre), para que le llegue la notificación y pueda llamar ya.
@@ -312,6 +344,14 @@ export function CaptacionesClient({
         titleKey="admin.nav.captaciones"
         subtitleKey="Prospección de propiedades - Agentes crean, captadoras completan info"
       />
+
+      {canConfigureDistribution && (
+        <AutoDistributionPanel
+          assignableUsers={assignableUsers}
+          assignedCounts={assignedCounts}
+          initialConfig={distributionConfig}
+        />
+      )}
 
       <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
         {!isCaptadora ? (

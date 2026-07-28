@@ -6,6 +6,8 @@ import { getCaptacionEditableFields, getCaptacionViewRestriction } from "@/lib/p
 import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getPipelinesForCountry, getStagesForPipeline } from "@/lib/captaciones/pipeline";
+import { getAutoDistributionConfig, type AutoDistributionConfig } from "@/lib/captaciones/auto-distribution";
+import { createAdminClient } from "@/lib/db/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,19 @@ export default async function CaptacionesPage({
   }
   const canConfigurePipelines = actor.isAdmin;
 
+  // Reparto automático de captaciones: apartado solo-admin. Se carga la config
+  // guardada (pool + on/off) para pintar el panel; los conteos por usuario los
+  // calcula el cliente sobre las captaciones ya cargadas (se actualizan solos).
+  const canConfigureDistribution = actor.isAdmin;
+  let distributionConfig: AutoDistributionConfig = { enabled: false, user_ids: [] };
+  if (canConfigureDistribution) {
+    try {
+      distributionConfig = await getAutoDistributionConfig(createAdminClient() as any);
+    } catch {
+      distributionConfig = { enabled: false, user_ids: [] };
+    }
+  }
+
   return (
     <CaptacionesClient
       captaciones={captaciones}
@@ -106,6 +121,8 @@ export default async function CaptacionesPage({
       canDelete={canDelete}
       pipelines={pipelines}
       canConfigurePipelines={canConfigurePipelines}
+      canConfigureDistribution={canConfigureDistribution}
+      distributionConfig={distributionConfig}
     />
   );
 }

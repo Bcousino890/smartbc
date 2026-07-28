@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
 import { getCaptacionEditableFields, STAFF_ROLES } from "@/lib/permissions";
+import { applyCaptacionAssignment } from "@/lib/captaciones/assign";
 
 export async function POST(
   request: NextRequest,
@@ -95,56 +96,13 @@ export async function POST(
       }
     }
 
-    // Si el pipeline tiene una etapa de tipo "assign", la captación se mueve
-    // ahí (mismo comportamiento que antes: asignar la lleva a "Asignada").
-    // Si no tiene ninguna, solo se actualiza el usuario asignado.
-    const updates: any = {
-      assigned_to: captadora_id,
-      assigned_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (captacion.pipeline_id) {
-      const { data: assignStage } = await db
-        .from("captacion_pipeline_stages")
-        .select("id")
-        .eq("pipeline_id", captacion.pipeline_id)
-        .eq("stage_type", "assign")
-        .limit(1)
-        .maybeSingle();
-      if (assignStage) updates.stage_id = assignStage.id;
-    }
-
-    const { data: updated, error: updateError } = await db
-      .from("captaciones")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-
-    // Registrar en log de captacion (attempt_type must be in allowed set)
-    await db.from("captacion_logs").insert({
-      captacion_id: id,
-      created_by: profile.id,
-      attempt_type: "message",
-      result: "assigned",
-      notes: `Asignada a ${captadora.full_name}`,
-    }).then(() => {}).catch(() => {}); // non-critical, ignore errors
-
-    // Enviar notificación a la captadora
-    const propertyTitle = captacion.title || "Captación";
-    await db.from("crm_notifications").insert({
-      user_id: captadora_id,
-      type: "captacion_assigned",
-      title: "Nueva captación asignada",
-      body: `${profile.full_name || "Admin"} te asignó una captación: ${propertyTitle}`,
-      link: `/cl/admin/captaciones/${id}`,
-      data: {
-        captacion_id: id,
-        assigned_by: profile.id,
-        assigned_by_name: profile.full_name,
-      },
+    // La asignación (mover a la etapa "assign", log y notificación) vive en un
+    // helper compartido para que el reparto automático se comporte idéntico.
+    const updated = await applyCaptacionAssignment(db, {
+      captacion: { id, title: captacion.title, pipeline_id: captacion.pipeline_id },
+      assigneeId: captadora_id,
+      assigneeName: captadora.full_name,
+      assignedBy: { id: profile.id, full_name: profile.full_name },
     });
 
     return NextResponse.json({
