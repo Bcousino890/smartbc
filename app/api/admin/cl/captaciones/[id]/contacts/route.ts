@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCurrentProfile } from "@/lib/db/queries/session";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
-import { requirePermission } from "@/lib/auth/guard";
+import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
 
 export async function GET(
   request: NextRequest,
@@ -35,11 +34,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Gate de autorización: añadir contacto del propietario a una captación → captaciones/edit.
-  const gate = await requirePermission("captaciones", "edit");
+  const { id } = await params;
+  // Gate de autorización: quien trabaja la captación (asignado, creador o con
+  // permiso de edición) puede añadir contactos del propietario.
+  const gate = await requireCaptacionWork(id);
   if (!gate.ok) return gate.response;
 
-  const { id } = await params;
   try {
     const body = await request.json();
     const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones, rut } = body;
@@ -96,8 +96,7 @@ export async function POST(
     if (error) throw error;
 
     // Avisar al ejecutivo: ya tiene datos del propietario para llamar
-    const profile = await getCurrentProfile().catch(() => null);
-    await notifyOwnerUpdated(db, id, profile?.id ?? null);
+    await notifyOwnerUpdated(db, id, gate.profile.id);
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {

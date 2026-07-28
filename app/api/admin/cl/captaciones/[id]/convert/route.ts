@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { getCaptacionEditableFields } from "@/lib/permissions";
+import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
 
 // Convierte una captación CONFIRMADA en una propiedad real del catálogo de
 // Chile. Antes la transición confirmed → converted_to_property solo cambiaba
@@ -24,9 +25,8 @@ export async function POST(
     // captación confirmada — no solo el creador original. Así un agente
     // senior puede convertir las captaciones confirmadas que ve, aunque las
     // haya creado otra persona.
-    const editPerms = getCaptacionEditPermissions(profile.role);
-    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
-    if (!isAdmin && !editPerms.fields.canEditStatus) {
+    const actor = await getCaptacionActor(profile);
+    if (!actor.isAdmin && !getCaptacionEditableFields(actor.role).canEditStatus) {
       return NextResponse.json(
         { error: "No tienes permisos para convertir captaciones" },
         { status: 403 }

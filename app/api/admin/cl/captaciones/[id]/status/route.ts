@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { getCaptacionEditableFields } from "@/lib/permissions";
+import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
 
 // Mueve una captación a otra etapa de su mismo pipeline. Las etapas son
 // configurables (migración 0078): en vez de un enum fijo, cada pipeline
@@ -52,17 +53,17 @@ export async function POST(
       );
     }
 
-    const editPerms = getCaptacionEditPermissions(profile.role);
-    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
-    const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
-    const isCreator = captacion.created_by === profile.id;
+    // Rol EFECTIVO (rol por país / personalizado incluidos): con el rol global
+    // a pelo, un senior de Chile no podía mover la etapa.
+    const actor = await getCaptacionActor(profile);
     // Los roles con permiso para cambiar el estado (agent_senior, owner…)
     // pueden mover cualquier captación que ven a una nueva etapa (p. ej.
     // confirmarla para luego convertirla), no solo la que crearon o tienen
     // asignada.
-    const canManageStatus = isAdmin || editPerms.fields.canEditStatus;
+    const canManageStatus =
+      actor.isAdmin || getCaptacionEditableFields(actor.role).canEditStatus;
 
-    if (!isAdmin && !isCaptadora && !isCreator && !canManageStatus) {
+    if (!actorCanWorkCaptacion(actor, captacion) && !canManageStatus) {
       return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
     if (!canManageStatus) {

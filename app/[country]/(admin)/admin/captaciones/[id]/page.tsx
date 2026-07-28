@@ -6,6 +6,7 @@ import { CaptacionDetailClient } from "./detail-client";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { getStagesForPipeline } from "@/lib/captaciones/pipeline";
+import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
 
 export const dynamic = "force-dynamic";
 
@@ -117,10 +118,21 @@ export default async function CaptacionDetailPage({
   // Etapas del pipeline de esta captación (para la ficha/estado/conversión)
   const stages = captacion.pipeline_id ? await getStagesForPipeline(captacion.pipeline_id).catch(() => []) : [];
 
+  // Permisos reales del usuario sobre ESTA captación. Se resuelven aquí (rol
+  // por país + rol personalizado + excepciones) y se bajan al cliente ya
+  // decididos: la UI no vuelve a comparar `role === "captadora"`, que era lo
+  // que escondía el botón "+ Registrar Intento" y los botones de edición a
+  // quien sí tenía permiso en la API.
+  const actor = await getCaptacionActor(profile);
+  const canWork = actorCanWorkCaptacion(actor, captacion);
+  const canDelete = actor.effective.captaciones?.delete ?? false;
+
   return (
     <CaptacionDetailClient
       captacion={captacion}
-      userRole={profile.role}
+      userRole={actor.role}
+      canWork={canWork}
+      canDelete={canDelete}
       currentUserId={profile.id}
       photos={photos}
       logs={logs}

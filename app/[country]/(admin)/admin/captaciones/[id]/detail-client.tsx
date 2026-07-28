@@ -13,6 +13,7 @@ import { ListingsSection } from "./listings-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
 import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
 import { getCaptacionEditableFields } from "@/lib/permissions";
+import { isCaptacionAdminRole } from "@/lib/captaciones/access";
 
 // Descripciones cortas por tipo de etapa (las etapas "normal" son libres, así
 // que no tienen una descripción fija: el nombre que le puso el admin ya es
@@ -45,7 +46,16 @@ type ListingOperation = {
 
 type DetailClientProps = {
   captacion: Captacion;
+  /** Rol EFECTIVO en Chile (rol por país si lo tiene; si no, el global). */
   userRole: string;
+  /**
+   * ¿Puede trabajar esta captación? (registrar intentos, editar contactos y
+   * datos del dueño). Ya viene resuelto del servidor con la misma regla que
+   * aplican las rutas de API — ver `lib/captaciones/access.ts`.
+   */
+  canWork: boolean;
+  /** Permiso efectivo `captaciones.delete` (borrar contactos). */
+  canDelete: boolean;
   currentUserId: string;
   photos: Photo[];
   logs: Log[];
@@ -113,6 +123,8 @@ function CopyButton({ value, label }: { value: string; label?: string }) {
 export function CaptacionDetailClient({
   captacion,
   userRole,
+  canWork,
+  canDelete,
   currentUserId,
   photos,
   logs,
@@ -121,15 +133,16 @@ export function CaptacionDetailClient({
   stages,
 }: DetailClientProps) {
   const isCaptadora = userRole === "captadora";
-  const isAdmin = userRole === "admin";
+  const isAdmin = isCaptacionAdminRole(userRole);
   const isCreator = currentUserId === captacion.created_by;
   // Roles con permiso para cambiar la etapa de una captación (agent_admin,
   // agent_senior, owner…) — no solo el creador. Habilita confirmar y convertir
   // a quienes ven captaciones confirmadas de otros.
   const canManageStatus =
-    isAdmin ||
-    userRole === "agent_admin" ||
-    getCaptacionEditableFields(userRole).canEditStatus;
+    isAdmin || getCaptacionEditableFields(userRole).canEditStatus;
+  // Asignar/reasignar la captación a otra persona del equipo (misma condición
+  // que exige POST /captaciones/[id]/assign).
+  const canAssign = isAdmin || getCaptacionEditableFields(userRole).canAssignCaptadora;
 
   // Etapa actual dentro del pipeline configurable (reemplaza al status fijo)
   const currentStage = stages.find((s) => s.id === captacion.stage_id) || captacion.stage || null;
@@ -793,8 +806,8 @@ export function CaptacionDetailClient({
         </div>
       )}
 
-      {/* Asignación (solo para admin) */}
-      {isAdmin && (
+      {/* Asignación (roles con permiso para asignar) */}
+      {canAssign && (
         <div className="mb-6 rounded-2xl border border-gold/15 bg-white/70 p-6">
           <h3 className="text-sm font-semibold text-ink mb-4">Asignación</h3>
           {captacion.assigned_to && !showReassignForm ? (
@@ -1134,7 +1147,7 @@ export function CaptacionDetailClient({
       {tab === "listings" && (
         <ListingsSection
           captacionId={captacion.id}
-          canEdit={isAdmin || isCaptadora || isCreator}
+          canEdit={canWork}
         />
       )}
 
@@ -1151,8 +1164,7 @@ export function CaptacionDetailClient({
             commune: captacion.commune || null,
           }}
           captacionId={captacion.id}
-          isCaptadora={isCaptadora}
-          isAdmin={isAdmin}
+          canEdit={canWork}
           onUpdate={async (data) => {
             const res = await fetch(`/api/admin/cl/captaciones/${captacion.id}/update`, {
               method: "POST",
@@ -1177,7 +1189,7 @@ export function CaptacionDetailClient({
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-ink">Contactos</h3>
-                  {(isCaptadora || isAdmin) && !showAddContact && (
+                  {canWork && !showAddContact && (
                     <button
                       onClick={() => {
                         resetContactForm();
@@ -1473,7 +1485,7 @@ export function CaptacionDetailClient({
                             )}
                           </div>
                         </div>
-                        {(isCaptadora || isAdmin) && (
+                        {canWork && (
                           <div className="flex gap-1 flex-shrink-0">
                             <button
                               onClick={() => handleEditContact(contact)}
@@ -1482,14 +1494,19 @@ export function CaptacionDetailClient({
                             >
                               <Edit size={14} />
                             </button>
-                            <button
-                              onClick={() => handleDeleteContact(contact.id)}
-                              disabled={deletingContactId === contact.id}
-                              title="Eliminar"
-                              className="rounded p-1.5 text-ink/50 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            {/* Borrar contacto exige `captaciones.delete` en la
+                                API: sin ese permiso el botón no se enseña (antes
+                                salía y devolvía 403). */}
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDeleteContact(contact.id)}
+                                disabled={deletingContactId === contact.id}
+                                title="Eliminar"
+                                className="rounded p-1.5 text-ink/50 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1534,7 +1551,7 @@ export function CaptacionDetailClient({
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-ink">Notas y confirmación</h3>
-                  {(isCaptadora || isAdmin) && (
+                  {canWork && (
                     <button
                       onClick={() => setUpdatingData(true)}
                       className="text-xs font-medium text-gold hover:text-gold-dark"
@@ -1555,9 +1572,9 @@ export function CaptacionDetailClient({
                 {!captacion.notes && !captacion.owner_confirmed && (
                   <p className="text-sm text-ink/40">Sin notas</p>
                 )}
-                {!isCaptadora && !isAdmin && (
+                {!canWork && (
                   <p className="mt-2 text-xs text-ink/40">
-                    Solo captadoras y admins pueden editar
+                    No tienes permiso para editar esta captación
                   </p>
                 )}
               </div>
@@ -1655,8 +1672,10 @@ export function CaptacionDetailClient({
             </div>
           )}
 
-          {/* Registran intentos: captadora/ejecutivo asignado, creador y admin */}
-          {(isCaptadora || isAdmin || isCreator) && !loggingAttempt && (
+          {/* Registran intentos: quien tiene la captación asignada, quien la
+              creó y cualquiera con permiso de edición en captaciones (misma
+              regla que la API — ver lib/captaciones/access.ts) */}
+          {canWork && !loggingAttempt && (
             <button
               onClick={() => setLoggingAttempt(true)}
               className="mb-6 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"

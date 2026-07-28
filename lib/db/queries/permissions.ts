@@ -122,7 +122,25 @@ export async function getEffectivePermissions(
   role: string,
   country?: string,
 ): Promise<EffectivePermissions> {
-  const { effectiveRole, matrix: baseMatrix } = await resolveBaseMatrix(
+  const { permissions } = await getEffectiveRoleAndPermissions(userId, role, country);
+  return permissions;
+}
+
+/**
+ * Igual que `getEffectivePermissions`, pero devuelve además el ROL EFECTIVO
+ * usado para resolver la matriz (rol por país si existe, si no el global).
+ *
+ * Hace falta cuando quien llama no solo pregunta "¿puede?" sino que decide por
+ * rol (ej. captaciones: qué campos puede editar cada rol). Usando el rol global
+ * ahí, un usuario con rol por país —senior en Chile pero junior en España—
+ * quedaba juzgado con el rol equivocado.
+ */
+export async function getEffectiveRoleAndPermissions(
+  userId: string,
+  role: string,
+  country?: string,
+): Promise<{ effectiveRole: string; isCustomRole: boolean; permissions: EffectivePermissions }> {
+  const { effectiveRole, matrix: baseMatrix, isCustomRole } = await resolveBaseMatrix(
     userId,
     role,
     country,
@@ -166,9 +184,11 @@ export async function getEffectivePermissions(
   // `baseMatrix` ya incluye el rol personalizado / rol por país si aplica;
   // `effectiveRole` se pasa solo por compatibilidad de firma (no se usa para
   // resolver la matriz cuando `baseMatrix` viene informado).
-  return country
+  const permissions = country
     ? applyOverridesForCountry(effectiveRole, overrides, country, baseMatrix)
     : applyOverrides(effectiveRole, overrides, baseMatrix);
+
+  return { effectiveRole, isCustomRole, permissions };
 }
 
 /**
