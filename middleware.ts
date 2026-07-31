@@ -52,6 +52,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  // --- API pública (/api/v1): no pasa por sesión ni por control de acceso ---
+  // Se autentica con clave de API en la propia ruta (lib/api/auth.ts), así que
+  // resolver la sesión de cookies aquí sería una llamada a GoTrue por cada
+  // petición de un proveedor, para nada.
+  if (pathname.startsWith("/api/v1")) {
+    return NextResponse.next();
+  }
+
   // --- IP Security: solo en rutas públicas, excluir /api/tracking ---
   // Las rutas de admin y cliente siguen el flujo normal de auth.
   // /api/tracking debe recibir eventos aunque la IP esté bloqueada.

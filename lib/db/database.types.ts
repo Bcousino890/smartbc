@@ -755,6 +755,151 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["property_application_document_annotations"]["Insert"]>;
       };
+      // ── API pública de integraciones (migración 0101) ──────────────────────
+      api_clients: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          country: string;
+          active: boolean;
+          contact_email: string | null;
+          default_created_by: string;
+          default_pipeline_id: string | null;
+          default_assigned_to: string | null;
+          auto_distribute: boolean;
+          overwrite_manual_fields: boolean;
+          match_by_source_url: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          country?: string;
+          active?: boolean;
+          contact_email?: string | null;
+          default_created_by: string;
+          default_pipeline_id?: string | null;
+          default_assigned_to?: string | null;
+          auto_distribute?: boolean;
+          overwrite_manual_fields?: boolean;
+          match_by_source_url?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["api_clients"]["Insert"]>;
+      };
+      api_keys: {
+        Row: {
+          id: string;
+          client_id: string;
+          label: string | null;
+          key_prefix: string;
+          key_hash: string;
+          last_four: string | null;
+          scopes: string[];
+          rate_limit_per_minute: number;
+          expires_at: string | null;
+          last_used_at: string | null;
+          revoked_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          label?: string | null;
+          key_prefix: string;
+          key_hash: string;
+          last_four?: string | null;
+          scopes?: string[];
+          rate_limit_per_minute?: number;
+          expires_at?: string | null;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["api_keys"]["Insert"]>;
+      };
+      api_requests: {
+        Row: {
+          id: string;
+          api_client_id: string | null;
+          api_key_id: string | null;
+          request_id: string | null;
+          method: string | null;
+          path: string | null;
+          status_code: number | null;
+          error_code: string | null;
+          error_message: string | null;
+          ip: string | null;
+          user_agent: string | null;
+          idempotency_key: string | null;
+          dry_run: boolean;
+          duration_ms: number | null;
+          items_total: number;
+          items_created: number;
+          items_updated: number;
+          items_unchanged: number;
+          items_failed: number;
+          request_body: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          api_client_id?: string | null;
+          api_key_id?: string | null;
+          request_id?: string | null;
+          method?: string | null;
+          path?: string | null;
+          status_code?: number | null;
+          error_code?: string | null;
+          error_message?: string | null;
+          ip?: string | null;
+          user_agent?: string | null;
+          idempotency_key?: string | null;
+          dry_run?: boolean;
+          duration_ms?: number | null;
+          items_total?: number;
+          items_created?: number;
+          items_updated?: number;
+          items_unchanged?: number;
+          items_failed?: number;
+          request_body?: Json | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["api_requests"]["Insert"]>;
+      };
+      api_idempotency: {
+        Row: {
+          id: string;
+          api_client_id: string;
+          idempotency_key: string;
+          request_hash: string;
+          status_code: number | null;
+          response_body: Json | null;
+          completed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          api_client_id: string;
+          idempotency_key: string;
+          request_hash: string;
+          status_code?: number | null;
+          response_body?: Json | null;
+          completed_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["api_idempotency"]["Insert"]>;
+      };
     };
     Enums: {
       user_role: UserRole;

@@ -83,6 +83,13 @@ export type Captacion = {
   next_action_at: string | null;
   next_action_note: string | null;
   updated_at: string;
+  // Trazabilidad de la API pública (migración 0101). Opcionales porque las
+  // captaciones creadas a mano o por scraping no las llevan.
+  origin?: "manual" | "scrape" | "api" | null;
+  api_client_id?: string | null;
+  external_id?: string | null;
+  external_source?: string | null;
+  external_synced_at?: string | null;
   contacts?: CaptacionContact[];
   // Indicadores de calidad de datos para los filtros del listado (se
   // calculan aparte con attachDataQualityFlags; opcionales porque no todas
