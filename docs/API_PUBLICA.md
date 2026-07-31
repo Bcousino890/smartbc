@@ -256,14 +256,17 @@ Respuesta:
 { "items": [ { "external_id": "A-1", "price": 100000000 }, { "external_id": "A-2" } ] }
 ```
 
-Responde siempre `200`. Cada elemento trae su propio resultado o su error, de
-modo que un item mal formado **no** tumba el resto:
+Responde siempre `200`. Cada elemento trae su propio resultado o su error —tanto
+si el fallo es de validación (un campo o un enum mal escrito) como de negocio—,
+de modo que un item mal formado **no** tumba el resto:
 
 ```json
 {
   "data": [
     { "index": 0, "ok": true, "external_id": "A-1", "action": "updated", "…": "…" },
-    { "index": 1, "ok": false, "external_id": "A-2", "error": { "code": "…", "message": "…" } }
+    { "index": 1, "ok": false, "external_id": "A-2",
+      "error": { "code": "validation_error", "message": "El elemento no cumple el contrato",
+                 "details": [{ "field": "property_type", "message": "Invalid input" }] } }
   ],
   "meta": { "summary": { "total": 2, "created": 0, "updated": 1, "unchanged": 0, "failed": 1 } }
 }

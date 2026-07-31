@@ -1,6 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { withApiRoute } from "@/lib/api/handler";
+import { apiErrors } from "@/lib/api/errors";
+import { locationKey } from "@/lib/captaciones/write/resolve-location";
 import { CATALOG_ENUMS } from "@/lib/api/v1/captaciones/schema";
 import { getPipelinesForCountry, getStagesForPipeline } from "@/lib/captaciones/pipeline";
 import { isStaffRole } from "@/lib/permissions";
@@ -25,6 +27,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TIPOS = ["enums", "pipelines", "regiones", "comunas", "zonas", "usuarios"] as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Row = Record<string, any>;
 
 export const GET = withApiRoute({
   scope: "catalogos:read",
@@ -68,52 +73,87 @@ export const GET = withApiRoute({
       }
 
       case "regiones": {
-        const { data } = await db
+        const { data, error } = await db
           .from("chile_regions")
           .select("code, name, full_name")
           .order("name", { ascending: true });
+        if (error) throw apiErrors.internal(`No se pudo leer el maestro de regiones: ${error.message}`);
         ctx.counters.total = (data ?? []).length;
         return { data: data ?? [] };
       }
 
       case "comunas": {
-        const region = ctx.searchParams.get("region");
-        let query = db
-          .from("chile_communes")
-          .select("name, code, region_id, chile_regions(name, code)")
-          .order("name", { ascending: true });
-        const { data } = await query;
-        let rows = (data ?? []).map((row: Record<string, unknown>) => ({
-          name: row.name,
-          code: row.code,
-          region: (row.chile_regions as { name?: string } | null)?.name ?? null,
-        }));
-        if (region) {
-          const wanted = region.toLowerCase();
-          rows = rows.filter(
-            (r: { region: string | null }) => (r.region ?? "").toLowerCase() === wanted
+        // Dos consultas y unión en memoria en vez del embed de PostgREST: el
+        // embed depende de que detecte la clave ajena y, si no la ve, devuelve
+        // un error que antes se tragaba y salía como lista vacía.
+        const [{ data: regions, error: regionsError }, { data: communes, error: communesError }] =
+          await Promise.all([
+            db.from("chile_regions").select("id, code, name"),
+            db.from("chile_communes").select("name, code, region_id").order("name", { ascending: true }),
+          ]);
+        if (regionsError || communesError) {
+          throw apiErrors.internal(
+            `No se pudo leer el maestro de comunas: ${(regionsError ?? communesError).message}`
           );
         }
+
+        const regionById = new Map<string, { code: string; name: string }>(
+          (regions ?? []).map((r: Row) => [r.id as string, { code: r.code, name: r.name }])
+        );
+
+        type CommuneRow = { name: string; code: string | null; region: string | null; region_code: string | null };
+        let rows: CommuneRow[] = (communes ?? []).map((row: Row) => {
+          const region = regionById.get(row.region_id as string);
+          return {
+            name: row.name as string,
+            code: (row.code as string) ?? null,
+            region: region?.name ?? null,
+            region_code: region?.code ?? null,
+          };
+        });
+
+        // El filtro acepta el nombre o el código de región, y es insensible a
+        // mayúsculas y tildes ("metropolitana", "RM", "Región Metropolitana").
+        const region = ctx.searchParams.get("region");
+        if (region) {
+          const wanted = locationKey(region);
+          rows = rows.filter(
+            (r) => locationKey(r.region ?? "") === wanted || locationKey(r.region_code ?? "") === wanted
+          );
+        }
+
         ctx.counters.total = rows.length;
         return { data: rows };
       }
 
       case "zonas": {
-        const comuna = ctx.searchParams.get("comuna");
-        const { data } = await db
-          .from("chile_zones")
-          .select("name, chile_communes(name)")
-          .order("name", { ascending: true });
-        let rows = (data ?? []).map((row: Record<string, unknown>) => ({
-          name: row.name,
-          commune: (row.chile_communes as { name?: string } | null)?.name ?? null,
-        }));
-        if (comuna) {
-          const wanted = comuna.toLowerCase();
-          rows = rows.filter(
-            (r: { commune: string | null }) => (r.commune ?? "").toLowerCase() === wanted
+        const [{ data: communes, error: communesError }, { data: zones, error: zonesError }] =
+          await Promise.all([
+            db.from("chile_communes").select("id, name"),
+            db.from("chile_zones").select("name, commune_id").order("name", { ascending: true }),
+          ]);
+        if (communesError || zonesError) {
+          throw apiErrors.internal(
+            `No se pudo leer el maestro de zonas: ${(communesError ?? zonesError).message}`
           );
         }
+
+        const communeById = new Map<string, string>(
+          (communes ?? []).map((c: Row) => [c.id as string, c.name as string])
+        );
+
+        type ZoneRow = { name: string; commune: string | null };
+        let rows: ZoneRow[] = (zones ?? []).map((row: Row) => ({
+          name: row.name as string,
+          commune: communeById.get(row.commune_id as string) ?? null,
+        }));
+
+        const comuna = ctx.searchParams.get("comuna");
+        if (comuna) {
+          const wanted = locationKey(comuna);
+          rows = rows.filter((r) => locationKey(r.commune ?? "") === wanted);
+        }
+
         ctx.counters.total = rows.length;
         return { data: rows };
       }

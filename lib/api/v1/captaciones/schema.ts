@@ -40,10 +40,20 @@ export const CATALOG_ENUMS = {
 const text = (max: number) => z.string().trim().max(max);
 const nullableText = (max: number) => text(max).nullable().optional();
 
-/** Fecha ISO 8601. Se acepta también `null` para limpiar el campo. */
+/**
+ * Fecha ISO 8601 en formato EXTENDIDO (con guiones y dos puntos). Se acepta
+ * también `null` para limpiar el campo.
+ *
+ * El mensaje de error lleva un ejemplo a propósito: el fallo habitual es mezclar
+ * el formato básico de la fecha (20260804) con el extendido de la hora
+ * (15:00:00), que no es ISO 8601 válido y es difícil de ver a simple vista.
+ */
 const isoDate = z
   .string()
-  .refine((v) => !Number.isNaN(Date.parse(v)), { message: "Debe ser una fecha ISO 8601 válida" })
+  .refine((v) => /^\d{4}-\d{2}-\d{2}/.test(v) && !Number.isNaN(Date.parse(v)), {
+    message:
+      "Debe ser una fecha ISO 8601 en formato extendido, ej. 2026-08-04T15:00:00Z",
+  })
   .nullable()
   .optional();
 
@@ -223,10 +233,33 @@ export const CaptacionInputSchema = z
   })
   .strict();
 
-/** Cuerpo de POST /api/v1/captaciones/batch */
+/**
+ * Forma del lote, para documentación y para validar un elemento suelto.
+ * NO se usa para validar la petición: ver CaptacionBatchEnvelopeSchema.
+ */
 export const CaptacionBatchSchema = z
   .object({
     items: z.array(CaptacionInputSchema).min(1).max(100),
+    options: OptionsSchema.nullable().optional(),
+  })
+  .strict();
+
+/**
+ * Cuerpo real de POST /api/v1/captaciones/batch.
+ *
+ * Valida solo el sobre —que `items` sea una lista de objetos de tamaño
+ * razonable— y deja cada elemento sin validar a propósito. Cada uno se valida
+ * después, por separado, dentro del handler.
+ *
+ * El motivo: si el schema completo se aplica al cuerpo entero, un solo elemento
+ * con un enum mal escrito devuelve 400 y se pierden los otros 99. Peor aún, como
+ * el dato sucio sigue en el origen, el lote vuelve a fallar en cada
+ * sincronización y el integrador se queda bloqueado indefinidamente. Validando
+ * elemento a elemento, lo bueno entra y lo malo se reporta con su índice.
+ */
+export const CaptacionBatchEnvelopeSchema = z
+  .object({
+    items: z.array(z.record(z.string(), z.unknown())).min(1).max(100),
     options: OptionsSchema.nullable().optional(),
   })
   .strict();
