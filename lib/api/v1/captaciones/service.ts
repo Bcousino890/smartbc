@@ -9,6 +9,7 @@ import {
   type CaptacionUpsertResult,
 } from "@/lib/captaciones/write/upsert-captacion";
 import { getStagesForPipeline } from "@/lib/captaciones/pipeline";
+import { CaptacionInputSchema } from "./schema";
 import type { CaptacionInput, CaptacionPatchInput } from "./schema";
 
 /**
@@ -43,19 +44,34 @@ export type BatchItemResult =
   | {
       index: number;
       ok: false;
-      external_id: string;
-      error: { code: string; message: string };
+      external_id: string | null;
+      error: {
+        code: string;
+        message: string;
+        details?: { field?: string; message: string }[];
+      };
     };
 
+/** `external_id` del elemento crudo, para poder identificarlo aunque no valide. */
+function rawExternalId(item: unknown): string | null {
+  if (!item || typeof item !== "object") return null;
+  const value = (item as Record<string, unknown>).external_id;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 /**
- * Procesa un lote. Un elemento que falla NO tumba el resto: se registra su
- * error y se continúa, porque un proveedor que manda 100 fichas no debe perder
- * 99 por una mal formada.
+ * Procesa un lote. Ningún elemento puede tumbar al resto — ni por un error de
+ * negocio ni por uno de validación.
+ *
+ * Los elementos llegan SIN validar (ver CaptacionBatchEnvelopeSchema) y se
+ * validan aquí uno a uno. Es lo que permite que un lote de 100 con una ficha
+ * mal formada suba las otras 99 en vez de perderlas todas, y que el integrador
+ * sepa exactamente cuál corregir por su índice y su external_id.
  */
 export async function upsertCaptacionBatch(
   client: ApiClientRow,
-  items: CaptacionInput[],
-  opts: { dryRun?: boolean } = {}
+  items: unknown[],
+  opts: { dryRun?: boolean; defaultOptions?: CaptacionInput["options"] } = {}
 ): Promise<{ results: BatchItemResult[]; summary: BatchSummary }> {
   const results: BatchItemResult[] = [];
   const summary: BatchSummary = {
@@ -67,9 +83,38 @@ export async function upsertCaptacionBatch(
   };
 
   for (let index = 0; index < items.length; index++) {
-    const item = items[index];
+    const raw = items[index];
+
+    // 1 · Validación del elemento, aislada del resto del lote.
+    const parsed = CaptacionInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      summary.failed += 1;
+      results.push({
+        index,
+        ok: false,
+        external_id: rawExternalId(raw),
+        error: {
+          code: "validation_error",
+          message: "El elemento no cumple el contrato",
+          details: parsed.error.issues.slice(0, 20).map((issue) => ({
+            field: issue.path.map((p) => String(p)).join(".") || undefined,
+            message: issue.message,
+          })),
+        },
+      });
+      continue;
+    }
+
+    // Las opciones del lote sirven de valor por defecto para el elemento.
+    const item: CaptacionInput = opts.defaultOptions
+      ? { ...parsed.data, options: parsed.data.options ?? opts.defaultOptions }
+      : parsed.data;
+
+    // 2 · Procesado, también aislado.
     try {
-      const result = await upsertCaptacionFromApi(client, toUpsertInput(item), opts);
+      const result = await upsertCaptacionFromApi(client, toUpsertInput(item), {
+        dryRun: opts.dryRun,
+      });
       results.push({ index, ok: true, ...result });
       if (result.action === "created") summary.created += 1;
       else if (result.action === "updated") summary.updated += 1;

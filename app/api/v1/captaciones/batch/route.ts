@@ -1,14 +1,20 @@
 import "server-only";
 import { withApiRoute } from "@/lib/api/handler";
-import { CaptacionBatchSchema } from "@/lib/api/v1/captaciones/schema";
+import { CaptacionBatchEnvelopeSchema } from "@/lib/api/v1/captaciones/schema";
 import { upsertCaptacionBatch } from "@/lib/api/v1/captaciones/service";
 
 /**
  * POST /api/v1/captaciones/batch
  *
  * Hasta 100 captaciones en una llamada. Devuelve siempre 200 con un `results[]`
- * por elemento: un item mal formado no puede tumbar los otros 99. El proveedor
- * mira `summary.failed` y reintenta solo lo que falló.
+ * por elemento: ni un fallo de validación ni uno de negocio pueden tumbar a los
+ * demás. El proveedor mira `meta.summary.failed` y reintenta solo lo que falló.
+ *
+ * Solo se valida aquí el sobre; cada elemento se valida por separado dentro de
+ * upsertCaptacionBatch. Si el schema completo se aplicara al cuerpo entero, una
+ * sola ficha con un enum mal escrito devolvería 400 y se perderían las otras 99
+ * —y como el dato sucio sigue en el origen, el lote volvería a fallar en cada
+ * sincronización.
  */
 
 export const runtime = "nodejs";
@@ -17,16 +23,11 @@ export const maxDuration = 300;
 
 export const POST = withApiRoute({
   scope: "captaciones:write",
-  schema: CaptacionBatchSchema,
+  schema: CaptacionBatchEnvelopeSchema,
   handler: async (input, ctx) => {
-    // Las opciones del lote sirven de valor por defecto para cada elemento que
-    // no traiga las suyas.
-    const items = input.options
-      ? input.items.map((item) => ({ ...item, options: item.options ?? input.options }))
-      : input.items;
-
-    const { results, summary } = await upsertCaptacionBatch(ctx.client, items, {
+    const { results, summary } = await upsertCaptacionBatch(ctx.client, input.items, {
       dryRun: ctx.dryRun,
+      defaultOptions: input.options ?? undefined,
     });
 
     ctx.counters.total = summary.total;

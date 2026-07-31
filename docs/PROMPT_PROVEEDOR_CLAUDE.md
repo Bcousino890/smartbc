@@ -497,13 +497,16 @@ En los sub-recursos, el identificador acepta el id interno de SmartBC, tu propio
 { "items": [ { "external_id": "A-1", "price": 100000000 }, { "external_id": "A-2" } ] }
 ```
 
-Responde siempre `200`; cada elemento trae su resultado o su error:
+Responde siempre `200`; cada elemento trae su resultado o su error, sea de
+validación o de negocio:
 
 ```json
 {
   "data": [
     { "index": 0, "ok": true,  "external_id": "A-1", "action": "updated" },
-    { "index": 1, "ok": false, "external_id": "A-2", "error": { "code": "…", "message": "…" } }
+    { "index": 1, "ok": false, "external_id": "A-2",
+      "error": { "code": "validation_error", "message": "El elemento no cumple el contrato",
+                 "details": [{ "field": "property_type", "message": "Invalid input" }] } }
   ],
   "meta": { "summary": { "total": 2, "created": 0, "updated": 1, "unchanged": 0, "failed": 1 } }
 }
