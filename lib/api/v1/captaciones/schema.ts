@@ -119,6 +119,10 @@ export const ListingSchema = z
     broker_website_url: z.string().trim().url().max(2000).nullable().optional(),
     broker_price: money,
     broker_currency: z.enum(CURRENCIES).nullable().optional(),
+    // Estado de la comprobación de la web propia de la corredora: si el
+    // proveedor la vigila él mismo, puede reportar cuándo la miró y qué falló.
+    broker_scraped_at: isoDate,
+    broker_scrape_error: nullableText(2000),
     scrape_status: nullableText(40),
     scrape_error: nullableText(2000),
   })

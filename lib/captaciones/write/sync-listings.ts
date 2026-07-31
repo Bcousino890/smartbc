@@ -40,6 +40,8 @@ export type ListingInput = {
   broker_website_url?: string | null;
   broker_price?: number | null;
   broker_currency?: string | null;
+  broker_scraped_at?: string | null;
+  broker_scrape_error?: string | null;
   scrape_status?: string | null;
   scrape_error?: string | null;
 };
@@ -102,6 +104,8 @@ function buildListingPayload(listing: ListingInput): Record<string, unknown> {
       "broker_website_url",
       "broker_price",
       "broker_currency",
+      "broker_scraped_at",
+      "broker_scrape_error",
       "scrape_status",
       "scrape_error",
     ] as (keyof ListingInput)[]

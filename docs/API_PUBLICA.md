@@ -179,9 +179,12 @@ curl -s -X POST https://portal.bcousinoprop.com/api/v1/captaciones \
         "price": 460000000,
         "currency": "clp",
         "operation": "venta",
+        "portal_publication_number": "3914632576",
+        "published_ago": "Publicado hace 2 meses",
         "broker_website_url": "https://corredorax.cl/propiedad/4412",
         "broker_price": 455000000,
-        "broker_currency": "clp"
+        "broker_currency": "clp",
+        "broker_scraped_at": "2026-07-31T12:00:00Z"
       }
     ],
 
@@ -231,8 +234,11 @@ Respuesta:
   enviado, no lo ya descargado. Modos: `sync` (por defecto: añade las nuevas y
   quita las que ya no mandas), `append` (solo añade), `replace` (reconstruye).
   Una foto ya conocida **no** se vuelve a descargar.
-- **Avisos**: se deduplican por `source_url`. Cada cambio de `price` o
-  `broker_price` deja automáticamente un punto en el histórico de precios.
+- **Avisos** (pestaña «Corredoras» del panel): la misma propiedad publicada por
+  varias corredoras. Se deduplican por `source_url`, así que si está en venta y
+  en arriendo se mandan los dos avisos. Cada cambio de `price` (portal) o de
+  `broker_price` (web propia de la corredora) deja automáticamente un punto en
+  el histórico, distinguiendo el origen con `source`.
 - **Intentos**: se deduplican por `external_id`. Sin él, se insertan siempre.
 - **Etapa**: `stage` acepta la `key` de una etapa del pipeline
   (`GET /api/v1/catalogos?tipo=pipelines`). La etapa `converted` no se puede
@@ -278,7 +284,7 @@ modo que un item mal formado **no** tumba el resto:
 | `DELETE /api/v1/captaciones/{id}/contactos/{contactId}` | Eliminar un contacto |
 | `GET·PUT /api/v1/captaciones/{id}/fotos` | Listar / sincronizar galería |
 | `DELETE /api/v1/captaciones/{id}/fotos/{photoId}` | Eliminar una foto |
-| `GET·POST /api/v1/captaciones/{id}/avisos` | Listar / upsert de avisos de corredoras |
+| `GET·POST /api/v1/captaciones/{id}/avisos` | Listar / upsert de avisos de corredoras (pestaña «Corredoras») |
 | `DELETE /api/v1/captaciones/{id}/avisos/{listingId}` | Eliminar un aviso |
 | `GET·POST /api/v1/captaciones/{id}/avisos/{listingId}/precios` | Histórico de precios |
 | `GET·POST /api/v1/captaciones/{id}/intentos` | Historial de contacto |
