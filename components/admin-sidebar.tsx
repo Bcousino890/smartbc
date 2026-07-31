@@ -23,6 +23,7 @@ import {
   UserCog,
   Users,
   X,
+  Plug,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -73,6 +74,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
   { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "diagnostico",  onlyCountry: "es" },
   { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
+  { href: "/admin/integraciones",      labelKey: "admin.nav.integraciones",      icon: Plug,          permissionResource: "configuracion" },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 

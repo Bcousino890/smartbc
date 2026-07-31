@@ -3,6 +3,7 @@
 import {
   ArrowLeft, Phone, MapPin, Check, Image, Clock,
   MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit, Copy,
+  Plug,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -674,6 +675,27 @@ export function CaptacionDetailClient({
               )}
             </div>
           </div>
+
+          {/* Origen API: esta captación la mantiene una integración externa, así
+              que quien la mire sabe que los datos del anuncio se actualizan
+              solos y no hace falta refrescarlos a mano. */}
+          {captacion.origin === "api" && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-gold/8 px-3 py-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 font-medium text-gold-dark">
+                <Plug size={12} />
+                Origen: API · {captacion.external_source || "integración"}
+              </span>
+              {captacion.external_id && (
+                <span className="text-ink/45">ref. proveedor: {captacion.external_id}</span>
+              )}
+              {captacion.external_synced_at && (
+                <span className="text-ink/45">
+                  última sincronización:{" "}
+                  {new Date(captacion.external_synced_at).toLocaleString("es-CL")}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Scrape status and meta */}
           <div className="mb-3 flex items-center gap-2 text-[11px] text-ink/50">

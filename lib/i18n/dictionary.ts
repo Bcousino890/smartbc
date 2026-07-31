@@ -389,6 +389,7 @@ const es: Strings = {
 
   "admin.nav.usuarios": "Usuarios",
   "admin.nav.demo_setup": "Demo Setup",
+  "admin.nav.integraciones": "Integraciones",
   "admin.nav.configuracion": "Configuración",
   "admin.realtime.footer": "Datos actualizados en tiempo real",
   "publicacion.title": "Publicación",
@@ -537,6 +538,9 @@ const es: Strings = {
   "agency.notFound": "Agencia no encontrada.",
 
   // Admin / Clientes
+  "integraciones.title": "Integraciones",
+  "integraciones.subtitle":
+    "Sistemas externos autorizados a crear y actualizar captaciones automáticamente vía API.",
   "clientes.title": "Clientes",
   "clientes.subtitle":
     "Seguimiento y control de clientes dentro de la plataforma.",
@@ -1410,6 +1414,7 @@ const en: Strings = {
 
   "admin.nav.usuarios": "Users",
   "admin.nav.demo_setup": "Demo Setup",
+  "admin.nav.integraciones": "Integrations",
   "admin.nav.configuracion": "Settings",
   "admin.realtime.footer": "Data updated in real time",
   "admin.relativeTime.justNow": "Just now",
@@ -1549,6 +1554,9 @@ const en: Strings = {
   "agency.properties.price.sale": "{price}",
   "agency.notFound": "Agency not found.",
 
+  "integraciones.title": "Integrations",
+  "integraciones.subtitle":
+    "External systems allowed to create and update prospects automatically through the API.",
   "clientes.title": "Clients",
   "clientes.subtitle":
     "Tracking and management of clients within the platform.",
@@ -2411,6 +2419,7 @@ const fr: Strings = {
 
   "admin.nav.usuarios": "Utilisateurs",
   "admin.nav.demo_setup": "Configuration de démo",
+  "admin.nav.integraciones": "Intégrations",
   "admin.nav.configuracion": "Configuration",
   "admin.realtime.footer": "Données mises à jour en temps réel",
   "admin.relativeTime.justNow": "À l'instant",
@@ -2551,6 +2560,9 @@ const fr: Strings = {
   "agency.properties.price.sale": "{price}",
   "agency.notFound": "Agence introuvable.",
 
+  "integraciones.title": "Intégrations",
+  "integraciones.subtitle":
+    "Systèmes externes autorisés à créer et mettre à jour des prospects automatiquement via l\u2019API.",
   "clientes.title": "Clients",
   "clientes.subtitle":
     "Suivi et gestion des clients au sein de la plateforme.",
@@ -3371,6 +3383,7 @@ const de: Strings = {
 
   "admin.nav.usuarios": "Benutzer",
   "admin.nav.demo_setup": "Demo-Setup",
+  "admin.nav.integraciones": "Integrationen",
   "admin.nav.configuracion": "Einstellungen",
   "admin.realtime.footer": "Daten in Echtzeit aktualisiert",
   "admin.relativeTime.justNow": "Gerade eben",
@@ -3511,6 +3524,9 @@ const de: Strings = {
   "agency.properties.price.sale": "{price}",
   "agency.notFound": "Agentur nicht gefunden.",
 
+  "integraciones.title": "Integrationen",
+  "integraciones.subtitle":
+    "Externe Systeme, die über die API automatisch Akquisen anlegen und aktualisieren dürfen.",
   "clientes.title": "Kunden",
   "clientes.subtitle":
     "Nachverfolgung und Verwaltung der Kunden in der Plattform.",
