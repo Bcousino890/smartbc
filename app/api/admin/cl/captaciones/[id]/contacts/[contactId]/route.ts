@@ -66,6 +66,10 @@ export async function PUT(
       updateData.extra_phones = extraPhonesResult.phones;
     }
 
+    // Sella el contacto como tocado por una persona: a partir de aquí ninguna
+    // sincronización con mode=sync puede retirarlo, lo creara quien lo creara.
+    updateData.updated_by_user_at = new Date().toISOString();
+
     const { data, error } = await db
       .from("captacion_contacts")
       .update(updateData)

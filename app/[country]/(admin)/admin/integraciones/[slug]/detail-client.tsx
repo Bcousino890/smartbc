@@ -407,6 +407,11 @@ export function IntegracionDetailClient({
                         {entry.items_created} nuevas · {entry.items_updated} actualizadas ·{" "}
                         {entry.items_unchanged} sin cambios
                         {entry.items_failed > 0 && ` · ${entry.items_failed} con error`}
+                        {entry.items_removed > 0 && (
+                          <span className="ml-1 font-medium text-rose-600">
+                            · {entry.items_removed} retirados
+                          </span>
+                        )}
                       </span>
                     )}
                   </button>

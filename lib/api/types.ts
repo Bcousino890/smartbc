@@ -35,6 +35,7 @@ export type ApiContext = {
     created: number;
     updated: number;
     unchanged: number;
+    removed: number;
     failed: number;
   };
 };

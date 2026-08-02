@@ -37,6 +37,8 @@ export type ContactSyncResult = {
   unchanged: number;
   /** Contactos retirados por no venir en un envío con mode=sync. */
   removed: number;
+  /** Contactos que se habrían retirado pero están protegidos (los tocó una persona). */
+  removalProtected: number;
   /** Fotos de perfil encoladas para descargar y re-alojar. */
   photosQueued: number;
   errors: { external_id?: string | null; message: string }[];
@@ -54,6 +56,7 @@ type ExistingContact = {
   rut: string | null;
   extra_phones: unknown;
   api_client_id: string | null;
+  updated_by_user_at: string | null;
   photo_url: string | null;
   photo_storage_path: string | null;
   photo_source_url: string | null;
@@ -85,6 +88,7 @@ export async function syncCaptacionContacts(
     updated: 0,
     unchanged: 0,
     removed: 0,
+    removalProtected: 0,
     photosQueued: 0,
     errors: [],
   };
@@ -95,7 +99,7 @@ export async function syncCaptacionContacts(
 
   const { data: existingRows } = await db
     .from("captacion_contacts")
-    .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones, photo_url, photo_storage_path, photo_source_url, api_client_id")
+    .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones, photo_url, photo_storage_path, photo_source_url, api_client_id, updated_by_user_at")
     .eq("captacion_id", captacionId);
 
   const existing: ExistingContact[] = existingRows ?? [];
@@ -220,12 +224,21 @@ export async function syncCaptacionContacts(
   // no desaparece porque un integrador mande una lista corta; uno de otra
   // integración tampoco.
   if (mode === "sync") {
-    const orphans = existing.filter(
+    const candidates = existing.filter(
       (row) =>
         !seen.has(row.id) &&
         row.api_client_id !== null &&
         row.api_client_id === (opts.apiClientId ?? null)
     );
+
+    // Segunda salvaguarda, además de la procedencia: si una PERSONA ha tocado
+    // el contacto, no se retira aunque lo creara la integración. Un teléfono
+    // que la captadora corrigió tras hablar con el propietario es el dato más
+    // valioso de la ficha, y no puede perderse porque el proveedor mande una
+    // lista más corta.
+    const protectedRows = candidates.filter((row) => row.updated_by_user_at !== null);
+    const orphans = candidates.filter((row) => row.updated_by_user_at === null);
+    result.removalProtected = protectedRows.length;
 
     if (orphans.length > 0) {
       if (!opts.dryRun) {

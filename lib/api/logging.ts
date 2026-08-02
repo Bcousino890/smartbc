@@ -47,6 +47,7 @@ export type ApiRequestLog = {
     created: number;
     updated: number;
     unchanged: number;
+    removed: number;
     failed: number;
   };
   body?: unknown;
@@ -74,6 +75,7 @@ export async function logApiRequest(entry: ApiRequestLog): Promise<void> {
       items_created: entry.counters?.created ?? 0,
       items_updated: entry.counters?.updated ?? 0,
       items_unchanged: entry.counters?.unchanged ?? 0,
+      items_removed: entry.counters?.removed ?? 0,
       items_failed: entry.counters?.failed ?? 0,
       request_body: truncateBody(entry.body),
     });

@@ -252,6 +252,14 @@ Respuesta:
   y ya no envías — nunca los que dio de alta el equipo de SmartBC desde el
   panel, aunque no vengan en tu envío. Una lista vacía con `sync` retira todos
   los tuyos. La forma de array plano sigue siendo válida y equivale a `append`.
+
+  **Dos salvaguardas, y conviene conocerlas porque cambian el resultado:**
+  no se retira un contacto que creó el equipo de SmartBC (no es tuyo), ni uno
+  que **una persona haya editado**, aunque lo crearas tú — un teléfono corregido
+  por la captadora tras hablar con el propietario no se pierde porque mandes una
+  lista más corta. Cuando eso pasa, la respuesta lo dice:
+  `sections.contacts.removal_protected` con el número, y un aviso en `warnings`.
+  Si esperabas que desapareciera y sigue ahí, es esto.
 - **Fotos de contacto** (`contacts[].photo_url`): se descargan y re-alojan igual
   que la galería, en segundo plano, y solo cuando la URL cambia respecto a la
   última que enviaste. Un `404` se interpreta como "ese número no tiene foto":

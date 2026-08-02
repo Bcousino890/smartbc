@@ -400,6 +400,10 @@ retira a nadie. `sync` además **retira los contactos que tu integración creó
 antes y ya no envías** — nunca los que dio de alta el equipo de SmartBC en el
 panel. Una lista vacía con `sync` retira todos los tuyos.
 
+Tampoco se retira un contacto que **una persona haya editado**, aunque lo
+crearas tú. `sections.contacts.removal_protected` te dice cuántos se han
+protegido, y sale también como aviso en `warnings`.
+
 Campos de cada elemento:
 
 | Campo | Tipo | Notas |
