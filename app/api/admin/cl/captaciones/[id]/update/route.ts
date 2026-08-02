@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditableFields } from "@/lib/permissions";
 import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
 import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function POST(
   request: NextRequest,
@@ -81,7 +82,7 @@ export async function POST(
 
     // Construir objeto de actualización dinámicamente
     const updates: any = {
-      updated_at: new Date().toISOString(),
+      ...panelChange(),
     };
 
     // Campos que anyone puede editar

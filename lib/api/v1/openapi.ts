@@ -60,6 +60,12 @@ const contactoGuardado = {
         },
       },
     },
+    source: {
+      type: "string",
+      enum: ["panel", "api"],
+      description:
+        "panel = lo añadió o corrigió una persona del equipo de SmartBC (suele ser mejor dato: sale de haber hablado con el propietario). api = lo envió una integración.",
+    },
     created_at: { type: "string", format: "date-time" },
     updated_at: { type: "string", format: "date-time" },
   },
@@ -155,7 +161,18 @@ const captacionGuardada = {
     owner_phone: { type: ["string", "null"] },
     owner_confirmed: { type: ["boolean", "null"] },
     created_at: { type: "string", format: "date-time" },
-    updated_at: { type: "string", format: "date-time" },
+    updated_at: {
+      type: "string",
+      format: "date-time",
+      description:
+        "Último cambio de cualquier origen, INCLUIDOS los envíos de la propia integración. No sirve para sondear cambios ajenos.",
+    },
+    updated_by_user_at: {
+      type: ["string", "null"],
+      format: "date-time",
+      description:
+        "Último cambio hecho por una persona en el panel. NULL si nadie lo ha tocado a mano. Es la marca que hay que sondear con ?changed_by=panel.",
+    },
   },
   required: ["id", "external_id"],
 };
@@ -351,6 +368,13 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
               schema: { type: "string", format: "date-time" },
             },
             { name: "stage", in: "query", description: "Filtra por `key` de etapa.", schema: { type: "string" } },
+            {
+              name: "changed_by",
+              in: "query",
+              description:
+                "Con valor `panel`, devuelve solo las captaciones que ha tocado una persona del equipo de SmartBC, y aplica `updated_since` y el cursor sobre `updated_by_user_at` en vez de sobre `updated_at`. Es la forma de sondear el trabajo del equipo sin recibir el eco de los propios envíos.",
+              schema: { type: "string", enum: ["panel"] },
+            },
           ],
           responses: {
             "200": okResponse("Listado", arrayOf(captacionGuardada)),

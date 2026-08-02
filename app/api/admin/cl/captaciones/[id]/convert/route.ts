@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditableFields } from "@/lib/permissions";
 import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 // Convierte una captación CONFIRMADA en una propiedad real del catálogo de
 // Chile. Antes la transición confirmed → converted_to_property solo cambiaba
@@ -239,7 +240,7 @@ export async function POST(
         ...(convertedStageId ? { stage_id: convertedStageId } : {}),
         converted_to_property_id: property.id,
         completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        ...panelChange(),
       })
       .eq("id", id);
 

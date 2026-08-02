@@ -4,6 +4,7 @@ import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
 import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function PUT(
   request: NextRequest,
@@ -84,6 +85,8 @@ export async function PUT(
     // Avisar al ejecutivo: los datos del propietario cambiaron
     await notifyOwnerUpdated(db, id, gate.profile.id);
 
+    await stampPanelChange(db, id);
+
     return NextResponse.json(data);
   } catch (error) {
     console.error("PUT /contacts/[contactId] error:", error);
@@ -119,6 +122,8 @@ export async function DELETE(
       .eq("captacion_id", id);
 
     if (error) throw error;
+
+    await stampPanelChange(db, id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

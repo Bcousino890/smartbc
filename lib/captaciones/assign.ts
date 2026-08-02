@@ -1,4 +1,5 @@
 import "server-only";
+import { panelChange } from "./panel-change";
 
 /**
  * Aplica la asignación de una captación a un usuario y deja todo consistente:
@@ -36,7 +37,10 @@ export async function applyCaptacionAssignment(
   const updates: any = {
     assigned_to: assigneeId,
     assigned_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    // Una asignación MANUAL es trabajo del equipo y se marca como tal. El
+    // reparto automático no: lo dispara la creación por API, y contarlo como
+    // cambio del panel devolvería al integrador el eco de su propio envío.
+    ...(auto ? { updated_at: new Date().toISOString() } : panelChange()),
   };
 
   // Si el pipeline tiene una etapa de tipo "assign", la captación se mueve ahí.

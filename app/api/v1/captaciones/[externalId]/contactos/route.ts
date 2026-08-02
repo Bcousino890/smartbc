@@ -26,11 +26,17 @@ export const GET = withApiRoute({
     const db = createAdminClient() as any;
     const { data } = await db
       .from("captacion_contacts")
-      .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, photo_url, extra_phones, created_at, updated_at")
+      .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, photo_url, extra_phones, api_client_id, created_at, updated_at")
       .eq("captacion_id", captacion.id)
       .order("created_at", { ascending: true });
-    ctx.counters.total = (data ?? []).length;
-    return { data: data ?? [] };
+    // `source` distingue lo que añadió el equipo en el panel de lo que envió
+    // una integración; el id interno del cliente API no sale de aquí.
+    const rows = (data ?? []).map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ({ api_client_id, ...rest }: any) => ({ ...rest, source: api_client_id ? "api" : "panel" })
+    );
+    ctx.counters.total = rows.length;
+    return { data: rows };
   },
 });
 

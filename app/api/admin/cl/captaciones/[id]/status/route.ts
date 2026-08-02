@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCaptacionEditableFields } from "@/lib/permissions";
 import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 // Mueve una captación a otra etapa de su mismo pipeline. Las etapas son
 // configurables (migración 0078): en vez de un enum fijo, cada pipeline
@@ -103,7 +104,7 @@ export async function POST(
       .update({
         stage_id: new_stage_id,
         revision_notes: targetStage.requires_notes ? notes : null,
-        updated_at: new Date().toISOString(),
+        ...panelChange(),
       })
       .eq("id", id)
       .select()
