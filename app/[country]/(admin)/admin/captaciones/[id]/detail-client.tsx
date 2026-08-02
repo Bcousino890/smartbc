@@ -1544,14 +1544,25 @@ export function CaptacionDetailClient({
                 )}
               </div>
 
-              {/* Datos heredados del sistema anterior — teléfono/nombre/contacto ahora
-                  se editan como Contacto (arriba) y la dirección en la pestaña
-                  Ubicación; esto queda solo como referencia de solo lectura. */}
+              {/* Datos heredados del sistema anterior — teléfono/nombre/contacto se
+                  pueden editar también como Contacto (arriba) y la dirección desde
+                  la pestaña Ubicación, pero quedan aquí editables directamente para
+                  corregir el dato heredado sin tener que crear un contacto nuevo. */}
               {(captacion.owner_phone || captacion.owner_name || captacion.owner_contact || captacion.address_real) && (
                 <>
                   <hr className="border-ink/10" />
                   <div>
-                    <p className="mb-2 text-xs text-ink/40">Datos heredados del sistema anterior</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-ink/40">Datos heredados del sistema anterior</p>
+                      {canWork && (
+                        <button
+                          onClick={() => setUpdatingData(true)}
+                          className="text-xs font-medium text-gold hover:text-gold-dark"
+                        >
+                          + Editar
+                        </button>
+                      )}
+                    </div>
                     <div className="space-y-4">
                       {captacion.owner_phone && (
                         <InfoRow label="Teléfono">
@@ -1610,6 +1621,27 @@ export function CaptacionDetailClient({
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
+              <Input
+                label="Teléfono"
+                value={formData.owner_phone}
+                onChange={(v) => setFormData({ ...formData, owner_phone: v })}
+                placeholder="+56 9 1234 5678"
+              />
+              <Input
+                label="Nombre"
+                value={formData.owner_name}
+                onChange={(v) => setFormData({ ...formData, owner_name: v })}
+              />
+              <Input
+                label="Contacto (Email/Otro)"
+                value={formData.owner_contact}
+                onChange={(v) => setFormData({ ...formData, owner_contact: v })}
+              />
+              <Input
+                label="Dirección Real"
+                value={formData.address_real}
+                onChange={(v) => setFormData({ ...formData, address_real: v })}
+              />
               <div>
                 <label className="block text-sm font-medium text-ink/70 mb-1">Notas</label>
                 <textarea
