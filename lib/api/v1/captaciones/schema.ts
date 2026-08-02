@@ -90,6 +90,33 @@ export const ContactSchema = z
   })
   .strict();
 
+/**
+ * Colección de contactos. Admite dos formas, a propósito:
+ *
+ *   "contacts": [ … ]                          ← forma histórica, equivale a append
+ *   "contacts": { "mode": "sync", "items": [ … ] }
+ *
+ * `append` (por defecto) solo da de alta y actualiza. `sync` además RETIRA los
+ * contactos que la integración había creado antes y ya no envía — pensado para
+ * proveedores cuyo equipo cura la lista y necesita que quitar a alguien de su
+ * lado lo quite también de la ficha.
+ *
+ * En `sync` solo se retiran contactos creados por la propia integración que
+ * llama. Los que haya dado de alta el equipo de SmartBC desde el panel no se
+ * tocan nunca, aunque no vengan en el envío.
+ */
+export const ContactCollectionSchema = z
+  .object({
+    mode: z.enum(["sync", "append"]).nullable().optional(),
+    items: z.array(ContactSchema).max(20),
+  })
+  .strict();
+
+export const ContactsInputSchema = z.union([
+  z.array(ContactSchema).max(20),
+  ContactCollectionSchema,
+]);
+
 export const PhotoSchema = z
   .object({
     url: z.string().trim().url().max(2000),
@@ -224,7 +251,7 @@ export const CaptacionInputSchema = z
     next_action_note: nullableText(1000),
 
     // ── Sub-recursos ──
-    contacts: z.array(ContactSchema).max(20).nullable().optional(),
+    contacts: ContactsInputSchema.nullable().optional(),
     photos: PhotoCollectionSchema.nullable().optional(),
     listings: z.array(ListingSchema).max(20).nullable().optional(),
     attempts: z.array(AttemptSchema).max(50).nullable().optional(),
@@ -278,6 +305,16 @@ export type CaptacionInput = z.infer<typeof CaptacionInputSchema>;
 export type CaptacionBatchInput = z.infer<typeof CaptacionBatchSchema>;
 export type CaptacionPatchInput = z.infer<typeof CaptacionPatchSchema>;
 export type ContactInputPayload = z.infer<typeof ContactSchema>;
+export type ContactsInputPayload = z.infer<typeof ContactsInputSchema>;
+
+/** Normaliza las dos formas aceptadas de `contacts` a { mode, items }. */
+export function normalizeContactsInput(
+  input: ContactsInputPayload | null | undefined
+): { mode: "sync" | "append"; items: ContactInputPayload[] } | null {
+  if (!input) return null;
+  if (Array.isArray(input)) return { mode: "append", items: input };
+  return { mode: input.mode ?? "append", items: input.items };
+}
 export type ListingInputPayload = z.infer<typeof ListingSchema>;
 export type AttemptInputPayload = z.infer<typeof AttemptSchema>;
 export type PhotoCollectionPayload = z.infer<typeof PhotoCollectionSchema>;

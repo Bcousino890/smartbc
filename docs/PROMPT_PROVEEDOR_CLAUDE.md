@@ -386,7 +386,21 @@ pero **no** se escribió porque pertenece al equipo de SmartBC y ya tenía valor
 | `next_action_at` | fecha ISO 8601 |
 | `next_action_note` | string |
 
-### `contacts[]` — máx. 20
+### `contacts` — máx. 20
+
+Admite dos formas. El array plano equivale a `append`:
+
+```json
+"contacts": [ … ]
+"contacts": { "mode": "sync", "items": [ … ] }
+```
+
+`append` (por defecto) solo da de alta y actualiza: una lista más corta no
+retira a nadie. `sync` además **retira los contactos que tu integración creó
+antes y ya no envías** — nunca los que dio de alta el equipo de SmartBC en el
+panel. Una lista vacía con `sync` retira todos los tuyos.
+
+Campos de cada elemento:
 
 | Campo | Tipo | Notas |
 |---|---|---|

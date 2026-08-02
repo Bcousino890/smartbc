@@ -240,6 +240,18 @@ Respuesta:
   en arriendo se mandan los dos avisos. Cada cambio de `price` (portal) o de
   `broker_price` (web propia de la corredora) deja automáticamente un punto en
   el histórico, distinguiendo el origen con `source`.
+- **Contactos**: por defecto `contacts` solo da de alta y actualiza; una lista
+  más corta **no** retira a nadie. Si tu equipo cura la lista y necesitas que
+  quitar a alguien de tu lado lo quite también aquí, usa la forma con modo:
+
+  ```json
+  "contacts": { "mode": "sync", "items": [ … ] }
+  ```
+
+  Con `mode: "sync"` se retiran los contactos que **tu integración** creó antes
+  y ya no envías — nunca los que dio de alta el equipo de SmartBC desde el
+  panel, aunque no vengan en tu envío. Una lista vacía con `sync` retira todos
+  los tuyos. La forma de array plano sigue siendo válida y equivale a `append`.
 - **Fotos de contacto** (`contacts[].photo_url`): se descargan y re-alojan igual
   que la galería, en segundo plano, y solo cuando la URL cambia respecto a la
   última que enviaste. Un `404` se interpreta como "ese número no tiene foto":
@@ -304,6 +316,14 @@ de modo que un item mal formado **no** tumba el resto:
 
 En sub-recursos, los identificadores aceptan tanto el id interno de SmartBC como
 tu propio `external_id` (y en avisos, además, la `source_url` codificada).
+
+### Forma de las respuestas
+
+Todas las respuestas llevan la misma envoltura: `{ "data": …, "request_id": … }`,
+y los listados devuelven **`data` como array directo** — no `data.contacts` ni
+`data.contactos`. La forma exacta de cada uno está declarada en el OpenAPI
+(`components.schemas.ContactoGuardado`, `CaptacionGuardada`…), así que se puede
+generar el cliente sin adivinar.
 
 ### Paginación
 
