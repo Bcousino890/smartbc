@@ -156,7 +156,7 @@ const FICHA_COLUMNS = `
   zone, subzone, address_scraped, address_real, address_verified, latitude,
   longitude, rol_propiedad, owner_name, owner_phone, owner_contact,
   owner_confirmed, notes, revision_notes, next_action_at, next_action_note,
-  last_contact_attempt_at, scrape_status, scraped_at
+  last_contact_attempt_at, scrape_status, scraped_at, updated_by_user_at
 `;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -177,6 +177,21 @@ async function findByExternalId(
   return data ?? null;
 }
 
+/**
+ * Marca el origen de cada contacto y oculta el id interno del cliente API.
+ *
+ * `source: "panel"` es el dato que más le sirve a una integración: significa que
+ * lo añadió o corrigió una persona del equipo tras hablar con el propietario, y
+ * suele ser mejor dato que el de origen.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withContactSource(rows: any[]): Record<string, unknown>[] {
+  return (rows ?? []).map(({ api_client_id, ...rest }) => ({
+    ...rest,
+    source: api_client_id ? "api" : "panel",
+  }));
+}
+
 /** Ficha completa: exactamente lo que muestran las seis pestañas del panel. */
 export async function getCaptacionDetail(
   client: ApiClientRow,
@@ -192,7 +207,7 @@ export async function getCaptacionDetail(
   const [contacts, photos, listings, attempts, stage] = await Promise.all([
     db
       .from("captacion_contacts")
-      .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, photo_url, extra_phones, created_at, updated_at")
+      .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, photo_url, extra_phones, api_client_id, created_at, updated_at")
       .eq("captacion_id", captacion.id)
       .order("created_at", { ascending: true })
       .then((r: Row) => r.data ?? []),
@@ -238,7 +253,7 @@ export async function getCaptacionDetail(
     ...captacion,
     admin_url: adminUrl(captacion.country, captacion.id),
     stage,
-    contacts,
+    contacts: withContactSource(contacts),
     photos,
     listings: listingsWithPrices,
     attempts,
@@ -266,6 +281,13 @@ export type ListParams = {
   cursor: string | null;
   updatedSince: string | null;
   stage: string | null;
+  /**
+   * `panel` devuelve solo lo que ha tocado una PERSONA desde el panel, y ordena
+   * por esa marca. Es lo que permite a una integración sondear el trabajo del
+   * equipo sin recibir el eco de sus propios envíos: `updated_at` avanza también
+   * con los push de la propia integración, `updated_by_user_at` no.
+   */
+  changedBy: "panel" | null;
 };
 
 export type ListResult = {
@@ -285,23 +307,31 @@ export async function listCaptaciones(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
 
+  // Con changed_by=panel se filtra y pagina por la marca de cambio humano.
+  const sortColumn = params.changedBy === "panel" ? "updated_by_user_at" : "updated_at";
+
   let query = db
     .from("captaciones")
     .select(FICHA_COLUMNS)
     .eq("api_client_id", client.id)
-    .order("updated_at", { ascending: false })
+    .order(sortColumn, { ascending: false })
     .order("id", { ascending: false })
     .limit(params.limit + 1);
 
+  if (params.changedBy === "panel") {
+    // NULL = nadie la ha tocado a mano desde que existe la marca.
+    query = query.not("updated_by_user_at", "is", null);
+  }
+
   if (params.updatedSince) {
-    query = query.gte("updated_at", params.updatedSince);
+    query = query.gte(sortColumn, params.updatedSince);
   }
 
   const cursor = decodeCursor(params.cursor);
   if (cursor) {
-    // Estrictamente anteriores al cursor en el orden (updated_at desc, id desc).
+    // Estrictamente anteriores al cursor en el orden (columna desc, id desc).
     query = query.or(
-      `updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`
+      `${sortColumn}.lt.${cursor.updatedAt},and(${sortColumn}.eq.${cursor.updatedAt},id.lt.${cursor.id})`
     );
   }
 
@@ -322,7 +352,8 @@ export async function listCaptaciones(
 
   return {
     items: page.map((row) => ({ ...row, admin_url: adminUrl(row.country, row.id) })),
-    next_cursor: hasMore && last ? encodeCursor(last.updated_at, last.id) : null,
+    next_cursor:
+      hasMore && last ? encodeCursor(last[sortColumn] as string, last.id) : null,
     has_more: hasMore,
   };
 }

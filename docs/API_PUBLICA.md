@@ -460,7 +460,69 @@ Cada respuesta trae `X-RateLimit-Limit`, `X-RateLimit-Remaining` y
 
 ---
 
+## 13. Sondear lo que cambia en SmartBC
+
+La integración es de doble sentido en la lectura: además de enviar, puedes
+consultar qué ha hecho el equipo de SmartBC con tus captaciones.
+
+### El problema de sondear `updated_at`
+
+`updated_at` avanza con **cualquier** escritura, incluidos tus propios envíos.
+Si sondeas por él, cada push tuyo te volvería como "cambio en SmartBC", lo
+reflejarías en tu sistema, eso volvería a marcar la captación como cambiada, la
+reenviarías… y así indefinidamente.
+
+### La solución: `?changed_by=panel`
+
+```bash
+curl -s "$BASE/api/v1/captaciones?changed_by=panel&updated_since=2026-07-31T00:00:00Z&limit=100" \
+  -H "Authorization: Bearer $SMARTBC_API_KEY"
+```
+
+Con `changed_by=panel`:
+
+- se devuelven **solo** las captaciones que ha tocado una persona desde el panel;
+- `updated_since` y el cursor se aplican sobre **`updated_by_user_at`**, no sobre
+  `updated_at`;
+- `meta.cursor_field` te confirma sobre qué columna estás paginando.
+
+`updated_by_user_at` **nunca** avanza por tus envíos, ni por el reparto
+automático (que dispara tu propia alta). Solo por trabajo humano. No hay eco.
+
+### Qué vas a ver cambiar
+
+| Dato | Campo | Para qué te sirve |
+|---|---|---|
+| Etapa | `stage.key`, `stage.stage_type` | Dejar de trabajar lo que ya se rechazó (`stage_type: "rejected"`) o se convirtió (`"converted"`) |
+| Propietario confirmado | `owner_confirmed` | Saber que el dueño confirmó que quiere vender |
+| Contactos del equipo | `GET /captaciones/{id}/contactos` → `source: "panel"` | Los que añadió o corrigió el equipo tras hablar con la persona |
+| Datos del propietario | `owner_name`, `owner_phone`, `address_real` | Lo que consiguió la captadora |
+
+Cada contacto trae `source`: `"panel"` si lo puso una persona del equipo,
+`"api"` si lo enviaste tú. Es lo que te permite quedarte solo con lo primero.
+
+### Cadencia recomendada
+
+Un sondeo cada 5-10 minutos con `limit=100` y paginación por cursor. Con 120
+peticiones/minuto de límite sobra de largo, y la latencia es más que suficiente
+para un dato que cambia cuando alguien cuelga el teléfono.
+
+> **`updated_by_user_at` es `null` en todo lo anterior a esta función**, a
+> propósito: significa "nadie lo ha tocado a mano desde que existe la marca".
+> Así el primer sondeo no te devuelve todo el histórico de golpe.
+
+---
+
 ## Changelog
+
+### v1.1.0 — 2026-07-31
+- `contacts` admite `{ mode, items }` con `mode: "sync"` (retira los contactos
+  que la integración creó y ya no envía). El array plano sigue siendo válido.
+- `contacts[].photo_url`: foto de perfil por contacto.
+- `GET /captaciones?changed_by=panel` y `updated_by_user_at`: sondeo del trabajo
+  del equipo sin eco de los propios envíos.
+- Los contactos devuelven `source` (`panel` | `api`).
+- Declarada la forma real de `data` en todas las respuestas de lectura.
 
 ### v1.0.0 — 2026-07-31
 - Primera versión pública: alta y actualización de captaciones con la ficha

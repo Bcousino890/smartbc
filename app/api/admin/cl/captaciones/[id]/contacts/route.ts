@@ -4,6 +4,7 @@ import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
 import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
 import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
 import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function GET(
   request: NextRequest,
@@ -97,6 +98,9 @@ export async function POST(
 
     // Avisar al ejecutivo: ya tiene datos del propietario para llamar
     await notifyOwnerUpdated(db, id, gate.profile.id);
+    // Un contacto añadido a mano es trabajo del equipo: se sella la captación
+    // padre para que las integraciones lo vean al sondear ?changed_by=panel.
+    await stampPanelChange(db, id);
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {

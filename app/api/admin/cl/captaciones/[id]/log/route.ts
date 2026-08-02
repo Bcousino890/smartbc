@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
 import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function POST(
   request: NextRequest,
@@ -64,7 +65,7 @@ export async function POST(
     // etapa (revisión, confirmada, etc.) no se pisa.
     const captacionUpdates: any = {
       last_contact_attempt_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      ...panelChange(),
     };
     if (captacion.pipeline_id) {
       const stages = await getStagesForPipeline(captacion.pipeline_id);

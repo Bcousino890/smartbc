@@ -46,11 +46,14 @@ export const GET = withApiRoute({
         ? Math.min(Math.floor(rawLimit), MAX_LIMIT)
         : DEFAULT_LIMIT;
 
+    const changedBy = ctx.searchParams.get("changed_by") === "panel" ? "panel" : null;
+
     const result = await listCaptaciones(ctx.client, {
       limit,
       cursor: ctx.searchParams.get("cursor"),
       updatedSince: ctx.searchParams.get("updated_since"),
       stage: ctx.searchParams.get("stage"),
+      changedBy,
     });
 
     ctx.counters.total = result.items.length;
@@ -61,6 +64,9 @@ export const GET = withApiRoute({
         limit,
         has_more: result.has_more,
         next_cursor: result.next_cursor,
+        // Con changed_by=panel el cursor y updated_since se aplican sobre
+        // updated_by_user_at, no sobre updated_at.
+        cursor_field: changedBy === "panel" ? "updated_by_user_at" : "updated_at",
       },
     };
   },
