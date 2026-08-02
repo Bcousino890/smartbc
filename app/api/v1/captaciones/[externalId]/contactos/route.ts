@@ -35,8 +35,20 @@ export const GET = withApiRoute({
 });
 
 const ContactsPayloadSchema = z
-  .object({ contacts: z.array(ContactSchema).min(1).max(20) })
-  .strict();
+  .object({
+    contacts: z.array(ContactSchema).max(20),
+    /**
+     * append (por defecto) solo da de alta y actualiza. sync además retira los
+     * contactos que esta integración creó antes y ya no envía — nunca los que
+     * dio de alta el equipo desde el panel.
+     */
+    mode: z.enum(["sync", "append"]).nullable().optional(),
+  })
+  .strict()
+  .refine((v) => v.contacts.length > 0 || v.mode === "sync", {
+    message: "La lista solo puede ir vacía con mode=sync (retirar todos los míos)",
+    path: ["contacts"],
+  });
 
 export const POST = withApiRoute({
   scope: "captaciones:write",
@@ -48,6 +60,8 @@ export const POST = withApiRoute({
 
     const result = await syncCaptacionContacts(db, captacion.id, input.contacts, {
       dryRun: ctx.dryRun,
+      mode: input.mode ?? "append",
+      apiClientId: ctx.client.id,
     });
 
     ctx.counters.total = input.contacts.length;
@@ -61,6 +75,8 @@ export const POST = withApiRoute({
         created: result.created,
         updated: result.updated,
         unchanged: result.unchanged,
+        removed: result.removed,
+        photos_queued: result.photosQueued,
         errors: result.errors,
       },
       status: result.created > 0 && !ctx.dryRun ? 201 : 200,

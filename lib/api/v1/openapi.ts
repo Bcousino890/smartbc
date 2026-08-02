@@ -27,6 +27,156 @@ function jsonSchema(schema: z.ZodType, name: string): Record<string, unknown> {
 
 const BEARER = [{ ApiKeyAuth: [] }];
 
+/**
+ * Formas de RESPUESTA. Distintas de las de entrada: llevan los identificadores
+ * que asigna SmartBC y omiten lo que solo tiene sentido al escribir.
+ * Declararlas explícitamente evita que el integrador tenga que adivinar si
+ * `data` es un array, `data.contacts` o `data.contactos`.
+ */
+const contactoGuardado = {
+  type: "object",
+  properties: {
+    id: { type: "string", format: "uuid", description: "Identificador en SmartBC" },
+    external_id: { type: ["string", "null"], description: "El identificador que envió la integración" },
+    contact_type: { type: "string", enum: ["owner", "spouse", "family", "other"] },
+    contact_name: { type: ["string", "null"] },
+    phone: { type: ["string", "null"], description: "Normalizado a formato chileno" },
+    email: { type: ["string", "null"] },
+    has_whatsapp: { type: ["boolean", "null"] },
+    relationship: { type: ["string", "null"] },
+    rut: { type: ["string", "null"] },
+    photo_url: {
+      type: ["string", "null"],
+      description: "Copia alojada en SmartBC, no la URL de origen que se envió",
+    },
+    extra_phones: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          phone: { type: "string" },
+          has_whatsapp: { type: "boolean" },
+          label: { type: ["string", "null"] },
+        },
+      },
+    },
+    created_at: { type: "string", format: "date-time" },
+    updated_at: { type: "string", format: "date-time" },
+  },
+  required: ["id", "contact_type"],
+};
+
+const fotoGuardada = {
+  type: "object",
+  properties: {
+    id: { type: "string", format: "uuid" },
+    external_id: { type: ["string", "null"] },
+    url: { type: "string", description: "Copia alojada en SmartBC" },
+    source_url: { type: ["string", "null"], description: "URL de origen que se envió" },
+    position: { type: ["integer", "null"] },
+    created_at: { type: "string", format: "date-time" },
+  },
+  required: ["id", "url"],
+};
+
+const intentoGuardado = {
+  type: "object",
+  properties: {
+    id: { type: "string", format: "uuid" },
+    external_id: { type: ["string", "null"] },
+    attempt_type: { type: "string" },
+    result: { type: "string" },
+    owner_phone: { type: ["string", "null"] },
+    owner_name: { type: ["string", "null"] },
+    owner_contact: { type: ["string", "null"] },
+    address_real: { type: ["string", "null"] },
+    notes: { type: ["string", "null"] },
+    photo_url: { type: ["string", "null"] },
+    created_at: { type: "string", format: "date-time" },
+  },
+  required: ["id"],
+};
+
+const precioGuardado = {
+  type: "object",
+  properties: {
+    id: { type: "string", format: "uuid" },
+    listing_id: { type: "string", format: "uuid" },
+    price: { type: ["number", "null"] },
+    currency: { type: ["string", "null"] },
+    source: { type: "string", enum: ["portal", "broker_web"] },
+    scraped_at: { type: "string", format: "date-time" },
+  },
+  required: ["id"],
+};
+
+const avisoGuardado = {
+  type: "object",
+  description: "Aviso de corredora con su histórico de precios embebido.",
+  properties: {
+    id: { type: "string", format: "uuid" },
+    external_id: { type: ["string", "null"] },
+    source_url: { type: "string" },
+    broker_name: { type: ["string", "null"] },
+    price: { type: ["number", "null"] },
+    currency: { type: ["string", "null"] },
+    broker_price: { type: ["number", "null"] },
+    price_history: { type: "array", items: precioGuardado },
+  },
+  required: ["id", "source_url"],
+};
+
+const captacionGuardada = {
+  type: "object",
+  description:
+    "Captación tal y como la tiene SmartBC. En la ficha completa incluye además contacts, photos, listings y attempts.",
+  properties: {
+    id: { type: "string", format: "uuid" },
+    external_id: { type: ["string", "null"] },
+    external_source: { type: ["string", "null"] },
+    external_synced_at: { type: ["string", "null"], format: "date-time" },
+    origin: { type: "string", enum: ["manual", "scrape", "api"] },
+    admin_url: { type: "string" },
+    status: { type: ["string", "null"] },
+    stage: {
+      type: ["object", "null"],
+      properties: {
+        key: { type: "string" },
+        label: { type: "string" },
+        stage_type: { type: "string" },
+      },
+    },
+    title: { type: ["string", "null"] },
+    price: { type: ["number", "null"] },
+    currency: { type: ["string", "null"] },
+    region: { type: ["string", "null"] },
+    commune: { type: ["string", "null"] },
+    owner_name: { type: ["string", "null"] },
+    owner_phone: { type: ["string", "null"] },
+    owner_confirmed: { type: ["boolean", "null"] },
+    created_at: { type: "string", format: "date-time" },
+    updated_at: { type: "string", format: "date-time" },
+  },
+  required: ["id", "external_id"],
+};
+
+const fichaCompleta = {
+  allOf: [
+    captacionGuardada,
+    {
+      type: "object",
+      properties: {
+        contacts: { type: "array", items: contactoGuardado },
+        photos: { type: "array", items: fotoGuardada },
+        listings: { type: "array", items: avisoGuardado },
+        attempts: { type: "array", items: intentoGuardado },
+      },
+    },
+  ],
+};
+
+const arrayOf = (items: Record<string, unknown>) => ({ type: "array", items });
+
 const errorResponse = {
   description: "Error",
   content: {
@@ -163,6 +313,8 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
         CaptacionPatch: jsonSchema(CaptacionPatchSchema, "CaptacionPatch"),
         CaptacionBatch: jsonSchema(CaptacionBatchSchema, "CaptacionBatch"),
         Contacto: jsonSchema(ContactSchema, "Contacto"),
+        ContactoGuardado: contactoGuardado,
+        CaptacionGuardada: captacionGuardada,
         Aviso: jsonSchema(ListingSchema, "Aviso"),
         Intento: jsonSchema(AttemptSchema, "Intento"),
         Fotos: jsonSchema(PhotoCollectionSchema, "Fotos"),
@@ -201,7 +353,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
             { name: "stage", in: "query", description: "Filtra por `key` de etapa.", schema: { type: "string" } },
           ],
           responses: {
-            "200": okResponse("Listado", { type: "array", items: { type: "object" } }),
+            "200": okResponse("Listado", arrayOf(captacionGuardada)),
             default: errorResponse,
           },
         },
@@ -224,7 +376,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
           summary: "Ficha completa",
           description: "Devuelve la captación con contactos, fotos, avisos, histórico de precios e intentos.",
           parameters: [externalIdParam],
-          responses: { "200": okResponse("Ficha completa"), default: errorResponse },
+          responses: { "200": okResponse("Ficha completa", fichaCompleta), default: errorResponse },
         },
         patch: {
           summary: "Actualización parcial",
@@ -243,7 +395,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
         get: {
           summary: "Listar contactos",
           parameters: [externalIdParam],
-          responses: { "200": okResponse("Contactos"), default: errorResponse },
+          responses: { "200": okResponse("Contactos", arrayOf(contactoGuardado)), default: errorResponse },
         },
         post: {
           summary: "Crear o actualizar contactos",
@@ -256,6 +408,13 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
                   type: "object",
                   properties: {
                     contacts: { type: "array", items: { $ref: "#/components/schemas/Contacto" } },
+                    mode: {
+                      type: "string",
+                      enum: ["sync", "append"],
+                      default: "append",
+                      description:
+                        "append (por defecto) solo da de alta y actualiza. sync además retira los contactos que esta integración creó antes y ya no envía; nunca los que dio de alta el equipo de SmartBC en el panel. Con sync se admite una lista vacía para retirarlos todos.",
+                    },
                   },
                   required: ["contacts"],
                 },
@@ -279,7 +438,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
         get: {
           summary: "Listar fotos",
           parameters: [externalIdParam],
-          responses: { "200": okResponse("Galería"), default: errorResponse },
+          responses: { "200": okResponse("Galería", arrayOf(fotoGuardada)), default: errorResponse },
         },
         put: {
           summary: "Sincronizar la galería",
@@ -304,7 +463,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
         get: {
           summary: "Listar avisos de corredoras",
           parameters: [externalIdParam],
-          responses: { "200": okResponse("Avisos con su histórico"), default: errorResponse },
+          responses: { "200": okResponse("Avisos con su histórico", arrayOf(avisoGuardado)), default: errorResponse },
         },
         post: {
           summary: "Crear o actualizar avisos",
@@ -350,7 +509,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
             externalIdParam,
             { name: "listing_id", in: "path", required: true, schema: { type: "string" } },
           ],
-          responses: { "200": okResponse("Histórico"), default: errorResponse },
+          responses: { "200": okResponse("Histórico", arrayOf(precioGuardado)), default: errorResponse },
         },
         post: {
           summary: "Añadir un punto al histórico",
@@ -381,7 +540,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
         get: {
           summary: "Listar intentos de contacto",
           parameters: [externalIdParam],
-          responses: { "200": okResponse("Intentos"), default: errorResponse },
+          responses: { "200": okResponse("Intentos", arrayOf(intentoGuardado)), default: errorResponse },
         },
         post: {
           summary: "Registrar intentos de contacto",

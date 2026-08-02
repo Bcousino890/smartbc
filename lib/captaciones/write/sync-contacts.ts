@@ -35,6 +35,8 @@ export type ContactSyncResult = {
   created: number;
   updated: number;
   unchanged: number;
+  /** Contactos retirados por no venir en un envío con mode=sync. */
+  removed: number;
   /** Fotos de perfil encoladas para descargar y re-alojar. */
   photosQueued: number;
   errors: { external_id?: string | null; message: string }[];
@@ -51,6 +53,7 @@ type ExistingContact = {
   relationship: string | null;
   rut: string | null;
   extra_phones: unknown;
+  api_client_id: string | null;
   photo_url: string | null;
   photo_storage_path: string | null;
   photo_source_url: string | null;
@@ -62,28 +65,42 @@ function normalizeOptional(value: string | null | undefined): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
+export type ContactSyncMode = "sync" | "append";
+
 export async function syncCaptacionContacts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
   captacionId: string,
   contacts: ContactInput[],
-  opts: { dryRun?: boolean } = {}
+  opts: {
+    dryRun?: boolean;
+    /** append (por defecto) solo da de alta y actualiza; sync además retira. */
+    mode?: ContactSyncMode;
+    /** Integración que envía. Marca la procedencia y acota qué puede retirar. */
+    apiClientId?: string | null;
+  } = {}
 ): Promise<ContactSyncResult> {
   const result: ContactSyncResult = {
     created: 0,
     updated: 0,
     unchanged: 0,
+    removed: 0,
     photosQueued: 0,
     errors: [],
   };
-  if (contacts.length === 0) return result;
+  const mode: ContactSyncMode = opts.mode ?? "append";
+  // Con mode=sync una lista vacía es una instrucción válida: "retira todos los
+  // míos". Con append, no hay nada que hacer.
+  if (contacts.length === 0 && mode !== "sync") return result;
 
   const { data: existingRows } = await db
     .from("captacion_contacts")
-    .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones, photo_url, photo_storage_path, photo_source_url")
+    .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones, photo_url, photo_storage_path, photo_source_url, api_client_id")
     .eq("captacion_id", captacionId);
 
   const existing: ExistingContact[] = existingRows ?? [];
+  /** Ids que el envío da por vigentes; el resto son candidatos a retirar. */
+  const seen = new Set<string>();
   const byExternalId = new Map<string, ExistingContact>();
   const byPhone = new Map<string, ExistingContact>();
   for (const row of existing) {
@@ -118,6 +135,7 @@ export async function syncCaptacionContacts(
     const match =
       (externalId ? byExternalId.get(externalId) : undefined) ??
       (phone ? byPhone.get(phone) : undefined);
+    if (match) seen.add(match.id);
 
     const incomingPhoto = normalizeOptional(contact.photo_url);
 
@@ -125,7 +143,7 @@ export async function syncCaptacionContacts(
       if (!opts.dryRun) {
         const { data: inserted, error } = await db
           .from("captacion_contacts")
-          .insert(payload)
+          .insert({ ...payload, api_client_id: opts.apiClientId ?? null })
           .select("id")
           .single();
         if (error) {
@@ -194,6 +212,40 @@ export async function syncCaptacionContacts(
     }
 
     result.updated += 1;
+  }
+
+  // ── Retirada (solo en mode=sync) ──────────────────────────────────────────
+  // Se retira únicamente lo que ESTA integración creó y ya no envía. Un
+  // contacto con api_client_id NULL lo dio de alta una persona en el panel, y
+  // no desaparece porque un integrador mande una lista corta; uno de otra
+  // integración tampoco.
+  if (mode === "sync") {
+    const orphans = existing.filter(
+      (row) =>
+        !seen.has(row.id) &&
+        row.api_client_id !== null &&
+        row.api_client_id === (opts.apiClientId ?? null)
+    );
+
+    if (orphans.length > 0) {
+      if (!opts.dryRun) {
+        const { error } = await db
+          .from("captacion_contacts")
+          .delete()
+          .in("id", orphans.map((o) => o.id));
+        if (error) {
+          result.errors.push({ message: `No se pudieron retirar contactos: ${error.message}` });
+        } else {
+          result.removed = orphans.length;
+          // Las copias de sus fotos se van con ellos, para no dejar huérfanos.
+          for (const orphan of orphans) {
+            void removeContactPhoto(db, orphan.photo_storage_path);
+          }
+        }
+      } else {
+        result.removed = orphans.length;
+      }
+    }
   }
 
   return result;

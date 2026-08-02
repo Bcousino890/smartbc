@@ -5,7 +5,12 @@ import { autoDistributeNewCaptacion } from "../auto-distribution";
 import { buildFieldPolicy, buildPatch } from "./field-policy";
 import { findEntryStage, findStageByKey, resolveStageTransition } from "./stage-transitions";
 import { notifyCaptacionImported, notifyOwnerConfirmed, notifyOwnerUpdated } from "./notify";
-import { pickOwnerContact, syncCaptacionContacts, type ContactInput } from "./sync-contacts";
+import {
+  pickOwnerContact,
+  syncCaptacionContacts,
+  type ContactInput,
+  type ContactSyncMode,
+} from "./sync-contacts";
 import { syncCaptacionPhotos, type PhotoInput, type PhotoSyncMode } from "./sync-photos";
 import { syncCaptacionListings, type ListingInput } from "./sync-listings";
 import { appendCaptacionAttempts, type AttemptInput } from "./append-log";
@@ -75,7 +80,7 @@ export type CaptacionUpsertInput = {
   next_action_note?: string | null;
 
   // ── Sub-recursos ──
-  contacts?: ContactInput[] | null;
+  contacts?: ContactInput[] | { mode?: ContactSyncMode | null; items: ContactInput[] } | null;
   photos?: { mode?: PhotoSyncMode | null; items: PhotoInput[] } | null;
   listings?: ListingInput[] | null;
   attempts?: AttemptInput[] | null;
@@ -90,6 +95,15 @@ export type CaptacionUpsertInput = {
   metadata?: Record<string, unknown> | null;
 };
 
+/** `contacts` admite lista plana (= append) o { mode, items }. */
+function normalizeContacts(
+  input: CaptacionUpsertInput["contacts"]
+): { mode: ContactSyncMode; items: ContactInput[] } | null {
+  if (!input) return null;
+  if (Array.isArray(input)) return { mode: "append", items: input };
+  return { mode: input.mode ?? "append", items: input.items };
+}
+
 export type UpsertAction = "created" | "updated" | "unchanged";
 
 export type CaptacionUpsertResult = {
@@ -102,7 +116,13 @@ export type CaptacionUpsertResult = {
   /** Campos del equipo que se respetaron y NO se pisaron. */
   protected_fields: string[];
   sections: {
-    contacts?: { created: number; updated: number; unchanged: number; photos_queued?: number };
+    contacts?: {
+      created: number;
+      updated: number;
+      unchanged: number;
+      removed?: number;
+      photos_queued?: number;
+    };
     photos?: { added: number; removed: number; kept: number };
     listings?: { created: number; updated: number; unchanged: number; price_snapshots: number };
     attempts?: { created: number; unchanged: number };
@@ -160,7 +180,7 @@ export async function upsertCaptacionFromApi(
 
   // Los campos planos del dueño se rellenan desde `owner` o, si no viene, desde
   // el contacto de tipo `owner` de la lista de contactos.
-  const ownerContact = pickOwnerContact(input.contacts ?? []);
+  const ownerContact = pickOwnerContact(normalizeContacts(input.contacts)?.items ?? []);
   const ownerName = input.owner?.name ?? ownerContact?.contact_name ?? undefined;
   const ownerPhone = input.owner?.phone ?? ownerContact?.phone ?? undefined;
 
@@ -554,12 +574,19 @@ async function syncSections(
 ): Promise<CaptacionUpsertResult["sections"]> {
   const sections: CaptacionUpsertResult["sections"] = {};
 
-  if (input.contacts?.length) {
-    const res = await syncCaptacionContacts(db, captacionId, input.contacts, { dryRun });
+  const contacts = normalizeContacts(input.contacts);
+  // Con mode=sync una lista vacía es válida: significa "retira todos los míos".
+  if (contacts && (contacts.items.length > 0 || contacts.mode === "sync")) {
+    const res = await syncCaptacionContacts(db, captacionId, contacts.items, {
+      dryRun,
+      mode: contacts.mode,
+      apiClientId: client.id,
+    });
     sections.contacts = {
       created: res.created,
       updated: res.updated,
       unchanged: res.unchanged,
+      removed: res.removed,
       photos_queued: res.photosQueued,
     };
     if (res.errors.length > 0) console.error("[api captacion contacts]", res.errors);
@@ -612,8 +639,9 @@ async function simulateSections(
   input: CaptacionUpsertInput
 ): Promise<CaptacionUpsertResult["sections"]> {
   const sections: CaptacionUpsertResult["sections"] = {};
-  if (input.contacts?.length) {
-    sections.contacts = { created: input.contacts.length, updated: 0, unchanged: 0 };
+  const contacts = normalizeContacts(input.contacts);
+  if (contacts?.items.length) {
+    sections.contacts = { created: contacts.items.length, updated: 0, unchanged: 0 };
   }
   if (input.photos?.items?.length) {
     sections.photos = { added: input.photos.items.length, removed: 0, kept: 0 };
