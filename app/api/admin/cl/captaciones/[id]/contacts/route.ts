@@ -90,6 +90,7 @@ export async function POST(
         relationship: relationship || null,
         extra_phones: extraPhonesResult.phones,
         rut: rut || null,
+        updated_by_user_at: new Date().toISOString(),
       })
       .select()
       .single();

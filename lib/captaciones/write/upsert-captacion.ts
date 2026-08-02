@@ -121,6 +121,7 @@ export type CaptacionUpsertResult = {
       updated: number;
       unchanged: number;
       removed?: number;
+      removal_protected?: number;
       photos_queued?: number;
     };
     photos?: { added: number; removed: number; kept: number };
@@ -448,6 +449,7 @@ async function applyInsert(args: ApplyArgs): Promise<CaptacionUpsertResult> {
   }
 
   const sections = await syncSections(db, client, created.id, input, false);
+  warnings.push(...removalWarnings(sections));
 
   await notifyCaptacionImported(db, created.id, created.title, client.name, {
     createdBy: created.created_by,
@@ -526,6 +528,7 @@ async function applyUpdate(
   }
 
   const sections = await syncSections(db, client, existing.id, input, false);
+  warnings.push(...removalWarnings(sections));
 
   // Notificaciones equivalentes a las del panel.
   if (nextConfirmed && !wasConfirmed) {
@@ -587,6 +590,7 @@ async function syncSections(
       updated: res.updated,
       unchanged: res.unchanged,
       removed: res.removed,
+      removal_protected: res.removalProtected,
       photos_queued: res.photosQueued,
     };
     if (res.errors.length > 0) console.error("[api captacion contacts]", res.errors);
@@ -658,6 +662,18 @@ async function simulateSections(
     sections.attempts = { created: input.attempts.length, unchanged: 0 };
   }
   return sections;
+}
+
+/**
+ * Aviso al proveedor cuando su `mode: "sync"` no ha podido retirar algo. Que se
+ * entere importa: si no, cree que su curación se aplicó entera y no lo hizo.
+ */
+function removalWarnings(sections: CaptacionUpsertResult["sections"]): string[] {
+  const protectedCount = sections.contacts?.removal_protected ?? 0;
+  if (protectedCount === 0) return [];
+  return [
+    `${protectedCount} contacto(s) no se retiraron: los creó o editó una persona del equipo y quedan protegidos.`,
+  ];
 }
 
 export function adminUrl(country: string, captacionId: string): string {

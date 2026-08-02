@@ -74,6 +74,7 @@ export const POST = withApiRoute({
     ctx.counters.created = result.created;
     ctx.counters.updated = result.updated;
     ctx.counters.unchanged = result.unchanged;
+    ctx.counters.removed = result.removed;
     ctx.counters.failed = result.errors.length;
 
     return {
@@ -82,6 +83,7 @@ export const POST = withApiRoute({
         updated: result.updated,
         unchanged: result.unchanged,
         removed: result.removed,
+        removal_protected: result.removalProtected,
         photos_queued: result.photosQueued,
         errors: result.errors,
       },

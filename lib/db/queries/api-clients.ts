@@ -35,6 +35,7 @@ export type ApiRequestSummary = {
   items_created: number;
   items_updated: number;
   items_unchanged: number;
+  items_removed: number;
   items_failed: number;
   request_body: unknown;
   created_at: string;

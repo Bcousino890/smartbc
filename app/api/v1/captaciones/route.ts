@@ -26,6 +26,7 @@ export const POST = withApiRoute({
     if (result.action === "created") ctx.counters.created = 1;
     else if (result.action === "updated") ctx.counters.updated = 1;
     else ctx.counters.unchanged = 1;
+    ctx.counters.removed = result.sections.contacts?.removed ?? 0;
 
     return {
       data: result,

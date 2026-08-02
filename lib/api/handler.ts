@@ -127,7 +127,7 @@ export function withApiRoute<TBody>(config: ApiRouteConfig<TBody>): ApiRouteHand
     let reservedIdempotency = false;
     let extraHeaders: Record<string, string> = {};
 
-    const counters = { total: 0, created: 0, updated: 0, unchanged: 0, failed: 0 };
+    const counters = { total: 0, created: 0, updated: 0, unchanged: 0, removed: 0, failed: 0 };
 
     const finish = async (
       response: Response,
