@@ -12,6 +12,7 @@ import type { Captacion, CaptacionContact, CaptacionExtraPhone, CaptacionStage }
 import { LocationSection } from "./location-section";
 import { ListingsSection } from "./listings-section";
 import { normalizePhone, isValidPhoneChile, formatPhoneDisplay } from "@/lib/phone-utils";
+import { estimateAgeFromRut } from "@/lib/rut-age";
 import { pipelineColor } from "@/lib/captaciones/pipeline-colors";
 import { getCaptacionEditableFields } from "@/lib/permissions";
 import { isCaptacionAdminRole } from "@/lib/captaciones/access";
@@ -1430,7 +1431,9 @@ export function CaptacionDetailClient({
                   <p className="text-sm text-ink/40">Sin contactos registrados</p>
                 ) : (
                   <div className="space-y-2">
-                    {contacts.map((contact) => (
+                    {contacts.map((contact) => {
+                      const approxAge = estimateAgeFromRut(contact.rut);
+                      return (
                       <div key={contact.id} className="rounded-lg border border-ink/10 bg-white p-3 flex items-start justify-between gap-3">
                         {/* Foto de perfil del número (la envía la integración y
                             se guarda copia en nuestro bucket). Le pone cara al
@@ -1459,7 +1462,12 @@ export function CaptacionDetailClient({
                           )}
                           {contact.rut && (
                             <div className="flex items-center gap-1">
-                              <p className="text-xs text-ink/50">RUT: {contact.rut}</p>
+                              <p className="text-xs text-ink/50">
+                                RUT: {contact.rut}
+                                {approxAge !== null && (
+                                  <span className="text-ink/35"> · ~{approxAge} años (aprox.)</span>
+                                )}
+                              </p>
                               <CopyButton value={contact.rut} label="RUT" />
                             </div>
                           )}
@@ -1539,7 +1547,8 @@ export function CaptacionDetailClient({
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
