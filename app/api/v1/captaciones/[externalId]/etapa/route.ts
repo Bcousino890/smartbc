@@ -80,7 +80,16 @@ export const POST = withApiRoute({
         external_synced_at: new Date().toISOString(),
       };
       if (input.notes) patch.revision_notes = input.notes;
-      if (stage.stage_type === "rejected") patch.status = "rejected";
+      if (stage.stage_type === "rejected") {
+        patch.status = "rejected";
+        patch.rejected_by = "api";
+      } else if (captacion.status === "rejected") {
+        // Sale de "rechazada" por una petición explícita: no se queda a
+        // medias con el legado `status` desactualizado ni con `rejected_by`
+        // apuntando a un rechazo que ya no aplica.
+        patch.status = "draft";
+        patch.rejected_by = null;
+      }
 
       const { error } = await db.from("captaciones").update(patch).eq("id", captacion.id);
       if (error) throw error;

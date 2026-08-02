@@ -46,12 +46,33 @@ export const PROVIDER_FIELDS = [
  *
  * `commune` está aquí a propósito: la captadora la corrige desde la pestaña
  * Ubicación cuando el portal la trae mal (ver update/route.ts).
+ *
+ * `stage_id`, `pipeline_id` y `owner_confirmed` NO están aquí, y es a
+ * propósito — antes lo estaban y eso era un bug real:
+ *
+ *   - Solo se escriben cuando el payload los pide EXPLÍCITAMENTE (`stage`,
+ *     `pipeline`, `owner.confirmed`), nunca "de paso" en un resync normal de
+ *     la ficha. La protección de "solo si está vacío" no les hacía falta —
+ *     ya estaban gobernados por su propio campo con nombre — y en la práctica
+ *     los bloqueaba SIEMPRE, porque una captación existente nunca tiene
+ *     `stage_id` vacío ni `owner_confirmed` en null (nace en `false`, que
+ *     `isEmpty()` no trata como vacío). Un `owner.confirmed: true` o un
+ *     `stage: "contacting"` enviados después del alta no llegaban a
+ *     escribirse nunca.
+ *   - `stage_id` tiene su propia salvaguarda, más fina que esta lista: ver
+ *     `resolvePipelineAndStage` en upsert-captacion.ts y la columna
+ *     `captaciones.rejected_by` (migración 0107). Reabrir una captación
+ *     rechazada por la API es automático; reabrir una rechazada a mano por el
+ *     equipo exige que el proveedor lo pida explícitamente.
+ *   - `owner_confirmed` tiene su propia salvaguarda monotónica en
+ *     upsertCaptacionFromApi: pasar de false a true siempre se aplica (para
+ *     eso existe el campo); desconfirmar (true → false) sigue protegido como
+ *     antes, para no deshacer en silencio una confirmación real del equipo.
  */
 export const TEAM_FIELDS = [
   "owner_name",
   "owner_phone",
   "owner_contact",
-  "owner_confirmed",
   "address_real",
   "address_verified",
   "commune",
@@ -61,8 +82,6 @@ export const TEAM_FIELDS = [
   "next_action_at",
   "next_action_note",
   "assigned_to",
-  "stage_id",
-  "pipeline_id",
   "status",
 ] as const;
 

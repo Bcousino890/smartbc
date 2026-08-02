@@ -70,10 +70,30 @@ SmartBC distingue dos clases de datos:
 | Clase | Campos | Comportamiento |
 |---|---|---|
 | **Del anuncio** (tuyos) | título, descripción, operación, precio, moneda, dormitorios, baños, m², tipo, características, región, zona, dirección del anuncio, coordenadas, fotos, avisos | Se actualizan **siempre** con lo que envíes |
-| **Del equipo** (nuestros) | `owner_name`, `owner_phone`, `owner_contact`, `owner_confirmed`, `address_real`, `address_verified`, `commune`, `rol_propiedad`, `notes`, `revision_notes`, `next_action_at`, `next_action_note`, asignación y etapa | Solo se escriben **si están vacíos** |
+| **Del equipo** (nuestros) | `owner_name`, `owner_phone`, `owner_contact`, `address_real`, `address_verified`, `commune`, `rol_propiedad`, `notes`, `revision_notes`, `next_action_at`, `next_action_note`, asignación | Solo se escriben **si están vacíos** |
+| **De control explícito** | `owner.confirmed`, `stage`, `pipeline` | Solo se tocan si los pides **por su propio nombre**; nunca "de paso" al reenviar la ficha (ver debajo) |
 
 Esto es deliberado: si una captadora consigue el teléfono real del propietario,
 tu siguiente sincronización no lo puede borrar.
+
+`owner.confirmed`, `stage` y `pipeline` no están en la tabla de "solo si están
+vacíos" porque esa regla no les serviría de nada — una captación ya creada
+nunca tiene esos campos vacíos — y en su lugar cada uno tiene su propia regla:
+
+- **`owner.confirmed`** es monotónico: `false → true` siempre se aplica (para
+  eso existe el campo). `true → false` se ignora si el equipo ya lo había
+  confirmado a mano, salvo que pidas `options.overwrite_manual_fields`.
+- **`stage`** solo se mueve si lo pides explícitamente (o llamas a
+  `POST .../etapa`). La excepción es la **reapertura automática**: si una
+  captación quedó en una etapa `rejected` porque **tú** la borraste (`DELETE`)
+  o la moviste ahí por API, y luego la reenvías normal sin pedir `stage`,
+  vuelve sola a la etapa de entrada — no necesitas "recrearla", basta con
+  reenviar el mismo `external_id`. Si en cambio fue el **equipo** quien la
+  rechazó desde el panel, no se reabre sola: tienes que pedirlo con `stage`
+  explícito, porque pudo ser fraude, duplicado o cualquier motivo real que el
+  equipo decidió. `GET /captaciones/{external_id}` te devuelve `rejected_by`
+  (`"api"` | `"panel"` | `null`) para que sepas cuál es el caso antes de
+  reenviar.
 
 La respuesta te dice exactamente qué pasó:
 
@@ -502,6 +522,7 @@ automático (que dispara tu propia alta). Solo por trabajo humano. No hay eco.
 | Dato | Campo | Para qué te sirve |
 |---|---|---|
 | Etapa | `stage.key`, `stage.stage_type` | Dejar de trabajar lo que ya se rechazó (`stage_type: "rejected"`) o se convirtió (`"converted"`) |
+| Origen del rechazo | `rejected_by` (`"api"` \| `"panel"` \| `null`) | Si es `"panel"`, el equipo la rechazó a mano: no la reabras reenviando sin más, pídeselo al equipo o usa `stage` explícito |
 | Propietario confirmado | `owner_confirmed` | Saber que el dueño confirmó que quiere vender |
 | Contactos del equipo | `GET /captaciones/{id}/contactos` → `source: "panel"` | Los que añadió o corrigió el equipo tras hablar con la persona |
 | Datos del propietario | `owner_name`, `owner_phone`, `address_real` | Lo que consiguió la captadora |
@@ -522,6 +543,18 @@ para un dato que cambia cuando alguien cuelga el teléfono.
 ---
 
 ## Changelog
+
+### v1.2.0 — 2026-08-02
+- **Arreglado**: una captación borrada (`DELETE`) o rechazada por API quedaba
+  estancada en la etapa "Rechazada" para siempre, aunque el proveedor la
+  reenviara con datos nuevos — ahora se reabre sola en el siguiente envío
+  normal (sin `stage` explícito), salvo que el rechazo lo haya decidido el
+  equipo a mano desde el panel. Nuevo campo `rejected_by` en las respuestas de
+  lectura.
+- **Arreglado**: `owner.confirmed: true` no se aplicaba nunca en una captación
+  ya existente (el campo nace en `false`, que no contaba como "vacío"). Ahora
+  `false → true` siempre se aplica; `true → false` sigue protegido si el
+  equipo ya había confirmado al propietario.
 
 ### v1.1.0 — 2026-07-31
 - `contacts` admite `{ mode, items }` con `mode: "sync"` (retira los contactos

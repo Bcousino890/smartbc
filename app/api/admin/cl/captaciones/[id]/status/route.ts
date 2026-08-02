@@ -99,11 +99,32 @@ export async function POST(
       );
     }
 
+    // Origen del rechazo (migración 0107): si el equipo mueve a mano a una
+    // etapa "rechazada", queda marcada como rechazo humano y NO se reabre
+    // sola cuando el proveedor la reenvíe por la API. Si el equipo la saca de
+    // "rechazada" (a cualquier otra etapa), se limpia — vuelve a poder
+    // reabrirse por reenvío normal más adelante si el equipo la rechaza de
+    // nuevo por otra vía.
+    const { data: currentStage } = await db
+      .from("captacion_pipeline_stages")
+      .select("stage_type")
+      .eq("id", captacion.stage_id)
+      .maybeSingle();
+    const rejectionUpdate: Record<string, unknown> = {};
+    if (targetStage.stage_type === "rejected") {
+      rejectionUpdate.status = "rejected";
+      rejectionUpdate.rejected_by = "panel";
+    } else if (currentStage?.stage_type === "rejected") {
+      rejectionUpdate.status = "draft";
+      rejectionUpdate.rejected_by = null;
+    }
+
     const { data: updated, error: updateError } = await db
       .from("captaciones")
       .update({
         stage_id: new_stage_id,
         revision_notes: targetStage.requires_notes ? notes : null,
+        ...rejectionUpdate,
         ...panelChange(),
       })
       .eq("id", id)
