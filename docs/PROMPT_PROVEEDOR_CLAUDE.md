@@ -226,6 +226,7 @@ Crea o actualiza una captación completa. `201` si la crea, `200` si la actualiz
       "has_whatsapp": true,
       "relationship": null,
       "rut": "12.345.678-9",
+      "photo_url": "https://cdn.mi-sistema.cl/foto-contacto?id=13387802&size=240",
       "extra_phones": [
         { "phone": "+56987654321", "has_whatsapp": false, "label": "Oficina" }
       ]
@@ -397,6 +398,7 @@ pero **no** se escribió porque pertenece al equipo de SmartBC y ya tenía valor
 | `has_whatsapp` | boolean | |
 | `relationship` | string | Si `contact_type: family` → "Hijo", "Hermano"… |
 | `rut` | string (≤30) | Formato libre, ej. `12.345.678-9` |
+| `photo_url` | URL | Foto de perfil asociada al número de `phone`. SmartBC la descarga y guarda copia propia; un `404` significa "sin foto" y no invalida el contacto. Si alguien del equipo sube una foto a mano, la suya gana y la sincronización no la pisa. |
 | `extra_phones` | `[{ phone, has_whatsapp, label }]` (≤20) | Teléfonos adicionales del mismo contacto |
 
 ### `photos` — máx. 60 por envío

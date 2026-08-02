@@ -1,6 +1,7 @@
 import "server-only";
 import { normalizePhone } from "@/lib/phone-utils";
 import { parseExtraPhones } from "../extra-phones";
+import { persistContactPhoto, removeContactPhoto } from "./persist-contact-photo";
 
 /**
  * Sincroniza la pestaña «Info» de la ficha: los contactos de la captación
@@ -25,6 +26,8 @@ export type ContactInput = {
   has_whatsapp?: boolean | null;
   relationship?: string | null;
   rut?: string | null;
+  /** URL de origen de la foto de perfil. Se descarga y se guarda copia propia. */
+  photo_url?: string | null;
   extra_phones?: { phone: string; has_whatsapp?: boolean | null; label?: string | null }[] | null;
 };
 
@@ -32,6 +35,8 @@ export type ContactSyncResult = {
   created: number;
   updated: number;
   unchanged: number;
+  /** Fotos de perfil encoladas para descargar y re-alojar. */
+  photosQueued: number;
   errors: { external_id?: string | null; message: string }[];
 };
 
@@ -46,6 +51,9 @@ type ExistingContact = {
   relationship: string | null;
   rut: string | null;
   extra_phones: unknown;
+  photo_url: string | null;
+  photo_storage_path: string | null;
+  photo_source_url: string | null;
 };
 
 function normalizeOptional(value: string | null | undefined): string | null {
@@ -61,12 +69,18 @@ export async function syncCaptacionContacts(
   contacts: ContactInput[],
   opts: { dryRun?: boolean } = {}
 ): Promise<ContactSyncResult> {
-  const result: ContactSyncResult = { created: 0, updated: 0, unchanged: 0, errors: [] };
+  const result: ContactSyncResult = {
+    created: 0,
+    updated: 0,
+    unchanged: 0,
+    photosQueued: 0,
+    errors: [],
+  };
   if (contacts.length === 0) return result;
 
   const { data: existingRows } = await db
     .from("captacion_contacts")
-    .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones")
+    .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones, photo_url, photo_storage_path, photo_source_url")
     .eq("captacion_id", captacionId);
 
   const existing: ExistingContact[] = existingRows ?? [];
@@ -105,17 +119,38 @@ export async function syncCaptacionContacts(
       (externalId ? byExternalId.get(externalId) : undefined) ??
       (phone ? byPhone.get(phone) : undefined);
 
+    const incomingPhoto = normalizeOptional(contact.photo_url);
+
     if (!match) {
       if (!opts.dryRun) {
-        const { error } = await db.from("captacion_contacts").insert(payload);
+        const { data: inserted, error } = await db
+          .from("captacion_contacts")
+          .insert(payload)
+          .select("id")
+          .single();
         if (error) {
           result.errors.push({ external_id: externalId, message: error.message });
           continue;
         }
+        if (incomingPhoto) {
+          queuePhoto(db, captacionId, inserted.id, incomingPhoto, null);
+          result.photosQueued += 1;
+        }
+      } else if (incomingPhoto) {
+        result.photosQueued += 1;
       }
       result.created += 1;
       continue;
     }
+
+    // La foto solo se toca si el proveedor manda una distinta de la que ya
+    // descargamos de él. Si photo_url tiene valor pero photo_source_url es NULL,
+    // la subió una persona desde el panel y gana sobre la sincronización.
+    const photoIsManual = Boolean(match.photo_url) && !match.photo_source_url;
+    const photoChanged =
+      contact.photo_url !== undefined &&
+      !photoIsManual &&
+      incomingPhoto !== match.photo_source_url;
 
     const changed =
       match.contact_type !== payload.contact_type ||
@@ -128,25 +163,97 @@ export async function syncCaptacionContacts(
       JSON.stringify(match.extra_phones ?? []) !== JSON.stringify(payload.extra_phones) ||
       (externalId !== null && match.external_id !== externalId);
 
-    if (!changed) {
+    if (!changed && !photoChanged) {
       result.unchanged += 1;
       continue;
     }
 
     if (!opts.dryRun) {
-      const { error } = await db
-        .from("captacion_contacts")
-        .update({ ...payload, updated_at: new Date().toISOString() })
-        .eq("id", match.id);
-      if (error) {
-        result.errors.push({ external_id: externalId, message: error.message });
-        continue;
+      if (changed) {
+        const { error } = await db
+          .from("captacion_contacts")
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq("id", match.id);
+        if (error) {
+          result.errors.push({ external_id: externalId, message: error.message });
+          continue;
+        }
       }
+
+      if (photoChanged) {
+        if (incomingPhoto) {
+          queuePhoto(db, captacionId, match.id, incomingPhoto, match.photo_storage_path);
+          result.photosQueued += 1;
+        } else {
+          // El proveedor manda null: borra la foto que él mismo había puesto.
+          void clearPhoto(db, match.id, match.photo_storage_path);
+        }
+      }
+    } else if (photoChanged && incomingPhoto) {
+      result.photosQueued += 1;
     }
+
     result.updated += 1;
   }
 
   return result;
+}
+
+/**
+ * Descarga y re-aloja la foto en SEGUNDO PLANO: la respuesta al proveedor no
+ * debe esperar a bajar una imagen por contacto. Es seguro porque SmartBC corre
+ * como proceso PM2 persistente, el mismo patrón que la galería de la captación.
+ *
+ * Si la descarga falla o el número no tiene foto (404), no se escribe nada y el
+ * panel sigue pintando el avatar genérico.
+ */
+function queuePhoto(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  captacionId: string,
+  contactId: string,
+  sourceUrl: string,
+  previousStoragePath: string | null
+): void {
+  void (async () => {
+    const persisted = await persistContactPhoto(db, captacionId, contactId, sourceUrl);
+    if (!persisted) return;
+
+    const { error } = await db
+      .from("captacion_contacts")
+      .update({
+        photo_url: persisted.url,
+        photo_storage_path: persisted.storagePath,
+        photo_source_url: sourceUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", contactId);
+
+    if (error) {
+      console.error("[syncCaptacionContacts photo]", error);
+      return;
+    }
+    await removeContactPhoto(db, previousStoragePath);
+  })().catch((err) => console.error("[syncCaptacionContacts photo bg]", err));
+}
+
+/** Quita la foto sincronizada y su copia del bucket. */
+async function clearPhoto(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  contactId: string,
+  storagePath: string | null
+): Promise<void> {
+  await db
+    .from("captacion_contacts")
+    .update({
+      photo_url: null,
+      photo_storage_path: null,
+      photo_source_url: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", contactId);
+  await removeContactPhoto(db, storagePath);
 }
 
 /**

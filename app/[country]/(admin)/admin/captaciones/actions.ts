@@ -21,6 +21,8 @@ export type CaptacionContact = {
   extra_phones: CaptacionExtraPhone[] | null;
   created_at: string;
   updated_at: string;
+  /** Copia en nuestro bucket de la foto de perfil del contacto (migración 0103). */
+  photo_url?: string | null;
 };
 
 export type CaptacionStage = {
