@@ -141,7 +141,7 @@ const EXISTING_COLUMNS = `
   published_ago, region, commune, zone, subzone, address_scraped, address_real,
   address_verified, latitude, longitude, rol_propiedad, owner_name, owner_phone,
   owner_contact, owner_confirmed, notes, revision_notes, next_action_at,
-  next_action_note, external_id, api_client_id
+  next_action_note, external_id, api_client_id, rejected_by
 `;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -185,6 +185,23 @@ export async function upsertCaptacionFromApi(
   const ownerName = input.owner?.name ?? ownerContact?.contact_name ?? undefined;
   const ownerPhone = input.owner?.phone ?? ownerContact?.phone ?? undefined;
 
+  // owner_confirmed es monotónico para la API: false → true siempre se
+  // aplica (para eso existe el campo — que una integración marque al dueño
+  // como confirmado). true → false NO, salvo overwrite explícito: si una
+  // captadora ya confirmó tras hablar con el propietario, un reenvío con
+  // datos más viejos del proveedor no puede desconfirmarlo en silencio.
+  let ownerConfirmed = input.owner?.confirmed;
+  if (
+    ownerConfirmed === false &&
+    existing?.owner_confirmed === true &&
+    !policy.overwriteManualFields
+  ) {
+    warnings.push(
+      "El propietario ya estaba confirmado por el equipo; no se ha desconfirmado. Usa options.overwrite_manual_fields si es intencional."
+    );
+    ownerConfirmed = undefined;
+  }
+
   const incoming: Record<string, unknown> = {
     title: input.title,
     description: input.description,
@@ -217,7 +234,7 @@ export async function upsertCaptacionFromApi(
     owner_name: ownerName,
     owner_phone: ownerPhone,
     owner_contact: input.owner?.contact,
-    owner_confirmed: input.owner?.confirmed,
+    owner_confirmed: ownerConfirmed,
     notes: input.notes,
     revision_notes: input.revision_notes,
     next_action_at: input.next_action_at,
@@ -286,6 +303,13 @@ type PipelineResolution = {
   stageId: string | null;
   stages: PipelineStage[];
   warnings: string[];
+  /**
+   * `status` (legado) y `rejected_by` a forzar sin pasar por la política de
+   * campos protegidos — solo se rellena cuando la etapa resuelta ENTRA o SALE
+   * de una etapa de tipo `rejected`. Ver el comentario sobre reapertura
+   * automática más abajo.
+   */
+  forcedFields: Record<string, unknown>;
 };
 
 async function resolvePipelineAndStage(
@@ -341,12 +365,55 @@ async function resolvePipelineAndStage(
     }
   }
 
+  // Reapertura automática: si la captación sigue en una etapa "rechazada" y
+  // el proveedor reenvía sin pedir una etapa explícita, se entiende como
+  // "esto sigue vivo" y vuelve sola a la etapa de entrada. PERO solo si el
+  // rechazo lo causó la propia API — si una PERSONA la rechazó desde el
+  // panel (fraude, duplicado, o cualquier motivo real del equipo), no se
+  // reabre sola: el proveedor tendría que pedirlo con `stage` explícito.
+  if (!stageId && existing) {
+    const currentStage = stages.find((s) => s.id === existing.stage_id) ?? null;
+    if (currentStage?.stage_type === "rejected") {
+      if (existing.rejected_by === "panel") {
+        warnings.push(
+          'Esta captación fue rechazada a mano por el equipo; no se reabre sola. Envía "stage" explícitamente si quieres moverla.'
+        );
+      } else {
+        const entryStage = findEntryStage(stages);
+        if (entryStage) {
+          stageId = entryStage.id;
+          warnings.push(`La captación estaba rechazada; ha vuelto a la etapa "${entryStage.label}".`);
+        }
+      }
+    }
+  }
+
   // Alta sin etapa indicada: entra por la etapa de entrada del pipeline.
   if (!stageId && !existing && stages.length > 0) {
     stageId = findEntryStage(stages)?.id ?? null;
   }
 
-  return { pipelineId, stageId, stages, warnings };
+  // `status` (legado) y `rejected_by` solo se tocan cuando la etapa resuelta
+  // realmente entra o sale de una etapa `rejected` — no en cualquier cambio
+  // de etapa. `status` sigue siendo un campo del equipo protegido en
+  // `incoming`/buildPatch, así que este parche se aplica aparte (ver
+  // `finalPatch` en applyUpdate).
+  const forcedFields: Record<string, unknown> = {};
+  if (existing && stageId && stageId !== existing.stage_id) {
+    const previousStage = stages.find((s) => s.id === existing.stage_id) ?? null;
+    const targetStage = stages.find((s) => s.id === stageId) ?? null;
+    const wasRejected = previousStage?.stage_type === "rejected";
+    const isNowRejected = targetStage?.stage_type === "rejected";
+    if (isNowRejected) {
+      forcedFields.status = "rejected";
+      forcedFields.rejected_by = "api";
+    } else if (wasRejected) {
+      forcedFields.status = "draft";
+      forcedFields.rejected_by = null;
+    }
+  }
+
+  return { pipelineId, stageId, stages, warnings, forcedFields };
 }
 
 async function resolveUserByEmail(
@@ -496,6 +563,7 @@ async function applyUpdate(
   const finalPatch: Record<string, unknown> = {
     ...patch,
     ...transition,
+    ...pipelineResolution.forcedFields,
     // La captación pasa a estar bajo control de esta integración aunque se
     // hubiera creado por scraping (adopción por source_url).
     api_client_id: client.id,
@@ -505,7 +573,14 @@ async function applyUpdate(
   };
   if (input.metadata) finalPatch.external_payload = { metadata: input.metadata };
 
-  const hasFichaChanges = changed.length > 0 || Object.keys(transition).length > 0;
+  for (const field of Object.keys(pipelineResolution.forcedFields)) {
+    if (!changed.includes(field)) changed.push(field);
+  }
+
+  const hasFichaChanges =
+    changed.length > 0 ||
+    Object.keys(transition).length > 0 ||
+    Object.keys(pipelineResolution.forcedFields).length > 0;
 
   if (dryRun) {
     return {

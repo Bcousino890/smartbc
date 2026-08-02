@@ -470,16 +470,30 @@ llamar a nada aparte.
 
 ## 5. Campos protegidos
 
-SmartBC distingue dos clases de datos:
+SmartBC distingue tres clases de datos:
 
 - **Del anuncio (tuyos)**: se actualizan **siempre** con lo que envíes.
 - **Del equipo (suyos)**: `owner_name`, `owner_phone`, `owner_contact`,
-  `owner_confirmed`, `address_real`, `address_verified`, `commune`,
-  `rol_propiedad`, `notes`, `revision_notes`, `next_action_at`,
-  `next_action_note`, asignación y etapa. Solo se escriben **si están vacíos**.
+  `address_real`, `address_verified`, `commune`, `rol_propiedad`, `notes`,
+  `revision_notes`, `next_action_at`, `next_action_note`, asignación. Solo se
+  escriben **si están vacíos**.
+- **De control explícito**: `owner.confirmed`, `stage`, `pipeline`. No entran
+  en la regla de "solo si está vacío" (no serviría de nada — una captación ya
+  creada nunca los tiene vacíos); cada uno tiene su propia regla:
+  - `owner.confirmed`: `false → true` siempre se aplica; `true → false` se
+    ignora si el equipo ya había confirmado al propietario (salvo
+    `overwrite_manual_fields`).
+  - `stage`/`pipeline`: solo se mueven si los pides explícitamente, **con una
+    excepción** — si borraste la captación (`DELETE`) o la moviste tú por API
+    a una etapa `rejected`, el siguiente reenvío normal (sin `stage`) la
+    **reabre sola**, de vuelta a la etapa de entrada. No hace falta "volver a
+    crearla": basta con reenviar el mismo `external_id`. Si en cambio fue el
+    **equipo** quien la rechazó desde el panel, no se reabre sola — pide
+    `stage` explícito. `GET /captaciones/{external_id}` devuelve
+    `rejected_by` (`"api"` | `"panel"` | `null`) para que sepas cuál es el caso.
 
-Sobrescribirlos exige **dos** condiciones: que el admin de SmartBC lo autorice en
-tu integración **y** que tú lo pidas en ese envío con
+Sobrescribir los campos del equipo exige **dos** condiciones: que el admin de
+SmartBC lo autorice en tu integración **y** que tú lo pidas en ese envío con
 `"options": { "overwrite_manual_fields": true }` o
 `"options": { "force_fields": ["owner_phone"] }`. No lo uses salvo que te lo
 pidan expresamente.

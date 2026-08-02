@@ -148,7 +148,7 @@ export type BatchSummary = {
 
 const FICHA_COLUMNS = `
   id, country, external_id, external_source, external_synced_at, origin, status,
-  pipeline_id, stage_id, assigned_to, created_at, updated_at, completed_at,
+  rejected_by, pipeline_id, stage_id, assigned_to, created_at, updated_at, completed_at,
   converted_to_property_id, source_url, source_site, title, description,
   operation, price, currency, bedrooms, bathrooms, square_meters,
   useful_square_meters, property_type, features, cover_photo_url, broker_name,
@@ -432,6 +432,7 @@ export async function archiveCaptacion(
 
   const patch: Record<string, unknown> = {
     status: "rejected",
+    rejected_by: "api",
     external_synced_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -448,12 +449,18 @@ export async function archiveCaptacion(
 export async function requireCaptacionId(
   client: ApiClientRow,
   externalId: string
-): Promise<{ id: string; country: string; pipeline_id: string | null; stage_id: string | null }> {
+): Promise<{
+  id: string;
+  country: string;
+  pipeline_id: string | null;
+  stage_id: string | null;
+  status: string | null;
+}> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
   const { data } = await db
     .from("captaciones")
-    .select("id, country, pipeline_id, stage_id")
+    .select("id, country, pipeline_id, stage_id, status")
     .eq("api_client_id", client.id)
     .eq("external_id", externalId)
     .maybeSingle();
