@@ -3,7 +3,7 @@
 import {
   ArrowLeft, Phone, MapPin, Check, Image, Clock,
   MessageSquare, Navigation, ExternalLink, Loader2, MessageCircle, Trash2, Edit, Copy,
-  Plug,
+  Plug, User,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -1432,6 +1432,13 @@ export function CaptacionDetailClient({
                   <div className="space-y-2">
                     {contacts.map((contact) => (
                       <div key={contact.id} className="rounded-lg border border-ink/10 bg-white p-3 flex items-start justify-between gap-3">
+                        {/* Foto de perfil del número (la envía la integración y
+                            se guarda copia en nuestro bucket). Le pone cara al
+                            teléfono antes de marcar. Si no hay, iniciales. */}
+                        <ContactAvatar
+                          photoUrl={contact.photo_url ?? null}
+                          name={contact.contact_name}
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="text-xs font-medium uppercase text-ink/50">
@@ -1862,6 +1869,43 @@ export function CaptacionDetailClient({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Avatar del contacto. Si la integración envió foto de perfil se pinta la copia
+ * de nuestro bucket; si no, las iniciales del nombre. La imagen se degrada sola
+ * a iniciales si la copia no cargara, para que la tarjeta nunca quede rota.
+ */
+function ContactAvatar({ photoUrl, name }: { photoUrl: string | null; name: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const initials = (name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
+  if (photoUrl && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt={name ? `Foto de ${name}` : "Foto del contacto"}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-ink/10"
+      />
+    );
+  }
+
+  return (
+    <div
+      aria-hidden
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/10 text-xs font-semibold text-gold-dark ring-1 ring-ink/5"
+    >
+      {initials || <User size={16} className="text-gold/60" />}
     </div>
   );
 }

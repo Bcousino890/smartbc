@@ -102,7 +102,7 @@ export type CaptacionUpsertResult = {
   /** Campos del equipo que se respetaron y NO se pisaron. */
   protected_fields: string[];
   sections: {
-    contacts?: { created: number; updated: number; unchanged: number };
+    contacts?: { created: number; updated: number; unchanged: number; photos_queued?: number };
     photos?: { added: number; removed: number; kept: number };
     listings?: { created: number; updated: number; unchanged: number; price_snapshots: number };
     attempts?: { created: number; unchanged: number };
@@ -556,7 +556,12 @@ async function syncSections(
 
   if (input.contacts?.length) {
     const res = await syncCaptacionContacts(db, captacionId, input.contacts, { dryRun });
-    sections.contacts = { created: res.created, updated: res.updated, unchanged: res.unchanged };
+    sections.contacts = {
+      created: res.created,
+      updated: res.updated,
+      unchanged: res.unchanged,
+      photos_queued: res.photosQueued,
+    };
     if (res.errors.length > 0) console.error("[api captacion contacts]", res.errors);
   }
 

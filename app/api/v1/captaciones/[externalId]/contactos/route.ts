@@ -26,7 +26,7 @@ export const GET = withApiRoute({
     const db = createAdminClient() as any;
     const { data } = await db
       .from("captacion_contacts")
-      .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, extra_phones, created_at, updated_at")
+      .select("id, external_id, contact_type, contact_name, phone, email, has_whatsapp, relationship, rut, photo_url, extra_phones, created_at, updated_at")
       .eq("captacion_id", captacion.id)
       .order("created_at", { ascending: true });
     ctx.counters.total = (data ?? []).length;

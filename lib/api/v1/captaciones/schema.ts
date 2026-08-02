@@ -79,6 +79,13 @@ export const ContactSchema = z
     has_whatsapp: z.boolean().nullable().optional(),
     relationship: nullableText(100),
     rut: nullableText(30),
+    /**
+     * Foto de perfil asociada al número de `phone` (típicamente la de WhatsApp).
+     * SmartBC la descarga y guarda copia propia, así que la URL de origen puede
+     * ser un proxy temporal. Si devuelve 404 se entiende que ese número no tiene
+     * foto: no es un error y no invalida el contacto.
+     */
+    photo_url: z.string().trim().url().max(2000).nullable().optional(),
     extra_phones: z.array(ExtraPhoneSchema).max(20).nullable().optional(),
   })
   .strict();

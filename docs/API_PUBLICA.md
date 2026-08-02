@@ -150,6 +150,7 @@ curl -s -X POST https://portal.bcousinoprop.com/api/v1/captaciones \
         "email": "maria@ejemplo.cl",
         "has_whatsapp": true,
         "rut": "12.345.678-9",
+        "photo_url": "https://cdn.mi-sistema.cl/foto-contacto?id=13387802&size=240",
         "extra_phones": [
           { "phone": "+56987654321", "has_whatsapp": false, "label": "Oficina" }
         ]
@@ -239,6 +240,11 @@ Respuesta:
   en arriendo se mandan los dos avisos. Cada cambio de `price` (portal) o de
   `broker_price` (web propia de la corredora) deja automáticamente un punto en
   el histórico, distinguiendo el origen con `source`.
+- **Fotos de contacto** (`contacts[].photo_url`): se descargan y re-alojan igual
+  que la galería, en segundo plano, y solo cuando la URL cambia respecto a la
+  última que enviaste. Un `404` se interpreta como "ese número no tiene foto":
+  no es un error. `sections.contacts.photos_queued` indica cuántas se pusieron
+  en cola.
 - **Intentos**: se deduplican por `external_id`. Sin él, se insertan siempre.
 - **Etapa**: `stage` acepta la `key` de una etapa del pipeline
   (`GET /api/v1/catalogos?tipo=pipelines`). La etapa `converted` no se puede
