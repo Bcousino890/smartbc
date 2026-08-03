@@ -1,12 +1,10 @@
 import "server-only";
 import { getParticularesPage } from "@/lib/db/queries/particulares";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function GET(req: Request) {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const gate = await requirePermission("particulares", "view");
+  if (!gate.ok) return gate.response;
 
   const url = new URL(req.url);
   const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
