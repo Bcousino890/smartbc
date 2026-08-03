@@ -1,0 +1,106 @@
+name: Sweep missing phones (particulares)
+
+# Barrido manual de teléfonos faltantes de particulares, acotado a un
+# distrito de Madrid por vez (Salamanca, Chamberí, ...). Llama en tandas al
+# endpoint /api/admin/particulares/refresh-phones (autenticado con
+# CRON_SECRET, no necesita sesión de admin ni SSH al VPS — pega
+# directamente a la URL pública). Se frena solo si:
+#   - ya no quedan anuncios sin teléfono en ese distrito, o
+#   - el propio endpoint reporta saldo bajo de CapSolver (stopped=low_capsolver_balance)
+#   - se llega al tope de tandas de seguridad (max_batches)
+#
+# Requiere el secret CRON_SECRET (Settings → Secrets and variables →
+# Actions → Repository secrets), el mismo valor que ya usa el cron horario
+# del VPS (ver docs/CRON_PARTICULARES.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      zone:
+        description: 'Distrito de Madrid a barrer (ej. "Salamanca", "Chamberí"). Debe coincidir EXACTO con lib/madrid-zones.ts'
+        required: true
+        type: string
+      limit:
+        description: "Anuncios por tanda (máx 50)"
+        required: false
+        default: "50"
+        type: string
+      delay_seconds:
+        description: "Pausa entre tandas, en segundos (más alto = más lento y seguro)"
+        required: false
+        default: "45"
+        type: string
+      max_batches:
+        description: "Tope de tandas de seguridad, por si algo queda en loop"
+        required: false
+        default: "150"
+        type: string
+
+env:
+  PORTAL_URL: https://portal.bcousinoprop.com
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Verificar secret
+        run: |
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "::error::Falta el secret CRON_SECRET (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Barrido en tandas
+        run: |
+          set -uo pipefail
+          ZONE="${{ inputs.zone }}"
+          LIMIT="${{ inputs.limit }}"
+          DELAY="${{ inputs.delay_seconds }}"
+          MAX_BATCHES="${{ inputs.max_batches }}"
+
+          total_updated=0
+          total_checked=0
+          batch=0
+
+          echo "🧹 Barriendo distrito: $ZONE (tandas de $LIMIT, pausa ${DELAY}s, tope $MAX_BATCHES tandas)"
+
+          while [ "$batch" -lt "$MAX_BATCHES" ]; do
+            batch=$((batch + 1))
+            resp=$(curl -sS -X POST \
+              "$PORTAL_URL/api/admin/particulares/refresh-phones?limit=$LIMIT&zone=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$ZONE")" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+            echo "── Tanda $batch: $resp"
+
+            stopped=$(echo "$resp" | jq -r '.stopped // empty')
+            if [ -n "$stopped" ]; then
+              echo "🛑 Detenido por el endpoint: $stopped"
+              echo "$resp" | jq .
+              break
+            fi
+
+            checked=$(echo "$resp" | jq -r '.checked // 0')
+            updated=$(echo "$resp" | jq -r '.updated // 0')
+            remaining=$(echo "$resp" | jq -r '.remaining_in_window // -1')
+
+            total_checked=$((total_checked + checked))
+            total_updated=$((total_updated + updated))
+
+            if [ "$checked" -eq 0 ]; then
+              echo "✅ No quedan anuncios sin teléfono en $ZONE."
+              break
+            fi
+
+            echo "   Progreso acumulado: $total_updated teléfonos nuevos / $total_checked revisados"
+
+            if [ "$remaining" = "0" ] && [ "$checked" -lt "$LIMIT" ]; then
+              echo "✅ Distrito $ZONE agotado (última tanda parcial)."
+              break
+            fi
+
+            sleep "$DELAY"
+          done
+
+          echo ""
+          echo "🏁 Resumen: $total_updated teléfonos nuevos en $ZONE tras $batch tanda(s) ($total_checked anuncios revisados)."
