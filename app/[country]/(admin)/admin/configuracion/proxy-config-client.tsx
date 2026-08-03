@@ -20,28 +20,73 @@ interface ProxyConfigClientProps {
   onActiveProviderChange: (provider: ProxyProvider) => void;
 }
 
-const PROVIDER_INFO: Record<ProxyProvider, { label: string; placeholder: string; format: string }> = {
+const PROVIDER_INFO: Record<
+  ProxyProvider,
+  { label: string; hostPlaceholder: string; portPlaceholder: string }
+> = {
   evomi: {
     label: "Evomi",
-    placeholder: "http://usuario:password@core-residential.evomi.com:1000",
-    format: "http://usuario:password@host:puerto",
+    hostPlaceholder: "core-residential.evomi.com",
+    portPlaceholder: "1000",
   },
   smartproxy: {
     label: "Smartproxy",
-    placeholder: "http://user:pass@eu.smartproxy.net:3120",
-    format: "http://user:pass@host:puerto",
+    hostPlaceholder: "eu.smartproxy.net",
+    portPlaceholder: "3120",
   },
   geonode: {
     label: "Geonode",
-    placeholder: "host:puerto:usuario:password",
-    format: "host:puerto:usuario:password",
+    hostPlaceholder: "proxy.geonode.io",
+    portPlaceholder: "9000",
   },
   decodo: {
     label: "Decodo",
-    placeholder: "http://user:pass@dc.decodo.com:10001",
-    format: "http://user:pass@host:puerto",
+    hostPlaceholder: "dc.decodo.com",
+    portPlaceholder: "10001",
   },
 };
+
+/**
+ * Descompone una URL de proxy guardada en sus 4 componentes para editarlos
+ * por separado. Tolera cualquier formato que haya quedado guardado, incluido
+ * el mixto "http://" + "host:puerto:usuario:password" (sin "@") que rompe
+ * `new URL()` — es justo el error que este formulario existe para evitar.
+ */
+function parseProxyUrl(raw: string): { host: string; port: string; username: string; password: string } {
+  const empty = { host: "", port: "", username: "", password: "" };
+  const s = (raw || "").trim();
+  if (!s) return empty;
+
+  const bare = s.replace(/^https?:\/\//i, "");
+  try {
+    const u = new URL(s.includes("@") ? s : `http://${bare}`);
+    if (u.username || u.password) {
+      return {
+        host: u.hostname,
+        port: u.port,
+        username: decodeURIComponent(u.username),
+        password: decodeURIComponent(u.password),
+      };
+    }
+  } catch {
+    // Formato no parseable como URL → probar el nativo host:puerto:usuario:password.
+  }
+
+  const parts = bare.split(":");
+  if (parts.length >= 4) {
+    const [host, port, username, ...rest] = parts;
+    return { host, port, username, password: rest.join(":") };
+  }
+  return empty;
+}
+
+/** Arma siempre la forma canónica `http://usuario:password@host:puerto`. */
+function buildProxyUrl(fields: { host: string; port: string; username: string; password: string }): string {
+  const host = fields.host.trim();
+  if (!host) return "";
+  const auth = fields.username ? `${fields.username}:${fields.password}@` : "";
+  return `http://${auth}${host}${fields.port ? `:${fields.port}` : ""}`;
+}
 
 export function ProxyConfigClient({
   configs,
@@ -122,7 +167,9 @@ export function ProxyConfigClient({
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="font-semibold text-sm">{info.label}</h3>
-                  <p className="text-xs text-gray-500 mt-1">Format: {info.format}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {info.hostPlaceholder}:{info.portPlaceholder}
+                  </p>
                 </div>
                 {isActive && config && (
                   <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">
@@ -295,13 +342,18 @@ function ProxyDetailModal({
   onUpdate: (updates: Partial<ProxyConfig>) => void;
   onClose: () => void;
 }) {
-  const [url, setUrl] = useState(config.url);
+  const parsed = parseProxyUrl(config.url);
+  const [host, setHost] = useState(parsed.host);
+  const [port, setPort] = useState(parsed.port);
+  const [username, setUsername] = useState(parsed.username);
+  const [password, setPassword] = useState(parsed.password);
   const [notes, setNotes] = useState(config.notes || "");
   const [showPassword, setShowPassword] = useState(false);
   const info = PROVIDER_INFO[provider];
+  const assembled = buildProxyUrl({ host, port, username, password });
 
   const handleSave = () => {
-    onUpdate({ url, notes });
+    onUpdate({ url: assembled, notes });
   };
 
   return (
@@ -312,15 +364,51 @@ function ProxyDetailModal({
         </div>
 
         <div className="p-4 space-y-4">
+          <p className="text-xs text-gray-500">
+            Pega cada dato tal cual lo da el panel del proveedor. El sistema arma la URL
+            (<code className="font-mono">http://usuario:password@host:puerto</code>) automáticamente —
+            no hace falta pegar <code className="font-mono">http://</code> ni el <code className="font-mono">@</code>.
+          </p>
+
           <div>
-            <label className="text-sm font-medium">Proxy URL</label>
-            <p className="text-xs text-gray-500 mb-2">Format: {info.format}</p>
+            <label className="text-sm font-medium">Host</label>
+            <input
+              type="text"
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              placeholder={info.hostPlaceholder}
+              className="w-full px-3 py-2 border rounded text-sm font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Puerto</label>
+            <input
+              type="text"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              placeholder={info.portPlaceholder}
+              className="w-full px-3 py-2 border rounded text-sm font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Usuario</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 border rounded text-sm font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder={info.placeholder}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border rounded text-sm font-mono"
               />
               <button
@@ -345,9 +433,14 @@ function ProxyDetailModal({
 
           <div className="bg-gray-50 p-2 rounded text-xs text-gray-600 space-y-1">
             <p>
-              <strong>Note:</strong> Paste only base credentials without country, session, or lifetime modifiers.
-              The system adds these automatically.
+              <strong>Note:</strong> Solo credenciales base — sin país, sesión ni lifetime. El sistema
+              los añade automáticamente en cada request.
             </p>
+            {assembled && (
+              <p className="font-mono truncate">
+                → {assembled.replace(/:[^:@]+@/, ":***@")}
+              </p>
+            )}
           </div>
         </div>
 
