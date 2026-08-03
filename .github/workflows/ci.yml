@@ -19,7 +19,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22+ hace falta para --experimental-strip-types (test:particulares
+          # corre los .mts de scripts/ directo, sin ts-node/tsx instalados).
+          node-version: 22
           cache: npm
 
       - name: Instalar dependencias
@@ -27,6 +29,9 @@ jobs:
 
       - name: TypeScript (compila el proyecto entero)
         run: npx tsc --noEmit
+
+      - name: Particulares (parsers de teléfono/cross-match, offline)
+        run: npm run test:particulares
 
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
