@@ -39,6 +39,7 @@ import {
   YAxis,
 } from "recharts";
 import { useToast } from "@/components/ui/toast";
+import { ZoneFilter } from "@/components/admin/particulares/zone-filter";
 import { extractFloor } from "@/lib/floor";
 import { formatPrice } from "@/lib/format";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
@@ -1440,30 +1441,47 @@ export function ParticularesClient({
     setAllRows(rows);
   }, [rows]);
 
-  // Zonas agrupadas por distrito canónico de Madrid. El scraper mezcla
-  // distritos y barrios en un solo campo `zone`; aquí lo ordenamos:
-  // cada zona "sucia" se normaliza a su distrito y el desplegable muestra
-  // optgroups Distrito → zonas, ordenados alfabéticamente ("Otras zonas"
-  // siempre al final).
+  // Zonas agrupadas por distrito canónico de Madrid, con conteos (total y
+  // sin teléfono) para poder priorizar barridos por zona igual que ya se
+  // hace con el workflow de GitHub Actions. El scraper mezcla distritos y
+  // barrios en un solo campo `zone`; cada zona "sucia" se normaliza a su
+  // distrito. Los conteos respetan la pestaña activa/retirados actual, para
+  // que el número mostrado coincida con lo que se ve en pantalla.
   const zoneGroups = useMemo(() => {
-    const groups = new Map<string, Set<string>>();
+    const districts = new Map<
+      string,
+      { total: number; missingPhone: number; zones: Map<string, { total: number; missingPhone: number }> }
+    >();
     for (const r of allRows) {
+      if (showRetired ? r.is_active : !r.is_active) continue;
       if (!r.zone) continue;
       const { district } = normalizeZone(r.zone);
-      if (!groups.has(district)) groups.set(district, new Set());
-      groups.get(district)!.add(r.zone);
+      if (!districts.has(district)) {
+        districts.set(district, { total: 0, missingPhone: 0, zones: new Map() });
+      }
+      const d = districts.get(district)!;
+      d.total++;
+      if (!r.phone) d.missingPhone++;
+      if (!d.zones.has(r.zone)) d.zones.set(r.zone, { total: 0, missingPhone: 0 });
+      const z = d.zones.get(r.zone)!;
+      z.total++;
+      if (!r.phone) z.missingPhone++;
     }
-    return Array.from(groups.entries())
+    return Array.from(districts.entries())
       .sort((a, b) => {
         if (a[0] === OTHER_ZONE_LABEL) return 1;
         if (b[0] === OTHER_ZONE_LABEL) return -1;
         return a[0].localeCompare(b[0], "es");
       })
-      .map(([district, zones]) => ({
+      .map(([district, d]) => ({
         district,
-        zones: Array.from(zones).sort((a, b) => a.localeCompare(b, "es")),
+        total: d.total,
+        missingPhone: d.missingPhone,
+        zones: Array.from(d.zones.entries())
+          .sort((a, b) => a[0].localeCompare(b[0], "es"))
+          .map(([name, c]) => ({ name, total: c.total, missingPhone: c.missingPhone })),
       }));
-  }, [allRows]);
+  }, [allRows, showRetired]);
 
   const activeCount = useMemo(() => allRows.filter((r) => r.is_active).length, [allRows]);
   const retiredCount = allRows.length - activeCount;
@@ -1688,27 +1706,7 @@ export function ParticularesClient({
             <option value="rent">Alquiler</option>
             <option value="sale">Venta</option>
           </select>
-          <select
-            value={zone}
-            onChange={(e) => setZone(e.target.value)}
-            className="max-w-[220px] rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
-          >
-            <option value="">Zona: todas</option>
-            {zoneGroups.map(({ district, zones }) => (
-              <optgroup key={district} label={district}>
-                {zones.length > 1 && (
-                  <option value={`d:${district}`}>
-                    Todo {district}
-                  </option>
-                )}
-                {zones.map((z) => (
-                  <option key={z} value={zones.length > 1 ? `z:${z}` : `d:${district}`}>
-                    {z}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <ZoneFilter groups={zoneGroups} value={zone} onChange={setZone} />
           <select
             value={gestion}
             onChange={(e) => setGestion(e.target.value as typeof gestion)}
