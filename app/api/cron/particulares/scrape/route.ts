@@ -6,8 +6,11 @@ import {
   fetchIdealistaPhoneViaAjax,
   normalizeSpanishPhone,
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
-import { extractPhoneFromHtmlDescription } from "@/lib/sync/particulares/phone-from-text";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
+import { withMigration0035Fallback } from "@/lib/sync/particulares/migration-fallback";
+import { checkCapSolverBalanceGuard } from "@/lib/sync/particulares/capsolver-guard";
+import { buildPhoneCandidateQuery } from "@/lib/sync/particulares/phone-candidates";
+import { lookupIdealistaPhone } from "@/lib/sync/particulares/phone-lookup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,49 +90,6 @@ type ParticularPayload = {
   floor_plan_url: string | null;
   video_url: string | null;
 };
-
-// ─── Degradación elegante para migraciones 0035/0036 ─────────────────────────
-// Las columnas `address`/`phone_confidence` (0035) y `has_floor_plan`/
-// `floor_plan_url`/`has_video`/`video_url` (0036) pueden NO estar aplicadas
-// todavía en el VPS (se aplican con psql en el post-deploy). Si el
-// insert/update falla por columna inexistente, reintenta UNA vez la misma
-// operación sin esas claves.
-
-const MIGRATION_0035_COLUMNS = [
-  "address",
-  "phone_confidence",
-  "has_floor_plan",
-  "floor_plan_url",
-  "has_video",
-  "video_url",
-] as const;
-
-function isMissing0035ColumnError(error: { message?: string } | null | undefined): boolean {
-  const msg = error?.message ?? "";
-  if (!/column|does not exist|schema cache/i.test(msg)) return false;
-  return MIGRATION_0035_COLUMNS.some((col) => msg.includes(col));
-}
-
-// `data` es laxo (any) por la misma razón que SupabaseLike: los genéricos del
-// SDK no aportan aquí y ya casteamos puntualmente donde hace falta.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseResult = { error: { message?: string } | null; data?: any };
-
-async function withMigration0035Fallback<T extends SupabaseResult>(
-  values: Record<string, unknown>,
-  run: (values: Record<string, unknown>) => PromiseLike<T>,
-): Promise<T> {
-  const first = await run(values);
-  if (first.error && isMissing0035ColumnError(first.error)) {
-    console.warn(
-      "[cron-particulares] Migración 0035 no aplicada — reintentando sin address/phone_confidence",
-    );
-    const stripped = { ...values };
-    for (const col of MIGRATION_0035_COLUMNS) delete stripped[col];
-    return run(stripped);
-  }
-  return first;
-}
 
 async function upsertParticular(
   supabase: SupabaseLike,
@@ -284,7 +244,18 @@ async function upsertParticular(
     }
 
     if (changesToInsert.length > 0) {
-      await supabase.from("particulares_changes").insert(changesToInsert);
+      const { error: changesErr } = await supabase
+        .from("particulares_changes")
+        .insert(changesToInsert);
+      // Un CHECK de change_type desactualizado (ya pasó 2 veces: 0034, 0088)
+      // hace fallar TODO el lote en silencio si no se loguea el error — acá
+      // al menos queda en los logs para poder detectarlo.
+      if (changesErr) {
+        console.error(
+          `[cron-particulares] Error insertando particulares_changes (${existing.id}):`,
+          changesErr,
+        );
+      }
     }
 
     if (wasInactive) {
@@ -344,7 +315,7 @@ async function upsertParticular(
 
   // Registrar el evento de alta en el historial
   if (inserted?.id) {
-    await supabase.from("particulares_changes").insert({
+    const { error: changesErr } = await supabase.from("particulares_changes").insert({
       particular_id: inserted.id,
       change_type: "new_listing",
       old_value: null,
@@ -356,6 +327,12 @@ async function upsertParticular(
       },
       changed_at: now,
     });
+    if (changesErr) {
+      console.error(
+        `[cron-particulares] Error insertando particulares_changes new_listing (${inserted.id}):`,
+        changesErr,
+      );
+    }
   }
 
   return true;
@@ -524,23 +501,22 @@ async function backfillPhonesViaAjax(
   chatOnlyFirst = false,
   deadline?: number,
 ): Promise<number> {
-  let query = supabase
-    .from("particulares")
-    .select("id, source_url")
-    .eq("is_active", true)
-    .is("phone", null)
-    .order("updated_at", { ascending: true })
-    .limit(limit);
-
-  if (chatOnlyFirst) {
-    query = query.eq("chat_only", true);
-  } else {
-    query = query.is("chat_only", null).or("chat_only.eq.false");
+  const guard = await checkCapSolverBalanceGuard();
+  if (guard.blocked) {
+    console.warn(
+      `[cron-particulares] backfill: saldo CapSolver ($${guard.balance}) bajo el mínimo ($${guard.min}) — fase saltada`,
+    );
+    return 0;
   }
 
-  const { data, error } = await query;
+  const { data, error } = await buildPhoneCandidateQuery(
+    supabase,
+    chatOnlyFirst ? "chat_only" : "missing_unclassified",
+    { limit, columns: "id, source_url" },
+  );
   if (error || !data || data.length === 0) return 0;
 
+  const proxyUrl = await getProxyUrl();
   let found = 0;
   for (const row of data as Array<{ id: string; source_url: string }>) {
     // Guardia de tiempo: si nos acercamos al límite del cron (maxDuration),
@@ -562,43 +538,11 @@ async function backfillPhonesViaAjax(
     }
 
     try {
-      // Fuente 1 (barata): minar el teléfono de la descripción del anuncio.
-      // Descargamos el HTML con UA WhatsApp (pasa DataDome, sin proxy/CapSolver)
-      // y buscamos un teléfono escrito en el texto por el propio particular.
-      let phone: string | null = null;
-      let phoneConfidence: "high" | "medium" | null = null;
-      try {
-        const htmlRes = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
-          proxyUrl: await getProxyUrl(),
-        });
-        if (htmlRes.ok) {
-          const textPhone = extractPhoneFromHtmlDescription(htmlRes.html, adId.slice(-9));
-          if (textPhone.phone) {
-            phone = textPhone.phone;
-            phoneConfidence = "medium";
-            console.log(`[cron-particulares] teléfono en descripción ${adId}: ${phone}`);
-          }
-        }
-      } catch {
-        // Ignorar y caer al fallback AJAX.
-      }
-
-      // Fuente 2 (cara): endpoints AJAX "Ver teléfono" (proxy/CapSolver/Playwright).
-      if (!phone) {
-        const ajax = await fetchIdealistaPhoneViaAjax(adId, {
-          proxyUrl: await getProxyUrl(),
-        });
-        if (ajax.phone) {
-          phone = ajax.phone;
-          phoneConfidence = ajax.phone_confidence;
-        }
-      }
-
-      const ajax = { phone, phone_confidence: phoneConfidence };
-      const values: Record<string, unknown> = ajax.phone
+      const lookup = await lookupIdealistaPhone(row.source_url, { proxyUrl });
+      const values: Record<string, unknown> = lookup.phone
         ? {
-            phone: ajax.phone,
-            phone_confidence: ajax.phone_confidence,
+            phone: lookup.phone,
+            phone_confidence: lookup.phone_confidence,
             chat_only: false,
             updated_at: now,
           }
@@ -608,15 +552,21 @@ async function backfillPhonesViaAjax(
         values,
         (v) => supabase.from("particulares").update(v).eq("id", row.id),
       );
-      if (!updErr && ajax.phone) {
+      if (!updErr && lookup.phone) {
         found++;
-        await supabase.from("particulares_changes").insert({
+        const { error: changesErr } = await supabase.from("particulares_changes").insert({
           particular_id: row.id,
           change_type: "phone_added",
           old_value: null,
-          new_value: { phone: ajax.phone },
+          new_value: { phone: lookup.phone },
           changed_at: now,
         });
+        if (changesErr) {
+          console.error(
+            `[cron-particulares] Error insertando particulares_changes phone_added (${row.id}):`,
+            changesErr,
+          );
+        }
       }
     } catch (err) {
       console.warn(`[cron-particulares] backfill teléfono ${adId}:`, err);
@@ -701,13 +651,19 @@ async function markStaleListingsInactive(
         .eq("id", row.id);
 
       // Log en histórico de cambios
-      await supabase.from("particulares_changes").insert({
+      const { error: changesErr } = await supabase.from("particulares_changes").insert({
         particular_id: row.id,
         change_type: "deleted",
         old_value: null,
         new_value: { taken_down_at: now },
         changed_at: now,
       });
+      if (changesErr) {
+        console.error(
+          `[cron-particulares] Error insertando particulares_changes deleted (${row.id}):`,
+          changesErr,
+        );
+      }
 
       removed++;
       console.log(`[cron-particulares] Baja: ${row.source_url}`);

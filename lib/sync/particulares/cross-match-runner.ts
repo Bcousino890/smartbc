@@ -3,6 +3,7 @@ import {
   findCrossPortalPhone,
   type MatchableListing,
 } from "./cross-match-phone";
+import { withMigration0035Fallback } from "./migration-fallback";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -82,16 +83,20 @@ export async function crossMatchPhones(
       const match = findCrossPortalPhone(target, pool);
       if (!match) continue;
 
-      const { error: updErr } = await supabase
-        .from("particulares")
-        .update({
+      const { error: updErr } = await withMigration0035Fallback(
+        {
           phone: match.phone,
           phone_confidence: "medium", // cross-portal: alta probabilidad, no verificado en origen
           chat_only: false,
           updated_at: now,
-        })
-        .eq("id", target.id)
-        .is("phone", null); // no pisar si otro proceso ya lo rellenó
+        },
+        (values) =>
+          supabase
+            .from("particulares")
+            .update(values)
+            .eq("id", target.id)
+            .is("phone", null), // no pisar si otro proceso ya lo rellenó
+      );
       if (updErr) continue;
 
       // Historial: teléfono nuevo por cross-match.

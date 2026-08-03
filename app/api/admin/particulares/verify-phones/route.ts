@@ -1,13 +1,13 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import {
-  detectAdvertiserFromHtml,
-  fetchIdealistaPhoneViaAjax,
-  normalizeSpanishPhone,
-} from "@/lib/sync/particulares/idealista-advertiser-detector";
-import { fetchViaCurl } from "@/lib/sync/import-by-link/fetch-via-curl";
+import { fetchIdealistaPhoneViaAjax, normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { requirePermission } from "@/lib/auth/guard";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
+import { lookupIdealistaPhone } from "@/lib/sync/particulares/phone-lookup";
+import { withMigration0035Fallback } from "@/lib/sync/particulares/migration-fallback";
+import { checkCapSolverBalanceGuard } from "@/lib/sync/particulares/capsolver-guard";
+import { buildPhoneCandidateQuery } from "@/lib/sync/particulares/phone-candidates";
+import { resolveChatOnly } from "@/lib/sync/particulares/chat-only";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 min — hasta 100 fichas por llamada
@@ -26,44 +26,6 @@ export const maxDuration = 300; // 5 min — hasta 100 fichas por llamada
 // los genéricos del SDK no aportan aquí y casteamos puntualmente).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
-
-// UA de WhatsApp: DataDome lo deja pasar (whitelist por los previews de
-// links compartidos por WhatsApp).
-const WHATSAPP_UA = "WhatsApp/2.23.20.0";
-
-// ─── Degradación elegante para la migración 0035 ─────────────────────────────
-// La columna `phone_confidence` se añade en la migración 0035, que puede NO
-// estar aplicada todavía en el VPS. Si el update falla por columna
-// inexistente, reintenta UNA vez sin esa clave. (Mismo patrón que el helper
-// withMigration0035Fallback del cron de scrape — duplicado aquí porque un
-// route.ts de Next solo puede exportar los campos de ruta válidos.)
-
-function isMissingPhoneConfidenceError(
-  error: { message?: string } | null | undefined,
-): boolean {
-  const msg = error?.message ?? "";
-  return (
-    /column|does not exist|schema cache/i.test(msg) &&
-    msg.includes("phone_confidence")
-  );
-}
-
-async function updateWithMigration0035Fallback(
-  supabase: SupabaseLike,
-  id: string,
-  values: Record<string, unknown>,
-): Promise<{ error: { message?: string } | null }> {
-  const first = await supabase.from("particulares").update(values).eq("id", id);
-  if (first.error && isMissingPhoneConfidenceError(first.error)) {
-    console.warn(
-      "[verify-phones] Migración 0035 no aplicada — reintentando sin phone_confidence",
-    );
-    const stripped = { ...values };
-    delete stripped.phone_confidence;
-    return supabase.from("particulares").update(stripped).eq("id", id);
-  }
-  return first;
-}
 
 // ─── Auth: Bearer CRON_SECRET (cron/scripts del VPS) ─────────────────────────
 
@@ -87,6 +49,10 @@ type VerifyResponse = {
   // Teléfono encontrado (solo en verificación de un anuncio concreto, para
   // que el cliente actualice la UI sin recargar).
   foundPhone?: string | null;
+  // Freno de saldo de CapSolver (mismo criterio que refresh-phones).
+  stopped?: "low_capsolver_balance";
+  capsolver_balance?: number;
+  min_required?: number;
 };
 
 type ParticularRow = {
@@ -103,25 +69,36 @@ async function verifyByScraping(
   limit: number,
   onlyId?: string | null,
 ): Promise<VerifyResponse> {
+  // Freno de saldo ANTES de gastar un solo request (no aplica a la
+  // verificación puntual de un anuncio desde el modal: ese es un solo
+  // request, de bajo riesgo, y bloquearlo sería más molesto que útil).
+  if (!onlyId) {
+    const guard = await checkCapSolverBalanceGuard();
+    if (guard.blocked) {
+      return {
+        ok: false,
+        mode,
+        checked: 0,
+        updated: 0,
+        withPhone: 0,
+        chatOnly: 0,
+        errors: 0,
+        stopped: "low_capsolver_balance",
+        capsolver_balance: guard.balance,
+        min_required: guard.min,
+      };
+    }
+  }
+
   const proxyUrl = await getProxyUrl();
   // Activos, los menos verificados primero (updated_at asc). En "missing"
   // solo los que no tienen teléfono. Con `onlyId`, ese anuncio concreto
   // (botón "Verificar teléfono" del modal).
-  let query = supabase
-    .from("particulares")
-    .select("id, source_url, phone")
-    .order("updated_at", { ascending: true })
-    .limit(limit);
-  if (onlyId) {
-    query = query.eq("id", onlyId);
-  } else {
-    query = query.eq("is_active", true);
-    if (mode === "missing") {
-      query = query.is("phone", null);
-    }
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await buildPhoneCandidateQuery(
+    supabase,
+    mode === "missing" ? "missing" : "all",
+    { limit, onlyId },
+  );
   if (error) {
     console.error("[verify-phones] Error listando particulares:", error);
     return {
@@ -151,65 +128,32 @@ async function verifyByScraping(
     const now = new Date().toISOString();
 
     try {
-      const res = await fetchViaCurl(row.source_url, WHATSAPP_UA, {
-        proxyUrl,
-      });
-      if (!res.ok) {
-        console.warn(
-          `[verify-phones] fetch ${row.source_url} -> ${res.reason}`,
-        );
+      const lookup = await lookupIdealistaPhone(row.source_url, { proxyUrl });
+      if (!lookup.httpOk && !lookup.phone) {
+        console.warn(`[verify-phones] fetch ${row.source_url} -> sin resultado (HTML y AJAX)`);
         result.errors++;
         continue;
       }
 
-      const info = detectAdvertiserFromHtml(res.html);
-      // El detector ya devuelve el teléfono normalizado a +34XXXXXXXXX;
-      // re-normalizamos por si acaso (idempotente).
-      let phone = normalizeSpanishPhone(info.phone);
-      let confidence = info.phone_confidence ?? null;
+      // Si no se encontró nada nuevo, conserva el teléfono existente (no lo
+      // borra por un re-check fallido); si nunca tuvo, queda en null.
+      const effectivePhone = lookup.phone ?? row.phone;
+      const values: Record<string, unknown> = {
+        phone: effectivePhone,
+        chat_only: resolveChatOnly(effectivePhone),
+        updated_at: now,
+      };
 
-      // Fallback "Ver teléfono": muchos anuncios NO traen el teléfono en el
-      // HTML — solo se revela vía AJAX al pulsar el botón. Si el HTML no dio
-      // teléfono, llamamos a los endpoints AJAX de contacto de Idealista
-      // (vía curl, mismo bypass de DataDome).
-      if (!phone) {
-        const adIdMatch = row.source_url.match(/\/inmueble\/(\d+)/);
-        if (adIdMatch?.[1]) {
-          const ajax = await fetchIdealistaPhoneViaAjax(adIdMatch[1], {
-            proxyUrl,
-          });
-          if (ajax.phone) {
-            phone = ajax.phone;
-            confidence = ajax.phone_confidence;
-          }
-        }
-      }
-
-      let values: Record<string, unknown>;
-      if (phone) {
-        // Teléfono encontrado → guardar normalizado con su confianza.
-        values = {
-          phone,
-          phone_confidence: confidence,
-          chat_only: false,
-          updated_at: now,
-        };
+      if (lookup.phone) {
+        values.phone_confidence = lookup.phone_confidence;
         result.withPhone++;
-        result.foundPhone = phone;
+        result.foundPhone = lookup.phone;
       } else if (!row.phone) {
-        // Sin teléfono ahora ni antes → solo contactable por chat del portal.
-        values = { chat_only: true, updated_at: now };
         result.chatOnly++;
-      } else {
-        // No se encontró pero ya tenía → conservar el existente, solo
-        // refrescar updated_at para que rote al final de la cola.
-        values = { updated_at: now };
       }
 
-      const { error: updateError } = await updateWithMigration0035Fallback(
-        supabase,
-        row.id,
-        values,
+      const { error: updateError } = await withMigration0035Fallback(values, (v) =>
+        supabase.from("particulares").update(v).eq("id", row.id),
       );
       if (updateError) {
         console.error("[verify-phones] Error actualizando:", updateError);
@@ -218,16 +162,16 @@ async function verifyByScraping(
       }
       // Cuenta como actualizado si escribimos algo material (teléfono nuevo
       // o chat_only); el refresco de solo updated_at no cuenta.
-      if (phone || !row.phone) {
+      if (lookup.phone || !row.phone) {
         result.updated++;
       }
       // Historial: teléfono descubierto en un anuncio que no lo tenía.
-      if (phone && !row.phone) {
+      if (lookup.phone && !row.phone) {
         await supabase.from("particulares_changes").insert({
           particular_id: row.id,
           change_type: "phone_added",
           old_value: null,
-          new_value: { phone },
+          new_value: { phone: lookup.phone },
           changed_at: now,
         });
       }
