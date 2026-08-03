@@ -19,7 +19,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22+ hace falta para --experimental-strip-types (test:particulares
+          # corre los .mts de scripts/ directo, sin ts-node/tsx instalados).
+          node-version: 22
           cache: npm
 
       - name: Instalar dependencias
