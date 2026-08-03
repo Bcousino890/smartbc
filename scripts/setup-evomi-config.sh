@@ -37,20 +37,25 @@ PROXY_URL="core-residential.evomi.com:1000:portales3:Um72i6DQURDoxb1Ez1xs_countr
 echo "Guardando configuración en la BD..."
 echo ""
 
-$DB_CMD << EOF
-INSERT INTO app_settings (key, value, created_at, updated_at)
-VALUES ('scraping.proxyUrl', '$PROXY_URL', NOW(), NOW())
-ON CONFLICT (key) DO UPDATE SET value = '$PROXY_URL', updated_at = NOW();
+$DB_CMD -v proxy_url="$PROXY_URL" << 'EOF'
+INSERT INTO app_settings (key, value, updated_at)
+VALUES ('scraping.proxyUrl', to_jsonb(:'proxy_url'::text), now())
+ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now();
 
-INSERT INTO app_settings (key, value, created_at, updated_at)
+INSERT INTO app_settings (key, value, updated_at)
 VALUES (
   'scraping.proxyConfigs',
-  '[{"provider":"evomi","url":"$PROXY_URL","enabled":true,"notes":"Residencial - principal"}]',
-  NOW(), NOW()
+  to_jsonb(jsonb_build_array(
+    jsonb_build_object(
+      'provider', 'evomi',
+      'url', :'proxy_url',
+      'enabled', true,
+      'notes', 'Residencial - principal'
+    )
+  )::text),
+  now()
 )
-ON CONFLICT (key) DO UPDATE SET
-  value = '[{"provider":"evomi","url":"$PROXY_URL","enabled":true,"notes":"Residencial - principal"}]',
-  updated_at = NOW();
+ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now();
 
 SELECT key, value FROM app_settings WHERE key LIKE 'scraping%' ORDER BY key;
 EOF
