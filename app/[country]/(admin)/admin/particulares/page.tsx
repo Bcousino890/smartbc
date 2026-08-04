@@ -3,7 +3,6 @@ import { UserSearch, Home, Tag, Clock } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
-import { TestPhoneExtractor } from "@/components/admin/particulares/test-phone-extractor";
 import {
   getParticularesPage,
   getStaffOptions,
@@ -17,10 +16,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminParticularesPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ country: Country }>;
-  searchParams: Promise<{ offset?: string }>;
 }) {
   const { country } = await params;
   // "Particulares" lista anuncios scrapeados de Idealista (España). El flujo
@@ -31,18 +28,13 @@ export default async function AdminParticularesPage({
   if (!canAccess(currentProfile?.role ?? "", "particulares", "view")) {
     redirect(getCountryConfig(country).prefix);
   }
-  await searchParams; // offset ya no se usa: se cargan TODOS los anuncios.
-  const pageSize = 100;
-  const offset = 0;
 
-  const [{ rows: enrichedRows, total }, staffOptions] = await Promise.all([
+  const [{ rows: enrichedRows }, staffOptions] = await Promise.all([
     getParticularesPage(),
     getStaffOptions().catch(() => []),
   ]);
 
   const rows = enrichedRows as unknown as ParticularRow[];
-  // Sin paginación: el servidor ya devuelve activos + retirados completos.
-  const hasMore = false;
 
   // Las stats de cabecera se calculan solo sobre ACTIVOS: `rows` incluye
   // los retirados al final (para el tab "Retirados") y no deben inflarlas.
@@ -108,19 +100,11 @@ export default async function AdminParticularesPage({
         />
       </div>
 
-      <div className="mt-7">
-        <TestPhoneExtractor />
-      </div>
-
       <ParticularesClient
         rows={rows}
         currentRole={currentProfile?.role}
         currentUserId={currentProfile?.id}
         staffOptions={staffOptions}
-        hasMore={hasMore}
-        currentOffset={offset}
-        pageSize={pageSize}
-        total={total}
       />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />

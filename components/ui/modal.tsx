@@ -54,6 +54,15 @@ export function Modal({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !isPending) onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, isPending, onClose]);
+
   if (!open) return null;
   if (typeof document === "undefined") return null;
 

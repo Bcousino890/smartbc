@@ -39,6 +39,7 @@ import {
   YAxis,
 } from "recharts";
 import { useToast } from "@/components/ui/toast";
+import { Modal } from "@/components/ui/modal";
 import { ZoneFilter } from "@/components/admin/particulares/zone-filter";
 import { extractFloor } from "@/lib/floor";
 import { formatPrice } from "@/lib/format";
@@ -53,6 +54,7 @@ import {
   setParticularActive,
   updateParticularPhone,
 } from "./actions";
+import { useParticularesFilters } from "./use-particulares-filters";
 
 export type StaffOption = { id: string; name: string };
 
@@ -117,7 +119,12 @@ const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   timeZone: "Europe/Madrid",
 });
 
-function formatPhone(phone: string): string {
+// Única función de formateo de teléfono del módulo (antes había una segunda
+// casi idéntica, formatPhoneToInternational, que no reformateaba bien los
+// números ya guardados con prefijo +34 — el caso más común, porque
+// normalizeSpanishPhone ya los guarda así).
+function formatPhone(phone: string | null | undefined): string {
+  if (!phone) return "";
   const d = phone.replace(/[\s\-\(\)\.]/g, "");
   if (/^[6789]\d{8}$/.test(d))
     return `+34 ${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
@@ -164,52 +171,35 @@ function EditPhoneModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="relative flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-ink/10 p-6">
-          <h2 className="text-lg font-semibold text-ink">Editar teléfono</h2>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1 text-ink/50 hover:text-ink"
-          >
-            <X size={20} strokeWidth={2} />
-          </button>
+    <Modal open onClose={onClose} isPending={saving} title="Editar teléfono" size="sm">
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="block text-sm font-medium text-ink/75 mb-2">
+            Teléfono
+          </label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Ej: +34 600 123 456"
+            className="w-full rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-ink/50">
+            Deja en blanco para eliminar el teléfono
+          </p>
         </div>
 
-        <div className="flex flex-1 flex-col gap-4 p-6">
-          <div>
-            <label className="block text-sm font-medium text-ink/75 mb-2">
-              Teléfono
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Ej: +34 600 123 456"
-              className="w-full rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-ink/50">
-              Deja en blanco para eliminar el teléfono
-            </p>
+        {error && (
+          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
           </div>
+        )}
 
-          {error && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-3 border-t border-ink/10 p-6">
+        <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className="flex-1 rounded-lg border border-ink/15 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-ink/5"
+            disabled={saving}
+            className="flex-1 rounded-lg border border-ink/15 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-ink/5 disabled:opacity-60"
           >
             Cancelar
           </button>
@@ -222,7 +212,7 @@ function EditPhoneModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -775,6 +765,24 @@ function ParticularModal({
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(currentRow.phone);
 
+  // Scroll-lock + Escape-para-cerrar: este modal no usa el <Modal> compartido
+  // (el carrusel de fotos hace de "header" propio, no encaja en su prop
+  // `title`), así que replica aquí lo mínimo que ese componente da gratis.
+  // Si EditPhoneModal (hijo, vía showEditPhone) está abierto, dejamos que
+  // Escape lo cierre a él primero en vez de cerrar este modal también.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !showEditPhone) onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose, showEditPhone]);
+
   async function handleAssign(advisorId: string) {
     setAssigning(true);
     setAssignError(null);
@@ -787,7 +795,8 @@ function ParticularModal({
       setCurrentRow((prev) => ({ ...prev, assigned_to: value, assigned_name: name }));
       onAssigned?.(value, name);
     } else {
-      setAssignError(res.error);
+      console.error("[particulares] Error asignando:", res.error);
+      setAssignError("No se pudo guardar la asignación. Inténtalo de nuevo.");
     }
     setAssigning(false);
   }
@@ -914,6 +923,7 @@ function ParticularModal({
           {photos.length > 1 && (
             <>
               <button
+                aria-label="Foto anterior"
                 onClick={() =>
                   setPhotoIdx((i) => (i === 0 ? photos.length - 1 : i - 1))
                 }
@@ -922,6 +932,7 @@ function ParticularModal({
                 ‹
               </button>
               <button
+                aria-label="Foto siguiente"
                 onClick={() =>
                   setPhotoIdx((i) => (i === photos.length - 1 ? 0 : i + 1))
                 }
@@ -1135,9 +1146,7 @@ function ParticularModal({
               {assigning && <Loader2 size={16} className="animate-spin text-ink/40" />}
             </div>
             {assignError && (
-              <p className="mt-1.5 text-xs text-red-600">
-                No se pudo guardar la asignación ({assignError}). ¿Está aplicada la migración 0034?
-              </p>
+              <p className="mt-1.5 text-xs text-red-600">{assignError}</p>
             )}
             {currentRow.last_contact_by && (
               <p className="mt-2 text-[12px] text-ink/55">
@@ -1176,6 +1185,7 @@ function ParticularModal({
                 <div className="overflow-hidden rounded-lg border border-ink/10">
                   <div className="relative h-36 w-full bg-gray-100">
                     <iframe
+                      title="Mapa de ubicación del anuncio"
                       width="100%"
                       height="100%"
                       style={{ border: "none" }}
@@ -1359,30 +1369,6 @@ function ParticularModal({
   );
 }
 
-// ─── Utilidades ────────────────────────────────────────────────────────
-
-function formatPhoneToInternational(phone: string | null): string {
-  if (!phone) return "";
-  const cleaned = phone.replace(/[\s\-()]/g, "");
-  if (/^[6789]\d{8}$/.test(cleaned)) {
-    return `+34 ${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
-  }
-  if (cleaned.startsWith("34")) {
-    const withoutCountry = cleaned.slice(2);
-    return `+34 ${withoutCountry.slice(0, 3)} ${withoutCountry.slice(3, 6)} ${withoutCountry.slice(6)}`;
-  }
-  return phone;
-}
-
-async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ─── Listado principal ────────────────────────────────────────────────────────
 
 type RefreshState = "idle" | "loading" | "done" | "error";
@@ -1395,36 +1381,43 @@ export function ParticularesClient({
   currentRole,
   currentUserId,
   staffOptions = [],
-  hasMore = false,
-  currentOffset = 0,
-  pageSize = 100,
-  total = 0,
 }: {
   rows: ParticularRow[];
   currentRole?: string;
   currentUserId?: string;
   staffOptions?: StaffOption[];
-  hasMore?: boolean;
-  currentOffset?: number;
-  pageSize?: number;
-  total?: number;
 }) {
-  const [query, setQuery] = useState("");
-  const [operation, setOperation] = useState<"" | "rent" | "sale">("");
-  const [zone, setZone] = useState("");
-  const [priceMin, setPriceMin] = useState("");
-  const [priceMax, setPriceMax] = useState("");
-  const [bedrooms, setBedrooms] = useState("");
-  const [floorMin, setFloorMin] = useState("");
-  const [areaMin, setAreaMin] = useState("");
-  const [last24h, setLast24h] = useState(false);
-  const [phoneFilter, setPhoneFilter] = useState<"" | "no_phone" | "with_phone">("");
-  const [gestion, setGestion] = useState<"" | "unmanaged" | "contacted" | "assigned" | "mine">("");
-  // Tipo de anunciante (migración 0035): null/undefined cuenta como "unknown"
-  const [advertiser, setAdvertiser] = useState<"" | "particular" | "professional" | "unknown">("");
-  const [showRetired, setShowRetired] = useState(false);
+  // Filtros sincronizados con la URL (persisten al refrescar, se pueden
+  // compartir por link, y el botón "atrás" del navegador los recorre).
+  const {
+    query,
+    setQuery,
+    operation,
+    setOperation,
+    zone,
+    setZone,
+    priceMin,
+    setPriceMin,
+    priceMax,
+    setPriceMax,
+    bedrooms,
+    setBedrooms,
+    floorMin,
+    setFloorMin,
+    areaMin,
+    setAreaMin,
+    last24h,
+    setLast24h,
+    phoneFilter,
+    setPhoneFilter,
+    gestion,
+    setGestion,
+    advertiser,
+    setAdvertiser,
+    showRetired,
+    setShowRetired,
+  } = useParticularesFilters();
   const [allRows, setAllRows] = useState(rows);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
@@ -1495,24 +1488,6 @@ export function ParticularesClient({
     }
     return map;
   }, [allRows]);
-
-  async function handleLoadMore() {
-    setLoadingMore(true);
-    try {
-      const nextOffset = currentOffset + pageSize;
-      const res = await fetch(`/api/admin/particulares/paginated?offset=${nextOffset}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAllRows((prev) => [...prev, ...(data.rows ?? [])]);
-      } else {
-        toast("No se pudieron cargar más anuncios. Inténtalo de nuevo.", "error");
-      }
-    } catch {
-      toast("No se pudieron cargar más anuncios. Inténtalo de nuevo.", "error");
-    } finally {
-      setLoadingMore(false);
-    }
-  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1632,6 +1607,9 @@ export function ParticularesClient({
         setRefreshResult({ updated: data.updated, checked: data.checked });
         setRefreshState("done");
         setTimeout(() => setRefreshState("idle"), 8000);
+        // Igual que "Verificar teléfonos": recargar del servidor para que las
+        // cards reflejen los teléfonos nuevos sin esperar a un reload manual.
+        if (data.updated > 0) router.refresh();
       } else {
         setRefreshState("error");
         setTimeout(() => setRefreshState("idle"), 5000);
@@ -1642,6 +1620,16 @@ export function ParticularesClient({
     }
   }
 
+
+  // Copiar teléfono al portapapeles: antes cada uno de los 2 botones de la
+  // card (badge sobre la foto + pill debajo) tenía su propia regex de
+  // limpieza ligeramente distinta. Un solo punto de verdad acá.
+  function handleCopyPhone(phone: string, id: string) {
+    const digits = phone.replace(/[\s\-().]/g, "");
+    navigator.clipboard.writeText(digits).catch(() => {});
+    setCopiedPhoneId(id);
+    setTimeout(() => setCopiedPhoneId(null), 2000);
+  }
 
   function handlePhoneUpdated(newPhone: string | null) {
     setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
@@ -1840,7 +1828,6 @@ export function ParticularesClient({
           </button>
           <span className="ml-auto text-[11px] text-ink/55">
             {filtered.length} de {allRows.length} anuncios · {allRows.filter(r => r.phone).length} con teléfono
-            {total > allRows.length && <> · {total} total</>}
           </span>
         </div>
 
@@ -1928,10 +1915,7 @@ export function ParticularesClient({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const digits = r.phone!.replace(/[\s\-\(\)\.]/g, "");
-                          navigator.clipboard.writeText(digits).catch(() => {});
-                          setCopiedPhoneId(r.id);
-                          setTimeout(() => setCopiedPhoneId(null), 2000);
+                          handleCopyPhone(r.phone!, r.id);
                         }}
                         className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-700"
                       >
@@ -2030,10 +2014,7 @@ export function ParticularesClient({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const cleanPhone = r.phone!.replace(/[\s\-()]/g, "");
-                          copyToClipboard(cleanPhone);
-                          setCopiedPhoneId(r.id);
-                          setTimeout(() => setCopiedPhoneId(null), 2000);
+                          handleCopyPhone(r.phone!, r.id);
                         }}
                         className="mt-2 flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
                       >
@@ -2045,7 +2026,7 @@ export function ParticularesClient({
                         ) : (
                           <>
                             <Copy size={12} strokeWidth={1.75} />
-                            {formatPhoneToInternational(r.phone)}
+                            {formatPhone(r.phone)}
                           </>
                         )}
                       </button>
@@ -2100,22 +2081,6 @@ export function ParticularesClient({
               </p>
             </div>
 
-            {hasMore && (
-              <div className="mt-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="flex items-center gap-2 rounded-xl border border-gold/30 bg-white px-6 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/60 hover:bg-gold/5 disabled:opacity-60"
-                >
-                  {loadingMore ? (
-                    <><Loader2 size={14} className="animate-spin" /> Cargando…</>
-                  ) : (
-                    `Cargar más (${allRows.length} de ${total})`
-                  )}
-                </button>
-              </div>
-            )}
           </>
         )}
       </section>

@@ -407,7 +407,17 @@ export function normalizeMatrix(input: unknown): PermissionMatrix {
 export const AGENT_ROLES = ["agent_junior", "agent_senior", "agent_admin"] as const;
 export type AgentRole = (typeof AGENT_ROLES)[number];
 
-/** Todos los roles staff que acceden a /admin */
+/**
+ * Todos los roles staff que acceden a /admin (usado para rutear al matrix
+ * de permisos correcto, ver ROLE_PERMISSIONS más abajo).
+ *
+ * ⚠️ NO es lo mismo que STAFF_ROLES en lib/db/auth-helpers.ts (6 roles, sin
+ * "captadora") — esa lista gatea rutas genéricas de staff (mensajes,
+ * propiedades, clientes, documentos...) que "captadora" NO debe poder usar
+ * (ver CAPTADORA_PERMISSIONS: todo en false salvo captaciones). Son dos
+ * listas con propósitos distintos a propósito; si agregás un rol nuevo,
+ * actualizá ambas y pensá en cuál de las dos (o las dos) le corresponde.
+ */
 export const STAFF_ROLES = [
   "owner",
   "admin",

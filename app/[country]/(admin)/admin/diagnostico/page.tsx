@@ -4,6 +4,7 @@ import { PageFooter } from "@/components/ui/page-footer";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { DiagnosticoClient } from "./diagnostico-client";
+import { TestPhoneExtractor } from "@/components/admin/particulares/test-phone-extractor";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
 export default async function AdminDiagnosticoPage({
@@ -28,6 +29,13 @@ export default async function AdminDiagnosticoPage({
       />
 
       <DiagnosticoClient />
+
+      <div className="mt-10">
+        <h2 className="mb-3 font-serif text-lg font-medium text-ink">
+          Extracción de teléfono (Idealista)
+        </h2>
+        <TestPhoneExtractor />
+      </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>
