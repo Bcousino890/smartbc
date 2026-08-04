@@ -3,13 +3,16 @@ import type {
   PropertyApplicationDocument,
   PropertyApplicationScore,
 } from "./types";
-import { buildCurrencyContext, convertCLPtoEUR } from "./currency";
+import { buildCurrencyContext, convertToEUR, isSupportedCurrency } from "./currency";
 
 type ScoringInput = {
   application_id: string;
   documents: PropertyApplicationDocument[];
   income_amount?: number;
-  income_currency?: "CLP" | "EUR";
+  // Texto libre: viene de la extracción de la IA sobre el documento, no de
+  // un enum cerrado — se valida en runtime con isSupportedCurrency antes de
+  // usarla (ver más abajo).
+  income_currency?: string;
   rent_price?: number;
   rent_currency?: "CLP" | "EUR";
   has_references?: boolean;
@@ -49,32 +52,39 @@ export async function calculateScore(
   let currency_context: string | null = null;
 
   if (input.income_amount && input.rent_price) {
-    const incomeCur = input.income_currency ?? "EUR";
+    const incomeCurRaw = input.income_currency ?? "EUR";
     const rentCur = input.rent_currency ?? "EUR";
 
-    // Normalizar ambos a EUR
-    const incomeEur = incomeCur === "CLP"
-      ? await convertCLPtoEUR(input.income_amount)
-      : input.income_amount;
-    const rentEur = rentCur === "CLP"
-      ? await convertCLPtoEUR(input.rent_price)
-      : input.rent_price;
+    if (!isSupportedCurrency(incomeCurRaw)) {
+      // Moneda no reconocida: NUNCA se asume que es EUR (ese fue el bug
+      // real — cualquier moneda distinta de "CLP" se trataba como EUR sin
+      // convertir). Se deja fuera del score en vez de arriesgar un cálculo
+      // con una moneda que no sabemos convertir.
+      currency_context = `Moneda "${incomeCurRaw}" no reconocida automáticamente — revisa el importe manualmente, no se incluyó en el cálculo del score.`;
+    } else {
+      // rent_currency siempre es "CLP" | "EUR" (se deriva del país de la
+      // solicitud, nunca de texto libre de la IA), por eso no necesita el
+      // mismo chequeo que income_currency.
+      const incomeEur = await convertToEUR(input.income_amount, incomeCurRaw);
+      const rentEur = await convertToEUR(input.rent_price, rentCur);
 
-    income_amount_eur = incomeEur;
-    income_ratio = rentEur > 0 ? incomeEur / rentEur : null;
+      if (incomeEur === null || rentEur === null) {
+        currency_context = `No se pudo obtener la tasa de cambio para convertir ${incomeCurRaw} a EUR — revisa el importe manualmente, no se incluyó en el cálculo del score.`;
+      } else {
+        income_amount_eur = incomeEur;
+        income_ratio = rentEur > 0 ? incomeEur / rentEur : null;
 
-    if (income_ratio !== null) {
-      if (income_ratio >= 4) income_score = 40;
-      else if (income_ratio >= 3.5) income_score = 35;
-      else if (income_ratio >= 3) income_score = 25;
-      else if (income_ratio >= 2) income_score = 15;
-      else income_score = 5;
+        if (income_ratio !== null) {
+          if (income_ratio >= 4) income_score = 40;
+          else if (income_ratio >= 3.5) income_score = 35;
+          else if (income_ratio >= 3) income_score = 25;
+          else if (income_ratio >= 2) income_score = 15;
+          else income_score = 5;
+        }
+
+        currency_context = await buildCurrencyContext(input.income_amount, incomeCurRaw);
+      }
     }
-
-    currency_context = await buildCurrencyContext(
-      input.income_amount,
-      incomeCur as "CLP" | "EUR"
-    );
   }
 
   const total_score = Math.min(

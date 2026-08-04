@@ -169,7 +169,7 @@ export function AutoDocumentUploader({ applicationId, operation, onUploaded }: P
         ref={inputRef}
         type="file"
         multiple
-        accept=".pdf,.jpg,.jpeg,.png"
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) void handleFiles(e.target.files);

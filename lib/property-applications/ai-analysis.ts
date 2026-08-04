@@ -31,6 +31,7 @@ function fallbackAnalysis(warning: string): AiDocumentAnalysis {
     warnings: [warning],
     is_valid: false,
     recommendation: "Revisar manualmente",
+    owner_explanation: null,
   };
 }
 
@@ -86,38 +87,40 @@ export async function analyzeApplicationDocument(documentId: string): Promise<vo
   const docType = d.property_application_document_types;
   const countryLabel = app?.country === "CL" ? "Chile" : "España";
 
-  // El país del TIPO de documento puede diferir del de la solicitud: los
-  // candidatos pueden aportar documentación extranjera (p.ej. nóminas
-  // chilenas en CLP para alquilar en España). En ese caso la moneda
-  // extranjera NO es un error — se reporta y la plataforma la convierte.
-  const docCountry = docType?.country ?? app?.country ?? "ES";
-  const docCountryLabel = docCountry === "CL" ? "Chile" : "España";
-  const expectedCurrency = docCountry === "CL" ? "pesos chilenos (CLP)" : "euros (EUR)";
-  const isForeignDoc = Boolean(app?.country && docType?.country && app.country !== docType.country);
-  const currencyNote = isForeignDoc
-    ? `Este es un documento de ${docCountryLabel} aportado para una solicitud en ${countryLabel}. Los valores monetarios estarán normalmente en ${expectedCurrency}: NO lo marques como error ni como advertencia — indica el importe y la moneda reales en income_amount/income_currency y la plataforma hará la conversión de divisa automáticamente. Solo advierte si la moneda no corresponde a ninguno de los dos países (p.ej. USD).`
-    : `Los valores monetarios deben estar en ${expectedCurrency}. Marca una advertencia si detectas otra moneda.`;
+  // El candidato puede ser de cualquier nacionalidad y aportar documentos de
+  // cualquier país (p.ej. un extracto bancario dominicano, una nómina
+  // chilena para alquilar en España, un contrato colombiano...). El tipo de
+  // documento (docType) es solo la CATEGORÍA del checklist en la que el
+  // equipo lo archivó — nunca un requisito de que el documento en sí sea de
+  // España o Chile. Por eso la moneda real jamás se trata como un error:
+  // se reporta tal cual (con su código ISO) y la plataforma la convierte
+  // automáticamente a EUR con la tasa del día.
+  const system = `Eres un experto en verificación de documentos inmobiliarios para ${countryLabel}, acostumbrado a revisar documentación de candidatos de cualquier nacionalidad (española, latinoamericana o de cualquier otro país).
 
-  const system = `Eres un experto en verificación de documentos inmobiliarios para ${countryLabel}.
-Analiza el documento adjunto de tipo "${docType?.display_name ?? "documento"}" (documentación de ${docCountryLabel}) para una solicitud de ${app?.operation === "rent" ? "alquiler" : "compra"} en ${countryLabel}.
+Analiza el documento adjunto, archivado en el checklist como "${docType?.display_name ?? "documento"}", para una solicitud de ${app?.operation === "rent" ? "alquiler" : "compra"} en ${countryLabel}.
 
-${currencyNote}
+IMPORTANTE sobre el origen del documento: el candidato puede ser extranjero y aportar documentos emitidos en cualquier país (p.ej. un extracto bancario de República Dominicana, una nómina chilena, un contrato colombiano...). Eso es NORMAL y NUNCA es un error ni una advertencia — identifica el documento por lo que ES (identidad, nómina, contrato, extracto bancario, comprobante de domicilio, certificado de impuestos, referencias, aval...) sin importar el país que lo emitió.
+
+MONEDA: reporta el importe y la moneda REALES que ves en el documento, usando su código ISO de 3 letras (EUR, USD, CLP, ARS, BOB, BRL, COP, CRC, DOP, GTQ, HNL, MXN, NIO, PAB, PEN, PYG, UYU, VES, u otra si reconoces cuál es). NUNCA marques una moneda distinta a la esperada como error — la plataforma la convierte automáticamente a EUR con la tasa de cambio del día. Solo marca una advertencia si el importe o la moneda son genuinamente ilegibles o ambiguos.
+
+PERSONA: extrae siempre el nombre completo que aparece en el documento (titular de la cuenta, del contrato, de la identidad...) en extracted_data.name — es la forma de saber de quién es cada documento, especialmente cuando hay varios solicitantes.
 ${docType?.validation_rules ? `Requisitos de validación: ${JSON.stringify(docType.validation_rules)}` : ""}
 ${docType?.help_text ? `Contexto: ${docType.help_text}` : ""}
 
-Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional. Escribe los textos (warnings, recommendation, document_type_detected) en español:
+Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional. Escribe los textos en español:
 {
   "readability": "clear" | "partially_clear" | "unclear",
   "completeness": <número 0-100>,
-  "document_type_detected": "<tipo de documento detectado>",
+  "document_type_detected": "<qué tipo de documento es realmente, en lenguaje llano>",
   "income_amount": <número o null>,
-  "income_currency": "<CLP|EUR|USD|null>",
-  "warnings": ["<advertencia si aplica>"],
+  "income_currency": "<código ISO de 3 letras (EUR, USD, CLP, DOP...) o null>",
+  "warnings": ["<advertencia si aplica — solo problemas reales, no la nacionalidad ni el país de origen>"],
   "recommendation": "<recomendación breve y clara para el revisor humano>",
+  "owner_explanation": "<1-2 frases en tono profesional y positivo, listas para mostrarle al propietario, explicando qué es este documento y qué confirma sobre el candidato (p.ej. 'Extracto bancario que confirma actividad financiera regular y saldo disponible acorde a sus ingresos declarados'). Sé honesto: si hay algo relevante a revisar, menciónalo con tono neutro, no alarmista.>",
   "is_valid": <true|false>,
   "extracted_data": {
-    "name": "<si se encuentra>",
-    "document_number": "<DNI/RUT/pasaporte si se encuentra>",
+    "name": "<nombre completo del titular del documento, si se encuentra>",
+    "document_number": "<DNI/RUT/pasaporte/cédula si se encuentra>",
     "expiry_date": "<si se encuentra>",
     "employer": "<si se encuentra>",
     "salary": "<texto del salario si se encuentra>"
@@ -131,6 +134,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional. E
       images: [signed.signedUrl],
       fileMediaType: isPdf ? "application/pdf" : mimeType,
       maxTokens: 900,
+      strictImages: true,
     });
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error(`Respuesta IA sin JSON: ${raw.slice(0, 200)}`);
@@ -161,24 +165,28 @@ export type DocumentClassificationResult = {
   reason?: string;
 };
 
-// Identifica a qué tipo de documento (de una lista de candidatos que puede
-// mezclar España y Chile, ya que el candidato puede aportar documentación
-// extranjera) corresponde un archivo recién subido sin que el equipo tenga
-// que elegirlo a mano. Se usa antes de crear la fila del documento: solo
-// necesita la URL firmada del archivo ya subido a storage.
+// Identifica a qué tipo de documento (de una lista de candidatos que mezcla
+// España y Chile) corresponde un archivo recién subido sin que el equipo
+// tenga que elegirlo a mano. Se usa antes de crear la fila del documento:
+// solo necesita la URL firmada del archivo ya subido a storage.
 export async function classifyApplicationDocument(
   signedUrl: string,
   mimeType: string,
-  candidates: DocumentClassificationCandidate[]
+  candidates: DocumentClassificationCandidate[],
+  applicationCountry?: ApplicationCountry
 ): Promise<DocumentClassificationResult> {
   const isPdf = mimeType === "application/pdf";
   const list = candidates
-    .map((c) => `- id: "${c.id}" | país: ${c.country} | nombre: "${c.display_name}"${c.description ? ` | descripción: ${c.description}` : ""}`)
+    .map((c) => `- id: "${c.id}" | checklist: ${c.country} | nombre: "${c.display_name}"${c.description ? ` | descripción: ${c.description}` : ""}`)
     .join("\n");
+  const preferredCountryLabel = applicationCountry === "CL" ? "Chile" : applicationCountry === "ES" ? "España" : null;
 
-  const system = `Eres un clasificador de documentos para solicitudes inmobiliarias. Se te da un archivo aportado por un candidato (identidad, nómina, contrato, extracto bancario, referencias, empadronamiento...) y una lista de tipos de documento posibles, de España y de Chile (el candidato puede aportar documentación extranjera).
+  const system = `Eres un clasificador de documentos para solicitudes inmobiliarias, acostumbrado a documentación de candidatos de CUALQUIER nacionalidad (española, latinoamericana o de cualquier otro país: pasaportes, nóminas, extractos bancarios o contratos de República Dominicana, Colombia, EE.UU., etc. son igual de válidos y frecuentes).
 
-Identifica cuál de estos tipos corresponde al archivo. Si el archivo no encaja claramente con ninguno, o es ilegible, devuelve document_type_id null.
+Se te da un archivo aportado por un candidato y una lista de tipos de documento posibles. Cada tipo tiene un "checklist" (ES o Chile) que es solo la lista administrativa donde se archiva — NO significa que el documento en sí tenga que haber sido emitido en ese país. Clasifica por CATEGORÍA real del documento (identidad/pasaporte, nómina o comprobante de ingresos, contrato de trabajo, extracto bancario, comprobante de domicilio, certificado de impuestos, referencias de alquiler, aval...), sin importar el país que lo emitió, el idioma o la moneda que muestre.
+
+Usa confianza "high" o "medium" siempre que la categoría del documento sea reconocible, aunque venga de un país distinto a España o Chile — eso es normal, no un motivo de duda. Reserva confianza "low" o document_type_id null SOLO para cuando el archivo sea realmente ilegible, o no corresponda a NINGUNA de las categorías de la lista (p.ej. un justificante escolar, una matrícula de vehículo, una foto no relacionada).
+${preferredCountryLabel ? `Si la categoría encaja igual de bien con un tipo "ES" que con uno "Chile" (mismo tipo de documento en ambas listas), prefiere el del checklist "${applicationCountry}" porque es el país de esta solicitud — pero elige el otro sin dudar si el documento encaja claramente mejor ahí.` : ""}
 
 Tipos posibles:
 ${list}
@@ -197,6 +205,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
       images: [signedUrl],
       fileMediaType: isPdf ? "application/pdf" : mimeType,
       maxTokens: 300,
+      strictImages: true,
     });
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return { document_type_id: null, confidence: "low" };

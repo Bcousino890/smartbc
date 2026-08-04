@@ -67,7 +67,9 @@ export async function recalculateApplicationScore(applicationId: string): Promis
       const priority = INCOME_DOC_PRIORITY.indexOf(key);
       return {
         amount: Number(d.ai_analysis.income_amount),
-        currency: (d.ai_analysis.income_currency as "CLP" | "EUR" | undefined) ?? rentCurrency,
+        // Texto libre de la IA (puede ser cualquier moneda reconocida, no
+        // solo CLP/EUR) — calculateScore valida con isSupportedCurrency.
+        currency: d.ai_analysis.income_currency ?? rentCurrency,
         priority: priority === -1 ? 99 : priority,
       };
     })

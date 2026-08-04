@@ -12,7 +12,12 @@ import { recalculateApplicationScore } from "@/lib/property-applications/scoring
 import type { ApplicationCountry } from "@/lib/property-applications/types";
 
 const BUCKET = "property-application-documents";
-const AUTO_ACCEPTED_EXT = ["pdf", "jpg", "jpeg", "png"];
+// pdf + formatos de imagen habituales de cámara/escáner de móvil (incluye
+// HEIC/HEIF de iPhone y WEBP). Si el proveedor de IA no logra decodificar
+// alguno igualmente se sube (queda disponible para revisión manual), pero
+// no se le pide a la IA que "adivine" sin haber visto el archivo (ver
+// strictImages en lib/services/ai/chat.ts).
+const AUTO_ACCEPTED_EXT = ["pdf", "jpg", "jpeg", "png", "webp", "heic", "heif"];
 const MAX_AUTO_SIZE_BYTES = 20 * 1024 * 1024;
 
 function sanitizeFileName(name: string): string {
@@ -93,7 +98,8 @@ export async function POST(req: Request) {
             country: c.country,
             display_name: c.display_name,
             description: c.description,
-          }))
+          })),
+          application.country
         )
       : { document_type_id: null, confidence: "low" as const };
 

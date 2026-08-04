@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 
 // PDF de resumen de candidato para el propietario — pensado para acompañar
@@ -40,6 +40,7 @@ const styles = StyleSheet.create({
   },
   brand: { fontFamily: "Times-Bold", fontSize: 14, letterSpacing: 1.6, color: COLORS.ink },
   brandSub: { fontFamily: "Helvetica", fontSize: 8, letterSpacing: 2.5, color: COLORS.goldDark, marginTop: 2 },
+  logo: { width: 130, height: Math.round(130 * (519 / 3282)), objectFit: "contain" },
   meta: { textAlign: "right", fontSize: 8, color: COLORS.muted },
   title: { fontFamily: "Times-Bold", fontSize: 18, color: COLORS.ink, marginBottom: 4 },
   metaLine: { fontSize: 9.5, color: COLORS.inkSoft, marginBottom: 14 },
@@ -90,9 +91,11 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: "row", borderBottom: `1px solid ${COLORS.border}` },
   th: { fontSize: 8, fontFamily: "Helvetica-Bold", color: COLORS.muted, padding: 6, textTransform: "uppercase" },
   td: { fontSize: 9, color: COLORS.ink, padding: 6 },
-  colDoc: { width: "45%" },
-  colStatus: { width: "25%" },
-  colNotes: { width: "30%" },
+  colDoc: { width: "32%" },
+  colStatus: { width: "18%" },
+  colNotes: { width: "50%" },
+  docPerson: { fontSize: 7.5, color: COLORS.muted, marginTop: 1 },
+  docExplanation: { fontStyle: "italic", color: COLORS.inkSoft },
   footer: {
     marginTop: 18,
     padding: 12,
@@ -118,6 +121,7 @@ export type CandidateSummaryPdfData = {
   countryLabel: string;
   propertyTitle: string | null;
   generatedAt: string;
+  logoDataUri?: string | null;
   score: {
     total: number;
     recommendationLabel: string;
@@ -126,7 +130,18 @@ export type CandidateSummaryPdfData = {
     incomeRatio: number | null;
     currencyContext: string | null;
   } | null;
-  documents: { name: string; status: string; notes: string | null }[];
+  documents: {
+    name: string;
+    status: string;
+    notes: string | null;
+    // Explicación automática (IA) de qué es el documento y qué confirma —
+    // solo se usa cuando no hay una nota manual del equipo.
+    explanation: string | null;
+    // Nombre del titular extraído del propio documento (identidad, nómina,
+    // extracto...) — permite ver de quién es cada documento cuando hay
+    // varios solicitantes.
+    personName: string | null;
+  }[];
 };
 
 export function CandidateSummaryPdfDocument({ data }: { data: CandidateSummaryPdfData }): ReactElement {
@@ -135,10 +150,14 @@ export function CandidateSummaryPdfDocument({ data }: { data: CandidateSummaryPd
     <Document title={`Resumen candidato — ${data.clientName}`} author="Benjamín Cousiño Propiedades">
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.brand}>BENJAMÍN COUSIÑO</Text>
-            <Text style={styles.brandSub}>PROPIEDADES</Text>
-          </View>
+          {data.logoDataUri ? (
+            <Image src={data.logoDataUri} style={styles.logo} />
+          ) : (
+            <View>
+              <Text style={styles.brand}>BENJAMÍN COUSIÑO</Text>
+              <Text style={styles.brandSub}>PROPIEDADES</Text>
+            </View>
+          )}
           <View style={styles.meta}>
             <Text>{data.generatedAt}</Text>
             <Text style={{ marginTop: 2 }}>contacto@bcousinoprop.com</Text>
@@ -207,7 +226,7 @@ export function CandidateSummaryPdfDocument({ data }: { data: CandidateSummaryPd
           <View style={styles.tableHeaderRow}>
             <Text style={[styles.th, styles.colDoc]}>Documento</Text>
             <Text style={[styles.th, styles.colStatus]}>Estado</Text>
-            <Text style={[styles.th, styles.colNotes]}>Notas</Text>
+            <Text style={[styles.th, styles.colNotes]}>Notas / qué confirma</Text>
           </View>
           {data.documents.length === 0 ? (
             <View style={styles.tableRow}>
@@ -215,10 +234,15 @@ export function CandidateSummaryPdfDocument({ data }: { data: CandidateSummaryPd
             </View>
           ) : (
             data.documents.map((d, i) => (
-              <View style={styles.tableRow} key={i}>
-                <Text style={[styles.td, styles.colDoc]}>{d.name}</Text>
+              <View style={styles.tableRow} key={i} wrap={false}>
+                <View style={[styles.td, styles.colDoc]}>
+                  <Text>{d.name}</Text>
+                  {!!d.personName && <Text style={styles.docPerson}>Titular: {d.personName}</Text>}
+                </View>
                 <Text style={[styles.td, styles.colStatus]}>{STATUS_LABEL[d.status] ?? d.status}</Text>
-                <Text style={[styles.td, styles.colNotes]}>{d.notes ?? "—"}</Text>
+                <Text style={[styles.td, styles.colNotes, d.notes ? {} : styles.docExplanation]}>
+                  {d.notes ?? d.explanation ?? "—"}
+                </Text>
               </View>
             ))
           )}
