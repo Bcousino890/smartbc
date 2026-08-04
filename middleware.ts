@@ -12,7 +12,7 @@ import {
 // son las imágenes para preview en redes sociales/WhatsApp. Todos
 // accesibles sin login.
 const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p"];
-const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes"];
+const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes", "/documentacion"];
 // Los árboles de país (/es/admin, /cl/admin) también son admin: antes solo
 // se protegían en el layout; el middleware ni los miraba.
 const ADMIN_PATHS = ["/admin", "/es/admin", "/cl/admin"];
