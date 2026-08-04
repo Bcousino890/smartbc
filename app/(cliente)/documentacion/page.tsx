@@ -24,43 +24,55 @@ export default async function DocumentacionPage() {
   // así que el primer login con ese email la acepta.
   await acceptPendingCoApplicantInvites(profile.id, profile.email).catch(() => {});
 
-  // Solicitudes propias + solicitudes conjuntas donde ya es co-solicitante
-  const applications = await getApplicationsForClientIncludingShared(profile.id);
+  // Todo lo que sigue depende de las tablas de property_applications (país,
+  // tipos de documento, progreso...). Si a alguna consulta le falta una
+  // migración o el schema cache de PostgREST no se recargó tras aplicarla,
+  // Supabase devuelve un error y sin este try/catch la página entera moría
+  // con el crash genérico de Next sin dejar rastro. Se loguea con contexto
+  // (visible en pm2 logs) y se relanza para que error.tsx muestre un estado
+  // amigable en vez de la pantalla en blanco con solo un digest.
+  try {
+    // Solicitudes propias + solicitudes conjuntas donde ya es co-solicitante
+    const applications = await getApplicationsForClientIncludingShared(profile.id);
 
-  // Obtener tipos de documentos para rent y sale en su país
-  const [rentDocTypes, saleDocTypes] = await Promise.all([
-    getDocumentTypes(country, "rent"),
-    getDocumentTypes(country, "sale"),
-  ]);
+    // Obtener tipos de documentos para rent y sale en su país
+    const [rentDocTypes, saleDocTypes] = await Promise.all([
+      getDocumentTypes(country, "rent"),
+      getDocumentTypes(country, "sale"),
+    ]);
 
-  // Para cada solicitud, obtener progreso y documentos — si no es el
-  // solicitante principal (co-solicitante), filtramos a solo sus propios
-  // documentos para respetar la privacidad entre solicitantes.
-  const applicationsWithProgress = await Promise.all(
-    (applications ?? []).map(async (app) => {
-      const coApplicantId = app.is_primary ? undefined : profile.id;
-      const [progress, documents] = await Promise.all([
-        getApplicationDocumentProgress(app.id, coApplicantId),
-        getDocumentsForApplication(app.id, coApplicantId),
-      ]);
-      return { ...app, progress, documents, coApplicantId };
-    })
-  );
+    // Para cada solicitud, obtener progreso y documentos — si no es el
+    // solicitante principal (co-solicitante), filtramos a solo sus propios
+    // documentos para respetar la privacidad entre solicitantes.
+    const applicationsWithProgress = await Promise.all(
+      (applications ?? []).map(async (app) => {
+        const coApplicantId = app.is_primary ? undefined : profile.id;
+        const [progress, documents] = await Promise.all([
+          getApplicationDocumentProgress(app.id, coApplicantId),
+          getDocumentsForApplication(app.id, coApplicantId),
+        ]);
+        return { ...app, progress, documents, coApplicantId };
+      })
+    );
 
-  return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pb-10 md:px-8">
-      <DocumentacionClient
-        profile={{
-          id: profile.id,
-          full_name: profile.full_name,
-          email: profile.email,
-          country,
-        }}
-        applications={applicationsWithProgress as Parameters<typeof DocumentacionClient>[0]["applications"]}
-        rentDocTypes={rentDocTypes}
-        saleDocTypes={saleDocTypes}
-      />
-      <PageFooter textKey="login.footer" />
-    </div>
-  );
+    return (
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pb-10 md:px-8">
+        <DocumentacionClient
+          profile={{
+            id: profile.id,
+            full_name: profile.full_name,
+            email: profile.email,
+            country,
+          }}
+          applications={applicationsWithProgress as Parameters<typeof DocumentacionClient>[0]["applications"]}
+          rentDocTypes={rentDocTypes}
+          saleDocTypes={saleDocTypes}
+        />
+        <PageFooter textKey="login.footer" />
+      </div>
+    );
+  } catch (error) {
+    console.error(`[/documentacion] Error cargando documentación para profile ${profile.id}:`, error);
+    throw error;
+  }
 }
