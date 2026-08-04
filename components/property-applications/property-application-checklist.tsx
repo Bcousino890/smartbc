@@ -9,6 +9,8 @@ import {
   Clock,
   FileText,
   Info,
+  Loader2,
+  Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -73,6 +75,7 @@ function DocumentRow({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // "Otro documento" es un tipo catch-all: no hay forma de saber qué es sin
   // que el cliente lo explique, así que se pide una descripción obligatoria
@@ -119,6 +122,30 @@ function DocumentRow({
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handleDelete() {
+    if (!document) return;
+    if (!confirm(`¿Eliminar "${docType.display_name}"? Tendrás que volver a subirlo si lo necesitas.`)) {
+      return;
+    }
+    setUploadError(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/property-application-documents/${document.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setUploadError(data.error ?? "Error al eliminar el documento");
+        return;
+      }
+      onUploaded();
+    } catch {
+      setUploadError("Error de conexión. Inténtalo de nuevo.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -253,6 +280,18 @@ function DocumentRow({
             >
               Ver
             </a>
+          )}
+
+          {/* Eliminar (solo si aún no está verificado) */}
+          {document && !disabled && !isVerified && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Eliminar documento"
+              className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 p-1.5 text-ink/40 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            >
+              {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            </button>
           )}
         </div>
       </div>

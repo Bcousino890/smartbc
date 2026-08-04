@@ -6,6 +6,7 @@ import type {
   ApplicationCountry,
   ApplicationOperation,
   ApplicationStatus,
+  DocumentStatus,
   PropertyApplication,
   PropertyApplicationDocument,
   PropertyApplicationDocumentType,
@@ -408,6 +409,30 @@ export async function verifyDocument(
     .single();
   if (error) throw error;
   return (data as { property_application_id: string }).property_application_id;
+}
+
+// Datos mínimos para decidir si quien pide borrar un documento puede
+// hacerlo (dueño/co-solicitante/staff) antes de borrarlo de verdad.
+export async function getDocumentForDeleteCheck(documentId: string): Promise<{
+  id: string;
+  property_application_id: string;
+  co_applicant_id: string | null;
+  status: DocumentStatus;
+} | null> {
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("property_application_documents")
+    .select("id, property_application_id, co_applicant_id, status")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (error) return null;
+  return data as {
+    id: string;
+    property_application_id: string;
+    co_applicant_id: string | null;
+    status: DocumentStatus;
+  } | null;
 }
 
 export async function deleteDocument(documentId: string): Promise<string | null> {

@@ -8,8 +8,10 @@ import {
   ChevronUp,
   Clock,
   ExternalLink,
+  Loader2,
   MessageSquare,
   Sparkles,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import type { ApplicationCountry, PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
@@ -39,6 +41,30 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
   const [annotationType, setAnnotationType] = useState<"info" | "warning" | "error">("warning");
   const [notes, setNotes] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm(`¿Eliminar "${doc.document_type?.display_name ?? "este documento"}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setError(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/property-application-documents/${doc.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Error al eliminar el documento");
+        return;
+      }
+      onVerified();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function handleReanalyze() {
     setError(null);
@@ -349,6 +375,16 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
               Rechazar
             </button>
           )}
+
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Eliminar documento"
+            className="flex items-center gap-1 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/40 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+            Eliminar
+          </button>
         </div>
       </div>
     </div>
