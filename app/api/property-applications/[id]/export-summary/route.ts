@@ -27,7 +27,7 @@ export async function GET(
     const application = await getApplicationById(id, true);
     if (!application) return new Response("No encontrada", { status: 404 });
 
-    const data = buildCandidateSummaryPdfData(application);
+    const data = await buildCandidateSummaryPdfData(application);
     const buffer = await renderCandidateSummaryPdfBuffer(data);
 
     const safeName = data.clientName

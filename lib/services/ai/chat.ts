@@ -101,6 +101,14 @@ export type AICompleteOpts = {
   fileMediaType?: string;
   maxTokens?: number;
   jsonSchema?: Record<string, unknown>; // si se da, se pide salida JSON conforme al esquema
+  // Por defecto, si se piden imágenes y NINGUNA se pudo preparar (descarga o
+  // decodificación fallida), aiComplete sigue igualmente solo con el texto —
+  // aceptable para casos tolerantes (p.ej. describir un inmueble con menos
+  // fotos de las pedidas). Cuando la respuesta depende de "ver" el archivo
+  // para no inventar datos (importes, fechas, identidad...), pasa
+  // strictImages: true para que lance un error en vez de dejar que el
+  // modelo responda a ciegas como si hubiera visto el documento.
+  strictImages?: boolean;
 };
 
 // Antes de mandar fotos a la IA las descargamos y reescalamos en el servidor
@@ -179,6 +187,9 @@ export async function aiComplete(opts: AICompleteOpts): Promise<string> {
   const images = opts.images ?? [];
   const isDocument = opts.fileMediaType === "application/pdf";
   const prepared = images.length ? await prepareImages(images, isDocument) : [];
+  if (opts.strictImages && images.length > 0 && prepared.length === 0) {
+    throw new Error("No se pudo preparar el archivo para la IA (descarga o formato no soportado)");
+  }
   const maxTokens = opts.maxTokens ?? 1500;
 
   if (cfg.kind === "anthropic") {

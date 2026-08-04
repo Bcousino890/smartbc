@@ -65,6 +65,10 @@ export type AiDocumentAnalysis = {
   currency_detected?: string;
   income_amount?: number;
   income_currency?: string;
+  // Explicación breve y presentable para el propietario de qué es este
+  // documento y qué confirma sobre el candidato (tono profesional, sin
+  // datos crudos sensibles). null si el análisis fue un fallback sin IA.
+  owner_explanation?: string | null;
 };
 
 export type PropertyApplicationDocument = {

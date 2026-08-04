@@ -52,7 +52,7 @@ export async function POST(
       );
     }
 
-    const data = buildCandidateSummaryPdfData(application);
+    const data = await buildCandidateSummaryPdfData(application);
     const buffer = await renderCandidateSummaryPdfBuffer(data);
 
     const ownerName = (property?.owner_name as string | undefined) ?? "";

@@ -187,7 +187,30 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
                         </span>
                       </div>
                     )}
+                    {analysis.extracted_data?.name && (
+                      <div className="col-span-2">
+                        <span className="text-ink/40">Titular del documento:</span>{" "}
+                        <span className="font-medium text-ink">{analysis.extracted_data.name}</span>
+                      </div>
+                    )}
+                    {analysis.extracted_data?.document_number && (
+                      <div>
+                        <span className="text-ink/40">Nº documento:</span>{" "}
+                        <span className="font-medium text-ink">{analysis.extracted_data.document_number}</span>
+                      </div>
+                    )}
+                    {analysis.extracted_data?.employer && (
+                      <div>
+                        <span className="text-ink/40">Empleador:</span>{" "}
+                        <span className="font-medium text-ink">{analysis.extracted_data.employer}</span>
+                      </div>
+                    )}
                   </div>
+                  {analysis.owner_explanation && (
+                    <p className="mt-2 rounded-md bg-gold/10 px-2 py-1.5 text-ink/70">
+                      <span className="font-medium">Para el propietario:</span> {analysis.owner_explanation}
+                    </p>
+                  )}
                   {analysis.warnings.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {analysis.warnings.map((w, i) => (
