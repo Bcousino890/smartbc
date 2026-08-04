@@ -58,7 +58,15 @@ async function fetchAllRows(
   return { rows: all, error: null };
 }
 
-export async function getParticularesPage(_offset?: number, _pageSize?: number) {
+export async function getParticularesPage(opts?: {
+  /** Si se pasa junto a `pageSize`, activa paginación real server-side en
+   *  vez del comportamiento histórico de traer todo. */
+  offset?: number;
+  /** Presente → pagina de verdad (una sola tanda, `total` = count exacto). */
+  pageSize?: number;
+  /** Con paginación real: activos (default) o retirados. */
+  showRetired?: boolean;
+}) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
 
@@ -79,6 +87,36 @@ export async function getParticularesPage(_offset?: number, _pageSize?: number) 
   let rows: any[] = [];
   let total = 0;
   let lastError: { message: string } | null = null;
+
+  if (opts?.pageSize) {
+    // Paginación real: una sola tanda (offset/limit reales contra Postgres,
+    // no el "traer todo y trocear en JS" de abajo), con el total exacto de
+    // esa pestaña (activos o retirados) vía count de PostgREST.
+    const offset = Math.max(0, opts.offset ?? 0);
+    const pageSize = Math.max(1, opts.pageSize);
+    const showRetired = opts.showRetired ?? false;
+    for (const cols of attempts) {
+      let query = supabase
+        .from("particulares")
+        .select(cols, { count: "exact" })
+        .eq("is_active", !showRetired);
+      query = showRetired
+        ? query.order("taken_down_at", { ascending: false, nullsFirst: false })
+        : query.order("created_at", { ascending: false });
+      const res = await query.range(offset, offset + pageSize - 1);
+      if (res.error) {
+        lastError = res.error;
+        continue;
+      }
+      rows = res.data ?? [];
+      total = res.count ?? rows.length;
+      lastError = null;
+      break;
+    }
+    if (lastError) throw new Error(lastError.message);
+    return finishEnrichment(supabase, rows, total);
+  }
+
   for (const cols of attempts) {
     // ACTIVOS: todos, sin límite (por lotes de 1000 para sortear el tope
     // de filas por request de PostgREST).
@@ -114,7 +152,19 @@ export async function getParticularesPage(_offset?: number, _pageSize?: number) 
     break;
   }
   if (lastError) throw new Error(lastError.message);
+  return finishEnrichment(supabase, rows, total);
+}
 
+// Segunda mitad, compartida por las dos formas de traer `rows` (paginación
+// real vs. el histórico "traer todo"): añade asignación + último contacto +
+// nº de contactos por anuncio (particulares_contacts + profiles).
+async function finishEnrichment(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rows: any[],
+  total: number,
+) {
   const ids = rows.map((r) => r.id);
   const advisorIds = new Set<string>(
     rows.map((r) => r.assigned_to).filter(Boolean),

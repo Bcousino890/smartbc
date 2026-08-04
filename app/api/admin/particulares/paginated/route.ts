@@ -8,11 +8,12 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
-  const pageSize = 100;
+  const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get("pageSize")) || 100));
+  const showRetired = url.searchParams.get("retired") === "1";
 
   try {
-    const { rows } = await getParticularesPage(offset, pageSize);
-    return Response.json({ rows });
+    const { rows, total } = await getParticularesPage({ offset, pageSize, showRetired });
+    return Response.json({ rows, total, offset, pageSize });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "query_failed" },
