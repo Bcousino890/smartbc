@@ -2,10 +2,11 @@
 
 import { useCallback, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, FileText, Loader2, Sparkles, Upload } from "lucide-react";
-import type { ApplicationOperation, PropertyApplicationDocumentType } from "@/lib/property-applications/types";
+import type { ApplicationCountry, ApplicationOperation, PropertyApplicationDocumentType } from "@/lib/property-applications/types";
 
 type Props = {
   applicationId: string;
+  country: ApplicationCountry;
   operation: ApplicationOperation;
   onUploaded: () => void;
 };
@@ -28,11 +29,14 @@ type PendingFile = {
 
 // Zona de subida "sin pensar": el equipo arrastra o selecciona archivos sin
 // indicar de antemano de qué documento se trata, y la IA los clasifica
-// contra los tipos configurados (España + Chile, ya que el candidato puede
-// aportar documentación extranjera). Si no logra identificar alguno con
-// confianza, se le pide al equipo que elija el tipo para ESE archivo
-// concreto — el archivo ya está subido, no hace falta repetir la subida.
-export function AutoDocumentUploader({ applicationId, operation, onUploaded }: Props) {
+// contra los tipos del propio país de la solicitud (los paneles de España
+// y Chile son independientes). El candidato sí puede ser de cualquier
+// nacionalidad y aportar documentos en cualquier moneda — eso lo maneja la
+// clasificación por categoría, no el país del checklist. Si no logra
+// identificar alguno con confianza, se le pide al equipo que elija el tipo
+// para ESE archivo concreto — el archivo ya está subido, no hace falta
+// repetir la subida.
+export function AutoDocumentUploader({ applicationId, country, operation, onUploaded }: Props) {
   const [items, setItems] = useState<PendingFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [allTypes, setAllTypes] = useState<PropertyApplicationDocumentType[] | null>(null);
@@ -45,11 +49,9 @@ export function AutoDocumentUploader({ applicationId, operation, onUploaded }: P
   async function ensureTypesLoaded() {
     if (allTypes !== null) return allTypes;
     try {
-      const [es, cl] = await Promise.all([
-        fetch(`/api/property-application-document-types?country=ES&operation=${operation}`).then((r) => r.json()),
-        fetch(`/api/property-application-document-types?country=CL&operation=${operation}`).then((r) => r.json()),
-      ]);
-      const types = [...(es.types ?? []), ...(cl.types ?? [])] as PropertyApplicationDocumentType[];
+      const res = await fetch(`/api/property-application-document-types?country=${country}&operation=${operation}`);
+      const data = await res.json();
+      const types = (data.types ?? []) as PropertyApplicationDocumentType[];
       setAllTypes(types);
       return types;
     } catch {

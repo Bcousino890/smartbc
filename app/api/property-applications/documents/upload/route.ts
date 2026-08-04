@@ -54,10 +54,10 @@ export async function POST(req: Request) {
       return Response.json({ error: "Sin permiso para esta solicitud" }, { status: 403 });
     }
 
-    // Obtener tipo de documento para validaciones. Se busca por id (no por
-    // la lista del país de la solicitud) para permitir documentación de
-    // otro país — p.ej. nóminas chilenas en CLP para una solicitud
-    // española; la IA detecta la moneda y el scoring la convierte a EUR.
+    // Los paneles de España y Chile son independientes: un documento nunca
+    // se archiva contra el checklist del otro país. El candidato sí puede
+    // ser extranjero y traer documentos en cualquier moneda — eso lo
+    // maneja la IA (categoría + conversión de moneda), no el checklist.
     const docType = await getDocumentTypeById(documentTypeId);
     if (!docType) {
       return Response.json({ error: "Tipo de documento no válido" }, { status: 400 });
@@ -65,6 +65,12 @@ export async function POST(req: Request) {
     if (docType.operation !== application.operation) {
       return Response.json(
         { error: "El tipo de documento no corresponde a esta operación (alquiler/compra)" },
+        { status: 400 }
+      );
+    }
+    if (docType.country !== application.country) {
+      return Response.json(
+        { error: "El tipo de documento no corresponde al país de esta solicitud" },
         { status: 400 }
       );
     }

@@ -25,12 +25,17 @@ function sanitizeFileName(name: string): string {
 }
 
 // Sube un archivo sin que el equipo indique de antemano de qué tipo de
-// documento se trata: la IA lo clasifica contra la lista de tipos de la
-// operación (ES + CL, porque el candidato puede aportar documentación
-// extranjera) y, si acierta con confianza, crea la fila directamente y
-// lanza el mismo análisis que la subida manual. Si no logra identificarlo,
-// el archivo queda subido igualmente y se devuelve para que el equipo
-// asigne el tipo a mano (ver /documents/assign-pending), sin volver a subirlo.
+// documento se trata: la IA lo clasifica contra la lista de tipos DEL
+// PROPIO PAÍS de la solicitud (el panel de España y el de Chile son
+// independientes — /es/admin/solicitudes-documentacion nunca debe mezclar
+// tipos de Chile ni viceversa) y, si acierta con confianza, crea la fila
+// directamente y lanza el mismo análisis que la subida manual. El
+// candidato SÍ puede ser de cualquier nacionalidad y aportar documentos en
+// cualquier moneda (eso lo maneja la clasificación por categoría y la
+// conversión de moneda, no el país del checklist). Si no logra
+// identificarlo, el archivo queda subido igualmente y se devuelve para que
+// el equipo asigne el tipo a mano (ver /documents/assign-pending), sin
+// volver a subirlo.
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -64,14 +69,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "Archivo demasiado grande (máx 20MB)" }, { status: 400 });
     }
 
-    // Candidatos: tipos de documento de ambos países para la operación de
-    // la solicitud (alquiler/compra), ya que la documentación puede venir
-    // de un país distinto al de la solicitud.
-    const [esTypes, clTypes] = await Promise.all([
-      getDocumentTypes("ES", application.operation),
-      getDocumentTypes("CL", application.operation),
-    ]);
-    const candidates = [...esTypes, ...clTypes];
+    // Candidatos: solo los tipos de documento del propio país de la
+    // solicitud (paneles ES/CL independientes).
+    const candidates = await getDocumentTypes(application.country, application.operation);
 
     const timestamp = Date.now();
     const safeName = sanitizeFileName(file.name);
@@ -98,8 +98,7 @@ export async function POST(req: Request) {
             country: c.country,
             display_name: c.display_name,
             description: c.description,
-          })),
-          application.country
+          }))
         )
       : { document_type_id: null, confidence: "low" as const };
 

@@ -388,6 +388,7 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
                 <div className="mt-3 space-y-3">
                   <AutoDocumentUploader
                     applicationId={application.id}
+                    country={application.country}
                     operation={application.operation}
                     onUploaded={handleDocUpdated}
                   />

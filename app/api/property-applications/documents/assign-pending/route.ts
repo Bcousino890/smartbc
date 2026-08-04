@@ -54,6 +54,12 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    if (docType.country !== application.country) {
+      return Response.json(
+        { error: "El tipo de documento no corresponde al país de esta solicitud" },
+        { status: 400 }
+      );
+    }
 
     const document = await insertDocument(
       {

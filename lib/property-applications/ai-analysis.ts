@@ -167,28 +167,26 @@ export type DocumentClassificationResult = {
   reason?: string;
 };
 
-// Identifica a qué tipo de documento (de una lista de candidatos que mezcla
-// España y Chile) corresponde un archivo recién subido sin que el equipo
-// tenga que elegirlo a mano. Se usa antes de crear la fila del documento:
-// solo necesita la URL firmada del archivo ya subido a storage.
+// Identifica a qué tipo de documento (de la lista del propio país de la
+// solicitud — los paneles ES y CL son independientes, nunca se mezclan)
+// corresponde un archivo recién subido sin que el equipo tenga que
+// elegirlo a mano. Se usa antes de crear la fila del documento: solo
+// necesita la URL firmada del archivo ya subido a storage.
 export async function classifyApplicationDocument(
   signedUrl: string,
   mimeType: string,
-  candidates: DocumentClassificationCandidate[],
-  applicationCountry?: ApplicationCountry
+  candidates: DocumentClassificationCandidate[]
 ): Promise<DocumentClassificationResult> {
   const isPdf = mimeType === "application/pdf";
   const list = candidates
-    .map((c) => `- id: "${c.id}" | checklist: ${c.country} | nombre: "${c.display_name}"${c.description ? ` | descripción: ${c.description}` : ""}`)
+    .map((c) => `- id: "${c.id}" | nombre: "${c.display_name}"${c.description ? ` | descripción: ${c.description}` : ""}`)
     .join("\n");
-  const preferredCountryLabel = applicationCountry === "CL" ? "Chile" : applicationCountry === "ES" ? "España" : null;
 
-  const system = `Eres un clasificador de documentos para solicitudes inmobiliarias, acostumbrado a documentación de candidatos de CUALQUIER nacionalidad (española, latinoamericana o de cualquier otro país: pasaportes, nóminas, extractos bancarios o contratos de República Dominicana, Colombia, EE.UU., etc. son igual de válidos y frecuentes).
+  const system = `Eres un clasificador de documentos para solicitudes inmobiliarias, acostumbrado a documentación de candidatos de CUALQUIER nacionalidad (española, latinoamericana o de cualquier otro país: pasaportes, nóminas, extractos bancarios o contratos de República Dominicana, Colombia, EE.UU., etc. son igual de válidos y frecuentes) — el candidato puede ser extranjero aunque la solicitud sea de este país.
 
-Se te da un archivo aportado por un candidato y una lista de tipos de documento posibles. Cada tipo tiene un "checklist" (ES o Chile) que es solo la lista administrativa donde se archiva — NO significa que el documento en sí tenga que haber sido emitido en ese país. Clasifica por CATEGORÍA real del documento (identidad/pasaporte, nómina o comprobante de ingresos, contrato de trabajo, extracto bancario, comprobante de domicilio, certificado de impuestos, referencias de alquiler, aval...), sin importar el país que lo emitió, el idioma o la moneda que muestre.
+Se te da un archivo aportado por un candidato y la lista de tipos de documento posibles para esta solicitud. Clasifica por CATEGORÍA real del documento (identidad/pasaporte, nómina o comprobante de ingresos, contrato de trabajo, extracto bancario, comprobante de domicilio, certificado de impuestos, referencias de alquiler, aval...), sin importar el país que lo emitió, el idioma o la moneda que muestre — un extracto bancario de otro país sigue siendo "extracto bancario".
 
-Usa confianza "high" o "medium" siempre que la categoría del documento sea reconocible, aunque venga de un país distinto a España o Chile — eso es normal, no un motivo de duda. Reserva confianza "low" o document_type_id null SOLO para cuando el archivo sea realmente ilegible, o no corresponda a NINGUNA de las categorías de la lista (p.ej. un justificante escolar, una matrícula de vehículo, una foto no relacionada).
-${preferredCountryLabel ? `Si la categoría encaja igual de bien con un tipo "ES" que con uno "Chile" (mismo tipo de documento en ambas listas), prefiere el del checklist "${applicationCountry}" porque es el país de esta solicitud — pero elige el otro sin dudar si el documento encaja claramente mejor ahí.` : ""}
+Usa confianza "high" o "medium" siempre que la categoría del documento sea reconocible, aunque el documento en sí venga de otro país — eso es normal, no un motivo de duda. Reserva confianza "low" o document_type_id null SOLO para cuando el archivo sea realmente ilegible, o no corresponda a NINGUNA de las categorías de la lista (p.ej. un justificante escolar, una matrícula de vehículo, una foto no relacionada).
 
 Tipos posibles:
 ${list}
