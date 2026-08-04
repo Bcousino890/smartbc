@@ -7,6 +7,9 @@
 -- normalizeProxyUrl()/buildEvomiUrl() en lib/sync/proxy-config.ts la
 -- normalizan y anclan sesión/país/lifetime en cada request, así que no hace
 -- falta guardarla ya con modificadores.
+-- Conocida y ya marcada como filtrada (Fase 0 del plan de mejoras de
+-- Particulares) — rotar en el dashboard de Evomi, NUNCA reemplazar acá
+-- (las migraciones son código versionado para siempre). -- gitleaks:allow
 INSERT INTO app_settings (key, value, updated_at)
 VALUES (
   'scraping.proxyUrl',
