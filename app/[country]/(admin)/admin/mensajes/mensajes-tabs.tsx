@@ -6,11 +6,8 @@ import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 import { AdminMensajesClient, type AdminConversation } from "./mensajes-admin-client";
 import { TeamChat } from "./team-chat";
-import {
-  WhatsAppChat,
-  type WhatsAppConversation,
-  type WhatsAppMessage,
-} from "./whatsapp-chat";
+import type { WhatsAppConversation, WhatsAppMessage } from "./whatsapp-chat";
+import { ZintoInboxEmbed } from "./zinto-inbox-embed";
 
 export function MensajesTabs({
   activeTab,
@@ -72,13 +69,7 @@ export function MensajesTabs({
           messages={messages}
         />
       )}
-      {activeTab === "whatsapp" && (
-        <WhatsAppChat
-          conversations={whatsappConversations}
-          activeId={whatsappActiveId}
-          initialMessages={whatsappMessages}
-        />
-      )}
+      {activeTab === "whatsapp" && <ZintoInboxEmbed />}
       {activeTab === "equipo" && <TeamChat currentUserId={currentUserId} />}
     </div>
   );
