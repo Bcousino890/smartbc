@@ -18,6 +18,7 @@ import type { PropertyApplicationWithDetails } from "@/lib/property-applications
 import { DocumentVerificationRow } from "./document-verification-row";
 import { CandidateScoreCard } from "./candidate-score-card";
 import { AdminDocumentUploader } from "./admin-document-uploader";
+import { AutoDocumentUploader } from "./auto-document-uploader";
 
 type Props = {
   applicationId: string;
@@ -384,14 +385,26 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
                   </p>
                 )}
 
-                <div className="mt-3">
-                  <AdminDocumentUploader
+                <div className="mt-3 space-y-3">
+                  <AutoDocumentUploader
                     applicationId={application.id}
-                    country={application.country}
                     operation={application.operation}
-                    existingDocumentTypeIds={docs.map((d) => d.document_type_id)}
                     onUploaded={handleDocUpdated}
                   />
+                  <details className="group">
+                    <summary className="cursor-pointer select-none text-xs font-medium text-ink/40 transition hover:text-ink">
+                      O elige el tipo de documento manualmente
+                    </summary>
+                    <div className="mt-2">
+                      <AdminDocumentUploader
+                        applicationId={application.id}
+                        country={application.country}
+                        operation={application.operation}
+                        existingDocumentTypeIds={docs.map((d) => d.document_type_id)}
+                        onUploaded={handleDocUpdated}
+                      />
+                    </div>
+                  </details>
                 </div>
               </div>
 

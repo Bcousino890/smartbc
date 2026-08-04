@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 import { updateDocumentAiAnalysis } from "@/lib/db/queries/property-applications";
 import { recalculateApplicationScore } from "./scoring-engine";
-import type { AiDocumentAnalysis } from "./types";
+import type { AiDocumentAnalysis, ApplicationCountry } from "./types";
 
 const BUCKET = "property-application-documents";
 const SIGNED_URL_TTL_SECONDS = 600;
@@ -146,4 +146,68 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional. E
   }
 
   await recalculateApplicationScore(d.property_application_id);
+}
+
+export type DocumentClassificationCandidate = {
+  id: string;
+  country: ApplicationCountry;
+  display_name: string;
+  description: string | null;
+};
+
+export type DocumentClassificationResult = {
+  document_type_id: string | null;
+  confidence: "high" | "medium" | "low";
+  reason?: string;
+};
+
+// Identifica a qué tipo de documento (de una lista de candidatos que puede
+// mezclar España y Chile, ya que el candidato puede aportar documentación
+// extranjera) corresponde un archivo recién subido sin que el equipo tenga
+// que elegirlo a mano. Se usa antes de crear la fila del documento: solo
+// necesita la URL firmada del archivo ya subido a storage.
+export async function classifyApplicationDocument(
+  signedUrl: string,
+  mimeType: string,
+  candidates: DocumentClassificationCandidate[]
+): Promise<DocumentClassificationResult> {
+  const isPdf = mimeType === "application/pdf";
+  const list = candidates
+    .map((c) => `- id: "${c.id}" | país: ${c.country} | nombre: "${c.display_name}"${c.description ? ` | descripción: ${c.description}` : ""}`)
+    .join("\n");
+
+  const system = `Eres un clasificador de documentos para solicitudes inmobiliarias. Se te da un archivo aportado por un candidato (identidad, nómina, contrato, extracto bancario, referencias, empadronamiento...) y una lista de tipos de documento posibles, de España y de Chile (el candidato puede aportar documentación extranjera).
+
+Identifica cuál de estos tipos corresponde al archivo. Si el archivo no encaja claramente con ninguno, o es ilegible, devuelve document_type_id null.
+
+Tipos posibles:
+${list}
+
+Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
+{
+  "document_type_id": "<id exacto de la lista, o null>",
+  "confidence": "high" | "medium" | "low",
+  "reason": "<breve explicación en español>"
+}`;
+
+  try {
+    const raw = await aiComplete({
+      system,
+      userText: "Clasifica este documento y responde solo con el JSON solicitado.",
+      images: [signedUrl],
+      fileMediaType: isPdf ? "application/pdf" : mimeType,
+      maxTokens: 300,
+    });
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return { document_type_id: null, confidence: "low" };
+    const parsed = JSON.parse(match[0]) as DocumentClassificationResult;
+    const validIds = new Set(candidates.map((c) => c.id));
+    if (parsed.document_type_id && !validIds.has(parsed.document_type_id)) {
+      parsed.document_type_id = null;
+    }
+    return parsed;
+  } catch (err) {
+    console.error("[ai-classify] Error clasificando documento", err);
+    return { document_type_id: null, confidence: "low" };
+  }
 }
