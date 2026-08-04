@@ -83,6 +83,10 @@ export type PropertyApplicationDocument = {
   mime_type: string | null;
   status: DocumentStatus;
   verification_notes: string | null;
+  // Descripción del propio cliente al subir un documento que no encaja en
+  // ninguna categoría fija ("Otro documento") — distinta de
+  // verification_notes, que es la nota del equipo al verificar.
+  client_note: string | null;
   ai_analysis: AiDocumentAnalysis | null;
   verification_timestamp: string | null;
   verified_by: string | null;

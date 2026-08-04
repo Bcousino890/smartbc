@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     const applicationId = formData.get("application_id") as string | null;
     const documentTypeId = formData.get("document_type_id") as string | null;
     const coApplicantId = formData.get("co_applicant_id") as string | null;
+    const clientNote = (formData.get("client_note") as string | null)?.trim() || undefined;
 
     if (!file || !applicationId || !documentTypeId) {
       return Response.json(
@@ -64,6 +65,16 @@ export async function POST(req: Request) {
     if (docType.operation !== application.operation) {
       return Response.json(
         { error: "El tipo de documento no corresponde a esta operación (alquiler/compra)" },
+        { status: 400 }
+      );
+    }
+
+    // El tipo catch-all "Otro documento" no tiene forma de saber qué es sin
+    // que el cliente lo describa — se exige la nota en vez de dejar un
+    // documento anónimo que nadie sabrá interpretar.
+    if (docType.document_key === "other_document" && !clientNote) {
+      return Response.json(
+        { error: "Describe brevemente qué es este documento antes de subirlo" },
         { status: 400 }
       );
     }
@@ -119,6 +130,7 @@ export async function POST(req: Request) {
       file_url: storagePath,
       file_size: file.size,
       mime_type: file.type || undefined,
+      client_note: clientNote,
     }, isStaff);
 
     // Recalculamos ya la completitud documental (rápido, sin IA) y

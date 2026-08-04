@@ -129,6 +129,12 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
           </div>
           <p className="mt-0.5 text-[11px] text-ink/50">{doc.file_name}</p>
 
+          {doc.client_note && (
+            <p className="mt-1.5 rounded-md bg-blue-50 px-2 py-1.5 text-xs text-blue-800">
+              <span className="font-medium">El cliente dice que es:</span> {doc.client_note}
+            </p>
+          )}
+
           {/* Análisis IA */}
           <div className="mt-2 flex items-center gap-3">
             {analysis && (

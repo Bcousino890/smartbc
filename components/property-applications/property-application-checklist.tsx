@@ -74,6 +74,12 @@ function DocumentRow({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
+  // "Otro documento" es un tipo catch-all: no hay forma de saber qué es sin
+  // que el cliente lo explique, así que se pide una descripción obligatoria
+  // antes de poder subir el archivo.
+  const isOtherType = docType.document_key === "other_document";
+  const [note, setNote] = useState(document?.client_note ?? "");
+
   const statusCfg = document ? DOC_STATUS_CONFIG[document.status] : null;
   const StatusIcon = statusCfg?.icon;
   const annotations = document?.annotations ?? [];
@@ -82,6 +88,11 @@ function DocumentRow({
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (isOtherType && !note.trim()) {
+      setUploadError("Describe qué es este documento antes de subirlo");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setUploadError(null);
     setUploading(true);
 
@@ -91,6 +102,7 @@ function DocumentRow({
       formData.append("application_id", applicationId);
       formData.append("document_type_id", docType.id);
       if (coApplicantId) formData.append("co_applicant_id", coApplicantId);
+      if (note.trim()) formData.append("client_note", note.trim());
 
       const res = await fetch("/api/property-applications/documents/upload", {
         method: "POST",
@@ -161,6 +173,23 @@ function DocumentRow({
             <p className="mt-0.5 text-xs text-ink/50">{docType.description}</p>
           )}
 
+          {/* "Otro documento": qué es, según el propio cliente */}
+          {isOtherType && (
+            !disabled && !isVerified ? (
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="¿Qué es este documento? (obligatorio para subirlo)"
+                className="mt-2 w-full rounded-lg border border-ink/15 bg-white/80 px-3 py-1.5 text-xs text-ink placeholder:text-ink/35 focus:outline-none focus:ring-1 focus:ring-gold"
+              />
+            ) : document?.client_note ? (
+              <p className="mt-1.5 text-xs text-ink/50">
+                <span className="font-medium">Descripción:</span> {document.client_note}
+              </p>
+            ) : null
+          )}
+
           {/* Anotaciones del admin */}
           {pendingAnnotations.length > 0 && (
             <div className="mt-2 space-y-1">
@@ -204,7 +233,8 @@ function DocumentRow({
               />
               <button
                 onClick={() => inputRef.current?.click()}
-                disabled={uploading}
+                disabled={uploading || (isOtherType && !note.trim())}
+                title={isOtherType && !note.trim() ? "Describe qué es este documento primero" : undefined}
                 className="flex items-center gap-1.5 rounded-lg border border-ink/20 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-white disabled:opacity-50"
               >
                 <Upload size={12} strokeWidth={1.75} />

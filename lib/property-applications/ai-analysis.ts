@@ -12,6 +12,7 @@ type DocForAnalysis = {
   id: string;
   storage_path: string;
   mime_type: string | null;
+  client_note: string | null;
   property_application_id: string;
   property_applications: { country: "ES" | "CL"; operation: "rent" | "sale" } | null;
   property_application_document_types: {
@@ -49,7 +50,7 @@ export async function analyzeApplicationDocument(documentId: string): Promise<vo
   const { data: doc, error } = await supabase
     .from("property_application_documents")
     .select(
-      `id, storage_path, mime_type, property_application_id,
+      `id, storage_path, mime_type, client_note, property_application_id,
       property_applications(country, operation),
       property_application_document_types(display_name, country, validation_rules, help_text)`
     )
@@ -106,6 +107,7 @@ MONEDA: reporta el importe y la moneda REALES que ves en el documento, usando su
 PERSONA: extrae siempre el nombre completo que aparece en el documento (titular de la cuenta, del contrato, de la identidad...) en extracted_data.name — es la forma de saber de quién es cada documento, especialmente cuando hay varios solicitantes.
 ${docType?.validation_rules ? `Requisitos de validación: ${JSON.stringify(docType.validation_rules)}` : ""}
 ${docType?.help_text ? `Contexto: ${docType.help_text}` : ""}
+${d.client_note ? `El propio cliente describió este documento así al subirlo: "${d.client_note}" — tenlo en cuenta para identificarlo (especialmente si está archivado como "Otro documento"), pero confirma tú mismo qué es a partir del contenido real del archivo.` : ""}
 
 Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional. Escribe los textos en español:
 {

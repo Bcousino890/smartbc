@@ -349,6 +349,9 @@ export async function insertDocument(input: {
   file_url: string;
   file_size?: number;
   mime_type?: string;
+  // Descripción del cliente cuando sube contra el tipo catch-all "Otro
+  // documento" (o cualquier otro, si quiere aclarar algo).
+  client_note?: string;
 }, asAdmin = false): Promise<PropertyApplicationDocument> {
   const supabase = asAdmin ? createAdminClient() : await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -363,6 +366,7 @@ export async function insertDocument(input: {
       file_url: input.file_url,
       file_size_bytes: input.file_size ?? null,
       mime_type: input.mime_type ?? null,
+      client_note: input.client_note ?? null,
       status: "pending",
     })
     .select()
