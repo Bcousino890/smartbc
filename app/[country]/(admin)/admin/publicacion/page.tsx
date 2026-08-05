@@ -8,6 +8,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getMlTokens } from "@/lib/sync/portalinmobiliario/ml-config";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import type { DbIdealistaListing } from "@/lib/services/idealista/listing-helpers";
 import { PublicacionClient } from "./publicacion-client";
 import { PublicacionClClient } from "./publicacion-cl-client";
 
@@ -81,14 +82,23 @@ export default async function AdminPublicacionPage({
 
   const supabase = createAdminClient();
 
-  const { data: properties } = await supabase
-    .from("properties")
-    .select(
-      "id, slug, title, zone, price, operation, bedrooms, bathrooms, square_meters, status, cover_photo_url, external_id, bc_reference, created_at",
-    )
-    .is("archived_at", null)
-    .order("created_at", { ascending: false })
-    .limit(500);
+  const [{ data: properties }, { data: listings }] = await Promise.all([
+    supabase
+      .from("properties")
+      .select(
+        "id, slug, title, zone, price, operation, bedrooms, bathrooms, square_meters, status, cover_photo_url, external_id, bc_reference, created_at",
+      )
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    // Fichas ya preparadas para Idealista (mismos datos que /admin/idealista),
+    // para saber qué propiedades están listas para publicar por API real.
+    supabase
+      .from("idealista_listings")
+      .select("*")
+      .eq("is_inspo", false)
+      .order("updated_at", { ascending: false }),
+  ]);
 
   const rows = (properties ?? []) as Array<{
     id: string; slug: string; title: string; zone: string | null;
@@ -97,6 +107,8 @@ export default async function AdminPublicacionPage({
     cover_photo_url: string | null; external_id: string | null;
     bc_reference: string | null; created_at: string;
   }>;
+
+  const idealistaListings = (listings ?? []) as DbIdealistaListing[];
 
   const stats = {
     total: rows.length,
@@ -132,7 +144,7 @@ export default async function AdminPublicacionPage({
         />
       </div>
 
-      <PublicacionClient properties={rows} />
+      <PublicacionClient properties={rows} listings={idealistaListings} />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

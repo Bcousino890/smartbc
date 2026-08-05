@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import type { DbIdealistaListing } from "@/lib/services/idealista/listing-helpers";
 import { IdealistaClient } from "./idealista-client";
 
 export const dynamic = "force-dynamic";
@@ -61,79 +62,7 @@ export default async function AdminIdealistaPage({
     created_at: string;
   }>;
 
-  const idealista = (listings ?? []) as Array<{
-    id: string;
-    property_id: string | null;
-    is_inspo: boolean;
-    inspo_title: string | null;
-    property_type: string | null;
-    cadastral_reference: string | null;
-    address_street: string | null;
-    address_number: string | null;
-    has_no_number: boolean;
-    address_postal_code: string | null;
-    address_city: string | null;
-    address_block: string | null;
-    address_door: string | null;
-    building_name: string | null;
-    is_last_floor: boolean;
-    address_visibility: string | null;
-    square_meters: number | null;
-    built_square_meters: number | null;
-    floor: string | null;
-    bedrooms: number | null;
-    bathrooms: number | null;
-    condition: string | null;
-    price: number | null;
-    community_fees: number | null;
-    sale_exception: string | null;
-    total_rental_price: number | null;
-    rental_type: string | null;
-    max_tenants: number | null;
-    pets_allowed: boolean;
-    children_recommended: boolean;
-    equipment_type: string | null;
-    windows_location: string | null;
-    has_elevator: boolean;
-    is_bank_property: boolean;
-    heating_type: string | null;
-    construction_year: number | null;
-    has_adapted_access: boolean;
-    has_wheelchair_access: boolean;
-    orientation_north: boolean;
-    orientation_south: boolean;
-    orientation_east: boolean;
-    orientation_west: boolean;
-    has_terrace: boolean;
-    has_balcony: boolean;
-    has_parking: boolean;
-    has_storage: boolean;
-    has_pool: boolean;
-    has_garden: boolean;
-    has_wardrobes: boolean;
-    has_ac: boolean;
-    is_penthouse: boolean;
-    is_studio: boolean;
-    is_duplex: boolean;
-    energy_class: string | null;
-    energy_performance: number | null;
-    emission_rating: string | null;
-    emission_value: number | null;
-    external_link: string | null;
-    contact_id: string | null;
-    notes: string | null;
-    description: string | null;
-    photo_ids: string[];
-    video_ids: string[];
-    plan_ids: string[];
-    idealista_property_id: string | null;
-    idealista_state: string | null;
-    reference_code: string | null;
-    operation: string | null;
-    scheduled_publish_at: string | null;
-    created_at: string;
-    updated_at: string;
-  }>;
+  const idealista = (listings ?? []) as DbIdealistaListing[];
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
@@ -162,11 +91,7 @@ export default async function AdminIdealistaPage({
           Selecciona una propiedad, completa los datos de Idealista y sube fotos, videos y planos. Los datos quedan guardados y listos para publicar.
         </p>
 
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any --
-            hotfix: el tipo local DbIdealistaListing de idealista-client.tsx
-            derivó respecto al cast inline de `idealista`; la data es la misma
-            que la versión raíz (que compila y funciona en runtime). */}
-        <IdealistaClient properties={rows} listings={idealista as any} />
+        <IdealistaClient properties={rows} listings={idealista} />
       </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />

@@ -4,20 +4,25 @@ import {
   AlertTriangle,
   Building2,
   Check,
-  ExternalLink,
   ImagePlus,
-  Key,
   Loader2,
+  RefreshCw,
   Search,
   Send,
   User,
   X,
+  Zap,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { MediaManager } from "./media-manager";
 import { IdealistaForm, type IdealistaListing } from "./idealista-form";
+import {
+  listingToInitialData,
+  listingMissingForApi,
+  type DbIdealistaListing,
+} from "@/lib/services/idealista/listing-helpers";
 
 export type PublicacionProperty = {
   id: string;
@@ -73,93 +78,16 @@ const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
   year: "numeric",
 });
 
-// ─── Modal de clave API ───────────────────────────────────────────────────────
-
-function ApiKeyModal({
-  onSave,
-  onClose,
-  currentKey,
-}: {
-  onSave: (key: string) => void;
-  onClose: () => void;
-  currentKey: string;
-}) {
-  const [key, setKey] = useState(currentKey);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-cream-50 p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h2 className="font-serif text-xl font-semibold text-ink">
-              Clave API Idealista
-            </h2>
-            <p className="mt-0.5 text-sm text-ink/55">
-              Clave para volcados — importación masiva
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
-          >
-            <X size={18} strokeWidth={2} />
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
-          <p className="font-semibold mb-1">¿Dónde obtengo la clave?</p>
-          <p className="text-amber-700">
-            Solicítala a Idealista como cliente profesional. Te la envían por email junto con la documentación del API de volcado (importación masiva de propiedades).
-          </p>
-        </div>
-
-        <label className="block text-xs font-semibold uppercase tracking-wider text-ink/50 mb-1.5">
-          API Key
-        </label>
-        <input
-          type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="Pega aquí tu clave de Idealista…"
-          className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-          autoFocus
-        />
-
-        <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-xl border border-ink/10 py-2.5 text-sm text-ink/65 transition hover:border-ink/20 hover:text-ink"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => { onSave(key.trim()); onClose(); }}
-            disabled={!key.trim()}
-            className="flex-1 rounded-xl bg-ink py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
-          >
-            Guardar clave
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function PublicacionClient({
   properties,
+  listings,
 }: {
   properties: PublicacionProperty[];
+  listings: DbIdealistaListing[];
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [operation, setOperation] = useState<"" | "rent" | "sale">("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("own");
@@ -168,13 +96,18 @@ export function PublicacionClient({
   const [publishStates, setPublishStates] = useState<
     Record<string, PropertyPublishState>
   >({});
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [isBulkPublishing, setIsBulkPublishing] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<{
     text: string;
     type: "success" | "error";
   } | null>(null);
+
+  // Ficha de Idealista ya preparada para cada propiedad (si existe).
+  const listingByProperty = useMemo(() => {
+    const m = new Map<string, DbIdealistaListing>();
+    for (const l of listings) if (l.property_id) m.set(l.property_id, l);
+    return m;
+  }, [listings]);
 
   const sourceCounts = useMemo(() => {
     const counts = { own: 0, agency: 0, particular: 0, unknown: 0 };
@@ -216,10 +149,16 @@ export function PublicacionClient({
     }
   };
 
-  const publishProperty = async (property: PublicacionProperty) => {
-    if (!apiKey) {
-      setShowApiKeyModal(true);
-      return;
+  // Publica por el Partner API real de Idealista. Requiere que la propiedad ya
+  // tenga una ficha preparada (botón "Preparar Idealista" / "Editar ficha").
+  const publishProperty = async (property: PublicacionProperty): Promise<boolean> => {
+    const listing = listingByProperty.get(property.id);
+    if (!listing) {
+      setPublishStates((prev) => ({
+        ...prev,
+        [property.id]: { status: "error", message: "Prepara la ficha primero (botón 'Preparar Idealista')." },
+      }));
+      return false;
     }
 
     setPublishStates((prev) => ({
@@ -228,23 +167,25 @@ export function PublicacionClient({
     }));
 
     try {
-      const res = await fetch("/api/admin/publicacion/idealista", {
+      const res = await fetch("/api/admin/idealista/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ property, apiKey }),
+        body: JSON.stringify({ listingId: listing.id }),
       });
 
       const data = await res.json();
+      const warningsMsg = Array.isArray(data.warnings) && data.warnings.length ? ` — ${data.warnings.join("; ")}` : "";
 
       setPublishStates((prev) => ({
         ...prev,
         [property.id]: {
           status: res.ok ? "success" : "error",
           message: res.ok
-            ? `Publicado en Idealista (ref: ${data.idealistaId ?? "—"})`
+            ? `Publicado por API (ref. Idealista: ${data.idealistaPropertyId ?? "—"})${warningsMsg}`
             : data.error ?? "Error desconocido",
         },
       }));
+      return res.ok;
     } catch (err) {
       setPublishStates((prev) => ({
         ...prev,
@@ -253,66 +194,103 @@ export function PublicacionClient({
           message: err instanceof Error ? err.message : "Error de red",
         },
       }));
+      return false;
     }
   };
 
   const publishSelected = async () => {
-    if (!apiKey) { setShowApiKeyModal(true); return; }
     if (selected.size === 0) return;
 
     setIsBulkPublishing(true);
     setBulkMessage(null);
     let ok = 0;
     let fail = 0;
+    let unprepared = 0;
 
     for (const id of selected) {
       const prop = properties.find((p) => p.id === id);
       if (!prop) continue;
-      await publishProperty(prop);
-      const state = publishStates[id];
-      if (state?.status === "success") ok++;
+      if (!listingByProperty.has(id)) {
+        unprepared++;
+        continue;
+      }
+      const success = await publishProperty(prop);
+      if (success) ok++;
       else fail++;
     }
 
+    const parts = [`${ok} publicadas`];
+    if (fail) parts.push(`${fail} con error`);
+    if (unprepared) parts.push(`${unprepared} sin preparar (usa "Preparar Idealista" primero)`);
+
     setBulkMessage({
-      text: `Volcado completado: ${ok} publicadas, ${fail} errores`,
-      type: fail === 0 ? "success" : "error",
+      text: parts.join(", "),
+      type: fail === 0 && unprepared === 0 ? "success" : "error",
     });
     setIsBulkPublishing(false);
-    setTimeout(() => setBulkMessage(null), 6000);
+    if (ok > 0) router.refresh();
+    setTimeout(() => setBulkMessage(null), 8000);
   };
 
   const allSelected = filtered.length > 0 && selected.size === filtered.length;
 
-  const handleSaveIdealistaListing = async (data: IdealistaListing) => {
+  const handleSaveIdealistaListing = async (data: IdealistaListing): Promise<string | undefined> => {
+    const res = await fetch("/api/admin/publicacion/save-idealista-listing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error ?? "Error al guardar");
+    }
+    const { id } = await res.json();
+    return id as string | undefined;
+  };
+
+  const handleSaveOnly = async (data: IdealistaListing) => {
+    await handleSaveIdealistaListing(data);
+    setEditingIdealistaProperty(null);
+    router.refresh();
+  };
+
+  const handleSaveAndPublish = async (data: IdealistaListing) => {
+    const listingId = await handleSaveIdealistaListing(data);
+    setEditingIdealistaProperty(null);
+    router.refresh();
+    if (!listingId || !editingIdealistaProperty) return;
+
+    const propertyId = editingIdealistaProperty.id;
+    setPublishStates((prev) => ({ ...prev, [propertyId]: { status: "loading" } }));
     try {
-      const res = await fetch("/api/admin/publicacion/save-idealista-listing", {
+      const res = await fetch("/api/admin/idealista/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ listingId }),
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Error al guardar");
-      }
-
-      setEditingIdealistaProperty(null);
+      const resData = await res.json();
+      const warningsMsg = Array.isArray(resData.warnings) && resData.warnings.length ? ` — ${resData.warnings.join("; ")}` : "";
+      setPublishStates((prev) => ({
+        ...prev,
+        [propertyId]: {
+          status: res.ok ? "success" : "error",
+          message: res.ok
+            ? `Publicado por API (ref. Idealista: ${resData.idealistaPropertyId ?? "—"})${warningsMsg}`
+            : resData.error ?? "Error desconocido",
+        },
+      }));
+      router.refresh();
     } catch (err) {
-      throw err instanceof Error ? err : new Error("Error desconocido");
+      setPublishStates((prev) => ({
+        ...prev,
+        [propertyId]: { status: "error", message: err instanceof Error ? err.message : "Error de red" },
+      }));
     }
   };
 
   return (
     <>
-      {showApiKeyModal && (
-        <ApiKeyModal
-          currentKey={apiKey}
-          onSave={setApiKey}
-          onClose={() => setShowApiKeyModal(false)}
-        />
-      )}
-
       {editingIdealistaProperty && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/50 p-4 backdrop-blur-sm">
           <div className="mx-auto max-w-3xl py-6">
@@ -327,7 +305,13 @@ export function PublicacionClient({
             <IdealistaForm
               propertyId={editingIdealistaProperty.id}
               propertyTitle={editingIdealistaProperty.title}
-              onSave={handleSaveIdealistaListing}
+              bcReference={editingIdealistaProperty.bc_reference ?? undefined}
+              initialData={(() => {
+                const existing = listingByProperty.get(editingIdealistaProperty.id);
+                return existing ? listingToInitialData(existing, editingIdealistaProperty.id) : undefined;
+              })()}
+              onSave={handleSaveOnly}
+              onPublish={handleSaveAndPublish}
             />
           </div>
         </div>
@@ -400,21 +384,6 @@ export function PublicacionClient({
             <option value="sale">Venta</option>
           </select>
 
-          {/* Botón clave API */}
-          <button
-            type="button"
-            onClick={() => setShowApiKeyModal(true)}
-            className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px] transition",
-              apiKey
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
-            )}
-          >
-            <Key size={13} strokeWidth={1.75} />
-            {apiKey ? "Clave configurada ✓" : "Configurar clave API"}
-          </button>
-
           {selected.size > 0 && (
             <button
               type="button"
@@ -425,9 +394,9 @@ export function PublicacionClient({
               {isBulkPublishing ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : (
-                <Send size={14} strokeWidth={1.75} />
+                <Zap size={14} strokeWidth={1.75} />
               )}
-              Volcar {selected.size} a Idealista
+              Publicar {selected.size} por API
             </button>
           )}
 
@@ -467,7 +436,7 @@ export function PublicacionClient({
                 <th className="px-3 pb-2">Operación</th>
                 <th className="px-3 pb-2">Precio</th>
                 <th className="px-3 pb-2">Ref.</th>
-                <th className="px-3 pb-2">Fecha</th>
+                <th className="px-3 pb-2">Idealista</th>
                 <th className="px-3 pb-2 text-right">Acción</th>
               </tr>
             </thead>
@@ -475,8 +444,9 @@ export function PublicacionClient({
               {filtered.map((p) => {
                 const state = publishStates[p.id];
                 const isLoading = state?.status === "loading";
-                const isSuccess = state?.status === "success";
-                const isError = state?.status === "error";
+                const listing = listingByProperty.get(p.id);
+                const missingForApi = listing ? listingMissingForApi(listing) : [];
+                const isPublished = listing?.idealista_state === "published";
 
                 return (
                   <tr
@@ -537,18 +507,62 @@ export function PublicacionClient({
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-[12px] text-ink/60">
-                      {DATE_FMT.format(new Date(p.created_at))}
+                    <td className="px-3 py-3 text-[12px]">
+                      {!listing ? (
+                        <span className="text-ink/35">Sin preparar</span>
+                      ) : isPublished ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                          <Check size={10} /> Publicada{listing.idealista_property_id ? ` (${listing.idealista_property_id})` : ""}
+                        </span>
+                      ) : listing.idealista_state === "failed" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                          ✗ Falló
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                          Preparada
+                        </span>
+                      )}
+                      {state && (
+                        <p
+                          className={cn(
+                            "mt-1 max-w-[220px] text-[10px]",
+                            state.status === "error" ? "text-red-600" : "text-emerald-600"
+                          )}
+                        >
+                          {state.message}
+                        </p>
+                      )}
                     </td>
                     <td className="rounded-r-xl px-3 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setEditingIdealistaProperty(p)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold-dark transition hover:bg-gold/20"
-                      >
-                        <ImagePlus size={12} strokeWidth={1.75} />
-                        Preparar Idealista
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingIdealistaProperty(p)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold-dark transition hover:bg-gold/20"
+                        >
+                          <ImagePlus size={12} strokeWidth={1.75} />
+                          {listing ? "Editar ficha" : "Preparar Idealista"}
+                        </button>
+                        {listing && (
+                          <button
+                            type="button"
+                            onClick={() => publishProperty(p)}
+                            disabled={isLoading || missingForApi.length > 0}
+                            title={missingForApi.length > 0 ? `Falta: ${missingForApi.join(", ")}` : undefined}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40"
+                          >
+                            {isLoading ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : isPublished ? (
+                              <RefreshCw size={12} strokeWidth={1.75} />
+                            ) : (
+                              <Send size={12} strokeWidth={1.75} />
+                            )}
+                            {isPublished ? "Republicar" : "Publicar por API"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -565,18 +579,19 @@ export function PublicacionClient({
 
         {/* Info API */}
         <div className="mt-4 rounded-xl border border-ink/8 bg-white/50 px-4 py-3 text-[12px] text-ink/55">
-          <span className="font-semibold text-ink/70">Volcado a Idealista: </span>
-          Las propiedades se envían mediante la API de importación masiva de Idealista.
-          Necesitas la clave API que Idealista te entrega como cliente profesional.{" "}
-          <a
-            href="https://www.idealista.com/news/herramientas/herramientas-para-profesionales"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-gold-dark hover:underline"
-          >
-            Más información
-            <ExternalLink size={11} strokeWidth={1.75} />
+          <span className="font-semibold text-ink/70">Publicación por API: </span>
+          1) Prepara la ficha con &quot;Preparar Idealista&quot; (datos + fotos + ID de contacto de Idealista). 2)
+          Pulsa &quot;Publicar por API&quot;. Las credenciales del Partner API (client ID, secret y feedKey) se
+          configuran una sola vez en{" "}
+          <a href="/es/admin/idealista/configuracion" className="text-gold-dark hover:underline">
+            Configuración → Idealista
           </a>
+          . Si preferís el flujo con la extensión de Chrome (abre idealista.com y autocompleta el formulario), usá
+          el botón &quot;Abrir en Idealista&quot; disponible en{" "}
+          <a href="/es/admin/idealista" className="text-gold-dark hover:underline">
+            /admin/idealista
+          </a>
+          .
         </div>
       </section>
     </>

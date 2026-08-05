@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { guardPage } from "@/lib/auth/guard";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { IdealistaConfigClient } from "./config-client";
+import { ApiConfigSection } from "./api-config-section";
 import { AIConfigSection } from "./ai-config-section";
 import { ExtensionTokenSection } from "./extension-token-section";
 
@@ -55,6 +56,8 @@ export default async function IdealistaConfigPage({
 
         <IdealistaConfigClient initialConfig={initialConfig} />
       </div>
+
+      <ApiConfigSection />
 
       <ExtensionTokenSection />
 
