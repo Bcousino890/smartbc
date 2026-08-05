@@ -11,6 +11,7 @@ import {
   type WhatsAppConversation,
   type WhatsAppMessage,
 } from "./whatsapp-chat";
+import { ZintoInboxEmbed } from "./zinto-inbox-embed";
 
 export function MensajesTabs({
   activeTab,
@@ -22,7 +23,7 @@ export function MensajesTabs({
   whatsappActiveId,
   whatsappMessages,
 }: {
-  activeTab: "clientes" | "equipo" | "whatsapp";
+  activeTab: "clientes" | "equipo" | "whatsapp" | "zinto";
   conversations: AdminConversation[];
   activeId: string | null;
   messages: NonNullable<AdminConversation["messages"]>;
@@ -62,6 +63,12 @@ export function MensajesTabs({
         >
           Equipo
         </Link>
+        <Link
+          href={`${config.prefix}/mensajes?tab=zinto`}
+          className={tabClass(activeTab === "zinto")}
+        >
+          Zinto
+        </Link>
       </div>
 
       {/* Content */}
@@ -80,6 +87,7 @@ export function MensajesTabs({
         />
       )}
       {activeTab === "equipo" && <TeamChat currentUserId={currentUserId} />}
+      {activeTab === "zinto" && <ZintoInboxEmbed />}
     </div>
   );
 }

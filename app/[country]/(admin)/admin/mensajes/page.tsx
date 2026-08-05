@@ -102,7 +102,13 @@ export default async function AdminMensajesPage({
   }
 
   const activeTab =
-    tab === "equipo" ? "equipo" : tab === "whatsapp" ? "whatsapp" : "clientes";
+    tab === "equipo"
+      ? "equipo"
+      : tab === "whatsapp"
+        ? "whatsapp"
+        : tab === "zinto"
+          ? "zinto"
+          : "clientes";
 
   // ---- WhatsApp (Zinto) conversations ----
   let whatsappConversations: WhatsAppConversation[] = [];
