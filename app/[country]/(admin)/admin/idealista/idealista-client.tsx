@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Cable } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -95,6 +95,9 @@ type DbIdealistaListing = {
   plan_ids: string[];
   idealista_property_id: string | null;
   idealista_state: string | null;
+  api_state: string | null;
+  api_idealista_property_id: number | null;
+  api_error: string | null;
   scheduled_publish_at: string | null;
   archived_at: string | null;
   created_at: string;
@@ -240,6 +243,7 @@ export function IdealistaClient({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [publishingApiId, setPublishingApiId] = useState<string | null>(null);
   const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningId, setCleaningId] = useState<string | null>(null);
@@ -447,6 +451,34 @@ export function IdealistaClient({
       setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: "Error de red al generar el enlace" } }));
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  // Publica vía el Partner API oficial de Idealista (REST, en paralelo al
+  // método de arriba que abre la web con la extensión de Chrome). No requiere
+  // que el usuario tenga una pestaña abierta ni sesión de navegador.
+  const handlePublishApi = async (listingId: string) => {
+    setPublishingApiId(listingId);
+    try {
+      const res = await fetch("/api/admin/idealista/api-publish-listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: data.error ?? "Error al publicar vía API" } }));
+        return;
+      }
+      setPublishResults((prev) => ({
+        ...prev,
+        [listingId]: { ok: true, msg: `Publicado vía API (id ${data.idealistaPropertyId})` },
+      }));
+      router.refresh();
+    } catch {
+      setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: "Error de red al publicar vía API" } }));
+    } finally {
+      setPublishingApiId(null);
     }
   };
 
@@ -863,6 +895,25 @@ export function IdealistaClient({
                         {publishingId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                         Abrir en Idealista
                       </button>
+                    )}
+                    {listing.api_state !== "published" && (
+                      <button
+                        onClick={() => handlePublishApi(listing.id)}
+                        disabled={publishingApiId === listing.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+                        title="Publicar vía el Partner API oficial de Idealista (sin abrir navegador)"
+                      >
+                        {publishingApiId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Cable size={12} />}
+                        Publicar vía API
+                      </button>
+                    )}
+                    {listing.api_state === "published" && (
+                      <span
+                        className="flex items-center gap-1 rounded-lg bg-sky-100 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700"
+                        title={`Idealista propertyId ${listing.api_idealista_property_id}`}
+                      >
+                        <Cable size={12} /> Publicado (API)
+                      </span>
                     )}
                     <button
                       onClick={() => {
