@@ -64,6 +64,7 @@ type DbIdealistaListing = {
   has_elevator: boolean;
   is_bank_property: boolean;
   heating_type: string | null;
+  heating_fuel: string | null;
   construction_year: number | null;
   has_adapted_access: boolean;
   has_wheelchair_access: boolean;
@@ -170,6 +171,11 @@ function listingToInitialData(
       | "centralized"
       | "none"
       | "unknown",
+    heatingFuel: (listing.heating_fuel ?? "unknown") as
+      | "unknown"
+      | "gas-natural"
+      | "gasoil"
+      | "otro",
     constructionYear: listing.construction_year ?? 0,
     hasAdaptedAccess: listing.has_adapted_access,
     hasWheelchairAccess: listing.has_wheelchair_access,

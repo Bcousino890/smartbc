@@ -79,8 +79,13 @@ export const PROPERTY_TYPE_MAP: Record<string, string> = {
   apartment: "Piso",
   flat: "Piso",
   piso: "Piso",
+  penthouse: "Piso", // Ático — subtipo de Piso, se marca aparte (isPenthouse)
+  studio: "Piso", // Estudio / Loft — subtipo de Piso (isStudio)
+  duplex: "Piso", // Dúplex — subtipo de Piso (isDuplex)
   house: "Casa / Chalet",
   chalet: "Casa / Chalet",
+  "semi-detached": "Casa / Chalet", // Adosado / Pareado
+  villa: "Casa / Chalet",
   rustic: "Casa rústica",
   room: "Habitación",
   habitacion: "Habitación",
