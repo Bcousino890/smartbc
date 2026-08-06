@@ -85,6 +85,10 @@
     for (const label of labels) {
       if (norm(label.textContent).startsWith(norm(text))) return label;
     }
+    // último recurso: contains (p.ej. "¿Es exterior?" para buscar "Exterior")
+    for (const label of labels) {
+      if (norm(label.textContent).includes(norm(text))) return label;
+    }
     return null;
   }
 
@@ -157,9 +161,23 @@
   // ningún otro campo ya mapeado por id.
   async function setTextInputByLabel(labelText, value) {
     if (value === undefined || value === null || value === "") return;
-    const container = findContainerByLabelText(labelText);
-    if (!container) return log(`⚠ No encontré el campo "${labelText}"`);
-    const input = container.querySelector("input, textarea");
+    const norm = (s) => (s || "").trim().toLowerCase();
+    const target = norm(labelText);
+    const candidates = [...document.querySelectorAll("p, label")];
+    let labelEl = candidates.find((n) => norm(n.textContent) === target);
+    if (!labelEl) labelEl = candidates.find((n) => norm(n.textContent).startsWith(target));
+    if (!labelEl) return log(`⚠ No encontré el campo "${labelText}"`);
+
+    // El input de Idealista suele ser HERMANO del <p>/<label>, no un
+    // descendiente (p.ej. <p>Consumo...</p><div><input/></div>, patrón ya
+    // verificado en selectors.ts). A veces el propio <p> tiene su [id], y ahí
+    // "el ancestro con id más cercano" era el <p> mismo (sin input dentro) —
+    // por eso se prueban varias estrategias, de la más a la menos precisa.
+    const input =
+      labelEl.nextElementSibling?.querySelector?.("input, textarea") ||
+      (labelEl.nextElementSibling?.matches?.("input, textarea") ? labelEl.nextElementSibling : null) ||
+      labelEl.closest("[id]")?.querySelector("input, textarea") ||
+      labelEl.parentElement?.querySelector("input, textarea");
     if (!input) return log(`⚠ Input no encontrado para "${labelText}"`);
     setNativeValue(input, String(value));
     await sleep(SMS_DELAY);
