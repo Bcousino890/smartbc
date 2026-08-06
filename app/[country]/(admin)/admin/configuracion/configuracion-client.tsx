@@ -22,6 +22,7 @@ import { ProxyConfigClient, type ProxyConfig, type ProxyProvider } from "./proxy
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
 import { RepairConversionsManager } from "./repair-conversions-manager";
+import { IdealistaImagesManager } from "./idealista-images-manager";
 import { useT } from "@/lib/i18n/provider";
 import { mockAppSettings } from "@/lib/mock-admin-extras";
 import type { AppSettings } from "@/lib/types";
@@ -358,6 +359,9 @@ export default function ConfiguracionClient() {
 
         {/* Reparar propiedades ya convertidas (fotos + datos del dueño) */}
         <RepairConversionsManager />
+
+        {/* Recuperar imágenes de leads de Idealista (hotlinks que se rompen) */}
+        <IdealistaImagesManager />
 
         {/* Email Configuration */}
         <EmailConfigClient />

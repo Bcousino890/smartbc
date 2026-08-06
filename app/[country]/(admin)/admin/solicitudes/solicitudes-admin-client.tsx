@@ -69,6 +69,7 @@ const TAB_BADGE_CLASS: Record<TabKey, string> = {
 
 type LeadStatusFilter = "todos" | "nuevo" | "fichado" | "descartado";
 type LeadTypeFilter = "todos" | "particular" | "agencia" | "relocation";
+type LeadOperationFilter = "todos" | "venta" | "alquiler";
 
 const LEAD_TYPE_LABEL: Record<"particular" | "agencia" | "relocation", string> = {
   particular: "Particular",
@@ -115,6 +116,26 @@ function matchesSearch(terms: string[], fields: (string | null | undefined)[]): 
   return terms.every((term) => haystack.includes(term));
 }
 
+// ─── Precio / operación ─────────────────────────────────────────
+//
+// property_price es texto libre tal cual lo muestra Idealista (ej.
+// "2.400 €/mes" en alquiler, "450.000 €" en venta): parseLeadPrice extrae el
+// monto para el filtro de rango, inferLeadOperation deduce venta/alquiler por
+// la presencia de "/mes".
+
+function parseLeadPrice(priceText: string | null): number | null {
+  if (!priceText) return null;
+  const digits = priceText.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : null;
+}
+
+function inferLeadOperation(priceText: string | null): "alquiler" | "venta" | null {
+  if (!priceText) return null;
+  return /\/\s*mes\b/i.test(priceText) ? "alquiler" : "venta";
+}
+
 // ─── Main component ──────────────────────────────────────────────────
 
 export function SolicitudesAdminClient({
@@ -132,6 +153,9 @@ export function SolicitudesAdminClient({
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [leadStatusFilter, setLeadStatusFilter] = useState<LeadStatusFilter>("todos");
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>("todos");
+  const [leadOperationFilter, setLeadOperationFilter] = useState<LeadOperationFilter>("todos");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   // Id en lugar del objeto completo: así, tras un router.refresh() (ej. al
   // vincular manualmente una ficha del sistema desde el modal), el modal
@@ -156,6 +180,10 @@ export function SolicitudesAdminClient({
   const filteredLeads = idealistaLeads.filter((l) => {
     if (leadStatusFilter !== "todos" && l.status !== leadStatusFilter) return false;
     if (leadTypeFilter !== "todos" && (l.lead_type ?? l.suggested_type) !== leadTypeFilter) return false;
+    if (leadOperationFilter !== "todos" && inferLeadOperation(l.property_price) !== leadOperationFilter) return false;
+    const price = parseLeadPrice(l.property_price);
+    if (priceMin && (price === null || price < Number(priceMin))) return false;
+    if (priceMax && (price === null || price > Number(priceMax))) return false;
     return matchesSearch(searchTerms, [
       l.name,
       l.phone,
@@ -271,6 +299,19 @@ export function SolicitudesAdminClient({
                   />
                 ))}
               </div>
+              <span className="hidden text-ink/20 sm:inline">|</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(["todos", "venta", "alquiler"] as LeadOperationFilter[]).map((f) => (
+                  <FilterChip
+                    key={f}
+                    active={leadOperationFilter === f}
+                    onClick={() => setLeadOperationFilter(f)}
+                    label={f === "todos" ? "Venta y alquiler" : f === "venta" ? "Venta" : "Alquiler"}
+                  />
+                ))}
+              </div>
+              <span className="hidden text-ink/20 sm:inline">|</span>
+              <PriceRange min={priceMin} max={priceMax} onMin={setPriceMin} onMax={setPriceMax} />
             </div>
             {filteredLeads.length === 0 ? (
               <div className="rounded-2xl border border-gold/15 bg-cream-50/60 py-14 text-center text-sm text-ink/45">
@@ -433,6 +474,50 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
     >
       {label}
     </button>
+  );
+}
+
+// ─── PriceRange ───────────────────────────────────────────────────
+//
+// Rango de precio (mín – máx €) para los leads de Idealista, mismo estilo de
+// chip usado en el buscador de propiedades (properties-admin-client.tsx).
+// Vacío = sin límite por ese lado.
+
+function PriceRange({
+  min,
+  max,
+  onMin,
+  onMax,
+}: {
+  min: string;
+  max: string;
+  onMin: (v: string) => void;
+  onMax: (v: string) => void;
+}) {
+  const sanitize = (v: string) => v.replace(/[^\d]/g, "");
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+        Precio
+      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={min}
+        onChange={(e) => onMin(sanitize(e.target.value))}
+        placeholder="mín"
+        className="w-14 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+      />
+      <span className="text-ink/35">–</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={max}
+        onChange={(e) => onMax(sanitize(e.target.value))}
+        placeholder="máx"
+        className="w-16 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+      />
+    </div>
   );
 }
 
@@ -759,6 +844,7 @@ function IdealistaLeadCard({
               <img
                 src={lead.property_image_url}
                 alt=""
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
                 className="h-11 w-14 shrink-0 rounded-md object-cover"
               />
             )}
@@ -1093,7 +1179,12 @@ function IdealistaLeadModal({
                 <div key={p.title ?? p.imageUrl ?? i} className="flex gap-2.5 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
                   {p.imageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imageUrl} alt="" className="h-11 w-14 shrink-0 rounded-md object-cover" />
+                    <img
+                      src={p.imageUrl}
+                      alt=""
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      className="h-11 w-14 shrink-0 rounded-md object-cover"
+                    />
                   )}
                   <p className="min-w-0 text-[13px] font-medium text-ink/80 self-center">
                     📍 {[p.title, p.price, p.type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
@@ -1107,7 +1198,12 @@ function IdealistaLeadModal({
             <div className="mt-4 flex gap-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2.5">
               {lead.property_image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={lead.property_image_url} alt="" className="h-14 w-18 shrink-0 rounded-md object-cover" />
+                <img
+                  src={lead.property_image_url}
+                  alt=""
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  className="h-14 w-18 shrink-0 rounded-md object-cover"
+                />
               )}
               <div className="min-w-0">
                 <p className="text-[13px] font-medium text-ink/80">
