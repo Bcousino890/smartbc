@@ -537,9 +537,26 @@
       (el) => el.childElementCount === 0 && /campos parecen ser incorrect/i.test(el.textContent || "")
     );
     if (!marker) return null;
-    const scope = marker.closest("div") || marker.parentElement;
-    const links = [...(scope?.querySelectorAll("a") ?? [])].map((a) => a.textContent.trim()).filter(Boolean);
-    return links;
+
+    // Sube de padre en padre hasta el primer ancestro que YA contenga la
+    // lista de enlaces del aviso. La caja de error es chica; antes se usaba
+    // closest("div") pero esa caja no está envuelta en un <div> sino en otra
+    // etiqueta (section/aside/etc.), así que se saltaba de largo hasta el
+    // layout completo de la página (menú, header, footer...) y devolvía
+    // decenas de enlaces sin relación con el aviso real.
+    let scope = marker.parentElement;
+    let links = [];
+    let guard = 0;
+    while (scope && guard < 8) {
+      links = [...scope.querySelectorAll("a")].map((a) => a.textContent.trim()).filter(Boolean);
+      if (links.length > 0) break;
+      scope = scope.parentElement;
+      guard++;
+    }
+    // Salvavidas: el aviso real lista como mucho un puñado de campos. Si de
+    // todos modos salió una cantidad absurda, algo se enganchó mal — mejor
+    // no reportar nada que bombardear con basura (menú, footer, opciones...).
+    return links.length > 0 && links.length <= 30 ? links : null;
   }
 
   // ── Arranque ──────────────────────────────────────────────────────────
