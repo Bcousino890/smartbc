@@ -92,6 +92,29 @@ const CONTACT_STATUS_BADGE: Record<IdealistaLeadRow["contact_status"], string> =
   sin_respuesta: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
+// ─── Search helpers ───────────────────────────────────────────────
+//
+// Búsqueda libre (nombre/cliente/precio/referencia) sobre las tarjetas de
+// cada pestaña. Compara sin distinguir mayúsculas, acentos ni el separador
+// de miles ("4.500" debe encontrarse buscando "4500") y exige que todas las
+// palabras tecleadas aparezcan en algún campo (AND), para poder combinar por
+// ejemplo nombre + precio en una sola búsqueda.
+
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[^\x00-\x7F]/g, "") // quita acentos (tras NFD quedan fuera del rango ASCII)
+    .replace(/[.,]/g, "")
+    .trim();
+}
+
+function matchesSearch(terms: string[], fields: (string | null | undefined)[]): boolean {
+  if (terms.length === 0) return true;
+  const haystack = normalizeSearchText(fields.filter(Boolean).join(" "));
+  return terms.every((term) => haystack.includes(term));
+}
+
 // ─── Main component ──────────────────────────────────────────────────
 
 export function SolicitudesAdminClient({
@@ -109,6 +132,7 @@ export function SolicitudesAdminClient({
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [leadStatusFilter, setLeadStatusFilter] = useState<LeadStatusFilter>("todos");
   const [leadTypeFilter, setLeadTypeFilter] = useState<LeadTypeFilter>("todos");
+  const [searchQuery, setSearchQuery] = useState("");
   // Id en lugar del objeto completo: así, tras un router.refresh() (ej. al
   // vincular manualmente una ficha del sistema desde el modal), el modal
   // vuelve a leer el lead actualizado del array recién llegado por props en
@@ -127,17 +151,34 @@ export function SolicitudesAdminClient({
     idealista: idealistaLeads.filter((l) => l.status === "nuevo").length,
   };
 
+  const searchTerms = normalizeSearchText(searchQuery).split(/\s+/).filter(Boolean);
+
   const filteredLeads = idealistaLeads.filter((l) => {
     if (leadStatusFilter !== "todos" && l.status !== leadStatusFilter) return false;
     if (leadTypeFilter !== "todos" && (l.lead_type ?? l.suggested_type) !== leadTypeFilter) return false;
-    return true;
+    return matchesSearch(searchTerms, [
+      l.name,
+      l.phone,
+      l.property_title,
+      l.property_price,
+      l.property_ref,
+      l.idealista_code,
+      l.matched_property_title,
+      l.matched_property_reference,
+      ...l.properties.flatMap((p) => [p.title, p.price]),
+    ]);
   });
+
+  const filteredContactRequests = contactRequests.filter((c) =>
+    matchesSearch(searchTerms, [c.name, c.email, c.phone, c.subject, c.message]),
+  );
 
   const filteredRequests = requests.filter(
     (r) =>
       activeTab !== "consultas" &&
       activeTab !== "idealista" &&
-      r.status === TAB_STATUS_MAP[activeTab as Exclude<TabKey, "consultas" | "idealista">],
+      r.status === TAB_STATUS_MAP[activeTab as Exclude<TabKey, "consultas" | "idealista">] &&
+      matchesSearch(searchTerms, [r.clientName, r.clientEmail, r.propertyTitle, r.propertyReference]),
   );
 
   const TAB_LABELS: Record<TabKey, string> = {
@@ -182,6 +223,28 @@ export function SolicitudesAdminClient({
         ))}
       </div>
 
+      {/* Búsqueda */}
+      <label className="mt-4 flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
+        <Search size={15} strokeWidth={1.75} className="shrink-0 text-ink/45" />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Buscar por nombre, cliente, precio o referencia…"
+          className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            aria-label="Limpiar búsqueda"
+            className="shrink-0 rounded-md p-0.5 text-ink/35 transition hover:bg-ink/10 hover:text-ink/60"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </label>
+
       {/* Cards */}
       <div className="mt-4">
         {activeTab === "idealista" ? (
@@ -213,7 +276,9 @@ export function SolicitudesAdminClient({
               <div className="rounded-2xl border border-gold/15 bg-cream-50/60 py-14 text-center text-sm text-ink/45">
                 {idealistaLeads.length === 0
                   ? "Sin leads de Idealista — usa la extensión de Chrome en el inbox de idealista.com para capturarlos"
-                  : "Ningún lead con estos filtros"}
+                  : searchQuery.trim()
+                    ? "Ningún lead coincide con tu búsqueda"
+                    : "Ningún lead con estos filtros"}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -236,20 +301,22 @@ export function SolicitudesAdminClient({
             )}
           </>
         ) : activeTab === "consultas" ? (
-          contactRequests.length === 0 ? (
+          filteredContactRequests.length === 0 ? (
             <div className="rounded-2xl border border-gold/15 bg-cream-50/60 py-14 text-center text-sm text-ink/45">
-              Sin consultas recibidas
+              {contactRequests.length === 0
+                ? "Sin consultas recibidas"
+                : "Ninguna consulta coincide con tu búsqueda"}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {contactRequests.map((r) => (
+              {filteredContactRequests.map((r) => (
                 <ContactCard key={r.id} contact={r} />
               ))}
             </div>
           )
         ) : filteredRequests.length === 0 ? (
           <div className="rounded-2xl border border-gold/15 bg-cream-50/60 py-14 text-center text-sm text-ink/45">
-            {t("solicitudes.empty")}
+            {searchQuery.trim() ? "Ninguna solicitud coincide con tu búsqueda" : t("solicitudes.empty")}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
