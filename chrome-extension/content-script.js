@@ -376,10 +376,14 @@
     if (data.heatingType && HEATING_TYPE_MAP[data.heatingType]) {
       await selectCombobox("heatingType", [HEATING_TYPE_MAP[data.heatingType]], "Tipo calefacción");
       // "Combustible calefacción" sólo se muestra/exige cuando sí hay
-      // calefacción — antes no existía este campo en la ficha de SmartBC,
-      // así que Idealista lo dejaba siempre marcado como error.
-      if (data.heatingType !== "none" && HEATING_FUEL_MAP[data.heatingFuel]) {
-        await selectCombobox("heatingFuel", [HEATING_FUEL_MAP[data.heatingFuel]], "Combustible calefacción");
+      // calefacción. Si la ficha no trae el dato (p.ej. fichas creadas antes
+      // de que este campo existiera en SmartBC), se completa con "Gas
+      // natural" por defecto — el más común — en vez de dejarlo vacío y
+      // bloquear la publicación; queda avisado en el log para revisar a mano.
+      if (data.heatingType !== "none") {
+        const fuelKnown = HEATING_FUEL_MAP[data.heatingFuel];
+        if (!fuelKnown) log('La ficha no trae "Combustible calefacción" — se usa "Gas natural" por defecto, revísalo.');
+        await selectCombobox("heatingFuel", [fuelKnown ?? HEATING_FUEL_MAP["gas-natural"]], "Combustible calefacción");
       }
     }
     if (data.constructionYear) await setTextInputInContainer("constructionYear", data.constructionYear);

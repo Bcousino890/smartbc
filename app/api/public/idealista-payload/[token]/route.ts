@@ -20,7 +20,21 @@ export async function OPTIONS() {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+  try {
+    return await handleGet(req, params);
+  } catch (err) {
+    // Cualquier excepción no controlada (DB caída, env var faltante, etc.)
+    // debe seguir devolviendo los headers CORS — si no, Chrome la muestra
+    // como "Failed to fetch"/bloqueo CORS sin ningún detalle real del error,
+    // y la extensión no puede mostrarle al usuario qué pasó de verdad.
+    console.error("[idealista-payload] Error inesperado:", err);
+    const message = err instanceof Error ? err.message : "Error inesperado";
+    return Response.json({ error: message }, { status: 500, headers: corsHeaders() });
+  }
+}
+
+async function handleGet(req: Request, paramsPromise: Promise<{ token: string }>) {
+  const { token } = await paramsPromise;
   const verified = verifyPublishToken(token);
   if (!verified) {
     return Response.json({ error: "Token inválido o expirado" }, { status: 401, headers: corsHeaders() });
