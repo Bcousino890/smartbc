@@ -97,6 +97,7 @@ export default async function AdminIdealistaPage({
     has_elevator: boolean;
     is_bank_property: boolean;
     heating_type: string | null;
+    heating_fuel: string | null;
     construction_year: number | null;
     has_adapted_access: boolean;
     has_wheelchair_access: boolean;

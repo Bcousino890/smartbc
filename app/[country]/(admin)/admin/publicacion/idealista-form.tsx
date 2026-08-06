@@ -57,6 +57,7 @@ export type IdealistaListing = {
   hasElevator: boolean;
   isBankProperty: boolean;
   heatingType: "individual" | "centralized" | "none" | "unknown";
+  heatingFuel: "unknown" | "gas-natural" | "gasoil" | "otro";
   constructionYear: number;
   hasAdaptedAccess: boolean;
   hasWheelchairAccess: boolean;
@@ -135,6 +136,7 @@ const DEFAULTS: Omit<IdealistaListing, "propertyId"> = {
   hasElevator: false,
   isBankProperty: false,
   heatingType: "unknown",
+  heatingFuel: "unknown",
   constructionYear: 0,
   hasAdaptedAccess: false,
   hasWheelchairAccess: false,
@@ -1412,6 +1414,19 @@ export function IdealistaForm({
             { value: "unknown", label: "No lo sé" },
           ]}
         />
+        {(form.heatingType === "individual" || form.heatingType === "centralized") && (
+          <RadioGroup
+            label="Combustible de la calefacción"
+            value={form.heatingFuel}
+            onChange={(v) => set("heatingFuel", v)}
+            options={[
+              { value: "gas-natural", label: "Gas natural" },
+              { value: "gasoil", label: "Gasoil" },
+              { value: "otro", label: "Otro" },
+              { value: "unknown", label: "No lo sé" },
+            ]}
+          />
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label>Año de construcción del edificio</Label>

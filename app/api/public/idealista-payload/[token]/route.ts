@@ -81,6 +81,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     hasElevator: !!l.has_elevator,
     isBankProperty: !!l.is_bank_property,
     heatingType: l.heating_type ?? "unknown",
+    heatingFuel: l.heating_fuel ?? "unknown",
     constructionYear: l.construction_year ?? null,
     hasAdaptedAccess: !!l.has_adapted_access,
     hasWheelchairAccess: !!l.has_wheelchair_access,
@@ -99,9 +100,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     hasWardrobes: !!l.has_wardrobes,
     hasAC: !!l.has_ac,
 
-    isPenthouse: !!l.is_penthouse,
-    isStudio: !!l.is_studio,
-    isDuplex: !!l.is_duplex,
+    // OR con property_type: si eligieron "Ático/Estudio/Dúplex" en el selector
+    // de tipo pero no marcaron también el chip correspondiente, igual se debe
+    // marcar la subtipología en Idealista (si no, el campo queda vacío y el
+    // formulario lo marca como error).
+    isPenthouse: !!l.is_penthouse || l.property_type === "penthouse",
+    isStudio: !!l.is_studio || l.property_type === "studio",
+    isDuplex: !!l.is_duplex || l.property_type === "duplex",
 
     energyClass: l.energy_class ?? "",
     energyPerformance: l.energy_performance ?? null,

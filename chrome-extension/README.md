@@ -69,5 +69,9 @@ Extensión de Chrome con dos funciones:
 - Si algún campo no se rellena (Idealista cambia su formulario de vez en cuando),
   el panel flotante muestra qué falló — puedes completarlo a mano y avisar para
   ajustar el selector correspondiente
+- Al terminar, la extensión relee el propio aviso de validación de Idealista
+  ("Algunos campos parecen ser incorrectos...") y si sigue habiendo errores el
+  panel lo dice explícitamente (en vez de mostrar "✓ Listo" a ciegas) con la
+  lista exacta de campos pendientes
 - Las fotos solo se pueden subir después de completar los campos obligatorios
   (así lo exige Idealista) — la extensión ya respeta ese orden

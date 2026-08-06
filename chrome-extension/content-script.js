@@ -88,8 +88,27 @@
     return null;
   }
 
-  async function clickCheckOrRadioByLabel(containerId, labelText) {
-    const container = document.getElementById(containerId);
+  // Busca el contenedor con [id] más cercano a un <p>/<label>/<h2>/<h3> cuyo
+  // texto visible coincide con `text`. Idealista cambia los id de sus
+  // contenedores de vez en cuando (p. ej. "flatLocation" dejó de existir);
+  // esto permite ubicar el campo por su etiqueta visible cuando el id
+  // esperado ya no está.
+  function findContainerByLabelText(text) {
+    if (!text) return null;
+    const norm = (s) => (s || "").trim().toLowerCase();
+    const target = norm(text);
+    const nodes = [...document.querySelectorAll("p, label, h2, h3")];
+    let el = nodes.find((n) => norm(n.textContent) === target);
+    if (!el) el = nodes.find((n) => norm(n.textContent).startsWith(target));
+    return el?.closest("[id]") || null;
+  }
+
+  function getContainer(containerId, labelFallback) {
+    return document.getElementById(containerId) || (labelFallback ? findContainerByLabelText(labelFallback) : null);
+  }
+
+  async function clickCheckOrRadioByLabel(containerId, labelText, labelFallback) {
+    const container = getContainer(containerId, labelFallback);
     if (!container) return log(`⚠ Contenedor #${containerId} no encontrado`);
     const label = findLabelByText(container, labelText);
     const input = label?.querySelector('input[type="checkbox"], input[type="radio"]');
@@ -122,8 +141,8 @@
     await sleep(SMS_DELAY);
   }
 
-  async function setTextInputInContainer(containerId, value, inputIndex = 0) {
-    const container = document.getElementById(containerId);
+  async function setTextInputInContainer(containerId, value, inputIndex = 0, labelFallback) {
+    const container = getContainer(containerId, labelFallback);
     if (!container) return log(`⚠ Contenedor #${containerId} no encontrado`);
     const inputs = container.querySelectorAll("input, textarea");
     const input = inputs[inputIndex];
@@ -132,28 +151,49 @@
     await sleep(SMS_DELAY);
   }
 
+  // Como setTextInputInContainer, pero ubicando el campo directamente por su
+  // etiqueta visible en vez de un id de contenedor — para campos como
+  // "Consumo de energía" / "Emisiones" que no comparten contenedor con
+  // ningún otro campo ya mapeado por id.
+  async function setTextInputByLabel(labelText, value) {
+    if (value === undefined || value === null || value === "") return;
+    const container = findContainerByLabelText(labelText);
+    if (!container) return log(`⚠ No encontré el campo "${labelText}"`);
+    const input = container.querySelector("input, textarea");
+    if (!input) return log(`⚠ Input no encontrado para "${labelText}"`);
+    setNativeValue(input, String(value));
+    await sleep(SMS_DELAY);
+  }
+
   async function fillLocationAutocomplete(containerId, inputIndex, value) {
     if (!value) return;
-    const container = document.getElementById(containerId);
+    const container = getContainer(containerId, "Localización del inmueble");
     if (!container) return log(`⚠ Contenedor #${containerId} no encontrado`);
     const input = container.querySelectorAll("input")[inputIndex];
     if (!input) return log(`⚠ Input #${inputIndex} no encontrado en #${containerId}`);
     setNativeValue(input, String(value));
 
-    // Cada campo de localización tiene un <ul> de sugerencias que aparece tras escribir
+    // Cada campo de localización tiene un <ul> de sugerencias que aparece tras
+    // escribir (con debounce) — se espera un poco antes de sondear y se da
+    // más margen total: en conexiones lentas 1.5s no siempre alcanzaba y el
+    // campo quedaba "escrito pero sin confirmar", lo que Idealista marca
+    // como dirección inválida.
+    await sleep(300);
     const scope = input.closest("[data-component-id]")?.parentElement || input.parentElement;
     const list = await waitFor(() => {
       const ul = scope?.querySelector("ul");
       return ul && ul.children.length > 0 ? ul : null;
-    }, 1500);
+    }, 3000);
     if (list) {
       list.querySelector("li")?.click();
       await sleep(SMS_DELAY);
+    } else {
+      log(`⚠ Sin sugerencias de autocompletar para "${value}" — puede quedar sin confirmar`);
     }
   }
 
-  async function setStepper(containerId, targetValue) {
-    const container = document.getElementById(containerId);
+  async function setStepper(containerId, targetValue, labelFallback) {
+    const container = getContainer(containerId, labelFallback);
     if (!container) return log(`⚠ Contenedor #${containerId} no encontrado`);
     const input = container.querySelector("input");
     const plusBtn = container.querySelector('a[aria-label="+"]');
@@ -171,8 +211,8 @@
     }
   }
 
-  async function selectCombobox(containerId, optionTexts) {
-    const container = document.getElementById(containerId);
+  async function selectCombobox(containerId, optionTexts, labelFallback) {
+    const container = getContainer(containerId, labelFallback);
     if (!container) return log(`⚠ Contenedor #${containerId} no encontrado`);
     const trigger = container.querySelector('[role="combobox"]');
     if (!trigger) return log(`⚠ Combobox #${containerId} no encontrado`);
@@ -216,6 +256,18 @@
     "bare-ownership": "Nuda propiedad",
   };
   const HEATING_TYPE_MAP = { individual: "Individual", centralized: "Centralizada", none: "No dispone" };
+  const HEATING_FUEL_MAP = { "gas-natural": "Gas natural", gasoil: "Gasoil", otro: "Otro" };
+  // Subtipo de "Tipología" que Idealista exige aparte cuando el tipo
+  // principal es Casa/Chalet (Chalet adosado / pareado / independiente).
+  // SmartBC no distingue adosado de pareado (una sola opción "Adosado /
+  // Pareado" en su selector), así que ambos usan "Chalet adosado" por
+  // defecto — revisable a mano si el caso real es "pareado".
+  const CHALET_SUBTYPE_MAP = {
+    "semi-detached": "Chalet adosado",
+    chalet: "Chalet independiente",
+    villa: "Chalet independiente",
+    house: "Chalet independiente",
+  };
 
   function floorOptionTexts(floor) {
     const f = (floor || "").toLowerCase().replace(/[°ºª\s]/g, "");
@@ -231,8 +283,15 @@
   // ── Flujo principal ─────────────────────────────────────────────────────
   async function fillForm(data) {
     setStatus("Rellenando tipo de inmueble...");
-    await selectCombobox("typology", [data.propertyTypeLabel]);
+    await selectCombobox("typology", [data.propertyTypeLabel], "Tipo de inmueble");
     await sleep(600); // esperar a que aparezcan los campos dinámicos
+
+    // "Tipología" (Chalet adosado/pareado/independiente) sólo aparece cuando
+    // el tipo principal es Casa/Chalet — es un campo obligatorio aparte que
+    // antes se quedaba siempre vacío (bloqueando el guardado).
+    if (data.propertyTypeLabel === "Casa / Chalet" && CHALET_SUBTYPE_MAP[data.propertyType]) {
+      await clickCheckOrRadioByLabel("subtypology", CHALET_SUBTYPE_MAP[data.propertyType], "Tipología");
+    }
 
     if (data.cadastralReference) await setTextInputInContainer("cadastralReference", data.cadastralReference);
 
@@ -240,9 +299,9 @@
     await fillLocationAutocomplete("location", 0, data.addressCity);
     await fillLocationAutocomplete("location", 1, data.addressStreet);
     if (data.hasNoNumber) {
-      await clickCheckOrRadioByLabel("location", "Sin número");
+      await clickCheckOrRadioByLabel("location", "Sin número", "Localización del inmueble");
     } else {
-      await setTextInputInContainer("location", data.addressNumber, 2);
+      await setTextInputInContainer("location", data.addressNumber, 2, "Localización del inmueble");
     }
     const validarBtn = document.getElementById("validateAddressButton");
     validarBtn?.querySelector('a, [role="button"]')?.click();
@@ -287,9 +346,9 @@
     }
 
     setStatus("Características adicionales...");
-    if (data.isPenthouse) await clickCheckOrRadioByLabel("subtypology", "Ático");
-    if (data.isStudio) await clickCheckOrRadioByLabel("subtypology", "Estudio");
-    if (data.isDuplex) await clickCheckOrRadioByLabel("subtypology", "Dúplex");
+    if (data.isPenthouse) await clickCheckOrRadioByLabel("subtypology", "Ático", "Tipología");
+    if (data.isStudio) await clickCheckOrRadioByLabel("subtypology", "Estudio", "Tipología");
+    if (data.isDuplex) await clickCheckOrRadioByLabel("subtypology", "Dúplex", "Tipología");
     if (data.isBankProperty) await clickCheckOrRadioByLabel("categories", "Inmueble de banco");
 
     if (data.operation === "rent" && data.equipmentType && data.equipmentType !== "unknown") {
@@ -297,33 +356,49 @@
     }
 
     if (data.heatingType && HEATING_TYPE_MAP[data.heatingType]) {
-      await selectCombobox("heatingType", [HEATING_TYPE_MAP[data.heatingType]]);
+      await selectCombobox("heatingType", [HEATING_TYPE_MAP[data.heatingType]], "Tipo calefacción");
+      // "Combustible calefacción" sólo se muestra/exige cuando sí hay
+      // calefacción — antes no existía este campo en la ficha de SmartBC,
+      // así que Idealista lo dejaba siempre marcado como error.
+      if (data.heatingType !== "none" && HEATING_FUEL_MAP[data.heatingFuel]) {
+        await selectCombobox("heatingFuel", [HEATING_FUEL_MAP[data.heatingFuel]], "Combustible calefacción");
+      }
     }
     if (data.constructionYear) await setTextInputInContainer("constructionYear", data.constructionYear);
     if (data.hasAdaptedAccess) await clickCheckOrRadioByLabel("accessibility", "Acceso exterior a la vivienda adaptado");
     if (data.hasWheelchairAccess) await clickCheckOrRadioByLabel("accessibility", "Adaptado para uso con silla de ruedas");
 
-    if (data.builtSquareMeters) await setTextInputInContainer("constructedArea", data.builtSquareMeters);
-    if (data.squareMeters) await setTextInputInContainer("usableArea", data.squareMeters);
+    if (data.builtSquareMeters) await setTextInputInContainer("constructedArea", data.builtSquareMeters, 0, "M² construidos");
+    if (data.squareMeters) await setTextInputInContainer("usableArea", data.squareMeters, 0, "M² útiles");
 
     setStatus("Dormitorios y baños...");
-    await setStepper("roomNumber", data.bedrooms);
-    await setStepper("bathNumber", data.bathrooms);
+    await setStepper("roomNumber", data.bedrooms, "Número de dormitorios");
+    await setStepper("bathNumber", data.bathrooms, "Número de baños");
 
     setStatus("Eficiencia energética...");
     if (data.energyClass) {
       const opts = ENERGY_OPTION_MAP[data.energyClass] ?? [data.energyClass.toUpperCase()];
-      await selectCombobox("energyCertificationType", opts);
+      await selectCombobox("energyCertificationType", opts, "Calificación energética");
     }
+    // Consumo (kWh/m² año): campo numérico aparte de la calificación por
+    // letra. El dato ya viajaba en la ficha (data.energyPerformance) pero
+    // nunca se llegaba a escribir en el formulario — Idealista lo exige
+    // junto con la calificación y lo marcaba siempre como error.
+    if (data.energyPerformance) await setTextInputByLabel("Consumo de energía", data.energyPerformance);
     if (data.emissionRating) {
       const opts = ENERGY_OPTION_MAP[data.emissionRating] ?? [data.emissionRating.toUpperCase()];
-      await selectCombobox("emissionsType", opts);
+      await selectCombobox("emissionsType", opts, "Calificación de emisiones");
     }
+    // Emisiones (kgCO₂/m² año): mismo caso que el consumo — nunca se rellenaba.
+    if (data.emissionValue) await setTextInputByLabel("Emisiones", data.emissionValue);
 
     setStatus("Conservación y orientación...");
-    await clickCheckOrRadioByLabel("conservationState", CONDITION_MAP[data.condition] ?? "Buen estado");
-    await clickCheckOrRadioByLabel("flatLocation", WINDOWS_LOCATION_MAP[data.windowsLocation] ?? "Exterior");
-    await clickCheckOrRadioByLabel("elevatorOption", data.hasElevator ? "Sí" : "No");
+    await clickCheckOrRadioByLabel("conservationState", CONDITION_MAP[data.condition] ?? "Buen estado", "Estado de conservación");
+    // "flatLocation" (Interior/Exterior) — el id del contenedor cambió y ya
+    // no existe; se busca directamente por la etiqueta del radio en toda la
+    // página, igual que ya se hacía para la excepción de venta.
+    await clickGlobalRadioByLabel(WINDOWS_LOCATION_MAP[data.windowsLocation] ?? "Exterior");
+    await clickCheckOrRadioByLabel("elevatorOption", data.hasElevator ? "Sí" : "No", "Ascensor");
 
     if (data.orientationNorth) await clickCheckOrRadioByLabel("orientation", "Norte");
     if (data.orientationSouth) await clickCheckOrRadioByLabel("orientation", "Sur");
@@ -369,12 +444,23 @@
     if (!photoUrls || photoUrls.length === 0) return;
     setStatus(`Subiendo fotos (0/${photoUrls.length})...`);
 
+    // Da tiempo a que React recalcule el estado locked/unlocked del botón
+    // tras el último campo rellenado.
+    await sleep(500);
     const addBtn = document.querySelector("#multimedia-list_1 [data-component-id]");
     if (!addBtn) {
       log("⚠ No encontré el botón + de Fotos. Súbelas manualmente.");
       return;
     }
-    log(`Botón de fotos encontrado (locked=${addBtn.className.includes("locked")}), haciendo click...`);
+    const locked = addBtn.className.includes("locked");
+    if (locked) {
+      // Idealista bloquea la subida de fotos hasta completar los campos
+      // obligatorios — intentar el click igualmente sólo produce un modal
+      // vacío. Mejor avisar claro y parar aquí.
+      log("⚠ Botón de fotos bloqueado: hay campos obligatorios sin completar. Complétalos (revisa el aviso de Idealista) y sube las fotos manualmente.");
+      return;
+    }
+    log("Botón de fotos encontrado (locked=false), haciendo click...");
     addBtn.click();
 
     let modal = await waitFor(() => {
@@ -424,6 +510,20 @@
     setStatus(`✓ ${done}/${photoUrls.length} fotos subidas`);
   }
 
+  // Lee el propio aviso de validación de Idealista ("Algunos campos parecen
+  // ser incorrectos, por favor revisa:") para decirle al usuario EXACTAMENTE
+  // qué falta, en vez de que la extensión reporte éxito a ciegas mientras el
+  // formulario todavía tiene errores (como pasaba antes).
+  function findFormErrorFields() {
+    const marker = [...document.querySelectorAll("body *")].find(
+      (el) => el.childElementCount === 0 && /campos parecen ser incorrect/i.test(el.textContent || "")
+    );
+    if (!marker) return null;
+    const scope = marker.closest("div") || marker.parentElement;
+    const links = [...(scope?.querySelectorAll("a") ?? [])].map((a) => a.textContent.trim()).filter(Boolean);
+    return links;
+  }
+
   // ── Arranque ──────────────────────────────────────────────────────────
   async function main() {
     const token = getToken();
@@ -448,7 +548,15 @@
     try {
       await fillForm(data);
       await uploadPhotos(data.photos);
-      setStatus("✓ Listo. Revisa el formulario y presiona 'Guardar y publicar anuncio'.");
+
+      await sleep(500); // dar tiempo a que Idealista recalcule su propia validación
+      const pending = findFormErrorFields();
+      if (pending && pending.length > 0) {
+        log(`⚠ Idealista todavía marca ${pending.length} campo(s) con error: ${pending.join(", ")}`);
+        setStatus(`⚠ Revisa ${pending.length} campo(s) antes de publicar: ${pending.join(", ")}`, true);
+      } else {
+        setStatus("✓ Listo. Revisa el formulario y presiona 'Guardar y publicar anuncio'.");
+      }
     } catch (err) {
       setStatus(`Error durante el llenado: ${err.message}`, true);
       log(String(err.stack || err));

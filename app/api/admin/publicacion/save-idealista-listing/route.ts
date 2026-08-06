@@ -63,6 +63,7 @@ export async function POST(req: Request) {
       has_elevator: body.hasElevator ?? false,
       is_bank_property: body.isBankProperty ?? false,
       heating_type: body.heatingType ?? "unknown",
+      heating_fuel: body.heatingFuel ?? "unknown",
       construction_year: body.constructionYear || null,
       has_adapted_access: body.hasAdaptedAccess ?? false,
       has_wheelchair_access: body.hasWheelchairAccess ?? false,
