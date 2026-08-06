@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
+import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
 // Público a propósito (lo llama la extensión desde idealista.com); la seguridad
@@ -203,6 +204,34 @@ export async function POST(req: Request) {
     const existing = existingByConversation.get(lead.conversation_id);
     const isDetail = source === "detail";
 
+    // Foto de portada: si la que ya teníamos guardada es una copia permanente
+    // nuestra, se conserva tal cual (no se pisa con el hotlink que vuelva a
+    // mandar la extensión). Si no, se intenta re-alojar ahora; si falla, cae
+    // al hotlink de Idealista para no perder la referencia.
+    const existingImageUrl: string | null = existing?.property_image_url ?? null;
+    let propertyImageUrl: string | null;
+    if (isPersistedLeadImage(existingImageUrl)) {
+      propertyImageUrl = existingImageUrl;
+    } else {
+      const candidateImageUrl = lead.property_image_url ?? existingImageUrl;
+      propertyImageUrl = candidateImageUrl
+        ? ((await persistIdealistaLeadImage(db, lead.conversation_id, "cover", candidateImageUrl))?.url ??
+          candidateImageUrl)
+        : null;
+    }
+
+    // Mismo criterio para cada propiedad NUEVA del hilo (las ya guardadas no
+    // se tocan: mergeProperties las deja intactas al principio del array).
+    const existingProperties = (existing?.properties as NormalizedProperty[]) ?? [];
+    const mergedProperties = mergeProperties(existingProperties, lead.properties);
+    for (let i = existingProperties.length; i < mergedProperties.length; i++) {
+      const p = mergedProperties[i];
+      if (p.imageUrl && !isPersistedLeadImage(p.imageUrl)) {
+        const persisted = await persistIdealistaLeadImage(db, lead.conversation_id, `p${i}`, p.imageUrl);
+        if (persisted) p.imageUrl = persisted.url;
+      }
+    }
+
     // Merge: la captura de lista solo rellena huecos y nunca pisa el detalle;
     // la captura de detalle sobreescribe mensaje/perfil y marca detail_captured.
     const merged: Record<string, unknown> = {
@@ -215,10 +244,10 @@ export async function POST(req: Request) {
       property_title: lead.property_title ?? existing?.property_title ?? null,
       property_price: lead.property_price ?? existing?.property_price ?? null,
       property_type: lead.property_type ?? existing?.property_type ?? null,
-      property_image_url: lead.property_image_url ?? existing?.property_image_url ?? null,
+      property_image_url: propertyImageUrl,
       // Unión: el mismo contacto puede preguntar por varias propiedades a lo
       // largo del hilo (ver mergeProperties), nunca se pisa lo ya guardado.
-      properties: mergeProperties((existing?.properties as NormalizedProperty[]) ?? [], lead.properties),
+      properties: mergedProperties,
       message_date: lead.message_date ?? existing?.message_date ?? null,
       updated_at: now,
     };
