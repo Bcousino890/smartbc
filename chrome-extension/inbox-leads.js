@@ -626,33 +626,49 @@
   // siguiente y repite hasta el final del inbox o hasta que se detenga.
   let autoRun = null; // {captured: n} mientras está activo
 
-  // Localiza el botón de navegación entre conversaciones ("Anterior" /
+  // Localiza el control de navegación entre conversaciones ("Anterior" /
   // "Reciente") por su texto — sus clases _kiwi-button_* llevan hash de
-  // build. Se ignoran botones ocultos, deshabilitados o sin caja visible.
+  // build. No siempre es un <button> (a veces Idealista usa <a> o un
+  // elemento con role="button"), así que se buscan los tres. Se ignoran
+  // los ocultos, deshabilitados o sin caja visible.
   function findNavButton(label) {
-    return [...document.querySelectorAll("button")].find((b) => {
+    return [...document.querySelectorAll('button, a, [role="button"]')].find((b) => {
       if (b.disabled || b.getAttribute("aria-hidden") === "true") return false;
+      if (b.getAttribute("aria-disabled") === "true") return false;
       if (b.offsetParent === null && b.getClientRects().length === 0) return false;
       const text = (b.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
       return text === label || text.startsWith(label + " ") || text.endsWith(" " + label);
     });
   }
 
-  // Navega a la conversación anterior pulsando el botón "Anterior".
-  // Devuelve el nuevo conversationId, o null si tras el intento (y un
-  // reintento sobre el <span> interno) la conversación no cambió.
+  // Nombre del contacto visible en el panel — mismo selector que usa
+  // extractDetailLead. Se usa solo como SEÑAL de diagnóstico (para el
+  // mensaje de error si la navegación falla), nunca como id: el backend
+  // valida que conversationId sea numérico (o "call_"+dígitos) y rechaza
+  // cualquier otra cosa, así que un id inventado nunca llegaría a guardarse.
+  function contactNameNow() {
+    const el = document.querySelector('[class*="_seeker-name"]');
+    return el ? (el.textContent || "").trim() : null;
+  }
+
+  // Navega a la conversación anterior pulsando "Anterior". Devuelve el
+  // nuevo conversationId leído de la URL, o null si tras el intento (y un
+  // reintento sobre el <span> interno) la URL no cambió.
   // Un click nativo dispara los handlers de React; el reintento sobre el
   // hijo cubre el caso en que el listener esté en el <span>, no en el
-  // <button>. NO se hacen los dos clicks a la vez para no saltarse una
+  // control. NO se hacen los dos clicks a la vez para no saltarse una
   // conversación o rebotar hacia atrás.
   async function navigatePrev(currentId) {
+    const beforeName = contactNameNow();
     const changed = () => {
       const key = threadKeyFromUrl();
       return key && key !== currentId ? key : null;
     };
     const nav = findNavButton("anterior");
-    if (!nav) return { next: null, reason: 'no encontré el botón "Anterior"' };
+    if (!nav) return { next: null, reason: 'no encontré el control "Anterior"' };
     if (nav.disabled) return { next: null, reason: "fin del inbox (Anterior deshabilitado)" };
+    // eslint-disable-next-line no-console
+    console.log('[SmartBC] auto: click en <' + nav.tagName.toLowerCase() + '> "' + (nav.textContent || "").trim().slice(0, 30) + '"');
 
     nav.click();
     let next = await waitFor(changed, 4000, 150);
@@ -663,7 +679,20 @@
       inner.click();
       next = await waitFor(changed, 8000, 150);
     }
-    return { next, reason: next ? null : "la conversación no cambió al pulsar Anterior" };
+    if (!next) {
+      // Diagnóstico: si el nombre del contacto SÍ cambió pero la URL no,
+      // el problema es que Idealista navega sin tocar el history (esto
+      // quedaría anotado para poder confirmarlo con evidencia real en vez
+      // de volver a adivinar a ciegas).
+      const nameChanged = contactNameNow() !== beforeName;
+      const reason =
+        "la conversación no cambió al pulsar Anterior (URL sigue en " +
+        (threadKeyFromUrl() || "sin id") +
+        (nameChanged ? "; el nombre del contacto SÍ cambió — Idealista no actualiza la URL al navegar" : "; el contacto tampoco cambió") +
+        ")";
+      return { next: null, reason };
+    }
+    return { next, reason: null };
   }
 
   async function runAutoCapture(startId) {
