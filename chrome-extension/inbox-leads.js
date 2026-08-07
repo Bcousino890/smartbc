@@ -206,6 +206,25 @@
       .filter(Boolean);
   }
 
+  // Idealista pinta primero, como su propio nodo de texto, las iniciales del
+  // avatar cuando el contacto no tiene foto de perfil (ej. "Da" antes de
+  // "Daniel Encaoua"). Tomar literalmente la primera línea candidata captura
+  // ese fragmento en vez del nombre completo. Si la primera es muy corta y
+  // una posterior más larga empieza igual (mismas iniciales), se prefiere
+  // esa; si no hay ninguna que calce, se deja la primera tal cual (nombres
+  // reales cortos, ej. "Bo", siguen funcionando igual que antes).
+  function pickFullName(candidates) {
+    if (candidates.length === 0) return null;
+    const first = candidates[0];
+    if (first.length <= 3) {
+      const fuller = candidates
+        .slice(1)
+        .find((l) => l.length > first.length && l.toLowerCase().startsWith(first.toLowerCase()));
+      if (fuller) return fuller;
+    }
+    return first;
+  }
+
   function extractLeadFromRow(row, conversationId) {
     const lines = textLines(row);
     if (lines.length === 0) return null;
@@ -231,8 +250,9 @@
       if (!lead.messageDate && DATE_RE.test(line)) lead.messageDate = line;
     });
 
-    // Nombre: primera línea de la fila
-    lead.name = lines[0] || null;
+    // Nombre: primera línea de la fila (ver pickFullName para el caso de las
+    // iniciales del avatar coladas como línea propia).
+    lead.name = pickFullName(lines);
 
     // El atributo appcallback_target_phone (si está presente en la fila) es
     // más fiable que el regex sobre el texto visible.
@@ -441,9 +461,10 @@
         }
 
         if (!lead.name) {
-          const nameLine = headLines.find(
+          const nameCandidates = headLines.filter(
             (l, i) => i !== phoneIdx && !/internacional/i.test(l) && !/^vio el anuncio/i.test(l),
           );
+          const nameLine = pickFullName(nameCandidates);
           if (nameLine) lead.name = nameLine;
         }
       }
