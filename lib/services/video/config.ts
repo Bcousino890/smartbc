@@ -1,6 +1,3 @@
-import "server-only";
-import { createAdminClient } from "@/lib/db/admin";
-
 // Ajustes y constantes de la generación de vídeos de propiedad.
 //
 // Este módulo es la ÚNICA fuente de verdad de los defaults: la migración 0115
@@ -219,31 +216,4 @@ export function normalizeSettings(input: unknown): VideoSettings {
         ? src.defaultMusicTrackId
         : null,
   };
-}
-
-/** Lee los ajustes de app_settings. Si no hay fila o falla, devuelve defaults. */
-export async function getVideoSettings(): Promise<VideoSettings> {
-  const supabase = createAdminClient() as any;
-  const { data, error } = await supabase
-    .from("app_settings")
-    .select("value")
-    .eq("key", SETTINGS_KEY)
-    .maybeSingle();
-
-  if (error || !data) return { ...DEFAULT_SETTINGS };
-  return normalizeSettings(data.value);
-}
-
-/** Guarda los ajustes ya normalizados. Devuelve lo que quedó persistido. */
-export async function saveVideoSettings(input: unknown): Promise<VideoSettings> {
-  const settings = normalizeSettings(input);
-  const supabase = createAdminClient() as any;
-  const { error } = await supabase
-    .from("app_settings")
-    .upsert(
-      { key: SETTINGS_KEY, value: settings, updated_at: new Date().toISOString() },
-      { onConflict: "key" },
-    );
-  if (error) throw new Error(`No se pudieron guardar los ajustes: ${error.message}`);
-  return settings;
 }

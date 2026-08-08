@@ -1,23 +1,21 @@
 import "server-only";
 import { requirePermission } from "@/lib/auth/guard";
-import {
-  estimatePropertyVideo,
-  findProperty,
-  generatePropertyVideo,
-} from "@/lib/services/video/generate";
+import { estimatePropertyVideo, findProperty } from "@/lib/services/video/generate";
+import { enqueueVideoJob, processNextVideoJob } from "@/lib/services/video/queue";
 import { checkFfmpeg } from "@/lib/services/video/ffmpeg";
-import { getVideoSettings, isVideoFormat, isVideoResolution } from "@/lib/services/video/config";
+import {
+  isVideoFormat,
+  isVideoResolution,
+} from "@/lib/services/video/config";
+import { getVideoSettings } from "@/lib/services/video/settings";
 import { formatBytes, formatDuration, resolutionLabel } from "@/lib/services/video/plan";
 
 // Vídeo automático de una propiedad.
 //
 //   GET  → estimación: cuántas fotos entran, cuánto dura y CUÁNTO VA A PESAR.
 //          No renderiza nada; es lo que la ficha enseña antes de dar al botón.
-//   POST → genera el vídeo y lo publica en property_media.
-//
-// El render es síncrono a propósito: es una acción manual sobre una propiedad
-// concreta y el usuario espera el resultado. La generación masiva de las
-// propiedades de Idealista va por cola aparte, no por aquí.
+//   POST → encola el render (prioritario, por ser una petición de una persona)
+//          y arranca la cola. El estado se consulta en ./video/job.
 export const maxDuration = 3600;
 
 function parseOptions(params: URLSearchParams | Record<string, unknown>) {
@@ -118,20 +116,43 @@ export async function POST(
     // Sin cuerpo: se usan los ajustes por defecto.
   }
 
-  const result = await generatePropertyVideo({ property, ...parseOptions(body) });
-  if (!result.ok) {
-    return Response.json({ error: result.error }, { status: 422 });
+  const options = parseOptions(body);
+
+  // El render se ENCOLA en vez de hacerse aquí mismo. Un vídeo largo puede
+  // tardar minutos y la petición moriría en el timeout del proxy dejando al
+  // usuario sin saber si se generó. Con la cola, el trabajo sobrevive a la
+  // petición y el panel consulta su estado.
+  const queued = await enqueueVideoJob({
+    propertyId: property.id,
+    format: options.format,
+    resolution: options.resolution,
+    triggeredBy: "manual",
+    force: true,
+  });
+
+  if (!queued.ok) {
+    if (queued.reason === "already_queued") {
+      return Response.json(
+        { ok: true, alreadyQueued: true, message: "Ya hay un vídeo en cola para esta propiedad." },
+        { status: 202 },
+      );
+    }
+    if (queued.reason === "not_enough_photos") {
+      return Response.json({ error: "La propiedad no tiene fotos suficientes." }, { status: 422 });
+    }
+    return Response.json(
+      { error: queued.detail ?? "No se pudo encolar el vídeo." },
+      { status: 500 },
+    );
   }
 
-  return Response.json({
-    ok: true,
-    mediaId: result.mediaId,
-    url: result.url,
-    sizeBytes: result.sizeBytes,
-    sizeLabel: formatBytes(result.sizeBytes),
-    durationLabel: formatDuration(result.plan.durationSeconds),
-    estimatedLabel: formatBytes(result.plan.estimatedBytes),
-    sizeDeviationPercent: result.sizeDeviationPercent,
-    warnings: result.warnings,
+  // Arranca el render sin esperarlo: el servidor de Next vive bajo PM2, así
+  // que la promesa sigue corriendo después de responder. Si el proceso muriese
+  // a media, el trabajo queda en la cola y el cron lo recoge (y la liberación
+  // de trabajos colgados lo devuelve a "pending").
+  void processNextVideoJob().catch((err) => {
+    console.error("[video] fallo al procesar la cola tras encolar:", err);
   });
+
+  return Response.json({ ok: true, jobId: queued.jobId, queued: true }, { status: 202 });
 }

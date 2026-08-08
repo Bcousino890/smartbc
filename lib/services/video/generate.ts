@@ -3,11 +3,11 @@ import { createAdminClient } from "@/lib/db/admin";
 import {
   MIN_PHOTOS,
   STORAGE_LIMIT_BYTES,
-  getVideoSettings,
   type VideoFormat,
   type VideoResolution,
   type VideoSettings,
 } from "./config";
+import { getVideoSettings } from "./settings";
 import {
   buildVideoPlan,
   formatBytes,
@@ -346,11 +346,15 @@ export async function generatePropertyVideo(params: {
     };
   }
 
-  const fingerprint = photosFingerprint(photoUrls.slice(0, plan.usedPhotos), {
+  // La huella se calcula sobre TODAS las fotos, no sobre las que entraron en
+  // el vídeo. Tiene que coincidir exactamente con la que calcula el encolado
+  // (queue.ts), que no conoce el plan: si una recortase la lista y la otra no,
+  // nunca coincidirían y el cron regeneraría el mismo vídeo eternamente.
+  const fingerprint = photosFingerprint(photoUrls, {
     format,
     resolution,
-    secondsPerPhoto: plan.secondsPerPhoto,
-    transitionSeconds: plan.transitionSeconds,
+    secondsPerPhoto: settings.secondsPerPhoto,
+    transitionSeconds: settings.transitionSeconds,
     musicTrackId: music?.id ?? null,
   });
 

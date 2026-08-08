@@ -2,11 +2,11 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import {
   MIN_PHOTOS,
-  getVideoSettings,
   type VideoFormat,
   type VideoResolution,
   type VideoSettings,
 } from "./config";
+import { getVideoSettings } from "./settings";
 import { photosFingerprint } from "./plan";
 import {
   findProperty,
@@ -35,6 +35,17 @@ const STALE_PROCESSING_MS = 90 * 60 * 1000;
 
 /** Tras estos intentos fallidos el trabajo se abandona y deja pasar a los demás. */
 const MAX_ATTEMPTS = 3;
+
+/**
+ * Deduce la resolución de un vídeo ya existente por sus dimensiones. En 4K el
+ * lado mayor es 3840 (horizontal) o 3840 (vertical); en Full HD, 1920.
+ */
+function resolutionOf(
+  media: { width: number | null; height: number | null } | null | undefined,
+): VideoResolution | null {
+  if (!media?.width || !media.height) return null;
+  return Math.max(media.width, media.height) >= 3000 ? "4k" : "fullhd";
+}
 
 export type EnqueueResult =
   | { ok: true; jobId: string; reason: "queued" }
@@ -89,8 +100,23 @@ export async function enqueueVideoJob(params: {
   try {
     const settings = params.settings ?? (await getVideoSettings());
     const format = params.format ?? settings.defaultFormat;
-    const resolution = params.resolution ?? settings.defaultResolution;
     const supabase = createAdminClient() as any;
+
+    const { data: existing } = await supabase
+      .from("property_media")
+      .select("photos_fingerprint, width, height")
+      .eq("property_id", params.propertyId)
+      .eq("type", "video")
+      .eq("source", "auto")
+      .eq("format", format)
+      .maybeSingle();
+
+    // Si esta propiedad ya tiene un vídeo, se rehace en SU misma resolución
+    // salvo que se pida otra explícitamente. Sin esto, un vídeo que alguien
+    // generó a mano en 4K lo machacaría el cron con uno en Full HD (solo cabe
+    // un vídeo automático por propiedad y formato).
+    const resolution =
+      params.resolution ?? resolutionOf(existing) ?? settings.defaultResolution;
 
     const musicTrackId =
       params.musicTrackId !== undefined
@@ -109,18 +135,8 @@ export async function enqueueVideoJob(params: {
       return { ok: false, reason: "not_enough_photos" };
     }
 
-    if (!params.force) {
-      const { data: existing } = await supabase
-        .from("property_media")
-        .select("photos_fingerprint")
-        .eq("property_id", params.propertyId)
-        .eq("type", "video")
-        .eq("source", "auto")
-        .eq("format", format)
-        .maybeSingle();
-      if (existing?.photos_fingerprint === fingerprint) {
-        return { ok: false, reason: "up_to_date" };
-      }
+    if (!params.force && existing?.photos_fingerprint === fingerprint) {
+      return { ok: false, reason: "up_to_date" };
     }
 
     const { data, error } = await supabase
@@ -132,6 +148,9 @@ export async function enqueueVideoJob(params: {
         photos_fingerprint: fingerprint,
         photo_count: photoCount,
         triggered_by: params.triggeredBy,
+        // Lo que pide una persona desde la ficha va por delante del barrido
+        // automático, que puede tener cientos de propiedades esperando.
+        priority: params.triggeredBy === "manual" ? 10 : 0,
       })
       .select("id")
       .single();
@@ -202,6 +221,7 @@ export async function processNextVideoJob(): Promise<ProcessResult> {
     .select("id, property_id, format, resolution, music_track_id, attempts")
     .eq("status", "pending")
     .lt("attempts", MAX_ATTEMPTS)
+    .order("priority", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();

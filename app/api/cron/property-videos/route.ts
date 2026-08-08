@@ -1,6 +1,6 @@
 import "server-only";
 import { checkFfmpeg } from "@/lib/services/video/ffmpeg";
-import { getVideoSettings } from "@/lib/services/video/config";
+import { getVideoSettings } from "@/lib/services/video/settings";
 import { enqueuePendingProperties, processNextVideoJob } from "@/lib/services/video/queue";
 
 // Worker de la cola de vídeos. Cada disparo:

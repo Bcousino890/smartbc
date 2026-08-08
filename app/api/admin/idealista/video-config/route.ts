@@ -1,6 +1,6 @@
 import "server-only";
 import { requirePermission } from "@/lib/auth/guard";
-import { getVideoSettings, saveVideoSettings } from "@/lib/services/video/config";
+import { getVideoSettings, saveVideoSettings } from "@/lib/services/video/settings";
 import { getCalibration } from "@/lib/services/video/calibration";
 import { checkFfmpeg } from "@/lib/services/video/ffmpeg";
 

@@ -45,14 +45,19 @@ type EstimateResponse = {
   plan?: Plan;
 };
 
-type Generated = {
-  url: string;
-  sizeLabel: string;
-  estimatedLabel: string;
-  sizeDeviationPercent: number;
-  durationLabel: string;
-  warnings: string[];
+type Job = {
+  id: string;
+  status: "pending" | "processing" | "done" | "error" | "cancelled";
+  error: string | null;
+  url: string | null;
+  queuePosition: number | null;
+  sizeLabel: string | null;
+  estimatedLabel: string | null;
+  durationLabel: string | null;
 };
+
+/** Cada cuánto se pregunta por el estado mientras el vídeo se genera. */
+const POLL_MS = 4000;
 
 const boxCls =
   "rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none";
@@ -71,9 +76,12 @@ export function PropertyVideoPanel({
 
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState<Generated | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState("");
+
+  // El render no ocurre dentro de la petición que lo pide (tardaría minutos y
+  // moriría en el timeout del proxy): se encola y aquí se consulta su estado.
+  const running = job?.status === "pending" || job?.status === "processing";
 
   const loadEstimate = useCallback(async () => {
     setLoading(true);
@@ -97,9 +105,29 @@ export function PropertyVideoPanel({
     }
   }, [slug, format, resolution]);
 
+  const loadJob = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/admin/properties/${slug}/video/job`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setJob(data.job ?? null);
+    } catch {
+      // Un sondeo fallido no es motivo de alarma: se reintenta al siguiente.
+    }
+  }, [slug]);
+
   useEffect(() => {
     loadEstimate();
-  }, [loadEstimate]);
+    loadJob();
+  }, [loadEstimate, loadJob]);
+
+  // Mientras haya un render en cola o en marcha se pregunta cada pocos
+  // segundos; al terminar, el intervalo se detiene solo.
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(loadJob, POLL_MS);
+    return () => clearInterval(timer);
+  }, [running, loadJob]);
 
   const generate = async () => {
     const plan = estimate?.plan;
@@ -108,16 +136,27 @@ export function PropertyVideoPanel({
     const confirmed = confirm(
       `Se va a generar un vídeo ${plan.format} en ${plan.resolutionLabel}.\n\n` +
         `· ${plan.usedPhotos} fotos · ${plan.durationLabel} de duración\n` +
-        `· Peso estimado: ${plan.estimatedLabel} (${plan.rangeLabel})\n` +
+        `· Peso estimado: ${plan.estimatedLabel} (entre ${plan.rangeLabel})\n` +
         `· Nunca superará ${plan.maxLabel}\n` +
-        `· Tardará unos ${plan.renderLabel} minutos:segundos\n\n` +
+        `· Tardará alrededor de ${plan.renderLabel} (min:seg)\n\n` +
         `¿Continuar?`,
     );
     if (!confirmed) return;
 
-    setGenerating(true);
     setError("");
-    setGenerated(null);
+    // Estado optimista para que el panel entre en modo "en curso" de
+    // inmediato, sin esperar al primer sondeo.
+    setJob({
+      id: "pending",
+      status: "pending",
+      error: null,
+      url: null,
+      queuePosition: null,
+      sizeLabel: null,
+      estimatedLabel: null,
+      durationLabel: null,
+    });
+
     try {
       const res = await fetch(`/api/admin/properties/${slug}/video`, {
         method: "POST",
@@ -126,24 +165,14 @@ export function PropertyVideoPanel({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "No se pudo generar el vídeo.");
+        setError(data.error ?? "No se pudo encolar el vídeo.");
+        setJob(null);
         return;
       }
-      setGenerated({
-        url: data.url,
-        sizeLabel: data.sizeLabel,
-        estimatedLabel: data.estimatedLabel,
-        sizeDeviationPercent: data.sizeDeviationPercent,
-        durationLabel: data.durationLabel,
-        warnings: data.warnings ?? [],
-      });
+      await loadJob();
     } catch {
-      setError(
-        "Se perdió la conexión durante el render. El vídeo puede haberse " +
-          "generado igualmente: recarga la ficha para comprobarlo.",
-      );
-    } finally {
-      setGenerating(false);
+      setError("Error de red al encolar el vídeo.");
+      setJob(null);
     }
   };
 
@@ -173,7 +202,7 @@ export function PropertyVideoPanel({
         <select
           value={format}
           onChange={(e) => setFormat(e.target.value as typeof format)}
-          disabled={generating}
+          disabled={running}
           className={boxCls}
         >
           <option value="horizontal">Horizontal 16:9</option>
@@ -182,7 +211,7 @@ export function PropertyVideoPanel({
         <select
           value={resolution}
           onChange={(e) => setResolution(e.target.value as typeof resolution)}
-          disabled={generating}
+          disabled={running}
           className={boxCls}
         >
           <option value="fullhd">Full HD</option>
@@ -245,24 +274,26 @@ export function PropertyVideoPanel({
             <button
               type="button"
               onClick={generate}
-              disabled={generating || !estimate?.ffmpegAvailable}
+              disabled={running || !estimate?.ffmpegAvailable}
               className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
             >
-              {generating ? (
+              {running ? (
                 <Loader2 size={13} className="animate-spin" />
-              ) : hasExistingVideo || generated ? (
+              ) : hasExistingVideo || job?.status === "done" ? (
                 <RefreshCw size={13} />
               ) : (
                 <Play size={13} />
               )}
-              {generating
-                ? "Generando…"
-                : hasExistingVideo || generated
+              {running
+                ? job?.status === "processing"
+                  ? "Generando…"
+                  : "En cola…"
+                : hasExistingVideo || job?.status === "done"
                   ? "Regenerar vídeo"
                   : "Generar vídeo"}
             </button>
 
-            {(hasExistingVideo || generated) && (
+            {(hasExistingVideo || job?.status === "done") && (
               <a
                 href={`/api/admin/properties/${slug}/download-video?format=${format}`}
                 className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
@@ -273,30 +304,38 @@ export function PropertyVideoPanel({
             )}
           </div>
 
-          {generating && (
-            <p className="mt-2 text-[11px] text-ink/45">
-              El render ocupa la CPU del servidor unos {plan.renderLabel}. Puedes
-              dejar esta pestaña abierta.
+          {running && (
+            <p className="mt-2 text-[11px] text-ink/50">
+              {job?.status === "processing"
+                ? `Renderizando en el servidor, tarda alrededor de ${plan.renderLabel}. `
+                : job?.queuePosition
+                  ? `En cola, con ${job.queuePosition} vídeo(s) por delante. `
+                  : "En cola. "}
+              Puedes cerrar esta página: el render sigue en el servidor y el vídeo
+              aparecerá en la ficha al terminar.
             </p>
           )}
         </>
       ) : null}
 
-      {generated && (
+      {job?.status === "done" && (
         <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-800">
           <p className="font-semibold">
-            Vídeo generado · {generated.sizeLabel} · {generated.durationLabel}
+            Vídeo generado
+            {job.sizeLabel ? ` · ${job.sizeLabel}` : ""}
+            {job.durationLabel ? ` · ${job.durationLabel}` : ""}
           </p>
           <p className="mt-0.5 text-emerald-700/80">
-            Estimado {generated.estimatedLabel} ({generated.sizeDeviationPercent > 0 ? "+" : ""}
-            {generated.sizeDeviationPercent}% de desvío). Recarga la ficha para verlo
-            en la lista de vídeos.
+            {job.estimatedLabel && `Se había estimado ${job.estimatedLabel}. `}
+            Recarga la ficha para verlo en la lista de vídeos.
           </p>
-          {generated.warnings.map((warning) => (
-            <p key={warning} className="mt-1 text-emerald-700/70">
-              · {warning}
-            </p>
-          ))}
+        </div>
+      )}
+
+      {job?.status === "error" && job.error && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[12px] text-red-700">
+          <p className="font-semibold">No se pudo generar el vídeo</p>
+          <p className="mt-0.5">{job.error}</p>
         </div>
       )}
 

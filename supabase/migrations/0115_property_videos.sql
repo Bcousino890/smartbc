@@ -130,9 +130,15 @@ CREATE TABLE IF NOT EXISTS property_video_jobs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- El worker busca por (status, created_at): índice parcial sobre la cola viva.
+-- Prioridad en la cola: lo que pide una persona desde la ficha se atiende
+-- antes que el barrido automático, que puede llevar cientos por delante.
+ALTER TABLE property_video_jobs
+  ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0;
+
+-- El worker busca por (status, prioridad, antigüedad): índice parcial sobre la
+-- cola viva.
 CREATE INDEX IF NOT EXISTS idx_property_video_jobs_queue
-  ON property_video_jobs (created_at)
+  ON property_video_jobs (priority DESC, created_at)
   WHERE status IN ('pending', 'processing');
 
 CREATE INDEX IF NOT EXISTS idx_property_video_jobs_property
