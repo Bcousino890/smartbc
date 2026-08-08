@@ -1186,9 +1186,12 @@ function IdealistaLeadModal({
                       className="h-11 w-14 shrink-0 rounded-md object-cover"
                     />
                   )}
-                  <p className="min-w-0 text-[13px] font-medium text-ink/80 self-center">
-                    📍 {[p.title, p.price, p.type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
-                  </p>
+                  <div className="min-w-0 self-center">
+                    <p className="text-[13px] font-medium text-ink/80">
+                      📍 {[p.title, p.price, p.type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
+                    </p>
+                    {p.date && <p className="mt-0.5 text-[11px] text-ink/40">🗓 {p.date}</p>}
+                  </div>
                 </div>
               ))}
             </div>

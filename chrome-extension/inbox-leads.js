@@ -19,6 +19,12 @@
   const COUNTRY_RE = /\(([A-Z]{2})\)/;
   const PRICE_RE = /([\d.,]+\s*€(?:\/mes)?)/;
   const DATE_RE = /^(\d{1,2}:\d{2}|\d{1,2}\s+\w{3,}\.?|hoy|ayer)$/i;
+  // Hora suelta de un mensaje ("12:34") vs. cabecera de día del hilo
+  // ("23 jul.", "hoy", "ayer") — DATE_RE ya matchea ambas formas juntas;
+  // estas dos por separado sirven para fechar cada tarjeta de propiedad
+  // (ver cardDateLabel).
+  const TIME_ONLY_RE = /^\d{1,2}:\d{2}$/;
+  const DAY_HEADER_RE = /^(hoy|ayer|\d{1,2}\s+[a-zà-ÿ]{3,}\.?)$/i;
   // El inbox tiene dos tipos de hilo: mensajes (CONVERSATION_) y llamadas
   // perdidas (CALL_). Ambos son leads. La "clave" de un hilo es el id
   // numérico para las conversaciones y "call_<id>" para las llamadas, para
@@ -46,6 +52,53 @@
     return null;
   }
 
+  // Cabeceras de día ("23 jul.", "hoy", "ayer") dentro del contenedor del
+  // hilo, en orden de documento — un solo recorrido, reutilizado para todas
+  // las tarjetas de esa captura en vez de repetirlo tarjeta por tarjeta.
+  function collectDayHeaders(container) {
+    if (!container) return [];
+    const leaves = [...container.querySelectorAll("*")].filter((el) => el.children.length === 0);
+    return leaves
+      .map((el) => ({ el, text: (el.textContent || "").trim() }))
+      .filter(({ text }) => DAY_HEADER_RE.test(text));
+  }
+
+  // La cabecera de día más cercana que precede a la tarjeta en el
+  // documento: Idealista agrupa los mensajes bajo una única cabecera por
+  // día, así que "la última que aparece antes de la tarjeta" es su día.
+  function nearestDayHeaderBefore(dayHeaders, cardEl) {
+    let found = null;
+    for (const { el, text } of dayHeaders) {
+      // eslint-disable-next-line no-bitwise
+      if (el.compareDocumentPosition(cardEl) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        found = text;
+      }
+    }
+    return found;
+  }
+
+  // Hora del mensaje que contiene la tarjeta ("12:34"): sube por los
+  // ancestros de la tarjeta (acotado) buscando una línea con esa forma
+  // dentro de la burbuja del mensaje, sin depender de si en el DOM la hora
+  // queda antes o después de la tarjeta.
+  function findCardTime(cardEl) {
+    let node = cardEl;
+    for (let i = 0; i < 8 && node && node !== document.body; i++) {
+      const lines = textLines(node);
+      const timeLine = lines.find((l) => TIME_ONLY_RE.test(l));
+      if (timeLine) return timeLine;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function cardDateLabel(dayHeaders, cardEl) {
+    const day = nearestDayHeaderBefore(dayHeaders, cardEl);
+    const time = findCardTime(cardEl);
+    if (day && time) return `${day} · ${time}`;
+    return day || time || null;
+  }
+
   // Cada tarjeta de propiedad dentro del hilo trae una imagen con
   // alt="Imagen del anuncio" — atributo semántico estable, a diferencia de
   // las clases del botón contenedor (con hash de build). Un mismo contacto
@@ -53,11 +106,26 @@
   // que se devuelven TODAS las tarjetas encontradas, no solo la primera.
   function extractPropertyCards(scope) {
     const root = scope || document;
+    // Fuera de la vista de detalle (p.ej. una fila del listado del inbox) no
+    // hay hilo ni cabeceras de día — dayHeaders queda vacío y cardDateLabel
+    // cae directamente a la hora suelta si la hay dentro del propio scope.
+    const dayHeaders = collectDayHeaders(findThreadScroller() || root);
     const cards = [...root.querySelectorAll("button, a")]
       .filter((el) => el.querySelector('img[alt="Imagen del anuncio"]'))
       .map((el) => {
         const img = el.querySelector('img[alt="Imagen del anuncio"]');
-        const imageUrl = img ? img.currentSrc || img.getAttribute("src") || null : null;
+        // data-src/data-lazy-src: las tarjetas de mensajes antiguos se
+        // insertan de forma diferida al hacer scroll (scrollThreadToTop) y
+        // el <img> puede llegar sin currentSrc/src resueltos todavía —
+        // muchas librerías de lazy-load dejan la URL real en un atributo
+        // data-* mientras tanto (ver también waitForCardImages).
+        const imageUrl = img
+          ? img.currentSrc ||
+            img.getAttribute("src") ||
+            img.getAttribute("data-src") ||
+            img.getAttribute("data-lazy-src") ||
+            null
+          : null;
         const lines = ((el.innerText || "").trim()).split("\n").map((l) => l.trim()).filter(Boolean);
         const priceLine = lines.find((l) => PRICE_RE.test(l) && l.includes("€"));
         const price = priceLine ? (priceLine.match(PRICE_RE) || [])[1] || null : null;
@@ -66,11 +134,13 @@
           : [];
         const type = typeParts.length > 0 ? typeParts[typeParts.length - 1] : null;
         const title = lines.find((l) => l !== priceLine) || null;
-        return { title, price, type, imageUrl };
+        const date = cardDateLabel(dayHeaders, el);
+        return { title, price, type, imageUrl, date };
       })
       .filter((c) => c.title || c.price || c.imageUrl);
     // Dedup por título (la misma propiedad puede aparecer repetida si se
-    // menciona en más de un mensaje del hilo).
+    // menciona en más de un mensaje del hilo) — se queda con la primera
+    // aparición, que es la fecha en la que se preguntó por primera vez.
     const seen = new Set();
     return cards.filter((c) => {
       const key = c.title || c.imageUrl;
@@ -90,6 +160,20 @@
     const img = root.querySelector('img[src*="/profilephotos/"]');
     if (!img) return null;
     return img.currentSrc || img.getAttribute("src") || null;
+  }
+
+  // Cuando el contacto NO tiene foto de perfil, Idealista pinta un círculo
+  // con sus iniciales como texto plano (idéntico patrón al que usa el propio
+  // SmartBC para sus avatares) justo antes del nombre completo. Al leer
+  // "primera línea de texto" como el nombre, ese texto de iniciales se cuela
+  // por delante y el lead se guarda como "Ma" en vez de "Manuel". Se detecta
+  // cuando una línea es corta (1-3 letras) y la siguiente empieza exactamente
+  // por esas mismas letras — así se distingue de un nombre real corto
+  // (p.ej. "Bo" sin más apellido detrás no dispara esto).
+  function looksLikeAvatarInitials(candidate, next) {
+    if (!candidate || !next) return false;
+    if (candidate.length > 3 || !/^[A-Za-zÀ-ÿ]+$/.test(candidate)) return false;
+    return next.length > candidate.length && next.toLowerCase().startsWith(candidate.toLowerCase());
   }
 
   // El botón de llamada de Idealista lleva el teléfono en crudo en el
@@ -231,8 +315,10 @@
       if (!lead.messageDate && DATE_RE.test(line)) lead.messageDate = line;
     });
 
-    // Nombre: primera línea de la fila
-    lead.name = lines[0] || null;
+    // Nombre: primera línea de la fila, saltando las iniciales del avatar
+    // sin foto si se colaron delante (ver looksLikeAvatarInitials).
+    const nameIdx = looksLikeAvatarInitials(lines[0], lines[1]) ? 1 : 0;
+    lead.name = lines[nameIdx] || null;
 
     // El atributo appcallback_target_phone (si está presente en la fila) es
     // más fiable que el regex sobre el texto visible.
@@ -366,9 +452,15 @@
     return unique.length > 0 ? unique.join("\n\n").slice(0, 50000) : null;
   }
 
-  function extractDetailLead(conversationId) {
+  async function extractDetailLead(conversationId) {
     const lead = { conversationId };
     const bodyText = document.body.innerText || "";
+
+    // Da tiempo a que las imágenes de las tarjetas de propiedad recién
+    // insertadas por scrollThreadToTop() terminen de resolverse antes de
+    // leerlas más abajo (ver waitForCardImages) — si no, la propiedad más
+    // antigua del hilo se captura sin foto.
+    await waitForCardImages(document);
 
     // Llamadas perdidas (CALL_): no hay hilo de mensajes ni perfil, solo un
     // aviso "Este número te llamó…", el teléfono y la propiedad consultada.
@@ -403,7 +495,11 @@
     const nameEl = document.querySelector('[class*="_seeker-name"]');
     if (nameEl) {
       const name = (nameEl.innerText || "").trim();
-      if (name) lead.name = name;
+      // Un resultado de 1-3 letras sueltas es sospechoso de ser en realidad
+      // las iniciales del avatar (el selector puede haber enganchado un
+      // contenedor que las incluye) — se descarta y se deja resolver al
+      // respaldo del panel de abajo, que sí filtra ese caso explícitamente.
+      if (name && !/^[A-Za-zÀ-ÿ]{1,3}$/.test(name)) lead.name = name;
     }
     const attrPhone = extractPhoneFromScope(document);
     if (attrPhone) {
@@ -441,9 +537,13 @@
         }
 
         if (!lead.name) {
-          const nameLine = headLines.find(
+          const candidates = headLines.filter(
             (l, i) => i !== phoneIdx && !/internacional/i.test(l) && !/^vio el anuncio/i.test(l),
           );
+          // Misma protección que en modo LISTA: si la primera candidata son
+          // las iniciales del avatar, el nombre real es la siguiente.
+          const nameIdx = looksLikeAvatarInitials(candidates[0], candidates[1]) ? 1 : 0;
+          const nameLine = candidates[nameIdx];
           if (nameLine) lead.name = nameLine;
         }
       }
@@ -578,22 +678,28 @@
   // ── Modo DETALLE: captura automática ─────────────────────────────────
   const sentDetails = new Set(); // conversationIds ya enviados en esta pestaña
 
+  // Contenedor scrolleable del hilo de mensajes — se reutiliza tanto para
+  // subir hasta el principio del hilo (scrollThreadToTop) como para acotar
+  // la búsqueda de cabeceras de día al fechar cada tarjeta de propiedad
+  // (ver collectDayHeaders), y así no salirse del hilo hacia el resto de la
+  // página en esa búsqueda.
+  function findThreadScroller() {
+    const msg = document.querySelector('[data-qa="seeker-message"], [data-qa="advertiser-message"]');
+    let el = msg ? msg.parentElement : null;
+    while (el && el !== document.body) {
+      const style = getComputedStyle(el);
+      if (el.scrollHeight > el.clientHeight + 20 && /(auto|scroll)/.test(style.overflowY)) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
   // Idealista carga los mensajes antiguos del hilo solo al hacer scroll
   // hacia arriba. Antes de capturar se sube el contenedor del hilo hasta
   // arriba del todo (repetidamente, hasta que deje de crecer) para que
   // estén TODOS los mensajes en el DOM.
   async function scrollThreadToTop() {
-    const findScroller = () => {
-      const msg = document.querySelector('[data-qa="seeker-message"], [data-qa="advertiser-message"]');
-      let el = msg ? msg.parentElement : null;
-      while (el && el !== document.body) {
-        const style = getComputedStyle(el);
-        if (el.scrollHeight > el.clientHeight + 20 && /(auto|scroll)/.test(style.overflowY)) return el;
-        el = el.parentElement;
-      }
-      return null;
-    };
-    const scroller = findScroller();
+    const scroller = findThreadScroller();
     if (!scroller) return;
     let lastHeight = -1;
     for (let i = 0; i < 40; i++) {
@@ -602,6 +708,33 @@
       if (scroller.scrollHeight === lastHeight) break; // ya no carga más
       lastHeight = scroller.scrollHeight;
     }
+  }
+
+  // Las tarjetas de propiedad de los mensajes más antiguos se insertan en el
+  // DOM justo al terminar scrollThreadToTop() (carga diferida del
+  // historial) y sus imágenes pueden tardar un instante en resolverse
+  // (currentSrc vacío hasta que el navegador -o la librería de lazy-load de
+  // Idealista- decide cargarlas). Sin esta espera, la propiedad más antigua
+  // de un hilo con varias consultas se guardaba sistemáticamente sin foto.
+  // Sondea cada imagen encontrada en vez de un sleep fijo, para no alargar
+  // la captura cuando ya está todo cargado.
+  async function waitForCardImages(scope) {
+    const root = scope || document;
+    const imgs = [...root.querySelectorAll('img[alt="Imagen del anuncio"]')];
+    await Promise.all(
+      imgs.map((img) =>
+        waitFor(
+          () =>
+            img.currentSrc ||
+            img.getAttribute("src") ||
+            img.getAttribute("data-src") ||
+            img.getAttribute("data-lazy-src") ||
+            null,
+          2500,
+          150,
+        ),
+      ),
+    );
   }
 
   async function captureDetail(conversationId, force) {
@@ -613,7 +746,7 @@
     await sleep(1200); // margen para que la SPA termine de pintar el perfil
     await scrollThreadToTop(); // cargar los mensajes viejos del hilo
 
-    const lead = extractDetailLead(conversationId);
+    const lead = await extractDetailLead(conversationId);
     const result = await sendLeads("detail", [lead]);
     if (result && result.ok) {
       showBadge("✓ Contacto actualizado en SmartBC", false, 3000);
