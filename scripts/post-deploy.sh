@@ -75,6 +75,20 @@ if [ -f "node_modules/.bin/playwright" ]; then
   node_modules/.bin/playwright install chromium --with-deps 2>&1 | tail -3 || echo "⚠️  Chromium install falló (la extracción de teléfonos usará solo curl)"
 fi
 
+# ffmpeg: motor de los vídeos automáticos de propiedad. No se instala desde
+# aquí (requiere root y el deploy no debería tocar paquetes del sistema), solo
+# se avisa: sin él la generación de vídeos queda desactivada y el panel lo
+# indica, pero el resto de la aplicación funciona igual.
+echo "🎬 Verificando ffmpeg (vídeos de propiedad)..."
+if command -v ffmpeg &> /dev/null && command -v ffprobe &> /dev/null; then
+  echo "✅ $(ffmpeg -version 2>/dev/null | head -1 | cut -c1-60)"
+else
+  echo "⚠️  ffmpeg no está instalado — los vídeos automáticos no se generarán."
+  echo "    Instálalo con: apt install ffmpeg"
+  echo "    Y sube FILE_SIZE_LIMIT del contenedor 'storage' a 500MB (ver CLAUDE.md)."
+fi
+echo ""
+
 # Build de Next.js
 if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
   echo "🔨 Compilando Next.js..."
