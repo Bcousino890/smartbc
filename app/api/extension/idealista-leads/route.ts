@@ -27,6 +27,7 @@ type IncomingProperty = {
   price?: unknown;
   type?: unknown;
   imageUrl?: unknown;
+  date?: unknown;
 };
 
 type IncomingLead = {
@@ -76,10 +77,18 @@ function asProfile(value: IncomingLead["profile"]): { bullets: string[]; present
   return { bullets, presentacion };
 }
 
-type NormalizedProperty = { title: string | null; price: string | null; type: string | null; imageUrl: string | null };
+type NormalizedProperty = {
+  title: string | null;
+  price: string | null;
+  type: string | null;
+  imageUrl: string | null;
+  date: string | null;
+};
 
 // Un mismo contacto puede preguntar por varias propiedades distintas en un
-// mismo hilo del inbox — se guardan todas, no solo la primera.
+// mismo hilo del inbox — se guardan todas, no solo la primera. `date` es la
+// fecha/hora en la que se preguntó por ESA propiedad en concreto (distinta
+// de message_date, que es la del último mensaje del hilo completo).
 function asProperties(value: unknown): NormalizedProperty[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -89,6 +98,7 @@ function asProperties(value: unknown): NormalizedProperty[] {
       price: asText(p.price, 100),
       type: asText(p.type, 100),
       imageUrl: asText(p.imageUrl, 1000),
+      date: asText(p.date, 100),
     }))
     .filter((p) => p.title || p.price || p.imageUrl)
     .slice(0, 30);
