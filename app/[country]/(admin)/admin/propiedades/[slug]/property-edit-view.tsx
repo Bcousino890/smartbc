@@ -45,6 +45,7 @@ import {
   type MediaItem,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
+import { PropertyVideoPanel } from "@/components/admin/property-video-panel";
 import {
   type SmartLinkRow,
   SmartLinksPanel,
@@ -801,6 +802,15 @@ export function PropertyEditView({
             <span>{t("adminProps.detail.downloadPhotos")}</span>
           </a>
         )}
+        {videos.length > 0 && (
+          <a
+            href={`/api/admin/properties/${property.slug}/download-video`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+          >
+            <Video size={13} strokeWidth={1.75} className="text-gold-dark" />
+            <span>Descargar vídeo</span>
+          </a>
+        )}
         <button
           type="button"
           onClick={handleDeleteProperty}
@@ -1480,6 +1490,14 @@ export function PropertyEditView({
               Sin videos aún. Añade un enlace de YouTube/Vimeo o sube un archivo MP4.
             </p>
           )}
+
+          {/* Generación del vídeo a partir de las fotos de la ficha. Enseña el
+              peso estimado antes de dejar renderizar. */}
+          <PropertyVideoPanel
+            slug={property.slug}
+            photoCount={property.photos.length}
+            hasExistingVideo={videos.length > 0}
+          />
         </Section>
 
         {/* Planos */}
