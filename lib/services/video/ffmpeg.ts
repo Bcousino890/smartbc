@@ -170,7 +170,12 @@ export async function hasAudioStream(filePath: string): Promise<boolean> {
       filePath,
     ]);
     return out.trim().length > 0;
-  } catch {
+  } catch (err) {
+    // Si ffprobe no está instalado no sabemos si hay audio o no — no es lo
+    // mismo que "sin pista de audio". Se relanza para que el llamador (que ya
+    // sabe tratar ese caso sin bloquear la subida) lo distinga de un fichero
+    // realmente mudo o corrupto.
+    if (err instanceof FfmpegMissingError) throw err;
     return false;
   }
 }

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRef, useState, useEffect } from "react";
 import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PropertyVideoPanel } from "@/components/admin/property-video-panel";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
 
@@ -719,6 +720,7 @@ function MediaUploadZone({
 export function IdealistaForm({
   propertyId,
   propertyTitle,
+  propertySlug,
   isInspo = false,
   initialData,
   bcReference,
@@ -727,6 +729,9 @@ export function IdealistaForm({
 }: {
   propertyId: string;
   propertyTitle?: string;
+  /** Slug de la propiedad real en el sistema. Ausente en inspos: no tienen
+   *  ficha de propiedad de la que generar el vídeo automático. */
+  propertySlug?: string;
   isInspo?: boolean;
   initialData?: Partial<IdealistaListing>;
   bcReference?: string;
@@ -1617,6 +1622,7 @@ export function IdealistaForm({
           icon={Video}
           onChange={(urls) => set("videos", urls)}
         />
+        {propertySlug && <PropertyVideoPanel slug={propertySlug} />}
         <MediaUploadZone
           label="Planos"
           items={form.plans}

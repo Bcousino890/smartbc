@@ -587,6 +587,7 @@ export function IdealistaClient({
         <IdealistaForm
           propertyId={propertyId}
           propertyTitle={propertyTitle}
+          propertySlug={!isInspo ? selectedProperty?.slug : undefined}
           isInspo={!!isInspo}
           initialData={initialData}
           bcReference={!isInspo && !selectedListing ? (selectedProperty?.bc_reference ?? undefined) : undefined}
