@@ -65,11 +65,12 @@ const boxCls =
 export function PropertyVideoPanel({
   slug,
   photoCount,
-  hasExistingVideo,
+  hasExistingVideo = false,
 }: {
   slug: string;
-  photoCount: number;
-  hasExistingVideo: boolean;
+  /** Si no se pasa, no se aplica el filtro de "mínimo 3 fotos": lo decide el servidor. */
+  photoCount?: number;
+  hasExistingVideo?: boolean;
 }) {
   const [format, setFormat] = useState<"horizontal" | "vertical">("horizontal");
   const [resolution, setResolution] = useState<"fullhd" | "4k">("fullhd");
@@ -176,7 +177,7 @@ export function PropertyVideoPanel({
     }
   };
 
-  if (photoCount < 3) return null;
+  if (photoCount !== undefined && photoCount < 3) return null;
 
   const plan = estimate?.plan;
   const ffmpegMissing = estimate && !estimate.ffmpegAvailable;
@@ -275,7 +276,7 @@ export function PropertyVideoPanel({
               type="button"
               onClick={generate}
               disabled={running || !estimate?.ffmpegAvailable}
-              className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-cream-50 transition hover:bg-emerald-700 disabled:opacity-50"
             >
               {running ? (
                 <Loader2 size={13} className="animate-spin" />
