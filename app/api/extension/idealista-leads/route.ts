@@ -109,15 +109,38 @@ function propertyKey(p: NormalizedProperty): string {
 }
 
 // Merge de detalle: unión de lo ya guardado + lo nuevo, dedup por título
-// (o imagen si no hay título), preservando el orden de aparición.
+// (o imagen si no hay título), preservando el orden de aparición. Una
+// propiedad ya conocida NO se pisa con la nueva captura, pero sí se
+// completan sus huecos (imageUrl/date/price/type en null) — la primera vez
+// que se vio una propiedad puede no haber tenido foto cargada todavía
+// (lazy-load) o no traer fecha, y sin este relleno esos campos se quedaban
+// en null para siempre aunque una captura posterior sí los trajera.
 function mergeProperties(existing: NormalizedProperty[], incoming: NormalizedProperty[]): NormalizedProperty[] {
-  const merged: NormalizedProperty[] = [...existing];
-  const seen = new Set(existing.map(propertyKey).filter(Boolean));
+  // Todas las existentes se preservan tal cual entran (incluida alguna rareza
+  // sin título ni imagen que no se puede indexar por key — igual que antes).
+  const merged: NormalizedProperty[] = existing.map((p) => ({ ...p }));
+  const indexByKey = new Map<string, number>();
+  merged.forEach((p, i) => {
+    const key = propertyKey(p);
+    if (key && !indexByKey.has(key)) indexByKey.set(key, i);
+  });
   for (const p of incoming) {
     const key = propertyKey(p);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    merged.push(p);
+    if (!key) continue; // sin título ni imagen no hay con qué identificarla
+    const idx = indexByKey.get(key);
+    if (idx === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push(p);
+    } else {
+      const prev = merged[idx];
+      merged[idx] = {
+        title: prev.title ?? p.title,
+        price: prev.price ?? p.price,
+        type: prev.type ?? p.type,
+        imageUrl: prev.imageUrl ?? p.imageUrl,
+        date: prev.date ?? p.date,
+      };
+    }
   }
   return merged.slice(0, 30);
 }
@@ -230,11 +253,15 @@ export async function POST(req: Request) {
         : null;
     }
 
-    // Mismo criterio para cada propiedad NUEVA del hilo (las ya guardadas no
-    // se tocan: mergeProperties las deja intactas al principio del array).
+    // Mismo criterio que la portada para cada propiedad del hilo: se
+    // recorren TODAS las del merge (no solo las nuevas), porque
+    // mergeProperties ahora puede rellenar el imageUrl de una propiedad ya
+    // conocida que antes no lo tenía (ver comentario ahí) — ese hotlink
+    // recién completado también hay que re-alojarlo. Para las que ya son
+    // una copia permanente nuestra, isPersistedLeadImage la salta gratis.
     const existingProperties = (existing?.properties as NormalizedProperty[]) ?? [];
     const mergedProperties = mergeProperties(existingProperties, lead.properties);
-    for (let i = existingProperties.length; i < mergedProperties.length; i++) {
+    for (let i = 0; i < mergedProperties.length; i++) {
       const p = mergedProperties[i];
       if (p.imageUrl && !isPersistedLeadImage(p.imageUrl)) {
         const persisted = await persistIdealistaLeadImage(db, lead.conversation_id, `p${i}`, p.imageUrl);
