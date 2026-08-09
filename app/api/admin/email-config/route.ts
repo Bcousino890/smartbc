@@ -1,24 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { createCipheriv, randomBytes, scryptSync } from "crypto";
-
-const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
-
-function encryptPassword(text: string): { encrypted: string; iv: string } {
-  const iv = randomBytes(16).toString("hex");
-  const key = scryptSync(ENCRYPTION_KEY, "salt", 32);
-  const cipher = createCipheriv("aes-256-gcm", key, Buffer.from(iv, "hex"));
-
-  let encrypted = cipher.update(text, "utf8", "hex");
-  encrypted += cipher.final("hex");
-
-  const authTag = cipher.getAuthTag().toString("hex");
-  return {
-    encrypted: `${encrypted}:${authTag}`,
-    iv,
-  };
-}
+import { encryptSecret } from "@/lib/crypto/secret";
 
 export async function GET() {
   const profile = await getCurrentProfile();
@@ -42,10 +25,9 @@ export async function GET() {
     return Response.json({
       config: {
         id: data.id,
-        smtpServer: data.smtp_server,
-        smtpPort: data.smtp_port,
-        smtpUser: data.smtp_user,
-        useSsl: data.use_ssl,
+        awsRegion: data.aws_region,
+        awsAccessKeyId: data.aws_access_key_id,
+        hasSecretAccessKey: Boolean(data.aws_secret_access_key_encrypted),
         fromEmail: data.from_email,
         fromName: data.from_name,
       },
@@ -68,46 +50,53 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const {
-      smtpServer,
-      smtpPort,
-      smtpUser,
-      smtpPassword,
-      useSsl,
+      awsRegion,
+      awsAccessKeyId,
+      awsSecretAccessKey,
       fromEmail,
       fromName,
     } = body;
 
-    if (!smtpServer || !smtpPort || !smtpUser || !smtpPassword || !fromEmail) {
+    if (!awsRegion || !awsAccessKeyId || !fromEmail) {
       return Response.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    const { encrypted, iv } = encryptPassword(smtpPassword);
     const supabase = createAdminClient() as any;
 
     // Check if config already exists
     const { data: existing } = await supabase
       .from("email_config")
-      .select("id")
+      .select("id, aws_secret_access_key_encrypted")
       .limit(1)
       .single();
 
+    // Secrets are only (re)written when a new value is provided, so leaving
+    // the field blank keeps the previously stored secret.
+    const row: Record<string, unknown> = {
+      aws_region: awsRegion,
+      aws_access_key_id: awsAccessKeyId,
+      from_email: fromEmail,
+      from_name: fromName || "SmartBC",
+    };
+
+    if (awsSecretAccessKey) {
+      const { encrypted, iv } = encryptSecret(awsSecretAccessKey);
+      row.aws_secret_access_key_encrypted = encrypted;
+      row.aws_secret_access_key_iv = iv;
+    } else if (!existing?.aws_secret_access_key_encrypted) {
+      return Response.json(
+        { error: "AWS Secret Access Key is required" },
+        { status: 400 }
+      );
+    }
+
     if (existing) {
-      // Update existing config
       const { error } = await supabase
         .from("email_config")
-        .update({
-          smtp_server: smtpServer,
-          smtp_port: smtpPort,
-          smtp_user: smtpUser,
-          smtp_password_encrypted: encrypted,
-          smtp_password_iv: iv,
-          use_ssl: useSsl !== false,
-          from_email: fromEmail,
-          from_name: fromName || "SmartBC",
-        })
+        .update(row)
         .eq("id", existing.id);
 
       if (error) {
@@ -118,17 +107,7 @@ export async function POST(req: Request) {
         );
       }
     } else {
-      // Create new config
-      const { error } = await supabase.from("email_config").insert({
-        smtp_server: smtpServer,
-        smtp_port: smtpPort,
-        smtp_user: smtpUser,
-        smtp_password_encrypted: encrypted,
-        smtp_password_iv: iv,
-        use_ssl: useSsl !== false,
-        from_email: fromEmail,
-        from_name: fromName || "SmartBC",
-      });
+      const { error } = await supabase.from("email_config").insert(row);
 
       if (error) {
         console.error("Error creating email config:", error);

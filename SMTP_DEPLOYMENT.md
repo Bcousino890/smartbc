@@ -81,7 +81,7 @@ npm run build && pm2 restart smartbc
    - **Servidor SMTP**: `c1362346.ferozo.com`
    - **Puerto SMTP**: `465`
    - **Usuario SMTP**: `no-reply@bcousinoprop.com`
-   - **Contraseña SMTP**: `Contrasena2022@`
+   - **Contraseña SMTP**: (rotada — pedir la actual, no commitear en texto plano)
    - **SSL/TLS**: Enable toggle (✓)
 
 4. **Test Connection**

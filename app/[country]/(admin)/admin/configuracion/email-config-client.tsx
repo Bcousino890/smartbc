@@ -5,28 +5,29 @@ import { useState, useEffect } from "react";
 import { useT } from "@/lib/i18n/provider";
 
 interface EmailConfigData {
-  smtpServer: string;
-  smtpPort: number;
-  smtpUser: string;
-  smtpPassword: string;
-  useSsl: boolean;
+  awsRegion: string;
+  awsAccessKeyId: string;
+  awsSecretAccessKey: string;
   fromEmail: string;
   fromName?: string;
+}
+
+interface LoadedFlags {
+  hasSecretAccessKey: boolean;
 }
 
 export function EmailConfigClient() {
   const t = useT();
   const [config, setConfig] = useState<EmailConfigData>({
-    smtpServer: "",
-    smtpPort: 465,
-    smtpUser: "",
-    smtpPassword: "",
-    useSsl: true,
+    awsRegion: "eu-west-1",
+    awsAccessKeyId: "",
+    awsSecretAccessKey: "",
     fromEmail: "",
     fromName: "SmartBC",
   });
+  const [flags, setFlags] = useState<LoadedFlags>({ hasSecretAccessKey: false });
 
-  const [showPassword, setShowPassword] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,8 +39,6 @@ export function EmailConfigClient() {
   const [testToEmail, setTestToEmail] = useState("");
   const [sendToStatus, setSendToStatus] = useState<"idle" | "success" | "error">("idle");
   const [sendToMessage, setSendToMessage] = useState("");
-  const [testingAllPorts, setTestingAllPorts] = useState(false);
-  const [portTestResults, setPortTestResults] = useState<any>(null);
 
   // Load existing config on mount
   useEffect(() => {
@@ -51,8 +50,12 @@ export function EmailConfigClient() {
         if (data.config) {
           setConfig((prev) => ({
             ...prev,
-            ...data.config,
+            awsRegion: data.config.awsRegion || prev.awsRegion,
+            awsAccessKeyId: data.config.awsAccessKeyId || "",
+            fromEmail: data.config.fromEmail || "",
+            fromName: data.config.fromName || prev.fromName,
           }));
+          setFlags({ hasSecretAccessKey: Boolean(data.config.hasSecretAccessKey) });
         }
       } catch (error) {
         console.error("Error loading email config:", error);
@@ -90,6 +93,9 @@ export function EmailConfigClient() {
 
       setSaveStatus("success");
       setSuccessMessage("Configuración guardada exitosamente");
+      setFlags((prev) => ({ hasSecretAccessKey: prev.hasSecretAccessKey || Boolean(config.awsSecretAccessKey) }));
+      // Clear the secret input after save (it's stored encrypted now).
+      setConfig((prev) => ({ ...prev, awsSecretAccessKey: "" }));
       setTimeout(() => setSaveStatus("idle"), 3000);
     } catch (error) {
       setSaveStatus("error");
@@ -131,43 +137,6 @@ export function EmailConfigClient() {
     }
   };
 
-  const handleTestAllPorts = async () => {
-    setTestingAllPorts(true);
-    setErrorMessage("");
-    setSuccessMessage("");
-    setPortTestResults(null);
-
-    try {
-      const response = await fetch("/api/admin/email-config/test-all-ports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-
-      const data = await response.json();
-      setPortTestResults(data);
-
-      if (data.ok && data.recommended) {
-        setSuccessMessage(
-          `✅ Puerto ${data.recommended.port} funciona. Actualiza tu configuración con: Puerto=${data.recommended.port}, SSL/TLS=${data.recommended.secure}`
-        );
-        setConfig((prev) => ({
-          ...prev,
-          smtpPort: data.recommended.port,
-          useSsl: data.recommended.secure,
-        }));
-      } else {
-        setErrorMessage(
-          data.message || "No se encontró puerto funcionando. Contacta a Hetzner."
-        );
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Error desconocido");
-    } finally {
-      setTestingAllPorts(false);
-    }
-  };
-
   if (loading) {
     return (
       <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -175,7 +144,7 @@ export function EmailConfigClient() {
           <span className="text-gold">
             <Mail size={16} strokeWidth={1.75} />
           </span>
-          <span>Configuración SMTP</span>
+          <span>Configuración de Email (AWS SES)</span>
         </header>
         <div className="mt-4 flex items-center justify-center py-8">
           <Loader2 size={20} className="animate-spin text-gold" />
@@ -184,13 +153,17 @@ export function EmailConfigClient() {
     );
   }
 
+  const secretPlaceholder = flags.hasSecretAccessKey
+    ? "•••••••• (guardada — deja vacío para conservar)"
+    : "Pega la Secret Access Key aquí";
+
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
         <span className="text-gold">
           <Mail size={16} strokeWidth={1.75} />
         </span>
-        <span>Configuración SMTP</span>
+        <span>Configuración de Email (AWS SES)</span>
       </header>
 
       <div className="mt-4 space-y-4">
@@ -229,54 +202,43 @@ export function EmailConfigClient() {
             placeholder="SmartBC"
           />
 
-          {/* SMTP Server */}
+          {/* AWS Region */}
           <Field
-            labelKey="Servidor SMTP"
+            labelKey="AWS Region"
             type="text"
-            value={config.smtpServer}
-            onChange={(v) => handleInputChange("smtpServer", v)}
-            placeholder="smtp.example.com"
-            fullWidth
+            value={config.awsRegion}
+            onChange={(v) => handleInputChange("awsRegion", v)}
+            placeholder="eu-west-1"
           />
 
-          {/* SMTP Port */}
+          {/* AWS Access Key ID */}
           <Field
-            labelKey="Puerto SMTP"
-            type="number"
-            value={config.smtpPort.toString()}
-            onChange={(v) => handleInputChange("smtpPort", parseInt(v, 10))}
-            placeholder="465"
-          />
-
-          {/* SMTP User */}
-          <Field
-            labelKey="Usuario SMTP"
+            labelKey="AWS Access Key ID"
             type="text"
-            value={config.smtpUser}
-            onChange={(v) => handleInputChange("smtpUser", v)}
-            placeholder="user@example.com"
-            fullWidth
+            value={config.awsAccessKeyId}
+            onChange={(v) => handleInputChange("awsAccessKeyId", v)}
+            placeholder="AKIA..."
           />
 
-          {/* SMTP Password */}
-          <div className="flex flex-col gap-1.5 md:col-span-1">
+          {/* AWS Secret Access Key */}
+          <div className="flex flex-col gap-1.5 md:col-span-2">
             <label className="text-[11px] font-medium text-ink/65">
-              Contraseña SMTP
+              AWS Secret Access Key {flags.hasSecretAccessKey && <span className="text-green-700">· guardada</span>}
             </label>
             <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
               <input
-                type={showPassword ? "text" : "password"}
-                value={config.smtpPassword}
-                onChange={(e) => handleInputChange("smtpPassword", e.target.value)}
-                placeholder="••••••••"
+                type={showSecret ? "text" : "password"}
+                value={config.awsSecretAccessKey}
+                onChange={(e) => handleInputChange("awsSecretAccessKey", e.target.value)}
+                placeholder={secretPlaceholder}
                 className="w-full bg-transparent text-sm text-ink focus:outline-none"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() => setShowSecret(!showSecret)}
                 className="text-ink/55 hover:text-ink"
               >
-                {showPassword ? (
+                {showSecret ? (
                   <EyeOff size={16} />
                 ) : (
                   <Eye size={16} />
@@ -284,35 +246,13 @@ export function EmailConfigClient() {
               </button>
             </div>
           </div>
-
-          {/* SSL Toggle */}
-          <div className="flex items-end gap-2">
-            <label className="flex items-center gap-3 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 w-full">
-              <input
-                type="checkbox"
-                checked={config.useSsl}
-                onChange={(e) => handleInputChange("useSsl", e.target.checked)}
-                className="h-4 w-4 rounded border-ink/15 text-gold focus:ring-gold"
-              />
-              <span className="text-sm text-ink">Usar SSL/TLS</span>
-            </label>
-          </div>
         </div>
 
         {/* Buttons */}
         <div className="flex flex-col gap-3 pt-2 md:flex-row md:justify-end md:gap-2">
           <button
-            onClick={handleTestAllPorts}
-            disabled={testingAllPorts || saving}
-            className="flex items-center justify-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-5 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
-          >
-            {testingAllPorts && <Loader2 size={14} className="animate-spin" />}
-            <span>🔍 Probar Todos los Puertos</span>
-          </button>
-
-          <button
             onClick={handleTestConnection}
-            disabled={testing || saving || testingAllPorts}
+            disabled={testing || saving}
             className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-gold/5 disabled:opacity-50"
           >
             {testing && <Loader2 size={14} className="animate-spin" />}
@@ -321,43 +261,13 @@ export function EmailConfigClient() {
 
           <button
             onClick={handleSave}
-            disabled={saving || testing || testingAllPorts}
+            disabled={saving || testing}
             className="flex items-center justify-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             <span>Guardar Configuración</span>
           </button>
         </div>
-
-        {/* Port Test Results */}
-        {portTestResults && (
-          <div className="border-t border-ink/8 pt-4 mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/45 mb-3">
-              Resultados de prueba de puertos
-            </p>
-            <div className="space-y-2">
-              {portTestResults.results.map(
-                (result: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
-                      result.status === "success"
-                        ? "border-green-200 bg-green-50 text-green-700"
-                        : "border-red-200 bg-red-50 text-red-700"
-                    }`}
-                  >
-                    <span>
-                      {result.status === "success" ? "✅" : "❌"} {result.name}
-                    </span>
-                    {result.status === "failed" && (
-                      <span className="text-xs opacity-75">{result.error}</span>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Send test to specific address */}
         <div className="border-t border-ink/8 pt-4 mt-2">
