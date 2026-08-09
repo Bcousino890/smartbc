@@ -26,6 +26,20 @@ export interface SendEmailOptions {
 const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
 
 /**
+ * Nodemailer's `secure` option means implicit TLS (handshake before any SMTP
+ * traffic), which only port 465 uses. Ports 587/25/2525 use STARTTLS
+ * (plaintext greeting, then upgrade), so they need `secure: false` — passing
+ * `secure: true` there makes nodemailer attempt a TLS handshake on what the
+ * server still thinks is a plaintext socket, which OpenSSL reports as
+ * "wrong version number". `requireTLS` is what actually enforces encryption
+ * on STARTTLS ports.
+ */
+export function getSmtpTlsOptions(port: number, useSsl: boolean) {
+  const secure = useSsl && Number(port) === 465;
+  return { secure, requireTLS: useSsl && !secure };
+}
+
+/**
  * Encrypt password using AES-256-GCM
  */
 function encryptPassword(text: string): { encrypted: string; iv: string } {
@@ -162,7 +176,7 @@ export async function sendEmail(
     const transporter = nodemailer.createTransport({
       host: config.smtpServer,
       port: config.smtpPort,
-      secure: config.useSsl, // true for 465, false for other ports
+      ...getSmtpTlsOptions(config.smtpPort, config.useSsl),
       auth: {
         user: config.smtpUser,
         pass: decryptedPassword,
@@ -209,7 +223,7 @@ export async function testSmtpConnection(
     const transporter = nodemailer.createTransport({
       host: config.smtpServer,
       port: config.smtpPort,
-      secure: config.useSsl,
+      ...getSmtpTlsOptions(config.smtpPort, config.useSsl),
       auth: {
         user: config.smtpUser,
         pass: decryptedPassword,

@@ -3,6 +3,7 @@ import "server-only";
 const nodemailer = require('nodemailer');
 import { renderEmailLayout, escapeHtml } from "@/lib/email/templates";
 import { requirePermission } from "@/lib/auth/guard";
+import { getSmtpTlsOptions } from "@/lib/email/send-email";
 
 export async function POST(req: Request) {
   try {
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       const transporter = nodemailer.createTransport({
         host: smtpServer,
         port: smtpPort,
-        secure: useSsl ?? true,
+        ...getSmtpTlsOptions(smtpPort, useSsl ?? true),
         auth: {
           user: smtpUser,
           pass: smtpPassword,

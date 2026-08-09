@@ -1,6 +1,7 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getSmtpTlsOptions } from "@/lib/email/send-email";
 import { createDecipheriv, scryptSync } from "crypto";
 
 const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
     const transporter = nodemailer.createTransport({
       host: smtpServer,
       port: smtpPort,
-      secure: useSsl !== false,
+      ...getSmtpTlsOptions(smtpPort, useSsl !== false),
       auth: {
         user: smtpUser,
         pass: password,
