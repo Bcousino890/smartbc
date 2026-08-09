@@ -2,7 +2,7 @@ import "server-only";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const nodemailer = require("nodemailer");
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { getEmailConfig, decryptPassword } from "@/lib/email/send-email";
+import { getEmailConfig, decryptPassword, getSmtpTlsOptions } from "@/lib/email/send-email";
 import { renderEmailLayout } from "@/lib/email/templates";
 
 export async function POST(req: Request) {
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const transporter = nodemailer.createTransport({
       host: config.smtpServer,
       port: config.smtpPort,
-      secure: config.useSsl,
+      ...getSmtpTlsOptions(config.smtpPort, config.useSsl),
       auth: { user: config.smtpUser, pass: password },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
