@@ -16,6 +16,7 @@
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1106.0",
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
