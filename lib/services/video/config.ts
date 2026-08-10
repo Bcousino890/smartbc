@@ -61,18 +61,22 @@ export const SETTINGS_KEY = "video_generation";
 
 export const DEFAULT_SETTINGS: VideoSettings = {
   enabled: false,
-  // 4 s por foto con 1 s de fundido = 3 s de imagen quieta entre transición y
-  // transición. Por debajo de eso el vídeo se percibe acelerado: el ojo no
-  // llega a leer la estancia antes de que ya esté cambiando, y el Ken Burns
-  // (que recorre el zoom en el tiempo de la foto) se vuelve un barrido brusco.
-  secondsPerPhoto: 4,
-  transitionSeconds: 1,
+  // Ritmo aprobado por el cliente en producción (2026-08-11): con 22 fotos son
+  // ~1:04, casi 3 s de imagen quieta entre transición y transición. El valor
+  // importa más de lo que parece porque el Ken Burns recorre todo su zoom en
+  // el tiempo que dura la foto: acortarla no solo cambia rápido, también
+  // convierte el movimiento de cámara en un barrido brusco.
+  secondsPerPhoto: 3.5,
+  transitionSeconds: 0.6,
   maxPhotos: 40,
   maxDurationSeconds: 150, // 2:30, el tope que pidió el cliente
   defaultFormat: "horizontal",
   defaultResolution: "fullhd",
   musicVolume: 0.5,
-  logoOpacity: 0.75,
+  // A plena opacidad: es el logo de la marca, con sus colores. Bajarlo lo
+  // convierte en una marca de agua gris — el logo es tinta oscura, así que
+  // atenuarlo no lo hace "sutil", lo destiñe.
+  logoOpacity: 1,
   logoPosition: "top-right",
   regenerateOnPhotoChange: true,
   defaultMusicTrackId: null,
