@@ -38,5 +38,11 @@ export async function GET(request: Request) {
   const diagnosis = await diagnoseFfmpeg();
   // 200 siempre: un "no está instalado" es una respuesta válida del
   // diagnóstico, no un fallo del endpoint. El veredicto va en el cuerpo.
-  return NextResponse.json(diagnosis);
+  //
+  // charset explícito: sin él, el navegador adivina latin-1 al abrir la URL a
+  // pelo y el veredicto llega con acentos rotos ("no se encontrÃ³"), que es
+  // justo lo que uno acaba pegando en un chat para pedir ayuda.
+  return new NextResponse(JSON.stringify(diagnosis, null, 2), {
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
 }

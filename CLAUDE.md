@@ -13,7 +13,17 @@
   - Las migraciones se aplican con psql dentro del contenedor `supabase-db`
     (ver `scripts/post-deploy.sh` y el botón en `/admin/configuracion`).
 - Deploy: push a `main` → VPS hace `git pull && npm run build && pm2 restart`
-  (cron cada ~5 min). No tengo acceso SSH al VPS desde aquí.
+  (cron cada ~5 min).
+- **Ruta real de la app en el VPS: `/opt/smartbc-app`** (confirmado en
+  producción vía `/api/admin/video/ffmpeg-health`, campo `cwd`). Ojo: hay dos
+  rutas obsoletas circulando por el repo — `/app/smartbc` en
+  `ecosystem.config.js` y `/home/smartbc` en `DEPLOY.md`. Antes de instalar o
+  tocar nada en el servidor, confirma la ruta con `pm2 list`.
+- El proceso de Next corre **como root** en el VPS, así que un fallo de
+  "permiso denegado" nunca es la explicación de que no encuentre un binario.
+- Acceso SSH: `root@178.105.176.3` (ver `scripts/deploy.sh`). Claude Code lo
+  bloquea por defecto; hay que autorizarlo con `Bash(ssh root@178.105.176.3:*)`
+  en `.claude/settings.json` o aprobándolo a mano.
 
 ## Ramas
 - Desarrollo: `claude/adoring-pasteur-3OgFB`

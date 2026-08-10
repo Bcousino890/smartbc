@@ -105,11 +105,16 @@ export class FfmpegMissingError extends Error {
   readonly searched: string[];
 
   constructor(bin: string, searched: string[] = binSearchDirs()) {
+    // El mensaje se enseña tal cual en el panel, así que dice QUÉ hacer, no
+    // solo qué falta. Se busca siempre en /usr/bin, así que llegar aquí
+    // significa que no está instalado; mandar a nadie a revisar el PATH solo le
+    // hace perder la tarde.
     super(
-      `No se encontró "${bin}" en el servidor (buscado en ${searched.length} ` +
-        `directorios: ${searched.slice(0, 6).join(", ")}…). Instálalo en el VPS con ` +
-        `"apt install ffmpeg" y reinicia PM2 con "pm2 restart smartbc-main --update-env" ` +
-        `(o define FFMPEG_PATH/FFPROBE_PATH si está en otra ruta).`,
+      `${bin} no está instalado en el servidor: se buscó en /usr/bin (donde lo deja ` +
+        `apt) y en otros ${searched.length - 1} directorios, y no hay nada. Instálalo ` +
+        `en el VPS con "sudo apt update && sudo apt install -y ffmpeg" y revisa la ` +
+        `salida por si apt falla. Si en la shell del VPS "which ${bin}" sí responde, ` +
+        `está en una ruta no estándar: define FFMPEG_PATH/FFPROBE_PATH.`,
     );
     this.name = "FfmpegMissingError";
     this.searched = searched;
@@ -431,13 +436,23 @@ export async function diagnoseFfmpeg(): Promise<FfmpegDiagnosis> {
         `contenedor: instalarlo en el host no sirve, hay que instalarlo en la ` +
         `imagen del contenedor (o montar el binario dentro).`;
     } else {
+      // Siempre se busca en /usr/bin (está en EXTRA_BIN_DIRS pase lo que pase
+      // con el PATH), así que un "no encontrado" ya no admite la excusa del
+      // PATH: o no está instalado, o está en una ruta no estándar. Decirlo sin
+      // rodeos importa — el consejo genérico manda a la gente a perseguir
+      // fantasmas de PATH cuando lo que pasó es que apt nunca terminó.
+      const plural = missing.length > 1;
       verdict =
-        `No se encontró ${missing.join(" ni ")} en ninguno de los ${binSearchDirs().length} ` +
-        `directorios buscados. Si en la shell del VPS "which ffmpeg" SÍ responde, ` +
-        `el binario está en un directorio que este proceso no ve: reinicia PM2 con ` +
-        `"pm2 restart smartbc-main --update-env" (el demonio de PM2 conserva el PATH ` +
-        `con el que arrancó) o define FFMPEG_PATH y FFPROBE_PATH con la ruta absoluta. ` +
-        `Si no responde, instálalo: "sudo apt update && sudo apt install -y ffmpeg".`;
+        `${missing.join(" y ")} ${plural ? "no están instalados" : "no está instalado"} ` +
+        `en esta máquina: se buscó en /usr/bin (donde lo deja apt) y en otros ` +
+        `${binSearchDirs().length - 1} directorios estándar, y no hay ningún fichero. ` +
+        `No es un problema de PATH ni de permisos. Instálalo en el VPS y LEE la salida, ` +
+        `que es donde se pierde el fallo normalmente: ` +
+        `"sudo apt update && sudo apt install -y ffmpeg". Si apt falla, los sospechosos ` +
+        `son disco lleno ("df -h /"), falta de apt update, o dpkg a medias ` +
+        `("dpkg --configure -a"). Y si en la shell del VPS "which ffmpeg" SÍ responde, ` +
+        `entonces está en una ruta no estándar: define FFMPEG_PATH y FFPROBE_PATH con ` +
+        `la ruta absoluta en .env.local.`;
     }
   }
 
