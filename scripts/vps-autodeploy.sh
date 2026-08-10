@@ -46,6 +46,15 @@ npm install >>"$LOG" 2>&1
 # Heap de 4GB: el build creció (mapas, gráficos, chat) y se quedaba sin memoria
 # (OOM/SIGABRT). El VPS tiene 7.6GB RAM + swap, así que 4GB de heap entra bien.
 rm -rf .next.new >>"$LOG" 2>&1
+
+# Tipos generados RANCIOS del build anterior: Next mete `.next/types/**/*.ts` en
+# el `include` de tsconfig, así que el typecheck valida también los .d.ts del
+# build viejo. Si un commit BORRA una ruta de API, su fichero de tipos sigue
+# apuntando a un módulo inexistente y el build falla entero ("Cannot find
+# module '.../route.js'") — el deploy se queda atascado sin causa aparente.
+# Solo se usan al compilar, así que borrarlos no afecta al proceso en marcha.
+rm -rf .next/types >>"$LOG" 2>&1
+
 if NODE_OPTIONS="--max-old-space-size=4096" NEXT_BUILD_DIR=.next.new npm run build >>"$LOG" 2>&1; then
   # Swap atómico: mueve el `.next` viejo a un lado, pon el nuevo en su sitio y
   # reinicia. Si el reinicio arranca bien, borra el viejo.

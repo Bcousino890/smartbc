@@ -79,7 +79,14 @@ export type ParticularRow = {
   bathrooms: number | null;
   square_meters: number | null;
   description: string | null;
-  photos: Array<{ url: string; alt?: string }> | null;
+  /**
+   * Portada del anuncio. Es lo único que trae el listado: la galería completa
+   * la carga el modal al abrirse (ver /api/admin/particulares/detail), porque
+   * mandar los 30+ `photos` de cada fila colgaba la página.
+   */
+  cover_url: string | null;
+  /** Solo presente una vez el modal ha cargado el detalle. */
+  photos?: Array<{ url: string; alt?: string }> | null;
   features: string[] | null;
   owner_name: string | null;
   phone: string | null;
@@ -761,7 +768,36 @@ function ParticularModal({
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
-  const photos = currentRow.photos ?? [];
+
+  // El listado solo trae la portada. Al abrir el modal se pide la galería
+  // completa, así que hasta que llegue se muestra la portada como única foto.
+  useEffect(() => {
+    let cancelled = false;
+    if (currentRow.photos) return;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/particulares/detail?id=${encodeURIComponent(row.id)}`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (Array.isArray(data.photos)) {
+          setCurrentRow((prev) => ({ ...prev, photos: data.photos }));
+        }
+      } catch {
+        // Sin galería: se queda la portada. No merece romper el modal.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Solo al abrir: `row.id` identifica el anuncio del modal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.id]);
+
+  const photos =
+    currentRow.photos ??
+    (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
   const cover = photos[photoIdx]?.url;
   const hasPhone = Boolean(currentRow.phone);
 
@@ -1872,7 +1908,7 @@ export function ParticularesClient({
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {paginated.map((r) => {
-              const cover = r.photos?.[0]?.url;
+              const cover = r.cover_url ?? r.photos?.[0]?.url;
               return (
                 <button
                   key={r.id}

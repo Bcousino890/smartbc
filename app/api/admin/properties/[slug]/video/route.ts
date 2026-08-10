@@ -57,7 +57,12 @@ export async function GET(
   });
   if (!estimate.ok) {
     return Response.json(
-      { ok: false, error: estimate.error, ffmpegAvailable: ffmpeg.available },
+      {
+        ok: false,
+        error: estimate.error,
+        ffmpegAvailable: ffmpeg.available,
+        ffmpegError: ffmpeg.available ? null : ffmpeg.error,
+      },
       { status: 200 },
     );
   }

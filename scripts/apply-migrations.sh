@@ -4,7 +4,7 @@
 #
 # Se ejecuta EN EL VPS (necesita docker + el contenedor `supabase-db`).
 # Normalmente lo llama deploy.sh, pero también puedes correrlo suelto:
-#   ssh root@178.105.176.3 'bash /opt/smartbc-app/scripts/apply-migrations.sh'
+#   ssh root@178.105.185.125 'bash /opt/smartbc-app/scripts/apply-migrations.sh'
 #
 # Cómo funciona:
 #   - La primera vez crea la tabla `schema_migrations` y marca TODAS las

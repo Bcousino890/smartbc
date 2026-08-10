@@ -15,7 +15,7 @@ export type IdealistaLeadRow = {
   property_price: string | null;
   property_type: string | null;
   property_image_url: string | null;
-  properties: { title: string | null; price: string | null; type: string | null; imageUrl: string | null }[];
+  properties: { title: string | null; price: string | null; type: string | null; imageUrl: string | null; date: string | null }[];
   idealista_code: string | null;
   property_ref: string | null;
   matched_property_id: string | null;

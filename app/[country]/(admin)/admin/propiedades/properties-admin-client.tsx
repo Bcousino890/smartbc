@@ -18,7 +18,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { archiveProperty } from "@/app/(admin)/admin/propiedades/actions";
 import {
   type AgencyOption,
@@ -56,21 +56,44 @@ export function PropertiesAdminClient({
   const config = getCountryConfig(country);
   const t = useT();
   const { toast } = useToast();
-  const [query, setQuery] = useState("");
-  const [operationFilter, setOperationFilter] = useState<"" | "alquiler" | "venta">("");
-  const [statusFilter, setStatusFilter] = useState<"" | "available" | "reserved" | "sold" | "rented" | "draft">("");
-  const [zoneFilter, setZoneFilter] = useState<string>("");
-  const [subzoneFilter, setSubzoneFilter] = useState<string>("");
-  const [agencyFilter, setAgencyFilter] = useState<string>("");
-  const [stayFilter, setStayFilter] = useState<"" | "larga" | "corta">("");
-  const [bedroomsFilter, setBedroomsFilter] = useState<string>("");
-  const [bathroomsFilter, setBathroomsFilter] = useState<string>("");
-  const [floorFilter, setFloorFilter] = useState<string>("");
-  const [minPrice, setMinPrice] = useState<string>("");
-  const [maxPrice, setMaxPrice] = useState<string>("");
-  const [minM2, setMinM2] = useState<string>("");
-  const [maxM2, setMaxM2] = useState<string>("");
-  const [page, setPage] = useState(1);
+
+  // Los filtros viven en la URL (?operacion=…&distrito=…). Así, al entrar en una
+  // ficha y volver atrás, el navegador restaura la misma URL y la lista aparece
+  // filtrada igual que la dejaste, en vez de reiniciarse. De regalo, el listado
+  // filtrado se puede compartir o guardar en marcadores.
+  const searchParams = useSearchParams();
+  // Lee un parámetro validándolo contra los valores permitidos: una URL
+  // manipulada a mano no debe meter basura en un filtro tipado.
+  const param = <T extends string>(key: string, allowed?: readonly T[]): T => {
+    const raw = searchParams.get(key) ?? "";
+    if (allowed && !allowed.includes(raw as T)) return "" as T;
+    return raw as T;
+  };
+
+  const [query, setQuery] = useState(() => param("q"));
+  const [operationFilter, setOperationFilter] = useState<"" | "alquiler" | "venta">(
+    () => param("operacion", ["", "alquiler", "venta"] as const),
+  );
+  const [statusFilter, setStatusFilter] = useState<"" | "available" | "reserved" | "sold" | "rented" | "draft">(
+    () => param("estado", ["", "available", "reserved", "sold", "rented", "draft"] as const),
+  );
+  const [zoneFilter, setZoneFilter] = useState<string>(() => param("distrito"));
+  const [subzoneFilter, setSubzoneFilter] = useState<string>(() => param("zona"));
+  const [agencyFilter, setAgencyFilter] = useState<string>(() => param("agencia"));
+  const [stayFilter, setStayFilter] = useState<"" | "larga" | "corta">(
+    () => param("estancia", ["", "larga", "corta"] as const),
+  );
+  const [bedroomsFilter, setBedroomsFilter] = useState<string>(() => param("dormitorios"));
+  const [bathroomsFilter, setBathroomsFilter] = useState<string>(() => param("banos"));
+  const [floorFilter, setFloorFilter] = useState<string>(() => param("planta"));
+  const [minPrice, setMinPrice] = useState<string>(() => param("precioMin"));
+  const [maxPrice, setMaxPrice] = useState<string>(() => param("precioMax"));
+  const [minM2, setMinM2] = useState<string>(() => param("m2Min"));
+  const [maxM2, setMaxM2] = useState<string>(() => param("m2Max"));
+  const [page, setPage] = useState(() => {
+    const n = Number.parseInt(searchParams.get("pagina") ?? "", 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -195,8 +218,15 @@ export function PropertiesAdminClient({
   const safePage = Math.min(page, totalPages);
   const paged = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
 
-  // Al cambiar cualquier filtro/búsqueda, volver a la primera página.
+  // Al cambiar cualquier filtro/búsqueda, volver a la primera página. Se salta
+  // el primer render: si no, al volver atrás con ?pagina=3 este efecto la
+  // reseteaba a 1 nada más montar y perdías la página en la que estabas.
+  const isFirstRender = useRef(true);
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setPage(1);
   }, [
     query,
@@ -213,6 +243,56 @@ export function PropertiesAdminClient({
     maxPrice,
     minM2,
     maxM2,
+  ]);
+
+  // Espeja los filtros en la URL. Usamos history.replaceState (no router.push)
+  // a propósito: no dispara navegación ni recarga los datos del servidor —solo
+  // reescribe la barra de direcciones— así que escribir en el buscador sigue
+  // siendo instantáneo con el catálogo entero en memoria. `replace` en vez de
+  // `push` para no llenar el historial de estados intermedios: "atrás" desde
+  // una ficha te devuelve a la lista, no a cada letra que tecleaste.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const set = (key: string, value: string) => {
+      if (value) sp.set(key, value);
+      else sp.delete(key);
+    };
+    set("q", query);
+    set("operacion", operationFilter);
+    set("estado", statusFilter);
+    set("distrito", zoneFilter);
+    set("zona", subzoneFilter);
+    set("agencia", agencyFilter);
+    set("estancia", stayFilter);
+    set("dormitorios", bedroomsFilter);
+    set("banos", bathroomsFilter);
+    set("planta", floorFilter);
+    set("precioMin", minPrice);
+    set("precioMax", maxPrice);
+    set("m2Min", minM2);
+    set("m2Max", maxM2);
+    set("pagina", page > 1 ? String(page) : "");
+    const qs = sp.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, "", url);
+    }
+  }, [
+    query,
+    operationFilter,
+    statusFilter,
+    zoneFilter,
+    subzoneFilter,
+    agencyFilter,
+    stayFilter,
+    bedroomsFilter,
+    bathroomsFilter,
+    floorFilter,
+    minPrice,
+    maxPrice,
+    minM2,
+    maxM2,
+    page,
   ]);
 
   const hasActiveFilters = Boolean(

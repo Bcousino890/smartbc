@@ -112,7 +112,7 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
    - Navigate to `/admin/configuracion`
    - Fill in Ferozo SMTP details:
      - Email: `no-reply@bcousinoprop.com`
-     - Contraseña: `Contrasena2022@`
+     - Contraseña: (rotada — pedir la actual, no commitear en texto plano)
      - Servidor: `c1362346.ferozo.com`
      - Puerto: `465`
      - SSL: Enable toggle

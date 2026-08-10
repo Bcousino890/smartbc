@@ -13,6 +13,7 @@ import {
   STORAGE_SAFETY_FACTOR,
   VIDEO_BITRATE_KBPS,
   X264_PRESET,
+  type LogoPosition,
   type VideoFormat,
   type VideoResolution,
   type VideoSettings,
@@ -55,6 +56,8 @@ export type VideoPlan = {
   audioVolume: number;
   /** Opacidad del logo superpuesto, 0–1. */
   logoOpacity: number;
+  /** Esquina donde se incrusta el logo. */
+  logoPosition: LogoPosition;
 
   /** Peso previsto (lo que se le enseña al usuario). */
   estimatedBytes: number;
@@ -257,6 +260,7 @@ export function buildVideoPlan(params: {
       audioBitrateKbps: AUDIO_BITRATE_KBPS,
       audioVolume: settings.musicVolume,
       logoOpacity: settings.logoOpacity,
+      logoPosition: settings.logoPosition,
       estimatedBytes,
       estimatedLowBytes,
       estimatedHighBytes,
@@ -286,6 +290,7 @@ export function photosFingerprint(
     secondsPerPhoto: number;
     transitionSeconds: number;
     musicTrackId: string | null;
+    logoPosition: LogoPosition;
   },
 ): string {
   const payload = JSON.stringify({
@@ -295,6 +300,7 @@ export function photosFingerprint(
     secondsPerPhoto: extra.secondsPerPhoto,
     transitionSeconds: extra.transitionSeconds,
     musicTrackId: extra.musicTrackId,
+    logoPosition: extra.logoPosition,
   });
   return createHash("sha256").update(payload).digest("hex").slice(0, 32);
 }

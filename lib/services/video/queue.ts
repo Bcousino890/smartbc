@@ -116,6 +116,7 @@ export async function enqueueVideoJob(params: {
       secondsPerPhoto: settings.secondsPerPhoto,
       transitionSeconds: settings.transitionSeconds,
       musicTrackId,
+      logoPosition: settings.logoPosition,
     });
 
     if (photoCount < MIN_PHOTOS) {

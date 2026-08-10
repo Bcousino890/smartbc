@@ -1,34 +1,8 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { createDecipheriv, scryptSync } from "crypto";
-
-const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const nodemailer = require('nodemailer');
-
-function decryptPasswordFromIv(encrypted: string, iv: string): string {
-  try {
-    const [ciphertext, authTag] = encrypted.split(":");
-    const key = scryptSync(ENCRYPTION_KEY, "salt", 32);
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      key,
-      Buffer.from(iv, "hex")
-    );
-
-    decipher.setAuthTag(Buffer.from(authTag, "hex"));
-
-    let decrypted = decipher.update(ciphertext, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-
-    return decrypted;
-  } catch (error) {
-    console.error("Decryption error:", error);
-    throw new Error("Failed to decrypt password");
-  }
-}
+import { createSesTransport } from "@/lib/email/send-email";
+import { decryptSecret } from "@/lib/crypto/secret";
 
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
@@ -38,17 +12,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const {
-      smtpServer,
-      smtpPort,
-      smtpUser,
-      smtpPassword,
-      useSsl,
-    } = body;
+    const { awsRegion, awsAccessKeyId, awsSecretAccessKey } = body;
 
-    // If no password provided, fetch from DB
-    let password = smtpPassword;
-    if (!password) {
+    // If no secret provided, fetch from DB
+    let secretAccessKey = awsSecretAccessKey;
+    if (!secretAccessKey) {
       const supabase = createAdminClient() as any;
       const { data } = await supabase
         .from("email_config")
@@ -57,39 +25,33 @@ export async function POST(req: Request) {
         .single();
 
       if (data) {
-        password = decryptPasswordFromIv(
-          data.smtp_password_encrypted,
-          data.smtp_password_iv
+        secretAccessKey = decryptSecret(
+          data.aws_secret_access_key_encrypted,
+          data.aws_secret_access_key_iv
         );
       }
     }
 
-    if (!password) {
+    if (!secretAccessKey) {
       return Response.json(
-        { error: "No password provided or stored" },
+        { error: "No secret access key provided or stored" },
         { status: 400 }
       );
     }
 
-    // Create transporter and test connection
-    const transporter = nodemailer.createTransport({
-      host: smtpServer,
-      port: smtpPort,
-      secure: useSsl !== false,
-      auth: {
-        user: smtpUser,
-        pass: password,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    });
+    if (!awsRegion || !awsAccessKeyId) {
+      return Response.json(
+        { error: "Missing AWS region or access key ID" },
+        { status: 400 }
+      );
+    }
 
+    const transporter = createSesTransport(awsRegion, awsAccessKeyId, secretAccessKey);
     await transporter.verify();
 
-    return Response.json({ ok: true, message: "Conexión SMTP exitosa" });
+    return Response.json({ ok: true, message: "Conexión con AWS SES exitosa" });
   } catch (error) {
-    console.error("Error testing SMTP connection:", error);
+    console.error("Error testing SES connection:", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to connect" },
       { status: 400 }

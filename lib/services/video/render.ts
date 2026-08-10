@@ -2,7 +2,7 @@ import "server-only";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SUPERSAMPLE, MAX_ZOOM } from "./config";
+import { SUPERSAMPLE, MAX_ZOOM, type LogoPosition } from "./config";
 import { buildLogoOverlay, buildPhotoCanvas, canvasSize } from "./canvas";
 import { runFfmpeg } from "./ffmpeg";
 import type { VideoPlan } from "./plan";
@@ -90,6 +90,32 @@ function zoompanExpressions(motion: Motion, frames: number) {
 }
 
 /**
+ * Coordenadas del `overlay` del logo según la esquina elegida.
+ *
+ * `W`/`H` son el lienzo y `w`/`h` el logo, en la sintaxis de ffmpeg: pegar a la
+ * derecha o abajo es restar el tamaño del propio logo, no una constante.
+ */
+function logoOverlayPosition(
+  position: LogoPosition,
+  margin: number,
+): { x: string; y: string } {
+  const right = `W-w-${margin}`;
+  const bottom = `H-h-${margin}`;
+  const near = `${margin}`;
+
+  switch (position) {
+    case "top-left":
+      return { x: near, y: near };
+    case "top-right":
+      return { x: right, y: near };
+    case "bottom-left":
+      return { x: near, y: bottom };
+    case "bottom-right":
+      return { x: right, y: bottom };
+  }
+}
+
+/**
  * Transición entre la foto i e i+1. Mayoría de fundidos (lo natural en
  * inmobiliaria) con un desplazamiento suave cada tres para dar ritmo.
  * Todas existen en ffmpeg ≥ 4.3.
@@ -138,14 +164,15 @@ function buildFilterGraph(
     }
   }
 
-  // 3) Logo de la agencia, abajo a la derecha, durante todo el vídeo.
+  // 3) Logo de la agencia, en la esquina configurada, durante todo el vídeo.
   //    Se descuenta el `padding` del halo para que el margen visible sea el
   //    previsto y no el del lienzo transparente que lo rodea.
   let videoLabel = current;
   if (logo) {
     const margin = Math.max(0, Math.round(plan.width * 0.035) - logo.padding);
+    const { x, y } = logoOverlayPosition(plan.logoPosition, margin);
     parts.push(
-      `[${current}][${logo.index}:v]overlay=W-w-${margin}:H-h-${margin}:format=auto[outv]`,
+      `[${current}][${logo.index}:v]overlay=${x}:${y}:format=auto[outv]`,
     );
     videoLabel = "outv";
   }

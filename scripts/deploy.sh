@@ -8,13 +8,13 @@
 #   2. npm install + npm run build + pm2 restart en el servidor
 #   3. aplica migraciones de BD pendientes (runner con tabla de control)
 #
-# Requisitos: acceso SSH a root@178.105.176.3 (clave ~/.ssh/id_ed25519).
+# Requisitos: acceso SSH a root@178.105.185.125 (clave ~/.ssh/id_ed25519).
 #
 # Antes de desplegar, asegúrate de tener el código que quieres subir en tu
 # working tree local (haz `git pull` / merge de los cambios del jefe primero).
 set -euo pipefail
 
-VPS="root@178.105.176.3"
+VPS="root@178.105.185.125"
 APP_DIR="/opt/smartbc-app"
 PM2_APP="smartbc-portal"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

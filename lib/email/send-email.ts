@@ -1,16 +1,15 @@
 import "server-only";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const nodemailer = require('nodemailer');
+import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
 import { createAdminClient } from "@/lib/db/admin";
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
+import { encryptSecret, decryptSecret } from "@/lib/crypto/secret";
 
 export interface EmailConfig {
-  smtpServer: string;
-  smtpPort: number;
-  smtpUser: string;
-  smtpPasswordEncrypted: string;
-  smtpPasswordIv: string;
-  useSsl: boolean;
+  awsRegion: string;
+  awsAccessKeyId: string;
+  awsSecretAccessKeyEncrypted: string;
+  awsSecretAccessKeyIv: string;
   fromEmail: string;
   fromName?: string;
 }
@@ -23,50 +22,21 @@ export interface SendEmailOptions {
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
-const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || "default-insecure-key-change-this";
+export { encryptSecret, decryptSecret };
 
 /**
- * Encrypt password using AES-256-GCM
+ * Builds a nodemailer transporter backed by the AWS SES v3 SDK instead of
+ * SMTP. Nodemailer's SES transport composes the MIME message the same way
+ * the old SMTP transport did (attachments, HTML, etc. all keep working
+ * unchanged) and calls SES's SendRawEmail API over HTTPS — no ports, no
+ * STARTTLS negotiation, no SMTP AUTH quirks.
  */
-function encryptPassword(text: string): { encrypted: string; iv: string } {
-  const iv = randomBytes(16).toString("hex");
-  // Derive key from environment key
-  const key = scryptSync(ENCRYPTION_KEY, "salt", 32);
-  const cipher = createCipheriv("aes-256-gcm", key, Buffer.from(iv, "hex"));
-
-  let encrypted = cipher.update(text, "utf8", "hex");
-  encrypted += cipher.final("hex");
-
-  const authTag = cipher.getAuthTag().toString("hex");
-  return {
-    encrypted: `${encrypted}:${authTag}`,
-    iv,
-  };
-}
-
-/**
- * Decrypt password using AES-256-GCM
- */
-function decryptPassword(encrypted: string, iv: string): string {
-  try {
-    const [ciphertext, authTag] = encrypted.split(":");
-    const key = scryptSync(ENCRYPTION_KEY, "salt", 32);
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      key,
-      Buffer.from(iv, "hex")
-    );
-
-    decipher.setAuthTag(Buffer.from(authTag, "hex"));
-
-    let decrypted = decipher.update(ciphertext, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-
-    return decrypted;
-  } catch (error) {
-    console.error("Decryption error:", error);
-    throw new Error("Failed to decrypt password");
-  }
+export function createSesTransport(awsRegion: string, awsAccessKeyId: string, awsSecretAccessKey: string) {
+  const sesClient = new SESClient({
+    region: awsRegion,
+    credentials: { accessKeyId: awsAccessKeyId, secretAccessKey: awsSecretAccessKey },
+  });
+  return nodemailer.createTransport({ SES: { ses: sesClient, aws: { SendRawEmailCommand } } });
 }
 
 /**
@@ -76,7 +46,7 @@ export async function getEmailConfig(): Promise<EmailConfig | null> {
   try {
     const db = createAdminClient() as any;
 
-    const { data, error } = await db
+    const { data } = await db
       .from("email_config")
       .select("*")
       .limit(1)
@@ -84,34 +54,28 @@ export async function getEmailConfig(): Promise<EmailConfig | null> {
 
     if (data) {
       return {
-        smtpServer: data.smtp_server,
-        smtpPort: data.smtp_port,
-        smtpUser: data.smtp_user,
-        smtpPasswordEncrypted: data.smtp_password_encrypted,
-        smtpPasswordIv: data.smtp_password_iv,
-        useSsl: data.use_ssl,
+        awsRegion: data.aws_region,
+        awsAccessKeyId: data.aws_access_key_id,
+        awsSecretAccessKeyEncrypted: data.aws_secret_access_key_encrypted,
+        awsSecretAccessKeyIv: data.aws_secret_access_key_iv,
         fromEmail: data.from_email,
         fromName: data.from_name,
       };
     }
 
     // Fallback: try environment variables (for local development / staging)
-    const envSmtpServer = process.env.SMTP_SERVER;
-    const envSmtpPort = process.env.SMTP_PORT;
-    const envSmtpUser = process.env.SMTP_USER;
-    const envSmtpPass = process.env.SMTP_PASSWORD;
+    const envRegion = process.env.AWS_SES_REGION;
+    const envAccessKeyId = process.env.AWS_SES_ACCESS_KEY_ID;
+    const envSecretAccessKey = process.env.AWS_SES_SECRET_ACCESS_KEY;
     const envFromEmail = process.env.FROM_EMAIL;
-    const envUseSsl = process.env.SMTP_USE_SSL !== "false";
 
-    if (envSmtpServer && envSmtpPort && envSmtpUser && envSmtpPass && envFromEmail) {
-      console.log("[email] Using SMTP config from environment variables");
+    if (envRegion && envAccessKeyId && envSecretAccessKey && envFromEmail) {
+      console.log("[email] Using SES config from environment variables");
       return {
-        smtpServer: envSmtpServer,
-        smtpPort: parseInt(envSmtpPort, 10),
-        smtpUser: envSmtpUser,
-        smtpPasswordEncrypted: "", // Not encrypted from env
-        smtpPasswordIv: "",
-        useSsl: envUseSsl,
+        awsRegion: envRegion,
+        awsAccessKeyId: envAccessKeyId,
+        awsSecretAccessKeyEncrypted: "", // Not encrypted from env
+        awsSecretAccessKeyIv: "",
         fromEmail: envFromEmail,
         fromName: process.env.FROM_NAME || "SmartBC",
       };
@@ -126,12 +90,7 @@ export async function getEmailConfig(): Promise<EmailConfig | null> {
 }
 
 /**
- * Export decryptPassword for use in other modules
- */
-export { decryptPassword };
-
-/**
- * Send email using configured SMTP credentials
+ * Send email using configured AWS SES credentials
  */
 export async function sendEmail(
   options: SendEmailOptions
@@ -146,28 +105,19 @@ export async function sendEmail(
       };
     }
 
-    // Decrypt the password (or use directly if from env vars)
-    const decryptedPassword = config.smtpPasswordEncrypted
-      ? decryptPassword(config.smtpPasswordEncrypted, config.smtpPasswordIv)
-      : process.env.SMTP_PASSWORD || "";
+    // Decrypt the secret access key (or use directly if from env vars)
+    const secretAccessKey = config.awsSecretAccessKeyEncrypted
+      ? decryptSecret(config.awsSecretAccessKeyEncrypted, config.awsSecretAccessKeyIv)
+      : process.env.AWS_SES_SECRET_ACCESS_KEY || "";
 
-    if (!decryptedPassword) {
+    if (!secretAccessKey) {
       return {
         success: false,
-        error: "No SMTP password available",
+        error: "No AWS secret access key available",
       };
     }
 
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      host: config.smtpServer,
-      port: config.smtpPort,
-      secure: config.useSsl, // true for 465, false for other ports
-      auth: {
-        user: config.smtpUser,
-        pass: decryptedPassword,
-      },
-    });
+    const transporter = createSesTransport(config.awsRegion, config.awsAccessKeyId, secretAccessKey);
 
     // Send email
     const result = await transporter.sendMail({
@@ -188,43 +138,6 @@ export async function sendEmail(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-}
-
-/**
- * Test SMTP connection
- */
-export async function testSmtpConnection(
-  config: EmailConfig
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Decrypt the password
-    const decryptedPassword = decryptPassword(
-      config.smtpPasswordEncrypted,
-      config.smtpPasswordIv
-    );
-
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      host: config.smtpServer,
-      port: config.smtpPort,
-      secure: config.useSsl,
-      auth: {
-        user: config.smtpUser,
-        pass: decryptedPassword,
-      },
-    });
-
-    // Test connection
-    await transporter.verify();
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error testing SMTP connection:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Connection failed",
     };
   }
 }
