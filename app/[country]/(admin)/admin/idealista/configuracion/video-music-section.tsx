@@ -37,6 +37,7 @@ type Settings = {
   defaultResolution: "fullhd" | "4k";
   musicVolume: number;
   logoOpacity: number;
+  logoPosition: "top-right" | "top-left" | "bottom-right" | "bottom-left";
   regenerateOnPhotoChange: boolean;
   defaultMusicTrackId: string | null;
 };
@@ -463,6 +464,26 @@ export function VideoMusicSection() {
                     onChange={(e) => set("logoOpacity", Number(e.target.value))}
                     className="w-full accent-gold-dark"
                   />
+                </div>
+
+                <div>
+                  <label className={labelCls}>Posición del logo</label>
+                  <select
+                    value={settings.logoPosition}
+                    onChange={(e) =>
+                      set("logoPosition", e.target.value as Settings["logoPosition"])
+                    }
+                    className={inputCls}
+                  >
+                    <option value="top-right">Arriba a la derecha</option>
+                    <option value="top-left">Arriba a la izquierda</option>
+                    <option value="bottom-right">Abajo a la derecha</option>
+                    <option value="bottom-left">Abajo a la izquierda</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-ink/45">
+                    Arriba se ve mejor: abajo suele caer el suelo o el mobiliario, y
+                    los reproductores tapan esa zona con sus controles.
+                  </p>
                 </div>
               </div>
 

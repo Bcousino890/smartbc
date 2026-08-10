@@ -356,6 +356,7 @@ export async function generatePropertyVideo(params: {
     secondsPerPhoto: settings.secondsPerPhoto,
     transitionSeconds: settings.transitionSeconds,
     musicTrackId: music?.id ?? null,
+    logoPosition: settings.logoPosition,
   });
 
   // Alimenta la calibración con el peso real: el próximo vídeo se estimará con

@@ -9,6 +9,29 @@
 export type VideoFormat = "horizontal" | "vertical";
 export type VideoResolution = "fullhd" | "4k";
 
+/**
+ * Esquina donde se incrusta el logo de la agencia.
+ *
+ * Arriba es lo habitual en inmobiliaria: la parte baja del encuadre suele
+ * llevar el suelo o el mobiliario (donde la marca se pierde) y, además, los
+ * reproductores incrustados pintan ahí sus controles y la tapan.
+ */
+export type LogoPosition = "top-right" | "top-left" | "bottom-right" | "bottom-left";
+
+export const LOGO_POSITIONS: LogoPosition[] = [
+  "top-right",
+  "top-left",
+  "bottom-right",
+  "bottom-left",
+];
+
+export const LOGO_POSITION_LABELS: Record<LogoPosition, string> = {
+  "top-right": "Arriba a la derecha",
+  "top-left": "Arriba a la izquierda",
+  "bottom-right": "Abajo a la derecha",
+  "bottom-left": "Abajo a la izquierda",
+};
+
 export type VideoSettings = {
   /** Generación automática para las propiedades sincronizadas de Idealista. */
   enabled: boolean;
@@ -26,6 +49,8 @@ export type VideoSettings = {
   musicVolume: number;
   /** Opacidad del logo superpuesto, 0–1. */
   logoOpacity: number;
+  /** Esquina donde se coloca el logo. */
+  logoPosition: LogoPosition;
   /** Regenerar el vídeo cuando cambien las fotos de la propiedad. */
   regenerateOnPhotoChange: boolean;
   /** Pista por defecto; null = la marcada `is_default` en video_music_tracks. */
@@ -36,14 +61,19 @@ export const SETTINGS_KEY = "video_generation";
 
 export const DEFAULT_SETTINGS: VideoSettings = {
   enabled: false,
-  secondsPerPhoto: 3.5,
-  transitionSeconds: 0.6,
+  // 4 s por foto con 1 s de fundido = 3 s de imagen quieta entre transición y
+  // transición. Por debajo de eso el vídeo se percibe acelerado: el ojo no
+  // llega a leer la estancia antes de que ya esté cambiando, y el Ken Burns
+  // (que recorre el zoom en el tiempo de la foto) se vuelve un barrido brusco.
+  secondsPerPhoto: 4,
+  transitionSeconds: 1,
   maxPhotos: 40,
   maxDurationSeconds: 150, // 2:30, el tope que pidió el cliente
   defaultFormat: "horizontal",
   defaultResolution: "fullhd",
   musicVolume: 0.5,
   logoOpacity: 0.75,
+  logoPosition: "top-right",
   regenerateOnPhotoChange: true,
   defaultMusicTrackId: null,
 };
@@ -177,6 +207,10 @@ export function isVideoResolution(value: unknown): value is VideoResolution {
   return value === "fullhd" || value === "4k";
 }
 
+export function isLogoPosition(value: unknown): value is LogoPosition {
+  return LOGO_POSITIONS.includes(value as LogoPosition);
+}
+
 /**
  * Normaliza un objeto cualquiera (lo leído de app_settings o lo enviado por la
  * UI) a unos ajustes válidos. Nunca lanza: los campos malos caen al default.
@@ -210,6 +244,7 @@ export function normalizeSettings(input: unknown): VideoSettings {
       : d.defaultResolution,
     musicVolume: num(src.musicVolume, d.musicVolume, 0, 1),
     logoOpacity: num(src.logoOpacity, d.logoOpacity, 0, 1),
+    logoPosition: isLogoPosition(src.logoPosition) ? src.logoPosition : d.logoPosition,
     regenerateOnPhotoChange: bool(src.regenerateOnPhotoChange, d.regenerateOnPhotoChange),
     defaultMusicTrackId:
       typeof src.defaultMusicTrackId === "string" && src.defaultMusicTrackId

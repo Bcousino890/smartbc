@@ -71,6 +71,7 @@ async function currentFingerprint(
       secondsPerPhoto: settings.secondsPerPhoto,
       transitionSeconds: settings.transitionSeconds,
       musicTrackId,
+      logoPosition: settings.logoPosition,
     }),
   };
 }
