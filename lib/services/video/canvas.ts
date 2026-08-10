@@ -20,12 +20,25 @@ const LOGO_WIDTH_RATIO = 0.16;
 const BACKGROUND_BRIGHTNESS = 0.55;
 
 /**
- * Halo del logo: cuánto se solidifica la silueta antes de difuminarla y hasta
- * dónde llega su opacidad.
+ * Halo del logo. Existe solo para que la marca se lea sobre una foto oscura;
+ * el objetivo es que NO se vea.
+ *
+ * La clave está en el radio y en la dilatación. El wordmark tiene las letras
+ * muy juntas, así que si se engorda la silueta (dilatación > 1) con un radio
+ * generoso, los halos de cada letra se funden y lo que queda detrás del texto
+ * es una PLACA rectangular blanquecina: sobre pared clara parece suciedad y
+ * sobre foto oscura, un cartel gris. Con dilatación neutra y radio corto el
+ * halo abraza cada letra, hace su trabajo y desaparece de la vista.
+ *
+ * Valores elegidos comparando el render real sobre tres fondos (pared clara,
+ * estancia en penumbra y gris medio).
  */
-const GLOW_SOLIDIFY = 6;
-const GLOW_DILATE = 3.5;
-const GLOW_MAX_ALPHA = 190;
+const GLOW_SOLIDIFY = 3;
+/** 1 = halo pegado a la letra. Subirlo lo convierte en placa: no lo subas. */
+const GLOW_DILATE: number = 1;
+const GLOW_MAX_ALPHA = 150;
+/** Radio del halo como fracción del ancho del logo. */
+const GLOW_SIGMA_RATIO = 0.012;
 
 /**
  * Difumina un mapa de 1 canal y devuelve otro mapa de 1 canal.
@@ -151,7 +164,7 @@ export async function buildLogoOverlay(
   }
 
   const logoWidth = Math.max(48, Math.round(canvasWidth * LOGO_WIDTH_RATIO));
-  const glowSigma = Math.max(3, logoWidth * 0.026);
+  const glowSigma = Math.max(2, logoWidth * GLOW_SIGMA_RATIO);
   const padding = Math.ceil(glowSigma * 3);
 
   const resized = sharp(source).resize({ width: logoWidth }).ensureAlpha();
@@ -168,13 +181,15 @@ export async function buildLogoOverlay(
   for (let p = 0; p < width * height; p++) {
     silhouette[p] = Math.min(255, data[p * channels + 3] * GLOW_SOLIDIFY);
   }
-  // Dilatar y luego suavizar, en dos pasadas: la primera engorda la silueta
-  // hasta formar una base continua bajo el texto, la segunda le da el borde
-  // difuso. Hacerlo de una sola pasada deja un resplandor demasiado tenue
-  // para que la marca se lea sobre una foto oscura.
+  // Dos pasadas de desenfoque (corta y luego completa) en vez de una sola: la
+  // caída queda más suave y el halo no se corta de golpe. Entre medias se
+  // puede amplificar, pero por defecto NO se hace (GLOW_DILATE = 1): amplificar
+  // aquí es exactamente lo que fusiona las letras en una placa.
   const grown = await blurChannel(silhouette, width, height, glowSigma * 0.55);
-  for (let p = 0; p < grown.length; p++) {
-    grown[p] = Math.min(255, grown[p] * GLOW_DILATE);
+  if (GLOW_DILATE !== 1) {
+    for (let p = 0; p < grown.length; p++) {
+      grown[p] = Math.min(255, grown[p] * GLOW_DILATE);
+    }
   }
   const spread = await blurChannel(grown, width, height, glowSigma);
 
