@@ -154,12 +154,17 @@ async function tryFetch(
           },
         };
       }
+      // 404/410 no es un fallo nuestro: el anuncio ya no está publicado. Se
+      // dice con palabras para que el admin no lo confunda con un bloqueo.
+      const gone = res.status === 404 || res.status === 410;
       return {
         ok: false,
         error: {
           kind: "fetch_failed",
           status: res.status,
-          reason: `HTTP ${res.status} ${res.statusText}`,
+          reason: gone
+            ? "el anuncio ya no existe en el portal (retirado, vendido o alquilado)"
+            : `HTTP ${res.status} ${res.statusText}`,
         },
       };
     }
@@ -290,6 +295,23 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     console.log(
       `[fetch-html] ✗ UA WhatsApp (curl) falló: ${curlResult.reason}`,
     );
+    // 404/410 con el UA de WhatsApp = el anuncio NO EXISTE. Es un veredicto
+    // fiable: este intento es justo el que SÍ pasa DataDome, así que un 404
+    // suyo es del portal, no del anti-bot. Sin este corte, la cadena seguía
+    // con navegador/proxy/Playwright —que sí comen 403— y acababa acusando al
+    // anti-bot de un anuncio simplemente retirado, además de gastar GB de
+    // proxy y un arranque de navegador para nada.
+    if (curlResult.status === 404 || curlResult.status === 410) {
+      return {
+        ok: false,
+        error: {
+          kind: "fetch_failed",
+          status: curlResult.status,
+          reason:
+            "el anuncio ya no existe en el portal (retirado, vendido o alquilado)",
+        },
+      };
+    }
   }
 
   // Intento 1: fetch directo (sin proxy)
