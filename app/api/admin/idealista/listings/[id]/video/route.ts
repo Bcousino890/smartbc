@@ -1,6 +1,6 @@
 import "server-only";
 import { requirePermission } from "@/lib/auth/guard";
-import { estimateVideo, findProperty } from "@/lib/services/video/generate";
+import { estimateVideo, findListing } from "@/lib/services/video/generate";
 import { enqueueVideoJob, processNextVideoJob } from "@/lib/services/video/queue";
 import { checkFfmpeg } from "@/lib/services/video/ffmpeg";
 import {
@@ -10,12 +10,13 @@ import {
 import { getVideoSettings } from "@/lib/services/video/settings";
 import { formatBytes, formatDuration, resolutionLabel } from "@/lib/services/video/plan";
 
-// Vídeo automático de una propiedad.
+// Vídeo automático de una ficha "inspo" de Idealista (anuncio señuelo sin
+// propiedad real detrás — ver migración 0116). Mismo contrato que
+// /api/admin/properties/[slug]/video, solo que el sujeto es la ficha en vez
+// de la propiedad.
 //
 //   GET  → estimación: cuántas fotos entran, cuánto dura y CUÁNTO VA A PESAR.
-//          No renderiza nada; es lo que la ficha enseña antes de dar al botón.
-//   POST → encola el render (prioritario, por ser una petición de una persona)
-//          y arranca la cola. El estado se consulta en ./video/job.
+//   POST → encola el render. El estado se consulta en ./video/job.
 export const maxDuration = 3600;
 
 function parseOptions(params: URLSearchParams | Record<string, unknown>) {
@@ -35,15 +36,15 @@ function parseOptions(params: URLSearchParams | Record<string, unknown>) {
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ slug: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requirePermission("properties", "view");
+  const gate = await requirePermission("publicacion", "view");
   if (!gate.ok) return gate.response;
 
-  const { slug } = await params;
-  const property = await findProperty({ slug });
-  if (!property) {
-    return Response.json({ error: "Propiedad no encontrada" }, { status: 404 });
+  const { id } = await params;
+  const listing = await findListing({ id });
+  if (!listing) {
+    return Response.json({ error: "Ficha no encontrada" }, { status: 404 });
   }
 
   const options = parseOptions(new URL(req.url).searchParams);
@@ -51,7 +52,7 @@ export async function GET(
   const ffmpeg = await checkFfmpeg();
 
   const estimate = await estimateVideo({
-    subject: { kind: "property", ...property },
+    subject: { kind: "listing", ...listing },
     ...options,
     settings,
   });
@@ -95,15 +96,15 @@ export async function GET(
 
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ slug: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requirePermission("properties", "edit");
+  const gate = await requirePermission("publicacion", "edit");
   if (!gate.ok) return gate.response;
 
-  const { slug } = await params;
-  const property = await findProperty({ slug });
-  if (!property) {
-    return Response.json({ error: "Propiedad no encontrada" }, { status: 404 });
+  const { id } = await params;
+  const listing = await findListing({ id });
+  if (!listing) {
+    return Response.json({ error: "Ficha no encontrada" }, { status: 404 });
   }
 
   // Se comprueba ffmpeg antes de empezar: así el usuario recibe "instala
@@ -122,12 +123,10 @@ export async function POST(
 
   const options = parseOptions(body);
 
-  // El render se ENCOLA en vez de hacerse aquí mismo. Un vídeo largo puede
-  // tardar minutos y la petición moriría en el timeout del proxy dejando al
-  // usuario sin saber si se generó. Con la cola, el trabajo sobrevive a la
-  // petición y el panel consulta su estado.
+  // El render se ENCOLA en vez de hacerse aquí mismo: ver el mismo motivo en
+  // la ruta equivalente de propiedades.
   const queued = await enqueueVideoJob({
-    subject: { kind: "property", id: property.id },
+    subject: { kind: "listing", id: listing.id },
     format: options.format,
     resolution: options.resolution,
     triggeredBy: "manual",
@@ -137,12 +136,12 @@ export async function POST(
   if (!queued.ok) {
     if (queued.reason === "already_queued") {
       return Response.json(
-        { ok: true, alreadyQueued: true, message: "Ya hay un vídeo en cola para esta propiedad." },
+        { ok: true, alreadyQueued: true, message: "Ya hay un vídeo en cola para esta ficha." },
         { status: 202 },
       );
     }
     if (queued.reason === "not_enough_photos") {
-      return Response.json({ error: "La propiedad no tiene fotos suficientes." }, { status: 422 });
+      return Response.json({ error: "La ficha no tiene fotos suficientes." }, { status: 422 });
     }
     return Response.json(
       { error: queued.detail ?? "No se pudo encolar el vídeo." },
@@ -150,10 +149,8 @@ export async function POST(
     );
   }
 
-  // Arranca el render sin esperarlo: el servidor de Next vive bajo PM2, así
-  // que la promesa sigue corriendo después de responder. Si el proceso muriese
-  // a media, el trabajo queda en la cola y el cron lo recoge (y la liberación
-  // de trabajos colgados lo devuelve a "pending").
+  // Arranca el render sin esperarlo: ver el mismo motivo en la ruta
+  // equivalente de propiedades.
   void processNextVideoJob().catch((err) => {
     console.error("[video] fallo al procesar la cola tras encolar:", err);
   });

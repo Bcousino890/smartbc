@@ -19,7 +19,8 @@ import { renderPropertyVideo } from "./render";
 import { FfmpegError, FfmpegMissingError } from "./ffmpeg";
 import { estimatedBitrateKbps, getCalibration, recordRenderMeasurement } from "./calibration";
 
-// Orquestación completa: de una propiedad a un vídeo publicado.
+// Orquestación completa: de una propiedad (o una ficha "inspo" de Idealista) a
+// un vídeo publicado.
 //
 // Separa a propósito ESTIMAR de GENERAR:
 //   · estimate…() solo consulta la base de datos y hace cuentas. Es instantáneo
@@ -27,6 +28,11 @@ import { estimatedBitrateKbps, getCalibration, recordRenderMeasurement } from ".
 //   · generate…() descarga, renderiza y sube. Rehace el plan con las fotos que
 //     de verdad se pudieron descargar, para que el peso anunciado siga siendo
 //     honesto si alguna foto estaba rota.
+//
+// El "sujeto" del vídeo es una propiedad real del sistema O una ficha inspo de
+// Idealista (anuncio señuelo sin propiedad detrás, ver idealista_listings
+// .is_inspo). Ambas tienen fotos y ambas pueden querer un vídeo; lo único que
+// cambia es de dónde se leen las fotos y dónde queda el resultado.
 
 const PHOTO_BUCKET = "properties-photos";
 const MUSIC_BUCKET = "video-music";
@@ -36,6 +42,16 @@ const PHOTO_FETCH_TIMEOUT_MS = 30_000;
 const MAX_PHOTO_BYTES = 40 * 1024 * 1024;
 
 export type PropertyRef = { id: string; slug: string; reference: string | null };
+export type ListingRef = { id: string; reference: string | null };
+
+export type VideoSubject =
+  | ({ kind: "property" } & PropertyRef)
+  | ({ kind: "listing" } & ListingRef);
+
+/** Lo mínimo para identificar un sujeto sin cargar sus datos completos. */
+export type VideoSubjectRef =
+  | { kind: "property"; id: string }
+  | { kind: "listing"; id: string };
 
 export type MusicTrack = {
   id: string;
@@ -65,6 +81,19 @@ export async function findProperty(
   };
 }
 
+/** Ficha "inspo" de Idealista: sin propiedad real detrás, con sus propias fotos. */
+export async function findListing({ id }: { id: string }): Promise<ListingRef | null> {
+  const supabase = createAdminClient() as any;
+  const { data } = await supabase
+    .from("idealista_listings")
+    .select("id, reference_code")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!data) return null;
+  return { id: data.id, reference: data.reference_code ?? null };
+}
+
 /** URLs de las fotos de la propiedad, en el orden en que se muestran. */
 export async function getPropertyPhotoUrls(propertyId: string): Promise<string[]> {
   const supabase = createAdminClient() as any;
@@ -77,6 +106,32 @@ export async function getPropertyPhotoUrls(propertyId: string): Promise<string[]
   return ((data ?? []) as Array<{ url: string | null }>)
     .map((row) => row.url)
     .filter((url): url is string => typeof url === "string" && /^https?:\/\//.test(url));
+}
+
+/** URLs de las fotos de una ficha inspo, en el orden en que se muestran. */
+export async function getListingPhotoUrls(listingId: string): Promise<string[]> {
+  const supabase = createAdminClient() as any;
+  const { data } = await supabase
+    .from("idealista_listings")
+    .select("photo_ids")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  return ((data?.photo_ids ?? []) as unknown[]).filter(
+    (url): url is string => typeof url === "string" && /^https?:\/\//.test(url),
+  );
+}
+
+export async function getSubjectPhotoUrls(subject: VideoSubjectRef): Promise<string[]> {
+  return subject.kind === "property"
+    ? getPropertyPhotoUrls(subject.id)
+    : getListingPhotoUrls(subject.id);
+}
+
+/** Nombre a usar en el fichero de salida: la referencia si existe, si no el id/slug. */
+function subjectFileTag(subject: VideoSubject): string {
+  if (subject.reference) return subject.reference;
+  return subject.kind === "property" ? subject.slug : subject.id;
 }
 
 /**
@@ -126,7 +181,7 @@ export type EstimateResult =
   | {
       ok: true;
       plan: VideoPlan;
-      property: PropertyRef;
+      subject: VideoSubject;
       music: MusicTrack | null;
       /** Texto ya montado para la UI: "≈ 84 MB (máx. 187 MB)". */
       sizeLabel: string;
@@ -137,8 +192,8 @@ export type EstimateResult =
  * Calcula lo que va a ocupar y durar el vídeo ANTES de renderizarlo. Es lo que
  * pidió el cliente: nada se renderiza sin que antes se sepa el peso.
  */
-export async function estimatePropertyVideo(params: {
-  property: PropertyRef;
+export async function estimateVideo(params: {
+  subject: VideoSubject;
   format?: VideoFormat;
   resolution?: VideoResolution;
   musicTrackId?: string | null;
@@ -148,11 +203,11 @@ export async function estimatePropertyVideo(params: {
   const format = params.format ?? settings.defaultFormat;
   const resolution = params.resolution ?? settings.defaultResolution;
 
-  const photoUrls = await getPropertyPhotoUrls(params.property.id);
+  const photoUrls = await getSubjectPhotoUrls(params.subject);
   if (photoUrls.length < MIN_PHOTOS) {
     return {
       ok: false,
-      error: `Esta propiedad tiene ${photoUrls.length} foto(s); hacen falta al menos ${MIN_PHOTOS}.`,
+      error: `Esta ficha tiene ${photoUrls.length} foto(s); hacen falta al menos ${MIN_PHOTOS}.`,
     };
   }
 
@@ -172,7 +227,7 @@ export async function estimatePropertyVideo(params: {
   return {
     ok: true,
     plan: result.plan,
-    property: params.property,
+    subject: params.subject,
     music,
     sizeLabel: describeSize(result.plan),
   };
@@ -250,8 +305,8 @@ export type GenerateResult =
     }
   | { ok: false; error: string };
 
-export async function generatePropertyVideo(params: {
-  property: PropertyRef;
+export async function generateVideo(params: {
+  subject: VideoSubject;
   format?: VideoFormat;
   resolution?: VideoResolution;
   musicTrackId?: string | null;
@@ -263,11 +318,11 @@ export async function generatePropertyVideo(params: {
   const resolution = params.resolution ?? settings.defaultResolution;
   const warnings: string[] = [];
 
-  const photoUrls = await getPropertyPhotoUrls(params.property.id);
+  const photoUrls = await getSubjectPhotoUrls(params.subject);
   if (photoUrls.length < MIN_PHOTOS) {
     return {
       ok: false,
-      error: `Esta propiedad tiene ${photoUrls.length} foto(s); hacen falta al menos ${MIN_PHOTOS}.`,
+      error: `Esta ficha tiene ${photoUrls.length} foto(s); hacen falta al menos ${MIN_PHOTOS}.`,
     };
   }
 
@@ -367,7 +422,7 @@ export async function generatePropertyVideo(params: {
   });
 
   const published = await publishVideo({
-    property: params.property,
+    subject: params.subject,
     plan,
     fingerprint,
     musicTrackId: music?.id ?? null,
@@ -411,29 +466,31 @@ type PublishResult =
   | { ok: false; error: string };
 
 async function publishVideo(params: {
-  property: PropertyRef;
+  subject: VideoSubject;
   plan: VideoPlan;
   fingerprint: string;
   musicTrackId: string | null;
   video: Buffer;
   sizeBytes: number;
 }): Promise<PublishResult> {
-  const { property, plan } = params;
+  const { subject, plan } = params;
   const supabase = createAdminClient() as any;
+  const subjectColumn = subject.kind === "property" ? "property_id" : "idealista_listing_id";
 
-  // Solo hay un vídeo automático por propiedad y formato (índice único parcial
-  // de la migración 0115): al regenerar se reemplaza el anterior, no se acumula.
+  // Solo hay un vídeo automático por ficha y formato (índice único parcial de
+  // las migraciones 0115/0116): al regenerar se reemplaza el anterior, no se
+  // acumula.
   const { data: previous } = await supabase
     .from("property_media")
     .select("id, storage_path")
-    .eq("property_id", property.id)
+    .eq(subjectColumn, subject.id)
     .eq("type", "video")
     .eq("source", "auto")
     .eq("format", plan.format);
 
-  const storagePath =
-    `${property.id}/video/auto-${plan.format}-${plan.resolution}-${Date.now()}.mp4`;
-  const fileName = `${property.reference ?? property.slug}-${plan.format}.mp4`;
+  const pathPrefix = subject.kind === "property" ? subject.id : `idealista/${subject.id}`;
+  const storagePath = `${pathPrefix}/video/auto-${plan.format}-${plan.resolution}-${Date.now()}.mp4`;
+  const fileName = `${subjectFileTag(subject)}-${plan.format}.mp4`;
 
   const { error: uploadError } = await supabase.storage
     .from(PHOTO_BUCKET)
@@ -470,7 +527,8 @@ async function publishVideo(params: {
   const { data: inserted, error: insertError } = await supabase
     .from("property_media")
     .insert({
-      property_id: property.id,
+      property_id: subject.kind === "property" ? subject.id : null,
+      idealista_listing_id: subject.kind === "listing" ? subject.id : null,
       type: "video",
       source: "auto",
       file_name: fileName,
