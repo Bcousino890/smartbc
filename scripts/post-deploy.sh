@@ -89,15 +89,29 @@ else
 fi
 echo ""
 
-# Build de Next.js
-if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
-  echo "🔨 Compilando Next.js..."
-  if npm run build; then
-    echo "✅ Build exitoso"
+# Rebuild de Next.js + reinicio de la app.
+#
+# Este bloque estaba MUERTO: comprobaba next.config.js/.mjs y el proyecto usa
+# next.config.ts, así que nunca compilaba. El botón de /admin/configuracion solo
+# aplicaba migraciones y no había forma de reconstruir producción sin SSH.
+#
+# Se lanza DESACOPLADO (setsid + nohup) por dos razones:
+#  - el build tarda minutos y la petición HTTP del botón moriría antes;
+#  - al terminar reinicia PM2, que mata al proceso Next desde el que se ejecuta
+#    este script: si el build fuese hijo suyo, se cortaría a medias.
+# Con SKIP_REBUILD=1 se salta (útil si solo quieres aplicar migraciones).
+if [ -z "${SKIP_REBUILD:-}" ] && ls next.config.* >/dev/null 2>&1; then
+  echo "🔨 Lanzando rebuild atómico + reinicio en segundo plano..."
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup bash scripts/rebuild-restart.sh >/dev/null 2>&1 &
   else
-    echo "❌ Error en build - revisa los logs arriba"
-    exit 1
+    nohup bash scripts/rebuild-restart.sh >/dev/null 2>&1 &
   fi
+  disown 2>/dev/null || true
+  echo "   Log del rebuild: /tmp/smartbc-rebuild.log"
+  echo "   Tarda unos minutos. Al terminar la web se reinicia (dará error unos"
+  echo "   segundos) y quedará con el código más reciente."
+  echo "   Si el build falla, producción NO se toca: sigue como está."
 fi
 
 
