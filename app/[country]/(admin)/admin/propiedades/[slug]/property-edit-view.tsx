@@ -1494,7 +1494,7 @@ export function PropertyEditView({
           {/* Generación del vídeo a partir de las fotos de la ficha. Enseña el
               peso estimado antes de dejar renderizar. */}
           <PropertyVideoPanel
-            slug={property.slug}
+            subject={{ type: "property", slug: property.slug }}
             photoCount={property.photos.length}
             hasExistingVideo={videos.length > 0}
           />

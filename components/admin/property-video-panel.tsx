@@ -62,18 +62,29 @@ const POLL_MS = 4000;
 const boxCls =
   "rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none";
 
+export type VideoSubjectRef =
+  | { type: "property"; slug: string }
+  | { type: "listing"; id: string };
+
+function apiBase(subject: VideoSubjectRef): string {
+  return subject.type === "property"
+    ? `/api/admin/properties/${subject.slug}`
+    : `/api/admin/idealista/listings/${subject.id}`;
+}
+
 export function PropertyVideoPanel({
-  slug,
+  subject,
   photoCount,
   hasExistingVideo = false,
 }: {
-  slug: string;
+  subject: VideoSubjectRef;
   /** Si no se pasa, no se aplica el filtro de "mínimo 3 fotos": lo decide el servidor. */
   photoCount?: number;
   hasExistingVideo?: boolean;
 }) {
   const [format, setFormat] = useState<"horizontal" | "vertical">("horizontal");
   const [resolution, setResolution] = useState<"fullhd" | "4k">("fullhd");
+  const base = apiBase(subject);
 
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +100,7 @@ export function PropertyVideoPanel({
     setError("");
     try {
       const res = await fetch(
-        `/api/admin/properties/${slug}/video?format=${format}&resolution=${resolution}`,
+        `${base}/video?format=${format}&resolution=${resolution}`,
       );
       const data = (await res.json()) as EstimateResponse;
       if (!res.ok) {
@@ -104,18 +115,18 @@ export function PropertyVideoPanel({
     } finally {
       setLoading(false);
     }
-  }, [slug, format, resolution]);
+  }, [base, format, resolution]);
 
   const loadJob = useCallback(async () => {
     try {
-      const res = await fetch(`/api/admin/properties/${slug}/video/job`);
+      const res = await fetch(`${base}/video/job`);
       if (!res.ok) return;
       const data = await res.json();
       setJob(data.job ?? null);
     } catch {
       // Un sondeo fallido no es motivo de alarma: se reintenta al siguiente.
     }
-  }, [slug]);
+  }, [base]);
 
   useEffect(() => {
     loadEstimate();
@@ -159,7 +170,7 @@ export function PropertyVideoPanel({
     });
 
     try {
-      const res = await fetch(`/api/admin/properties/${slug}/video`, {
+      const res = await fetch(`${base}/video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format, resolution }),
@@ -312,7 +323,7 @@ export function PropertyVideoPanel({
 
             {(hasExistingVideo || job?.status === "done") && (
               <a
-                href={`/api/admin/properties/${slug}/download-video?format=${format}`}
+                href={`${base}/download-video?format=${format}`}
                 className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
               >
                 <Download size={13} className="text-gold-dark" />

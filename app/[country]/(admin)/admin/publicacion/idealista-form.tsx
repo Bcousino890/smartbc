@@ -1622,7 +1622,13 @@ export function IdealistaForm({
           icon={Video}
           onChange={(urls) => set("videos", urls)}
         />
-        {propertySlug && <PropertyVideoPanel slug={propertySlug} />}
+        {propertySlug ? (
+          <PropertyVideoPanel subject={{ type: "property", slug: propertySlug }} />
+        ) : isInspo && form.listingId ? (
+          // Inspo ya guardada (tiene fila propia en idealista_listings): genera
+          // el vídeo desde SUS fotos, no hay propiedad real detrás.
+          <PropertyVideoPanel subject={{ type: "listing", id: form.listingId }} />
+        ) : null}
         <MediaUploadZone
           label="Planos"
           items={form.plans}

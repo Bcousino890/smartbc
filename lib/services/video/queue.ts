@@ -9,10 +9,13 @@ import {
 import { getVideoSettings } from "./settings";
 import { photosFingerprint } from "./plan";
 import {
+  findListing,
   findProperty,
-  generatePropertyVideo,
-  getPropertyPhotoUrls,
+  generateVideo,
+  getSubjectPhotoUrls,
   resolveMusicTrack,
+  type VideoSubject,
+  type VideoSubjectRef,
 } from "./generate";
 
 // Cola de render de vídeos.
@@ -23,6 +26,10 @@ import {
 //
 // Procesar de uno en uno no es una limitación temporal: el VPS sirve además la
 // web con PM2, y dos ffmpeg a la vez dejarían el panel inutilizable.
+//
+// Un trabajo es de una PROPIEDAD real o de una ficha INSPO de Idealista (nunca
+// las dos): ver migración 0116, que añadió idealista_listing_id junto a
+// property_id en property_video_jobs/property_media.
 
 export type TriggeredBy = "manual" | "sync" | "cron" | "backfill";
 
@@ -52,39 +59,14 @@ export type EnqueueResult =
   | { ok: false; reason: "already_queued" | "up_to_date" | "not_enough_photos" | "error"; detail?: string };
 
 /**
- * Huella actual de las fotos de una propiedad con los ajustes vigentes. Es lo
- * que permite saber si el vídeo que ya existe sigue valiendo.
- */
-async function currentFingerprint(
-  propertyId: string,
-  format: VideoFormat,
-  resolution: VideoResolution,
-  settings: VideoSettings,
-  musicTrackId: string | null,
-): Promise<{ fingerprint: string; photoCount: number }> {
-  const urls = await getPropertyPhotoUrls(propertyId);
-  return {
-    photoCount: urls.length,
-    fingerprint: photosFingerprint(urls, {
-      format,
-      resolution,
-      secondsPerPhoto: settings.secondsPerPhoto,
-      transitionSeconds: settings.transitionSeconds,
-      musicTrackId,
-      logoPosition: settings.logoPosition,
-    }),
-  };
-}
-
-/**
- * Encola el render de una propiedad si hace falta.
+ * Encola el render de una propiedad o ficha inspo si hace falta.
  *
  * No encola si el vídeo actual ya corresponde a estas fotos y estos ajustes:
  * es lo que evita que el cron de Idealista rehaga los mismos vídeos en cada
  * pasada. La huella incluye las fotos y los ajustes que cambian el resultado.
  */
 export async function enqueueVideoJob(params: {
-  propertyId: string;
+  subject: VideoSubjectRef;
   format?: VideoFormat;
   resolution?: VideoResolution;
   triggeredBy: TriggeredBy;
@@ -99,6 +81,8 @@ export async function enqueueVideoJob(params: {
   musicTrackId?: string | null;
 }): Promise<EnqueueResult> {
   try {
+    const { subject } = params;
+    const subjectColumn = subject.kind === "property" ? "property_id" : "idealista_listing_id";
     const settings = params.settings ?? (await getVideoSettings());
     const format = params.format ?? settings.defaultFormat;
     const supabase = createAdminClient() as any;
@@ -106,16 +90,16 @@ export async function enqueueVideoJob(params: {
     const { data: existing } = await supabase
       .from("property_media")
       .select("photos_fingerprint, width, height")
-      .eq("property_id", params.propertyId)
+      .eq(subjectColumn, subject.id)
       .eq("type", "video")
       .eq("source", "auto")
       .eq("format", format)
       .maybeSingle();
 
-    // Si esta propiedad ya tiene un vídeo, se rehace en SU misma resolución
-    // salvo que se pida otra explícitamente. Sin esto, un vídeo que alguien
-    // generó a mano en 4K lo machacaría el cron con uno en Full HD (solo cabe
-    // un vídeo automático por propiedad y formato).
+    // Si esta ficha ya tiene un vídeo, se rehace en SU misma resolución salvo
+    // que se pida otra explícitamente. Sin esto, un vídeo que alguien generó a
+    // mano en 4K lo machacaría el cron con uno en Full HD (solo cabe un vídeo
+    // automático por ficha y formato).
     const resolution =
       params.resolution ?? resolutionOf(existing) ?? settings.defaultResolution;
 
@@ -124,13 +108,16 @@ export async function enqueueVideoJob(params: {
         ? params.musicTrackId
         : ((await resolveMusicTrack(null, settings))?.id ?? null);
 
-    const { fingerprint, photoCount } = await currentFingerprint(
-      params.propertyId,
+    const photoUrls = await getSubjectPhotoUrls(subject);
+    const photoCount = photoUrls.length;
+    const fingerprint = photosFingerprint(photoUrls, {
       format,
       resolution,
-      settings,
+      secondsPerPhoto: settings.secondsPerPhoto,
+      transitionSeconds: settings.transitionSeconds,
       musicTrackId,
-    );
+      logoPosition: settings.logoPosition,
+    });
 
     if (photoCount < MIN_PHOTOS) {
       return { ok: false, reason: "not_enough_photos" };
@@ -143,7 +130,8 @@ export async function enqueueVideoJob(params: {
     const { data, error } = await supabase
       .from("property_video_jobs")
       .insert({
-        property_id: params.propertyId,
+        property_id: subject.kind === "property" ? subject.id : null,
+        idealista_listing_id: subject.kind === "listing" ? subject.id : null,
         format,
         resolution,
         photos_fingerprint: fingerprint,
@@ -158,7 +146,7 @@ export async function enqueueVideoJob(params: {
 
     if (error) {
       // El índice único parcial impide dos trabajos vivos para la misma
-      // propiedad y formato: que salte aquí es el comportamiento correcto.
+      // ficha y formato: que salte aquí es el comportamiento correcto.
       if (error.code === "23505") return { ok: false, reason: "already_queued" };
       return { ok: false, reason: "error", detail: error.message };
     }
@@ -193,7 +181,7 @@ export type ProcessResult =
   | {
       processed: true;
       jobId: string;
-      propertyId: string;
+      subjectId: string;
       ok: boolean;
       error?: string;
       sizeBytes?: number;
@@ -219,7 +207,7 @@ export async function processNextVideoJob(): Promise<ProcessResult> {
 
   const { data: job } = await supabase
     .from("property_video_jobs")
-    .select("id, property_id, format, resolution, music_track_id, attempts")
+    .select("id, property_id, idealista_listing_id, format, resolution, music_track_id, attempts")
     .eq("status", "pending")
     .lt("attempts", MAX_ATTEMPTS)
     .order("priority", { ascending: false })
@@ -244,27 +232,31 @@ export async function processNextVideoJob(): Promise<ProcessResult> {
     .maybeSingle();
   if (!claimed) return { processed: false, reason: "busy" };
 
-  const property = await findProperty({ id: job.property_id });
-  if (!property) {
+  const subjectId: string = job.property_id ?? job.idealista_listing_id;
+  const subject: VideoSubject | null = job.property_id
+    ? await findProperty({ id: job.property_id }).then((p) => (p ? { kind: "property" as const, ...p } : null))
+    : await findListing({ id: job.idealista_listing_id }).then((l) => (l ? { kind: "listing" as const, ...l } : null));
+
+  if (!subject) {
     await supabase
       .from("property_video_jobs")
       .update({
         status: "error",
-        error: "La propiedad ya no existe",
+        error: "La propiedad o ficha ya no existe",
         finished_at: new Date().toISOString(),
       })
       .eq("id", job.id);
     return {
       processed: true,
       jobId: job.id,
-      propertyId: job.property_id,
+      subjectId,
       ok: false,
-      error: "property_not_found",
+      error: "subject_not_found",
     };
   }
 
-  const result = await generatePropertyVideo({
-    property,
+  const result = await generateVideo({
+    subject,
     format: job.format,
     resolution: job.resolution,
     musicTrackId: job.music_track_id,
@@ -288,7 +280,7 @@ export async function processNextVideoJob(): Promise<ProcessResult> {
     return {
       processed: true,
       jobId: job.id,
-      propertyId: property.id,
+      subjectId,
       ok: false,
       error: result.error,
     };
@@ -310,7 +302,7 @@ export async function processNextVideoJob(): Promise<ProcessResult> {
   return {
     processed: true,
     jobId: job.id,
-    propertyId: property.id,
+    subjectId,
     ok: true,
     sizeBytes: result.sizeBytes,
   };
@@ -339,7 +331,7 @@ export async function enqueueAfterSync(propertyIds: string[]): Promise<number> {
       // `enqueueVideoJob` ya devuelve "up_to_date" cuando la huella coincide,
       // y aquí simplemente no se fuerza nada.
       const result = await enqueueVideoJob({
-        propertyId,
+        subject: { kind: "property", id: propertyId },
         triggeredBy: "sync",
         settings,
         musicTrackId,
@@ -359,6 +351,10 @@ export async function enqueueAfterSync(propertyIds: string[]): Promise<number> {
  * Se limita el lote porque la primera pasada sobre una cartera entera son
  * cientos de propiedades: encolarlas de golpe no acelera nada (el worker va de
  * una en una) y llena la tabla de trabajos que tardarán días en tocarles turno.
+ *
+ * Solo propiedades reales (no fichas inspo): las inspo se generan a mano desde
+ * su ficha, igual que las propiedades manuales — automatizarlas no lo pidió
+ * nadie y son anuncios señuelo, no cartera real que sincronice sola.
  */
 export async function enqueuePendingProperties(
   limit = 25,
@@ -389,7 +385,7 @@ export async function enqueuePendingProperties(
   for (const row of rows) {
     if (queued >= limit) break;
     const result = await enqueueVideoJob({
-      propertyId: row.id,
+      subject: { kind: "property", id: row.id },
       triggeredBy: "cron",
       settings,
       musicTrackId,
