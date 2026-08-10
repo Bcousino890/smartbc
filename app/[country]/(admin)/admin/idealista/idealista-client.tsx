@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Clapperboard, Video } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -228,9 +228,12 @@ function listingMissingFields(l: DbIdealistaListing): string[] {
 export function IdealistaClient({
   properties,
   listings,
+  listingsWithVideo,
 }: {
   properties: Property[];
   listings: DbIdealistaListing[];
+  /** IDs (de properties o de idealista_listings) que ya tienen vídeo automático generado. */
+  listingsWithVideo: string[];
 }) {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isInspoMode, setIsInspoMode] = useState(false);
@@ -253,7 +256,43 @@ export function IdealistaClient({
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusModalListingId, setStatusModalListingId] = useState<string | null>(null);
   const [statusModalTitle, setStatusModalTitle] = useState("");
+  const [generatingVideos, setGeneratingVideos] = useState(false);
+  const [generateVideosMsg, setGenerateVideosMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const router = useRouter();
+
+  const videoIds = useMemo(() => new Set(listingsWithVideo), [listingsWithVideo]);
+
+  // Dispara el vídeo de TODAS las inspo que lo necesiten (nuevas o con fotos
+  // cambiadas) de una vez. El render sigue en el servidor tras responder: no
+  // hay que esperar aquí a que termine, solo a que quede encolado.
+  const handleGenerateAllVideos = async () => {
+    setGeneratingVideos(true);
+    setGenerateVideosMsg(null);
+    try {
+      const res = await fetch("/api/admin/idealista/listings/generate-videos", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGenerateVideosMsg({ ok: false, text: data.error ?? "No se pudieron encolar los vídeos." });
+        return;
+      }
+      const parts = [`${data.queued} vídeo(s) encolados`];
+      if (data.upToDate > 0) parts.push(`${data.upToDate} ya al día`);
+      if (data.skipped > 0) parts.push(`${data.skipped} sin fotos suficientes`);
+      setGenerateVideosMsg({
+        ok: true,
+        text:
+          data.queued > 0
+            ? `${parts.join(", ")}. Se renderizan uno a uno; recarga en unos minutos para ver el botón de descarga.`
+            : `Nada que encolar (${parts.slice(1).join(", ") || "todas al día"}).`,
+      });
+    } catch {
+      setGenerateVideosMsg({ ok: false, text: "Error de red al encolar los vídeos." });
+    } finally {
+      setGeneratingVideos(false);
+    }
+  };
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId),
@@ -741,9 +780,25 @@ export function IdealistaClient({
       {/* Fichas preparadas: del sistema + inspo */}
       {activeListings.length > 0 && (
         <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink/45">
-            Fichas guardadas ({activeListings.length})
-          </h3>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/45">
+              Fichas guardadas ({activeListings.length})
+            </h3>
+            <button
+              onClick={handleGenerateAllVideos}
+              disabled={generatingVideos}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              title="Genera o actualiza el vídeo automático de todas las inspo que lo necesiten"
+            >
+              {generatingVideos ? <Loader2 size={12} className="animate-spin" /> : <Clapperboard size={12} />}
+              Generar vídeos de todas las inspo
+            </button>
+          </div>
+          {generateVideosMsg && (
+            <p className={`mb-3 text-xs ${generateVideosMsg.ok ? "text-emerald-700" : "text-red-600"}`}>
+              {generateVideosMsg.text}
+            </p>
+          )}
           <div className="space-y-2">
             {activeListings.map((listing) => {
               const property = !listing.is_inspo
@@ -752,6 +807,16 @@ export function IdealistaClient({
               const displayTitle = listing.is_inspo
                 ? (listing.inspo_title || "Inspo sin título")
                 : (property?.title ?? "Propiedad eliminada");
+              // El vídeo automático se guarda contra la propiedad si la ficha
+              // es una propiedad real, o contra la propia ficha si es inspo.
+              const videoOwnerId = listing.is_inspo ? listing.id : listing.property_id;
+              const videoHref =
+                listing.is_inspo
+                  ? `/api/admin/idealista/listings/${listing.id}/download-video`
+                  : property
+                    ? `/api/admin/properties/${property.slug}/download-video`
+                    : null;
+              const hasVideo = !!videoOwnerId && videoIds.has(videoOwnerId) && !!videoHref;
 
               return (
                 <div
@@ -848,6 +913,16 @@ export function IdealistaClient({
                         <Download size={12} />
                         Fotos
                       </button>
+                    )}
+                    {hasVideo && videoHref && (
+                      <a
+                        href={videoHref}
+                        className="flex items-center gap-1.5 rounded-lg border border-gold/25 bg-gold/5 px-2.5 py-1.5 text-xs font-semibold text-gold-dark transition hover:bg-gold/15"
+                        title="Descargar el vídeo automático ya generado"
+                      >
+                        <Video size={12} />
+                        Vídeo
+                      </a>
                     )}
                     {listing.is_inspo && (
                       <button

@@ -397,3 +397,63 @@ export async function enqueuePendingProperties(
 
   return { scanned: rows.length, queued, upToDate, skipped };
 }
+
+/**
+ * Encola el vídeo de todas las fichas inspo activas que lo necesiten (nuevas
+ * o con fotos cambiadas desde el último render). Es el equivalente en bloque
+ * del botón "Generar vídeo" de una ficha suelta — a diferencia del barrido de
+ * propiedades, este SÍ lo dispara una persona a mano (botón en el listado de
+ * Idealista), no un cron: las inspo no se tocan solas.
+ */
+export async function enqueuePendingListings(
+  limit = 100,
+): Promise<{ scanned: number; queued: number; upToDate: number; skipped: number }> {
+  const settings = await getVideoSettings();
+  const supabase = createAdminClient() as any;
+  const musicTrackId = (await resolveMusicTrack(null, settings))?.id ?? null;
+
+  const { data: listings } = await supabase
+    .from("idealista_listings")
+    .select("id")
+    .eq("is_inspo", true)
+    .is("archived_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit * 4);
+
+  let queued = 0;
+  let upToDate = 0;
+  let skipped = 0;
+  const rows = (listings ?? []) as Array<{ id: string }>;
+
+  for (const row of rows) {
+    if (queued >= limit) break;
+    const result = await enqueueVideoJob({
+      subject: { kind: "listing", id: row.id },
+      triggeredBy: "manual",
+      settings,
+      musicTrackId,
+    });
+    if (result.ok) queued++;
+    else if (result.reason === "up_to_date") upToDate++;
+    else skipped++;
+  }
+
+  return { scanned: rows.length, queued, upToDate, skipped };
+}
+
+/**
+ * Procesa la cola hasta vaciarla (o hasta `maxJobs`, tope de seguridad). Para
+ * un render suelto basta con el disparo puntual de processNextVideoJob tras
+ * encolar; para un lote de decenas hace falta seguir tirando de la cola sin
+ * bloquear la petición HTTP que las encoló — por eso esto se llama en
+ * background (`void drainQueue(...)`), nunca esperado.
+ */
+export async function drainQueue(maxJobs = 200): Promise<number> {
+  let processed = 0;
+  for (let i = 0; i < maxJobs; i++) {
+    const result = await processNextVideoJob();
+    if (!result.processed) break;
+    processed++;
+  }
+  return processed;
+}

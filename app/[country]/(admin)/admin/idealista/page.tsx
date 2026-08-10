@@ -45,6 +45,22 @@ export default async function AdminIdealistaPage({
     .select("*")
     .order("updated_at", { ascending: false });
 
+  // Qué fichas (propiedad o inspo) ya tienen un vídeo automático generado, para
+  // poder enseñar "Descargar" en la lista sin abrir cada una a comprobarlo.
+  const { data: autoVideos } = await supabase
+    .from("property_media")
+    .select("property_id, idealista_listing_id")
+    .eq("type", "video")
+    .eq("source", "auto");
+
+  const listingsWithVideo = [
+    ...new Set(
+      ((autoVideos ?? []) as Array<{ property_id: string | null; idealista_listing_id: string | null }>)
+        .flatMap((row) => [row.property_id, row.idealista_listing_id])
+        .filter((id): id is string => !!id),
+    ),
+  ];
+
   const rows = (properties ?? []) as Array<{
     id: string;
     slug: string;
@@ -167,7 +183,7 @@ export default async function AdminIdealistaPage({
             hotfix: el tipo local DbIdealistaListing de idealista-client.tsx
             derivó respecto al cast inline de `idealista`; la data es la misma
             que la versión raíz (que compila y funciona en runtime). */}
-        <IdealistaClient properties={rows} listings={idealista as any} />
+        <IdealistaClient properties={rows} listings={idealista as any} listingsWithVideo={listingsWithVideo} />
       </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
