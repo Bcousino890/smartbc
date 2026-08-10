@@ -80,11 +80,29 @@ fi
 # se avisa: sin él la generación de vídeos queda desactivada y el panel lo
 # indica, pero el resto de la aplicación funciona igual.
 echo "🎬 Verificando ffmpeg (vídeos de propiedad)..."
-if command -v ffmpeg &> /dev/null && command -v ffprobe &> /dev/null; then
+FFMPEG_BIN_PATH="$(command -v ffmpeg 2>/dev/null || true)"
+FFPROBE_BIN_PATH="$(command -v ffprobe 2>/dev/null || true)"
+
+if [ -n "$FFMPEG_BIN_PATH" ] && [ -n "$FFPROBE_BIN_PATH" ]; then
   echo "✅ $(ffmpeg -version 2>/dev/null | head -1 | cut -c1-60)"
+  echo "    ffmpeg:  $FFMPEG_BIN_PATH"
+  echo "    ffprobe: $FFPROBE_BIN_PATH"
+  # Aviso clave: que ESTE script lo encuentre no significa que lo encuentre el
+  # proceso de Next. El demonio de PM2 conserva el entorno con el que arrancó,
+  # así que un `pm2 restart` a secas puede seguir viendo el PATH viejo.
+  echo "    ℹ️  Si el panel sigue diciendo que falta: pm2 restart smartbc-main --update-env"
+  echo "        y comprueba /api/admin/video/ffmpeg-health"
+elif [ -n "$FFMPEG_BIN_PATH" ]; then
+  echo "⚠️  Está ffmpeg ($FFMPEG_BIN_PATH) pero NO ffprobe — hacen falta los dos."
+  echo "    El paquete 'ffmpeg' de apt trae ambos: apt install --reinstall ffmpeg"
 else
   echo "⚠️  ffmpeg no está instalado — los vídeos automáticos no se generarán."
-  echo "    Instálalo con: apt install ffmpeg"
+  echo "    Instálalo con: sudo apt update && sudo apt install -y ffmpeg"
+  echo "    PATH de este script: $PATH"
+  # Puede estar instalado fuera del PATH del cron; lo decimos en vez de mentir.
+  for d in /usr/bin /usr/local/bin /snap/bin /opt/ffmpeg/bin; do
+    [ -x "$d/ffmpeg" ] && echo "    ⚠️  Pero SÍ existe en $d/ffmpeg (problema de PATH, no de instalación)."
+  done
   echo "    Y sube FILE_SIZE_LIMIT del contenedor 'storage' a 500MB (ver CLAUDE.md)."
 fi
 echo ""

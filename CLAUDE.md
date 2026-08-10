@@ -38,10 +38,29 @@ Genera un vídeo tipo Ken Burns (zoom + paneo + transiciones) con las fotos de
 la propiedad, el logo de la agencia y música de fondo.
 
 **Requisitos en el VPS (los dos, o no funciona):**
-1. `apt install ffmpeg` — es el motor de render. Sin él el panel avisa y la
-   generación queda desactivada; el resto de la app funciona igual.
+1. `apt install ffmpeg` — es el motor de render (hacen falta **ffmpeg Y
+   ffprobe**). Sin él el panel avisa y la generación queda desactivada; el
+   resto de la app funciona igual.
 2. `FILE_SIZE_LIMIT` del contenedor `storage` a **500MB** (ver arriba). En
    Full HD un vídeo de 2:30 ronda los 80MB, pero en 4K se va a 250–400MB.
+
+⚠️ **Si el panel dice "falta ffmpeg" pero en la shell del VPS `ffmpeg -version`
+sí responde**, no es un problema de instalación sino de entorno: el demonio de
+PM2 conserva el PATH con el que arrancó, y `pm2 restart` a secas **no** lo
+refresca. Diagnóstico y solución en ese orden:
+```bash
+# 1. Qué ve EXACTAMENTE el proceso de Next (PATH, usuario, rutas probadas):
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3137/api/admin/video/ffmpeg-health | jq .verdict
+# 2. Refrescar el entorno de PM2 (esto arregla el caso más común):
+pm2 restart smartbc-main --update-env      # si no basta: pm2 kill && pm2 resurrect
+# 3. Último recurso: ruta absoluta en .env.local
+#    FFMPEG_PATH=/usr/bin/ffmpeg
+#    FFPROBE_PATH=/usr/bin/ffprobe
+```
+La app busca los binarios en el PATH **y** en las rutas habituales
+(`/usr/bin`, `/usr/local/bin`, `/snap/bin`, `/opt/ffmpeg/bin`…), así que un
+PATH pobre heredado de cron/systemd ya no debería romperla.
 
 **Cron del worker** (renderiza un vídeo por pasada, para no ahogar la CPU que
 comparte con PM2):

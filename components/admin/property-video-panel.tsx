@@ -193,8 +193,24 @@ export function PropertyVideoPanel({
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
           <AlertCircle size={15} className="mt-0.5 shrink-0" />
           <span>
-            Falta <strong>ffmpeg</strong> en el servidor: instálalo en el VPS con{" "}
-            <code className="rounded bg-amber-100 px-1">apt install ffmpeg</code>.
+            {/* El motivo real (no está / no ejecutable / está fuera del PATH que
+                heredó PM2) lo trae el servidor: sin él, "apt install ffmpeg" se
+                convierte en el único consejo posible aunque ya esté instalado. */}
+            {estimate?.ffmpegError ? (
+              <>
+                <strong>Vídeo automático no disponible:</strong> {estimate.ffmpegError}
+              </>
+            ) : (
+              <>
+                Falta <strong>ffmpeg</strong> en el servidor: instálalo en el VPS con{" "}
+                <code className="rounded bg-amber-100 px-1">apt install ffmpeg</code>.
+              </>
+            )}{" "}
+            Diagnóstico detallado en{" "}
+            <code className="rounded bg-amber-100 px-1">
+              /api/admin/video/ffmpeg-health
+            </code>
+            .
           </span>
         </div>
       )}
