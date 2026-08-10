@@ -29,6 +29,17 @@ COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
 echo "=== $(date -Is) rebuild iniciado — $APP_DIR @ $COMMIT ===" >>"$LOG"
 
 rm -rf .next.new >>"$LOG" 2>&1
+
+# Tipos generados RANCIOS del build anterior. Next añade `.next/types/**/*.ts`
+# al `include` de tsconfig, así que el typecheck del build nuevo también valida
+# los .d.ts que dejó el build viejo. Si un commit BORRA una ruta de API, su
+# fichero de tipos sigue en `.next/types` apuntando a un módulo que ya no
+# existe y el build entero falla con "Cannot find module '.../route.js'".
+# Como el build atómico solo hace swap si tiene éxito, producción se queda
+# clavada en la versión anterior sin motivo aparente. Estos .d.ts solo se usan
+# al compilar (el servidor en marcha no los lee), así que borrarlos es seguro.
+rm -rf .next/types >>"$LOG" 2>&1
+
 if NODE_OPTIONS="--max-old-space-size=4096" NEXT_BUILD_DIR=.next.new npm run build >>"$LOG" 2>&1; then
   rm -rf .next.old >>"$LOG" 2>&1
   mv .next .next.old >>"$LOG" 2>&1 || true
