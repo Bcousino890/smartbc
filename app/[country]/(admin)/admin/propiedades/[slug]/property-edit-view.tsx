@@ -119,11 +119,13 @@ export function PropertyEditView({
   shares,
   videos: initialVideos = [],
   plans: initialPlans = [],
+  isAdmin = false,
 }: {
   property: PropertyForEdit;
   shares: SmartLinkRow[];
   videos?: MediaItem[];
   plans?: MediaItem[];
+  isAdmin?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -800,6 +802,16 @@ export function PropertyEditView({
           >
             <ImageIcon size={13} strokeWidth={1.75} className="text-gold-dark" />
             <span>{t("adminProps.detail.downloadPhotos")}</span>
+          </a>
+        )}
+        {property.photos.length > 0 && isAdmin && (
+          <a
+            href={`/api/admin/properties/${property.slug}/download-photos?clean=1`}
+            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-ink/5 px-4 py-2 text-[12px] font-medium text-ink/70 transition hover:border-ink/30 hover:bg-ink/10"
+            title="Solo para admins: los originales, sin nuestro logo superpuesto"
+          >
+            <ImageIcon size={13} strokeWidth={1.75} />
+            <span>Fotos sin marca de agua</span>
           </a>
         )}
         {videos.length > 0 && (

@@ -31,14 +31,17 @@ export function safeZipName(raw: string): string {
   );
 }
 
-// Descarga las fotos dadas, les superpone el logo de la agencia y las
-// empaqueta en un ZIP (carpeta `folder`, archivos numerados 01.ext, 02.ext…).
-// Las fotos que fallen al descargar/procesar se omiten sin tumbar el resto.
-// Devuelve null si ninguna foto pudo incluirse.
+// Descarga las fotos dadas y las empaqueta en un ZIP (carpeta `folder`,
+// archivos numerados 01.ext, 02.ext…), con el logo de la agencia superpuesto
+// salvo que se pida `watermark: false` (uso interno, admin: los originales
+// limpios). Las fotos que fallen al descargar/procesar se omiten sin tumbar
+// el resto. Devuelve null si ninguna foto pudo incluirse.
 export async function buildWatermarkedPhotoZip(
   urls: string[],
   folder: string,
+  options: { watermark?: boolean } = {},
 ): Promise<Buffer | null> {
+  const watermark = options.watermark ?? true;
   const entries: (ZipEntry | null)[] = new Array(urls.length).fill(null);
   for (let start = 0; start < urls.length; start += CONCURRENCY) {
     const batch = urls.slice(start, start + CONCURRENCY);
@@ -59,10 +62,12 @@ export async function buildWatermarkedPhotoZip(
           const ext = extFromContentType(r.headers.get("content-type"), url);
           const num = String(i + 1).padStart(2, "0");
           let buf = rawBuf;
-          try {
-            buf = Buffer.from(await applyBrandWatermark(rawBuf));
-          } catch {
-            // si el procesado falla, se incluye la foto original sin marca
+          if (watermark) {
+            try {
+              buf = Buffer.from(await applyBrandWatermark(rawBuf));
+            } catch {
+              // si el procesado falla, se incluye la foto original sin marca
+            }
           }
           entries[i] = { name: `${folder}/${num}.${ext}`, data: buf };
         } catch {

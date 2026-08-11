@@ -13,7 +13,8 @@ export default async function PropertyDetailPage({
   params: Promise<{ slug: string; country: Country }>;
 }) {
   const { slug, country } = await params;
-  await guardPage("properties", country);
+  const currentProfile = await guardPage("properties", country);
+  const isAdmin = ["owner", "admin"].includes(currentProfile.role);
   // Cast: supabase-js no infiere bien filas tipo `properties` con joins,
   // así que la respuesta llega como `never`. Forzamos el shape concreto.
   const property = (await getPropertyBySlugForAdmin(slug)) as
@@ -101,6 +102,7 @@ export default async function PropertyDetailPage({
       shares={shares}
       videos={videos}
       plans={plans}
+      isAdmin={isAdmin}
       property={{
         id: property.id,
         slug: property.slug,
