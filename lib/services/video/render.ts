@@ -43,10 +43,17 @@ export type RenderOutput = {
  * Movimiento de cámara de cada foto. Se alterna de forma determinista (por
  * índice, no al azar) para que dos renders de la misma propiedad salgan
  * idénticos y para que el vídeo no repita siempre el mismo gesto.
+ *
+ * Las cuatro combinan zoom Y desplazamiento lateral A LA VEZ — nunca uno solo.
+ * Antes había variantes de zoom puro centrado (sin desplazamiento) y de
+ * desplazamiento puro a zoom fijo: las de zoom puro, al no mover el encuadre,
+ * cambian tan poco de un fotograma al siguiente que Idealista las rechazó por
+ * "vídeo carrusel de imágenes estáticas". Con las dos cosas a la vez el
+ * delta entre fotogramas consecutivos nunca es casi nulo.
  */
-type Motion = "zoom-in" | "zoom-out" | "pan-right" | "pan-left";
+type Motion = "in-right" | "out-left" | "in-left" | "out-right";
 
-const MOTIONS: Motion[] = ["zoom-in", "pan-right", "zoom-out", "pan-left"];
+const MOTIONS: Motion[] = ["in-right", "out-left", "in-left", "out-right"];
 
 /**
  * Expresiones de `zoompan` para un movimiento.
@@ -55,37 +62,30 @@ const MOTIONS: Motion[] = ["zoom-in", "pan-right", "zoom-out", "pan-left"];
  * fotograma de salida) para que el recorrido sea LINEAL. La forma habitual
  * (`z='min(zoom+0.0015,1.15)'`) acumula sobre el fotograma anterior y produce
  * el temblor típico de los slideshows mal hechos.
+ *
+ * El desplazamiento lateral usa el propio hueco que deja el zoom
+ * (`iw-iw/zoom`), así que a zoom 1 (arranque de un "in", final de un "out")
+ * no hay hueco que recorrer y el desplazamiento vale 0 por construcción — no
+ * hace falta tratar ese caso aparte.
  */
 function zoompanExpressions(motion: Motion, frames: number) {
   // Con un solo fotograma no hay interpolación posible; evita dividir por cero.
   const last = Math.max(1, frames - 1);
   const amplitude = MAX_ZOOM - 1;
+  const t = `on/${last}`;
+  const zoomIn = `1+${amplitude.toFixed(4)}*${t}`;
+  const zoomOut = `${MAX_ZOOM.toFixed(4)}-${amplitude.toFixed(4)}*${t}`;
+  const y = "(ih-ih/zoom)/2";
 
   switch (motion) {
-    case "zoom-in":
-      return {
-        z: `1+${amplitude.toFixed(4)}*on/${last}`,
-        x: "(iw-iw/zoom)/2",
-        y: "(ih-ih/zoom)/2",
-      };
-    case "zoom-out":
-      return {
-        z: `${MAX_ZOOM.toFixed(4)}-${amplitude.toFixed(4)}*on/${last}`,
-        x: "(iw-iw/zoom)/2",
-        y: "(ih-ih/zoom)/2",
-      };
-    case "pan-right":
-      return {
-        z: `${MAX_ZOOM.toFixed(4)}`,
-        x: `(iw-iw/zoom)*on/${last}`,
-        y: "(ih-ih/zoom)/2",
-      };
-    case "pan-left":
-      return {
-        z: `${MAX_ZOOM.toFixed(4)}`,
-        x: `(iw-iw/zoom)*(1-on/${last})`,
-        y: "(ih-ih/zoom)/2",
-      };
+    case "in-right":
+      return { z: zoomIn, x: `(iw-iw/zoom)*${t}`, y };
+    case "in-left":
+      return { z: zoomIn, x: `(iw-iw/zoom)*(1-${t})`, y };
+    case "out-right":
+      return { z: zoomOut, x: `(iw-iw/zoom)*(1-${t})`, y };
+    case "out-left":
+      return { z: zoomOut, x: `(iw-iw/zoom)*${t}`, y };
   }
 }
 
