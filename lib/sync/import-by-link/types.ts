@@ -10,6 +10,7 @@ export type ImportPortal =
   | "idealista"
   | "fotocasa"
   | "inmoweb"
+  | "inmovilla"
   | "mobilia"
   | "clikalia"
   | "urbantechome"
