@@ -45,5 +45,6 @@ next-env.d.ts
 *.swp
 *.swo
 
-# Claude Code local settings
-.claude/
+# Claude Code local settings (but share project-level skills with the team)
+.claude/*
+!.claude/skills/
