@@ -77,6 +77,11 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, config: await getIdealistaApiConfigStatus() });
   } catch (err) {
     console.error("[idealista-api/config] POST:", err);
-    return Response.json({ error: "No se pudo guardar la configuración" }, { status: 500 });
+    // El mensaje real importa: si falla la escritura (por ejemplo, porque falta
+    // la migración 0118 en el VPS), hay que verlo en el panel y no un genérico.
+    return Response.json(
+      { error: err instanceof Error ? err.message : "No se pudo guardar la configuración" },
+      { status: 500 }
+    );
   }
 }

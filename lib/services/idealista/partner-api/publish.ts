@@ -137,36 +137,63 @@ function buildImageList(listing: ListingRecord, warnings: string[]): IdealistaIm
   return all.slice(0, MAX_IMAGES).map((url) => ({ url }));
 }
 
-/** Guarda la relación foto nuestra ↔ imageId de Idealista, con su checksum. */
-async function persistImageMapping(listingId: string, config: IdealistaApiConfig, propertyId: number): Promise<void> {
+/**
+ * Guarda la relación foto nuestra ↔ imageId de Idealista, con su checksum.
+ *
+ * ⚠️ Idealista procesa las fotos en cola: justo después de subirlas vuelven con
+ * `state: "pending_to_process"` y **sin** `originalMD5CheckSum`. Por eso esto se
+ * vuelve a llamar desde "Actualizar estado", que es cuando ya suelen estar
+ * procesadas y llega el checksum — que es la pieza que Idealista pide tener
+ * guardada para emparejar sus imágenes con las nuestras.
+ *
+ * Devuelve cuántas fotos siguen pendientes de procesar.
+ */
+async function persistImageMapping(
+  listingId: string,
+  config: IdealistaApiConfig,
+  propertyId: number
+): Promise<{ total: number; pending: number }> {
   const images = await findImages(propertyId, config);
   const db = createAdminClient() as any;
 
-  await db.from("idealista_api_images").delete().eq("listing_id", listingId);
-  if (images.length === 0) return;
+  const rows = images.map((image) => ({
+    listing_id: listingId,
+    idealista_image_id: image.imageId ?? null,
+    url: image.url ?? "",
+    original_md5: image.originalMD5CheckSum ?? null,
+    label: image.label ?? null,
+    position: image.order ?? null,
+    state: image.state ?? null,
+    synced_at: new Date().toISOString(),
+  }));
 
-  await db.from("idealista_api_images").insert(
-    images.map((image) => ({
-      listing_id: listingId,
-      idealista_image_id: image.imageId ?? null,
-      url: image.url,
-      original_md5: image.originalMD5CheckSum ?? null,
-      label: image.label ?? null,
-      position: image.order ?? null,
-      state: image.state ?? null,
-      synced_at: new Date().toISOString(),
-    }))
-  );
+  // Se borra y se reinserta porque el PUT de fotos es una foto fija: los
+  // imageId antiguos dejan de existir. Si la inserción fallara nos quedaríamos
+  // sin relación, así que el error se propaga en vez de tragárselo.
+  const { error: deleteError } = await db.from("idealista_api_images").delete().eq("listing_id", listingId);
+  if (deleteError) throw new Error(`No se pudo limpiar la relación de fotos: ${deleteError.message}`);
+
+  if (rows.length > 0) {
+    const { error } = await db.from("idealista_api_images").insert(rows);
+    if (error) throw new Error(`No se pudo guardar la relación de fotos: ${error.message}`);
+  }
+
+  return {
+    total: rows.length,
+    pending: rows.filter((row) => row.state === "pending_to_process" || !row.original_md5).length,
+  };
 }
 
 async function persistVideoMapping(listingId: string, config: IdealistaApiConfig, propertyId: number): Promise<void> {
   const videos = await findVideos(propertyId, config);
   const db = createAdminClient() as any;
 
-  await db.from("idealista_api_videos").delete().eq("listing_id", listingId);
+  const { error: deleteError } = await db.from("idealista_api_videos").delete().eq("listing_id", listingId);
+  if (deleteError) throw new Error(`No se pudo limpiar la relación de vídeos: ${deleteError.message}`);
+
   if (videos.length === 0) return;
 
-  await db.from("idealista_api_videos").insert(
+  const { error } = await db.from("idealista_api_videos").insert(
     videos.map((video) => ({
       listing_id: listingId,
       idealista_video_id: video.videoId ?? null,
@@ -176,17 +203,21 @@ async function persistVideoMapping(listingId: string, config: IdealistaApiConfig
       synced_at: new Date().toISOString(),
     }))
   );
+  if (error) throw new Error(`No se pudo guardar la relación de vídeos: ${error.message}`);
 }
 
-async function updateListingState(
-  listingId: string,
-  patch: Record<string, unknown>
-): Promise<void> {
+/**
+ * Actualiza la ficha. Lanza si falla: perder el `api_property_id` que acaba de
+ * devolver Idealista significa que el siguiente intento crearía un anuncio
+ * nuevo y gastaría otro hueco, así que no se puede fallar en silencio.
+ */
+async function updateListingState(listingId: string, patch: Record<string, unknown>): Promise<void> {
   const db = createAdminClient() as any;
-  await db
+  const { error } = await db
     .from("idealista_listings")
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", listingId);
+  if (error) throw new Error(`No se pudo actualizar la ficha: ${error.message}`);
 }
 
 /**
@@ -274,22 +305,56 @@ export async function publishListingViaApi(listingId: string): Promise<PublishOu
       durationMs: Date.now() - startedAt,
       sandbox: config.sandbox,
     });
-    await updateListingState(listingId, { api_last_error: message, api_last_sync_at: new Date().toISOString() });
+    await updateListingState(listingId, {
+      api_last_error: message,
+      api_last_sync_at: new Date().toISOString(),
+    }).catch(() => {});
+
+    if (err instanceof IdealistaApiError && err.status === 409) {
+      return {
+        ok: false,
+        steps,
+        warnings,
+        errors: [
+          message,
+          'Idealista ya tiene un anuncio con esta referencia. Usa "Reconciliar anuncios" en Configuración → Idealista para recuperar su id y poder actualizarlo en vez de crearlo.',
+        ],
+      };
+    }
     return { ok: false, steps, warnings, errors: [message] };
   }
 
   const propertyId = response.propertyId ?? listing.api_property_id ?? undefined;
   steps.push(isUpdate ? "Anuncio actualizado en Idealista." : "Anuncio creado en Idealista.");
 
-  await updateListingState(listingId, {
+  const patch: Record<string, unknown> = {
     api_property_id: propertyId ?? null,
     api_state: response.state ?? "active",
     api_scope: response.scope ?? config.scope,
-    api_published_at: isUpdate ? undefined : new Date().toISOString(),
     api_last_sync_at: new Date().toISOString(),
     api_last_error: null,
+    // El anuncio está publicado, aunque haya sido por API: así el panel deja de
+    // ofrecer "Abrir en Idealista" (la extensión) y el cron de publicación
+    // programada lo deja en paz. Evita publicarlo dos veces por dos caminos.
     idealista_state: "published",
-  });
+  };
+  if (!isUpdate) patch.api_published_at = new Date().toISOString();
+
+  try {
+    await updateListingState(listingId, patch);
+  } catch (err) {
+    // El anuncio existe ya en Idealista: si no guardamos su id, el siguiente
+    // intento crearía otro y gastaría un hueco. Hay que decirlo bien claro.
+    return {
+      ok: false,
+      steps,
+      warnings,
+      errors: [
+        `El anuncio se ${isUpdate ? "actualizó" : "creó"} en Idealista (propertyId ${propertyId ?? "desconocido"}), pero no se pudo guardar en la ficha: ${describeError(err)}`,
+        'NO vuelvas a pulsar "Publicar por API": usa "Reconciliar anuncios" para recuperar la relación.',
+      ],
+    };
+  }
 
   if (!propertyId) {
     warnings.push("Idealista no devolvió el propertyId: las fotos y los vídeos no se han podido sincronizar.");
@@ -302,7 +367,12 @@ export async function publishListingViaApi(listingId: string): Promise<PublishOu
     try {
       await putImages(propertyId, images, config);
       steps.push(`${images.length} foto(s) enviadas.`);
-      await persistImageMapping(listingId, config, propertyId);
+      const mapping = await persistImageMapping(listingId, config, propertyId);
+      if (mapping.pending > 0) {
+        warnings.push(
+          `Idealista aún está procesando ${mapping.pending} foto(s): pulsa "Actualizar estado" en un rato para guardar sus checksums.`
+        );
+      }
       await logCall({
         listingId,
         operation: "images.put",
@@ -351,9 +421,16 @@ export async function publishListingViaApi(listingId: string): Promise<PublishOu
       if (videos.length > MAX_VIDEOS) {
         warnings.push(`Idealista admite ${MAX_VIDEOS} vídeos por anuncio: se han mandado los ${MAX_VIDEOS} primeros.`);
       }
-      await persistVideoMapping(listingId, config, propertyId);
     } catch (err) {
       warnings.push(`El anuncio está publicado, pero los vídeos han fallado: ${describeError(err)}`);
+    } finally {
+      // Aunque haya fallado a medias, hay que guardar lo que Idealista tenga
+      // ahora mismo: si no, el espejo local queda mintiendo.
+      try {
+        await persistVideoMapping(listingId, config, propertyId);
+      } catch (err) {
+        warnings.push(`No se pudo guardar la relación de vídeos: ${describeError(err)}`);
+      }
     }
   }
 
@@ -563,7 +640,24 @@ export async function refreshListingStateViaApi(listingId: string): Promise<Publ
       api_last_sync_at: new Date().toISOString(),
       api_last_error: null,
     });
-    return { ok: true, propertyId: listing.api_property_id, state: property.state, steps: [`Estado en Idealista: ${property.state}.`], warnings: [], errors: [] };
+
+    const steps = [`Estado en Idealista: ${property.state}.`];
+    const warnings: string[] = [];
+
+    // Momento natural para recoger los checksums MD5: cuando se publica, las
+    // fotos aún están en cola y Idealista todavía no los tiene.
+    try {
+      const mapping = await persistImageMapping(listingId, config, listing.api_property_id);
+      steps.push(
+        mapping.pending > 0
+          ? `${mapping.total} foto(s), ${mapping.pending} aún procesándose.`
+          : `${mapping.total} foto(s) con su checksum guardado.`
+      );
+    } catch (err) {
+      warnings.push(`No se pudo actualizar la relación de fotos: ${describeError(err)}`);
+    }
+
+    return { ok: true, propertyId: listing.api_property_id, state: property.state, steps, warnings, errors: [] };
   } catch (err) {
     return { ok: false, steps: [], warnings: [], errors: [describeError(err)] };
   }

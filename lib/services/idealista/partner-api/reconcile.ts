@@ -57,32 +57,55 @@ export async function reconcileProperties(): Promise<ReconcileResult> {
     };
   }
 
-  const { data: listings } = await db
+  const { data: listings, error: listingsError } = await db
     .from("idealista_listings")
-    .select("id, reference_code, api_property_id");
+    .select("id, reference_code, api_property_id, api_clone_property_id");
 
-  const byReference = new Map<string, { id: string; api_property_id: number | null }>();
-  const byPropertyId = new Map<number, { id: string }>();
-  for (const listing of (listings ?? []) as Array<{
+  if (listingsError) {
+    return { ok: false, totalRemote: remote.length, matched: 0, orphans: [], errors: [listingsError.message] };
+  }
+
+  interface LocalListing {
     id: string;
     reference_code: string | null;
     api_property_id: number | null;
-  }>) {
+    api_clone_property_id: number | null;
+  }
+
+  const byReference = new Map<string, LocalListing>();
+  const byPropertyId = new Map<number, LocalListing>();
+  for (const listing of (listings ?? []) as LocalListing[]) {
     if (listing.reference_code) {
       // El `code` de Idealista no distingue mayúsculas de minúsculas.
       byReference.set(listing.reference_code.trim().toLowerCase(), listing);
     }
     if (listing.api_property_id) byPropertyId.set(listing.api_property_id, listing);
+    // Los clonados (mismo inmueble en venta y alquiler) comparten `code` con su
+    // original: sin esto saldrían como huérfanos en cada pasada, y el clon
+    // podría llegar a pisar el `api_property_id` del original.
+    if (listing.api_clone_property_id) byPropertyId.set(listing.api_clone_property_id, listing);
   }
+
+  // Una ficha sólo se empareja una vez por pasada: si dos anuncios remotos
+  // llevan el mismo `code` (original y clon), el segundo no puede sobreescribir
+  // el `api_property_id` que acaba de fijar el primero.
+  const claimed = new Set<string>();
 
   for (const property of remote) {
     const propertyId = property.propertyId;
     if (!propertyId) continue;
 
     const code = (property.code ?? "").trim();
-    const local = byReference.get(code.toLowerCase()) ?? byPropertyId.get(propertyId);
+    const knownById = byPropertyId.get(propertyId);
+    const local = knownById ?? byReference.get(code.toLowerCase());
 
-    if (!local) {
+    // Ya conocido (como anuncio o como clon): nada que reasignar.
+    if (knownById?.api_clone_property_id === propertyId) {
+      matched++;
+      continue;
+    }
+
+    if (!local || (claimed.has(local.id) && !knownById)) {
       orphans.push({
         propertyId,
         code,
@@ -94,20 +117,24 @@ export async function reconcileProperties(): Promise<ReconcileResult> {
       continue;
     }
 
-    try {
-      await db
-        .from("idealista_listings")
-        .update({
-          api_property_id: propertyId,
-          api_state: property.state,
-          api_last_sync_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", local.id);
-      matched++;
-    } catch (err) {
-      errors.push(`No se pudo guardar la relación de ${code || propertyId}: ${err instanceof Error ? err.message : String(err)}`);
+    // supabase-js no lanza: devuelve `{ error }`. Sin mirarlo, un choque con el
+    // índice único de `api_property_id` se contaría como emparejado.
+    const { error } = await db
+      .from("idealista_listings")
+      .update({
+        api_property_id: propertyId,
+        api_state: property.state,
+        api_last_sync_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", local.id);
+
+    if (error) {
+      errors.push(`No se pudo guardar la relación de ${code || propertyId}: ${error.message}`);
+      continue;
     }
+    claimed.add(local.id);
+    matched++;
   }
 
   return { ok: errors.length === 0, totalRemote: remote.length, matched, orphans, errors };
@@ -133,6 +160,7 @@ export async function syncContacts(): Promise<ContactSyncResult> {
 
   const db = createAdminClient() as any;
   const errors: string[] = [];
+  let synced = 0;
 
   for (const contact of contacts) {
     const record = {
@@ -153,9 +181,11 @@ export async function syncContacts(): Promise<ContactSyncResult> {
 
     const { error } = await db.from("idealista_api_contacts").upsert(record, { onConflict: "contact_id" });
     if (error) errors.push(`Contacto ${contact.contactId}: ${error.message}`);
+    else synced++;
   }
 
-  return { ok: errors.length === 0, total: contacts.length, errors };
+  // `total` es lo que se ha guardado de verdad, no lo que vino de Idealista.
+  return { ok: errors.length === 0, total: synced, errors };
 }
 
 export interface ContactUpsertResult {

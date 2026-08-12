@@ -16,9 +16,19 @@
 -- ============================================================================
 
 -- ── Credenciales y ajustes del API ──────────────────────────────────────────
--- `client_id`, `feed_key` y `sandbox_mode` ya existían (migración 0018). El
--- secreto se guarda cifrado (AES-256-GCM), igual que el resto de integraciones.
+-- `feed_key` y `sandbox_mode` ya existían (migración 0018) y siguen ahí.
+--
+-- ⚠️ `client_id` NO. La migración 0055 (el cambio de OAuth a Playwright) hace
+-- `ALTER TABLE idealista_config DROP COLUMN IF EXISTS client_id`, y como
+-- post-deploy.sh relanza TODAS las migraciones en orden en cada deploy, ese
+-- DROP se ejecuta siempre después del 0018: la columna no puede existir, ni
+-- aunque se cree a mano. Por eso el client id del Partner API va en
+-- `api_client_id`, que además queda junto al resto de ajustes `api_*`.
+--
+-- El secreto se guarda cifrado (AES-256-GCM), igual que el resto de
+-- integraciones del CRM.
 ALTER TABLE idealista_config
+  ADD COLUMN IF NOT EXISTS api_client_id text,
   ADD COLUMN IF NOT EXISTS api_client_secret_encrypted text,
   ADD COLUMN IF NOT EXISTS api_client_secret_iv text,
   ADD COLUMN IF NOT EXISTS api_scope text DEFAULT 'idealista',

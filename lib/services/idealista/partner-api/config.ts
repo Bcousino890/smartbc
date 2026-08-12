@@ -53,16 +53,23 @@ export function isValidFeedKey(feedKey: string): boolean {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Siempre la misma fila: sin ORDER BY, si algún día hubiera más de una, leer y
+// escribir podrían caer en filas distintas.
 async function loadRow(): Promise<any | null> {
   const db = createAdminClient() as any;
-  const { data } = await db.from("idealista_config").select("*").limit(1).maybeSingle();
+  const { data } = await db
+    .from("idealista_config")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
   return data ?? null;
 }
 
 /** Config completa (con el secreto descifrado) o `null` si falta algo para poder llamar. */
 export async function getIdealistaApiConfig(): Promise<IdealistaApiConfig | null> {
   const row = await loadRow();
-  if (!row?.client_id || !row?.api_client_secret_encrypted || !row?.api_client_secret_iv || !row?.feed_key) {
+  if (!row?.api_client_id || !row?.api_client_secret_encrypted || !row?.api_client_secret_iv || !row?.feed_key) {
     return null;
   }
 
@@ -78,7 +85,7 @@ export async function getIdealistaApiConfig(): Promise<IdealistaApiConfig | null
   }
 
   return {
-    clientId: row.client_id,
+    clientId: row.api_client_id,
     clientSecret,
     feedKey: row.feed_key,
     sandbox: row.sandbox_mode !== false,
@@ -93,8 +100,8 @@ export async function getIdealistaApiConfig(): Promise<IdealistaApiConfig | null
 export async function getIdealistaApiConfigStatus(): Promise<IdealistaApiConfigStatus> {
   const row = await loadRow();
   return {
-    configured: !!(row?.client_id && row?.api_client_secret_encrypted && row?.feed_key),
-    clientId: row?.client_id ?? "",
+    configured: !!(row?.api_client_id && row?.api_client_secret_encrypted && row?.feed_key),
+    clientId: row?.api_client_id ?? "",
     feedKey: row?.feed_key ?? "",
     sandbox: row?.sandbox_mode !== false,
     scope: row?.api_scope === "microsite" ? "microsite" : "idealista",
@@ -120,11 +127,18 @@ export interface SaveIdealistaApiConfigInput {
   sendCode?: boolean;
 }
 
+/**
+ * Guarda las credenciales.
+ *
+ * Lanza si la escritura falla: supabase-js NO lanza por su cuenta, devuelve
+ * `{ error }`. Sin esto, una columna que no existiera se traduciría en un
+ * "Credenciales guardadas" que no guarda nada.
+ */
 export async function saveIdealistaApiConfig(input: SaveIdealistaApiConfigInput): Promise<void> {
   const db = createAdminClient() as any;
 
   const record: Record<string, unknown> = {
-    client_id: input.clientId.trim(),
+    api_client_id: input.clientId.trim(),
     feed_key: input.feedKey.trim(),
     sandbox_mode: input.sandbox,
     api_scope: input.scope ?? "idealista",
@@ -140,11 +154,13 @@ export async function saveIdealistaApiConfig(input: SaveIdealistaApiConfigInput)
     record.api_client_secret_iv = iv;
   }
 
-  const { data: existing } = await db.from("idealista_config").select("id").limit(1).maybeSingle();
-  if (existing) {
-    await db.from("idealista_config").update(record).eq("id", existing.id);
-  } else {
-    await db.from("idealista_config").insert(record);
+  const existing = await loadRow();
+  const { error } = existing
+    ? await db.from("idealista_config").update(record).eq("id", existing.id)
+    : await db.from("idealista_config").insert(record);
+
+  if (error) {
+    throw new Error(`No se pudieron guardar las credenciales de Idealista: ${error.message}`);
   }
 }
 

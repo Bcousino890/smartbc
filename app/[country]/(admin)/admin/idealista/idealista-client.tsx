@@ -928,6 +928,25 @@ export function IdealistaClient({
                           {publishResults[listing.id].msg}
                         </span>
                       )}
+                      {listing.api_property_id && (
+                        <span
+                          className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700"
+                          title={`Publicado por API — propertyId ${listing.api_property_id}`}
+                        >
+                          API {listing.api_property_id}
+                          {listing.api_state && listing.api_state !== "active" ? ` · ${listing.api_state}` : ""}
+                        </span>
+                      )}
+                      {/* El último error del API se guarda en la ficha: si no se
+                          enseña, el operador no sabe por qué no salió el anuncio. */}
+                      {!publishResults[listing.id] && listing.api_last_error && (
+                        <span
+                          className="max-w-[28rem] truncate rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-600"
+                          title={listing.api_last_error}
+                        >
+                          ⚠ API: {listing.api_last_error}
+                        </span>
+                      )}
                       <span className="text-ink/30">
                         {new Date(listing.updated_at).toLocaleDateString("es-ES")}
                       </span>
