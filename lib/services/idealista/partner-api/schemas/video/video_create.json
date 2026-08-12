@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/video/video_create.json",
+  "title": "Property video",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "url",
+    "order"
+  ],
+  "properties": {
+    "order": {
+      "title": "video order",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "url": {
+      "title": "video url",
+      "$ref": "../rules.json#/videoUrlFormat"
+    }
+  }
+}

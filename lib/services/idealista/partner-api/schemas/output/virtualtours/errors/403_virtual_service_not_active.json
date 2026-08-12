@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/virtualtours/errors/403_virtual_service_not_active.json",
+  "title": "403 Virtual tour service inactive",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message",
+    "success"
+  ],
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Customer has not active Virtual Tour Service",
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": false,
+      "description":"Indicates whether or not the request was successful"
+    }
+  }
+}

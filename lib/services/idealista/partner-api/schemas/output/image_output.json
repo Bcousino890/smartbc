@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/image_output.json",
+  "title": "Property image",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "imageId": {
+      "title": "image id",
+      "type": "integer",
+      "$ref": "../rules.json#/imageId"
+    },
+    "label": {
+      "title": "image label",
+      "enum": [
+        "appraisalplan",
+        "archive",
+        "atmosphere",
+        "balcony",
+        "basement",
+        "bathroom",
+        "bedroom",
+        "buildingwork",
+        "cellar",
+        "communalareas",
+        "corridor",
+        "details",
+        "dining_room",
+        "energycertificate",
+        "facade",
+        "garage",
+        "garden",
+        "gateway",
+        "hall",
+        "kitchen",
+        "land",
+        "lifts",
+        "living",
+        "loft",
+        "mates",
+        "meeting_room",
+        "office",
+        "open_plan",
+        "patio",
+        "penthouse",
+        "plan",
+        "pool",
+        "porch",
+        "pressphoto",
+        "reception",
+        "room",
+        "shop_window",
+        "staircase",
+        "storage",
+        "storage_space",
+        "studio",
+        "surroundings",
+        "terrace",
+        "unknown",
+        "views",
+        "waitingroom",
+        "walk_in_wardrobe"
+      ],
+      "default": "garden"
+    },
+    "order": {
+      "title": "image order",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200,
+      "default": 1
+    },
+    "url": {
+      "title": "image url",
+      "$ref": "../rules.json#/imageUrlFormat"
+    },
+    "originalMD5CheckSum": {
+      "title": "The original MD5 checksum from the picture downloaded from your system. This value can be used to check to what picture from your system belongs",
+      "$ref": "../rules.json#/stringTo32"
+    },
+    "state": {
+      "title": "image state",
+      "enum": [
+        "processed",
+        "pending_to_process",
+        "error_download"
+      ],
+      "default": "processed"
+    },
+    "aiGenerated": {
+      "title": "AI generated image",
+      "description": "Indicates if the image was generated using AI. If not provided it will be automatically identified",
+      "type": ["boolean", "null"]
+    }
+  }
+}

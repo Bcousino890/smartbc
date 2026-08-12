@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/conctact_array.json",
+  "title": "Contact Array Response Object",
+  "type": "array",
+  "items": {
+      "$ref": "contact_obtain.json"
+  }
+}

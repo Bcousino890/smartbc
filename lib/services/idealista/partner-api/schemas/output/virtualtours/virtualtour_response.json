@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/virtualtour_response.json",
+  "title": "Property virtual tour",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "title": "virtual tour url",
+      "$ref": "../../rules.json#/virtualTourUrl"
+    }
+  }
+}

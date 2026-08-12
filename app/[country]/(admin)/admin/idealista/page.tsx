@@ -145,6 +145,9 @@ export default async function AdminIdealistaPage({
     plan_ids: string[];
     idealista_property_id: string | null;
     idealista_state: string | null;
+    api_property_id: number | null;
+    api_state: string | null;
+    api_last_error: string | null;
     reference_code: string | null;
     operation: string | null;
     scheduled_publish_at: string | null;

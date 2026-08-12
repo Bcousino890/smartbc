@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Clapperboard, Video } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Clapperboard, Video, Plug, Power, Image as ImageIcon } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
@@ -96,6 +96,11 @@ type DbIdealistaListing = {
   plan_ids: string[];
   idealista_property_id: string | null;
   idealista_state: string | null;
+  // Publicación por el Partner API (API en tiempo real). Va aparte de
+  // `idealista_property_id`, que lo rellena el flujo de la extensión.
+  api_property_id: number | null;
+  api_state: string | null;
+  api_last_error: string | null;
   scheduled_publish_at: string | null;
   archived_at: string | null;
   created_at: string;
@@ -249,6 +254,7 @@ export function IdealistaClient({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [apiActionId, setApiActionId] = useState<string | null>(null);
   const [publishResults, setPublishResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningId, setCleaningId] = useState<string | null>(null);
@@ -492,6 +498,48 @@ export function IdealistaClient({
       setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: "Error de red al generar el enlace" } }));
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  // Publicación por el Partner API: en vez de abrir el formulario de Idealista
+  // en el navegador, se le manda el anuncio directamente y contesta al momento
+  // (con el propertyId, o con el detalle exacto de lo que le falta).
+  const handleApiAction = async (
+    listingId: string,
+    action: "publish" | "deactivate" | "reactivate" | "clone" | "sync-images" | "refresh-state"
+  ) => {
+    if (action === "deactivate" && !confirm("Se dará de baja el anuncio en Idealista y quedará libre el hueco. ¿Continuar?")) {
+      return;
+    }
+    setApiActionId(listingId);
+    setPublishResults((prev) => ({ ...prev, [listingId]: { ok: true, msg: "Hablando con Idealista…" } }));
+    try {
+      const res = await fetch("/api/admin/idealista/api/listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId, action }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        propertyId?: number;
+        steps?: string[];
+        warnings?: string[];
+        errors?: string[];
+      };
+
+      const parts = [...(data.steps ?? []), ...(data.warnings ?? []), ...(data.errors ?? [])];
+      setPublishResults((prev) => ({
+        ...prev,
+        [listingId]: {
+          ok: data.ok,
+          msg: parts.length > 0 ? parts.join(" · ") : data.ok ? "Hecho" : "No se pudo completar",
+        },
+      }));
+      if (data.ok) router.refresh();
+    } catch {
+      setPublishResults((prev) => ({ ...prev, [listingId]: { ok: false, msg: "Error de red al hablar con Idealista" } }));
+    } finally {
+      setApiActionId(null);
     }
   };
 
@@ -945,6 +993,48 @@ export function IdealistaClient({
                         {publishingId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                         Abrir en Idealista
                       </button>
+                    )}
+
+                    {/* Partner API: publicar sin pasar por el formulario ni la extensión. */}
+                    <button
+                      onClick={() => handleApiAction(listing.id, "publish")}
+                      disabled={apiActionId === listing.id}
+                      className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+                      title={
+                        listing.api_property_id
+                          ? `Actualizar en Idealista el anuncio ${listing.api_property_id}`
+                          : "Publicar directamente por la API de Idealista"
+                      }
+                    >
+                      {apiActionId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Plug size={12} />}
+                      {listing.api_property_id ? "Actualizar por API" : "Publicar por API"}
+                    </button>
+
+                    {listing.api_property_id && (
+                      <>
+                        <button
+                          onClick={() => handleApiAction(listing.id, "sync-images")}
+                          disabled={apiActionId === listing.id}
+                          className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-ink/5 px-2.5 py-1.5 text-xs font-semibold text-ink/70 transition hover:bg-ink/10 disabled:opacity-50"
+                          title="Reenviar las fotos a Idealista (sustituye las que tenga)"
+                        >
+                          <ImageIcon size={12} />
+                          Fotos
+                        </button>
+                        <button
+                          onClick={() => handleApiAction(listing.id, listing.api_state === "inactive" ? "reactivate" : "deactivate")}
+                          disabled={apiActionId === listing.id}
+                          className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                          title={
+                            listing.api_state === "inactive"
+                              ? "Reactivar el anuncio en Idealista"
+                              : "Dar de baja el anuncio en Idealista"
+                          }
+                        >
+                          <Power size={12} />
+                          {listing.api_state === "inactive" ? "Reactivar" : "Dar de baja"}
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => {

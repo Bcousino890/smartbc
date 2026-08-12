@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/property_cloning_response.json",
+  "title": "Property Cloned Response",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "description":"Indicates whether or not the request was successful"
+    },
+    "propertyId": {
+      "title": "idealista Property identifier",
+      "$ref": "../rules.json#/propertyId"
+    },
+    "state": {
+      "default": "active",
+      "title": "Property state",
+      "$ref": "../rules.json#/enumPropertyStatus"
+    },
+    "scope": {
+      "title": "Property visibility",
+      "$ref": "../rules.json#/enumPropertyVisibility"
+    },
+    "publishInfo": {
+      "title": "Publish Info",
+      "$ref": "../property/publishInfo.json"
+    }
+  }
+}

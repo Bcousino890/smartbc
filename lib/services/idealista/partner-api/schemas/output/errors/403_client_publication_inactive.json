@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/403_client_publication_inactive.json",
+  "title": "403 Publication inactive",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message",
+    "success"
+  ],
+  "properties": {
+    "message": {
+      "type": "string",
+      "default": "Client has the publication inactive",
+      "required": true,
+      "description": "The message content for the response"
+    },
+    "success": {
+      "type": "boolean",
+      "default": false,
+      "required": true,
+      "description": "Indicates that client has the publication inactive"
+    }
+  }
+}

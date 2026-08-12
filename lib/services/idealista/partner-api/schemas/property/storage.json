@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/storage.json",
+  "title": "Storage Room features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "areaConstructed"
+  ],
+  "properties": {
+    "access24h": {
+      "$ref": "features.json#/access24h"
+    },
+    "areaConstructed": {
+      "$ref": "features.json#/areaConstructed"
+    },
+    "areaHeight": {
+      "$ref": "features.json#/areaHeight"
+    },
+    "loadingDock": {
+      "$ref": "features.json#/loadingDock"
+    },
+    "security24h": {
+      "$ref": "features.json#/security24h"
+    },
+    "priceCommunity": {
+      "$ref": "features.json#/priceCommunity"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    }
+  }
+}

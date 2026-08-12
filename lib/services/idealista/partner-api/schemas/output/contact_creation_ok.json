@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/contact_creation_ok.json",
+  "title": "Contact Creation Object",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "type": "string",
+      "default": "Successful Operation",
+      "required": true,
+      "description": "The message content for the response"
+    },
+    "success": {
+      "type": "boolean",
+      "default": true,
+      "required": true,
+      "description": "Indicates whether or not the request was successful"
+    },
+    "contactId": {
+      "title": "Contact identifier",
+      "$ref": "../rules.json#/integer1to999999999",
+      "required": true,
+      "default": 123
+    },
+    "agent": {
+      "type": "boolean",
+      "default": true,
+      "required": true,
+      "description": "Indicates if the contact belongs to an agent"
+    }
+  }
+}

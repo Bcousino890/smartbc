@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/page.json",
+  "title": "Property page",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "number": {
+      "title": "page number",
+      "$ref": "../rules.json#/pageNumber1to99999999"
+    },
+    "size": {
+      "title": "page size",
+      "$ref": "../rules.json#/integer1to100"
+    },
+    "total": {
+      "title": "total pages",
+      "$ref": "../rules.json#/totalPage1to99999999"
+    }
+  }
+}

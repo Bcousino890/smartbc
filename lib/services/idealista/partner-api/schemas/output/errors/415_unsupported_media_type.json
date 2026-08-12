@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/415_unsupported_media_type.json",
+  "title": "Unsupported Media Type Error",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Unsupported Media Type",
+      "required":true,
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": false,
+      "required":true,
+      "description":"Indicates whether or not the request was successful"
+    }
+  }
+}

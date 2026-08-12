@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/400_generic_bad_request.json",
+  "title": "400 Bad Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "propertyId",
+    "state"
+  ],
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Bad Request",
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": false,
+      "description":"Indicates whether or not the request was successful"
+    }
+  }
+}

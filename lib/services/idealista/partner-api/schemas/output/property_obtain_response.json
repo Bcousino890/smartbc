@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/property_obtain_response.json",
+  "title": "Property Response",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "required":true,
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "required":true,
+      "description":"Indicates whether or not the request was successful"
+    },
+    "property": {
+      "$ref": "../property/property_obtain.json"
+    }
+  }
+}

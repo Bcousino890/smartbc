@@ -1,0 +1,1487 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/features.json",
+  "title": "Features fields",
+  "description": "fields in alphabetic order",
+  "access24h": {
+    "title": "24 hr access",
+    "description": "Availability of 24 hr access",
+    "type": "boolean"
+  },
+  "accessControl": {
+    "title": "access control",
+    "description": "Availability of access control system",
+    "type": "boolean"
+  },
+  "recommendedForChildren": {
+    "title": "recommended for children",
+    "description": "Indicates if the house is suitable for children (0-12 years). Only available for rent operation.",
+    "type": "boolean"
+  },
+  "petsAllowed": {
+    "title": "pets allowed",
+    "description": "Tells if pets are allowed in the property. Only available for rent operation",
+    "type": "boolean"
+  },
+  "petsAllowedForRooms": {
+    "title": "pets allowed",
+    "description": "Tells if pets are allowed in the property.",
+    "type": "boolean"
+  },
+  "areaBuildable": {
+    "title": "buildable area",
+    "description": "Land buildable area. Not allowed for type 'countrynonbuildable'",
+    "$ref": "../rules.json#/integer1to99999999"
+  },
+  "areaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters",
+    "$ref": "../rules.json#/integer1to99999"
+  },
+  "garageAreaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters",
+    "$ref": "../rules.json#/integer1to999999"
+  },
+  "commercialAreaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters",
+    "$ref": "../rules.json#/integer11to999999"
+  },
+  "housingAreaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters. It must be greater than 'areaUsable'",
+    "$ref": "../rules.json#/integer11to999999"
+  },
+  "officeAreaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters",
+    "$ref": "../rules.json#/integer11to999999"
+  },
+  "buildingAreaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters",
+    "$ref": "../rules.json#/integer11to999999"
+  },
+  "areaHeight": {
+    "title": "height area",
+    "$ref": "../rules.json#/numberGreaterThan0to9"
+  },
+  "areaPlot": {
+    "title": "plot area",
+    "description": "Plot square meters",
+    "$ref": "../rules.json#/integer1to99999999"
+  },
+  "areaTradableMinimum": {
+    "title": "minimum tradable area",
+    "description": "Only allowed for Rent operations",
+    "$ref": "../rules.json#/integer1to999999"
+  },
+  "buildingAreaTradableMinimum": {
+    "title": "minimum tradable area",
+    "desciption": "Only available for rent operation",
+    "$ref": "../rules.json#/integer1to999999"
+  },
+  "areaUsable": {
+    "title": "functional area",
+    "description": "areUsable must be always lower than areaConstructed",
+    "$ref": "../rules.json#/integer1to999999"
+  },
+  "auxiliaryEntrance": {
+    "title": "auxiliary entrance",
+    "description": "This option is only available if type = retail.</br>This is a private field. Bear in mind that this is not going to be shown in idealista portal, it will be shown in the private website, if the client have one.",
+    "type": "boolean"
+  },
+  "bathroomAdapted": {
+    "title": "adapted bathroom",
+    "description": "Availability of adapted bathroom for disabled people",
+    "type": "boolean"
+  },
+  "bathroomInside": {
+    "title": "bathroom inside",
+    "description": "Bathroom inside the property availability",
+    "type": "boolean"
+  },
+  "bathroomNumber": {
+    "title": "bathrooms number",
+    "$ref": "../rules.json#/integer0to99"
+  },
+  "roomBathroomNumber": {
+    "title": "bathrooms number",
+    "description": "Bathroom number of the property",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "housingBathroomNumber": {
+    "title": "bathrooms number",
+    "description": "Bathroom number can only be 0 if conservation = 'toRestore', otherwise it must be > 0",
+    "$ref": "../rules.json#/integer0to99"
+  },
+  "bathroomType": {
+    "title": "bathroom type",
+    "enum": [
+      "toilets",
+      "fullEquiped",
+      "both"
+    ]
+  },
+  "bridgeCrane": {
+    "title": "Bridge crane",
+    "description": "This option is only available if type = industrial.</br>This is a private field. Bear in mind that this is not going to be shown in idealista portal, it will be shown in the private website, if the client have one.",
+    "type": "boolean"
+  },
+  "buildingAdapted": {
+    "title": "adapted building",
+    "type": "boolean"
+  },
+  "builtYear": {
+    "title": "building year",
+    "type": "integer",
+    "minimum": 1700,
+    "maximum": 2100
+  },
+  "chimney": {
+    "title": "chimney availability for country houses",
+    "type": "boolean"
+  },
+  "classificationBlocks": {
+    "title": "blocks classification",
+    "description": "Certified for high-rise residential properties",
+    "type": "boolean"
+  },
+  "classificationChalet": {
+    "title": "chalet classification",
+    "description": "Classified for residential house (detached)",
+    "type": "boolean"
+  },
+  "classificationCommercial": {
+    "title": "commercial classification",
+    "description": "Classified for tertiary commercial properties",
+    "type": "boolean"
+  },
+  "classificationHotel": {
+    "title": "hotel classification",
+    "description": "Classified for hotels properties",
+    "type": "boolean"
+  },
+  "classificationIndustrial": {
+    "title": "industrial classification",
+    "description": "Classified for industrial properties",
+    "type": "boolean"
+  },
+  "classificationOffice": {
+    "title": "office classification",
+    "description": "Classified for office properties",
+    "type": "boolean"
+  },
+  "classificationOther": {
+    "title": "other classification",
+    "type": "boolean"
+  },
+  "classificationPublic": {
+    "title": "public classification",
+    "description": "Classified for amenities (hospitals, schools, museums)",
+    "type": "boolean"
+  },
+  "classificationAgricultural": {
+    "title": "agricultural classified",
+    "description": "Only allowed in France for land typology with type=countrynonbuildable.",
+    "type": "boolean"
+  },
+  "classificationIsland": {
+    "title": "island classified",
+    "description": "Only allowed in France for land typology with type=countrynonbuildable.",
+    "type": "boolean"
+  },
+  "classificationLeisure": {
+    "title": "leisure classified",
+    "description": "Only allowed in France for land typology with type=countrynonbuildable.",
+    "type": "boolean"
+  },
+  "conditionedAir": {
+    "title": "air conditioning",
+    "description": "Air conditioning availability",
+    "type": "boolean"
+  },
+  "conditionedAirType": {
+    "title": "air conditioning type",
+    "enum": [
+      "notAvailable",
+      "cold",
+      "cold/heat",
+      "preInstallation"
+    ]
+  },
+  "conservation": {
+    "title": "conservation status",
+    "description": "</br> * new_development_in_construction and new_development_finished values are only available for Italy and France.  </br> * fullyReformed only available for Italy and it only be shown on casa.it",
+    "enum": [
+      "good",
+      "toRestore",
+      "fullyReformed",
+      "new_development_in_construction",
+      "new_development_finished"
+    ]
+  },
+  "doorman": {
+    "title": "doorman",
+    "description": "Doorman availability",
+    "type": "boolean"
+  },
+  "duplex": {
+    "title": "duplex",
+    "description": "Flat on two floors connected by an indoor staircase",
+    "type": "boolean"
+  },
+  "emergencyExit": {
+    "title": "emergency exit",
+    "type": "boolean"
+  },
+  "emergencyLights": {
+    "title": "emergency lights",
+    "type": "boolean"
+  },
+  "energyCertificateLaw": {
+    "title": "energy certification law",
+    "description": "Only for Italy. Indicates the legislation that applies to the energy rating, DL-192(2005) or LEGGE-90(2013) For dl-192_2005 the values accepted are: A+, A, B, C, D, E, F, G. For legge-90_2013 the values accepted are: A4, A3, A2, A1, B, C, D, E, F, G",
+    "enum": [
+      "dl-192_2005",
+      "legge-90_2013"
+    ]
+  },
+  "energyCertificatePerformance": {
+    "title": "energy certification performance",
+    "description": "Note: A valid \"energyCertificateRating\" value other than \"uknown\", \"exempt\" or \"in_process\" is required to send this value.",
+    "$ref": "../rules.json#/number0to10000"
+  },
+  "energyCertificateRating": {
+    "title": "energy certification rating",
+    "description": "</br> * Allowed values for Spain: A,B,C,D,E,F,G,exempt. Values in_process,unknown will be set to G for default. </br> * Allowed values for Italy: A+,A4,A3,A2,A1,A,B,C,D,E,F,G,exempt,in_process,unknown. </br> * Allowed values for Portugal: A+,A,B,B-,C,D,E,F,G,exempt,in_process,unknown. </br> * Allowed values for France: A,B,C,D,E,F,G,exempt,in_process,unknown. ",
+    "enum": [
+      "A",
+      "A+",
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B",
+      "B-",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "exempt",
+      "in_process",
+      "unknown"
+    ]
+  },
+  "energyCertificateType": {
+    "title": "energy certification type",
+    "description": "Only available for new development properties. project: certification in project phase; completed: certification if the property is finished",
+    "enum": [
+      "project",
+      "completed"
+    ]
+  },
+  "energyCertificateEmissionsRating": {
+    "title": "energy certification emissions rating",
+    "description": "Only available for Spain and France. </br>Note: </br> *A valid \"energyCertificateRating\" value other than \"uknown\", \"exempt\" or \"in_process\" is required to send this value.",
+    "enum": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G"
+    ]
+  },
+  "energyCertificateEmissionsValue": {
+    "title": "energy certification emissions value",
+    "description": "only available for Spain. Only allowed if energyCertificateEmissionsRating is present. Note: A valid \"energyCertificateRating\" value other than \"uknown\", \"exempt\" or \"in_process\" is required to send this value.",
+    "$ref": "../rules.json#/number0to10000"
+  },
+  "equippedKitchen": {
+    "title": "equipped with kitchen",
+    "description": "Equipped with kitchen only",
+    "type": "boolean"
+  },
+  "extinguishers": {
+    "title": "extinguishers",
+    "description": "Extinguishers availability",
+    "type": "boolean"
+  },
+  "facadeArea": {
+    "title": "facade area",
+    "$ref": "../rules.json#/integer1to999"
+  },
+  "fireDetectors": {
+    "title": "fire detectors",
+    "description": "Fire detectors availability",
+    "type": "boolean"
+  },
+  "fireDoors": {
+    "title": "fire doors",
+    "description": "Fire doors availability",
+    "type": "boolean"
+  },
+  "floorsBuildable": {
+    "title": "buildable floors",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "floorsBuilding": {
+    "title": "building floors",
+    "description": "Total number of floors that the building has",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "isInTopFloor": {
+    "title": "floor in top",
+    "description": "Indicates if the property is on the last floor",
+    "type": "boolean"
+  },
+  "floorLevel": {
+    "title": "floor level andar de moradia floor",
+    "description": "Specific and required field for 'andar de moradia' property type, indicates if the property is the one on the higher floor or the one in the lower floor",
+    "enum": [
+      "higher",
+      "lower"
+    ]
+  },
+  "floorsProperty": {
+    "title": "property floors number",
+    "description": "Number of floors that belong to the property. It must be lower than floorsBuilding",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "floorsPropertyCommercial": {
+    "title": "property floors number",
+    "description": "Number of floors that belong to the property",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "garden": {
+    "title": "garden",
+    "description": "Garden availability",
+    "type": "boolean"
+  },
+  "handicappedAdaptedAccess": {
+    "title": "handicapped adapted access availability",
+    "description": "Access adapted to people with reduced mobility",
+    "type": "boolean"
+  },
+  "handicappedAdaptedUse": {
+    "title": "handicapped adapted use availability",
+    "description": "Property adapted to people with reduced mobility",
+    "type": "boolean"
+  },
+  "heating": {
+    "title": "heating",
+    "description": "Heating availability",
+    "type": "boolean"
+  },
+  "heatingType": {
+    "title": "heatingType",
+    "enum": [
+      "central_gas",
+      "central_fuel_oil",
+      "central_other",
+      "individual_other",
+      "individual_gas",
+      "individual_electric",
+      "individual_air_conditioning_heat_pump",
+      "individual_propane_butane",
+      "no_heating"
+    ]
+  },
+  "hotWater": {
+    "title": "hot water",
+    "description": "Hot water availability",
+    "type": "boolean"
+  },
+  "lastActivity": {
+    "title": "last activity",
+    "$ref": "../rules.json#/stringTo100",
+    "deprecated": true
+  },
+  "liftAvailable": {
+    "title": "lift",
+    "description": "Lift availability",
+    "type": "boolean"
+  },
+  "liftNumber": {
+    "title": "lifts number",
+    "$ref": "../rules.json#/integer0to9"
+  },
+  "loadingDock": {
+    "title": "loading dock",
+    "description": "Loading dock availability",
+    "type": "boolean"
+  },
+  "commercialLoadingDock": {
+    "title": "loading dock",
+    "description": "This option is only available if type = industrial.</br>This is a private field. Bear in mind that this is not going to be shown in idealista portal, it will be shown in the private website, if the client have one.",
+    "type": "boolean"
+  },
+  "locatedAtCorner": {
+    "title": "located at corner",
+    "type": "boolean"
+  },
+  "nearestLocationKm": {
+    "title": "nearest location in km",
+    "description": "Only allowed if location is 'outside_town', this field indicates the distance in kilometers to the nearest town",
+    "$ref": "../rules.json#/number0to99"
+  },
+  "officeBuilding": {
+    "title": "office building",
+    "type": "boolean"
+  },
+  "orientationEast": {
+    "title": "east orientation",
+    "type": "boolean"
+  },
+  "orientationNorth": {
+    "title": "north orientation",
+    "type": "boolean"
+  },
+  "orientationSouth": {
+    "title": "south orientation",
+    "type": "boolean"
+  },
+  "orientationWest": {
+    "title": "west orientation",
+    "type": "boolean"
+  },
+  "parkingAvailable": {
+    "title": "parking availability",
+    "type": "boolean"
+  },
+  "parkingIncludedInPrice": {
+    "title": "parking included in the price",
+    "type": "boolean"
+  },
+  "parkingPrice": {
+    "title": "parking price",
+    "description": "Mandatory field if parking is available ('parkingAvailable' = true) and it is not included in total price ('parkingIncludedInPrice' = false)",
+    "$ref": "../rules.json#/number1to99999999"
+  },
+  "parkingAutomaticDoor": {
+    "title": "automatic door",
+    "type": "boolean"
+  },
+  "parkingPlaceCovered": {
+    "title": "parking covered",
+    "type": "boolean"
+  },
+  "parkingType": {
+    "title": "parking types",
+    "description": "This feature only applies for Portugal and Italy garages. 'depot' if is a box garage. 'parking_space' if is a regular garage",
+    "enum": [
+      "unknown",
+      "depot",
+      "parking_space"
+    ]
+  },
+  "parkingSpacesNumber": {
+    "title": "parking spaces number",
+    "description": "Parking spaces number included on the price",
+    "$ref": "../rules.json#/integer0to99"
+  },
+  "penthouse": {
+    "title": "penthouse",
+    "description": "Flat on the top floor",
+    "type": "boolean"
+  },
+  "pool": {
+    "title": "pool",
+    "description": "Pool availability",
+    "type": "boolean"
+  },
+  "builtProperties": {
+    "title": "properties number",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "rooms": {
+    "title": "rooms number",
+    "$ref": "../rules.json#/integer0to99"
+  },
+  "propertyRooms": {
+    "title": "rooms number",
+    "description": "Room number of the property",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "housingRooms": {
+    "title": "rooms number",
+    "description": "Room number can only be 0 if conservation = 'toRestore', otherwise it must be > 0",
+    "$ref": "../rules.json#/integer0to99"
+  },
+  "flatRooms": {
+    "title": "flat rooms number",
+    "description": "Room number can only be 0 if conservation = 'toRestore' or studio = true, otherwise it must be > 0",
+    "$ref": "../rules.json#/integer0to99"
+  },
+  "roomsSplitted": {
+    "title": "rooms splitted",
+    "enum": [
+      "openPlan",
+      "withScreens",
+      "withWalls",
+      "unknown"
+    ]
+  },
+  "security24h": {
+    "title": "24 hr security service",
+    "type": "boolean"
+  },
+  "securityAlarm": {
+    "title": "security alarm system",
+    "type": "boolean"
+  },
+  "securityDoor": {
+    "title": "security door",
+    "type": "boolean"
+  },
+  "securityPersonnel": {
+    "title": "security personnel",
+    "type": "boolean"
+  },
+  "securitySystem": {
+    "title": "security system",
+    "type": "boolean"
+  },
+  "securityCamera": {
+    "title": "security camera",
+    "type": "boolean"
+  },
+  "smokeExtraction": {
+    "title": "smoke extraction",
+    "type": "boolean"
+  },
+  "sprinklers": {
+    "title": "sprinklers",
+    "type": "boolean"
+  },
+  "storage": {
+    "title": "storage room",
+    "type": "boolean"
+  },
+  "studio": {
+    "title": "studio",
+    "description": "Flat with a single room",
+    "type": "boolean"
+  },
+  "suspendedCeiling": {
+    "title": "suspending ceiling",
+    "type": "boolean"
+  },
+  "suspendedFloor": {
+    "title": "suspending floor",
+    "type": "boolean"
+  },
+  "propertyTenants": {
+    "title": "tenants",
+    "type": "boolean"
+  },
+  "terrace": {
+    "title": "terrace",
+    "description": "Terrace availability",
+    "type": "boolean"
+  },
+  "location": {
+    "title": "location",
+    "enum": [
+      "on_top_floor",
+      "in_a_mall",
+      "on_the_street",
+      "mezzanine",
+      "underground",
+      "other",
+      "unknown"
+    ]
+  },
+  "electricity": {
+    "title": "electricity availability",
+    "type": "boolean"
+  },
+  "naturalGas": {
+    "title": "natural gas availability",
+    "type": "boolean"
+  },
+  "office": {
+    "title": "office",
+    "description": "This is a private field. Bear in mind that this is not going to be shown in idealista portal, it will be shown in the private website, if the client have one.",
+    "type": "boolean"
+  },
+  "roadAccess": {
+    "title": "road access availability",
+    "type": "boolean"
+  },
+  "sewerage": {
+    "title": "sewerage availability",
+    "type": "boolean"
+  },
+  "sidewalk": {
+    "title": "sidewalk availability",
+    "type": "boolean"
+  },
+  "streetLighting": {
+    "title": "street lighting availability",
+    "type": "boolean"
+  },
+  "water": {
+    "title": "water availability",
+    "type": "boolean"
+  },
+  "wardrobes": {
+    "title": "wardrobes availability",
+    "type": "boolean"
+  },
+  "balcony": {
+    "title": "balcony availability",
+    "type": "boolean"
+  },
+  "windowsDouble": {
+    "title": "double windows",
+    "description": "Double pane windows availability",
+    "type": "boolean"
+  },
+  "windowsLocation": {
+    "title": "windows location",
+    "description": "Internal / external flat based on windows view. Only available (and mandatory) for Spain.",
+    "enum": [
+      "internal",
+      "external"
+    ]
+  },
+  "windowsLocationByRoom": {
+    "title": "windows location for Room",
+    "description": "Internal / external flat based on windows view. Only available for Spain.",
+    "enum": [
+      "internal",
+      "external"
+    ]
+  },
+  "windowsShop": {
+    "title": "shop windows number",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "windowsNumber": {
+    "title": "Commercial windows numbers",
+    "$ref": "../rules.json#/number1to999"
+  },
+  "accessType": {
+    "title": "access type",
+    "description": "This field is mandatory when the field roadAccess is true and not allowed if roadAccess is false",
+    "enum": [
+      "urban",
+      "road",
+      "track",
+      "highway",
+      "unknown"
+    ]
+  },
+  "garageCapacity": {
+    "title": "garage capacity",
+    "enum": [
+      "unknown",
+      "car_compact",
+      "car_sedan",
+      "motorcycle",
+      "car_and_motorcycle",
+      "two_cars_and_more"
+    ]
+  },
+  "priceCommunity": {
+    "title": "price community",
+    "description": "Monthly community fees. It can only be defined for sale operation in Spain and Portugal. In Italy, it can be defined for both rent and sale operations",
+    "$ref": "../rules.json#/integer1to9999"
+  },
+  "depositMonths": {
+    "title": "deposit months",
+    "description": "</br> * It can only be defined for rent operation. </br> *In Spain and France deposit months must be between 1 mont to 6 mont for all typologies except Garage and Land that can be from 0 (no deposit) to 6 months",
+    "$ref": "../rules.json#/number0to6"
+  },
+  "equipment": {
+    "title": "equipment",
+    "description": "Only available for rent operation. Equipped kitchen with appliances and furnished, only equipped kitchen with appliances or neither of both",
+    "enum": [
+      "equipped_kitchen_and_furnished",
+      "equipped_kitchen_and_not_furnished",
+      "not_equipped"
+    ]
+  },
+  "roomType": {
+    "title": "room types",
+    "enum": [
+      "shared_flat",
+      "shared_chalet"
+    ]
+  },
+  "tenantNumber": {
+    "title": "tenant number",
+    "description": "Max number of flat mates allowed, including the tenant itself",
+    "$ref": "../rules.json#/integer2to99"
+  },
+
+  "tenantNumberForHousing": {
+    "title": "tenant number",
+    "description": "Max number of flat mates allowed, including the tenant itself. Only available for rent operation",
+    "$ref": "../rules.json#/integer1to10"
+  },
+
+  "bedType": {
+    "title": "bed types",
+    "enum": [
+      "single",
+      "double",
+      "two_beds",
+      "none"
+    ]
+  },
+  "smokingAllowed": {
+    "title": "smoking allowed",
+    "description": "Tells if smoking is allowed in the property",
+    "type": "boolean"
+  },
+  "couplesAllowed": {
+    "title": "couples allowed",
+    "description": "Tells if couples are allowed in the property",
+    "type": "boolean"
+  },
+  "minTenantAge": {
+    "title": "min tenant age",
+    "description": "Age of the youngest tenant. This field is mandatory if occupiedNow = true, and is not allowed if occupiedNow = false",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "maxTenantAge": {
+    "title": "min tenant age",
+    "description": "Age of the oldest tenant. This field is mandatory if occupiedNow = true, and is not allowed if occupiedNow = false",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "minimalStay": {
+    "title": "Minimal stay",
+    "description": "Minimal stay in months for the new tenant",
+    "$ref": "../rules.json#/integer1to6"
+  },
+  "windowView": {
+    "title": "window view types",
+    "description": "This fill is mandatory for Spain, and not allowed for Italy and Portugal",
+    "enum": [
+      "street_view",
+      "courtyard_view",
+      "no_window"
+    ]
+  },
+  "ownerLiving": {
+    "title": "owner living",
+    "description": "Tells if the owner of the property lives there. This field is mandatory if occupiedNow = true, and is not allowed if occupiedNow = false",
+    "type": "boolean"
+  },
+  "roomAreaConstructed": {
+    "title": "constructed area",
+    "description": "Built square meters",
+    "$ref": "../rules.json#/integer11to999999"
+  },
+  "availableFrom": {
+    "title": "available from date",
+    "description": "Date when the room will be available. The format must be 'yyyy-mm' (year-month) and the range of values goes from the current month to the following 5 months",
+    "$ref": "../rules.json#/availableFromFromat"
+  },
+  "tenantGender": {
+    "title": "tenant gender",
+    "description": "Gender of the tenants that currently lives in the property. This field is mandatory if occupiedNow = true, and is not allowed if occupiedNow = false",
+    "enum": [
+      "female",
+      "male",
+      "both"
+    ]
+  },
+  "internetAvailable": {
+    "title": "internet available",
+    "description": "Internet availability",
+    "type": "boolean"
+  },
+  "houseKeeper": {
+    "title": "housekeeper",
+    "description": "Housekeeper availability",
+    "type": "boolean"
+  },
+  "furnished": {
+    "title": "furnished",
+    "description": "Indicates if the room is furnished",
+    "type": "boolean"
+  },
+  "cupboard": {
+    "title": "cupboard",
+    "description": "Cupboard availability",
+    "type": "boolean"
+  },
+  "privateBathroom": {
+    "title": "private bathroom",
+    "description": "Private bathroom availability",
+    "type": "boolean"
+  },
+  "genderPreference": {
+    "title": "gender preference",
+    "description": "Gender preference for new tenants",
+    "enum": [
+      "female",
+      "male",
+      "no_preference"
+    ]
+  },
+  "occupation": {
+    "title": "occupation",
+    "description": "Occupation preference for new tenants",
+    "enum": [
+      "student",
+      "worker",
+      "no_preference"
+    ]
+  },
+  "lgtbFriendly": {
+    "title": "LGTB friendly",
+    "description": "Indicates if the flat mates are comfortable sharing the property with a LGTB person",
+    "type": "boolean"
+  },
+  "childrenAllowed": {
+    "title": "children allowed",
+    "description": "Indicates if children are allowed",
+    "type": "boolean"
+  },
+  "occupiedNow": {
+    "title": "occupied now",
+    "description": "Indicates if the property is currently occupied",
+    "type": "boolean"
+  },
+  "tenantWorkers": {
+    "title": "tenants workers",
+    "description": "It can only be sent if 'occupiedNow' is true. Indicates if there are workers in the property",
+    "type": "boolean"
+  },
+  "tenantStudents": {
+    "title": "tenants students",
+    "description": "It can only be sent if 'occupiedNow' is true. Indicates if there are students in the property",
+    "type": "boolean"
+  },
+  "minAge": {
+    "title": "min age",
+    "description": "Minimum age limit for the new tenant. It must be sent together with maxAge",
+    "$ref": "../rules.json#/integer18to99"
+  },
+  "maxAge": {
+    "title": "max age",
+    "description": "Maximum age limit for the new tenant. It must be sent together with minAge",
+    "$ref": "../rules.json#/integer18to99"
+  },
+  "exteriorAccessibility": {
+    "title": "exterior accessibility",
+    "description": "Access of the property is adapted for people with reduced mobility",
+    "type": "boolean"
+  },
+  "interiorAccessibility": {
+    "title": "exterior accessibility",
+    "description": "Property is adapted for people with reduced mobility",
+    "type": "boolean"
+  },
+  "lifeStyle": {
+    "title": "life style",
+    "enum": [
+      "quiet",
+      "friendly",
+      "animated"
+    ]
+  },
+  "priceReferenceIndex": {
+    "title": "Price Reference Index",
+    "description": "The reference index of rental prices is a compulsory public guidance figure from the Housing Agency of Catalonia (Spain) for the vast majority of its municipalities, indicating the price analyzed according to the area and its specific characteristics",
+    "$ref": "../rules.json#/number1to99"
+  },
+  "isAuction": {
+    "title": "auction property",
+    "description": "Only allowed for Italy. Only allowed for sale operation. Indicates if the property is an auction",
+    "type": "boolean"
+  },
+  "minAuctionBidIncrement": {
+    "title": "auction minimal bid increment",
+    "description": "Only allowed if isAuction is true. Indicates the minimal bid increment for an auction",
+    "$ref": "../rules.json#/number1to99999999"
+  },
+  "auctionDeposit": {
+    "title": "auction deposit",
+    "description": "Only allowed if isAuction is true. Indicates the deposit percentage",
+    "$ref": "../rules.json#/integer0to100"
+  },
+  "auctionDate": {
+    "title": "auction date",
+    "description": "Mandatory if isAuction is true. Indicates the date when the auction takes place. The format must be 'yyyy-mm-dd'",
+    "$ref": "../rules.json#/dateFormatNoHours"
+  },
+  "auctionTribunal": {
+    "title": "auction tribunal",
+    "description": "Only allowed if isAuction is true. Indicates the tribunal where the auction takes place",
+    "enum": [
+      "tribunale_di_alessandria_ex_tribunale_di_acqui_terme",
+      "tribunale_di_agrigento",
+      "tribunale_di_asti_ex_tribunale_di_alba",
+      "tribunale_di_alessandria",
+      "tribunale_di_ancona",
+      "corte_dappello_ancona",
+      "tribunale_di_aosta",
+      "tribunale_di_arezzo",
+      "tribunale_di_benevento_ex_tribunale_di_ariano_irpino",
+      "tribunale_di_ascoli_piceno",
+      "tribunale_di_asti",
+      "tribunale_di_lanciano_sezione_distaccata_di_atessa",
+      "tribunale_di_avellino",
+      "tribunale_di_avezzano",
+      "tribunale_di_barcellona_pozzo_di_gotto",
+      "tribunale_di_bari",
+      "corte_dapello_bari",
+      "tribunale_di_vicenza_ex_tribunale_di_bassano_del_grappa",
+      "tribunale_di_belluno",
+      "tribunale_di_benevento",
+      "tribunale_di_bergamo",
+      "tribunale_di_biella",
+      "corte_dapello_bologna",
+      "tribunale_di_bologna",
+      "tribunale_di_bolzano",
+      "sezione_distaccata_di_corte_dapello_bolzano_bozen",
+      "tribunale_di_brescia",
+      "corte_dapello_brescia",
+      "tribunale_di_brindisi",
+      "tribunale_di_busto_arsizio",
+      "corte_dapello_cagliari",
+      "tribunale_di_cagliari",
+      "tribunale_di_caltagirone",
+      "tribunale_di_caltanissetta",
+      "corte_dapello_caltanissetta",
+      "tribunale_di_macerata_ex_tribunale_di_camerino",
+      "corte_dapello_campobasso",
+      "tribunale_di_campobasso",
+      "tribunale_di_vercelli_ex_tribunale_di_casale_monferrato",
+      "tribunale_di_cassino",
+      "tribunale_di_castrovillari",
+      "tribunale_di_catania",
+      "corte_dapello_catania",
+      "tribunale_di_catanzaro",
+      "corte_dapello_catanzaro",
+      "tribunale_di_genova_ex_tribunale_di_chiavari",
+      "tribunale_di_chieti",
+      "tribunale_di_civitavecchia",
+      "tribunale_di_como",
+      "tribunale_di_cosenza",
+      "tribunale_di_cremona_ex_tribunale_di_crema",
+      "tribunale_di_cremona",
+      "tribunale_di_crotone",
+      "tribunale_di_cuneo",
+      "tribunale_di_enna",
+      "tribunale_di_fermo",
+      "tribunale_di_ferrara",
+      "tribunale_di_firenze",
+      "corte_dapello_firenze",
+      "tribunale_di_foggia",
+      "tribunale_di_forli",
+      "tribunale_di_frosinone",
+      "tribunale_di_gela",
+      "tribunale_di_genova",
+      "corte_dapello_genova",
+      "tribunale_di_gorizia",
+      "tribunale_di_grosseto",
+      "tribunale_di_imperia",
+      "tribunale_di_napoli_sezione_distaccata_di_ischia",
+      "tribunale_di_isernia",
+      "tribunale_di_ivrea",
+      "tribunale_di_la_spezia",
+      "tribunale_di_lagonegro",
+      "tribunale_di_lamezia_terme",
+      "tribunale_di_lanciano",
+      "tribunale_di_lanusei",
+      "tribunale_di_laquila",
+      "corte_dapello_laquila",
+      "tribunale_di_larino",
+      "tribunale_di_latina",
+      "corte_dapello_lecce",
+      "tribunale_di_lecce",
+      "tribunale_di_lecco",
+      "tribunale_di_barcellona_pozzo_di_gotto_sezione_distaccata_di_lipari",
+      "tribunale_di_livorno",
+      "tribunale_di_locri",
+      "tribunale_di_lodi",
+      "tribunale_di_lucca",
+      "tribunale_di_foggia_ex_tribunale_di_lucera",
+      "tribunale_di_macerata",
+      "tribunale_di_mantova",
+      "tribunale_di_marsala",
+      "tribunale_di_massa",
+      "tribunale_di_matera",
+      "tribunale_di_potenza_ex_tribunale_di_melfi",
+      "tribunale_di_messina",
+      "corte_dapello_messina",
+      "corte_dapello_milano",
+      "tribunale_di_milano",
+      "tribunale_di_patti_ex_tribunale_di_mistretta",
+      "tribunale_di_modena",
+      "tribunale_di_ragusa_ex_tribunale_di_modica",
+      "tribunale_di_cuneo_ex_tribunale_di_mondovi",
+      "tribunale_di_siena_ex_tribunale_di_montepulciano",
+      "tribunale_di_napoli",
+      "corte_dapello_napoli",
+      "tribunale_di_napoli_nord",
+      "tribunale_di_enna_ex_tribunale_di_nicosia",
+      "tribunale_di_nocera_inferiore",
+      "tribunale_di_nola",
+      "tribunale_di_novara",
+      "tribunale_di_nuoro",
+      "tribunale_di_oristano",
+      "tribunale_di_chieti_sezione_distaccata_di_ortona",
+      "tribunale_di_terni_ex_tribunale_di_orvieto",
+      "tribunale_di_padova",
+      "tribunale_di_palermo",
+      "corte_dapello_palermo",
+      "tribunale_di_palmi",
+      "tribunale_di_paola",
+      "tribunale_di_parma",
+      "tribunale_di_patti",
+      "tribunale_di_monza",
+      "tribunale_di_pavia",
+      "tribunale_di_perugia",
+      "corte_dapello_perugia",
+      "tribunale_di_pesaro",
+      "tribunale_di_pescara",
+      "tribunale_di_piacenza",
+      "tribunale_di_torino_ex_tribunale_di_pinerolo",
+      "tribunale_di_pisa",
+      "tribunale_di_pistoia",
+      "tribunale_di_pordenone",
+      "tribunale_di_livorno_sezione_distaccata_di_portoferraio",
+      "tribunale_di_potenza",
+      "corte_dapello_potenza",
+      "tribunale_di_prato",
+      "tribunale_di_ragusa",
+      "tribunale_di_ravenna",
+      "tribunale_di_reggio_calabria",
+      "corte_dapello_reggio_di_calabria",
+      "tribunale_di_reggio_emilia",
+      "tribunale_di_rieti",
+      "tribunale_di_rimini",
+      "tribunale_di_roma",
+      "corte_dapello_roma",
+      "tribunale_di_castrovillari_ex_tribunale_di_rossano",
+      "tribunale_di_rovereto",
+      "tribunale_di_rovigo",
+      "tribunale_di_lagonegro_ex_tribunale_di_sala_consilina",
+      "corte_dapello_salerno",
+      "tribunale_di_salerno",
+      "tribunale_di_cuneo_ex_tribunale_di_saluzzo",
+      "tribunale_di_imperia_ex_tribunale_di_sanremo",
+      "tribunale_di_santa_maria_capua_vetere",
+      "tribunale_di_avellino_ex_tribunale_di_santangelo_dei_lombardi",
+      "sezione_distaccata_di_corte_dapello_sassari",
+      "tribunale_di_sassari",
+      "tribunale_di_savona",
+      "tribunale_di_sciacca",
+      "tribunale_di_siena",
+      "tribunale_di_siracusa",
+      "tribunale_di_sondrio",
+      "tribunale_di_spoleto",
+      "tribunale_di_sulmona",
+      "sezione_distaccata_di_corte_dapello_taranto",
+      "tribunale_di_taranto",
+      "tribunale_di_tempio_pausania",
+      "tribunale_di_teramo",
+      "tribunale_di_termini_imerese",
+      "tribunale_di_terni",
+      "tribunale_di_tivoli",
+      "tribunale_di_udine_ex_tribunale_di_tolmezzo",
+      "corte_dapello_torino",
+      "tribunale_di_torino",
+      "tribunale_di_torre_annunziata",
+      "tribunale_di_alessandria_ex_tribunale_di_tortona",
+      "tribunale_di_trani",
+      "tribunale_di_trapani",
+      "tribunale_di_trento",
+      "corte_dapello_trento",
+      "tribunale_di_treviso",
+      "corte_dapello_trieste",
+      "tribunale_di_trieste",
+      "tribunale_di_udine",
+      "tribunale_di_urbino",
+      "tribunale_di_vallo_della_lucania",
+      "tribunale_di_varese",
+      "tribunale_di_vasto",
+      "tribunale_di_velletri",
+      "corte_dapello_venezia",
+      "tribunale_di_venezia",
+      "tribunale_di_verbania",
+      "tribunale_di_vercelli",
+      "tribunale_di_verona",
+      "tribunale_di_vibo_valentia",
+      "tribunale_di_vicenza",
+      "tribunale_di_pavia_ex_tribunale_di_vigevano",
+      "tribunale_di_viterbo",
+      "tribunale_di_pavia_ex_tribunale_di_voghera"
+    ]
+  },
+  "currentOccupation": {
+    "title": "current occupation",
+    "description": "In Spain, Portugal and France this field is only allowed for flat, house and country house properties. It's also only allowed for sale operation. Mandatory for France. It indicates the occupation state of the property.<br/>Possible values:<br/>-*Spain*: \"free\",\"bare_ownership\", \"tenanted\", \"illegally_occupied\".<br/>-*Italy*: \"not_free\", \"free\",\"bare_ownership\", \"tenanted\".<br/>-*Portugal*: \"free\", \"tenanted\".<br/>-*France*: \"free\", \"tenanted\", \"life_estate\".<br/>",
+    "enum": [
+      "not_free",
+      "free",
+      "bare_ownership",
+      "tenanted",
+      "illegally_occupied",
+      "life_estate"
+    ]
+  },
+  "gardenType": {
+    "title": "garden type",
+    "description": "only available for Italy. Only allowed if garden is true",
+    "enum": [
+      "private",
+      "community"
+    ]
+  },
+  "hiddenPrice": {
+    "title": "hidden price",
+    "description": "only available for Italy. Trattativa riservata. Price must be sent. In idealista the property will not be shown, only available to edit in tools area. It will be sent to Casa.it only",
+    "type": "boolean"
+  },
+  "parkingSpaceCapacity": {
+    "title": "parking space capacity",
+    "description": "only available for Italy. Only allowed if parkingAvailable is true. Indicates the size of the parking space",
+    "enum": [
+      "single",
+      "double"
+    ]
+  },
+  "parkingSpaceArea": {
+    "title": "parking space area",
+    "description": "only available for Italy. Only allowed if parkingAvailable is true. Indicates the area of the parking space",
+    "$ref": "../rules.json#/number1to9999"
+  },
+  "outdoorParkingSpaceAvailable": {
+    "title": "outdoor parking space available",
+    "description": "only available for Italy. Indicates if the property has an outdoor parking space",
+    "type": "boolean"
+  },
+  "outdoorParkingSpaceType": {
+    "title": "parking space capacity",
+    "description": "only available for Italy. Only allowed if outdoorParkingSpaceAvailable is true. Indicates the type of the outdoor parking space",
+    "enum": [
+      "covered",
+      "uncovered"
+    ]
+  },
+  "outdoorParkingSpaceNumber": {
+    "title": "parking space area",
+    "description": "only available for Italy. Only allowed if outdoorParkingSpaceAvailable is true. Indicates the number of outdoor parking spaces",
+    "$ref": "../rules.json#/integer1to999"
+  },
+  "residential": {
+    "title": "residential",
+    "description": "Indicates if the property is for residential rental. Only for rent operation. Only one of the following values can be true: seasonalRental, residential or shortTerm",
+    "type": "boolean"
+  },
+  "seasonalRental": {
+    "title": "seasonal rental",
+    "description": "Indicates if the property is for seasonal rental. Only for rent operation. Only one of the following values can be true: seasonalRental, residential or shortTerm",
+    "type": "boolean"
+  },
+  "shortTerm": {
+    "title": "short term",
+    "description": "Only available for Italy and Portugal. Indicates if the property is for short term rental. Only for rent operation. Only one of the following values can be true: seasonalRental, residential or shortTerm.",
+    "type": "boolean"
+  },
+  "shortTermLicense": {
+    "title": "short term license",
+    "description": "Only available if shortTerm = true. Mandatory and only for Italy. License for the short term property",
+    "$ref": "../rules.json#/stringTo25"
+  },
+  "shortTermLicenseNational": {
+    "title": "short term license national",
+    "description": "Only available if shortTerm = true. Mandatory and only for Italy. National license for the short term property",
+    "$ref": "../rules.json#/stringTo25"
+  },
+  "lowSeasonPrice": {
+    "title": "low season price",
+    "description": "Only available if shortTerm = true. Mandatory for Italy. Week price during the low season. Note that this field will only be shown if the property is also published in casa.it",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "highSeasonPrice": {
+    "title": "high season price",
+    "description": "Only available if shortTerm = true. Mandatory for Italy. Week price during the high season. Note that this field will only be shown if the property is also published in casa.it",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "thirdPartiesRented": {
+    "title": "third parties rented",
+    "description": "Indicates if the property is rented to third parties",
+    "type": "boolean"
+  },
+  "rentedYieldPercentage": {
+    "title": "rented yield percentage",
+    "description": "Only available if thirdPartiesRented is true. Yield percentage when the property is rented to third parties",
+    "$ref": "../rules.json#/decimals0to100"
+  },
+  "commercialMainActivity": {
+    "title": "commercial activities",
+    "description": "Main activity for commercial transfers",
+    "enum": [
+      "bed_and_breakfast",
+      "hotel",
+      "agritourism",
+      "other_types_of_accomodations",
+      "bar",
+      "cocktail_bar",
+      "coffee_shop",
+      "nightclub",
+      "pub",
+      "rotisserie",
+      "sandwich_bar",
+      "beach_bar",
+      "pizzeria",
+      "restaurant",
+      "take_away",
+      "other_types_of_caterings",
+      "butcher_shop",
+      "fruit_shop",
+      "ice_cream_shop",
+      "bakery",
+      "pastry_shop",
+      "supermarket",
+      "grocery_store",
+      "wine_shop",
+      "other_types_of_food_shops",
+      "tobacco_shop",
+      "pharmacy",
+      "newsstand",
+      "dealership",
+      "hardware_store",
+      "florist",
+      "herbalist_shop",
+      "stationery",
+      "cosmetics_store",
+      "electronics_and_computer_store",
+      "housewares_store",
+      "clothing_store",
+      "other_types_of_food_retails",
+      "educational_center",
+      "aesthetic_and_beauty",
+      "hair_salon",
+      "spa",
+      "fitness_center",
+      "gym",
+      "real_estate_agency",
+      "clinic",
+      "repair_shop",
+      "other_types_of_services",
+      "laboratory",
+      "storehouse",
+      "other_commercial_activities",
+      "dental_practice",
+      "physiotherapy_clinic",
+      "veterinary_clinic",
+      "agricultural_company"
+    ]
+  },
+  "commercialSecondaryActivity": {
+    "title": "commercial activities",
+    "description": "Secondary activity for commercial transfers",
+    "enum": [
+      "bed_and_breakfast",
+      "hotel",
+      "agritourism",
+      "other_types_of_accomodations",
+      "bar",
+      "cocktail_bar",
+      "coffee_shop",
+      "nightclub",
+      "pub",
+      "rotisserie",
+      "sandwich_bar",
+      "beach_bar",
+      "pizzeria",
+      "restaurant",
+      "take_away",
+      "other_types_of_caterings",
+      "butcher_shop",
+      "fruit_shop",
+      "ice_cream_shop",
+      "bakery",
+      "pastry_shop",
+      "supermarket",
+      "grocery_store",
+      "wine_shop",
+      "other_types_of_food_shops",
+      "tobacco_shop",
+      "pharmacy",
+      "newsstand",
+      "dealership",
+      "hardware_store",
+      "florist",
+      "herbalist_shop",
+      "stationery",
+      "cosmetics_store",
+      "electronics_and_computer_store",
+      "housewares_store",
+      "clothing_store",
+      "other_types_of_food_retails",
+      "educational_center",
+      "aesthetic_and_beauty",
+      "hair_salon",
+      "spa",
+      "fitness_center",
+      "gym",
+      "real_estate_agency",
+      "clinic",
+      "repair_shop",
+      "other_types_of_services",
+      "laboratory",
+      "storehouse",
+      "other_commercial_activities",
+      "dental_practice",
+      "physiotherapy_clinic",
+      "veterinary_clinic",
+      "agricultural_company"
+    ]
+  },
+  "isATransfer": {
+    "title": "transfer commercial",
+    "description": "Indicates if the commercial is a transfer",
+    "type": "boolean"
+  },
+  "priceTransfer": {
+    "title": "transfer price",
+    "description": "Only available if isAtransfer=true. Price of the transfer",
+    "$ref": "../rules.json#/integer1to99999999"
+  },
+  "transferEndContractDate": {
+    "title": "available from date",
+    "description": "Only available if operation=RENT, isAtransfer=true and priceTransfer filled. End date of the rental contract related to the commercial activity. The format must be 'yyyy-mm' (year-month)",
+    "$ref": "../rules.json#/transferEndContractDateFormat"
+  },
+  "referenceImages": {
+    "title": "reference images",
+    "description": "Only available if isAtransfer=true.",
+    "type": "boolean"
+  },
+  "couplesCosts": {
+    "title": "couples costs",
+    "description": "Only available if couplesAllowed=true",
+    "$ref": "../rules.json#/integer1to1000"
+  },
+  "roomArea": {
+    "title": "room area",
+    "description": "Room area",
+    "$ref": "../rules.json#/integer1to100"
+  },
+  "hasDesk": {
+    "title": "has desk",
+    "description": "Indicates if the room has desk",
+    "type": "boolean"
+  },
+  "hasRoomAirConditioning": {
+    "title": "has room air conditioning",
+    "description": "Indicates if the room has air conditioning",
+    "type": "boolean"
+  },
+  "hasWashingMachine": {
+    "title": "has washing machine",
+    "description": "Indicates if the property has washing machine",
+    "type": "boolean"
+  },
+  "residentOnly": {
+    "title": "resident only",
+    "description": "Only allowed in some Italian areas, such as Trentino Alto Adige. Only allowed for residential and seasonal rental. Indicates if the property is only for residents",
+    "type": "boolean"
+  },
+  "cadastralReference": {
+    "title": "cadastral reference",
+    "description": "Only available for Spain",
+    "$ref": "../rules.json#/stringTo20"
+  },
+  "officeType": {
+    "title": "office type",
+    "description": "office type based on space use. Coworking only available for rent operations. If coworking is submitted, the constructed area must be between 1 and 15 m2 with an openPlan layout.",
+    "enum": [
+      "coworking",
+      "shared_space",
+      "only_office"
+    ]
+  },
+  "sharedArea": {
+    "title": "shared area",
+    "description": "Shared area square meters. Only allowed for office type coworking",
+    "$ref": "../rules.json#/integer1to999999"
+  },
+  "additionalRentCharges": {
+    "title": "additional rent charges",
+    "description": "Only allowed if rentControl=true. Only for France with rent operation.",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "bareFree": {
+    "title": "bare free",
+    "description": "Only allowed in France when currentOccupation=life_estate.",
+    "type": "boolean"
+  },
+  "baseRent": {
+    "title": "base rent",
+    "description": "Mandatory if rentControl=true. Only for France with rent operation.",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "bedroomNumber": {
+    "title": "bedroom number",
+    "description": "Only allowed in France if studio!=true and rooms>1. Value must be lower than rooms",
+    "$ref": "../rules.json#/integer1to99"
+  },
+  "energyCertificationAdemeCode": {
+    "title": "energy certification ADEME code",
+    "description": "Only allowed in France. ADEME code of the energy certification.",
+    "$ref": "../rules.json#/stringTo25"
+  },
+  "energyCertificationDate": {
+    "title": "energy certification date",
+    "description": "Only allowed in France. Mandatory unless energyCertificateRating is exempt, unknown or in_process. Indicates if the DPE was issued before or after July 1st 2021",
+    "enum": [
+      "before_2021",
+      "after_2021"
+    ]
+  },
+  "fee": {
+    "title": "agency fee",
+    "description": "Only allowed in France. Mandatory when feePayerType is 'buyer' or 'shared'. Agency fee amount.",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "feePayerType": {
+    "title": "fee payer type",
+    "description": "Only allowed in France. Indicates who pays the agency fee. In case of operation rent only value allowed is 'seller'.",
+    "enum": [
+      "buyer",
+      "seller",
+      "shared"
+    ]
+  },
+  "triplex": {
+    "title": "triplex",
+    "description": "Only allowed in France. Property on three floors connected by an indoor staircase.",
+    "type": "boolean"
+  },
+  "maxReferenceRent": {
+    "title": "max reference rent",
+    "description": "Mandatory if rentControl=true. Only for France with rent operation.",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "monthlyFee": {
+    "title": "monthly fee",
+    "description": "Only allowed in France when currentOccupation=life_estate.",
+    "$ref": "../rules.json#/operationPrice"
+  },
+  "rentControl": {
+    "title": "rent control",
+    "description": "Only allowed in France for rent operation. Indicates if the property is subject to rent control regulations.",
+    "type": "boolean"
+  },
+  "serviceCharges": {
+    "title": "service charges",
+    "description": "Only allowed in France for rent operation. Monthly service charges amount.",
+    "$ref": "../rules.json#/operationPrice"
+  }
+}

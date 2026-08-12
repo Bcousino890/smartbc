@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/deactivation_response_ok.json",
+  "title": "Property deactivation",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Successful operation",
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": true,
+      "description":"Indicates whether or not the request was successful"
+    },
+    "propertyId": {
+      "default": 123,
+      "title": "idealista Property identifier",
+      "$ref": "../rules.json#/propertyId"
+    },
+    "publishInfo": {
+      "title": "Publish Info",
+      "$ref": "../property/publishInfo.json"
+    }
+  }
+}
