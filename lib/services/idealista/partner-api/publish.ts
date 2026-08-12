@@ -18,7 +18,12 @@ import {
 } from "./endpoints";
 import { buildPropertyPayload, buildPropertyUpdatePayload, type IdealistaListingRow } from "./mapper";
 import { validatePropertyCreate, validatePropertyModify } from "./validate";
-import type { IdealistaImageInput, IdealistaOperation, IdealistaPropertyResponse } from "./types";
+import type {
+  IdealistaImageInput,
+  IdealistaOperation,
+  IdealistaPropertyCreate,
+  IdealistaPropertyResponse,
+} from "./types";
 
 // Orquestación de la publicación: coge una ficha del CRM, la traduce, la valida,
 // la manda a Idealista y guarda las relaciones de ids que Idealista exige tener
@@ -240,8 +245,8 @@ export async function publishListingViaApi(listingId: string): Promise<PublishOu
   const startedAt = Date.now();
   try {
     response = isUpdate
-      ? await updateProperty(listing.api_property_id!, mapped.payload as never, config)
-      : await createProperty(mapped.payload as never, config);
+      ? await updateProperty(listing.api_property_id!, mapped.payload, config)
+      : await createProperty(mapped.payload as IdealistaPropertyCreate, config);
 
     await logCall({
       listingId,
