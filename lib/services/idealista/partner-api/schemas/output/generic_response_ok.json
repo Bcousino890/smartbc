@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/generic_response_ok.json",
+  "title": "Property image",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "propertyId",
+    "state"
+  ],
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Successful Operation",
+      "required":true,
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": true,
+      "required":true,
+      "description":"Indicates whether or not the request was successful"
+    }
+  }
+}

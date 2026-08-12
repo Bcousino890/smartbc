@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/commercial.json",
+  "title": "Commercial features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "areaConstructed",
+    "energyCertificateRating",
+    "conservation",
+    "location",
+    "rooms",
+    "type"
+  ],
+  "dependencies": {
+    "commercialSecondaryActivity": [
+      "commercialMainActivity"
+    ],
+    "rentedYieldPercentage": [
+      "thirdPartiesRented"
+    ]
+  },
+  "properties": {
+    "type": {
+      "title": "commercial types",
+      "enum": [
+        "retail",
+        "industrial"
+      ]
+    },
+    "areaConstructed": {
+      "$ref": "features.json#/commercialAreaConstructed"
+    },
+    "areaUsable": {
+      "$ref": "features.json#/areaUsable"
+    },
+    "auxiliaryEntrance": {
+      "$ref": "features.json#/auxiliaryEntrance"
+    },
+    "bathroomAdapted": {
+      "$ref": "features.json#/bathroomAdapted"
+    },
+    "bathroomNumber": {
+      "$ref": "features.json#/bathroomNumber"
+    },
+    "bridgeCrane": {
+      "$ref": "features.json#/bridgeCrane"
+    },
+    "builtYear": {
+      "$ref": "features.json#/builtYear"
+    },
+    "conditionedAir": {
+      "$ref": "features.json#/conditionedAir"
+    },
+    "conservation": {
+      "$ref": "features.json#/conservation"
+    },
+    "energyCertificateRating": {
+      "$ref": "features.json#/energyCertificateRating"
+    },
+    "energyCertificatePerformance": {
+      "$ref": "features.json#/energyCertificatePerformance"
+    },
+    "energyCertificateLaw": {
+      "$ref": "features.json#/energyCertificateLaw"
+    },
+    "energyCertificateEmissionsRating": {
+      "$ref": "features.json#/energyCertificateEmissionsRating"
+    },
+    "energyCertificateEmissionsValue": {
+      "$ref": "features.json#/energyCertificateEmissionsValue"
+    },
+    "energyCertificationDate": {
+      "$ref": "features.json#/energyCertificationDate"
+    },
+    "energyCertificationAdemeCode": {
+      "$ref": "features.json#/energyCertificationAdemeCode"
+    },
+    "equippedKitchen": {
+      "$ref": "features.json#/equippedKitchen"
+    },
+    "facadeArea": {
+      "$ref": "features.json#/facadeArea"
+    },
+    "floorsProperty": {
+      "$ref": "features.json#/floorsPropertyCommercial"
+    },
+    "heating": {
+      "$ref": "features.json#/heating"
+    },
+    "lastActivity": {
+      "$ref": "features.json#/lastActivity",
+      "deprecated": true
+    },
+    "loadingDock": {
+      "$ref": "features.json#/commercialLoadingDock"
+    },
+    "locatedAtCorner": {
+      "$ref": "features.json#/locatedAtCorner"
+    },
+    "rooms": {
+      "$ref": "features.json#/rooms"
+    },
+    "securityAlarm": {
+      "$ref": "features.json#/securityAlarm"
+    },
+    "securityDoor": {
+      "$ref": "features.json#/securityDoor"
+    },
+    "securityCamera": {
+      "$ref": "features.json#/securityCamera"
+    },
+    "storage": {
+      "$ref": "features.json#/storage"
+    },
+    "smokeExtraction": {
+      "$ref": "features.json#/smokeExtraction"
+    },
+    "location": {
+      "$ref": "features.json#/location"
+    },
+    "office": {
+      "$ref": "features.json#/office"
+    },
+    "windowsNumber": {
+      "$ref": "features.json#/windowsNumber"
+    },
+    "priceCommunity": {
+      "$ref": "features.json#/priceCommunity"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "parkingAvailable": {
+      "$ref": "features.json#/parkingAvailable"
+    },
+    "parkingSpaceCapacity": {
+      "$ref": "features.json#/parkingSpaceCapacity"
+    },
+    "parkingSpaceArea": {
+      "$ref": "features.json#/parkingSpaceArea"
+    },
+    "outdoorParkingSpaceAvailable": {
+      "$ref": "features.json#/outdoorParkingSpaceAvailable"
+    },
+    "outdoorParkingSpaceType": {
+      "$ref": "features.json#/outdoorParkingSpaceType"
+    },
+    "outdoorParkingSpaceNumber": {
+      "$ref": "features.json#/outdoorParkingSpaceNumber"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "thirdPartiesRented": {
+      "$ref": "features.json#/thirdPartiesRented"
+    },
+    "rentedYieldPercentage": {
+      "$ref": "features.json#/rentedYieldPercentage"
+    },
+    "commercialMainActivity": {
+      "$ref": "features.json#/commercialMainActivity",
+      "description": "Mandatory if isATransfer is true. Main activity for commercial transfers"
+    },
+    "commercialSecondaryActivity": {
+      "$ref": "features.json#/commercialSecondaryActivity",
+      "description": "Secondary activity for commercial transfers"
+    },
+    "isATransfer": {
+      "$ref": "features.json#/isATransfer"
+    },
+    "priceTransfer": {
+      "$ref": "features.json#/priceTransfer"
+    },
+    "transferEndContract": {
+      "$ref": "features.json#/transferEndContractDate"
+    },
+    "referenceImages": {
+      "$ref": "features.json#/referenceImages"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    },
+    "serviceCharges": {
+      "$ref": "features.json#/serviceCharges"
+    }
+  }
+}

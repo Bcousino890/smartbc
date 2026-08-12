@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/401_invalid_token.json",
+  "title": "Property image",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "error":{
+      "type":"string",
+      "description":"Error of the request",
+      "default": "invalid_token"
+    },
+    "error_description":{
+      "type":"string",
+      "description":"More detailed description of the error",
+      "default": "49456137-bdb1-4d03-82d6-ef46a5f68cb"
+    }
+  }
+}

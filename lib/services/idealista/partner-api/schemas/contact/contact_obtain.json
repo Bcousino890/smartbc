@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/contact/contact_obtain.json",
+
+  "title": "Contact Object",
+  "type": "object",
+  "required": [
+    "contactId",
+    "email",
+    "name",
+    "primaryPhoneNumber"
+  ],
+  "dependencies": {
+    "primaryPhonePrefix": [
+      "primaryPhoneNumber"
+    ],
+    "secondaryPhonePrefix": [
+      "secondaryPhoneNumber"
+    ]
+  },
+  "additionalProperties": false,
+  "properties": {
+    "contactId": {
+      "title": "Contact identifier",
+      "description": "It must be unique for each contact and unchanging over time. You will receive this id when you create the contact. This code will be use to attach a contact to a property",
+      "type": "number",
+      "$ref": "../rules.json#/integer1to999999999"
+    },
+    "name": {
+      "title": "contact name",
+      "$ref": "../rules.json#/stringTo60"
+    },
+    "lastName": {
+      "title": "contact last name",
+      "$ref": "../rules.json#/stringTo60"
+    },
+    "email": {
+      "title": "contact email",
+      "$ref": "../rules.json#/emailFormat"
+    },
+    "primaryPhonePrefix": {
+      "title": "contact primary phone prefix",
+      "$ref": "../rules.json#/phonePrefixFormat"
+    },
+    "primaryPhoneNumber": {
+      "title": "contact primary phone number",
+      "$ref": "../rules.json#/phoneFormat"
+    },
+    "secondaryPhonePrefix": {
+      "title": "contact secondary phone prefix",
+      "$ref": "../rules.json#/phonePrefixFormat"
+    },
+    "secondaryPhoneNumber": {
+      "title": "contact secondary phone number",
+      "$ref": "../rules.json#/phoneFormat"
+    },
+    "active": {
+      "title": "indicates if a contact is active or not",
+      "type": "boolean"
+    },
+    "agent": {
+      "title": "indicates if a contact is an agent",
+      "type": "boolean"
+    },
+    "agentEmail": {
+      "title": "agent email",
+      "$ref": "../rules.json#/agentEmailFormat"
+    }
+  }
+}

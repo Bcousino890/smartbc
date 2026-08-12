@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/409_agent_modification_forbidden.json",
+  "title": "Contact cannot be modified since it belongs to an agent",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Contact cannot be modified since it belongs to an agent",
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": false,
+      "description":"Indicates whether or not the request was successful"
+    }
+  }
+}

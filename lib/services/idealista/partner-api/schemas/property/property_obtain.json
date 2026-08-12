@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/property_obtain.json",
+  "title": "Property Object",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "code",
+    "state",
+    "address",
+    "contactId",
+    "features",
+    "operation"
+  ],
+  "properties": {
+    "propertyId": {
+      "$ref": "../rules.json#/propertyId"
+    },
+    "type": {
+      "title": "property types",
+      "description": "Typology availability",
+      "enum": [
+        "flat",
+        "house",
+        "countryhouse",
+        "garage",
+        "office",
+        "commercial",
+        "land",
+        "storage",
+        "building",
+        "room"
+      ]
+    },
+    "address": {
+      "title": "Property address",
+      "$ref": "addressFind.json#"
+    },
+    "code": {
+      "title": "Property identifier",
+      "description": "It must be unique for each property and unchanging over time. This code will be the internal id to match it with our id. Its not the same that the propertyReference value. If the code changes, the property that was associated with this code will be unset on our systems",
+      "type": "string",
+      "pattern": "^.{0,50}$"
+    },
+    "reference": {
+      "title": "Property reference",
+      "description": "Internal reference of the property in the customer system. It's not necessary for this reference to be unique",
+      "type": "string",
+      "pattern": "^.{0,50}$"
+    },
+    "casaCode": {
+      "title": "Property casa code",
+      "type": "string",
+      "pattern": "^.{0,50}$"
+    },
+    "contactId": {
+      "title": "Property contact id",
+      "description": "The id of a contact previously created",
+      "type": "number",
+      "$ref": "../rules.json#/integer1to999999999"
+    },
+    "features": {
+      "title": "Property type",
+      "oneOf": [
+        {
+          "$ref": "flat.json#"
+        },
+        {
+          "$ref": "house.json#"
+        },
+        {
+          "$ref": "countryHouse.json#"
+        },
+        {
+          "$ref": "garage.json#"
+        },
+        {
+          "$ref": "office.json#"
+        },
+        {
+          "$ref": "commercial.json#"
+        },
+        {
+          "$ref": "land.json#"
+        },
+        {
+          "$ref": "storage.json#"
+        },
+        {
+          "$ref": "building.json#"
+        },
+        {
+          "$ref": "room.json#"
+        }
+      ]
+    },
+    "operation": {
+      "title": "Property operation",
+      "$ref": "operation.json#"
+    },
+    "descriptions": {
+      "title": "Property descriptions",
+      "$ref": "../description/description_array.json#"
+    },
+    "additionalLink": {
+      "title": "Property URL",
+      "$ref": "../rules.json#/additionalLinkFormat"
+    },
+    "scope": {
+      "title": "Property visibility",
+      "$ref": "../rules.json#/enumPropertyVisibility"
+    },
+    "state": {
+      "title": "Property state",
+      "$ref": "../rules.json#/enumPropertyStatus"
+    },
+    "dropByQualityReason": {
+      "title": "Property dropped by quality reason. If the status of the property is dropped_by_quality this field can indicate the reason that caused it",
+      "$ref": "../rules.json#/enumDropByQualityReason"
+    }
+  }
+}

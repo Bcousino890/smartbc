@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/land.json",
+  "title": "Land features",
+  "type": "object",
+  "additionalProperties": false,
+  "dependencies": {
+    "nearestLocationKm": [
+      "location"
+    ]
+  },
+  "required": [
+    "areaPlot",
+    "roadAccess",
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "title": "land types",
+      "description": "</br> * If type is 'urban', or 'countrybuildable', at least one classification field must be sent </br> * If type is 'countrynonbuildable', not classification field sent ",
+      "enum": [
+        "urban",
+        "countrybuildable",
+        "countrynonbuildable"
+      ]
+    },
+    "areaPlot": {
+      "$ref": "features.json#/areaPlot"
+    },
+    "areaBuildable": {
+      "$ref": "features.json#/areaBuildable"
+    },
+    "areaTradableMinimum": {
+      "title": "minimum tradable area",
+      "description": "</br> * Only allowed if land type is 'urban' or 'countrybuildable' and must be lower than areaPlot, </br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "../rules.json#/integer1to999999"
+    },
+    "classificationBlocks": {
+      "$ref": "features.json#/classificationBlocks"
+    },
+    "classificationChalet": {
+      "$ref": "features.json#/classificationChalet"
+    },
+    "classificationCommercial": {
+      "$ref": "features.json#/classificationCommercial"
+    },
+    "classificationHotel": {
+      "$ref": "features.json#/classificationHotel"
+    },
+    "classificationIndustrial": {
+      "$ref": "features.json#/classificationIndustrial"
+    },
+    "classificationOffice": {
+      "$ref": "features.json#/classificationOffice"
+    },
+    "classificationOther": {
+      "$ref": "features.json#/classificationOther"
+    },
+    "classificationPublic": {
+      "$ref": "features.json#/classificationPublic"
+    },
+    "classificationAgricultural": {
+      "$ref": "features.json#/classificationAgricultural"
+    },
+    "classificationLeisure": {
+      "$ref": "features.json#/classificationLeisure"
+    },
+    "classificationIsland": {
+      "$ref": "features.json#/classificationIsland"
+    },
+    "floorsBuildable": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/floorsBuildable"
+    },
+    "location": {
+      "title": "location types",
+      "enum": [
+        "inside_town",
+        "outside_town",
+        "unknown"
+      ]
+    },
+    "nearestLocationKm": {
+      "$ref": "features.json#/nearestLocationKm"
+    },
+    "electricity": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/electricity"
+    },
+    "naturalGas": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/naturalGas"
+    },
+    "roadAccess": {
+      "$ref": "features.json#/roadAccess"
+    },
+    "sewerage": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/sewerage"
+    },
+    "sidewalk": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/sidewalk"
+    },
+    "streetLighting": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/streetLighting"
+    },
+    "water": {
+      "description": "</br> * If type is 'countrynonbuildable' don't send this field",
+      "$ref": "features.json#/water"
+    },
+    "accessType": {
+      "$ref": "features.json#/accessType"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    }
+  }
+}

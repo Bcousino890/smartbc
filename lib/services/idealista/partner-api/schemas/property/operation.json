@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/operation.json",
+  "title": "Operation Object",
+  "type": "object",
+  "required": [
+    "type",
+    "price"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "price": {
+      "title": "operation price",
+      "$ref": "../rules.json#/operationPrice"
+    },
+
+    "type": {
+      "$ref": "../rules.json#/enumOperationType"
+    }
+  }
+}

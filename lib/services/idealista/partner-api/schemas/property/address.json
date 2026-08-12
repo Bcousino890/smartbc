@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/address.json",
+  "title": "Address Object",
+  "type": "object",
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "required": [
+        "streetName",
+        "postalCode",
+        "country",
+        "visibility"
+      ]
+    },
+    {
+      "required": [
+        "streetName",
+        "town",
+        "country",
+        "visibility"
+      ]
+    },
+    {
+      "required": [
+        "latitude",
+        "longitude",
+        "precision",
+        "country",
+        "visibility"
+      ]
+    }
+  ],
+  "properties": {
+    "visibility": {
+      "title": "address visibility",
+      "description": "Full address, street name or zone will be shown publicly",
+      "enum": [
+        "full",
+        "street",
+        "hidden"
+      ]
+    },
+    "streetName": {
+      "title": "address street name",
+      "$ref": "../rules.json#/stringTo200"
+    },
+    "streetNumber": {
+      "title": "address street number",
+      "type": "string",
+      "pattern": "^.{0,10}$"
+    },
+    "streetKilometer": {
+      "title": "address street kilometer",
+      "description": "It will only by displayed for Lands typologies",
+      "$ref": "../rules.json#/number1to999"
+    },
+    "block": {
+      "title": "address block",
+      "$ref": "../rules.json#/stringTo20"
+    },
+    "floor": {
+      "title": "address floor",
+      "description": "bj: ground floor, en: mezzanine floor, ss: semi-basement, st: basement",
+      "type": "string",
+      "pattern": "^(-[1-2]|[1-9]|[1-5][0-9]|60|bj|en|ss|st)$"
+    },
+    "stair": {
+      "title": "address stair",
+      "type": "string",
+      "pattern": "^.{0,10}$"
+    },
+    "door": {
+      "title": "address door",
+      "$ref": "../rules.json#/stringTo4"
+    },
+    "urbanization": {
+      "title": "address urbanization",
+      "description": "This field will be shown even if the visibility is set to 'hidden'",
+      "$ref": "../rules.json#/stringTo50"
+    },
+    "postalCode": {
+      "title": "address postal code",
+      "type": "string",
+      "pattern": "^[0-9]{5}$|^AD[0-9]{3}$|^[0-9]{4}(-[0-9]{3})?$"
+    },
+    "town": {
+      "title": "address town",
+      "$ref": "../rules.json#/stringTo50"
+    },
+    "nsiCode": {
+      "title": "address nsi code",
+      "description": "National institute of statistics town code. Only available for Italy",
+      "type": "string",
+      "pattern": "^[0-9]{6}$"
+    },
+    "casaZoneId": {
+      "title": "address casa zone id",
+      "description": "Only available for Italy.  It will be sent to Casa.it only to specify the zone",
+      "type": "string",
+      "pattern": "^.{0,20}$"
+    },
+    "country": {
+      "title": "address country",
+      "description": "* Andorra can only be sent for idealista.com\n* France can be sent also for idealista.com and idealista.it in the following regions:\n * for idealista.com only País Vasco Francés and Cerdanya Francesa areas are allowed\n * for idealista.it only Alpi Marittime-Costa Azzurra area is allowed\n* Switzerland can only be sent for idealista.it and idealista.fr, and only Canton Ticino area is allowed for idealista.it\n* San Marino can only be sent for idealista.it\n* Monaco, Luxembourg and Belgium can only be sent for idealista.fr",
+      "enum": [
+        "Spain",
+        "Italy",
+        "Portugal",
+        "Andorra",
+        "France",
+        "Switzerland",
+        "San Marino",
+        "Monaco",
+        "Luxembourg",
+        "Belgium"
+      ]
+    },
+    "precision": {
+      "title": "address coordinates precision",
+      "description": "If moved, just the property zone will be shown publicly, but not its address",
+      "enum": [
+        "exact",
+        "moved"
+      ]
+    },
+    "latitude": {
+      "title": "address coordinates latitude",
+      "description": "To have a good accuracy, latitude need to have at least 4 decimals",
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "longitude": {
+      "title": "address coordinates longitude",
+      "description": "To have a good accuracy, longitude need to have at least 4 decimals",
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    }
+  },
+  "description": "The option of (addressPostalCode, addressCountry) is only available for Portugal. If you send only coordinates we will not publish with exact visibility, maximum with street only visibility. If the number of the address is not sent the visibility will never be complete and show only street visibility without number."
+}

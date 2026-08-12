@@ -110,3 +110,56 @@ comparte con la web. Renderiza uno por pasada justo por eso:
 - Ajustes en `app_settings.video_generation`; los defaults reales y su
   validación están en `lib/services/video/config.ts`.
 
+
+## Partner API de Idealista — "API en tiempo real" (`lib/services/idealista/partner-api/**`)
+Publicar llamando directamente a Idealista, con respuesta inmediata, en vez de
+rellenar su formulario con la extensión de Chrome (que sigue ahí como respaldo).
+
+**El contrato está vendorizado, y manda él.** Los 77 JSON Schema oficiales están
+en `lib/services/idealista/partner-api/schemas/` (bajados de
+`partners.idealista.com/api-reference/`, que pide login). No están de adorno:
+`scripts/test-idealista-payload.mts` valida contra ellos lo que genera el mapper.
+Si Idealista cambia algo, se vuelven a bajar ahí y `npm run test:idealista` dice
+qué ha dejado de cuadrar.
+
+⚠️ **No adivines nombres de campo.** Los schemas llevan
+`additionalProperties: false`: un campo de más, o mal escrito, es un 400. Y no te
+fíes de la prosa del spec, que en un punto contradice al schema: el **PUT de
+modificación sigue exigiendo `type`** (aunque diga que la tipología no se puede
+cambiar) y en cambio **no admite `code`**. Otro clásico: `windowsLocation` existe
+en `flat.json` y `office.json`, pero **no** en `house.json` — mandarlo en un
+chalet es un 400.
+
+**Credenciales** (Configuración → Idealista → "API en tiempo real"): client ID,
+client secret (cifrado con `EMAIL_ENCRYPTION_KEY`, como el resto) y feedKey. El
+botón "Probar conexión" llama de verdad a `GET /v1/customer/publishinfo`.
+Sandbox por defecto; **el sandbox de Idealista solo va de L-V, 6h-21h (Madrid)** y
+cada noche lo reescriben con una copia de producción, así que las pruebas del día
+anterior desaparecen.
+
+**Reglas que impone Idealista, no nosotros:**
+- Solo **segunda mano**. Una ficha marcada "Obra nueva" no se publica por API.
+- Todo lo que la API permite hacer **debe** hacerse por API, no desde su área
+  privada: hacerlo a mano puede acabar en bloqueo de la pasarela.
+- Nada de procesos masivos por aquí (para eso está el volcado V6).
+- Hay que tener guardada la relación con sus ids (anuncios, contactos e
+  imágenes). Eso vive en `idealista_listings.api_property_id` y en las tablas
+  `idealista_api_contacts` / `idealista_api_images` / `idealista_api_videos`
+  (migración 0118). Las fotos se emparejan por el **checksum MD5** del original,
+  que es lo que ellos devuelven.
+- `idealista_api_log` guarda cada llamada con su cuerpo: Idealista revisa las
+  peticiones antes de dar el visto bueno para producción.
+
+**Cuotas:** 1000/min en contactos, anuncios, vídeos y tours; 5000/min en
+imágenes; 100/min en publishinfo; y **una subida de fotos por minuto y anuncio**.
+El cliente las frena antes de que Idealista conteste 429 (cuando salta, hay que
+esperar el minuto entero). Ojo: los contadores viven en memoria del proceso, así
+que asumen el PM2 de un solo proceso que tenemos.
+
+**Probar contra el sandbox de verdad:**
+```bash
+IDEALISTA_CLIENT_ID=... IDEALISTA_CLIENT_SECRET=... IDEALISTA_FEED_KEY=ilc... \
+IDEALISTA_CONTACT_ID=123456 npm run idealista:smoke
+```
+Recorre alta, consulta, modificación, alta repetida (espera un 409), find all,
+fotos, clonado, baja y reactivación, y deja el anuncio de prueba dado de baja.

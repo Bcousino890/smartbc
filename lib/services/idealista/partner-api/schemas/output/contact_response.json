@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/contact_response.json",
+  "title": "Contact Response Object",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "type": "string",
+      "required": true,
+      "description": "The message content for the response"
+    },
+    "success": {
+      "type": "boolean",
+      "required": true,
+      "description": "Indicates whether or not the request was successful"
+    },
+    "contact": {
+      "$ref": "../contact/contact_obtain.json"
+    }
+  }
+}

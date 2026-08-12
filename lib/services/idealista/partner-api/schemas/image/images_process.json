@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/image/images_process.json",
+  "title": "Property images process",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "images"
+  ],
+  "properties": {
+    "images": {
+      "$ref": "images_process_array.json"
+    }
+  }
+}

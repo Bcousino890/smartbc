@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/properties_response.json",
+  "title": "All properties",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Successful Operation",
+      "required":true,
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": true,
+      "required":true,
+      "description":"Indicates whether or not the request was successful"
+    },
+    "contacts": {
+      "$ref": "contacts_array.json"
+    },
+    "page": {
+      "$ref": "../property/page.json"
+    },
+    "totalContacts": {
+      "title": "total contacts",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99999999
+    }
+  }
+}

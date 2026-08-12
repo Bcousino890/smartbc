@@ -8,6 +8,7 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import { IdealistaConfigClient } from "./config-client";
 import { AIConfigSection } from "./ai-config-section";
 import { ExtensionTokenSection } from "./extension-token-section";
+import { PartnerApiSection } from "./partner-api-section";
 import { VideoMusicSection } from "./video-music-section";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,8 @@ export default async function IdealistaConfigPage({
 
         <IdealistaConfigClient initialConfig={initialConfig} />
       </div>
+
+      <PartnerApiSection />
 
       <ExtensionTokenSection />
 

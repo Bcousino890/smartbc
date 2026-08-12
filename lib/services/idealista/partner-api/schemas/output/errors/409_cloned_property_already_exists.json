@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/409_cloned_property_already_exists.json",
+  "title": "Cloned property already exists with the property id provided",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "property already cloned",
+      "description":"Property already cloned for the property id provided"
+    },
+    "pathResource": {
+      "type": "string",
+      "description": "Existing cloned property resource with the property id provided"
+    },
+    "success":{
+      "type":"boolean",
+      "default": false,
+      "description":"Indicates whether or not the request was successful"
+    }
+  }
+}

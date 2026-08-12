@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/contact/contact_modify.json",
+  "title": "Contact Object",
+  "type": "object",
+  "required": [
+    "email",
+    "name",
+    "primaryPhoneNumber"
+  ],
+  "dependencies": {
+    "primaryPhonePrefix": [
+      "primaryPhoneNumber"
+    ],
+    "secondaryPhonePrefix": [
+      "secondaryPhoneNumber"
+    ]
+  },
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "title": "contact name",
+      "$ref": "../rules.json#/stringTo60"
+    },
+    "lastName": {
+      "title": "contact last name",
+      "$ref": "../rules.json#/stringTo60"
+    },
+    "email": {
+      "title": "contact email",
+      "$ref": "../rules.json#/emailFormat"
+    },
+    "primaryPhonePrefix": {
+      "title": "contact primary phone prefix",
+      "$ref": "../rules.json#/phonePrefixFormat"
+    },
+    "primaryPhoneNumber": {
+      "title": "contact primary phone number",
+      "$ref": "../rules.json#/phoneFormat"
+    },
+    "secondaryPhonePrefix": {
+      "title": "contact secondary phone prefix",
+      "$ref": "../rules.json#/phonePrefixFormat"
+    },
+    "secondaryPhoneNumber": {
+      "title": "contact secondary phone number",
+      "$ref": "../rules.json#/phoneFormat"
+    }
+  }
+}

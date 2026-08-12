@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/virtualtours/errors/403_find.json",
+  "title": "403 Error",
+  "type": "object",
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "$ref": "../../errors/403_client_software_active.json"
+    },
+    {
+      "$ref": "403_virtual_service_not_active.json"
+    }
+  ]
+}

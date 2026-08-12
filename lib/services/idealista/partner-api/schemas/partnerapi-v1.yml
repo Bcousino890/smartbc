@@ -1,0 +1,1707 @@
+swagger: '2.0'
+servers:
+  - url: https://partners-sandbox.idealista.com
+    description: 'Spain sandbox server'
+  - url: https://partners-sandbox.idealista.it
+    description: 'Italy sandbox server'
+  - url: https://partners-sandbox.idealista.pt
+    description: 'Portugal sandbox server'
+  - url: https://partners-sandbox.idealista.fr
+    description: 'France sandbox server'
+info:
+  description: "# Introduction\nThis API contains the necessary methods to introduce, update and / or consult idealista properties.\nIn the properties section there are the examples of the types of requests accepted and the format of the content that should be sent.\n\n# Specification\nHere the requirements that must be met in order to be able to publish a property:\n\n+ The property must always include the agency identifier (feedKey) that the client will provide accesing to the idealista tool.\n\n+ To associate a contact with a property, you must create a contact in advance or retrieve an existing contact by sending the contact id in the property.\n\n+ A property can only have one contact data associated\n\n+ At least one operation (sale or rental) must be defined. This must include its price. The corresponding codes for each type of operation can be found in the schema.\n\n+ The characteristics of the property described in each typology schema must be detailed.\n\n+ It is mandatory to include address of the property, sending at least a combination of: coordinates; street, number and postal code; and for Portugal is possible to geocode also just by postal code. Although it must be taken into account that the more complete the information provided in the location section is, the better the positioning quality of the property.\n\n# Authentication\n\nThis implementation uses\_\_[client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.4)\_flow of the\_[Oauth 2.0 specification](https://datatracker.ietf.org/doc/html/rfc6749).\n\n**Issuing application-only requests**\n\n**Step 1: Request a\_*Bearer*\_token for OAuth authentication.**\n\n**Resource URL**\n\n\n|POST\_*/oauth/token*|\n|-------------------|\n\n**Headers**\n\n\_\n|name|type|description|example|\n|----|----|-----------|-------|\n|Authorization|string|Your client id and client secret, encoded.|Basic your_base64_credentials|\n|Content-Type\_|string|Request content type|application/x-www-form-urlencoded;charset=UTF-8|\n\n**Encoding your authorization header:**\n 1. URL encode your\_*client id*\_and\_*client secret*\_according to\_[RFC 1738](http://www.ietf.org/rfc/rfc1738.txt)\_\n\n 2. Concatenate the\_encoded\_**client id**\_a colon character \":\", and the secret into a single string\n\n 3. [Base64 encode](http://en.wikipedia.org/wiki/Base64)\_the string from the previous step\n\nFor example, if your\_**client id**\_is \"abc\" and your secret \"123\", the\_base64(\"abc:123\")\_is\_YWJjOjEyMw==\n\nSo, your Authorization header should contain:\n\nBasic YWJjOjEyMw==\n\n**Parameters**\n\nThis call accepts the following parameters,\_x-www-form-urlencoded:\n\n|name|type|description|notes|\n|----|----|-----------|-----|\n|grant_type|string|Value:\_client_credentials|\_|\n|scope|string|Values:\_read\_or\_write|This field is optional.|\n\n**Response**\n\n|name|type|description|notes|\n|----|----|-----------|-----|\n|access_token|string|Your\_*Bearer*\_token|Are used in token-based authentication to allow application to access an API. The application receives an access token after a user successfully authenticates and authorizes access, then passes the access token as a credential when it calls the API.|\n|token_type|string|\_|Always \"bearer\"|\n|expires_in|number|Number of seconds until token expires|\_|\n|scope|string|Scopes consented to related access token|\_|\n|not-before-policy|string|Policy ensures that any tokens issued before that time become invalid (We return 0, because we do not have it activated)|\_|\n|session_state|string|User session id number|\_|\n\nNote: authentication error responses timestamps are in UTC\n\nExample:\n```\n{ \"access_token\": \"your_token\", \"expires_in\": 300, \"token_type\": \"bearer\", \"not-before-policy\": 0, \"session_state\": \"8247388a-f05c-464f-9d3e-445b69400229\", \"scope\": \"read\" }\n```\n\n**Complete request example**\n\nCURL\n\n|curl -X POST -H \"Authorization: Basic YWJjOjEyMw==\" -H \"Content-Type: application/x-www-form-urlencoded\" -d 'grant_type=client_credentials&scope=read' \"https://partners-sandbox.idealista.{com-it-pt-fr}/oauth/token\" -k|\n|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|\n\n_Note_: Replace\_{{YWJjOjEyMw==}}\_with your encoded credentials, as explained in the Headers section above.\n\n**Step 2: authenticate api requests with the bearer token**\n\nTo use the bearer token, create a normal HTTPS request and include an\_Authorization\_header with the value of\_Bearer <base64 bearer token value from previous step>\n\n**Complete request example**\n\nCURL\n\n|curl -X GET -H \"Authorization: Bearer 8b9027fa-ce6c-4c16-9c0b-7d2805328139\" \"https://XXXX/ads\"|\n|-----------------------------------------------------------------------------------------------------------|\n\n\n# Identification\n\nEach request must be provided with two parameters in the header of the request:\n+ feedKey: this field represents the idealista client code in our system. Is a string of 43 char lenght that starts with the characters \"ilc\". It can be provided by the client accessing in his \"tools\" section in idealista under configuration section,\n or it can be requested by the client account manager in idealista.\n+ Authorization: it is the token provided in the previous step.\n\n**Example Headers**\n\n|KEY|VALUE|\n|----|----|\n|feedKey|ilcxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|\n|authorization|Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX|\n\n\n# Rate Limit\n**Per Application**\n\nRate limitation of the standard API applies primarily on a per user access token. If a method allows 15 requests per rate limit window, then it allows 15 requests per window per access token.\n\nWhen using application-only authentication, rate limits are determined globally for the entire application. If a method allows 15 requests per rate limit window, then it allows you to make 15 requests per window — on behalf of your application.\n\n**Minute Windows**\n\nRate limits are divided into one minute intervals. All endpoints require authentication, so there is no concept of unauthenticated calls and rate limits.\n\n These are the rate limit for the resources: \n\n+ Contacts: 1000 requests per minute  \n\n+ Properties: 1000 requests per minute  \n\n+ Images: 5000 requests per minute  \n\n+ Virtual Tours: 1000 requests per minute  \n\n+ Videos: 1000 requests per minute \n\n+ Publication Info: 100 requests per minute. \n\n If that limit is reached, <b>you will have to wait for a minute</b> to start doing requests again\n\n**Duplicate Requests Control**\n\nIn order to improve the performance of the API and to avoid possible changes and data inconsistencies, there is a control for duplicate requests.\n\nIf two or more requests are made to the same endpoint, with the same params, with the same body, from the same client, in a small time window, only the first one of them will be allowed, and a 429 error code will be returned for the rest of them."
+  title: 'idealista Partner Api'
+  termsOfService: 'https://www.idealista.com/info/proteccion-datos-mobile?lang=en'
+  contact:
+    name: 'API Support'
+    email: datafeed@idealista.com
+  x-logo:
+    url: '../api-reference/img/logo.jpg'
+    altText: 'idealista logo'
+  license:
+    name: Idealista
+    url: 'https://www.idealista.com'
+tags:
+  -
+    name: Contact
+    description: "Defines the contact that will be associated to a property. When the user contacts a property in idealista, he will do it through this related contact.\n\nIf the office has an agent configured in idealista, we will assign the property to the contact of the agent if the contact sent has the same email than the agent configured, regardless of being a different contact. You can check all the contacts configured for an office and if it belongs to an agent with the Find All Contacts method.\n\nWhen trying to create a contact that has same email than an agent that already exists, we will return the contactId of the agent indicating the boolean field agent = true to indicate this."
+  -
+    name: Property
+    description: "Defines the property with the features of each typology. The typologies avaible to publish in idealista are:\n+ flats\n+ chalets\n+ country houses\n+ offices\n+ commercial\n+ garages\n+ lands\n+ buildings\n+ storage rooms\n+ rooms\n"
+  -
+    name: Images
+    description: "Defines the image/s associated to a property.\n\n <b>For the Find Methods we will return the checksum from the original photo downloaded</b>. With this checksum you can match the relation from the image in idealista and the one from your system "
+  -
+    name: Virtual Tours
+    description: "Defines the virtual tours associated to a property. \n\n To publish their Virtual Tours the customers must contact with their idealista account manager first in order to activate the service\n\nYou can find the providers allowed in idealista in the following list: \n+ Virtual tour 3D: Matterport and VistaPlayer3d \n+ Other formats: Immoviewer, Spectando, Floorplanner, Realisti_co, Goldmark, Floorfy, Fastout, Panotour, Everpano, Toursvirtuales360, KeepEyeOnBall, Inmovilla, Abitarepn, Pano2VR, Plushglobalmedia, Vizor.io, Nodalview, Gothru, Guru360, Creotour, Habiteo, Vitrio, Plug-in.studio, Ppgstudios, 360forcurious, Roundme, Virtualitour, Sircase, Divein.studio, Casagest24, Spherical, Gizmo-3d, Kuula, Emporda360, Vista360, Clicktours, Espaciosvirtuales.es, Cloudpano, Bizionar and Matterport360.\n\nPlease, note the following facts about virtual tours: \n+ Be sure that you use a valid/official URL for the virtual tour.  \n+ We only accept one 3D and one virtual tour per property. If you send a virtual tour and the property had already associated another one, the first would be replaced by the one is sent. \n+ A virtual tour created by idealista can not be replaced or deleted. If an agency wants to edit that information, they should contact their idealista account manager. \n+The virtual tour providers mentioned above are for reference only. Additional providers are supported, please contact support to confirm whether a specific provider is accepted."
+  -
+    name: Customer Publication Info
+    description: "Information of the customer account related to their ads. "
+  -
+    name: Changelog
+    description:
+          $ref: '../api-reference/partnerapi-changelog-v1.md'
+x-tagGroups:
+  -
+    name: 'Contact Management'
+    tags:
+      - Contact
+  -
+    name: 'Property Management'
+    tags:
+      - Property
+  -
+    name: 'Images Management'
+    tags:
+      - Images
+  -
+    name: 'Videos Management'
+    tags:
+      - Video
+  -
+    name: 'Virtual Tours Management'
+    tags:
+      - Virtual Tours
+      - Virtual Tours [deprecated]
+  -
+    name: 'Customer Publication Info Management'
+    tags:
+      - Customer Publication Info
+  -
+    name: 'Changelog'
+    tags:
+      - Changelog
+paths:
+  /v1/contacts:
+    parameters:
+      - in: header
+        name: feedKey
+        description: 'idealista client code'
+        required: true
+        type: string
+        maxLength: 43
+      - in: header
+        name: Authorization
+        description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+        required: true
+        type: string
+      - in: header
+        name: Content-Type
+        description: 'application/json'
+        required: true
+        type: string
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: query
+          name: page
+          description: 'Page number'
+          required: true
+          type: integer
+          minimum: 1
+        - in: query
+          name: size
+          description: 'Number of properties that can be retrieved per page'
+          required: true
+          type: integer
+          minimum: 1
+          maximum: 100
+      tags:
+        - Contact
+      summary: 'Find All Contacts'
+      description: 'Returns the contacts attached to a feedkey'
+      responses:
+        '200':
+          description: 'List of contacts for the feedkey'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/contact/contacts_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found.json
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      tags:
+        - Contact
+      summary: 'New contact'
+      description: 'Creates a new contact for the property'
+      responses:
+        '201':
+          description: 'Successful operation. Contact created.'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/contact_creation_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/contact/contact_create.json
+  '/v1/contacts/{contactId}':
+    put:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+
+        - name: contactId
+          in: path
+          description: 'ID of contact to modify'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Contact
+      summary: 'Update an existing contact'
+      description: 'Modify a contact information. If the contact belongs to an agent, it cannot be modified'
+      responses:
+        '200':
+          description: 'Successful operation.'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/contact_update_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '409':
+          description: 'Conflict'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/409_agent_modification_forbidden.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/contact/contact_modify.json
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - name: contactId
+          in: path
+          description: 'ID of contact to return'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Contact
+      summary: 'Find a contact'
+      description: 'Returns a single contact'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/contact_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Contact Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found.json
+  /v1/properties:
+    parameters:
+      - in: header
+        name: feedKey
+        description: 'idealista client code'
+        required: true
+        type: string
+        maxLength: 43
+      - in: header
+        name: Authorization
+        description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+        required: true
+        type: string
+      - in: header
+        name: Content-Type
+        description: 'application/json'
+        required: true
+        type: string
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: query
+          name: page
+          description: 'Page number'
+          required: true
+          type: integer
+          minimum: 1
+        - in: query
+          name: size
+          description: 'Number of properties that can be retrieved per page'
+          required: true
+          type: integer
+          minimum: 1
+          maximum: 100
+        - in: query
+          name: state
+          description: 'State of the properties to be retrieved'
+          required: false
+          schema:
+            type: string
+            enum: [active, inactive, pending]
+      tags:
+        - Property
+      summary: 'Find All Properties'
+      description: 'Returns the properties attached to a feedkey'
+      responses:
+        '200':
+          description: 'List of properties for the feedkey'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/property/properties_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: "jsonschemas/output/errors/404_not_found_property.json"
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+      tags:
+        - Property
+      summary: 'New Property'
+      description: "Creates a new property. \n\n<b>Minimal address changes might occur because of our geo positioning system.</b>"
+      responses:
+        '201':
+          description: 'Successful operation. Property Created'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/property_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '409':
+          description: 'Conflict'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/409_property_already_exists_for_code.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/property/property_create.json
+  '/v1/properties/{propertyId}':
+    put:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'Id of property to modify'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Property
+      summary: 'Update Property'
+      description: "The following fields cannot be modified:\n\n+ code.\n\n+ property type\n\n+ operation type\n\n<b>Minimal address changes might occur because of our geo positioning system.</b>"
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/property_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/property/property_modify.json
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'Id of property to return'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Property
+      summary: 'Find a Property'
+      description: 'Returns a single Property'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/property_obtain_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+  '/v1/properties/{propertyId}/deactivate':
+    parameters:
+      - in: header
+        name: feedKey
+        description: 'idealista client code'
+        required: true
+        type: string
+        maxLength: 43
+      - in: header
+        name: Authorization
+        description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+        required: true
+        type: string
+      - name: propertyId
+        in: path
+        description: 'ID of property to deactivate'
+        required: true
+        type: integer
+        minLength: 1
+        maxLength: 99999999
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      tags:
+        - Property
+      summary: 'Deactivate a Property'
+      description: 'Deactivates a single Property'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/deactivation_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+  '/v1/properties/{propertyId}/reactivate':
+    parameters:
+      - in: header
+        name: feedKey
+        description: 'idealista client code'
+        required: true
+        type: string
+        maxLength: 43
+      - in: header
+        name: Authorization
+        description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+        required: true
+        type: string
+      - name: propertyId
+        in: path
+        description: 'ID of property to reactivate'
+        required: true
+        type: integer
+        minLength: 1
+        maxLength: 99999999
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      tags:
+        - Property
+      summary: 'Reactivate a Property'
+      description: 'Reactivate a single property. If the property is dropped by our quality team (Http error 409), it can not be reactivated via Api call. In this case customer must contact to the account manager in idealista to reactivate it'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/reactivation_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '409':
+          description: 'Conflict'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: jsonschemas/output/errors/409_reactivation_response_dropped_by_quality.json
+                  - $ref: jsonschemas/output/errors/409_reactivation_response_due_phishing.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+  '/v1/properties/{propertyId}/clone':
+    parameters:
+      - in: header
+        name: feedKey
+        description: 'idealista client code'
+        required: true
+        type: string
+        maxLength: 43
+      - in: header
+        name: Authorization
+        description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+        required: true
+        type: string
+      - name: propertyId
+        in: path
+        description: 'ID of property to clone'
+        required: true
+        type: integer
+        minLength: 1
+        maxLength: 99999999
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      tags:
+        - Property
+      summary: 'Clone a Property'
+      description: 'This call is used when the same property can be published for sale and rent operation simultaneously. When publishing a property cloned it will only consume one slot in our site instead of two. To clone a property, first must be created for one of the operations (sale or rent) using the creation endpoint, and then call this endpoint with the first created property and the other operation to clone.'
+      responses:
+        '201':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/property_cloning_response.json
+        '409':
+          description: 'Conflict'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/409_cloned_property_already_exists.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/property/property_clone.json
+  '/v1/properties/{propertyId}/images':
+    put:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to set the image'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Images
+      summary: 'Images Process'
+      description: "Attach one or more images for a property. \n\n<b>The PUT call will update the snapshot of the images sent.</b> \n\nTake in consideration the following points: 
+                    \n\n+ The images not sent in the body of the request will be deleted. \n\n+ The order of the images in the body, will be the order published in idealista 
+                    \n\n+ Related also to the order: plans will always be at last position, home staging or other images published in idealista at first position, and then the order sent in this request.
+                    \n\n+ Max size allowed: **32MB per image**.
+                    \n\n+ Max number of images: **200 per property**.
+                    \n\n+ Rate limit: one request per minute.
+                    \n\n+ Formats allowed: **JPG, PNG, GIF**.
+                    \n\n+ For the multimedia URL we do not accept redirecting url 
+                    \n\n+ Labels by typology allowed: 
+                    \n++ **Flat:** kitchen, bathroom, living, bedroom, hall, corridor, terrace, patio, facade, garden, views, details, store, room, office, garage, penthouse, pool, dining_room, 
+                    surroundings, loft, storage, balcony, studio, cellar, communalareas, atmosphere, basement, energycertificate, walk_in_wardrobe, staircase, porch, lifts.
+                    \n++ **House:** kitchen, bathroom, living, bedroom, hall, corridor, terrace, patio, facade, garden, views, details, gateway, store, room, office, garage, penthouse, 
+                    pool, dining_room, surroundings, loft, storage, balcony, studio, cellar, communalareas, atmosphere, basement, energycertificate, walk_in_wardrobe, staircase, porch.
+                    \n++ **Country House:** kitchen, bathroom, living, bedroom, hall, patio, terrace, patio, facade, garden, views, details, gateway, store, room, office, garage, penthouse,
+                    pool, dining_room, surroundings, loft, storage, balcony, studio, cellar, communalareas, atmosphere, basement, energycertificate, walk_in_wardrobe, staircase, porch.
+                    \n++ **Garage:** facade, views, details, gateway, parking space.
+                    \n++ **Office:**: kitchen, bathroom, terrace, facade, garden, views, details, store, reception, waitingroom, office, archive, garage, dining_room, surroundings, storage,
+                     balcony, studio, cellar, communalareas, basement, energycertificate, walk_in_wardrobe, staircase, meeting_room, lifts, shop_window, open_plan.
+                    \n++ **Commercial:** kitchen, bathroom, hall, corridor, patio, facade, views, details, store, room,reception, office, pool, dining_room, surroundings, storage, 
+                    studio, cellar, communalareas, atmosphere, basement, energycertificate, walk_in_wardrobe, meeting_room, lifts, shop_window, open_plan.
+                    \n++ **Land:** views, pool, land, surroundings, communalareas.
+                    \n++ **Storage Room:** details, gateway, store, surroundings, storage, cellar, communalareas, atmosphere, energycertificate.
+                    \n++ **Building:** kitchen, bathroom, living, hall, corridor, terrace, facade, garden, views, details, store, room, reception, waitingroom, office, archive, garage, 
+                    penthouse, pool, dining_room, surroundings, storage, balcony, cellar, communalareas, atmosphere, basement, energycertificate, walk_in_wardrobe, staircase, porch, 
+                    meeting_room, lifts, shop_window, open_plan.
+                    \n++ **Room:** kitchen, bathroom, living, bedroom, hall, corridor, terrace, patio, facade, garden, views, details, mates, gateway, room, penthouse, pool, dining_room,
+                     surroundings, communalareas, atmosphere, basement, walk_in_wardrobe.
+                    
+                    \n\nIf field ***label*** is unknown, invalid for the typology, or missing, the system will automatically update the image and assign it a label. ***Plan label is only assigned automatically***."
+      responses:
+        '202':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/generic_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/403_client_software_active.json
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/image/images_process.json
+    delete:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: path
+          name: propertyId
+          description: 'ID of the property we want to delete the image'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Images
+      summary: 'Delete All'
+      description: 'Delete all images by propertyId'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/generic_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to obtain the images'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Images
+      summary: 'Find All Images'
+      description: 'Returns the images attached to a Property'
+      responses:
+        '200':
+          description: 'List of images for the property'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/images_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+
+  '/v1/properties/{propertyId}/videos':
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to set the video'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Video
+      summary: 'New Video'
+      description: "Attach a video for a property.\n\n+ Max size allowed: **750MB per video**.\n\n+ Max number of videos: **6 per property**.\n\n+ Formats allowed: **MP4, AVI, MOV, WMV, MPEG, FLV, 3GP** \n\n***N.B.*** We do not accept any streaming platform (Youtube, Vimeo, etc), only direct url that would allow us to download and process the file itself.\nPlease take into consideration that the videos may take some time to appear on idealista after uploading due to processing queues."
+      responses:
+        '201':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/video_response_created_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/video/video_create.json
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to obtain the videos'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Video
+      summary: 'Find All Videos'
+      description: 'Returns the videos attached to a Property'
+      responses:
+        '200':
+          description: 'List of videos for the property'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/videos_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+  '/v1/properties/{propertyId}/videos/{videoId}':
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: path
+          name: propertyId
+          description: 'ID of the property we want to obtain the video'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+        - in: path
+          name: videoId
+          description: 'ID of the video we want obtain'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Video
+      summary: 'Find Video'
+      description: 'Returns the video with the property id and videoId provided'
+      responses:
+        '200':
+          description: 'Video with property id and videoId'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/video_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/404_not_found_property.json'
+                  - $ref: 'jsonschemas/output/errors/404_not_found.json'
+    put:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+        - in: path
+          name: propertyId
+          description: 'ID of the property we want to modify the video'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+        - in: path
+          name: videoId
+          description: 'ID of the video we want to modify'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Video
+      summary: 'Modify Video'
+      description: 'Update an existing video.'
+      responses:
+        '202':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/video_response_created_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/404_not_found_property.json'
+                  - $ref: 'jsonschemas/output/errors/404_not_found.json'
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/video/video_modify.json
+    delete:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: path
+          name: propertyId
+          description: 'ID of the property we want to delete the video'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+        - in: path
+          name: videoId
+          description: 'ID of the video we want to delete'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - Video
+      summary: 'Delete Video'
+      description: 'Delete a Video'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/generic_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                  - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: 'jsonschemas/output/errors/404_not_found_property.json'
+                  - $ref: 'jsonschemas/output/errors/404_not_found.json'
+            
+  '/v1/properties/{propertyId}/virtualtours':
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to set the virtual tours'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - 'Virtual Tours'
+      summary: 'New Virtual Tours'
+      description: 'Attach a virtual tours for the property'
+      responses:
+        '201':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/generic_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/virtualtours/errors/403_post.json
+        '409':
+          description: 'Conflict'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/virtualtours/errors/409_virtual_tour_not_allowed.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/virtualtour/virtualtour_create.json
+    get:
+      security:
+        - ClientCredentials: [ 'properties:read' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to set the virtual tours'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - 'Virtual Tours'
+      summary: 'Find Virtual Tours'
+      description: 'Returns the virtual tours attached to a Property'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/virtualtours/virtualtours_response.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_generic_bad_request.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/virtualtours/errors/403_find.json
+        '404':
+          description: 'Not Found'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/404_not_found_property.json
+  '/v1/properties/{propertyId}/virtualtours/deactivate':
+    post:
+      security:
+        - ClientCredentials: [ 'properties:write' ]
+      parameters:
+        - in: header
+          name: feedKey
+          description: 'idealista client code'
+          required: true
+          type: string
+          maxLength: 43
+        - in: header
+          name: Authorization
+          description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+          required: true
+          type: string
+        - in: header
+          name: Content-Type
+          description: 'application/json'
+          required: true
+          type: string
+        - name: propertyId
+          in: path
+          description: 'ID of property to set the virtual tours'
+          required: true
+          type: integer
+          minLength: 1
+          maxLength: 99999999
+      tags:
+        - 'Virtual Tours'
+      summary: 'Deactivate Virtual Tour'
+      description: 'Deactivate a virtual tour'
+      responses:
+        '200':
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/generic_response_ok.json
+        '400':
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/400_validation_error.json
+        '401':
+          description: 'Invalid Token'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/401_invalid_token.json
+        '403':
+          description: 'Forbidden'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/virtualtours/errors/403_post.json
+        '415':
+          description: 'Unsupported Media Type'
+          content:
+            application/json:
+              schema:
+                $ref: jsonschemas/output/errors/415_unsupported_media_type.json
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: jsonschemas/virtualtour/virtualtour_create.json
+
+  /v1/customer/publishinfo:
+      get:
+        security:
+          - ClientCredentials: [ 'properties:read' ]
+        parameters:
+          - in: header
+            name: feedKey
+            description: 'idealista client code'
+            required: true
+            type: stringº
+            maxLength: 43
+          - in: header
+            name: Authorization
+            description: 'Access Token. Starts with Bearer and the authorization token. ie: authorization : Bearer 0ce7bddc-f945-4dca-958e-XXXXXXX'
+            required: true
+            type: string
+        tags:
+          - Customer Publication Info
+        summary: 'Get customer publication info'
+        description: 'Obtain information related to the customer account: if the account is active, you will find the number of published ads and how many the customer is able to publish'
+        responses:
+          '200':
+            description: 'Successful operation'
+            content:
+              application/json:
+                schema:
+                  $ref: jsonschemas/output/partner_publishinfo_response.json
+          '401':
+            description: 'Invalid Token'
+            content:
+              application/json:
+                schema:
+                  $ref: jsonschemas/output/errors/401_invalid_token.json
+          '403':
+            description: 'Forbidden'
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: 'jsonschemas/output/errors/403_client_software_active.json'
+                    - $ref: 'jsonschemas/output/errors/403_client_account_inactive.json'
+                    - $ref: 'jsonschemas/output/errors/403_client_publication_inactive.json'
+                    - $ref: 'jsonschemas/output/errors/403_client_account_not_assigned_to_software.json'
