@@ -163,3 +163,52 @@ IDEALISTA_CONTACT_ID=123456 npm run idealista:smoke
 ```
 Recorre alta, consulta, modificación, alta repetida (espera un 409), find all,
 fotos, clonado, baja y reactivación, y deja el anuncio de prueba dado de baja.
+
+**Credenciales de sandbox confirmadas (2026-08-14):** el `clientId`/`clientSecret`
+de `datafeed@idealista.com` tardó ~24-48h en activarse (dieron 401 los primeros
+dos días). Si vuelven a dar `invalid_client`, no es necesariamente un problema
+nuestro — puede ser el mismo retraso de activación.
+
+### Reglas de negocio que NO están en ningún JSON Schema
+
+Estas solo salen al chocar contra el sandbox de verdad — ni el texto del spec ni
+`additionalProperties: false` las delatan. Confirmadas ejecutando el listado
+oficial de casos de prueba de Idealista (`scripts/idealista-run-official-testcases.mts`,
+53/53 en verde el 2026-08-14):
+
+- **`windowsLocation` es obligatorio en pisos y oficinas** aunque no esté en el
+  `required` de `flat.json`/`office.json`. Sin él: 400 "windows location must be
+  provided". El mapper (`mapper.ts`) ya lo manda siempre.
+- **`bathroomNumber: 0` con `conservation: "good"` da 400** ("bathroom number
+  not valid"), aunque el schema admite 0 por rango. El mapper ahora bloquea la
+  publicación pidiendo el dato real en vez de mandar un 0 que sabe que va a
+  fallar.
+- **`areaUsable` debe ser ESTRICTAMENTE menor que `areaConstructed`** (igual
+  también lo rechaza: "usable area cannot be greater or equal..."). El mapper
+  omite `areaUsable` si no se cumple, en vez de forzar un 400.
+- **Solar (`type: "land"`, features `type: "urban"` o `"countrybuildable"`)
+  exige DOS cosas que no están en `required`:** `accessType` en cuanto
+  `roadAccess: true` ("access type must be provided when road access is
+  present"), y al menos un campo `classification*` (sólo está en la
+  `description` en prosa de `land.json`, no en un `anyOf` real). El mapper
+  manda `accessType: "unknown"` y `classificationOther: true` por defecto.
+- **Local comercial con `isATransfer: true` exige `priceTransfer` en alquiler**
+  ("Price transfer mandatory for rent commercial properties") y además
+  `commercialMainActivity` ("Commercial activity mandatory for transfer") — dos
+  reglas independientes, no una. El CRM no tiene esta distinción en el
+  formulario, así que el mapper no manda `isATransfer` (no aplica hoy).
+- **`garageCapacity` acepta el enum, pero `parkingType` lo rechaza para España**
+  ("parking type cannot be defined for this country") pese a estar en
+  `garage.json` sin restricción por país. El mapper no lo manda.
+- **Edificio (`type: "building"`) con `operation: "sale"` exige
+  `propertyTenants`** (booleano) — "tenants mandatory for sale operation". Sí
+  está en la `description` de ese campo, pero no en `required`/`anyOf`.
+- **Habitación (`type: "room"`) con `occupiedNow: true` encadena CUATRO campos
+  obligatorios uno detrás de otro**, ninguno en `required`: `tenantGender` →
+  `minTenantAge`+`maxTenantAge` → `ownerLiving` → `windowView`. Solo aparecen
+  al corregir el error anterior y volver a probar — no vienen todos en el mismo
+  400.
+
+El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
+selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo
+importan para el listado oficial de pruebas, no para `mapper.ts`.

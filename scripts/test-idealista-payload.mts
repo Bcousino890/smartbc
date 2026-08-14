@@ -242,6 +242,18 @@ console.log("\n▸ Reglas que Idealista rechazaría");
   onlyCoords.address_postal_code = null;
   check("solo con coordenadas se puede publicar", buildPropertyPayload(onlyCoords, OPTIONS).errors.length === 0);
 
+  // Confirmado contra el sandbox real: con type="urban", roadAccess=true SIN
+  // accessType ni ningún classification* da 400 (dos reglas que no están en
+  // el `required` del schema, sólo accessType aparece en la descripción).
+  const land = baseRow();
+  land.property_type = "land";
+  const landMapped = buildPropertyPayload(land, OPTIONS);
+  check("solar: manda accessType", landMapped.payload.features.accessType !== undefined);
+  check(
+    "solar: manda al menos un classification*",
+    Object.keys(landMapped.payload.features).some((k) => k.startsWith("classification"))
+  );
+
   const noPrice = baseRow();
   noPrice.price = null;
   check("sin precio → error", buildPropertyPayload(noPrice, OPTIONS).errors.length > 0);
@@ -252,6 +264,21 @@ console.log("\n▸ Reglas que Idealista rechazaría");
     "obra nueva → error (la API sólo admite segunda mano)",
     buildPropertyPayload(newBuild, OPTIONS).errors.some((e) => e.includes("Obra nueva"))
   );
+
+  // Confirmado contra el sandbox real (2026-08-14): bathroomNumber=0 con
+  // conservation="good" da 400 "bathroom number not valid".
+  const noBathrooms = baseRow();
+  noBathrooms.bathrooms = 0;
+  check("0 baños → error de mapeo (regla de negocio confirmada en sandbox)", buildPropertyPayload(noBathrooms, OPTIONS).errors.length > 0);
+
+  // Confirmado también: areaUsable debe ser estrictamente menor que
+  // areaConstructed, si no, 400 "usable area cannot be greater or equal...".
+  const usableTooBig = baseRow();
+  usableTooBig.square_meters = 100; // areaUsable
+  usableTooBig.built_square_meters = 90; // areaConstructed
+  const usableMapped = buildPropertyPayload(usableTooBig, OPTIONS);
+  check("areaUsable >= areaConstructed → se omite areaUsable, no error", usableMapped.errors.length === 0 && usableMapped.payload.features.areaUsable === undefined);
+  check("...con aviso", usableMapped.warnings.some((w) => w.includes("superficie útil")));
 
   const tinyFlat = baseRow();
   tinyFlat.built_square_meters = 8;
