@@ -116,8 +116,14 @@ export class ZintoIntegrationApiClient {
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.config.apiKey}`,
-      "Content-Type": "application/json",
     };
+    // Only set Content-Type when there's actually a body. Sending it on a
+    // bodyless write (e.g. PUT /contacts/{id}/tags/{tag}) used to trip a
+    // server-side 500 on Zinto's side (Fastify saw Content-Type: json + an
+    // empty body and their error handler mis-mapped the resulting 400 to a
+    // 500) — fixed on their end now, but there's no reason to send a
+    // Content-Type that doesn't describe an actual payload.
+    if (body !== undefined) headers["Content-Type"] = "application/json";
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
 
     let attempt = 0;
@@ -150,16 +156,27 @@ export class ZintoIntegrationApiClient {
             // non-JSON error body; keep generic message
           }
 
+          const retryAfterHeader = response.headers.get("retry-after");
+          const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : undefined;
+
           const err = new ZintoIntegrationApiError(response.status, code, message, {
             requestId: parsedRequestId,
             details,
+            retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
           });
 
           await this.log(method, path, response.status, parsedRequestId);
 
           if (isTransientError(err) && attempt < maxRetries) {
             attempt++;
-            await sleep(backoffMs(attempt));
+            // 429 rate_limit_exceeded: honor the server's Retry-After exactly
+            // instead of our own backoff curve — it's an authoritative wait,
+            // not an estimate.
+            const waitMs =
+              err.status === 429 && err.retryAfterSeconds !== undefined
+                ? err.retryAfterSeconds * 1000
+                : backoffMs(attempt);
+            await sleep(waitMs);
             lastError = err;
             continue;
           }

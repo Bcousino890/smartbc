@@ -217,10 +217,20 @@ async function main() {
     logWriteError("PUT /api/v1/contacts/{id}/tags/{tag}", err);
   }
 
+  const scopes = new Set(me.data.scopes ?? []);
+  const hasScope = (s: string) => scopes.has(s) || scopes.has("*");
+
   let dealId: string | undefined;
   let pipelineId: string | undefined;
   let firstStageId: string | undefined;
   let secondStageId: string | undefined;
+  if (!hasScope("deals:write")) {
+    log(
+      "SKIP",
+      "POST /api/v1/deals",
+      "la clave no tiene deals:write todavía (confirmado con Zinto el 2026-08-14: pendiente de activar)"
+    );
+  } else
   try {
     const pipelines = await client.listPipelines({ limit: 1 });
     const pipeline = pipelines.data[0];
@@ -264,14 +274,22 @@ async function main() {
     log("SKIP", "POST /api/v1/deals/{id}/move", "el pipeline no tiene una segunda etapa para mover el deal");
   }
 
-  try {
-    const task = await client.createTask(
-      { contact_id: contactId, title: `Seguimiento piloto SmartBC ${runTag}` },
-      client.newIdempotencyKey("write-smoke-task")
+  if (!hasScope("tasks:write")) {
+    log(
+      "SKIP",
+      "POST /api/v1/tasks",
+      "la clave no tiene tasks:write todavía (confirmado con Zinto el 2026-08-14: pendiente de activar)"
     );
-    log("OK", "POST /api/v1/tasks", `id=${task.data.id}`);
-  } catch (err) {
-    logWriteError("POST /api/v1/tasks", err);
+  } else {
+    try {
+      const task = await client.createTask(
+        { contact_id: contactId, title: `Seguimiento piloto SmartBC ${runTag}` },
+        client.newIdempotencyKey("write-smoke-task")
+      );
+      log("OK", "POST /api/v1/tasks", `id=${task.data.id}`);
+    } catch (err) {
+      logWriteError("POST /api/v1/tasks", err);
+    }
   }
 
   // Paso 12: aislamiento entre empresas — pedir un id que casi seguro no existe

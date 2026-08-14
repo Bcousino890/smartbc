@@ -108,6 +108,28 @@ async function run() {
     check("cursor passed through untouched", url.searchParams.get("cursor") === "cur_abc");
   }
 
+  console.log("=== Content-Type only sent when there is a body ===");
+  {
+    // Zinto confirmed the tags 500 (req_4eaa09b4-05dc-4d3f-bd80-fc6ac531d51f)
+    // was Content-Type: application/json paired with an empty body tripping
+    // their error handler. Fixed on their side now, but we still shouldn't
+    // send a Content-Type that doesn't describe an actual payload.
+    const calls = mockFetch(() => new Response(null, { status: 204 }));
+    const client = new ZintoIntegrationApiClient(BASE_CONFIG);
+    await client.tagContact("7", "smartbc-pilot-smoke-tag");
+    const headers = calls[0].init.headers as Record<string, string>;
+    check("PUT .../tags/{tag} (no body) omits Content-Type", !("Content-Type" in headers));
+  }
+  {
+    const calls = mockFetch(() =>
+      jsonResponse(201, { data: { id: "c1", name: "Test", tags: [], custom_fields: {}, archived: false, created_at: "", updated_at: "" } })
+    );
+    const client = new ZintoIntegrationApiClient(BASE_CONFIG);
+    await client.createContact({ name: "Test" }, client.newIdempotencyKey("contact"));
+    const headers = calls[0].init.headers as Record<string, string>;
+    check("POST with a body still sends Content-Type: application/json", headers["Content-Type"] === "application/json");
+  }
+
   console.log("=== Idempotency-Key ===");
   {
     const calls = mockFetch(() =>
@@ -138,6 +160,35 @@ async function run() {
       `HTTP ${status} surfaces error.code=${code}`,
       () => client.getContact("999"),
       (err) => err instanceof ZintoIntegrationApiError && err.code === code && err.status === status
+    );
+  }
+
+  console.log("=== 429 rate_limit_exceeded honors Retry-After ===");
+  {
+    // Measured via wall-clock delta — coarse but enough to prove the client
+    // waited close to the server's Retry-After, not its own shorter default
+    // backoff curve (which would resolve in well under 900ms on attempt 1).
+    let attempts = 0;
+    mockFetch(() => {
+      attempts++;
+      if (attempts === 1) {
+        return jsonResponse(
+          429,
+          { error: { code: "rate_limit_exceeded", message: "x", request_id: "req_429" } },
+          { "Retry-After": "1" }
+        );
+      }
+      return jsonResponse(200, { data: [], meta: { request_id: "req_ok", next_cursor: null, has_more: false } });
+    });
+    const client = new ZintoIntegrationApiClient(BASE_CONFIG);
+    const started = Date.now();
+    await client.listContacts();
+    const elapsedMs = Date.now() - started;
+    check("429 rate_limit_exceeded is retried automatically", attempts === 2);
+    check(
+      "wait honors Retry-After (~1s), not the shorter default backoff",
+      elapsedMs >= 900,
+      `elapsed=${elapsedMs}ms`
     );
   }
 
