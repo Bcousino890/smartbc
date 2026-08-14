@@ -416,9 +416,26 @@ function buildFeatures(
     priceCommunity: toPositiveInt(row.community_fees),
   };
 
+  // Confirmado contra el sandbox real: bathroomNumber=0 con conservation="good"
+  // da 400 "bathroom number not valid" — es una regla de negocio que no está en
+  // el schema (bathroomNumber admite 0 por rango). Mejor pedir el dato real que
+  // adivinar un número de baños que no es.
+  if (!row.bathrooms || row.bathrooms <= 0) {
+    errors.push('Faltan los baños en la ficha: Idealista no admite "0 baños" con el estado de conservación actual. Indica al menos 1.');
+  }
+  // Confirmado también: areaUsable debe ser ESTRICTAMENTE menor que
+  // areaConstructed (igual también lo rechaza). Si los datos de la ficha no lo
+  // cumplen, se omite areaUsable (es opcional) en vez de mandar un 400 seguro.
+  const areaUsableValid = areaUsable !== undefined && areaConstructed !== undefined && areaUsable < areaConstructed;
+  if (areaUsable !== undefined && areaConstructed !== undefined && !areaUsableValid) {
+    warnings.push(
+      `La superficie útil (${areaUsable} m²) no es menor que la construida (${areaConstructed} m²): se publica sin superficie útil.`
+    );
+  }
+
   const housingShared: IdealistaFeatures = {
     ...common,
-    areaUsable: areaUsable !== areaConstructed ? areaUsable : undefined,
+    areaUsable: areaUsableValid ? areaUsable : undefined,
     bathroomNumber: row.bathrooms ?? 0,
     rooms: row.bedrooms ?? 0,
     energyCertificateRating,
@@ -511,12 +528,21 @@ function buildFeatures(
       const areaPlot = toPositiveInt(row.square_meters) ?? toPositiveInt(row.built_square_meters);
       if (!areaPlot) errors.push("Un solar necesita superficie de parcela para publicarse en Idealista.");
       warnings.push(
-        'Solar: Idealista exige tipo de suelo y acceso rodado, que el formulario no pregunta. Se publica como "urbano" con acceso rodado; revísalo en la ficha si no es así.'
+        'Solar: Idealista exige tipo de suelo, acceso rodado, tipo de acceso y una clasificación urbanística, que el formulario no pregunta. ' +
+          'Se publica como "urbano", con acceso rodado y clasificación "otro"; revísalo en la ficha si no es así.'
       );
       return compact<IdealistaFeatures>({
         areaPlot,
         type: "urban",
         roadAccess: true,
+        // Dos reglas confirmadas contra el sandbox real, ninguna en el
+        // `required` del schema (sólo en la descripción en prosa, o ni eso):
+        //  - roadAccess=true exige accessType, si no 400 "access type must
+        //    be provided when road access is present".
+        //  - type="urban" exige al menos un campo classification*, si no 400
+        //    de validación pidiendo cada uno de los classification* posibles.
+        accessType: "unknown",
+        classificationOther: true,
         cadastralReference: trimTo(row.cadastral_reference, 20),
       });
     }
