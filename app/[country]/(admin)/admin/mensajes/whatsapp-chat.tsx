@@ -25,6 +25,7 @@ import {
   updateConversationName,
   deleteConversation,
 } from "./zinto-actions";
+import { ZintoCrmPanel } from "./zinto-crm-panel";
 
 export type WhatsAppConversation = {
   id: string;
@@ -270,6 +271,8 @@ export function WhatsAppChat({
                 </div>
               )}
             </header>
+
+            <ZintoCrmPanel phone={active.phoneNumber} />
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5">
               {messages.length === 0 ? (

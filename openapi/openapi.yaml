@@ -1,0 +1,1787 @@
+openapi: 3.1.0
+info:
+  title: Zinto Integration API
+  version: 0.1.0
+  summary: Bidirectional, tenant-safe API for Zinto partners
+  description: |
+    Integrate external systems with Zinto contacts, conversations, complete
+    message history, channel delivery, notes, tags, and signed webhooks.
+    Tenant identity always comes from the API key; clients never send company_id.
+servers:
+  - url: https://crm.zinto.app/_integration-api
+    description: Controlled preview on the Zinto VPS
+tags:
+  - name: System
+  - name: Identity
+  - name: Channels
+  - name: Contacts
+  - name: Conversations
+  - name: Messages
+  - name: Webhooks
+  - name: Flows
+  - name: ERP
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      security: []
+      summary: Check service liveness
+      responses:
+        "200":
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /ready:
+    get:
+      tags: [System]
+      operationId: getReadiness
+      security: []
+      summary: Check service dependencies
+      responses:
+        "200":
+          description: Service and database are ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: A required service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/me:
+    get:
+      tags: [Identity]
+      operationId: getApiIdentity
+      summary: Inspect the authenticated company and scopes
+      responses:
+        "200":
+          description: Authenticated identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/channels:
+    get:
+      tags: [Channels]
+      operationId: listChannels
+      summary: List company channels and supported capabilities
+      responses:
+        "200":
+          description: Company channel list without provider credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Channel" }
+                  meta: { $ref: "#/components/schemas/RequestMeta" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/erp/products:
+    get:
+      tags: [ERP]
+      operationId: listErpProducts
+      summary: List company products
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated products }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/erp/inventory/warehouses:
+    get:
+      tags: [ERP]
+      operationId: listErpWarehouses
+      summary: List company warehouses
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated warehouses }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/erp/inventory/stock-levels:
+    get:
+      tags: [ERP]
+      operationId: listErpStockLevels
+      summary: List company stock levels
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated stock levels }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/erp/suppliers:
+    get:
+      tags: [ERP]
+      operationId: listErpSuppliers
+      summary: List company suppliers
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated suppliers }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/erp/sales-orders:
+    get:
+      tags: [ERP]
+      operationId: listErpSalesOrders
+      summary: List company sales orders
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated sales orders }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/erp/purchase-orders:
+    get:
+      tags: [ERP]
+      operationId: listErpPurchaseOrders
+      summary: List company purchase orders
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated purchase orders }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/erp/invoices:
+    get:
+      tags: [ERP]
+      operationId: listErpInvoices
+      summary: List company invoices
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { description: Paginated invoices }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/v1/flows:
+    get:
+      tags: [Flows]
+      operationId: listFlows
+      summary: List company flows
+      description: Requires `flows:read`; results are restricted to the API-key company.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { description: Flow page, content: { application/json: { schema: { $ref: "#/components/schemas/PageResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/flows/{id}:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    get:
+      tags: [Flows]
+      operationId: getFlow
+      summary: Get a company flow
+      responses:
+        "200": { description: Flow, content: { application/json: { schema: { $ref: "#/components/schemas/Flow" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/flows/{id}/sessions:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    get:
+      tags: [Flows]
+      operationId: listFlowSessions
+      summary: List sessions for a company flow
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: Session page, content: { application/json: { schema: { $ref: "#/components/schemas/PageResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/flows/{id}/executions:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    get:
+      tags: [Flows]
+      operationId: listFlowExecutions
+      summary: List executions for a company flow
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: Execution page, content: { application/json: { schema: { $ref: "#/components/schemas/PageResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/flow-templates:
+    get:
+      tags: [Flows]
+      operationId: listFlowTemplates
+      summary: List active global flow templates
+      description: The source schema defines templates as a global catalog, not company-private data.
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: Template page, content: { application/json: { schema: { $ref: "#/components/schemas/PageResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/contacts:
+    get:
+      tags: [Contacts]
+      operationId: listContacts
+      summary: List contacts with cursor pagination
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+      responses:
+        "200":
+          description: Contact page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Contact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Contacts]
+      operationId: createContact
+      summary: Create a contact
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactCreate" }
+      responses:
+        "201":
+          description: Contact created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/contacts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Contacts]
+      operationId: getContact
+      summary: Fetch one contact owned by the company
+      responses:
+        "200":
+          description: Contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Contacts]
+      operationId: updateContact
+      summary: Update allowed contact fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactUpdate" }
+      responses:
+        "200":
+          description: Contact updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Contacts]
+      operationId: archiveContact
+      summary: Archive a contact
+      responses:
+        "200":
+          description: Contact archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/contacts/{id}/notes:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Contacts]
+      operationId: listContactNotes
+      summary: List notes for a contact with cursor pagination
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+      responses:
+        "200":
+          description: Note page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Note" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Contacts]
+      operationId: createContactNote
+      summary: Add a historical note to a contact
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NoteInput" }
+      responses:
+        "201":
+          description: Note created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NoteResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/notes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    patch:
+      tags: [Contacts]
+      operationId: updateContactNote
+      summary: Update a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NoteInput" }
+      responses:
+        "200":
+          description: Note updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NoteResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Contacts]
+      operationId: deleteContactNote
+      summary: Delete a note
+      responses:
+        "204": { description: Note deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/contacts/{id}/tags/{tag}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+      - name: tag
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 100 }
+    put:
+      tags: [Contacts]
+      operationId: attachContactTag
+      summary: Attach a tag idempotently
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Contacts]
+      operationId: detachContactTag
+      summary: Detach a tag idempotently
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/pipelines:
+    post:
+      tags: [Pipelines]
+      operationId: createPipeline
+      summary: Create a pipeline
+      description: Requires `pipelines:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 255 }
+                description: { type: [string, "null"], maxLength: 500 }
+                icon: { type: [string, "null"], maxLength: 500 }
+                color: { type: [string, "null"], maxLength: 50 }
+                is_default: { type: boolean }
+                is_template: { type: boolean }
+                template_category: { type: [string, "null"], maxLength: 500 }
+                order_num: { type: integer, minimum: 0 }
+      responses:
+        "201": { description: Pipeline created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    get:
+      tags: [Pipelines]
+      operationId: listPipelines
+      summary: List the pipelines of the authenticated company
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+      responses:
+        "200":
+          description: Pipeline page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Pipeline" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/pipelines/{id}/stages:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Pipelines]
+      operationId: listPipelineStages
+      summary: List the stages of a pipeline owned by the company
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+      responses:
+        "200":
+          description: Pipeline stage page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/PipelineStage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Pipelines]
+      operationId: createPipelineStage
+      summary: Create a pipeline stage
+      description: Requires `pipelines:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, color]
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 255 }
+                color: { type: string, minLength: 1, maxLength: 50 }
+                order_num: { type: integer, minimum: 0 }
+      responses:
+        "201": { description: Pipeline stage created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/pipelines/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    patch:
+      tags: [Pipelines]
+      operationId: updatePipeline
+      summary: Update a pipeline
+      description: Requires `pipelines:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 255 }
+                description: { type: [string, "null"], maxLength: 500 }
+                icon: { type: [string, "null"], maxLength: 500 }
+                color: { type: [string, "null"], maxLength: 50 }
+                is_default: { type: boolean }
+                is_template: { type: boolean }
+                template_category: { type: [string, "null"], maxLength: 500 }
+                order_num: { type: integer, minimum: 0 }
+      responses:
+        "200": { description: Pipeline updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      tags: [Pipelines]
+      operationId: deletePipeline
+      summary: Delete an unused pipeline
+      description: Requires `pipelines:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Pipeline deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/pipelines/{id}/stages/{stageId}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+      - name: stageId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^\d+$' }
+    patch:
+      tags: [Pipelines]
+      operationId: updatePipelineStage
+      summary: Update a pipeline stage
+      description: Requires `pipelines:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 255 }
+                color: { type: string, minLength: 1, maxLength: 50 }
+                order_num: { type: integer, minimum: 0 }
+      responses:
+        "200": { description: Pipeline stage updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      tags: [Pipelines]
+      operationId: deletePipelineStage
+      summary: Delete an unused pipeline stage
+      description: Requires `pipelines:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Pipeline stage deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/deals:
+    post:
+      tags: [Deals]
+      operationId: createDeal
+      summary: Create a deal for a company contact
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealCreate" }
+      responses:
+        "201": { description: Deal created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    get:
+      tags: [Deals]
+      operationId: listDeals
+      summary: List deals with cursor pagination
+      description: >
+        stage_key carries the legacy stage vocabulary while stage_id and
+        stage_name describe the configurable pipeline stage. They are distinct
+        fields on purpose and must not be derived from one another.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+        - name: pipeline_id
+          in: query
+          schema: { type: string, pattern: '^\d+$' }
+        - name: contact_id
+          in: query
+          schema: { type: string, pattern: '^\d+$' }
+      responses:
+        "200":
+          description: Deal page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Deal" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/deals/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Deals]
+      operationId: getDeal
+      summary: Fetch a single deal owned by the company
+      responses:
+        "200":
+          description: Deal
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: "#/components/schemas/Deal" }
+                  meta: { $ref: "#/components/schemas/RequestMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Deals]
+      operationId: updateDeal
+      summary: Update a deal owned by the company
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealUpdate" }
+      responses:
+        "200": { description: Deal updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Deals]
+      operationId: deleteDeal
+      summary: Delete a deal owned by the company
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Deal deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/deals/{id}/move:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      tags: [Deals]
+      operationId: moveDeal
+      summary: Move a deal to a stage in another pipeline
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealMove" }
+      responses:
+        "200": { description: Deal moved }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/deals/{id}/stage:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    patch:
+      tags: [Deals]
+      operationId: changeDealStage
+      summary: Move a deal to another stage of its own pipeline
+      description: >
+        Writes stage_id and the legacy stage_key together, exactly as the CRM
+        does, so both vocabularies stay as aligned as the engine keeps them.
+        The target stage must belong to the pipeline the deal is already in;
+        moving a deal between pipelines is a different operation and is
+        rejected with stage_pipeline_mismatch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealStageInput" }
+      responses:
+        "200":
+          description: Deal with its new stage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: "#/components/schemas/Deal" }
+                  meta: { $ref: "#/components/schemas/RequestMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/StagePipelineMismatch" }
+  /api/v1/tasks:
+    get:
+      tags: [Tasks]
+      operationId: listTasks
+      summary: List contact tasks with cursor pagination
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+        - name: contact_id
+          in: query
+          schema: { type: string, pattern: '^\d+$' }
+      responses:
+        "200":
+          description: Task page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Tasks]
+      operationId: createTask
+      summary: Create a task for a company contact
+      description: Requires the `tasks:write` API-key scope and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskCreate" }
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    required: [data, meta]
+                    properties: { meta: { $ref: "#/components/schemas/RequestMeta" } }
+                  - type: object
+                    properties: { data: { $ref: "#/components/schemas/Task" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/tasks/{id}:
+    patch:
+      tags: [Tasks]
+      operationId: updateTask
+      summary: Update a task
+      description: Requires the `tasks:write` API-key scope and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskUpdate" }
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    required: [data, meta]
+                    properties: { meta: { $ref: "#/components/schemas/RequestMeta" } }
+                  - type: object
+                    properties: { data: { $ref: "#/components/schemas/Task" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      tags: [Tasks]
+      operationId: deleteTask
+      summary: Delete a task
+      description: Requires the `tasks:write` API-key scope and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204": { description: Task deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/conversations:
+    get:
+      tags: [Conversations]
+      operationId: listConversations
+      summary: List conversations
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+      responses:
+        "200":
+          description: Conversation page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Conversation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Conversations]
+      operationId: createConversation
+      summary: Find or create the conversation of a contact on a channel
+      description: >-
+        Returns the existing one-to-one conversation between the contact and the
+        channel, or creates it when there is none. Safe to retry and safe under
+        concurrency: two simultaneous calls for the same pair are serialised and
+        return the same conversation, never a duplicate. `channel_type` is
+        derived from the channel itself and cannot be supplied by the caller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversationCreate" }
+      responses:
+        "200":
+          description: The conversation already existed and is returned unchanged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationResponse" }
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/conversations/{id}:
+    patch:
+      tags: [Conversations]
+      operationId: updateConversation
+      summary: Update assignment and state of a conversation
+      description: Requires `conversations:write` and an `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                status: { type: string, minLength: 1, maxLength: 50 }
+                assigned_to_user_id: { type: [string, "null"], pattern: '^\d+$' }
+                bot_disabled: { type: boolean }
+                archived: { type: boolean }
+      responses:
+        "200": { description: Conversation updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/conversations/{id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Conversations]
+      operationId: listConversationMessages
+      summary: Read complete message history across all dates
+      description: >
+        updated_since is answered against each message's created_at: the
+        underlying table has no separate updated_at column, so this only
+        catches newly created messages, never a later status or read_at
+        change on an older one (those already arrive as their own
+        message.status.updated webhook event).
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/UpdatedSince"
+      responses:
+        "200":
+          description: Historical message page, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PageResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/messages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [Messages]
+      operationId: getMessage
+      summary: Fetch a single message owned by the company
+      responses:
+        "200":
+          description: Message
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: "#/components/schemas/Message" }
+                  meta: { $ref: "#/components/schemas/RequestMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/messages/send:
+    post:
+      tags: [Messages]
+      operationId: sendTextMessage
+      summary: Send text through a selected channel
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TextMessageInput" }
+      responses:
+        "201": { $ref: "#/components/responses/MessageAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnsupportedCapability" }
+        "502": { $ref: "#/components/responses/DeliveryFailed" }
+        "504": { $ref: "#/components/responses/DeliveryTimeout" }
+  /api/v1/messages/send-media:
+    post:
+      tags: [Messages]
+      operationId: sendMediaMessage
+      summary: Send public media through a selected channel
+      description: >
+        The media URL must resolve to a public address; private, loopback,
+        link-local, CGNAT and reserved ranges are refused for both IPv4 and
+        IPv6. The service downloads the media itself and forwards an internal
+        URL to the delivery engine, so the origin never learns which engine
+        fetched it; while that proxy is disabled the operation is refused
+        outright rather than forwarding the partner URL unmodified. Errors use
+        the codes unsafe_media_url, media_unreachable, media_too_large,
+        media_type_mismatch and media_proxy_disabled.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MediaMessageInput" }
+      responses:
+        "201": { $ref: "#/components/responses/MessageAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnsupportedCapability" }
+        "502": { $ref: "#/components/responses/DeliveryFailed" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+        "504": { $ref: "#/components/responses/DeliveryTimeout" }
+  /api/v1/messages/send-template:
+    post:
+      tags: [Messages]
+      operationId: sendTemplateMessage
+      summary: Send an approved WhatsApp template
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TemplateMessageInput" }
+      responses:
+        "201": { $ref: "#/components/responses/MessageAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnsupportedCapability" }
+        "502": { $ref: "#/components/responses/DeliveryFailed" }
+        "504": { $ref: "#/components/responses/DeliveryTimeout" }
+  /api/v1/messages/send-interactive:
+    post:
+      tags: [Messages]
+      operationId: sendInteractiveMessage
+      summary: Send an interactive WhatsApp message
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InteractiveMessageInput" }
+      responses:
+        "201": { $ref: "#/components/responses/MessageAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnsupportedCapability" }
+        "502": { $ref: "#/components/responses/DeliveryFailed" }
+        "504": { $ref: "#/components/responses/DeliveryTimeout" }
+  /api/v1/webhooks:
+    get:
+      tags: [Webhooks]
+      operationId: listWebhooks
+      summary: List webhook endpoints without secrets
+      responses:
+        "200":
+          description: Webhook endpoint list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/WebhookEndpoint" }
+                  meta: { $ref: "#/components/schemas/RequestMeta" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Webhooks]
+      operationId: createWebhook
+      summary: Register an HTTPS endpoint; secret is returned once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookCreate" }
+      responses:
+        "201":
+          description: Webhook endpoint and one-time signing secret
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/WebhookEndpoint"
+                      - type: object
+                        properties:
+                          secret: { type: string, pattern: '^whsec_[a-f0-9]{64}$' }
+                  meta: { $ref: "#/components/schemas/RequestMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/webhooks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    delete:
+      tags: [Webhooks]
+      operationId: disableWebhook
+      summary: Disable a webhook endpoint
+      responses:
+        "204": { description: Endpoint disabled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: pcp_<64 lowercase hex characters>
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^\d+$' }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor returned by the previous page
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique operation key. Reuse with a different body returns 409.
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    UpdatedSince:
+      name: updated_since
+      in: query
+      description: >
+        Return only records updated at or after this instant. Ordering stays by
+        creation so a page remains stable while records are being updated.
+      schema: { type: string, format: date-time }
+  responses:
+    ServiceUnavailable:
+      description: Operation temporarily disabled by a safety switch
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    BadRequest:
+      description: Validation or safety check failed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: API key missing, invalid, inactive, or expired
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: Required scope or source IP is not allowed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource is absent or belongs to another company
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: Idempotency conflict or inactive channel
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    StagePipelineMismatch:
+      description: Stage exists but belongs to a different pipeline than the deal
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    UnsupportedCapability:
+      description: Selected channel does not support the operation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    DeliveryTimeout:
+      description: Delivery may have occurred; retrying automatically is unsafe
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    DeliveryFailed:
+      description: >
+        The legacy delivery engine did not accept the message. `error.code`
+        distinguishes `delivery_rejected` (the engine's own 4xx: the request
+        will not succeed unchanged, do not retry it as-is) from
+        `delivery_failed` (the engine itself is unavailable or answered
+        unexpectedly: safe to retry later with the same idempotency key).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    MessageAccepted:
+      description: Message accepted by the existing Zinto delivery engine
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/MessageDeliveryResponse" }
+  schemas:
+    RequestMeta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id: { type: string, pattern: '^req_' }
+    PageMeta:
+      allOf:
+        - $ref: "#/components/schemas/RequestMeta"
+        - type: object
+          required: [next_cursor, has_more]
+          properties:
+            next_cursor: { type: [string, "null"] }
+            has_more: { type: boolean }
+    PageResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: {} }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, items: {} }
+            request_id: { type: string }
+    HealthResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [service, status, version]
+          properties:
+            service: { const: zinto-integration-api }
+            status: { type: string, enum: [ok, ready] }
+            version: { type: string }
+        meta: { $ref: "#/components/schemas/RequestMeta" }
+    IdentityResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            api_key:
+              type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+            company:
+              type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+            scopes: { type: array, items: { type: string } }
+        meta: { $ref: "#/components/schemas/RequestMeta" }
+    Channel:
+      type: object
+      required: [id, type, name, status, capabilities]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        name: { type: string }
+        status: { type: string }
+        capabilities: { type: array, items: { type: string } }
+    Flow:
+      type: object
+      required: [id, name, status, nodes, edges, version, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        status: { type: string, enum: [draft, active, inactive, archived] }
+        nodes: { type: array, items: {} }
+        edges: { type: array, items: {} }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FlowSession:
+      type: object
+      required: [id, session_id, flow_id, conversation_id, contact_id, status, trigger_node_id, execution_path, session_data, started_at, last_activity_at, created_at, updated_at]
+      properties:
+        id: { type: string }
+        session_id: { type: string }
+        flow_id: { type: string }
+        conversation_id: { type: string }
+        contact_id: { type: string }
+        status: { type: string }
+        current_node_id: { type: [string, "null"] }
+        trigger_node_id: { type: string }
+        execution_path: { type: array, items: {} }
+        session_data: { type: object, additionalProperties: true }
+        started_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"] }
+        expires_at: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FlowExecution:
+      type: object
+      required: [id, execution_id, flow_id, conversation_id, contact_id, status, trigger_node_id, execution_path, started_at, last_activity_at, created_at, updated_at]
+      properties:
+        id: { type: string }
+        execution_id: { type: string }
+        flow_id: { type: string }
+        conversation_id: { type: string }
+        contact_id: { type: string }
+        status: { type: string }
+        trigger_node_id: { type: string }
+        current_node_id: { type: [string, "null"] }
+        execution_path: { type: array, items: {} }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"] }
+        last_activity_at: { type: string, format: date-time }
+        total_duration_ms: { type: [integer, "null"] }
+        completion_rate: { type: [number, "null"] }
+        error_message: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FlowTemplate:
+      type: object
+      required: [id, name, category, business_type, nodes, edges, tags, is_active, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        category: { type: string }
+        business_type: { type: string }
+        nodes: { type: array, items: {} }
+        edges: { type: array, items: {} }
+        tags: { type: array, items: { type: string } }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ContactFields:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        avatar_url: { type: [string, "null"], format: uri }
+        company: { type: [string, "null"] }
+        tags: { type: array, items: { type: string } }
+        source: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        custom_fields: { type: object, additionalProperties: true }
+    ContactCreate:
+      allOf:
+        - $ref: "#/components/schemas/ContactFields"
+        - type: object
+          required: [name]
+          additionalProperties: false
+    ContactUpdate:
+      allOf:
+        - $ref: "#/components/schemas/ContactFields"
+        - type: object
+          minProperties: 1
+          additionalProperties: false
+    Contact:
+      allOf:
+        - $ref: "#/components/schemas/ContactFields"
+        - type: object
+          required: [id, name, tags, custom_fields, archived, created_at, updated_at]
+          properties:
+            id: { type: string }
+            archived: { type: boolean }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    ContactResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Contact" }
+        meta: { $ref: "#/components/schemas/RequestMeta" }
+    Pipeline:
+      type: object
+      required: [id, name, is_default, is_template, order_num, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        icon: { type: [string, "null"] }
+        color: { type: [string, "null"] }
+        is_default: { type: boolean }
+        is_template: { type: boolean }
+        template_category: { type: [string, "null"] }
+        order_num: { type: integer }
+        created_by_user_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PipelineStage:
+      type: object
+      required: [id, pipeline_id, name, color, order_num, created_at, updated_at]
+      properties:
+        id: { type: string }
+        pipeline_id: { type: string }
+        name: { type: string }
+        color: { type: string }
+        order_num: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Deal:
+      type: object
+      required: [id, pipeline_id, contact_id, title, stage_key, tags, custom_fields, created_at, updated_at]
+      properties:
+        id: { type: string }
+        pipeline_id: { type: string }
+        contact_id: { type: string }
+        title: { type: string }
+        stage_key:
+          type: string
+          description: Legacy stage vocabulary stored on the deal itself.
+        stage_id:
+          type: [string, "null"]
+          description: Configurable pipeline stage; a different vocabulary from stage_key.
+        stage_name:
+          type: [string, "null"]
+          description: Null when the stage reference does not resolve inside the same pipeline and company.
+        value: { type: [integer, "null"] }
+        priority: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        due_date: { type: [string, "null"], format: date-time }
+        assigned_to_user_id: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        tags: { type: array, items: { type: string } }
+        custom_fields: { type: object, additionalProperties: true }
+        last_activity_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DealStageInput:
+      type: object
+      required: [stage_id]
+      additionalProperties: false
+      properties:
+        stage_id:
+          type: string
+          pattern: '^\d+$'
+          description: Stage of the same pipeline the deal already belongs to.
+    DealCreate:
+      type: object
+      required: [contact_id, pipeline_id, stage_id, title]
+      additionalProperties: false
+      properties:
+        contact_id: { type: string, pattern: '^\d+$' }
+        pipeline_id: { type: string, pattern: '^\d+$' }
+        stage_id: { type: string, pattern: '^\d+$' }
+        title: { type: string, minLength: 1, maxLength: 255 }
+        value: { type: [integer, "null"] }
+        priority: { type: [string, "null"], maxLength: 50 }
+        status: { type: [string, "null"], maxLength: 50 }
+        due_date: { type: [string, "null"], format: date-time }
+        assigned_to_user_id: { type: [string, "null"], pattern: '^\d+$' }
+        description: { type: [string, "null"], maxLength: 20000 }
+        tags: { type: array, maxItems: 100, items: { type: string, maxLength: 100 } }
+        custom_fields: { type: object, additionalProperties: true }
+    DealUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+        stage_id: { type: string, pattern: '^\d+$' }
+        value: { type: [integer, "null"] }
+        priority: { type: [string, "null"], maxLength: 50 }
+        status: { type: [string, "null"], maxLength: 50 }
+        due_date: { type: [string, "null"], format: date-time }
+        assigned_to_user_id: { type: [string, "null"], pattern: '^\d+$' }
+        description: { type: [string, "null"], maxLength: 20000 }
+        tags: { type: array, maxItems: 100, items: { type: string, maxLength: 100 } }
+        custom_fields: { type: object, additionalProperties: true }
+    DealMove:
+      type: object
+      required: [pipeline_id, stage_id]
+      additionalProperties: false
+      properties:
+        pipeline_id: { type: string, pattern: '^\d+$' }
+        stage_id: { type: string, pattern: '^\d+$' }
+    Task:
+      type: object
+      required: [id, contact_id, title, priority, status, tags, created_at, updated_at]
+      properties:
+        id: { type: string }
+        contact_id: { type: string }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        priority: { type: string }
+        status: { type: string }
+        due_date: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        assigned_to:
+          type: [string, "null"]
+          description: Free text in the schema; it is not a validated user reference.
+        category: { type: [string, "null"] }
+        tags: { type: array, items: { type: string } }
+        background_color: { type: [string, "null"] }
+        created_by_user_id: { type: [string, "null"] }
+        updated_by_user_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TaskCreate:
+      type: object
+      required: [contact_id, title]
+      additionalProperties: false
+      properties:
+        contact_id: { type: string, pattern: '^\d+$' }
+        title: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 20000 }
+        priority: { type: string, maxLength: 50 }
+        status: { type: string, maxLength: 50 }
+        due_date: { type: [string, "null"], format: date-time }
+        assigned_to: { type: [string, "null"], maxLength: 500 }
+        category: { type: [string, "null"], maxLength: 500 }
+        tags: { type: array, maxItems: 100, items: { type: string, maxLength: 100 } }
+        background_color: { type: [string, "null"], maxLength: 50 }
+    TaskUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 20000 }
+        priority: { type: string, maxLength: 50 }
+        status: { type: string, maxLength: 50 }
+        due_date: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        assigned_to: { type: [string, "null"], maxLength: 500 }
+        category: { type: [string, "null"], maxLength: 500 }
+        tags: { type: array, maxItems: 100, items: { type: string, maxLength: 100 } }
+        background_color: { type: [string, "null"], maxLength: 50 }
+    NoteInput:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        content: { type: string, minLength: 1, maxLength: 20000 }
+    Note:
+      type: object
+      required: [id, contact_id, created_by_id, content, created_at, updated_at]
+      properties:
+        id: { type: string }
+        contact_id: { type: string }
+        created_by_id: { type: string }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    NoteResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Note" }
+        meta: { $ref: "#/components/schemas/RequestMeta" }
+    ConversationCreate:
+      type: object
+      required: [contact_id, channel_id]
+      additionalProperties: false
+      properties:
+        contact_id: { type: string, pattern: "^\\d+$" }
+        channel_id: { type: string, pattern: "^\\d+$" }
+    ConversationResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/Conversation" }
+        meta: { $ref: "#/components/schemas/RequestMeta" }
+    Conversation:
+      type: object
+      properties:
+        id: { type: string }
+        contact_id: { type: [string, "null"] }
+        channel_id: { type: string }
+        channel_type: { type: string }
+        status: { type: string }
+        assigned_to_user_id: { type: [string, "null"] }
+        last_message_at: { type: [string, "null"], format: date-time }
+        unread_count: { type: integer }
+        bot_disabled: { type: boolean }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Message:
+      type: object
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        external_id: { type: [string, "null"] }
+        direction: { type: string, enum: [incoming, outgoing] }
+        type: { type: string }
+        content: { type: string }
+        status: { type: string }
+        sender_id: { type: [string, "null"] }
+        sender_type: { type: [string, "null"] }
+        from_bot: { type: boolean }
+        media_url: { type: [string, "null"] }
+        sent_at: { type: [string, "null"], format: date-time }
+        read_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    TextMessageInput:
+      type: object
+      required: [channel_id, to, message]
+      additionalProperties: false
+      properties:
+        channel_id: { type: string, pattern: '^\d+$' }
+        to: { type: string, minLength: 1, maxLength: 320 }
+        message: { type: string, minLength: 1, maxLength: 4096 }
+    MediaMessageInput:
+      type: object
+      required: [channel_id, to, media_type, media_url]
+      additionalProperties: false
+      properties:
+        channel_id: { type: string, pattern: '^\d+$' }
+        to: { type: string, minLength: 1, maxLength: 320 }
+        media_type: { type: string, enum: [image, video, audio, document] }
+        media_url: { type: string, format: uri, maxLength: 2048, description: Public HTTP(S) URL; private addresses are rejected }
+        caption: { type: string, maxLength: 1024 }
+        filename: { type: string, maxLength: 255 }
+    TemplateMessageInput:
+      type: object
+      required: [channel_id, to, template_name]
+      additionalProperties: false
+      properties:
+        channel_id: { type: string, pattern: '^\d+$' }
+        to: { type: string, minLength: 1, maxLength: 320 }
+        template_name: { type: string }
+        template_language: { type: string, default: en }
+        components: { type: array, items: {} }
+    InteractiveMessageInput:
+      type: object
+      required: [channel_id, to, interactive_type, body, action]
+      additionalProperties: false
+      properties:
+        channel_id: { type: string, pattern: '^\d+$' }
+        to: { type: string, minLength: 1, maxLength: 320 }
+        interactive_type: { type: string, enum: [button, list] }
+        body: { type: string, minLength: 1, maxLength: 1024 }
+        header: { type: string, maxLength: 60 }
+        footer: { type: string, maxLength: 60 }
+        action: { type: object, additionalProperties: true }
+    MessageDelivery:
+      type: object
+      properties:
+        id: { type: string }
+        external_id: { type: [string, "null"] }
+        status: { type: string }
+        timestamp: { type: string, format: date-time }
+        channel_type: { type: string }
+        conversation_id: { type: string }
+    MessageDeliveryResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/MessageDelivery" }
+        meta: { $ref: "#/components/schemas/RequestMeta" }
+    WebhookCreate:
+      type: object
+      required: [url, event_types]
+      additionalProperties: false
+      properties:
+        url: { type: string, format: uri, description: Public HTTPS endpoint }
+        event_types:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: "#/components/schemas/WebhookEventType" }
+    WebhookEndpoint:
+      type: object
+      properties:
+        id: { type: string }
+        url: { type: string, format: uri }
+        event_types: { type: array, items: { $ref: "#/components/schemas/WebhookEventType" } }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+    WebhookEventType:
+      type: string
+      enum:
+        - contact.created
+        - contact.updated
+        - contact.deleted
+        - conversation.created
+        - conversation.updated
+        - message.created
+        - message.status.updated
+        - note.created
+        - note.updated
+        - note.deleted
+        - tag.attached
+        - tag.detached
+        - deal.created
+        - deal.updated
+        - deal.stage.changed
+        - deal.deleted
+        - task.created
+        - task.updated
+        - task.completed
+        - task.deleted
+        - channel.connection.updated
+    WebhookEvent:
+      type: object
+      required: [id, type, schema_version, occurred_at, data]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/WebhookEventType" }
+        schema_version: { type: integer, const: 1 }
+        occurred_at: { type: string, format: date-time }
+        data: {}
