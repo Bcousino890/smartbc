@@ -33,6 +33,30 @@ const AUTHORIZED_NUMBERS = {
 
 const PILOT_COMPANY_HINT = "bcousinoprop";
 
+/**
+ * Zinto now returns 409 contact_already_exists on a duplicate phone (fixed
+ * 2026-08-14, was a 500 before). No endpoint filters contacts by phone, so
+ * we page through /api/v1/contacts and match client-side. Capped so a large
+ * contact list can't turn this into an unbounded scan.
+ */
+async function findContactByPhone(
+  client: ZintoIntegrationApiClient,
+  phone: string,
+  maxPages = 20
+): Promise<{ id: string; name: string } | null> {
+  let pages = 0;
+  for await (const page of client.paginate<{ id: string; name: string; phone?: string | null }>(
+    "/api/v1/contacts",
+    { limit: 200 }
+  )) {
+    pages++;
+    const match = page.data.find((c) => c.phone === phone);
+    if (match) return { id: match.id, name: match.name };
+    if (pages >= maxPages) break;
+  }
+  return null;
+}
+
 let step = 0;
 function log(status: "OK" | "FAILED" | "SKIP", label: string, detail = "") {
   step++;
@@ -85,8 +109,12 @@ async function main() {
   const testContactName = `SmartBC Piloto ${runTag}`;
 
   // Paso 3-4: crear contacto con idempotencia (número autorizado de España).
+  // Zinto ahora responde 409 contact_already_exists si el teléfono ya existe
+  // (antes era un 500 — corregido 2026-08-14); en ese caso reusamos el
+  // contacto existente en vez de fallar, tal como piden ellos.
   const createContactKey = client.newIdempotencyKey("write-smoke-contact");
   let contactId: string;
+  let reusedExistingContact = false;
   try {
     const created = await client.createContact(
       { name: testContactName, phone: AUTHORIZED_NUMBERS.es, tags: ["smartbc-pilot-smoke"] },
@@ -95,25 +123,48 @@ async function main() {
     contactId = created.data.id;
     log("OK", "POST /api/v1/contacts (crear)", `id=${contactId} name="${created.data.name}"`);
   } catch (err) {
-    return abortOnWriteError("POST /api/v1/contacts", err);
+    if (err instanceof ZintoIntegrationApiError && err.code === "contact_already_exists") {
+      log("OK", "POST /api/v1/contacts", "409 contact_already_exists (esperado) — buscando el existente");
+      const existing = await findContactByPhone(client, AUTHORIZED_NUMBERS.es);
+      if (!existing) {
+        console.error(
+          "ABORTADO: Zinto dice que el contacto ya existe pero no lo encontramos paginando " +
+            "/api/v1/contacts. Puede que tenga más de 20 páginas o que el campo phone no " +
+            "coincida en formato exacto."
+        );
+        process.exitCode = 1;
+        return;
+      }
+      contactId = existing.id;
+      reusedExistingContact = true;
+      log("OK", "GET /api/v1/contacts (búsqueda por teléfono)", `reusando id=${contactId} name="${existing.name}"`);
+    } else {
+      return abortOnWriteError("POST /api/v1/contacts", err);
+    }
   }
 
   // Paso 11: repetir la MISMA petición con la MISMA Idempotency-Key — debe
-  // devolver la respuesta guardada (Idempotent-Replayed), nunca duplicar.
-  try {
-    const replay = await client.createContact(
-      { name: testContactName, phone: AUTHORIZED_NUMBERS.es, tags: ["smartbc-pilot-smoke"] },
-      createContactKey
-    );
-    log(
-      replay.data.id === contactId ? "OK" : "FAILED",
-      "Repetir POST /api/v1/contacts con la misma Idempotency-Key",
-      replay.data.id === contactId
-        ? "misma id devuelta, sin duplicar"
-        : `id distinta (${replay.data.id}) — posible duplicado`
-    );
-  } catch (err) {
-    log("FAILED", "Repetir POST /api/v1/contacts", err instanceof Error ? err.message : String(err));
+  // devolver la respuesta guardada (Idempotent-Replayed), nunca duplicar. Solo
+  // aplica si de verdad creamos el contacto en esta corrida: si lo reusamos
+  // por 409, la clave de idempotencia nunca llegó a completar una creación.
+  if (!reusedExistingContact) {
+    try {
+      const replay = await client.createContact(
+        { name: testContactName, phone: AUTHORIZED_NUMBERS.es, tags: ["smartbc-pilot-smoke"] },
+        createContactKey
+      );
+      log(
+        replay.data.id === contactId ? "OK" : "FAILED",
+        "Repetir POST /api/v1/contacts con la misma Idempotency-Key",
+        replay.data.id === contactId
+          ? "misma id devuelta, sin duplicar"
+          : `id distinta (${replay.data.id}) — posible duplicado`
+      );
+    } catch (err) {
+      log("FAILED", "Repetir POST /api/v1/contacts", err instanceof Error ? err.message : String(err));
+    }
+  } else {
+    log("SKIP", "Repetir POST /api/v1/contacts con la misma Idempotency-Key", "no aplica: se reusó un contacto existente, no se creó ninguno");
   }
 
   // Paso 5: crear o localizar conversación para ese contacto.
