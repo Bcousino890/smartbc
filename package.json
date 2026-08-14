@@ -17,6 +17,7 @@
     "idealista:smoke": "node --experimental-strip-types scripts/idealista-sandbox-smoke.mts",
     "test:zinto-integration": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zinto-integration-api.mts",
     "zinto-integration:smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-smoke.mts",
+    "zinto-integration:write-smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-write-smoke.mts",
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts"
   },
   "dependencies": {
