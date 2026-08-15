@@ -208,19 +208,26 @@ export async function POST(req: Request) {
   const codes = [...new Set([...incoming.values()].map((l) => l.idealista_code).filter((c): c is string => !!c))];
   const propertyIdByRef = new Map<string, string>();
   const propertyIdByCode = new Map<string, string>();
+  // Igual que arriba pero contra el id de la propia ficha de Idealista, no
+  // contra properties.id — la mayoría de fichas de este negocio son "inspo"
+  // con reference_code (BC-xxxx) y SIN property_id, así que el match de
+  // arriba nunca las puede alcanzar.
+  const listingIdByRef = new Map<string, string>();
+  const listingIdByCode = new Map<string, string>();
   if (refs.length > 0 || codes.length > 0) {
     const { data: listings } = await db
       .from("idealista_listings")
-      .select("property_id, reference_code, idealista_property_id")
-      .not("property_id", "is", null);
+      .select("id, property_id, reference_code, idealista_property_id");
     for (const l of listings ?? []) {
       if (l.reference_code) {
         const code = String(l.reference_code).toLowerCase();
-        if (refs.includes(code) && !propertyIdByRef.has(code)) propertyIdByRef.set(code, l.property_id);
+        if (refs.includes(code) && !listingIdByRef.has(code)) listingIdByRef.set(code, l.id);
+        if (l.property_id && refs.includes(code) && !propertyIdByRef.has(code)) propertyIdByRef.set(code, l.property_id);
       }
       if (l.idealista_property_id) {
         const id = String(l.idealista_property_id);
-        if (codes.includes(id) && !propertyIdByCode.has(id)) propertyIdByCode.set(id, l.property_id);
+        if (codes.includes(id) && !listingIdByCode.has(id)) listingIdByCode.set(id, l.id);
+        if (l.property_id && codes.includes(id) && !propertyIdByCode.has(id)) propertyIdByCode.set(id, l.property_id);
       }
     }
     const { data: props } = await db.from("properties").select("id, bc_reference");
@@ -232,11 +239,15 @@ export async function POST(req: Request) {
 
   // Fallback por dirección + precio: muchos hilos de Idealista no traen ni
   // referencia ni código de anuncio (solo aparecen si se abrió el detalle).
-  // Se arma la lista de candidatas una sola vez y solo si hace falta.
+  // Se arman dos listas de candidatas una sola vez y solo si hace falta: las
+  // propiedades propias (properties) y las fichas de Idealista (idealista_
+  // listings), que tienen su propia dirección/precio independientemente de
+  // si están linkeadas a una fila de properties.
   const needsAddressFallback = [...incoming.values()].some(
     (l) => !l.property_ref && !l.idealista_code && l.property_title,
   );
   let addressCandidates: { id: string; street: string | null; zone: string | null; price: number | null }[] = [];
+  let listingAddressCandidates: { id: string; street: string | null; zone: string | null; price: number | null }[] = [];
   if (needsAddressFallback) {
     const { data: ownProps } = await db
       .from("properties")
@@ -248,6 +259,17 @@ export async function POST(req: Request) {
       street: p.address ?? null,
       zone: p.zone ?? null,
       price: p.price ?? null,
+    }));
+
+    const { data: ownListings } = await db
+      .from("idealista_listings")
+      .select("id, address_street, address_city, operation, price, total_rental_price")
+      .is("archived_at", null);
+    listingAddressCandidates = (ownListings ?? []).map((l: any) => ({
+      id: l.id,
+      street: l.address_street ?? null,
+      zone: l.address_city ?? null,
+      price: (l.operation === "rent" ? l.total_rental_price : l.price) ?? null,
     }));
   }
 
@@ -364,6 +386,19 @@ export async function POST(req: Request) {
         merged.property_title as string | null,
         merged.property_price as string | null,
         addressCandidates,
+      );
+
+    // Igual pero contra la ficha de Idealista directamente (ver comentario
+    // más arriba): cubre las fichas "inspo" sin property_id, que son la
+    // mayoría de lo que hay preparado hoy.
+    merged.matched_listing_id =
+      existing?.matched_listing_id ??
+      (ref ? listingIdByRef.get(ref) : undefined) ??
+      (code ? listingIdByCode.get(code) : undefined) ??
+      matchPropertyByAddress(
+        merged.property_title as string | null,
+        merged.property_price as string | null,
+        listingAddressCandidates,
       );
 
     rows.push(merged);

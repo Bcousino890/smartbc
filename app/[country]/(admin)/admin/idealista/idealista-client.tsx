@@ -237,6 +237,7 @@ export function IdealistaClient({
   listings,
   listingsWithVideo,
   leadCountsByProperty,
+  leadCountsByListing,
 }: {
   properties: Property[];
   listings: DbIdealistaListing[];
@@ -244,6 +245,8 @@ export function IdealistaClient({
   listingsWithVideo: string[];
   /** property_id -> nº de leads del inbox de Idealista matcheados a esa propiedad. */
   leadCountsByProperty: Record<string, number>;
+  /** idealista_listing_id -> nº de leads matcheados directamente a esa ficha (cubre las "inspo" sin property_id). */
+  leadCountsByListing: Record<string, number>;
 }) {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isInspoMode, setIsInspoMode] = useState(false);
@@ -957,12 +960,12 @@ export function IdealistaClient({
                           {listing.reference_code}
                         </span>
                       )}
-                      {!listing.is_inspo && listing.property_id && leadCountsByProperty[listing.property_id] > 0 && (
+                      {leadCountsByListing[listing.id] > 0 && (
                         <span
                           className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700"
-                          title="Contactos del inbox de Idealista matcheados a esta propiedad (ver Solicitudes)"
+                          title="Contactos del inbox de Idealista matcheados a esta ficha (ver Solicitudes)"
                         >
-                          👤 {leadCountsByProperty[listing.property_id]} lead{leadCountsByProperty[listing.property_id] === 1 ? "" : "s"}
+                          👤 {leadCountsByListing[listing.id]} lead{leadCountsByListing[listing.id] === 1 ? "" : "s"}
                         </span>
                       )}
                       {(() => {

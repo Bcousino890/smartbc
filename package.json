@@ -14,6 +14,7 @@
     "test:particulares": "node --experimental-strip-types scripts/test-phone-from-text.mts && node --experimental-strip-types scripts/test-structured-phone-parser.mts && node --experimental-strip-types scripts/test-cross-match-phone.mts",
     "test:video": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-video-plan.mts",
     "test:idealista": "node --experimental-strip-types scripts/test-idealista-payload.mts",
+    "test:idealista-ingest": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-idealista-ingest.mts",
     "idealista:smoke": "node --experimental-strip-types scripts/idealista-sandbox-smoke.mts",
     "test:zinto-integration": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zinto-integration-api.mts",
     "zinto-integration:smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-smoke.mts",
