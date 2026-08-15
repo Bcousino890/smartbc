@@ -9,7 +9,8 @@ export async function PATCH(req: Request) {
     userId: string;
     firstName?: string;
     lastName?: string;
-    phone?: string;
+    // null = borrar el teléfono (el formulario lo manda vacío a propósito).
+    phone?: string | null;
     role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
     country?: "es" | "cl";
