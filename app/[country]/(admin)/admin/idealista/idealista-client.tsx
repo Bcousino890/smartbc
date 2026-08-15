@@ -358,6 +358,27 @@ export function IdealistaClient({
     [listings]
   );
 
+  // El buscador de arriba filtra las fichas YA guardadas (por título, zona o
+  // referencia) — la lista de propiedades del sistema sin preparar se queda
+  // oculta salvo que se pida explícitamente con "Ver todas las propiedades".
+  const filteredActiveListings = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return activeListings;
+    return activeListings.filter((listing) => {
+      const property = !listing.is_inspo
+        ? properties.find((p) => p.id === listing.property_id)
+        : null;
+      const title = listing.is_inspo
+        ? listing.inspo_title
+        : (property?.title ?? "");
+      return (
+        (title ?? "").toLowerCase().includes(query) ||
+        property?.zone?.toLowerCase().includes(query) ||
+        listing.reference_code?.toLowerCase().includes(query)
+      );
+    });
+  }, [activeListings, properties, searchTerm]);
+
   function clearForm() {
     setSelectedPropertyId(null);
     setIsInspoMode(false);
@@ -704,10 +725,10 @@ export function IdealistaClient({
         <div className="rounded-xl border border-ink/10 bg-white/60 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Search size={15} className="text-ink/50" />
-            <h3 className="text-sm font-semibold text-ink">Propiedad existente</h3>
+            <h3 className="text-sm font-semibold text-ink">Buscar ficha guardada</h3>
           </div>
           <p className="text-xs text-ink/50 mb-3">
-            Busca una propiedad ya creada en el sistema y prepara su ficha para Idealista.
+            Filtra las fichas ya guardadas (abajo) por nombre, zona o referencia. Para preparar una propiedad nueva, usá &quot;Ver todas las propiedades&quot;.
           </p>
           <div className="relative">
             <input
@@ -718,14 +739,12 @@ export function IdealistaClient({
               className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
             />
           </div>
-          {!searchTerm && (
-            <button
-              onClick={() => setShowAllProperties((v) => !v)}
-              className="mt-2 text-xs font-medium text-ink/45 underline decoration-dotted underline-offset-2 hover:text-ink/70"
-            >
-              {showAllProperties ? "Ocultar listado completo" : `Ver todas las propiedades (${properties.length})`}
-            </button>
-          )}
+          <button
+            onClick={() => setShowAllProperties((v) => !v)}
+            className="mt-2 text-xs font-medium text-ink/45 underline decoration-dotted underline-offset-2 hover:text-ink/70"
+          >
+            {showAllProperties ? "Ocultar listado completo" : `Ver todas las propiedades (${properties.length})`}
+          </button>
         </div>
 
         {/* Modo 2: inspo */}
@@ -783,7 +802,7 @@ export function IdealistaClient({
       </div>
 
       {/* Lista de propiedades del sistema: solo mientras se busca o si el usuario pide verla toda */}
-      {filteredProperties.length > 0 && (searchTerm || showAllProperties) && (
+      {filteredProperties.length > 0 && showAllProperties && (
         <div className="rounded-xl border border-ink/8 bg-white/40 overflow-hidden">
           <div className="max-h-[220px] overflow-y-auto divide-y divide-ink/6">
             {filteredProperties.map((property) => {
@@ -813,6 +832,14 @@ export function IdealistaClient({
                           ✓ Preparada
                         </span>
                       )}
+                      {leadCountsByProperty[property.id] > 0 && (
+                        <span
+                          className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700"
+                          title="Contactos del inbox de Idealista matcheados a esta propiedad (ver Solicitudes)"
+                        >
+                          👤 {leadCountsByProperty[property.id]} lead{leadCountsByProperty[property.id] === 1 ? "" : "s"}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -839,12 +866,16 @@ export function IdealistaClient({
         </div>
       )}
 
-      {/* Fichas preparadas: del sistema + inspo */}
+      {/* Fichas preparadas: del sistema + inspo. El buscador de arriba filtra
+          esta lista (por título, zona o referencia); si hay término de
+          búsqueda y no matchea ninguna, se avisa en vez de mostrar la lista
+          completa como si no se hubiera buscado nada. */}
       {activeListings.length > 0 && (
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/45">
-              Fichas guardadas ({activeListings.length})
+              Fichas guardadas ({filteredActiveListings.length}
+              {searchTerm ? ` de ${activeListings.length}` : ""})
             </h3>
             <button
               onClick={handleGenerateAllVideos}
@@ -861,8 +892,13 @@ export function IdealistaClient({
               {generateVideosMsg.text}
             </p>
           )}
+          {searchTerm && filteredActiveListings.length === 0 && (
+            <p className="rounded-xl border border-ink/10 bg-white/40 px-4 py-6 text-center text-sm text-ink/45">
+              Ninguna ficha guardada coincide con &quot;{searchTerm}&quot;.
+            </p>
+          )}
           <div className="space-y-2">
-            {activeListings.map((listing) => {
+            {filteredActiveListings.map((listing) => {
               const property = !listing.is_inspo
                 ? properties.find((p) => p.id === listing.property_id)
                 : null;
