@@ -23,8 +23,14 @@ export type ZintoCrmPanelData = {
 export async function getZintoCrmPanelData(phone: string): Promise<ZintoCrmPanelData> {
   await assertPermission("mensajes", "view");
 
+  // El caché guarda los teléfonos en E.164 con "+" (así los devuelve Zinto),
+  // pero normalizePhoneNumber() los deja solo en dígitos — probamos primero
+  // con el "+" antepuesto, que es el formato real de zinto_crm_contacts.phone.
   const normalized = normalizePhoneNumber(phone);
-  let contact = await getCachedZintoContactByPhone(normalized);
+  let contact = await getCachedZintoContactByPhone(`+${normalized}`);
+  if (!contact) {
+    contact = await getCachedZintoContactByPhone(normalized);
+  }
   if (!contact && normalized !== phone) {
     contact = await getCachedZintoContactByPhone(phone);
   }
