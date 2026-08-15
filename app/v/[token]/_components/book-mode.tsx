@@ -6,10 +6,11 @@
 // La colección se comporta como una publicación paginada: portada, índice, un
 // spread por residencia, asesor y colofón. Un viewport = una composición.
 //
-// El efecto de libro sale de la composición, la paginación y el ritmo — no de
-// páginas doblándose ni de ninguna librería de flipbook. La transición es un
-// desplazamiento horizontal corto con fundido (~550 ms), anulada por
-// prefers-reduced-motion.
+// El paso de página es un giro real sobre el lomo (rotateY + perspectiva +
+// sombra de lomo, ver globals.css), ~700ms y la portada más marcada (~850ms).
+// Sin librerías de flipbook. prefers-reduced-motion lo degrada a un fundido.
+// Las páginas viven en nodos con key estable que sobreviven al giro: la
+// fotografía nunca se remonta al aterrizar (sin pestañeo).
 //
 // Entradas: clic, teclado ←/→ (invertido en RTL), y swipe en tablet. No se
 // secuestra el scroll del navegador: dentro de una página con poco alto, el
@@ -87,12 +88,16 @@ export function BookMode({
   } | null>(null);
   const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewedStops = useRef(new Set<number>());
+  // El fundido de entrada solo aplica al primer montaje; tras el primer giro
+  // la página aterrizada no debe volver a fundirse (pestañeo).
+  const opened = useRef(false);
 
   const go = useCallback(
     (target: number) => {
       if (turn) return; // hoja en el aire: se ignora hasta que aterrice
       const next = Math.max(0, Math.min(pages.length - 1, target));
       if (next === current) return;
+      opened.current = true;
       const dir: 1 | -1 = next > current ? 1 : -1;
       const cover = current === 0 && dir === 1;
       setTurn({ from: current, dir, cover });
@@ -105,6 +110,18 @@ export function BookMode({
     },
     [pages.length, current, turn],
   );
+
+  // Precarga de las fotografías de portada vecinas: cuando la hoja gire, la
+  // página que se revela ya tiene su imagen decodificada — sin pop de carga.
+  useEffect(() => {
+    for (const i of [current - 1, current + 1]) {
+      const p = pages[i];
+      if (p?.kind === "residence" && p.stop.coverPhotoUrl) {
+        const img = new window.Image();
+        img.src = p.stop.coverPhotoUrl;
+      }
+    }
+  }, [current, pages]);
 
   useEffect(
     () => () => {
@@ -207,6 +224,33 @@ export function BookMode({
   const sheetBg = (p: Page) =>
     p.kind === "cover" || p.kind === "colophon" ? "bg-ink" : "bg-cream-50";
 
+  // Una capa del escenario. TODAS las capas comparten esta estructura exacta
+  // (página + hueco de sombra, aunque sea null): si el número o la posición
+  // de los hijos cambiara entre estados, React remontaría el contenido al
+  // aterrizar — y la fotografía pestañearía.
+  const pageLayer = (
+    idx: number,
+    cls: string,
+    opts?: { shade?: "turn" | "under"; hidden?: boolean },
+  ) => (
+    <div
+      key={`page-${idx}`}
+      aria-hidden={opts?.hidden || undefined}
+      className={cn("absolute inset-0", cls)}
+    >
+      {renderPage(pages[idx])}
+      {opts?.shade ? (
+        <div
+          className={cn(
+            opts.shade === "turn" ? "vc-turn-shade" : "vc-under-shade",
+            rtlClass,
+          )}
+          aria-hidden
+        />
+      ) : null}
+    </div>
+  );
+
   return (
     <div
       dir={rtl ? "rtl" : "ltr"}
@@ -217,60 +261,50 @@ export function BookMode({
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
+      {/* Las capas se renderizan como ARRAY con key por índice de página y
+          estructura de hijos IDÉNTICA en todos los estados (página + hueco de
+          sombra): React reconcilia por key y posición, así que una página que
+          sobrevive al cambio de estado (girando ↔ reposo) conserva su nodo
+          DOM — la fotografía no se remonta ni repinta al aterrizar la hoja.
+          Solo cambian las clases. El orden del array es el orden de apilado
+          (la última queda encima). */}
       <div className="vc-book-stage relative min-h-0 flex-1">
-        {turn ? (
-          turn.dir === 1 ? (
-            // ── AVANZAR: la nueva página se asienta debajo; la hoja actual
-            //    gira sobre el lomo y se retira. Sombra de giro sobre la nueva.
-            <>
-              <div
-                key={`in-${current}`}
-                className={cn("absolute inset-0 vc-sheet-settle", rtlClass)}
-              >
-                {renderPage(pages[current])}
-                <div className={cn("vc-turn-shade", rtlClass)} aria-hidden />
-              </div>
-              <div
-                key={`out-${turn.from}`}
-                aria-hidden
-                className={cn(
-                  "pointer-events-none absolute inset-0 z-10 vc-sheet-edge",
-                  sheetBg(pages[turn.from]),
-                  turn.cover ? "vc-sheet-out-cover" : "vc-sheet-out-next",
-                  rtlClass,
-                )}
-              >
-                {renderPage(pages[turn.from])}
-              </div>
-            </>
-          ) : (
-            // ── RETROCEDER: la página que dejamos queda quieta debajo; la
-            //    hoja anterior vuelve a posarse encima, giro inverso.
-            <>
-              <div
-                key={`under-${turn.from}`}
-                aria-hidden
-                className="pointer-events-none absolute inset-0 vc-sheet-under"
-              >
-                {renderPage(pages[turn.from])}
-              </div>
-              <div
-                key={`in-${current}`}
-                className={cn(
-                  "absolute inset-0 z-10 vc-sheet-in-prev vc-sheet-edge",
-                  sheetBg(pages[current]),
-                  rtlClass,
-                )}
-              >
-                {renderPage(pages[current])}
-              </div>
-            </>
-          )
-        ) : (
-          <div key={`page-${current}`} className="vc-page-in h-full">
-            {renderPage(pages[current])}
-          </div>
-        )}
+        {turn
+          ? turn.dir === 1
+            ? [
+                // ── AVANZAR: la nueva página se asienta debajo; la hoja que
+                //    dejamos (mismo nodo que tenía en reposo) gira encima.
+                pageLayer(current, cn("vc-sheet-settle", rtlClass), {
+                  shade: "turn",
+                }),
+                pageLayer(
+                  turn.from,
+                  cn(
+                    "pointer-events-none vc-sheet-edge",
+                    sheetBg(pages[turn.from]),
+                    turn.cover ? "vc-sheet-out-cover" : "vc-sheet-out-next",
+                    rtlClass,
+                  ),
+                  { hidden: true },
+                ),
+              ]
+            : [
+                // ── RETROCEDER: la página que dejamos (mismo nodo) queda
+                //    quieta debajo; la hoja anterior vuelve a posarse encima.
+                pageLayer(turn.from, "pointer-events-none", {
+                  shade: "under",
+                  hidden: true,
+                }),
+                pageLayer(
+                  current,
+                  cn(
+                    "vc-sheet-in-prev vc-sheet-edge",
+                    sheetBg(pages[current]),
+                    rtlClass,
+                  ),
+                ),
+              ]
+          : [pageLayer(current, !opened.current ? "vc-page-in" : "")]}
       </div>
 
       {/* Navegación editorial. Oculta en la portada: allí manda "Comenzar". */}

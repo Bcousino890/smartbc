@@ -13,14 +13,14 @@ En viewports ≥1024px apaisados la colección es ahora una **publicación pagin
 - **Spreads**: texto a una página, fotografía a sangre en la otra, alternando de lado por capítulo. La galería completa se abre como superposición dentro del spread, sin perder la paginación.
 - **Dos numeraciones**: la residencia (`01 / 03`, ChapterMark) y la página del libro (`05 / 10`, en la barra de navegación). Jerarquías distintas, tipografía distinta.
 - **Navegación**: Anterior / Índice / Siguiente al pie; el índice salta a cualquier residencia; teclado ←/→ (Home vuelve a portada); swipe en tablet con umbral de 60px para no robar el scroll.
-- **Transición**: desplazamiento horizontal de 26px + fundido, 550ms, `prefers-reduced-motion` la anula. Sin flipbook, sin 3D, sin librerías.
+- **Transición** *(addendum 2026-08-15)*: **giro de página real** — la hoja saliente rota sobre el lomo (`rotateY`, perspectiva 2400px, sombra de lomo dinámica, canto marfil de 1px) y la entrante se asienta debajo; ~700ms, portada más marcada (~850ms, «abrir el libro»). Direccional (adelante gira hacia fuera, atrás la hoja vuelve), RTL espejado. Navegación bloqueada mientras la hoja está en el aire (teclado, click y swipe disparan la misma animación; sin `stop_view` duplicados). `prefers-reduced-motion` → fundido simple, nunca 3D forzado. Solo `transform`/`opacity`, sin librerías, sin sonidos, sin textura de papel.
 - **Sin secuestro**: el servidor renderiza el modo scroll (mejor LCP); el cliente cambia a libro tras montar. Como la portada llena el viewport en ambos modos, el cambio es invisible.
 
 **Móvil y tablet vertical: intactos** — el recorrido vertical de siempre, con el ritmo corregido (menos aire tras «Explorar residencia»: `py-16/24/28 → py-12/20/24` y CTA `mt-11 → mt-8`).
 
 ## 2. Idiomas — 8, con RTL
 
-`es · en · fr · it · de · ar · tr · he`. El agente elige el idioma en el builder («Idioma de la colección»); migración `0130` (`viewing_itineraries.language`, default `es`).
+`es · en · fr · it · de · ar · tr · he`. El agente elige el idioma **al crear el itinerario** (selector en el diálogo de creación, añadido en el addendum: antes solo estaba dentro del editor y era fácil no verlo — de ahí el «la traducción no se aplica») y puede cambiarlo después en «datos del día»; migración `0130` (`viewing_itineraries.language`, default `es`).
 
 - Árabe y hebreo se sirven en **RTL** completo (layout espejado, flechas de teclado invertidas), con los grupos latinos —horas, precios— protegidos del algoritmo bidi con `dir="ltr"`.
 - Fechas por locale del idioma (el árabe con dígitos latinos, para coincidir con el panel). La **moneda sigue la lógica del país**; solo el sufijo `/mes` se traduce.

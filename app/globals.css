@@ -259,10 +259,12 @@
   100% { transform: rotateY(0deg) translateX(0); opacity: 1; }
 }
 
-/* ── Página que queda DEBAJO: se asienta ── */
+/* ── Página que queda DEBAJO: se asienta ──
+   Sin filter: animar brightness re-rasteriza la fotografía entera y produce
+   un pestañeo visible. El oscurecido lo pone la sombra de giro (opacidad). */
 @keyframes vcSheetSettle {
-  from { transform: scale(0.988) translateX(0.8%); filter: brightness(0.965); }
-  to   { transform: none; filter: none; }
+  from { transform: scale(0.988) translateX(0.8%); }
+  to   { transform: none; }
 }
 .vc-sheet-settle {
   animation: vcSheetSettle 700ms var(--vc-turn-ease) both;
@@ -272,19 +274,37 @@
   animation-name: vcSheetSettleRtl;
 }
 @keyframes vcSheetSettleRtl {
-  from { transform: scale(0.988) translateX(-0.8%); filter: brightness(0.965); }
-  to   { transform: none; filter: none; }
+  from { transform: scale(0.988) translateX(-0.8%); }
+  to   { transform: none; }
 }
 
-/* Al retroceder, la página actual queda debajo sin moverse: solo se atenúa un
-   punto mientras la hoja anterior se posa. */
-@keyframes vcSheetUnder {
-  from { filter: brightness(1); }
-  50%  { filter: brightness(0.96); }
-  to   { filter: brightness(0.96); }
+/* Al retroceder, la página que queda debajo se atenúa desde el lomo mientras
+   la hoja se posa — opacidad pura, por lo mismo que arriba. */
+@keyframes vcUnderShade {
+  0%   { opacity: 0; }
+  45%  { opacity: 1; }
+  100% { opacity: 1; }
 }
-.vc-sheet-under {
-  animation: vcSheetUnder 700ms var(--vc-turn-ease) both;
+.vc-under-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(
+    to right,
+    rgba(10, 10, 10, 0.16),
+    rgba(10, 10, 10, 0.05) 30%,
+    transparent 55%
+  );
+  animation: vcUnderShade 700ms var(--vc-turn-ease) both;
+}
+.vc-under-shade.vc-rtl {
+  background: linear-gradient(
+    to left,
+    rgba(10, 10, 10, 0.16),
+    rgba(10, 10, 10, 0.05) 30%,
+    transparent 55%
+  );
 }
 
 /* ── Sombra de giro: pasa sobre la página revelada, desde el lomo ── */
@@ -342,14 +362,17 @@
   .vc-sheet-out-cover,
   .vc-sheet-in-prev,
   .vc-sheet-settle,
-  .vc-sheet-under,
-  .vc-turn-shade,
   .vc-page-in {
     animation: none !important;
   }
   .vc-sheet-out-next,
   .vc-sheet-out-cover {
     opacity: 0;
+  }
+  /* Sin animación las sombras quedarían clavadas a plena opacidad. */
+  .vc-turn-shade,
+  .vc-under-shade {
+    display: none;
   }
   .vc-sheet-edge {
     box-shadow: none;
