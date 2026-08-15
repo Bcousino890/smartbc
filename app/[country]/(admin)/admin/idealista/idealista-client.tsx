@@ -251,6 +251,7 @@ export function IdealistaClient({
   const [seeding, setSeeding] = useState<string | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showAllProperties, setShowAllProperties] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
@@ -706,12 +707,20 @@ export function IdealistaClient({
           <div className="relative">
             <input
               type="text"
-              placeholder="Buscar por nombre, zona, referencia..."
+              placeholder="Buscar por nombre, zona o referencia (ej. BC-1338)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
             />
           </div>
+          {!searchTerm && (
+            <button
+              onClick={() => setShowAllProperties((v) => !v)}
+              className="mt-2 text-xs font-medium text-ink/45 underline decoration-dotted underline-offset-2 hover:text-ink/70"
+            >
+              {showAllProperties ? "Ocultar listado completo" : `Ver todas las propiedades (${properties.length})`}
+            </button>
+          )}
         </div>
 
         {/* Modo 2: inspo */}
@@ -768,10 +777,10 @@ export function IdealistaClient({
         </div>
       </div>
 
-      {/* Lista de propiedades del sistema (si hay búsqueda o siempre visible) */}
-      {filteredProperties.length > 0 && (
+      {/* Lista de propiedades del sistema: solo mientras se busca o si el usuario pide verla toda */}
+      {filteredProperties.length > 0 && (searchTerm || showAllProperties) && (
         <div className="rounded-xl border border-ink/8 bg-white/40 overflow-hidden">
-          <div className="max-h-[400px] overflow-y-auto divide-y divide-ink/6">
+          <div className="max-h-[220px] overflow-y-auto divide-y divide-ink/6">
             {filteredProperties.map((property) => {
               const listing = systemListings.find((l) => l.property_id === property.id);
               return (
