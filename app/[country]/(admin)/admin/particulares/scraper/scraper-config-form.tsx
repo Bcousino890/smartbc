@@ -19,6 +19,19 @@ type FieldSpec = {
   hint?: string;
 };
 
+// Los campos de tiempo se guardan siempre en su unidad base (minutos u
+// horas, según field.unit) porque así los espera el scraper — pero teclear
+// "31–90 días" como 2160 horas es un embole. TIME_UNITS deja elegir la
+// unidad cómoda (min/h/d) solo para mostrar y capturar; la conversión de
+// vuelta a la unidad base pasa siempre por minutos como pivote.
+type TimeUnit = "min" | "h" | "d";
+const MINUTES_PER_UNIT: Record<TimeUnit, number> = { min: 1, h: 60, d: 1440 };
+const TIME_UNIT_LABEL: Record<TimeUnit, string> = { min: "min", h: "h", d: "días" };
+
+function isTimeField(unit: string): unit is TimeUnit {
+  return unit === "min" || unit === "h";
+}
+
 const GROUPS: { title: string; description: string; fields: FieldSpec[] }[] = [
   {
     title: "Descubrimiento",
@@ -101,6 +114,16 @@ export function ScraperConfigForm({ initial }: { initial: IdealistaScraperConfig
   const [draft, setDraft] = useState<Record<string, string | boolean>>(() => toDraft(initial));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  // Unidad que se está mostrando ahora mismo para cada campo de tiempo —
+  // puramente de UI, el valor guardado (draft/config) sigue en la unidad
+  // base. Arranca en la unidad base de cada campo (min o h).
+  const [timeUnits, setTimeUnits] = useState<Record<string, TimeUnit>>(() => {
+    const u: Record<string, TimeUnit> = {};
+    for (const group of GROUPS) {
+      for (const f of group.fields) if (isTimeField(f.unit)) u[f.key] = f.unit;
+    }
+    return u;
+  });
 
   function toDraft(c: IdealistaScraperConfig): Record<string, string | boolean> {
     const d: Record<string, string | boolean> = { scraping_enabled: c.scraping_enabled };
@@ -180,26 +203,76 @@ export function ScraperConfigForm({ initial }: { initial: IdealistaScraperConfig
           <h3 className="font-serif text-base font-semibold text-ink">{group.title}</h3>
           <p className="mt-0.5 mb-4 text-sm text-ink/60">{group.description}</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {group.fields.map((field) => (
-              <label key={field.key} className="block">
-                <span className="mb-1 block text-xs font-medium text-ink/70">{field.label}</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={String(draft[field.key] ?? "")}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, [field.key]: e.target.value }))
-                    }
-                    className={inputCls}
-                  />
-                  <span className="shrink-0 text-xs text-ink/50">{field.unit}</span>
-                </div>
-                {field.hint ? (
-                  <span className="mt-1 block text-[11px] text-ink/45">{field.hint}</span>
-                ) : null}
-              </label>
-            ))}
+            {group.fields.map((field) => {
+              if (!isTimeField(field.unit)) {
+                return (
+                  <label key={field.key} className="block">
+                    <span className="mb-1 block text-xs font-medium text-ink/70">{field.label}</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={String(draft[field.key] ?? "")}
+                        onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
+                        className={inputCls}
+                      />
+                      <span className="shrink-0 text-xs text-ink/50">{field.unit}</span>
+                    </div>
+                    {field.hint ? (
+                      <span className="mt-1 block text-[11px] text-ink/45">{field.hint}</span>
+                    ) : null}
+                  </label>
+                );
+              }
+
+              const baseUnit = field.unit as TimeUnit;
+              const chosenUnit = timeUnits[field.key] ?? baseUnit;
+              const baseValue = Number(draft[field.key] ?? 0);
+              const displayValue =
+                (baseValue * MINUTES_PER_UNIT[baseUnit]) / MINUTES_PER_UNIT[chosenUnit];
+              // Redondea a 2 decimales para que no aparezcan colas de coma
+              // flotante (p.ej. 168h / 1440 = 0.11666...6 días).
+              const displayRounded = Math.round(displayValue * 100) / 100;
+
+              return (
+                <label key={field.key} className="block">
+                  <span className="mb-1 block text-xs font-medium text-ink/70">{field.label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={String(displayRounded)}
+                      onChange={(e) => {
+                        const entered = Number(e.target.value);
+                        if (!Number.isFinite(entered)) return;
+                        const newBase = Math.round(
+                          (entered * MINUTES_PER_UNIT[chosenUnit]) / MINUTES_PER_UNIT[baseUnit],
+                        );
+                        setDraft((d) => ({ ...d, [field.key]: String(Math.max(0, newBase)) }));
+                      }}
+                      className={inputCls}
+                    />
+                    <select
+                      value={chosenUnit}
+                      onChange={(e) =>
+                        setTimeUnits((u) => ({ ...u, [field.key]: e.target.value as TimeUnit }))
+                      }
+                      className="shrink-0 rounded-xl border border-ink/10 bg-cream-50 px-2 py-2 text-xs text-ink/70 outline-none focus:border-gold/50"
+                    >
+                      {(["min", "h", "d"] as TimeUnit[]).map((u) => (
+                        <option key={u} value={u}>
+                          {TIME_UNIT_LABEL[u]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {field.hint ? (
+                    <span className="mt-1 block text-[11px] text-ink/45">{field.hint}</span>
+                  ) : null}
+                </label>
+              );
+            })}
           </div>
         </div>
       ))}
