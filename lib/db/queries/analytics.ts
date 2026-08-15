@@ -399,41 +399,51 @@ export async function getShareAnalytics(
 // ---------------------------------------------------------------------------
 // insertPageView
 // ---------------------------------------------------------------------------
+/**
+ * Registra una visita de página y devuelve su id.
+ *
+ * ⚠️ La versión anterior llamaba a `.insert(payload, { select: "id" })`. Esa no
+ * es la firma de supabase-js: el segundo argumento admite `count`, no `select`,
+ * así que la fila SÍ se insertaba pero la respuesta no traía datos y la función
+ * lanzaba "no row returned" → el endpoint devolvía 500 y el navegador nunca
+ * recibía el `pageViewId`. Sin ese id, `flush()` del tracker descarta la cola:
+ * las visitas se contaban pero NINGÚN evento granular (photo_view, stop_view,
+ * share_click…) llegaba a guardarse.
+ *
+ * Detectado en el QA de producción de Viewing Collections. La forma correcta es
+ * encadenar `.select().single()`.
+ */
 export async function insertPageView(
   data: Omit<PageViewRow, "id" | "created_at">,
 ): Promise<{ id: string }> {
   const supabase = createAdminClient();
-  const insertTbl = supabase.from("page_views") as unknown as {
-    insert: (
-      payload: Record<string, unknown>,
-      opts: { select: string },
-    ) => Promise<{
-      data: Array<{ id: string }> | null;
-      error: { message: string } | null;
-    }>;
-  };
-  const res = await insertTbl.insert(
-    {
+  const extra = data as unknown as Record<string, unknown>;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: row, error } = await (supabase as any)
+    .from("page_views")
+    .insert({
       property_id: data.property_id,
       share_id: data.share_id,
+      collection_share_id: data.collection_share_id ?? null,
       page_type: data.page_type,
       page_path: data.page_path,
-      referrer: (data as unknown as Record<string, unknown>)["referrer"] ?? null,
+      referrer: extra["referrer"] ?? null,
       session_id: data.session_id,
       ip: data.ip,
-      user_agent: (data as unknown as Record<string, unknown>)["user_agent"] ?? null,
+      user_agent: extra["user_agent"] ?? null,
       device_type: data.device_type,
       browser: data.browser,
-      os: (data as unknown as Record<string, unknown>)["os"] ?? null,
+      os: extra["os"] ?? null,
       country_code: data.country_code,
       country_name: data.country_name,
       city: data.city,
-    },
-    { select: "id" },
-  );
-  if (res.error) throw new Error(res.error.message);
-  const row = (res.data ?? [])[0];
-  if (!row) throw new Error("insertPageView: no row returned");
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  if (!row?.id) throw new Error("insertPageView: no row returned");
   return { id: row.id };
 }
 
