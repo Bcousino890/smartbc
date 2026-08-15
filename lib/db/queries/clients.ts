@@ -295,12 +295,16 @@ export async function getClientById(id: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
+    // `client_tag_assignments` y `visit_requests` tienen DOS claves ajenas a
+    // `profiles` (client_id y assigned_by / assigned_to), así que PostgREST no
+    // puede deducir por cuál embeber y responde PGRST201. Hay que nombrar la
+    // relación explícitamente, igual que ya hace getClients() más arriba.
     .select(`
       *,
       client_preferences(*),
-      client_tag_assignments(tag_id, client_tags(id, name, category, color)),
+      client_tag_assignments!client_tag_assignments_client_id_fkey(tag_id, client_tags(id, name, category, color)),
       favorites(property_id, properties(slug, title)),
-      visit_requests(id, property_id, requested_at, status, properties(slug, title))
+      visit_requests!visit_requests_client_id_fkey(id, property_id, requested_at, status, properties(slug, title))
     `)
     .eq("id", id)
     .eq("role", "client")
