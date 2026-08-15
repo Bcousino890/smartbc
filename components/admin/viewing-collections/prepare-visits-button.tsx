@@ -24,6 +24,13 @@ import {
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 
+/** Por qué creemos que es la misma persona. El agente decide con esto delante. */
+const MATCH_REASON: Record<string, string> = {
+  email: "Mismo correo electrónico",
+  phone: "Mismo teléfono",
+  phone_tail: "Mismos últimos 9 dígitos del teléfono",
+};
+
 function usePrefix(): string {
   const params = useParams<{ country?: string }>();
   const country = isCountry(params?.country) ? params.country : "es";
@@ -185,29 +192,53 @@ function PrepareVisitsDialog({
 
           {ok && (
             <div className="space-y-4">
-              {/* Caso 3 · posible cliente existente: vincular antes que duplicar */}
-              {ok.match && (
+              {/* Caso 3 · posibles clientes existentes: vincular antes que
+                  duplicar. Se listan TODOS los candidatos con el motivo de la
+                  coincidencia; ninguno se vincula solo. */}
+              {ok.matches.length > 0 && (
                 <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3.5">
                   <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-800/70">
-                    Posible cliente existente
+                    {ok.matches.length > 1
+                      ? `${ok.matches.length} posibles clientes existentes`
+                      : "Posible cliente existente"}
                   </p>
-                  <p className="mt-1.5 text-[13px] font-medium text-ink">
-                    {ok.match.fullName}
-                  </p>
-                  <p className="text-[11px] text-ink/55">
-                    {ok.match.email}
-                    {ok.match.phone ? ` · ${ok.match.phone}` : ""} — coincide
-                    por {ok.match.matchedBy === "email" ? "email" : "teléfono"}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => finish({ existingClientId: ok.match!.id })}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
-                  >
-                    <Link2 size={13} strokeWidth={1.75} className="text-gold" />
-                    Vincular y preparar visitas
-                  </button>
+
+                  {ok.ambiguous && (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-emerald-900/60">
+                      {ok.matches.length > 1
+                        ? "Más de una ficha encaja. Comprueba cuál es antes de vincular."
+                        : "Solo coinciden los últimos 9 dígitos del teléfono: confirma que es la misma persona."}
+                    </p>
+                  )}
+
+                  <ul className="mt-2.5 space-y-2">
+                    {ok.matches.map((m) => (
+                      <li
+                        key={m.id}
+                        className="rounded-lg border border-emerald-200/60 bg-white/70 p-2.5"
+                      >
+                        <p className="text-[13px] font-medium text-ink">
+                          {m.fullName}
+                        </p>
+                        <p className="text-[11px] text-ink/55">
+                          {m.email}
+                          {m.phone ? ` · ${m.phone}` : ""}
+                        </p>
+                        <p className="mt-0.5 text-[10.5px] text-ink/45">
+                          {MATCH_REASON[m.matchedBy]}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => finish({ existingClientId: m.id })}
+                          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                        >
+                          <Link2 size={13} strokeWidth={1.75} className="text-gold" />
+                          Vincular y preparar visitas
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
@@ -215,11 +246,11 @@ function PrepareVisitsDialog({
               <div
                 className={cn(
                   "rounded-xl border border-ink/10 bg-white/60 p-3.5",
-                  ok.match && "opacity-90",
+                  ok.matches.length > 0 && "opacity-90",
                 )}
               >
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink/50">
-                  {ok.match ? "O crear un cliente nuevo" : "Crear cliente"}
+                  {ok.matches.length > 0 ? "O crear un cliente nuevo" : "Crear cliente"}
                 </p>
                 <div className="mt-2.5 space-y-2">
                   <input

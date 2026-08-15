@@ -460,6 +460,10 @@ export type InternalUser = {
   initials: string;
   roleKey: InternalUserRole;
   status: InternalUserStatus;
+  // Teléfono del perfil. Es lo que ve el cliente en la ficha del asesor al
+  // final de una colección de visitas, así que el formulario de edición tiene
+  // que precargarlo: si no, guardar cualquier otro cambio lo borraba.
+  phone?: string;
   lastLoginText?: string;
   joinedLabel: string;
   country?: string;

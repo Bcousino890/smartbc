@@ -250,6 +250,7 @@ export function profileRowToInternalUser(
     firstName: firstName ?? "",
     lastName: rest.join(" "),
     email: row.email,
+    phone: row.phone ?? undefined,
     initials: deriveInitials(display),
     roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin"].includes(row.role ?? "")
       ? row.role

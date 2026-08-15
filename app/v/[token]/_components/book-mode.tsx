@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { CollectionCover } from "./collection-cover";
 import { AgentContactData } from "./closing";
 import { statusWord } from "./day-overview";
+import { PrivateGallery } from "./private-gallery";
 import {
   ChapterMark,
   DataPoint,
@@ -88,7 +89,15 @@ export function BookMode({
     cover: boolean;
   } | null>(null);
   const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const viewedStops = useRef(new Set<number>());
+
+  // La galería vive AQUÍ, no dentro de la página. Si viviera dentro, la hoja
+  // saliente seguiría montada durante el giro y el lector vería las fotos del
+  // capítulo anterior sobre la página nueva durante casi un segundo.
+  const [gallery, setGallery] = useState<{
+    order: number;
+    startIndex: number | null;
+  } | null>(null);
+  const closeGallery = useCallback(() => setGallery(null), []);
   // El fundido de entrada solo aplica al primer montaje; tras el primer giro
   // la página aterrizada no debe volver a fundirse (pestañeo).
   const opened = useRef(false);
@@ -98,6 +107,10 @@ export function BookMode({
       if (turn) return; // hoja en el aire: se ignora hasta que aterrice
       const next = Math.max(0, Math.min(pages.length - 1, target));
       if (next === current) return;
+      // ANTES del giro, siempre: nada de fotografías del capítulo anterior
+      // sobrevolando la página nueva. Vale para siguiente, anterior, salto
+      // desde el índice y vuelta al índice — todos pasan por aquí.
+      setGallery(null);
       opened.current = true;
       const dir: 1 | -1 = next > current ? 1 : -1;
       const cover = current === 0 && dir === 1;
@@ -109,8 +122,18 @@ export function BookMode({
         cover ? 870 : 720,
       );
     },
-    [pages.length, current, turn],
+    [pages.length, current, turn, setGallery],
   );
+
+  // Cinturón y tirantes: si por cualquier vía la página cambia con la galería
+  // abierta, se cierra en el mismo commit, sin esperar a la animación.
+  useEffect(() => {
+    setGallery((g) => {
+      const page = pages[current];
+      if (!g) return g;
+      return page.kind === "residence" && page.stop.order === g.order ? g : null;
+    });
+  }, [current, pages]);
 
   // Precarga de las fotografías de portada vecinas: cuando la hoja gire, la
   // página que se revela ya tiene su imagen decodificada — sin pop de carga.
@@ -141,14 +164,13 @@ export function BookMode({
     [pages, go],
   );
 
-  // stop_view: una sola vez por residencia, aunque el lector pase varias
-  // veces por la misma página — la navegación no fabrica métricas.
+  // Se avisa cuando la residencia pasa a ser la página ACTIVA — ni al iniciar
+  // la animación de la hoja saliente, ni al abrir la galería. De que no se
+  // cuente dos veces se encarga quien recibe el aviso (ViewingCollectionView),
+  // que es lo único que sobrevive a un cambio de modo.
   useEffect(() => {
     const page = pages[current];
-    if (page.kind === "residence" && !viewedStops.current.has(page.stop.order)) {
-      viewedStops.current.add(page.stop.order);
-      onStopView(page.stop.order);
-    }
+    if (page.kind === "residence") onStopView(page.stop.order);
   }, [current, pages, onStopView]);
 
   // Teclado. En RTL las flechas se invierten: → retrocede, ← avanza.
@@ -156,6 +178,8 @@ export function BookMode({
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && /^(input|textarea|select)$/i.test(t.tagName)) return;
+      // Con la galería abierta mandan sus flechas, no las del libro.
+      if (gallery) return;
       const fwd = rtl ? "ArrowLeft" : "ArrowRight";
       const back = rtl ? "ArrowRight" : "ArrowLeft";
       if (e.key === fwd) go(current + 1);
@@ -164,20 +188,22 @@ export function BookMode({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, current, rtl]);
+  }, [go, current, rtl, gallery]);
 
   // Swipe en tablet. Umbral alto (60px) para no interferir con el scroll
   // vertical interno de una página.
   const touch = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
+    if (gallery) return;
     touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
   const onTouchEnd = (e: React.TouchEvent) => {
-    if (!touch.current) return;
+    if (gallery || !touch.current) return;
     const dx = e.changedTouches[0].clientX - touch.current.x;
     const dy = e.changedTouches[0].clientY - touch.current.y;
     touch.current = null;
     if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (gallery) return;
     const forward = rtl ? dx > 0 : dx < 0;
     go(current + (forward ? 1 : -1));
   };
@@ -185,6 +211,12 @@ export function BookMode({
   const page = pages[current];
   const isDark = page.kind === "cover" || page.kind === "colophon";
   const rtlClass = rtl ? "vc-rtl" : "";
+
+  // La residencia de la galería se resuelve por `order`, no por índice de
+  // página: si el orden cambiara, la galería no puede quedar apuntando a otra.
+  const galleryStop = gallery
+    ? (collection.stops.find((s) => s.order === gallery.order) ?? null)
+    : null;
 
   const renderPage = (p: Page) => (
     <>
@@ -207,7 +239,10 @@ export function BookMode({
           stop={p.stop}
           total={collection.stopCount}
           dict={dict}
-          onExpand={() => onStopExpand(p.stop.order)}
+          onOpenGallery={() => {
+            setGallery({ order: p.stop.order, startIndex: null });
+            onStopExpand(p.stop.order);
+          }}
           onSmartLinkClick={() => onSmartLinkClick(p.stop.order)}
         />
       )}
@@ -373,6 +408,20 @@ export function BookMode({
           </button>
         </nav>
       )}
+
+      {/* Private Gallery Mode, por encima de todo el libro (nunca dentro de una
+          página): así una navegación la cierra en seco y no queda flotando. */}
+      {galleryStop && (
+        <PrivateGallery
+          title={galleryStop.title}
+          /* Portada + 12: el mismo conjunto que anuncia "ver N fotografías". */
+          photos={galleryStop.photoUrls.slice(0, 13)}
+          dict={dict}
+          rtl={rtl}
+          startIndex={gallery?.startIndex ?? null}
+          onClose={closeGallery}
+        />
+      )}
     </div>
   );
 }
@@ -466,16 +515,15 @@ function BookResidencePage({
   stop,
   total,
   dict,
-  onExpand,
+  onOpenGallery,
   onSmartLinkClick,
 }: {
   stop: PublicViewingStop;
   total: number;
   dict: CollectionDictionary;
-  onExpand: () => void;
+  onOpenGallery: () => void;
   onSmartLinkClick: () => void;
 }) {
-  const [galleryOpen, setGalleryOpen] = useState(false);
   const flipped = stop.order % 2 === 0;
   const cancelled = stop.status === "cancelled";
   const unavailable = stop.availability === "unavailable";
@@ -621,10 +669,7 @@ function BookResidencePage({
         {stop.coverPhotoUrl ? (
           <button
             type="button"
-            onClick={() => {
-              setGalleryOpen(true);
-              onExpand();
-            }}
+            onClick={onOpenGallery}
             aria-haspopup="dialog"
             className="vc-focus group block h-full w-full overflow-hidden"
           >
@@ -642,40 +687,6 @@ function BookResidencePage({
           </button>
         ) : (
           <div className="h-full w-full bg-ink/5" />
-        )}
-
-        {/* Galería como superposición dentro de la página: el libro no pierde
-            su paginación mientras se hojean las fotografías. */}
-        {galleryOpen && (
-          <div
-            role="dialog"
-            aria-label={stop.title}
-            className="absolute inset-0 z-10 overflow-y-auto bg-ink/97 p-2"
-          >
-            <div className="sticky top-0 z-10 flex justify-end pb-2">
-              <button
-                type="button"
-                onClick={() => setGalleryOpen(false)}
-                className="vc-focus border border-cream-50/40 bg-ink/70 px-4 py-2 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm"
-              >
-                {dict.closeGallery}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              {[stop.coverPhotoUrl, ...extraPhotos]
-                .filter(Boolean)
-                .map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`${url}-${i}`}
-                    src={url as string}
-                    alt={`${stop.title} — ${i + 1}`}
-                    loading="lazy"
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                ))}
-            </div>
-          </div>
         )}
       </div>
     </div>

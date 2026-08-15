@@ -75,6 +75,20 @@ export function ViewingCollectionView({
     [trackerRef, isPreview],
   );
 
+  // Una residencia se cuenta como vista UNA vez por sesión. El registro vive
+  // aquí, no dentro de cada modo: al girar una tablet se cruza el media query,
+  // se desmonta un modo y monta el otro, y un registro por modo volvía a
+  // contar la residencia que ya estaba en pantalla.
+  const viewedStops = useRef(new Set<number>());
+  const trackStopView = useCallback(
+    (order: number) => {
+      if (viewedStops.current.has(order)) return;
+      viewedStops.current.add(order);
+      track("stop_view", { order });
+    },
+    [track],
+  );
+
   // ── Detección de modo ──────────────────────────────────────────────────────
   const [bookMode, setBookMode] = useState(false);
   useEffect(() => {
@@ -150,7 +164,7 @@ export function ViewingCollectionView({
       <BookMode
         collection={collection}
         dict={dict}
-        onStopView={(order) => track("stop_view", { order })}
+        onStopView={trackStopView}
         onStopExpand={(order) => track("stop_expand", { order })}
         onSmartLinkClick={(order) => track("share_click", { order })}
       />
@@ -208,7 +222,7 @@ export function ViewingCollectionView({
                 total={collection.stopCount}
                 registerRef={registerRef}
                 dict={dict}
-                onView={() => track("stop_view", { order: stop.order })}
+                onView={() => trackStopView(stop.order)}
                 onExpand={() => track("stop_expand", { order: stop.order })}
                 onSmartLinkClick={() => track("share_click", { order: stop.order })}
               />

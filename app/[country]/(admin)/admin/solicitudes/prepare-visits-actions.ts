@@ -29,79 +29,134 @@ import { addPropertyToSelection } from "../clientes/viewing-collections-actions"
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/**
+ * Cómo se ha reconocido a un candidato, de más a menos fiable:
+ *   email       — mismo correo normalizado. Prácticamente concluyente.
+ *   phone       — mismo teléfono completo normalizado (con prefijo país).
+ *   phone_tail  — solo coinciden los últimos 9 dígitos. INDICIO, no prueba:
+ *                 dos números de países distintos pueden acabar igual.
+ */
+export type ClientMatchKind = "email" | "phone" | "phone_tail";
+
 export type ClientMatch = {
   id: string;
   fullName: string;
   email: string;
   phone: string | null;
-  matchedBy: "email" | "phone";
+  matchedBy: ClientMatchKind;
 };
 
 export type PrepareVisitsLookup =
   | { ok: false; error: string }
   | {
       ok: true;
-      match: ClientMatch | null;
+      /** Candidatos ordenados por fiabilidad. Vacío = ninguno. */
+      matches: ClientMatch[];
+      /** true = hay que mirar antes de vincular (varios, o solo cola de 9). */
+      ambiguous: boolean;
       prefill: { name: string; email: string; phone: string };
       property: { id: string; title: string } | null;
     };
 
-/** Últimos 9 dígitos: suficiente para casar +34 612..., 612..., 0034612... */
+/** Dígitos del teléfono, sin prefijo internacional en formato 00. */
+function phoneDigits(phone: string | null | undefined): string {
+  const d = (phone ?? "").replace(/\D/g, "");
+  return d.startsWith("00") ? d.slice(2) : d;
+}
+
+/** Últimos 9 dígitos: casa +34 612..., 612..., 0034612... — y también casa
+ *  números de países distintos, por eso es el último recurso. */
 function phoneTail(phone: string | null | undefined): string | null {
-  const digits = (phone ?? "").replace(/\D/g, "");
+  const digits = phoneDigits(phone);
   return digits.length >= 9 ? digits.slice(-9) : null;
 }
 
-async function findExistingClient(
+function normalizeEmail(email: string | null | undefined): string | null {
+  const e = (email ?? "").trim().toLowerCase();
+  return e.includes("@") ? e : null;
+}
+
+/**
+ * Busca clientes que puedan ser la misma persona, en cascada de fiabilidad:
+ * email exacto → teléfono completo → últimos 9 dígitos.
+ *
+ * Devuelve TODOS los candidatos, no el primero: vincular es una decisión del
+ * agente, y para decidir necesita ver si hay más de uno. Nada se vincula solo.
+ */
+async function findExistingClients(
   email: string | null,
   phone: string | null,
-): Promise<ClientMatch | null> {
+): Promise<{ matches: ClientMatch[]; ambiguous: boolean }> {
   const admin = createAdminClient() as any;
+  const byId = new Map<string, ClientMatch>();
+  const add = (row: any, matchedBy: ClientMatchKind) => {
+    const prev = byId.get(row.id);
+    // Si ya estaba, se queda con el reconocimiento más fiable.
+    const rank: Record<ClientMatchKind, number> = {
+      email: 0,
+      phone: 1,
+      phone_tail: 2,
+    };
+    if (prev && rank[prev.matchedBy] <= rank[matchedBy]) return;
+    byId.set(row.id, {
+      id: row.id,
+      fullName: row.full_name ?? row.email,
+      email: row.email,
+      phone: row.phone,
+      matchedBy,
+    });
+  };
 
-  if (email?.trim()) {
+  const wanted = normalizeEmail(email);
+  if (wanted) {
     const { data } = await admin
       .from("profiles")
       .select("id, full_name, email, phone")
       .eq("role", "client")
-      .ilike("email", email.trim())
-      .limit(1)
-      .maybeSingle();
-    if (data) {
-      return {
-        id: data.id,
-        fullName: data.full_name ?? data.email,
-        email: data.email,
-        phone: data.phone,
-        matchedBy: "email",
-      };
+      .ilike("email", wanted)
+      .limit(5);
+    // `ilike` sin comodines ya es igualdad sin distinguir mayúsculas; se
+    // reconfirma en memoria por si el dato guardado trae espacios.
+    for (const row of (data ?? []) as any[]) {
+      if (normalizeEmail(row.email) === wanted) add(row, "email");
     }
   }
 
+  const digits = phoneDigits(phone);
   const tail = phoneTail(phone);
   if (tail) {
-    // No hay formato canónico de teléfono en profiles: se compara por cola de
-    // 9 dígitos sobre los candidatos con teléfono (volumen pequeño).
+    // No hay formato canónico de teléfono en profiles, así que se comparan en
+    // memoria los candidatos con teléfono (volumen pequeño hoy).
     const { data } = await admin
       .from("profiles")
       .select("id, full_name, email, phone")
       .eq("role", "client")
       .not("phone", "is", null)
       .limit(500);
-    const hit = ((data ?? []) as any[]).find(
-      (p) => phoneTail(p.phone) === tail,
-    );
-    if (hit) {
-      return {
-        id: hit.id,
-        fullName: hit.full_name ?? hit.email,
-        email: hit.email,
-        phone: hit.phone,
-        matchedBy: "phone",
-      };
+    for (const row of (data ?? []) as any[]) {
+      const rowDigits = phoneDigits(row.phone);
+      if (!rowDigits) continue;
+      if (digits && rowDigits === digits) add(row, "phone");
+      else if (phoneTail(row.phone) === tail) add(row, "phone_tail");
     }
   }
 
-  return null;
+  const order: Record<ClientMatchKind, number> = {
+    email: 0,
+    phone: 1,
+    phone_tail: 2,
+  };
+  const matches = [...byId.values()]
+    .sort((a, b) => order[a.matchedBy] - order[b.matchedBy])
+    .slice(0, 4);
+
+  // Ambiguo cuando hay más de un candidato, o cuando el único que hay se
+  // sostiene solo en nueve dígitos: ahí el agente tiene que mirar.
+  const ambiguous =
+    matches.length > 1 ||
+    (matches.length === 1 && matches[0].matchedBy === "phone_tail");
+
+  return { matches, ambiguous };
 }
 
 /**
@@ -167,9 +222,18 @@ export async function lookupPrepareVisits(
     phone = contact.phone ?? "";
   }
 
-  const match = await findExistingClient(email || null, phone || null);
+  const { matches, ambiguous } = await findExistingClients(
+    email || null,
+    phone || null,
+  );
 
-  return { ok: true, match, prefill: { name, email, phone }, property };
+  return {
+    ok: true,
+    matches,
+    ambiguous,
+    prefill: { name, email, phone },
+    property,
+  };
 }
 
 export type ConfirmPrepareVisits =

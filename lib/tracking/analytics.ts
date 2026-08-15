@@ -116,8 +116,17 @@ export class AnalyticsTracker {
   }
 
   flush(): void {
-    if (!this.pageViewId || this.eventQueue.length === 0) {
-      this.eventQueue = []
+    if (this.eventQueue.length === 0) return
+    // Sin pageViewId todavía, la cola se CONSERVA. Antes se vaciaba, y por eso
+    // se perdían los eventos encolados mientras el POST del page-view estaba
+    // en vuelo — justo el caso de `collection_open`, que se encola en el mismo
+    // tick del montaje. Se limita el tamaño para que una página cuyo page-view
+    // nunca llega no acumule memoria sin fin.
+    if (!this.pageViewId) {
+      const MAX_PENDING = 50
+      if (this.eventQueue.length > MAX_PENDING) {
+        this.eventQueue = this.eventQueue.slice(-MAX_PENDING)
+      }
       return
     }
     const events = [...this.eventQueue]

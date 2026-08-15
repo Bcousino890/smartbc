@@ -51,6 +51,7 @@ export default async function AdminUsuariosPage({
     firstName: row.full_name?.split(" ")[0] ?? "",
     lastName: row.full_name?.split(" ").slice(1).join(" ") ?? "",
     email: row.email ?? "",
+    phone: row.phone ?? undefined,
     initials: deriveInitials(row.full_name || row.email || "?"),
     // Rol real para "client"; cualquier otro valor (viewer, roles raros o
     // futuros) se muestra como "viewer" para no romper el tipado.

@@ -188,9 +188,12 @@ export async function POST(req: Request) {
 
   if (role === "client") {
     profileUpdate.assigned_advisor_id = assignedAdvisorId || null;
-    if (phone) {
-      profileUpdate.phone = phone;
-    }
+  }
+
+  // El teléfono también para staff: el formulario lo pide a todos y es lo que
+  // ve el cliente en la ficha de asesor de una colección de visitas.
+  if (phone) {
+    profileUpdate.phone = phone;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

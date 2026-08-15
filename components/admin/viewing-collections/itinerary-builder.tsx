@@ -35,6 +35,7 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import {
   COLLECTION_LANGUAGES,
   LANGUAGE_LABELS,
+  TRANSLATION_REVIEW_REQUIRED,
 } from "@/lib/viewing-collections/i18n";
 import { cn } from "@/lib/utils";
 import { ViewingStopEditor } from "./viewing-stop-editor";
@@ -220,6 +221,7 @@ export function ItineraryBuilder({
                       {COLLECTION_LANGUAGES.map((l) => (
                         <option key={l} value={l}>
                           {LANGUAGE_LABELS[l]}
+                          {TRANSLATION_REVIEW_REQUIRED.has(l) ? " · sin revisar" : ""}
                         </option>
                       ))}
                     </select>

@@ -9,6 +9,9 @@ export async function PATCH(req: Request) {
     userId: string;
     firstName?: string;
     lastName?: string;
+    // Correo de acceso. Cambia la credencial en GoTrue Y la columna del
+    // perfil (que es la que se muestra en el panel y en la ficha de asesor).
+    email?: string;
     // null = borrar el teléfono (el formulario lo manda vacío a propósito).
     phone?: string | null;
     role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
@@ -39,6 +42,7 @@ export async function PATCH(req: Request) {
     userId,
     firstName,
     lastName,
+    email,
     phone,
     role,
     password,
@@ -68,6 +72,7 @@ export async function PATCH(req: Request) {
   // Best-effort: si falla la lectura, seguimos sin auditar esos campos.
   let prevProfile: {
     role?: string | null;
+    email?: string | null;
     country?: string | null;
     countries?: string[] | null;
   } | null = null;
@@ -75,12 +80,36 @@ export async function PATCH(req: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: prev } = await (supabase as any)
       .from("profiles")
-      .select("role, country, countries")
+      .select("role, email, country, countries")
       .eq("id", userId)
       .maybeSingle();
     prevProfile = prev ?? null;
   } catch {
     prevProfile = null;
+  }
+
+  // ── Email ────────────────────────────────────────────────────────────────
+  // Se cambia primero en GoTrue: si el correo ya lo usa otro usuario falla
+  // ahí, y así no dejamos el perfil apuntando a un email con el que nadie
+  // puede entrar. `email_confirm` lo da por verificado (lo cambia un admin,
+  // no el propio usuario, así que no hay email de confirmación que abrir).
+  const nextEmail = typeof email === "string" ? email.trim().toLowerCase() : undefined;
+  if (nextEmail !== undefined) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      return Response.json({ error: "Email inválido" }, { status: 400 });
+    }
+    if (nextEmail !== (prevProfile?.email ?? "").toLowerCase()) {
+      const { error: authEmailError } = await supabase.auth.admin.updateUserById(userId, {
+        email: nextEmail,
+        email_confirm: true,
+      });
+      if (authEmailError) {
+        return Response.json(
+          { error: `Error cambiando el email: ${authEmailError.message}` },
+          { status: 400 },
+        );
+      }
+    }
   }
 
   const updates: Record<string, string | boolean | string[] | null> = {};
@@ -90,6 +119,7 @@ export async function PATCH(req: Request) {
   }
   if (role !== undefined) updates.role = role;
   if (phone !== undefined) updates.phone = phone;
+  if (nextEmail !== undefined) updates.email = nextEmail;
 
   // customRoleId: string (uuid) para asignar, "" o null para quitar.
   let hasCustomRoleId = false;

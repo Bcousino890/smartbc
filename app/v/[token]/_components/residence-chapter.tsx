@@ -19,6 +19,7 @@ import type {
 } from "@/lib/viewing-collections/public-contract";
 import { cn } from "@/lib/utils";
 import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
+import { PrivateGallery } from "./private-gallery";
 import {
   ChapterMark,
   DataPoint,
@@ -74,31 +75,48 @@ export function ResidenceChapter({
   const sectionRef = useRef<HTMLElement | null>(null);
   const viewed = useRef(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  /** Índice de la lámina abierta a pantalla completa; null = ninguna. */
+  const [plate, setPlate] = useState<number | null>(null);
+
+  // `onView` cambia de identidad en cada render del padre, y el padre
+  // re-renderiza en cada frame de scroll. Si el efecto dependiera de él,
+  // recrearía el observador constantemente y cancelaría notificaciones aún no
+  // entregadas: en un scroll rápido el stop_view se perdía. Se guarda en un ref
+  // y el efecto se monta UNA vez.
+  const onViewRef = useRef(onView);
+  onViewRef.current = onView;
 
   useEffect(() => {
     const el = sectionRef.current;
     registerRef(stop.order, el);
     if (!el || typeof IntersectionObserver === "undefined") return;
+    // Banda central del viewport en vez de `threshold: 0.35`. Un capítulo más
+    // alto que ~2.9 pantallas NUNCA podía alcanzar ese ratio (el máximo posible
+    // es 1/altura-en-pantallas), así que su stop_view no se emitía jamás. Con
+    // rootMargin negativo el criterio es "el capítulo ocupa el centro de la
+    // pantalla", que es lo que de verdad significa estar leyéndolo.
     const obs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           if (e.isIntersecting && !viewed.current) {
             viewed.current = true;
-            onView();
+            onViewRef.current();
             obs.disconnect();
           }
         }
       },
-      { threshold: 0.35 },
+      { threshold: 0, rootMargin: "-35% 0px -35% 0px" },
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [stop.order, onView, registerRef]);
+  }, [stop.order, registerRef]);
 
   const unavailable = stop.availability === "unavailable";
   const cancelled = stop.status === "cancelled";
   const flipped = stop.order % 2 === 0;
   const extraPhotos = stop.photoUrls.slice(1, 13);
+  /** Portada + extras: el orden que ve el cliente en la lámina y el contador. */
+  const allPhotos = stop.photoUrls.slice(0, 13);
   const viewing = viewingLine(stop, dict);
   const AVAILABILITY_WORD = availabilityWord(dict);
 
@@ -148,10 +166,11 @@ export function ResidenceChapter({
               <button
                 type="button"
                 onClick={() => {
-                  setGalleryOpen((open) => {
-                    if (!open) onExpand();
-                    return !open;
-                  });
+                  // El aviso va FUERA del updater: React puede invocarlo dos
+                  // veces (StrictMode, render concurrente) y eso duplicaba el
+                  // evento stop_expand.
+                  if (!galleryOpen) onExpand();
+                  setGalleryOpen((open) => !open);
                 }}
                 aria-expanded={galleryOpen}
                 aria-controls={`gallery-${stop.order}`}
@@ -186,17 +205,37 @@ export function ResidenceChapter({
               className="mt-1 grid grid-cols-2 gap-1 lg:grid-cols-3"
             >
               {extraPhotos.map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <button
                   key={`${url}-${i}`}
-                  src={url}
-                  alt={`${stop.title} — fotografía ${i + 2}`}
-                  loading="lazy"
-                  decoding="async"
-                  className="aspect-[4/3] w-full object-cover"
-                />
+                  type="button"
+                  onClick={() => setPlate(i + 1)}
+                  aria-haspopup="dialog"
+                  className="vc-focus block overflow-hidden"
+                  aria-label={`${stop.title} — ${i + 2}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={`${stop.title} — fotografía ${i + 2}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/3] w-full object-cover"
+                  />
+                </button>
               ))}
             </div>
+          )}
+
+          {/* La lámina: la fotografía entera sobre tinta, sin recorte ni
+              ampliación. Misma pieza que en el libro. */}
+          {plate !== null && (
+            <PrivateGallery
+              title={stop.title}
+              photos={allPhotos}
+              dict={dict}
+              startIndex={plate}
+              onClose={() => setPlate(null)}
+            />
           )}
 
           {/* ── Bloque editorial ─────────────────────────────────────────── */}

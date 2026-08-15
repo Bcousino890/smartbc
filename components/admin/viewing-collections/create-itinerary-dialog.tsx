@@ -9,6 +9,7 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 import {
   COLLECTION_LANGUAGES,
   LANGUAGE_LABELS,
+  TRANSLATION_REVIEW_REQUIRED,
 } from "@/lib/viewing-collections/i18n";
 
 export function CreateItineraryDialog({
@@ -140,11 +141,18 @@ export function CreateItineraryDialog({
               {COLLECTION_LANGUAGES.map((l) => (
                 <option key={l} value={l}>
                   {LANGUAGE_LABELS[l]}
+                  {TRANSLATION_REVIEW_REQUIRED.has(l) ? " · sin revisar" : ""}
                 </option>
               ))}
             </select>
             <span className="mt-1 block text-[10px] text-ink/45">
               El enlace que verá el cliente se sirve en este idioma.
+              {TRANSLATION_REVIEW_REQUIRED.has(language as never) && (
+                <span className="mt-0.5 block text-amber-700">
+                  Traducción sin revisar por un hablante nativo: el diseño y el
+                  sentido de lectura sí están comprobados, la lengua no.
+                </span>
+              )}
             </span>
           </label>
 

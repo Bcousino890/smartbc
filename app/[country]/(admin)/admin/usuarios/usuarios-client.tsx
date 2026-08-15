@@ -453,7 +453,10 @@ interface EditUserModalProps {
 function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSuccess }: EditUserModalProps) {
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState(user.email);
+  // Precargado: el formulario manda el teléfono siempre (vacío = borrar), así
+  // que abrirlo en blanco borraba el número al guardar cualquier otra cosa.
+  const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState<InternalUserRole>(user.roleKey);
   // Si el perfil aún no tiene país asignado, el default de edición es el
   // árbol admin desde el que se abrió (no un país fijo).
@@ -518,6 +521,10 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
       // También para staff: el teléfono del agente es lo que ve el cliente en
       // la colección de visitas. Se envía siempre (vacío = borrarlo).
       payload.phone = phone.trim() || null;
+      // El correo solo viaja si cambió: tocarlo implica cambiar también las
+      // credenciales de acceso, y no queremos hacerlo en cada guardado.
+      const nextEmail = email.trim();
+      if (nextEmail && nextEmail !== user.email) payload.email = nextEmail;
       if (newPassword) payload.password = newPassword;
 
       const res = await fetch("/api/admin/usuarios/update", {
@@ -597,6 +604,33 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                   className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="usuario@ejemplo.com"
+                required
+                className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              />
+              {email.trim() !== user.email && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-amber-700">
+                  Cambiar el email cambia también el usuario con el que se
+                  inicia sesión. A partir de guardar, hay que entrar con{" "}
+                  <span className="font-medium">{email.trim() || "—"}</span>.
+                </p>
+              )}
+              {!isClient && email.trim() === user.email && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-ink/45">
+                  Es el correo que ve el cliente en la ficha de asesor de una
+                  colección de visitas, y el de inicio de sesión.
+                </p>
+              )}
             </div>
 
             <div>
@@ -723,7 +757,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
               </button>
               <button
                 type="submit"
-                disabled={!firstName || status === "loading"}
+                disabled={!firstName || !email.trim() || status === "loading"}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
               >
                 {status === "loading" ? (

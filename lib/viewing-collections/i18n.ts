@@ -41,6 +41,22 @@ export const LANGUAGE_LABELS: Record<CollectionLanguage, string> = {
   he: "עברית",
 };
 
+/**
+ * Idiomas cuya traducción escribió una IA y NO ha revisado un hablante nativo.
+ * El layout y el RTL sí están comprobados; lo que falta es la lengua.
+ *
+ * No se retiran (funcionan, y quitarlos perdería el trabajo hecho), pero el
+ * panel los marca para que nadie los mande a un cliente creyéndolos revisados.
+ * Al validarlos con un hablante, basta con vaciar este conjunto.
+ */
+export const TRANSLATION_REVIEW_REQUIRED: ReadonlySet<CollectionLanguage> =
+  new Set<CollectionLanguage>(["ar", "tr", "he"]);
+
+/** Español e inglés son los únicos revisados de punta a punta. */
+export function isProductionSafeLanguage(lang: CollectionLanguage): boolean {
+  return !TRANSLATION_REVIEW_REQUIRED.has(lang);
+}
+
 export function isRtl(lang: CollectionLanguage): boolean {
   return lang === "ar" || lang === "he";
 }
@@ -86,6 +102,8 @@ export type CollectionDictionary = {
   residence: string;
   viewPhotos: (n: number) => string;
   closeGallery: string;
+  /** Vuelta al mosaico desde una lámina de la galería. */
+  galleryAll: string;
 
   bedrooms: string;
   bathrooms: string;
@@ -152,6 +170,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "Residencia",
     viewPhotos: (n) => `Ver ${n} fotografías`,
     closeGallery: "Cerrar galería",
+    galleryAll: "Todas las fotografías",
     bedrooms: "Dormitorios",
     bathrooms: "Baños",
     surface: "Superficie",
@@ -191,6 +210,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "Residence",
     viewPhotos: (n) => `View ${n} photographs`,
     closeGallery: "Close gallery",
+    galleryAll: "All photographs",
     bedrooms: "Bedrooms",
     bathrooms: "Bathrooms",
     surface: "Surface",
@@ -230,6 +250,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "Résidence",
     viewPhotos: (n) => `Voir ${n} photographies`,
     closeGallery: "Fermer la galerie",
+    galleryAll: "Toutes les photographies",
     bedrooms: "Chambres",
     bathrooms: "Salles de bain",
     surface: "Surface",
@@ -269,6 +290,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "Residenza",
     viewPhotos: (n) => `Vedi ${n} fotografie`,
     closeGallery: "Chiudi la galleria",
+    galleryAll: "Tutte le fotografie",
     bedrooms: "Camere",
     bathrooms: "Bagni",
     surface: "Superficie",
@@ -308,6 +330,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "Residenz",
     viewPhotos: (n) => `${n} Fotografien ansehen`,
     closeGallery: "Galerie schließen",
+    galleryAll: "Alle Fotografien",
     bedrooms: "Schlafzimmer",
     bathrooms: "Bäder",
     surface: "Fläche",
@@ -348,6 +371,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "مسكن",
     viewPhotos: (n) => `عرض ${n} صورة`,
     closeGallery: "إغلاق المعرض",
+    galleryAll: "كل الصور",
     bedrooms: "غرف النوم",
     bathrooms: "الحمّامات",
     surface: "المساحة",
@@ -386,6 +410,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "Rezidans",
     viewPhotos: (n) => `${n} fotoğrafı gör`,
     closeGallery: "Galeriyi kapat",
+    galleryAll: "Tüm fotoğraflar",
     bedrooms: "Yatak odası",
     bathrooms: "Banyo",
     surface: "Alan",
@@ -425,6 +450,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     residence: "נכס",
     viewPhotos: (n) => `צפייה ב-${n} תצלומים`,
     closeGallery: "סגירת הגלריה",
+    galleryAll: "כל התצלומים",
     bedrooms: "חדרי שינה",
     bathrooms: "חדרי רחצה",
     surface: "שטח",
