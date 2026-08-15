@@ -53,6 +53,19 @@ export default async function AdminIdealistaPage({
     .eq("type", "video")
     .eq("source", "auto");
 
+  // Cuántos leads del inbox de Idealista llegaron matcheados a cada propiedad,
+  // para ver el rendimiento real de cada ficha (cuál conviene mantener subida).
+  const { data: idealistaLeadMatches } = await supabase
+    .from("idealista_leads")
+    .select("matched_property_id")
+    .not("matched_property_id", "is", null);
+
+  const leadCountsByProperty: Record<string, number> = {};
+  for (const row of (idealistaLeadMatches ?? []) as Array<{ matched_property_id: string | null }>) {
+    if (!row.matched_property_id) continue;
+    leadCountsByProperty[row.matched_property_id] = (leadCountsByProperty[row.matched_property_id] ?? 0) + 1;
+  }
+
   const listingsWithVideo = [
     ...new Set(
       ((autoVideos ?? []) as Array<{ property_id: string | null; idealista_listing_id: string | null }>)
@@ -189,7 +202,7 @@ export default async function AdminIdealistaPage({
             hotfix: el tipo local DbIdealistaListing de idealista-client.tsx
             derivó respecto al cast inline de `idealista`; la data es la misma
             que la versión raíz (que compila y funciona en runtime). */}
-        <IdealistaClient properties={rows} listings={idealista as any} listingsWithVideo={listingsWithVideo} />
+        <IdealistaClient properties={rows} listings={idealista as any} listingsWithVideo={listingsWithVideo} leadCountsByProperty={leadCountsByProperty} />
       </div>
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />

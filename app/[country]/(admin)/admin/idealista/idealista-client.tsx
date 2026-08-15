@@ -236,11 +236,14 @@ export function IdealistaClient({
   properties,
   listings,
   listingsWithVideo,
+  leadCountsByProperty,
 }: {
   properties: Property[];
   listings: DbIdealistaListing[];
   /** IDs (de properties o de idealista_listings) que ya tienen vídeo automático generado. */
   listingsWithVideo: string[];
+  /** property_id -> nº de leads del inbox de Idealista matcheados a esa propiedad. */
+  leadCountsByProperty: Record<string, number>;
 }) {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isInspoMode, setIsInspoMode] = useState(false);
@@ -916,6 +919,14 @@ export function IdealistaClient({
                       {listing.reference_code && (
                         <span className="rounded-full bg-blue-100/60 px-2 py-0.5 text-[10px] font-medium text-blue-700 font-mono">
                           {listing.reference_code}
+                        </span>
+                      )}
+                      {!listing.is_inspo && listing.property_id && leadCountsByProperty[listing.property_id] > 0 && (
+                        <span
+                          className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700"
+                          title="Contactos del inbox de Idealista matcheados a esta propiedad (ver Solicitudes)"
+                        >
+                          👤 {leadCountsByProperty[listing.property_id]} lead{leadCountsByProperty[listing.property_id] === 1 ? "" : "s"}
                         </span>
                       )}
                       {(() => {
