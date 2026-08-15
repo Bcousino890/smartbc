@@ -12,8 +12,32 @@
   - `SUPABASE_SERVICE_ROLE_KEY` / `NEXT_PUBLIC_SUPABASE_URL` apuntan al VPS.
   - Las migraciones se aplican con psql dentro del contenedor `supabase-db`
     (ver `scripts/post-deploy.sh` y el botón en `/admin/configuracion`).
-- Deploy: push a `main` → VPS hace `git pull && npm run build && pm2 restart`
-  (cron cada ~5 min).
+- Deploy: push a `main` → el VPS despliega solo (cron cada minuto,
+  `/opt/vps-autodeploy.sh`). Ver "Cómo despliega el VPS" abajo.
+
+### Cómo despliega el VPS (corregido 2026-08-16)
+Hasta esta fecha el build se hacía **en sitio**: `next build` reescribía `.next`
+mientras el proceso de PM2 seguía sirviendo desde esa misma carpeta, así que
+**cada despliegue devolvía 500 durante uno o dos minutos**. Ya no.
+
+Ahora: compila en `.next.new` → migraciones → intercambio atómico → reinicio →
+health check → **si no responde, vuelve sola a la versión anterior**. La versión
+previa queda en `.next.prev` hasta el siguiente despliegue (rollback = un `mv`).
+
+⚠️ **La trampa que hay que conocer:** Next graba el `distDir` DENTRO del build
+(`.next/required-server-files.json`). Compilar en `.next.new` y renombrarlo a
+`.next` **no basta**: arranca con *"Could not find a production build in the
+'.next' directory"*. Hay que reescribir ese campo antes del swap; el script ya
+lo hace. Si algún día alguien "simplifica" ese paso, tumba producción.
+
+⚠️ El script vive **fuera del repo** (`/opt/vps-autodeploy.sh`) para que
+`git reset --hard` no lo pise en caliente. La copia de referencia está en
+`scripts/vps-autodeploy.sh`: **si editas una, copia la otra**. Durante meses la
+del VPS fue una versión vieja de junio y la del repo describía un mecanismo que
+nunca se había ejecutado (y que además estaba roto).
+
+`npm install` solo se lanza si cambió `package-lock.json`: reescribir
+`node_modules` bajo un proceso vivo también rompe peticiones.
 ### Datos del servidor verificados en producción (2026-08-11)
 Comprobados por SSH contra la máquina viva. El repo tenía **cuatro** de estos
 datos mal, y por eso se pierde tanto tiempo: la gente instala o reinicia cosas
