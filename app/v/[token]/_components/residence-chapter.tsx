@@ -18,6 +18,7 @@ import type {
   PublicViewingStop,
 } from "@/lib/viewing-collections/public-contract";
 import { cn } from "@/lib/utils";
+import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
 import {
   ChapterMark,
   DataPoint,
@@ -28,22 +29,29 @@ import {
   StatusLine,
 } from "./editorial";
 
-const AVAILABILITY_WORD: Partial<Record<PublicAvailability, string>> = {
-  reserved: "Residencia · Reservada",
-  sold: "Residencia · Vendida",
-};
+function availabilityWord(
+  t: CollectionDictionary,
+): Partial<Record<PublicAvailability, string>> {
+  return {
+    reserved: `${t.residence} · ${t.reserved}`,
+    sold: `${t.residence} · ${t.sold}`,
+  };
+}
 
-function viewingLine(stop: PublicViewingStop): {
-  text: string;
-  tone: "confirmed" | "pending" | "muted";
-} {
+function viewingLine(
+  stop: PublicViewingStop,
+  t: CollectionDictionary,
+): { text: string; tone: "confirmed" | "pending" | "muted" } {
   if (stop.status === "cancelled") {
-    return { text: "Visita cancelada", tone: "muted" };
+    return { text: `${t.privateViewing} · ${t.statusCancelled}`, tone: "muted" };
   }
   if (stop.status === "confirmed") {
-    return { text: "Visita privada · Confirmada", tone: "confirmed" };
+    return {
+      text: `${t.privateViewing} · ${t.statusConfirmed}`,
+      tone: "confirmed",
+    };
   }
-  return { text: "Visita privada · Por confirmar", tone: "pending" };
+  return { text: `${t.privateViewing} · ${t.statusPending}`, tone: "pending" };
 }
 
 export function ResidenceChapter({
@@ -53,6 +61,7 @@ export function ResidenceChapter({
   onExpand,
   onSmartLinkClick,
   registerRef,
+  dict,
 }: {
   stop: PublicViewingStop;
   total: number;
@@ -60,6 +69,7 @@ export function ResidenceChapter({
   onExpand: () => void;
   onSmartLinkClick: () => void;
   registerRef: (order: number, el: HTMLElement | null) => void;
+  dict: CollectionDictionary;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const viewed = useRef(false);
@@ -89,7 +99,8 @@ export function ResidenceChapter({
   const cancelled = stop.status === "cancelled";
   const flipped = stop.order % 2 === 0;
   const extraPhotos = stop.photoUrls.slice(1, 13);
-  const viewing = viewingLine(stop);
+  const viewing = viewingLine(stop, dict);
+  const AVAILABILITY_WORD = availabilityWord(dict);
 
   return (
     <section
@@ -97,7 +108,9 @@ export function ResidenceChapter({
       id={`residence-${stop.order}`}
       aria-labelledby={`residence-${stop.order}-title`}
       className={cn(
-        "scroll-mt-16 py-16 md:py-24 lg:py-28",
+        // El aire entre capítulos se redujo un punto: tras el CTA quedaba un
+        // hueco que empezaba a leer como accidental, sobre todo en móvil.
+        "scroll-mt-16 py-12 md:py-20 lg:py-24",
         (unavailable || cancelled) && "opacity-60",
       )}
     >
@@ -123,7 +136,7 @@ export function ResidenceChapter({
         <Reveal delay={1} className="mx-auto mt-10 max-w-5xl px-6 md:px-10">
           <Rule />
           <p className="py-12 text-center font-sans text-[13px] text-ink/50 md:py-16 md:text-sm">
-            Esta residencia ya no está disponible.
+            {dict.noLongerAvailable}
           </p>
           <Rule />
         </Reveal>
@@ -158,8 +171,8 @@ export function ResidenceChapter({
                 {extraPhotos.length > 0 && (
                   <span className="pointer-events-none absolute bottom-5 right-5 border border-cream-50/45 bg-ink/55 px-4 py-2.5 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm md:bottom-8 md:right-8 md:text-[10px]">
                     {galleryOpen
-                      ? "Cerrar galería"
-                      : `Ver ${extraPhotos.length} fotografías`}
+                      ? dict.closeGallery
+                      : dict.viewPhotos(extraPhotos.length)}
                   </span>
                 )}
               </button>
@@ -175,7 +188,7 @@ export function ResidenceChapter({
               {extraPhotos.map((url, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  key={url}
+                  key={`${url}-${i}`}
                   src={url}
                   alt={`${stop.title} — fotografía ${i + 2}`}
                   loading="lazy"
@@ -203,18 +216,18 @@ export function ResidenceChapter({
                   flipped ? "lg:col-start-6" : "lg:col-start-1",
                 )}
               >
-                <p className="font-serif text-[27px] leading-none text-ink vc-nums md:text-[34px]">
+                <p dir="ltr" className="font-serif text-[27px] leading-none text-ink vc-nums md:text-[34px] rtl:text-right">
                   {stop.priceLabel}
                 </p>
 
                 <Rule className="my-7 md:my-8" />
 
                 <div className="flex flex-wrap gap-x-12 gap-y-6 sm:gap-x-16">
-                  <DataPoint label="Dormitorios" value={stop.bedrooms} />
-                  <DataPoint label="Baños" value={stop.bathrooms} />
+                  <DataPoint label={dict.bedrooms} value={stop.bedrooms} />
+                  <DataPoint label={dict.bathrooms} value={stop.bathrooms} />
                   {stop.squareMeters ? (
                     <DataPoint
-                      label="Superficie"
+                      label={dict.surface}
                       value={
                         <>
                           {stop.squareMeters}
@@ -227,7 +240,7 @@ export function ResidenceChapter({
                   ) : null}
                   {stop.propertyTypeLabel && (
                     <DataPoint
-                      label="Tipología"
+                      label={dict.typology}
                       value={
                         <span className="text-[17px] md:text-[19px]">
                           {stop.propertyTypeLabel}
@@ -262,7 +275,7 @@ export function ResidenceChapter({
                   )}
                 >
                   {stop.timeLabel && !cancelled && (
-                    <p className="font-serif text-[27px] leading-none text-ink vc-nums md:text-[32px]">
+                    <p dir="ltr" className="font-serif text-[27px] leading-none text-ink vc-nums md:text-[32px] rtl:text-right">
                       {stop.timeLabel}
                       {stop.durationLabel && (
                         <span className="ml-2.5 font-sans text-[12px] font-normal text-ink/40 md:text-[13px]">
@@ -277,7 +290,7 @@ export function ResidenceChapter({
                   </StatusLine>
 
                   <div className="mt-7">
-                    <Label>Ubicación</Label>
+                    <Label>{dict.location}</Label>
                     {stop.exactAddress ? (
                       <p className="mt-2 font-sans text-[13.5px] leading-relaxed text-ink/80 md:text-[14.5px]">
                         {stop.exactAddress}
@@ -288,7 +301,7 @@ export function ResidenceChapter({
                           {stop.zoneLabel}
                         </p>
                         <p className="mt-2 font-sans text-[11.5px] leading-relaxed text-ink/40">
-                          La dirección exacta se facilita al confirmar la visita.
+                          {dict.addressOnConfirm}
                         </p>
                       </>
                     )}
@@ -305,16 +318,16 @@ export function ResidenceChapter({
 
             {/* ── Acción ─────────────────────────────────────────────────── */}
             {stop.smartLinkUrl && !cancelled && (
-              <div className="mt-11 md:mt-14">
+              <div className="mt-8 md:mt-10">
                 <EditorialAction
                   href={stop.smartLinkUrl}
                   onClick={onSmartLinkClick}
                   className="w-full sm:w-auto"
                 >
-                  Explorar residencia
+                  {dict.explore}
                 </EditorialAction>
                 <p className="mt-4 font-sans text-[11.5px] text-ink/40">
-                  Galería completa, descripción, vídeo y planos.
+                  {dict.exploreHint}
                 </p>
               </div>
             )}

@@ -74,6 +74,7 @@ export type ViewingItineraryRow = {
   id: string;
   client_id: string;
   title: string | null;
+  language: string;
   scheduled_date: string | null;
   window_start: string | null;
   window_end: string | null;

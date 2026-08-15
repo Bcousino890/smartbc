@@ -89,7 +89,11 @@ export type PublicAgentContact = {
   avatarUrl: string | null;
 };
 
+import type { CollectionLanguage } from "./i18n";
+
 export type PublicViewingCollection = {
+  /** Idioma elegido por el agente. 'ar' y 'he' se renderizan en RTL. */
+  language: CollectionLanguage;
   title: string;
   dateLabel: string;
   windowLabel: string | null;

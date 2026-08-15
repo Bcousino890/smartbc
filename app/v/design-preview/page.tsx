@@ -4,6 +4,7 @@ import type {
   PublicViewingStop,
 } from "@/lib/viewing-collections/public-contract";
 import { ViewingCollectionView } from "../[token]/viewing-collection-view";
+import { isCollectionLanguage } from "@/lib/viewing-collections/i18n";
 
 /**
  * Banco de pruebas visual de la Viewing Collection.
@@ -101,6 +102,7 @@ function stop(
 // dirección exacta, por confirmar en solo-zona, reservada, cancelada visible y
 // no disponible.
 const COLLECTION: PublicViewingCollection = {
+  language: "es",
   title: "Visitas del lunes",
   dateLabel: "Lunes, 17 de agosto de 2026",
   windowLabel: "10:00 – 14:00",
@@ -152,8 +154,18 @@ const COLLECTION: PublicViewingCollection = {
   },
 };
 
-export default function ViewingCollectionPreviewPage() {
+export default async function ViewingCollectionPreviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string }>;
+}) {
   if (process.env.NODE_ENV === "production") notFound();
+  const { lang } = await searchParams;
+  const language = isCollectionLanguage(lang) ? lang : "es";
+  // El banco construye el objeto a mano, así que la traducción de labels de
+  // proyección (fechas, sufijos) no aplica aquí — pero language sí gobierna
+  // el diccionario de los componentes y el RTL, que es lo que se revisa.
+  const collection = { ...COLLECTION, language };
   // Token vacío: el banco de pruebas no emite analítica.
-  return <ViewingCollectionView collection={COLLECTION} collectionToken="" />;
+  return <ViewingCollectionView collection={collection} collectionToken="" />;
 }

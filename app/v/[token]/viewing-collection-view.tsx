@@ -3,25 +3,40 @@
 // ============================================================================
 // Viewing Collection · superficie de cliente.
 //
-// Consume EXCLUSIVAMENTE PublicViewingCollection. No accede a base de datos ni
-// carga el cliente de Supabase: todo lo que se ve aquí ya pasó por la
-// proyección del servidor.
+// Dos modos sobre el MISMO contrato (PublicViewingCollection):
 //
-// Estructura, como una publicación:
-//   Portada (tinta)  →  La jornada  →  Capítulos  →  Asesor  →  Colofón (tinta)
+//   · PRIVATE BOOK (escritorio y tablet horizontal, ≥1024px apaisado):
+//     publicación paginada — portada, índice, un spread por residencia,
+//     asesor y colofón. Ver book-mode.tsx.
 //
-// La instrumentación de analytics es la misma de Sprint 3: collection_open,
-// stop_view, stop_expand y share_click.
+//   · SCROLL EDITORIAL (móvil y tablet vertical): el recorrido vertical de
+//     siempre, pensado para consultarse entre visita y visita.
+//
+// El servidor renderiza el modo scroll (mejor LCP: la portada es idéntica en
+// ambos) y el cliente cambia a libro tras montar si el viewport lo pide. Como
+// la portada ocupa el viewport completo en los dos modos, el cambio es
+// invisible.
+//
+// Ningún componente de esta vista toca la base de datos: todo llega ya
+// proyectado y traducido según collection.language. 'ar' y 'he' → RTL.
 // ============================================================================
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicViewingCollection } from "@/lib/viewing-collections/public-contract";
+import {
+  getCollectionDictionary,
+  isRtl,
+} from "@/lib/viewing-collections/i18n";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { CollectionCover } from "./_components/collection-cover";
 import { DayOverview } from "./_components/day-overview";
 import { ResidenceChapter } from "./_components/residence-chapter";
 import { ChapterRail, ProgressBar } from "./_components/chapter-nav";
 import { AdvisorBlock, Colophon } from "./_components/closing";
+import { BookMode } from "./_components/book-mode";
+
+/** Libro en viewports amplios y apaisados; scroll en el resto. */
+const BOOK_MEDIA_QUERY = "(min-width: 1024px) and (orientation: landscape)";
 
 export function ViewingCollectionView({
   collection,
@@ -31,6 +46,12 @@ export function ViewingCollectionView({
   /** Token público de la colección. Vacío en previsualizaciones internas. */
   collectionToken: string;
 }) {
+  const dict = useMemo(
+    () => getCollectionDictionary(collection.language),
+    [collection.language],
+  );
+  const rtl = isRtl(collection.language);
+
   // Token vacío = previsualización del agente: no se instrumenta nada.
   const isPreview = !collectionToken;
   const trackerRef = useAnalytics({
@@ -54,7 +75,17 @@ export function ViewingCollectionView({
     [trackerRef, isPreview],
   );
 
-  // ── Navegación ────────────────────────────────────────────────────────────
+  // ── Detección de modo ──────────────────────────────────────────────────────
+  const [bookMode, setBookMode] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(BOOK_MEDIA_QUERY);
+    const apply = () => setBookMode(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // ── Navegación del modo scroll ─────────────────────────────────────────────
   const chapterRefs = useRef(new Map<number, HTMLElement>());
   const overviewRef = useRef<HTMLDivElement | null>(null);
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
@@ -67,6 +98,7 @@ export function ViewingCollectionView({
   }, []);
 
   useEffect(() => {
+    if (bookMode) return; // el libro no usa scroll de documento
     let frame = 0;
     const onScroll = () => {
       if (frame) return;
@@ -74,13 +106,9 @@ export function ViewingCollectionView({
         frame = 0;
         const y = window.scrollY;
         setPastCover(y > window.innerHeight * 0.7);
-
         const doc = document.documentElement;
         const scrollable = doc.scrollHeight - window.innerHeight;
         setProgress(scrollable > 0 ? y / scrollable : 0);
-
-        // Capítulo activo: el último cuya apertura ya ha pasado el tercio
-        // superior de la ventana.
         const marker = window.innerHeight * 0.33;
         let current: number | null = null;
         for (const [order, el] of chapterRefs.current) {
@@ -89,7 +117,6 @@ export function ViewingCollectionView({
         setActiveOrder(current);
       });
     };
-
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
@@ -98,19 +125,14 @@ export function ViewingCollectionView({
       window.removeEventListener("resize", onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [bookMode]);
 
-  // El scroll suave se hace por JS para poder respetar reduced-motion sin
-  // imponer `scroll-behavior: smooth` a todo el documento.
   const scrollTo = useCallback((el: HTMLElement | null) => {
     if (!el) return;
     const reduced = window.matchMedia?.(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    el.scrollIntoView({
-      behavior: reduced ? "auto" : "smooth",
-      block: "start",
-    });
+    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
   }, []);
 
   const goToChapter = useCallback(
@@ -122,13 +144,27 @@ export function ViewingCollectionView({
     [scrollTo],
   );
 
+  // ── PRIVATE BOOK ───────────────────────────────────────────────────────────
+  if (bookMode) {
+    return (
+      <BookMode
+        collection={collection}
+        dict={dict}
+        onStopView={(order) => track("stop_view", { order })}
+        onStopExpand={(order) => track("stop_expand", { order })}
+        onSmartLinkClick={(order) => track("share_click", { order })}
+      />
+    );
+  }
+
+  // ── SCROLL EDITORIAL ───────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-cream-50">
+    <div dir={rtl ? "rtl" : "ltr"} className="min-h-screen bg-cream-50">
       <a
         href="#viewing-day"
         className="vc-focus sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-ink focus:px-4 focus:py-2 focus:font-display focus:text-[11px] focus:uppercase focus:text-cream-50"
       >
-        Saltar a la jornada
+        {dict.dayTitle}
       </a>
 
       <ProgressBar
@@ -146,7 +182,11 @@ export function ViewingCollectionView({
         onOverview={goToOverview}
       />
 
-      <CollectionCover collection={collection} onBegin={goToOverview} />
+      <CollectionCover
+        collection={collection}
+        dict={dict}
+        onBegin={goToOverview}
+      />
 
       <main>
         <div ref={overviewRef}>
@@ -155,6 +195,7 @@ export function ViewingCollectionView({
             dateLabel={collection.dateLabel}
             windowLabel={collection.windowLabel}
             onSelect={goToChapter}
+            dict={dict}
           />
         </div>
 
@@ -166,6 +207,7 @@ export function ViewingCollectionView({
                 stop={stop}
                 total={collection.stopCount}
                 registerRef={registerRef}
+                dict={dict}
                 onView={() => track("stop_view", { order: stop.order })}
                 onExpand={() => track("stop_expand", { order: stop.order })}
                 onSmartLinkClick={() => track("share_click", { order: stop.order })}
@@ -175,7 +217,7 @@ export function ViewingCollectionView({
         )}
 
         <div className="border-t border-ink/10">
-          <AdvisorBlock agent={collection.agent} />
+          <AdvisorBlock agent={collection.agent} dict={dict} />
         </div>
       </main>
 
@@ -183,6 +225,7 @@ export function ViewingCollectionView({
         clientFirstName={collection.clientFirstName}
         dateLabel={collection.dateLabel}
         expiresAtLabel={collection.expiresAtLabel}
+        dict={dict}
       />
     </div>
   );

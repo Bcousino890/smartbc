@@ -7,6 +7,12 @@
 // ============================================================================
 
 import { getCountryConfig, isCountry } from "@/lib/country-config";
+import {
+  getCollectionDictionary,
+  intlLocale,
+  isCollectionLanguage,
+  type CollectionLanguage,
+} from "./i18n";
 import { shareSlug } from "@/lib/share-slug";
 import type {
   PublicAgentContact,
@@ -67,6 +73,7 @@ export type RawPublicStop = {
 
 export type RawPublicItinerary = {
   title: string | null;
+  language?: string | null;
   scheduled_date: string | null;
   window_start: string | null;
   window_end: string | null;
@@ -201,6 +208,38 @@ function effectivePrice(prop: RawPublicProperty): number {
   return Number(prop.price);
 }
 
+/**
+ * Título editorial de la residencia.
+ *
+ * Los títulos del catálogo son operativos ("Alquiler de piso en Calle de
+ * Jorge Juan") y en una publicación privada leen a portal inmobiliario. Si el
+ * título contiene una vía reconocible, la colección muestra solo su nombre
+ * ("Jorge Juan") — la operación, el tipo y la zona ya están en la página.
+ *
+ * Transformación de PRESENTACIÓN, conservadora a propósito: no toca
+ * properties.title, no inventa nada, y ante cualquier duda (sin vía
+ * reconocible, resultado corto o con dígitos) devuelve el título original.
+ */
+const STREET_NAME_RE =
+  /(?:calle|c\/|avenida|avda\.?|paseo|plaza|glorieta|camino|ronda|traves[ií]a|bulevar|costanilla|cuesta|v[ií]a|carrer|r[úu]a)\s+(?:de\s+(?:la|los|las|el)\s+|del\s+|de\s+|la\s+|el\s+)?([a-záéíóúüñA-ZÁÉÍÓÚÜÑ][a-záéíóúüñA-ZÁÉÍÓÚÜÑ\s.''-]{2,40}?)(?=\s*[,\dº(]|\s*$)/iu;
+
+export function editorialResidenceTitle(rawTitle: string): string {
+  const m = rawTitle.match(STREET_NAME_RE);
+  if (!m) return rawTitle;
+  const name = m[1].trim().replace(/\s+/g, " ");
+  // Con dígitos o demasiado corto no es un nombre de vía fiable.
+  if (name.length < 3 || /\d/.test(name)) return rawTitle;
+  // Capitalización de título respetando partículas.
+  const MINOR = new Set(["de", "del", "la", "las", "los", "el", "y"]);
+  return name
+    .toLocaleLowerCase("es")
+    .split(" ")
+    .map((w, i) =>
+      MINOR.has(w) && i > 0 ? w : w.charAt(0).toLocaleUpperCase("es") + w.slice(1),
+    )
+    .join(" ");
+}
+
 const GENERIC_TITLE_RE =
   /^(t[ií]tulos?|titles?|propiedad|sin t[ií]tulo|untitled|—|-)$/i;
 
@@ -210,7 +249,7 @@ function displayTitle(prop: RawPublicProperty): string {
       ? prop.title_rent
       : prop.title
   )?.trim();
-  if (raw && !GENERIC_TITLE_RE.test(raw)) return raw;
+  if (raw && !GENERIC_TITLE_RE.test(raw)) return editorialResidenceTitle(raw);
   const typ = prop.property_type?.trim();
   const label =
     typ && typ.length > 0
@@ -314,6 +353,14 @@ export function toPublicViewingCollection(
     : "es";
   const cfg = getCountryConfig(country);
   const tz = input.itinerary.timezone || "Europe/Madrid";
+  const language: CollectionLanguage = isCollectionLanguage(
+    input.itinerary.language,
+  )
+    ? input.itinerary.language
+    : "es";
+  const dict = getCollectionDictionary(language);
+  // Fechas en el idioma del cliente; la moneda sigue la lógica del país.
+  const locale = intlLocale(language);
 
   // 1 · Filtrar paradas ocultas.
   //     La query ya las excluye; esto es la SEGUNDA barrera, a propósito: si
@@ -338,7 +385,7 @@ export function toPublicViewingCollection(
       order: i + 1,
       timeLabel: formatTimeLabel(stop.scheduled_at, tz),
       durationLabel: stop.duration_minutes
-        ? `${stop.duration_minutes} min`
+        ? `${stop.duration_minutes} ${dict.minutesShort}`
         : null,
       status: collapseStopStatus(stop.confirmation_status),
 
@@ -348,11 +395,11 @@ export function toPublicViewingCollection(
       bedrooms: prop.bedrooms,
       bathrooms: prop.bathrooms,
       squareMeters: prop.square_meters,
-      priceLabel: cfg.formatPrice(
-        effectivePrice(prop),
-        prop.currency,
-        prop.operation,
-      ),
+      // La moneda la decide el país (EUR/CLP/UF); solo el sufijo de alquiler
+      // cambia de idioma.
+      priceLabel: cfg
+        .formatPrice(effectivePrice(prop), prop.currency, prop.operation)
+        .replace(/\/mes$/, dict.perMonthSuffix),
       bcReference: prop.bc_reference,
       availability: deriveAvailability(prop),
 
@@ -373,10 +420,12 @@ export function toPublicViewingCollection(
     };
   });
 
-  const dateLabel = formatDateLong(input.itinerary.scheduled_date, cfg.locale);
+  const dateLabel = formatDateLong(input.itinerary.scheduled_date, locale);
 
   return {
-    title: input.itinerary.title?.trim() || dateLabel || "Colección privada",
+    language,
+    title:
+      input.itinerary.title?.trim() || dateLabel || "Private Viewing Collection",
     dateLabel,
     windowLabel: formatWindow(
       input.itinerary.window_start,
@@ -384,7 +433,7 @@ export function toPublicViewingCollection(
     ),
     clientFirstName: firstNameOnly(input.clientFullName),
     stopCount: stops.length,
-    expiresAtLabel: formatDateShort(input.expiresAt, cfg.locale),
+    expiresAtLabel: formatDateShort(input.expiresAt, locale),
     stops,
     agent: toPublicAgent(input.agent),
   };

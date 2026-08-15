@@ -99,6 +99,8 @@ export function SelectedPropertiesBlock({
 
   return (
     <>
+      {/* Ancla del salto desde Solicitudes → "Preparar visitas". */}
+      <span id="viewing-collections" className="scroll-mt-24" />
       <CollapsibleBlock
         title="Propiedades seleccionadas"
         count={selections.length}

@@ -172,3 +172,26 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Book Mode: entrada de página — desplazamiento horizontal corto + fundido.
+   El sentido lo fija --vc-shift (invertido al retroceder y en RTL). */
+@keyframes vcPageIn {
+  from {
+    opacity: 0;
+    transform: translateX(var(--vc-shift, 26px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vc-page-in {
+  animation: vcPageIn 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-page-in {
+    animation: none;
+  }
+}

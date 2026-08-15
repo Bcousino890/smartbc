@@ -224,6 +224,7 @@ export function visitRequestRowToLegacy(
   const clientName = row.profiles?.full_name?.trim() || row.profiles?.email || "—";
   return {
     id: row.id,
+    clientId: row.client_id,
     clientName,
     clientInitials: deriveInitials(clientName),
     clientEmail: row.profiles?.email,

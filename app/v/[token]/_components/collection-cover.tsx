@@ -15,37 +15,22 @@
 
 import Image from "next/image";
 import type { PublicViewingCollection } from "@/lib/viewing-collections/public-contract";
+import {
+  getCollectionDictionary,
+  type CollectionDictionary,
+} from "@/lib/viewing-collections/i18n";
 import { Ornament } from "./editorial";
-
-/** Cifras en palabra: más editorial que un dígito suelto. */
-const WORDS = [
-  "ninguna",
-  "una",
-  "dos",
-  "tres",
-  "cuatro",
-  "cinco",
-  "seis",
-  "siete",
-  "ocho",
-  "nueve",
-  "diez",
-  "once",
-  "doce",
-];
-
-function residenceCount(n: number): string {
-  const word = WORDS[n] ?? String(n);
-  return `${word} ${n === 1 ? "residencia" : "residencias"}`;
-}
 
 export function CollectionCover({
   collection,
   onBegin,
+  dict,
 }: {
   collection: PublicViewingCollection;
   onBegin: () => void;
+  dict?: CollectionDictionary;
 }) {
+  const t = dict ?? getCollectionDictionary(collection.language);
   // La portada toma la fotografía de la primera residencia disponible.
   const cover =
     collection.stops.find((s) => s.availability !== "unavailable" && s.coverPhotoUrl)
@@ -113,7 +98,7 @@ export function CollectionCover({
         <Ornament tone="cream" className="vc-cover-in vc-cover-in-d2 mt-6 sm:mt-8 md:mt-10" />
 
         <p className="vc-cover-in vc-cover-in-d2 mt-6 font-display sm:mt-8 text-[9.5px] font-medium uppercase vc-tracked text-cream-50/55 md:text-[10.5px]">
-          Preparada para
+          {t.curatedFor}
         </p>
         <p className="vc-cover-in vc-cover-in-d2 mt-3 font-serif text-[27px] italic text-cream-50 md:text-[34px]">
           {collection.clientFirstName}
@@ -127,7 +112,7 @@ export function CollectionCover({
           )}
           <p className="font-sans text-[12px] text-cream-50/55 md:text-[13px]">
             {collection.windowLabel ? `${collection.windowLabel} · ` : ""}
-            {residenceCount(collection.stopCount)}
+            {t.residencesCount(collection.stopCount)}
           </p>
         </div>
       </div>
@@ -140,7 +125,7 @@ export function CollectionCover({
           className="vc-cover-in vc-cover-in-d4 vc-focus group flex flex-col items-center gap-3 text-cream-50/60 transition-colors duration-500 hover:text-cream-50"
         >
           <span className="font-display text-[9.5px] font-medium uppercase vc-tracked md:text-[10px]">
-            Comenzar
+            {t.begin}
           </span>
           <span
             aria-hidden

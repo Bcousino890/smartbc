@@ -11,26 +11,34 @@ import type {
   PublicStopStatus,
   PublicViewingStop,
 } from "@/lib/viewing-collections/public-contract";
+import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
 import { Label, Ornament, Reveal, Rule } from "./editorial";
 import { cn } from "@/lib/utils";
 
-const STATUS_WORD: Record<PublicStopStatus, string> = {
-  confirmed: "Confirmada",
-  pending: "Por confirmar",
-  cancelled: "Cancelada",
-};
+export function statusWord(
+  t: CollectionDictionary,
+): Record<PublicStopStatus, string> {
+  return {
+    confirmed: t.statusConfirmed,
+    pending: t.statusPending,
+    cancelled: t.statusCancelled,
+  };
+}
 
 export function DayOverview({
   stops,
   dateLabel,
   windowLabel,
   onSelect,
+  dict,
 }: {
   stops: PublicViewingStop[];
   dateLabel: string;
   windowLabel: string | null;
   onSelect: (order: number) => void;
+  dict: CollectionDictionary;
 }) {
+  const STATUS_WORD = statusWord(dict);
   if (stops.length === 0) return null;
 
   return (
@@ -40,12 +48,12 @@ export function DayOverview({
       className="mx-auto max-w-5xl px-6 py-20 md:px-10 md:py-28 lg:py-32"
     >
       <Reveal className="text-center">
-        <Label tone="gold">La jornada</Label>
+        <Label tone="gold">{dict.dayLabel}</Label>
         <h2
           id="viewing-day-title"
           className="mt-4 font-serif text-[30px] font-normal vc-tight text-ink md:text-[42px]"
         >
-          Tu día de visitas
+          {dict.dayTitle}
         </h2>
         {(dateLabel || windowLabel) && (
           <p className="mt-4 font-sans text-[13px] text-ink/50 md:text-sm">

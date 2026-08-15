@@ -32,6 +32,10 @@ import type {
   StopWithSelection,
 } from "@/lib/viewing-collections/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import {
+  COLLECTION_LANGUAGES,
+  LANGUAGE_LABELS,
+} from "@/lib/viewing-collections/i18n";
 import { cn } from "@/lib/utils";
 import { ViewingStopEditor } from "./viewing-stop-editor";
 import { PublishCollectionDialog } from "./publish-collection-dialog";
@@ -85,6 +89,7 @@ export function ItineraryBuilder({
   const [date, setDate] = useState(itinerary.scheduled_date ?? "");
   const [from, setFrom] = useState(itinerary.window_start?.slice(0, 5) ?? "");
   const [to, setTo] = useState(itinerary.window_end?.slice(0, 5) ?? "");
+  const [language, setLanguage] = useState(itinerary.language ?? "es");
 
   const stops = itinerary.stops;
   const isPublished = itinerary.status === "published";
@@ -106,6 +111,7 @@ export function ItineraryBuilder({
         scheduledDate: date || null,
         windowStart: from || null,
         windowEnd: to || null,
+        language,
       }),
     );
 
@@ -157,7 +163,7 @@ export function ItineraryBuilder({
             {/* Datos del día */}
             {!readOnly && (
               <div className="rounded-xl border border-gold/15 bg-white/60 p-3">
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
                   <label className="col-span-2 sm:col-span-1">
                     <span className="text-[10px] font-medium text-ink/55">
                       Título
@@ -201,6 +207,22 @@ export function ItineraryBuilder({
                       onChange={(e) => setTo(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
                     />
+                  </label>
+                  <label className="col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-medium text-ink/55">
+                      Idioma de la colección
+                    </span>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                    >
+                      {COLLECTION_LANGUAGES.map((l) => (
+                        <option key={l} value={l}>
+                          {LANGUAGE_LABELS[l]}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <button

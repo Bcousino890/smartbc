@@ -23,6 +23,10 @@ import {
   translateLeadMessage,
 } from "./actions";
 import { WhatsAppLeadButton } from "./whatsapp-lead-button";
+import {
+  PrepareVisitsButton,
+  PrepareVisitsLink,
+} from "@/components/admin/viewing-collections/prepare-visits-button";
 
 type PropertySearchResult = {
   id: string;
@@ -432,6 +436,10 @@ function ContactCard({ contact }: { contact: ContactRequestRow }) {
 
       <div className="mt-2.5 text-[11px] text-ink/40">
         {new Date(contact.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+      </div>
+
+      <div className="mt-3">
+        <PrepareVisitsButton source="contact" sourceId={contact.id} compact />
       </div>
 
       {isNew && (
@@ -995,6 +1003,9 @@ function IdealistaLeadCard({
                 {LEAD_TYPE_LABEL[type]}
               </button>
             ))}
+          </div>
+          <div className="mt-2">
+            <PrepareVisitsButton source="idealista" sourceId={lead.id} />
           </div>
           <div className="mt-2 flex gap-2">
             <button
@@ -1609,7 +1620,8 @@ function RequestCard({ request }: { request: VisitRequest }) {
 
       {/* Acciones para pendientes */}
       {isPendingStatus && (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {request.clientId && <PrepareVisitsLink clientId={request.clientId} />}
           <button
             type="button"
             onClick={handleConfirm}

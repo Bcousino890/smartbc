@@ -393,6 +393,8 @@ export type VisitRequestStatus =
 
 export type VisitRequest = {
   id: string;
+  /** id del profile del cliente — permite saltar a su ficha/Viewing Collections. */
+  clientId?: string;
   clientName: string;
   clientInitials: string;
   clientEmail?: string;

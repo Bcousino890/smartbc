@@ -13,6 +13,7 @@
  */
 import {
   collapseStopStatus,
+  editorialResidenceTitle,
   deriveAvailability,
   firstNameOnly,
   proxyPhotoUrls,
@@ -373,6 +374,73 @@ check(
   "1000 tokens sin colisión",
   new Set(Array.from({ length: 1000 }, () => randomToken())).size === 1000,
 );
+
+// ============================================================================
+section("🟡 Títulos editoriales (transformación de presentación)");
+// ============================================================================
+
+for (const [input, expected] of [
+  ["Alquiler de piso en Calle de Jorge Juan", "Jorge Juan"],
+  ["Piso en venta en Calle José Abascal", "José Abascal"],
+  ["Ático en venta en finca señorial en Calle del General Oráa", "General Oráa"],
+  ["Piso reformado en alquiler en Almagro, con terraza", "Piso reformado en alquiler en Almagro, con terraza"],
+  ["Piso en venta en Guindalera", "Piso en venta en Guindalera"],
+  ["Chalet en Avenida de la Fontanilla, 15", "Fontanilla"],
+  ["Piso en Calle Velázquez 55, 2º Derecha", "Velázquez"],
+] as const) {
+  const got = editorialResidenceTitle(input);
+  check(`"${input.slice(0, 42)}…" → "${expected.slice(0, 30)}"`, got === expected, got);
+}
+
+// ============================================================================
+section("🟡 i18n · la colección habla el idioma del cliente");
+// ============================================================================
+
+const enCol = toPublicViewingCollection(
+  mondayCollection({
+    itinerary: { ...mondayCollection().itinerary, language: "en" },
+  }),
+);
+check("language=en en el contrato", enCol.language === "en");
+check(
+  "fecha en inglés",
+  enCol.dateLabel.startsWith("Monday"),
+  enCol.dateLabel,
+);
+check(
+  "sufijo de alquiler traducido",
+  enCol.stops[0].priceLabel.endsWith("/month"),
+  enCol.stops[0].priceLabel,
+);
+check(
+  "duración traducida (min)",
+  enCol.stops[0].durationLabel === "30 min",
+  String(enCol.stops[0].durationLabel),
+);
+
+const arCol = toPublicViewingCollection(
+  mondayCollection({
+    itinerary: { ...mondayCollection().itinerary, language: "ar" },
+  }),
+);
+check("language=ar", arCol.language === "ar");
+check(
+  "fecha árabe con dígitos latinos",
+  /2026/.test(arCol.dateLabel),
+  arCol.dateLabel,
+);
+check(
+  "sufijo árabe de alquiler",
+  arCol.stops[0].priceLabel.includes("شهري"),
+  arCol.stops[0].priceLabel,
+);
+
+const badLang = toPublicViewingCollection(
+  mondayCollection({
+    itinerary: { ...mondayCollection().itinerary, language: "xx" },
+  }),
+);
+check("idioma desconocido cae a español", badLang.language === "es");
 
 // ============================================================================
 console.log(

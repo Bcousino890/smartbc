@@ -19,6 +19,7 @@ import {
   collectionUrl,
   getViewingCollectionsSettings,
 } from "@/lib/db/queries/viewing-collections";
+import { isCollectionLanguage } from "@/lib/viewing-collections/i18n";
 import {
   CONFIRMATIONS_REVOKING_EXACT_ADDRESS,
   midpointPosition,
@@ -319,6 +320,8 @@ export type CreateItineraryInput = {
   scheduledDate?: string | null;
   windowStart?: string | null;
   windowEnd?: string | null;
+  /** Idioma de la colección pública. El panel sigue en español. */
+  language?: string | null;
   selectionIds?: string[];
 };
 
@@ -346,6 +349,7 @@ export async function createItinerary(
       window_end: input.windowEnd || null,
       country,
       timezone: country === "cl" ? "America/Santiago" : "Europe/Madrid",
+      language: isCollectionLanguage(input.language) ? input.language : "es",
       created_by: g.userId,
     })
     .select("id")
@@ -378,6 +382,7 @@ export type UpdateItineraryInput = {
   scheduledDate?: string | null;
   windowStart?: string | null;
   windowEnd?: string | null;
+  language?: string | null;
 };
 
 export async function updateItinerary(
@@ -399,6 +404,9 @@ export async function updateItinerary(
     patch.window_start = input.windowStart || null;
   }
   if (input.windowEnd !== undefined) patch.window_end = input.windowEnd || null;
+  if (input.language !== undefined && isCollectionLanguage(input.language)) {
+    patch.language = input.language;
+  }
 
   const { error } = await db()
     .from("viewing_itineraries")

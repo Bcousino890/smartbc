@@ -9,9 +9,16 @@
 
 import Image from "next/image";
 import type { PublicAgentContact } from "@/lib/viewing-collections/public-contract";
+import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
 import { Label, Ornament, Reveal } from "./editorial";
 
-export function AdvisorBlock({ agent }: { agent: PublicAgentContact }) {
+export function AdvisorBlock({
+  agent,
+  dict,
+}: {
+  agent: PublicAgentContact;
+  dict: CollectionDictionary;
+}) {
   const initials = agent.displayName
     .split(/\s+/)
     .slice(0, 2)
@@ -25,12 +32,12 @@ export function AdvisorBlock({ agent }: { agent: PublicAgentContact }) {
       className="mx-auto max-w-5xl px-6 py-20 md:px-10 md:py-28"
     >
       <Reveal className="text-center">
-        <Label tone="gold">A tu disposición</Label>
+        <Label tone="gold">{dict.atYourService}</Label>
         <h2
           id="advisor-title"
           className="mt-4 font-serif text-[28px] font-normal vc-tight text-ink md:text-[38px]"
         >
-          Tu asesor
+          {dict.yourAdvisor}
         </h2>
         <Ornament className="mt-7" />
       </Reveal>
@@ -81,7 +88,7 @@ export function AdvisorBlock({ agent }: { agent: PublicAgentContact }) {
               href={`mailto:${agent.email}`}
               className="vc-focus border border-ink/25 px-7 py-3.5 text-center font-display text-[10.5px] font-medium uppercase vc-tracked text-ink transition-colors duration-500 hover:border-ink"
             >
-              Escribir
+              {dict.write}
             </a>
           )}
         </div>
@@ -94,10 +101,12 @@ export function Colophon({
   clientFirstName,
   dateLabel,
   expiresAtLabel,
+  dict,
 }: {
   clientFirstName: string;
   dateLabel: string;
   expiresAtLabel: string;
+  dict: CollectionDictionary;
 }) {
   return (
     <footer className="bg-ink text-cream-50">
@@ -118,7 +127,7 @@ export function Colophon({
           <Ornament tone="cream" className="mt-10" />
 
           <p className="mt-10 font-serif text-[19px] italic leading-relaxed text-cream-50/90 md:text-[22px]">
-            Preparada en exclusiva para {clientFirstName}.
+            {dict.preparedExclusively(clientFirstName)}
           </p>
 
           {dateLabel && (
@@ -130,7 +139,7 @@ export function Colophon({
           {/* Discreción, no advertencia legal: se menciona la vigencia una sola
               vez y en el tono del resto de la publicación. */}
           <p className="mt-14 font-sans text-[11px] leading-relaxed text-cream-50/30">
-            Colección privada · disponible hasta el {expiresAtLabel}
+            {dict.validUntil(expiresAtLabel)}
           </p>
         </Reveal>
       </div>
