@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
+import { matchPropertyByAddress } from "@/lib/services/idealista/lead-property-match";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
 // Público a propósito (lo llama la extensión desde idealista.com); la seguridad
@@ -229,6 +230,27 @@ export async function POST(req: Request) {
     }
   }
 
+  // Fallback por dirección + precio: muchos hilos de Idealista no traen ni
+  // referencia ni código de anuncio (solo aparecen si se abrió el detalle).
+  // Se arma la lista de candidatas una sola vez y solo si hace falta.
+  const needsAddressFallback = [...incoming.values()].some(
+    (l) => !l.property_ref && !l.idealista_code && l.property_title,
+  );
+  let addressCandidates: { id: string; street: string | null; zone: string | null; price: number | null }[] = [];
+  if (needsAddressFallback) {
+    const { data: ownProps } = await db
+      .from("properties")
+      .select("id, address, zone, price")
+      .not("bc_reference", "is", null)
+      .is("archived_at", null);
+    addressCandidates = (ownProps ?? []).map((p: any) => ({
+      id: p.id,
+      street: p.address ?? null,
+      zone: p.zone ?? null,
+      price: p.price ?? null,
+    }));
+  }
+
   const now = new Date().toISOString();
   const rows: any[] = [];
   const results: { conversationId: string; action: "inserted" | "updated" }[] = [];
@@ -329,14 +351,20 @@ export async function POST(req: Request) {
     }
 
     // Match de propiedad (solo si aún no hay match): primero por referencia
-    // de agencia, luego por código de anuncio de idealista.com.
+    // de agencia, luego por código de anuncio de idealista.com, y si tampoco
+    // hay eso (lo más común: la mayoría de hilos no traen ni ref ni código),
+    // por dirección + precio del propio inbox.
     const ref = (merged.property_ref as string | null)?.toLowerCase();
     const code = merged.idealista_code as string | null;
     merged.matched_property_id =
       existing?.matched_property_id ??
       (ref ? propertyIdByRef.get(ref) : undefined) ??
       (code ? propertyIdByCode.get(code) : undefined) ??
-      null;
+      matchPropertyByAddress(
+        merged.property_title as string | null,
+        merged.property_price as string | null,
+        addressCandidates,
+      );
 
     rows.push(merged);
     results.push({ conversationId: lead.conversation_id, action: existing ? "updated" : "inserted" });
