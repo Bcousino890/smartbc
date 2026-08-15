@@ -6,6 +6,10 @@ import { Loader2, X } from "lucide-react";
 import { createItinerary } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
 import type { SelectionWithProperty } from "@/lib/viewing-collections/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import {
+  COLLECTION_LANGUAGES,
+  LANGUAGE_LABELS,
+} from "@/lib/viewing-collections/i18n";
 
 export function CreateItineraryDialog({
   clientId,
@@ -24,6 +28,7 @@ export function CreateItineraryDialog({
   const [date, setDate] = useState("");
   const [from, setFrom] = useState("10:00");
   const [to, setTo] = useState("14:00");
+  const [language, setLanguage] = useState("es");
   const [chosen, setChosen] = useState<Set<string>>(
     new Set(selections.map((s) => s.id)),
   );
@@ -38,6 +43,7 @@ export function CreateItineraryDialog({
         scheduledDate: date || null,
         windowStart: from || null,
         windowEnd: to || null,
+        language,
         selectionIds: Array.from(chosen),
       });
       if (res.ok) {
@@ -121,6 +127,26 @@ export function CreateItineraryDialog({
           <p className="mt-1.5 text-[10px] text-ink/45">
             Puedes dejar la fecha vacía y guardarlo como borrador.
           </p>
+
+          <label className="mt-4 block">
+            <span className="text-[11px] font-medium text-ink/55">
+              Idioma de la colección
+            </span>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            >
+              {COLLECTION_LANGUAGES.map((l) => (
+                <option key={l} value={l}>
+                  {LANGUAGE_LABELS[l]}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[10px] text-ink/45">
+              El enlace que verá el cliente se sirve en este idioma.
+            </span>
+          </label>
 
           <div className="mt-5">
             <p className="text-[11px] font-medium text-ink/55">

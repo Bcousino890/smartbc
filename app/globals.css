@@ -173,25 +173,185 @@
   }
 }
 
-/* Book Mode: entrada de página — desplazamiento horizontal corto + fundido.
-   El sentido lo fija --vc-shift (invertido al retroceder y en RTL). */
-@keyframes vcPageIn {
-  from {
-    opacity: 0;
-    transform: translateX(var(--vc-shift, 26px));
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+/* ============================================================================
+   Private Book · paso de página
+   ----------------------------------------------------------------------------
+   Al avanzar, la hoja actual gira sutilmente sobre el lomo (izquierdo en LTR)
+   y revela la siguiente, que se asienta debajo. Al retroceder, la hoja
+   anterior vuelve a posarse encima. Rotación contenida (≤16°, portada 24°),
+   perspectiva moderada y una sombra de giro que pasa sobre la página nueva:
+   la sensación es de superficie sobre superficie, no de tarjeta flotante.
+
+   Todo transforms + opacity (composición en GPU). prefers-reduced-motion lo
+   degrada a un fundido corto sin perspectiva.
+   ========================================================================== */
+
+.vc-book-stage {
+  perspective: 2400px;
+  perspective-origin: 50% 45%;
 }
 
+/* Curva "masa ligera": arranque suave, giro fluido, aterrizaje blando. */
+:root {
+  --vc-turn-ease: cubic-bezier(0.45, 0.05, 0.15, 1);
+}
+
+/* ── Hoja SALIENTE al avanzar (gira y se retira) ── */
+@keyframes vcSheetOutNext {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: rotateY(-16deg) translateX(-7%); opacity: 0; }
+}
+.vc-sheet-out-next {
+  transform-origin: left center;
+  animation: vcSheetOutNext 700ms var(--vc-turn-ease) both;
+  will-change: transform, opacity;
+}
+.vc-sheet-out-next.vc-rtl {
+  transform-origin: right center;
+  animation-name: vcSheetOutNextRtl;
+}
+@keyframes vcSheetOutNextRtl {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: rotateY(16deg) translateX(7%); opacity: 0; }
+}
+
+/* Portada: apertura más marcada — el momento distintivo del libro. */
+.vc-sheet-out-cover {
+  transform-origin: left center;
+  animation: vcSheetOutCover 850ms var(--vc-turn-ease) both;
+  will-change: transform, opacity;
+}
+@keyframes vcSheetOutCover {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  65%  { opacity: 1; }
+  100% { transform: rotateY(-24deg) translateX(-10%); opacity: 0; }
+}
+.vc-sheet-out-cover.vc-rtl {
+  transform-origin: right center;
+  animation-name: vcSheetOutCoverRtl;
+}
+@keyframes vcSheetOutCoverRtl {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  65%  { opacity: 1; }
+  100% { transform: rotateY(24deg) translateX(10%); opacity: 0; }
+}
+
+/* ── Hoja ENTRANTE al retroceder (vuelve a posarse encima) ── */
+@keyframes vcSheetInPrev {
+  0%   { transform: rotateY(-16deg) translateX(-7%); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: rotateY(0deg) translateX(0); opacity: 1; }
+}
+.vc-sheet-in-prev {
+  transform-origin: left center;
+  animation: vcSheetInPrev 700ms var(--vc-turn-ease) both;
+  will-change: transform, opacity;
+}
+.vc-sheet-in-prev.vc-rtl {
+  transform-origin: right center;
+  animation-name: vcSheetInPrevRtl;
+}
+@keyframes vcSheetInPrevRtl {
+  0%   { transform: rotateY(16deg) translateX(7%); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: rotateY(0deg) translateX(0); opacity: 1; }
+}
+
+/* ── Página que queda DEBAJO: se asienta ── */
+@keyframes vcSheetSettle {
+  from { transform: scale(0.988) translateX(0.8%); filter: brightness(0.965); }
+  to   { transform: none; filter: none; }
+}
+.vc-sheet-settle {
+  animation: vcSheetSettle 700ms var(--vc-turn-ease) both;
+  will-change: transform;
+}
+.vc-sheet-settle.vc-rtl {
+  animation-name: vcSheetSettleRtl;
+}
+@keyframes vcSheetSettleRtl {
+  from { transform: scale(0.988) translateX(-0.8%); filter: brightness(0.965); }
+  to   { transform: none; filter: none; }
+}
+
+/* Al retroceder, la página actual queda debajo sin moverse: solo se atenúa un
+   punto mientras la hoja anterior se posa. */
+@keyframes vcSheetUnder {
+  from { filter: brightness(1); }
+  50%  { filter: brightness(0.96); }
+  to   { filter: brightness(0.96); }
+}
+.vc-sheet-under {
+  animation: vcSheetUnder 700ms var(--vc-turn-ease) both;
+}
+
+/* ── Sombra de giro: pasa sobre la página revelada, desde el lomo ── */
+@keyframes vcTurnShade {
+  0%   { opacity: 0.28; }
+  100% { opacity: 0; }
+}
+.vc-turn-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(
+    to right,
+    rgba(10, 10, 10, 0.38),
+    rgba(10, 10, 10, 0.1) 22%,
+    transparent 45%
+  );
+  animation: vcTurnShade 700ms var(--vc-turn-ease) both;
+}
+.vc-turn-shade.vc-rtl {
+  background: linear-gradient(
+    to left,
+    rgba(10, 10, 10, 0.38),
+    rgba(10, 10, 10, 0.1) 22%,
+    transparent 45%
+  );
+}
+
+/* Canto de la hoja durante el giro: 1px marfil + sombra interior sutil.
+   Nunca visible en reposo. */
+.vc-sheet-edge {
+  box-shadow:
+    inset -1px 0 0 rgba(251, 248, 243, 0.55),
+    12px 0 40px -18px rgba(10, 10, 10, 0.45);
+}
+.vc-sheet-edge.vc-rtl {
+  box-shadow:
+    inset 1px 0 0 rgba(251, 248, 243, 0.55),
+    -12px 0 40px -18px rgba(10, 10, 10, 0.45);
+}
+
+/* Entrada inicial del libro (primer montaje, sin giro). */
+@keyframes vcPageIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 .vc-page-in {
-  animation: vcPageIn 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: vcPageIn 400ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .vc-book-stage { perspective: none; }
+  .vc-sheet-out-next,
+  .vc-sheet-out-cover,
+  .vc-sheet-in-prev,
+  .vc-sheet-settle,
+  .vc-sheet-under,
+  .vc-turn-shade,
   .vc-page-in {
-    animation: none;
+    animation: none !important;
+  }
+  .vc-sheet-out-next,
+  .vc-sheet-out-cover {
+    opacity: 0;
+  }
+  .vc-sheet-edge {
+    box-shadow: none;
   }
 }

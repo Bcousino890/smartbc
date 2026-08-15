@@ -77,16 +77,40 @@ export function BookMode({
   );
 
   const [current, setCurrent] = useState(0);
-  const [anim, setAnim] = useState<1 | -1>(1);
+  // Giro en curso: mantiene la hoja saliente montada mientras la nueva página
+  // se asienta debajo. La navegación queda BLOQUEADA durante el giro — pulsar
+  // "siguiente" en ráfaga no apila animaciones ni salta páginas.
+  const [turn, setTurn] = useState<{
+    from: number;
+    dir: 1 | -1;
+    cover: boolean;
+  } | null>(null);
+  const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewedStops = useRef(new Set<number>());
 
   const go = useCallback(
     (target: number) => {
+      if (turn) return; // hoja en el aire: se ignora hasta que aterrice
       const next = Math.max(0, Math.min(pages.length - 1, target));
-      setAnim(next >= current ? 1 : -1);
+      if (next === current) return;
+      const dir: 1 | -1 = next > current ? 1 : -1;
+      const cover = current === 0 && dir === 1;
+      setTurn({ from: current, dir, cover });
       setCurrent(next);
+      if (turnTimer.current) clearTimeout(turnTimer.current);
+      turnTimer.current = setTimeout(
+        () => setTurn(null),
+        cover ? 870 : 720,
+      );
     },
-    [pages.length, current],
+    [pages.length, current, turn],
+  );
+
+  useEffect(
+    () => () => {
+      if (turnTimer.current) clearTimeout(turnTimer.current);
+    },
+    [],
   );
 
   const goToResidence = useCallback(
@@ -142,6 +166,46 @@ export function BookMode({
 
   const page = pages[current];
   const isDark = page.kind === "cover" || page.kind === "colophon";
+  const rtlClass = rtl ? "vc-rtl" : "";
+
+  const renderPage = (p: Page) => (
+    <>
+      {p.kind === "cover" && (
+        <CollectionCover
+          collection={collection}
+          dict={dict}
+          onBegin={() => go(1)}
+        />
+      )}
+      {p.kind === "index" && (
+        <BookIndexPage
+          collection={collection}
+          dict={dict}
+          onSelect={goToResidence}
+        />
+      )}
+      {p.kind === "residence" && (
+        <BookResidencePage
+          stop={p.stop}
+          total={collection.stopCount}
+          dict={dict}
+          onExpand={() => onStopExpand(p.stop.order)}
+          onSmartLinkClick={() => onSmartLinkClick(p.stop.order)}
+        />
+      )}
+      {p.kind === "advisor" && (
+        <BookAdvisorPage collection={collection} dict={dict} />
+      )}
+      {p.kind === "colophon" && (
+        <BookColophonPage collection={collection} dict={dict} />
+      )}
+    </>
+  );
+
+  // Fondo de la hoja saliente: debe ser opaco (una hoja no es transparente),
+  // del color de la página que se lleva.
+  const sheetBg = (p: Page) =>
+    p.kind === "cover" || p.kind === "colophon" ? "bg-ink" : "bg-cream-50";
 
   return (
     <div
@@ -153,43 +217,60 @@ export function BookMode({
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Página actual. La clave fuerza el remontaje → la animación de
-          entrada corre en cada cambio de página. */}
-      <div key={current} className="min-h-0 flex-1">
-        <div
-          className="vc-page-in h-full"
-          style={{ "--vc-shift": `${anim * (rtl ? -1 : 1) * 26}px` } as React.CSSProperties}
-        >
-          {page.kind === "cover" && (
-            <CollectionCover
-              collection={collection}
-              dict={dict}
-              onBegin={() => go(1)}
-            />
-          )}
-          {page.kind === "index" && (
-            <BookIndexPage
-              collection={collection}
-              dict={dict}
-              onSelect={goToResidence}
-            />
-          )}
-          {page.kind === "residence" && (
-            <BookResidencePage
-              stop={page.stop}
-              total={collection.stopCount}
-              dict={dict}
-              onExpand={() => onStopExpand(page.stop.order)}
-              onSmartLinkClick={() => onSmartLinkClick(page.stop.order)}
-            />
-          )}
-          {page.kind === "advisor" && (
-            <BookAdvisorPage collection={collection} dict={dict} />
-          )}
-          {page.kind === "colophon" && (
-            <BookColophonPage collection={collection} dict={dict} />
-          )}
-        </div>
+      <div className="vc-book-stage relative min-h-0 flex-1">
+        {turn ? (
+          turn.dir === 1 ? (
+            // ── AVANZAR: la nueva página se asienta debajo; la hoja actual
+            //    gira sobre el lomo y se retira. Sombra de giro sobre la nueva.
+            <>
+              <div
+                key={`in-${current}`}
+                className={cn("absolute inset-0 vc-sheet-settle", rtlClass)}
+              >
+                {renderPage(pages[current])}
+                <div className={cn("vc-turn-shade", rtlClass)} aria-hidden />
+              </div>
+              <div
+                key={`out-${turn.from}`}
+                aria-hidden
+                className={cn(
+                  "pointer-events-none absolute inset-0 z-10 vc-sheet-edge",
+                  sheetBg(pages[turn.from]),
+                  turn.cover ? "vc-sheet-out-cover" : "vc-sheet-out-next",
+                  rtlClass,
+                )}
+              >
+                {renderPage(pages[turn.from])}
+              </div>
+            </>
+          ) : (
+            // ── RETROCEDER: la página que dejamos queda quieta debajo; la
+            //    hoja anterior vuelve a posarse encima, giro inverso.
+            <>
+              <div
+                key={`under-${turn.from}`}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 vc-sheet-under"
+              >
+                {renderPage(pages[turn.from])}
+              </div>
+              <div
+                key={`in-${current}`}
+                className={cn(
+                  "absolute inset-0 z-10 vc-sheet-in-prev vc-sheet-edge",
+                  sheetBg(pages[current]),
+                  rtlClass,
+                )}
+              >
+                {renderPage(pages[current])}
+              </div>
+            </>
+          )
+        ) : (
+          <div key={`page-${current}`} className="vc-page-in h-full">
+            {renderPage(pages[current])}
+          </div>
+        )}
       </div>
 
       {/* Navegación editorial. Oculta en la portada: allí manda "Comenzar". */}
