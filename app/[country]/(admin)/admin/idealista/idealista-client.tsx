@@ -5,6 +5,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
+import { IdealistaListingLeadsModal } from "@/components/admin/idealista-listing-leads-modal";
 import { IdealistaStateSelector } from "@/components/admin/idealista-state-selector";
 import { cn } from "@/lib/utils";
 
@@ -271,6 +272,11 @@ export function IdealistaClient({
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusModalListingId, setStatusModalListingId] = useState<string | null>(null);
   const [statusModalTitle, setStatusModalTitle] = useState("");
+  const [leadsModalOpen, setLeadsModalOpen] = useState(false);
+  const [leadsModalListingId, setLeadsModalListingId] = useState<string | null>(null);
+  const [leadsModalTitle, setLeadsModalTitle] = useState("");
+  const [onlyWithLeads, setOnlyWithLeads] = useState(false);
+  const [sortByLeads, setSortByLeads] = useState(false);
   const [generatingVideos, setGeneratingVideos] = useState(false);
   const [generateVideosMsg, setGenerateVideosMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const router = useRouter();
@@ -366,21 +372,32 @@ export function IdealistaClient({
   // oculta salvo que se pida explícitamente con "Ver todas las propiedades".
   const filteredActiveListings = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return activeListings;
-    return activeListings.filter((listing) => {
-      const property = !listing.is_inspo
-        ? properties.find((p) => p.id === listing.property_id)
-        : null;
-      const title = listing.is_inspo
-        ? listing.inspo_title
-        : (property?.title ?? "");
-      return (
-        (title ?? "").toLowerCase().includes(query) ||
-        property?.zone?.toLowerCase().includes(query) ||
-        listing.reference_code?.toLowerCase().includes(query)
+    let result = !query
+      ? activeListings
+      : activeListings.filter((listing) => {
+          const property = !listing.is_inspo
+            ? properties.find((p) => p.id === listing.property_id)
+            : null;
+          const title = listing.is_inspo
+            ? listing.inspo_title
+            : (property?.title ?? "");
+          return (
+            (title ?? "").toLowerCase().includes(query) ||
+            property?.zone?.toLowerCase().includes(query) ||
+            listing.reference_code?.toLowerCase().includes(query)
+          );
+        });
+
+    if (onlyWithLeads) {
+      result = result.filter((listing) => (leadCountsByListing[listing.id] ?? 0) > 0);
+    }
+    if (sortByLeads) {
+      result = [...result].sort(
+        (a, b) => (leadCountsByListing[b.id] ?? 0) - (leadCountsByListing[a.id] ?? 0)
       );
-    });
-  }, [activeListings, properties, searchTerm]);
+    }
+    return result;
+  }, [activeListings, properties, searchTerm, onlyWithLeads, sortByLeads, leadCountsByListing]);
 
   function clearForm() {
     setSelectedPropertyId(null);
@@ -880,15 +897,39 @@ export function IdealistaClient({
               Fichas guardadas ({filteredActiveListings.length}
               {searchTerm ? ` de ${activeListings.length}` : ""})
             </h3>
-            <button
-              onClick={handleGenerateAllVideos}
-              disabled={generatingVideos}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-              title="Genera o actualiza el vídeo automático de todas las inspo que lo necesiten"
-            >
-              {generatingVideos ? <Loader2 size={12} className="animate-spin" /> : <Clapperboard size={12} />}
-              Generar vídeos de todas las inspo
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setOnlyWithLeads((v) => !v)}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  onlyWithLeads
+                    ? "border-violet-300 bg-violet-100 text-violet-700"
+                    : "border-ink/15 bg-white text-ink/60 hover:bg-ink/5"
+                }`}
+                title="Mostrar solo fichas con al menos un lead matcheado"
+              >
+                👤 Con leads
+              </button>
+              <button
+                onClick={() => setSortByLeads((v) => !v)}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  sortByLeads
+                    ? "border-violet-300 bg-violet-100 text-violet-700"
+                    : "border-ink/15 bg-white text-ink/60 hover:bg-ink/5"
+                }`}
+                title="Ordenar de más a menos leads"
+              >
+                Ordenar por leads
+              </button>
+              <button
+                onClick={handleGenerateAllVideos}
+                disabled={generatingVideos}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                title="Genera o actualiza el vídeo automático de todas las inspo que lo necesiten"
+              >
+                {generatingVideos ? <Loader2 size={12} className="animate-spin" /> : <Clapperboard size={12} />}
+                Generar vídeos de todas las inspo
+              </button>
+            </div>
           </div>
           {generateVideosMsg && (
             <p className={`mb-3 text-xs ${generateVideosMsg.ok ? "text-emerald-700" : "text-red-600"}`}>
@@ -961,12 +1002,17 @@ export function IdealistaClient({
                         </span>
                       )}
                       {leadCountsByListing[listing.id] > 0 && (
-                        <span
-                          className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700"
-                          title="Contactos del inbox de Idealista matcheados a esta ficha (ver Solicitudes)"
+                        <button
+                          onClick={() => {
+                            setLeadsModalListingId(listing.id);
+                            setLeadsModalTitle(displayTitle);
+                            setLeadsModalOpen(true);
+                          }}
+                          className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 transition hover:bg-violet-200"
+                          title="Ver los contactos del inbox de Idealista matcheados a esta ficha"
                         >
                           👤 {leadCountsByListing[listing.id]} lead{leadCountsByListing[listing.id] === 1 ? "" : "s"}
-                        </span>
+                        </button>
                       )}
                       {(() => {
                         // Checklist: ¿la ficha está lista para publicar?
@@ -1226,6 +1272,18 @@ export function IdealistaClient({
           setStatusModalOpen(false);
           setStatusModalListingId(null);
           setStatusModalTitle("");
+        }}
+      />
+
+      {/* Modal de leads matcheados a una ficha */}
+      <IdealistaListingLeadsModal
+        listingId={leadsModalListingId || ""}
+        title={leadsModalTitle}
+        isOpen={leadsModalOpen}
+        onClose={() => {
+          setLeadsModalOpen(false);
+          setLeadsModalListingId(null);
+          setLeadsModalTitle("");
         }}
       />
     </div>
