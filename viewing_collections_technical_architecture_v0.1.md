@@ -391,7 +391,7 @@ CREATE TABLE IF NOT EXISTS viewing_collection_opens (
 CREATE INDEX IF NOT EXISTS idx_vco_share ON viewing_collection_opens(share_id, opened_at DESC);
 ```
 
-### 6.2 `0123_viewing_collections_guards.sql`
+### 6.2 `0124_viewing_collections_guards.sql`
 
 ```sql
 -- ============================================================================
@@ -467,7 +467,7 @@ CREATE TRIGGER cps_country_sync
   FOR EACH ROW EXECUTE FUNCTION cps_set_country_from_property();
 ```
 
-### 6.3 `0124_viewing_collections_publish_fn.sql`
+### 6.3 `0125_viewing_collections_publish_fn.sql`
 
 ```sql
 -- ============================================================================
@@ -619,7 +619,7 @@ $$;
 
 > **Nota sobre `property_shares`.** La función **inserta** en `property_shares`, pero **no altera su esquema**. D-05 prohíbe cambiar la tabla, no usarla — crear SmartLinks es exactamente para lo que existe.
 
-### 6.4 `0125_viewing_collections_analytics.sql`
+### 6.4 `0126_viewing_collections_analytics.sql`
 
 ```sql
 -- ============================================================================
@@ -789,7 +789,7 @@ Sprint 0 §4.1 documentó que el panel usa masivamente `createAdminClient()` (se
 
 Meter el scoping fino en RLS crearía dos fuentes de verdad para la misma regla de negocio, y la de SQL sería invisible para quien lee `lib/permissions.ts`. Se documenta como decisión consciente, no como omisión.
 
-### 10.2 `0126_viewing_collections_rls.sql`
+### 10.2 `0127_viewing_collections_rls.sql`
 
 ```sql
 -- ============================================================================
@@ -1574,7 +1574,7 @@ Verificado en producción: 7 columnas, idénticas al repositorio, **0 filas**. L
  * 28 chars base64url ≈ 168 bits. Extraído de app/(admin)/admin/propiedades/
  * actions.ts, donde vivía con un único caller.
  *
- * El equivalente SQL es generate_url_safe_token() (migración 0124), que usa
+ * El equivalente SQL es generate_url_safe_token() (migración 0125), que usa
  * gen_random_bytes(21) → mismo alfabeto, misma longitud, misma entropía.
  * Si cambias uno, cambia el otro: hay un test que compara ambos.
  */
@@ -2147,7 +2147,7 @@ Los errores de BD se traducen con `DB_ERROR_MAP` (§18.5). Nunca se muestra un `
 | R-4 | `visit_requests` sin cambios de esquema | |
 | R-5 | La ficha del cliente carga sin regresión de tiempo | |
 | R-6 | `createShareLink` sigue funcionando tras extraer `randomToken` | |
-| **M-1** | **Migraciones idempotentes** | Ejecutar `0122`–`0127` **dos veces seguidas** → sin error |
+| **M-1** | **Migraciones idempotentes** | Ejecutar `0122`–`0128` **dos veces seguidas** → sin error |
 | M-2 | Tokens equivalentes | `generate_url_safe_token(21)` y `randomToken(28)`: misma longitud, mismo alfabeto `[A-Za-z0-9_-]` |
 | M-3 | Backfill idempotente | Ejecutar dos veces → mismo resultado |
 | M-4 | Filtro anidado de PostgREST | Verificar que `.eq("viewing_stops.hidden_from_client", false)` funciona en el VPS; si no, quitarlo (§16.1) |
@@ -2477,10 +2477,10 @@ Si están en el VPS pero no en Git, commitearlas. Si no están en ningún sitio,
 | Fichero | Acción | Propósito |
 |---|---|---|
 | `supabase/migrations/0122_viewing_collections_core.sql` | Nuevo | 5 tablas |
-| `supabase/migrations/0123_viewing_collections_guards.sql` | Nuevo | Triggers |
-| `supabase/migrations/0124_viewing_collections_publish_fn.sql` | Nuevo | RPC de publicación |
-| `supabase/migrations/0125_viewing_collections_analytics.sql` | Nuevo | `page_events` + `page_views` |
-| `supabase/migrations/0126_viewing_collections_rls.sql` | Nuevo | Policies |
+| `supabase/migrations/0124_viewing_collections_guards.sql` | Nuevo | Triggers |
+| `supabase/migrations/0125_viewing_collections_publish_fn.sql` | Nuevo | RPC de publicación |
+| `supabase/migrations/0126_viewing_collections_analytics.sql` | Nuevo | `page_events` + `page_views` |
+| `supabase/migrations/0127_viewing_collections_rls.sql` | Nuevo | Policies |
 | `supabase/migrations/0127_viewing_collections_custom_roles_backfill.sql` | Nuevo | Backfill |
 | `lib/db/queries/suggested-properties.ts` | **Modificar** | 🔴 Fix bloqueante (§29.1) |
 | `app/api/admin/clientes/[clientId]/suggested-properties/route.ts` | Modificar | Nuevo tipo de retorno + `country` |
@@ -2625,7 +2625,7 @@ DROP FUNCTION IF EXISTS cps_set_country_from_property();
 ### Puerta 3A → 3B
 
 - [ ] Migraciones 0119–0121 recuperadas en Git, o documentado que no existen (§29.5)
-- [ ] `0122`–`0127` ejecutadas **dos veces seguidas** sin error (M-1)
+- [ ] `0122`–`0128` ejecutadas **dos veces seguidas** sin error (M-1)
 - [ ] 5 tablas, 13 índices, 5 triggers, 4 funciones verificados en el esquema
 - [ ] **S-1 pasa: el trigger cross-cliente bloquea incluso con service role**
 - [ ] S-9, S-10, S-11 pasan (CHECKs de dirección y ocultación)
@@ -2688,11 +2688,11 @@ DROP FUNCTION IF EXISTS cps_set_country_from_property();
 | Criterio | Estado |
 |---|---|
 | Sin decisiones de esquema abiertas | ✅ Q-1…Q-11 cerradas. D-06 resuelve P-05. Q-7 y Task 10 resueltas contra producción |
-| SQL completamente especificado | ✅ 6 migraciones (`0122`–`0127`): 5 tablas, 13 índices, 15 constraints, 5 triggers, 4 funciones |
+| SQL completamente especificado | ✅ 6 migraciones (`0122`–`0128`): 5 tablas, 13 índices, 15 constraints, 5 triggers, 4 funciones |
 | Permisos definidos | ✅ Diff de los 8 puntos de `lib/permissions.ts` + backfill + matriz por rol |
 | Contrato público cerrado | ✅ `PublicViewingCollection` + `toPublicViewingCollection` + query de columnas explícitas |
 | Tests de seguridad definidos | ✅ 18 tests S-\*, 7 P-\*, 17 F-\*, 6 R-\*, 4 M-\*, 7 SP-\* |
-| Migraciones ordenadas | ✅ `0122`→`0127` con verificación por paso y rollback |
+| Migraciones ordenadas | ✅ `0122`→`0128` con verificación por paso y rollback |
 | Ficheros identificados | ✅ 47 ficheros repartidos en 3A–3F |
 
 ### Tres cosas que hay que hacer antes de la primera línea de código

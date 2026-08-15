@@ -52,11 +52,11 @@ Copiadas íntegras desde `/opt/smartbc-app/supabase/migrations/`. **No se recons
 | Fichero | Contenido |
 |---|---|
 | `0122_viewing_collections_core.sql` | 5 tablas, 13 índices, 15 constraints, 3 triggers `updated_at` |
-| `0123_viewing_collections_guards.sql` | Trigger cross-cliente + sincronización de país |
-| `0124_viewing_collections_publish_fn.sql` | `generate_url_safe_token()` + `publish_viewing_itinerary()` |
-| `0125_viewing_collections_analytics.sql` | 3 valores nuevos en `page_events`, `page_views.collection_share_id` |
-| `0126_viewing_collections_rls.sql` | 9 policies |
-| `0127_viewing_collections_permissions_backfill.sql` | Backfill de `custom_roles` + feature flag en `app_settings` |
+| `0124_viewing_collections_guards.sql` | Trigger cross-cliente + sincronización de país |
+| `0125_viewing_collections_publish_fn.sql` | `generate_url_safe_token()` + `publish_viewing_itinerary()` |
+| `0126_viewing_collections_analytics.sql` | 3 valores nuevos en `page_events`, `page_views.collection_share_id` |
+| `0127_viewing_collections_rls.sql` | 9 policies |
+| `0128_viewing_collections_permissions_backfill.sql` | Backfill de `custom_roles` + feature flag en `app_settings` |
 
 **No modifican `property_shares`, `visit_requests` ni `properties`.** Verificado por grep.
 
@@ -260,7 +260,7 @@ npm run build && npm run test:viewing-collections
 # merge a main → el cron del VPS hace pull + build + post-deploy.sh + pm2 restart
 ```
 
-`post-deploy.sh` aplica `0117`–`0127`. Las cinco recuperadas ya están aplicadas en producción y son idempotentes: no harán nada.
+`post-deploy.sh` aplica `0117`–`0128`. Las cinco recuperadas ya están aplicadas en producción y son idempotentes: no harán nada.
 
 **Comprobar tras el deploy:**
 

@@ -41,3 +41,134 @@
     transform: none;
   }
 }
+
+/* ============================================================================
+   Viewing Collection · capa editorial
+   ----------------------------------------------------------------------------
+   Motion contenido: reveals suaves al entrar en viewport y transiciones de
+   capítulo. Nada de scroll hijacking ni efectos llamativos — en una
+   publicación de lujo el movimiento sirve al ritmo de lectura, no al revés.
+   Todo se desactiva con prefers-reduced-motion.
+   ========================================================================== */
+
+@layer utilities {
+  /* Reveal al entrar en viewport. El elemento parte oculto y lo activa el
+     IntersectionObserver añadiendo .is-revealed. Sin JS (o con JS caído) el
+     fallback de abajo lo deja visible: nunca se queda contenido invisible. */
+  .vc-reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+
+  .vc-reveal.is-revealed {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Escalonado dentro de un bloque. */
+  .vc-reveal-d1 { transition-delay: 90ms; }
+  .vc-reveal-d2 { transition-delay: 180ms; }
+  .vc-reveal-d3 { transition-delay: 270ms; }
+  .vc-reveal-d4 { transition-delay: 360ms; }
+
+  /* Zoom lentísimo de la fotografía de portada: da vida sin distraer. */
+  .vc-kenburns {
+    animation: vcKenburns 24s ease-out forwards;
+  }
+
+  /* Interlineado apretado para los títulos display grandes. */
+  .vc-tight {
+    line-height: 0.94;
+  }
+
+  /* Tracking amplio para las etiquetas en versalitas. */
+  .vc-tracked {
+    letter-spacing: 0.28em;
+  }
+
+  .vc-tracked-sm {
+    letter-spacing: 0.18em;
+  }
+
+  /* Cifras alineadas en columnas (horarios, precios). */
+  .vc-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@keyframes vcKenburns {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes vcFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* La portada anima al montar, no al hacer scroll: es lo primero que se ve. */
+.vc-cover-in {
+  animation: vcFadeUp 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vc-cover-in-d1 { animation-delay: 200ms; }
+.vc-cover-in-d2 { animation-delay: 380ms; }
+.vc-cover-in-d3 { animation-delay: 560ms; }
+.vc-cover-in-d4 { animation-delay: 760ms; }
+
+/* Subrayado que crece desde la izquierda al pasar el cursor. */
+.vc-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vc-underline:hover,
+.vc-underline:focus-visible {
+  background-size: 100% 1px;
+}
+
+/* Foco visible y sobrio en toda la colección. */
+.vc-focus:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-reveal,
+  .vc-reveal.is-revealed {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .vc-kenburns,
+  .vc-cover-in {
+    animation: none;
+  }
+
+  .vc-underline {
+    transition: none;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+}

@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "../admin";
 import { createClient } from "../server";
 import { resolveViewScope, getAssignedClientIds } from "./view-scope";
+import { checkPermission } from "@/lib/auth/guard";
 import {
   toPublicViewingCollection,
   type RawCollectionData,
@@ -100,6 +101,45 @@ const PUBLIC_COLLECTION_SELECT = `
   )
 `;
 
+// Mismo árbol que la query pública, pero partiendo del itinerario. Se
+// mantiene sincronizado a mano con PUBLIC_COLLECTION_SELECT: si añades una
+// columna allí, añádela aquí — o el preview del agente y lo que ve el cliente
+// dejarán de coincidir, que es justo lo que el preview debe evitar.
+const PREVIEW_ITINERARY_SELECT = `
+  client_id,
+  title,
+  scheduled_date,
+  window_start,
+  window_end,
+  timezone,
+  country,
+  status,
+  client:profiles!viewing_itineraries_client_id_fkey ( full_name ),
+  agent:profiles!viewing_itineraries_created_by_fkey ( full_name, email, phone, avatar_url ),
+  viewing_stops (
+    position,
+    scheduled_at,
+    duration_minutes,
+    confirmation_status,
+    address_visibility,
+    hidden_from_client,
+    created_at,
+    property_shares ( token ),
+    client_property_selections!inner (
+      properties!inner (
+        slug, title, title_rent, property_type,
+        zone, subzone, address,
+        bedrooms, bathrooms, square_meters,
+        price, rent_price, currency, operation, operations,
+        status, archived_at, bc_reference,
+        latitude, longitude, country,
+        last_synced_at, updated_at,
+        property_photos ( url, position, is_cover )
+      )
+    )
+  )
+`;
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function shapeRawCollection(row: any): RawCollectionData | null {
   const itinerary = Array.isArray(row.viewing_itineraries)
@@ -193,6 +233,48 @@ export async function getPublicCollectionByToken(
   return {
     ok: true,
     shareId: data.id,
+    collection: toPublicViewingCollection(shaped),
+  };
+}
+
+/**
+ * Previsualización para el agente: la MISMA proyección que ve el cliente,
+ * resuelta por id de itinerario en vez de por token, y autorizada por sesión
+ * de staff en vez de por secreto compartido.
+ *
+ * Funciona con el itinerario en borrador — es justo su razón de ser: ver el
+ * resultado antes de publicar. No registra aperturas ni analítica.
+ */
+export async function getPreviewCollection(
+  itineraryId: string,
+): Promise<PublicCollectionResult> {
+  const perm = await checkPermission("viewing_collections", "view");
+  if (!perm.ok) return { ok: false };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+
+  const { data, error } = await supabase
+    .from("viewing_itineraries")
+    .select(PREVIEW_ITINERARY_SELECT)
+    .eq("id", itineraryId)
+    .maybeSingle();
+
+  if (error || !data) return { ok: false };
+
+  // El scope (own/team/all) decide si este agente puede ver a este cliente.
+  const allowed = await canAccessClient(data.client_id);
+  if (!allowed) return { ok: false };
+
+  const shaped = shapeRawCollection({
+    expires_at: new Date(Date.now() + 86400000).toISOString(),
+    viewing_itineraries: data,
+  });
+  if (!shaped) return { ok: false };
+
+  return {
+    ok: true,
+    shareId: "",
     collection: toPublicViewingCollection(shaped),
   };
 }

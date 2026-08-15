@@ -188,7 +188,7 @@ check(
   ),
 );
 check(
-  "una matriz vacía deniega por defecto (de ahí el backfill de 0127)",
+  "una matriz vacía deniega por defecto (de ahí el backfill de 0128)",
   normalized.viewing_collections.view === false &&
     normalized.viewing_collections.publish === false,
 );

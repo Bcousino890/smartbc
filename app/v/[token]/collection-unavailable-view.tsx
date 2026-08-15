@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { Lock } from "lucide-react";
 
 /**
  * Vista terminal de una colección no accesible.
@@ -8,55 +7,61 @@ import { Lock } from "lucide-react";
  * incapaz de filtrar nada, y las cinco situaciones terminales —caducada,
  * revocada, token inexistente, itinerario cancelado/archivado y módulo
  * desactivado— quedan idénticas byte a byte. No debe distinguirse cuál es.
+ *
+ * En tinta, como la portada y el colofón: aunque no haya colección que
+ * mostrar, la marca se comporta igual.
  */
 export function CollectionUnavailableView() {
   return (
-    <div className="flex min-h-screen flex-col bg-cream-50">
-      <header className="border-b border-gold/15 bg-cream-50/95 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center px-5 py-4 md:px-8">
+    <div className="flex min-h-[100svh] flex-col bg-ink text-cream-50">
+      <header className="flex justify-center px-6 pt-12 md:pt-16">
+        <div className="flex flex-col items-center">
           <Image
             src="/logo.png"
             alt="Benjamín Cousiño Propiedades"
-            width={140}
-            height={Math.round(140 * (519 / 3282))}
+            width={150}
+            height={Math.round(150 * (519 / 3282))}
             priority
-            className="h-auto w-[130px] select-none md:w-[140px]"
+            className="h-auto w-[128px] select-none brightness-0 invert md:w-[150px]"
           />
+          <span className="mt-3 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50/55 md:text-[10.5px]">
+            Private Client Services
+          </span>
         </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full border border-gold/25 bg-gold/10 text-gold-dark">
-          <Lock size={26} strokeWidth={1.5} />
-        </span>
+        <span aria-hidden className="block h-px w-10 bg-cream-50/30" />
 
-        <h1 className="mt-7 font-serif text-2xl font-semibold text-ink md:text-3xl">
-          Esta colección ya no está disponible
+        <h1 className="mt-10 font-serif text-[27px] font-normal vc-tight text-cream-50 md:text-[36px]">
+          Esta colección
+          <br />
+          ya no está disponible
         </h1>
 
-        <p className="mt-4 text-[15px] leading-relaxed text-ink/65">
-          Si necesitas acceder de nuevo, ponte en contacto con nosotros y te
-          enviaremos un enlace actualizado.
+        <p className="mt-7 max-w-[38ch] font-sans text-[13.5px] leading-relaxed text-cream-50/55 md:text-[14.5px]">
+          Si deseas consultarla de nuevo, escríbenos y te enviaremos un enlace
+          actualizado.
         </p>
 
-        <div className="mt-8 flex flex-col items-center gap-3 text-sm">
+        <div className="mt-11 flex flex-col items-stretch gap-2.5 sm:flex-row sm:gap-3">
           <a
             href="mailto:contacto@bcousinoprop.com"
-            className="font-medium text-ink transition hover:text-gold-dark"
+            className="vc-focus border border-cream-50/30 px-7 py-3.5 text-center font-display text-[10.5px] font-medium uppercase vc-tracked text-cream-50 transition-colors duration-500 hover:border-cream-50"
           >
-            contacto@bcousinoprop.com
+            Escribir
           </a>
           <a
             href="tel:+34694209763"
-            className="font-medium text-ink transition hover:text-gold-dark"
+            className="vc-focus border border-cream-50/30 px-7 py-3.5 text-center font-display text-[10.5px] font-medium uppercase vc-tracked text-cream-50 transition-colors duration-500 hover:border-cream-50"
           >
             +34 694 20 97 63
           </a>
         </div>
       </main>
 
-      <footer className="border-t border-gold/15 px-6 py-6 text-center">
-        <p className="text-[11px] uppercase tracking-[0.16em] text-ink/45">
+      <footer className="px-6 pb-12 text-center md:pb-16">
+        <p className="font-display text-[9px] font-medium uppercase vc-tracked text-cream-50/25">
           Benjamín Cousiño Propiedades
         </p>
       </footer>

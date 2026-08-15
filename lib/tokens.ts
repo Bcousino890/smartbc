@@ -5,7 +5,7 @@
  * extrae aquí para que las colecciones usen exactamente el mismo mecanismo en
  * lugar de una copia que pueda divergir.
  *
- * El equivalente en SQL es `generate_url_safe_token()` (migración 0124), que
+ * El equivalente en SQL es `generate_url_safe_token()` (migración 0125), que
  * usa `gen_random_bytes(21)` → mismo alfabeto, misma longitud, misma entropía.
  * Si cambias uno, cambia el otro: hay un test que compara ambos.
  */

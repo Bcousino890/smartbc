@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, ExternalLink, Loader2, Send, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Eye,
+  ExternalLink,
+  Loader2,
+  Send,
+  X,
+} from "lucide-react";
 import { publishItinerary } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
 import type { ItineraryWithStops } from "@/lib/viewing-collections/types";
 import { CopyLinkButton } from "./copy-link-button";
@@ -160,6 +168,16 @@ export function PublishCollectionDialog({
                   ))}
                 </div>
               )}
+
+              <a
+                href={`/v/preview/${itinerary.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              >
+                <Eye size={12} strokeWidth={1.75} className="text-gold-dark" />
+                Previsualizar como lo verá el cliente
+              </a>
 
               <label className="block pt-1">
                 <span className="text-[11px] font-medium text-ink/55">

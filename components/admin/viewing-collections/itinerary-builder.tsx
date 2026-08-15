@@ -330,6 +330,15 @@ export function ItineraryBuilder({
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <a
+                href={`/v/preview/${itinerary.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              >
+                <Eye size={11} strokeWidth={1.75} className="text-gold-dark" />
+                Previsualizar
+              </a>
               {itinerary.activeShare && (
                 <CopyLinkButton
                   url={itinerary.activeShare.url}
@@ -604,5 +613,3 @@ function StopRow({
     </li>
   );
 }
-
-export { Eye, Plus };

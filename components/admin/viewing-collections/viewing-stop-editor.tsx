@@ -77,7 +77,7 @@ export function ViewingStopEditor({
   const [notes, setNotes] = useState(stop.agent_notes ?? "");
 
   useEffect(() => {
-    fetch(`/api/admin/properties/${prop.id}/shares`)
+    fetch(`/api/admin/property-shares?propertyId=${prop.id}`)
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((j) => setShares(j.data ?? []))
       .catch(() => setShares([]));

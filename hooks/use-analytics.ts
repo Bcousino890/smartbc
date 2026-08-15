@@ -17,6 +17,8 @@ interface UseAnalyticsOptions {
   propertyId?: string;
   shareId?: string;
   collectionShareId?: string;
+  /** Desactiva la instrumentación (previsualizaciones internas). */
+  disabled?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export function useAnalytics(options: UseAnalyticsOptions) {
   const trackerRef = useRef<ReturnType<typeof getTracker>>(null);
 
   useEffect(() => {
+    if (options.disabled) return;
     const tracker = getTracker();
     trackerRef.current = tracker;
     if (tracker) {
