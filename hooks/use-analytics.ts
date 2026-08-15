@@ -16,7 +16,7 @@ interface UseAnalyticsOptions {
   pageType: PageType;
   propertyId?: string;
   shareId?: string;
-  collectionShareId?: string;
+  collectionToken?: string;
   /** Desactiva la instrumentación (previsualizaciones internas). */
   disabled?: boolean;
 }
@@ -40,7 +40,7 @@ export function useAnalytics(options: UseAnalyticsOptions) {
         pageType: options.pageType,
         propertyId: options.propertyId,
         shareId: options.shareId,
-        collectionShareId: options.collectionShareId,
+        collectionToken: options.collectionToken,
       });
     }
     // Solo inicializar una vez al montar — no re-inicializar si cambian las opciones

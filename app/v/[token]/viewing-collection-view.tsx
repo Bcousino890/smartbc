@@ -25,16 +25,17 @@ import { AdvisorBlock, Colophon } from "./_components/closing";
 
 export function ViewingCollectionView({
   collection,
-  shareId,
+  collectionToken,
 }: {
   collection: PublicViewingCollection;
-  shareId: string;
+  /** Token público de la colección. Vacío en previsualizaciones internas. */
+  collectionToken: string;
 }) {
-  // shareId vacío = previsualización del agente: no se instrumenta nada.
-  const isPreview = !shareId;
+  // Token vacío = previsualización del agente: no se instrumenta nada.
+  const isPreview = !collectionToken;
   const trackerRef = useAnalytics({
     pageType: "viewing_collection",
-    collectionShareId: shareId || undefined,
+    collectionToken: collectionToken || undefined,
     disabled: isPreview,
   });
 

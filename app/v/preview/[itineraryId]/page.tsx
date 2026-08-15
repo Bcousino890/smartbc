@@ -43,7 +43,7 @@ export default async function ViewingCollectionPreviewPage({
           Previsualización · así lo verá el cliente
         </p>
       </div>
-      <ViewingCollectionView collection={result.collection} shareId="" />
+      <ViewingCollectionView collection={result.collection} collectionToken="" />
     </>
   );
 }

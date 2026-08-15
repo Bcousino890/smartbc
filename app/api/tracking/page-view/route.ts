@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { insertPageView } from "@/lib/db/queries/analytics";
+import {
+  insertPageView,
+  resolveCollectionShareId,
+} from "@/lib/db/queries/analytics";
 
 // POST /api/tracking/page-view
 // Registra una nueva visita de página desde el cliente.
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
       pageType?: string;
       propertyId?: string | null;
       shareId?: string | null;
-      collectionShareId?: string | null;
+      collectionToken?: string | null;
       sessionId?: string;
       pagePath?: string;
       referrer?: string | null;
@@ -42,6 +45,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // El navegador manda el TOKEN público de la colección, nunca el UUID del
+    // share: así no hace falta serializar un identificador interno en el HTML.
+    // La traducción a share_id ocurre aquí, con service role.
+    let collectionShareId: string | null = body.collection_share_id ?? null;
+    const collectionToken = body.collectionToken;
+    if (!collectionShareId && collectionToken) {
+      collectionShareId = await resolveCollectionShareId(collectionToken);
+    }
+
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       req.headers.get("x-real-ip") ??
@@ -49,8 +61,7 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get("user-agent") ?? null;
 
     const result = await insertPageView({
-      collection_share_id:
-        body.collectionShareId ?? body.collection_share_id ?? null,
+      collection_share_id: collectionShareId,
       property_id: body.propertyId ?? body.property_id ?? null,
       share_id: body.shareId ?? body.share_id ?? null,
       page_type: pageType,

@@ -468,3 +468,34 @@ export async function insertPageEvent(data: {
   });
   if (res.error) throw new Error(res.error.message);
 }
+
+// ---------------------------------------------------------------------------
+// resolveCollectionShareId
+// ---------------------------------------------------------------------------
+/**
+ * Traduce el token público de una Viewing Collection a su `share_id` interno.
+ *
+ * Existe para que la página pública no tenga que pasar el UUID del share como
+ * prop a un Client Component: todo lo que se pasa como prop viaja en el payload
+ * RSC y quedaba visible en el HTML. El token, en cambio, ya está en la URL.
+ *
+ * Devuelve null si el token no existe: el tracking nunca debe romper la
+ * petición ni revelar si un token es válido.
+ */
+export async function resolveCollectionShareId(
+  token: string,
+): Promise<string | null> {
+  if (!token || token.length < 16) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const { data } = await supabase
+      .from("viewing_collection_shares")
+      .select("id")
+      .eq("token", token)
+      .maybeSingle();
+    return data?.id ?? null;
+  } catch {
+    return null;
+  }
+}

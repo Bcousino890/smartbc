@@ -154,6 +154,6 @@ const COLLECTION: PublicViewingCollection = {
 
 export default function ViewingCollectionPreviewPage() {
   if (process.env.NODE_ENV === "production") notFound();
-  // shareId vacío: el banco de pruebas no emite analítica.
-  return <ViewingCollectionView collection={COLLECTION} shareId="" />;
+  // Token vacío: el banco de pruebas no emite analítica.
+  return <ViewingCollectionView collection={COLLECTION} collectionToken="" />;
 }

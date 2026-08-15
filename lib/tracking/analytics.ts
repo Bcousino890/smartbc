@@ -31,7 +31,7 @@ export class AnalyticsTracker {
     pageType: string
     propertyId?: string
     shareId?: string
-    collectionShareId?: string
+    collectionToken?: string
   }): void {
     this.pageViewId = null
     this.timeOnPageStart = Date.now()
@@ -42,7 +42,7 @@ export class AnalyticsTracker {
     pageType: string
     propertyId?: string
     shareId?: string
-    collectionShareId?: string
+    collectionToken?: string
   }): Promise<void> {
     try {
       const res = await fetch("/api/tracking/page-view", {
@@ -52,7 +52,7 @@ export class AnalyticsTracker {
           pageType: params.pageType,
           propertyId: params.propertyId ?? null,
           shareId: params.shareId ?? null,
-          collectionShareId: params.collectionShareId ?? null,
+          collectionToken: params.collectionToken ?? null,
           sessionId: this.sessionId,
           referrer: document.referrer,
           pagePath: window.location.pathname,

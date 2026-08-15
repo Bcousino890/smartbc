@@ -50,10 +50,14 @@ export default async function ViewingCollectionPage({
     /* tracking opt-out silently */
   });
 
+  // Se pasa el TOKEN, no el id del share: el token ya es público (está en la
+  // URL) mientras que el UUID es un identificador interno, y todo lo que se
+  // pasa como prop a un Client Component acaba en el payload RSC. El endpoint
+  // de tracking resuelve token → share_id en servidor.
   return (
     <ViewingCollectionView
       collection={result.collection}
-      shareId={result.shareId}
+      collectionToken={token}
     />
   );
 }
