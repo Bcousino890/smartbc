@@ -8,6 +8,11 @@ export const API_SCOPES = [
   "captaciones:read",
   "captaciones:write",
   "catalogos:read",
+  // Ingesta del scraper de mercado de Idealista (proveedor externo, España).
+  // Separados de captaciones a propósito: la clave del scraper no debe poder
+  // tocar las captaciones de Chile ni al revés.
+  "idealista:read",
+  "idealista:write",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];

@@ -8,6 +8,7 @@ import {
   ListingSchema,
   PhotoCollectionSchema,
 } from "./captaciones/schema";
+import { IDEALISTA_PATHS, IDEALISTA_SCHEMAS } from "./openapi-idealista";
 
 /**
  * Especificación OpenAPI 3.1 generada a partir de los mismos esquemas zod que
@@ -335,6 +336,7 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
         Aviso: jsonSchema(ListingSchema, "Aviso"),
         Intento: jsonSchema(AttemptSchema, "Intento"),
         Fotos: jsonSchema(PhotoCollectionSchema, "Fotos"),
+        ...IDEALISTA_SCHEMAS,
       },
     },
     paths: {
@@ -642,6 +644,11 @@ export function buildOpenApiDocument(baseUrl: string): Record<string, unknown> {
           responses: { "200": okResponse("Catálogo"), default: errorResponse },
         },
       },
+
+      // Ingesta del scraper de mercado de Idealista (España). Otro contrato y
+      // otro consumidor que el de captaciones, pero el mismo documento: así el
+      // proveedor genera su cliente desde un único /api/v1/openapi.
+      ...IDEALISTA_PATHS,
     },
   };
 }

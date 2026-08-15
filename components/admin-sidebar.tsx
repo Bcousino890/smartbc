@@ -14,6 +14,7 @@ import {
   Magnet,
   Menu,
   MessageSquare,
+  Radar,
   Radio,
   Send,
   Settings,
@@ -55,6 +56,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
   // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
   { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
+  // Estado del scraper externo y frecuencias de captura. Mismo recurso que
+  // particulares: quien ve los anuncios ve si el scraper que los trae va bien.
+  { href: "/admin/particulares/scraper", labelKey: "admin.nav.scraperIdealista", icon: Radar,         permissionResource: "particulares", onlyCountry: "es" },
   // Antes apuntaba a "properties": el toggle "Publicación" del panel de
   // permisos no controlaba este enlace ni coincidía con el recurso que ya
   // usan las rutas /api/admin/publicacion/* (requirePermission("publicacion", ...)).
