@@ -105,6 +105,8 @@ export type CollectionDictionary = {
   atYourService: string;
   yourAdvisor: string;
   write: string;
+  /** Acción del botón de teléfono; el número va en la línea de datos. */
+  call: string;
 
   preparedExclusively: (name: string) => string;
   validUntil: (date: string) => string;
@@ -166,6 +168,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "A tu disposición",
     yourAdvisor: "Tu asesor",
     write: "Escribir",
+    call: "Llamar",
     preparedExclusively: (name) => `Preparada en exclusiva para ${name}.`,
     validUntil: (date) => `Colección privada · disponible hasta el ${date}`,
     previous: "Anterior",
@@ -204,6 +207,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "At your service",
     yourAdvisor: "Your advisor",
     write: "Write",
+    call: "Call",
     preparedExclusively: (name) => `Prepared exclusively for ${name}.`,
     validUntil: (date) => `Private collection · available until ${date}`,
     previous: "Previous",
@@ -242,6 +246,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "À votre service",
     yourAdvisor: "Votre conseiller",
     write: "Écrire",
+    call: "Appeler",
     preparedExclusively: (name) => `Préparée en exclusivité pour ${name}.`,
     validUntil: (date) => `Collection privée · disponible jusqu'au ${date}`,
     previous: "Précédent",
@@ -280,6 +285,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "A tua disposizione",
     yourAdvisor: "Il tuo consulente",
     write: "Scrivere",
+    call: "Chiamare",
     preparedExclusively: (name) => `Preparata in esclusiva per ${name}.`,
     validUntil: (date) => `Collezione privata · disponibile fino al ${date}`,
     previous: "Precedente",
@@ -318,6 +324,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "Für Sie da",
     yourAdvisor: "Ihr Berater",
     write: "Schreiben",
+    call: "Anrufen",
     preparedExclusively: (name) =>
       `Exklusiv zusammengestellt für ${name}.`,
     validUntil: (date) => `Private Kollektion · verfügbar bis ${date}`,
@@ -356,6 +363,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "في خدمتك",
     yourAdvisor: "مستشارك",
     write: "مراسلة",
+    call: "اتصال",
     preparedExclusively: (name) => `أُعدَّت حصرياً من أجل ${name}.`,
     validUntil: (date) => `مجموعة خاصة · متاحة حتى ${date}`,
     previous: "السابق",
@@ -393,6 +401,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "Hizmetinizde",
     yourAdvisor: "Danışmanınız",
     write: "Yazın",
+    call: "Arayın",
     preparedExclusively: (name) =>
       `${name} için özel olarak hazırlanmıştır.`,
     validUntil: (date) => `Özel koleksiyon · ${date} tarihine kadar`,
@@ -431,6 +440,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     atYourService: "לשירותך",
     yourAdvisor: "היועץ שלך",
     write: "לכתוב",
+    call: "להתקשר",
     preparedExclusively: (name) => `הוכן באופן בלעדי עבור ${name}.`,
     validUntil: (date) => `אוסף פרטי · זמין עד ${date}`,
     previous: "הקודם",

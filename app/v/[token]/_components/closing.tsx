@@ -12,6 +12,45 @@ import type { PublicAgentContact } from "@/lib/viewing-collections/public-contra
 import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
 import { Label, Ornament, Reveal } from "./editorial";
 
+/**
+ * Los datos de contacto en limpio, bajo los botones. Los botones son acciones;
+ * esto es la tarjeta: el cliente puede leerlos, copiarlos o apuntarlos sin
+ * tener que abrir el correo. Se omite lo que el perfil del agente no tenga.
+ *
+ * `dir="ltr"` en cada dato: en árabe y hebreo el algoritmo bidi partiría un
+ * teléfono con prefijo (+34 …) o un correo por la mitad.
+ */
+export function AgentContactData({ agent }: { agent: PublicAgentContact }) {
+  if (!agent.email && !agent.phone) return null;
+  return (
+    <div className="mt-7 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 font-sans text-[12px] text-ink/50">
+      {agent.email && (
+        <a
+          dir="ltr"
+          href={`mailto:${agent.email}`}
+          className="vc-focus vc-underline transition-colors duration-500 hover:text-ink"
+        >
+          {agent.email}
+        </a>
+      )}
+      {agent.email && agent.phone && (
+        <span aria-hidden className="text-ink/25">
+          ·
+        </span>
+      )}
+      {agent.phone && (
+        <a
+          dir="ltr"
+          href={`tel:${agent.phone.replace(/\s/g, "")}`}
+          className="vc-focus vc-underline transition-colors duration-500 hover:text-ink"
+        >
+          {agent.phone}
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function AdvisorBlock({
   agent,
   dict,
@@ -80,7 +119,7 @@ export function AdvisorBlock({
               href={`tel:${agent.phone.replace(/\s/g, "")}`}
               className="vc-focus border border-ink/25 px-7 py-3.5 text-center font-display text-[10.5px] font-medium uppercase vc-tracked text-ink transition-colors duration-500 hover:border-ink"
             >
-              {agent.phone}
+              {dict.call}
             </a>
           )}
           {agent.email && (
@@ -92,6 +131,8 @@ export function AdvisorBlock({
             </a>
           )}
         </div>
+
+        <AgentContactData agent={agent} />
       </Reveal>
     </section>
   );

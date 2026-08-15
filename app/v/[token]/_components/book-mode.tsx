@@ -33,6 +33,7 @@ import {
 } from "@/lib/viewing-collections/i18n";
 import { cn } from "@/lib/utils";
 import { CollectionCover } from "./collection-cover";
+import { AgentContactData } from "./closing";
 import { statusWord } from "./day-overview";
 import {
   ChapterMark,
@@ -736,7 +737,7 @@ function BookAdvisorPage({
               href={`tel:${agent.phone.replace(/\s/g, "")}`}
               className="vc-focus border border-ink/25 px-7 py-3.5 font-display text-[10.5px] font-medium uppercase vc-tracked text-ink transition-colors duration-500 hover:border-ink"
             >
-              {agent.phone}
+              {dict.call}
             </a>
           )}
           {agent.email && (
@@ -748,6 +749,8 @@ function BookAdvisorPage({
             </a>
           )}
         </div>
+
+        <AgentContactData agent={agent} />
       </div>
     </div>
   );
