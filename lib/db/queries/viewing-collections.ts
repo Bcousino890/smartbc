@@ -472,7 +472,14 @@ function computeReadiness(
   if (!itinerary.scheduled_date) blockers.push({ kind: "no_date" });
   if (visible.length === 0) blockers.push({ kind: "no_stops" });
 
-  const withoutTime = visible.filter((s) => !s.scheduled_at).length;
+  // Una parada cancelada o rechazada se conserva visible a propósito (para que
+  // el cliente entienda el cambio de plan) y no tiene ni debe tener hora. Solo
+  // se exige hora a las que van a ocurrir — igual que publish_viewing_itinerary.
+  const withoutTime = visible.filter(
+    (s) =>
+      !s.scheduled_at &&
+      !["cancelled", "declined"].includes(s.confirmation_status),
+  ).length;
   if (withoutTime > 0) {
     blockers.push({ kind: "stops_without_time", count: withoutTime });
   }
