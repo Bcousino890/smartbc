@@ -126,26 +126,41 @@ export async function lookupPrepareVisits(
   let property: { id: string; title: string } | null = null;
 
   if (source === "idealista") {
-    const { data: lead } = await admin
+    // ⚠️ matched_property_title NO es columna de idealista_leads (el panel la
+    // deriva con un join); pedirla aquí hacía fallar el select entero y el
+    // diálogo decía "Lead no encontrado" para todos los leads.
+    const { data: lead, error: leadError } = await admin
       .from("idealista_leads")
-      .select("name, phone, matched_property_id, matched_property_title")
+      .select("name, phone, matched_property_id")
       .eq("id", id)
       .maybeSingle();
+    if (leadError) {
+      console.error("lookupPrepareVisits idealista:", leadError.message);
+      return { ok: false, error: "No se pudo leer el lead." };
+    }
     if (!lead) return { ok: false, error: "Lead no encontrado." };
     name = lead.name ?? "";
     phone = lead.phone ?? "";
     if (lead.matched_property_id) {
-      property = {
-        id: lead.matched_property_id,
-        title: lead.matched_property_title ?? "Propiedad del anuncio",
-      };
+      const { data: prop } = await admin
+        .from("properties")
+        .select("id, title")
+        .eq("id", lead.matched_property_id)
+        .maybeSingle();
+      if (prop) {
+        property = { id: prop.id, title: prop.title ?? "Propiedad del anuncio" };
+      }
     }
   } else {
-    const { data: contact } = await admin
+    const { data: contact, error: contactError } = await admin
       .from("contact_requests")
       .select("name, email, phone")
       .eq("id", id)
       .maybeSingle();
+    if (contactError) {
+      console.error("lookupPrepareVisits contact:", contactError.message);
+      return { ok: false, error: "No se pudo leer la consulta." };
+    }
     if (!contact) return { ok: false, error: "Consulta no encontrada." };
     name = contact.name ?? "";
     email = contact.email ?? "";
