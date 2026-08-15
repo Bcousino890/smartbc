@@ -353,6 +353,18 @@ function WhatsAppList({
   onSelect: (id: string) => void;
   onNew: () => void;
 }) {
+  const [query, setQuery] = useState("");
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const digitsQuery = query.replace(/[^\d]/g, "");
+  const filtered = !normalizedQuery
+    ? conversations
+    : conversations.filter((c) => {
+        const nameMatch = c.displayName.toLowerCase().includes(normalizedQuery);
+        const phoneMatch = digitsQuery.length > 0 && c.phoneNumber.replace(/[^\d]/g, "").includes(digitsQuery);
+        return nameMatch || phoneMatch;
+      });
+
   const header = (
     <li className="flex items-center justify-between border-b border-gold/15 px-4 py-3">
       <p className="font-serif text-sm font-semibold text-ink">WhatsApp</p>
@@ -365,6 +377,18 @@ function WhatsAppList({
         <Plus size={13} strokeWidth={2} />
         Nueva
       </button>
+    </li>
+  );
+
+  const searchBar = (
+    <li className="border-b border-gold/15 px-3 py-2">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Buscar por nombre o número…"
+        className="w-full rounded-lg border border-gold/20 bg-white/70 px-3 py-1.5 text-[12px] text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none"
+      />
     </li>
   );
 
@@ -381,7 +405,13 @@ function WhatsAppList({
   return (
     <ul className="flex flex-col overflow-y-auto md:max-h-full">
       {header}
-      {conversations.map((c) => {
+      {searchBar}
+      {filtered.length === 0 && (
+        <li className="flex items-center justify-center p-6 text-center text-sm text-ink/55">
+          Sin resultados para &quot;{query}&quot;.
+        </li>
+      )}
+      {filtered.map((c) => {
         const active = c.id === activeId;
         return (
           <li key={c.id}>

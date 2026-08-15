@@ -1,25 +1,45 @@
 "use client";
 
-import { ChevronDown, Loader2, StickyNote, Tag } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, Loader2, Plus, StickyNote, Tag } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
-import { getZintoCrmPanelData, type ZintoCrmPanelData } from "./zinto-crm-actions";
+import {
+  getZintoCrmPanelData,
+  addZintoCrmNote,
+  addZintoCrmTag,
+  type ZintoCrmPanelData,
+} from "./zinto-crm-actions";
 
 /**
- * Read-only side panel showing cached Zinto CRM context (name, tags, notes)
- * for the phone number of the currently-open WhatsApp conversation. Purely
- * additive to the chat view: collapsed by default, never blocks anything,
- * and degrades gracefully when the cache has no record yet for this number.
+ * Side panel showing cached Zinto CRM context (name, tags, notes) for the
+ * phone number of the currently-open WhatsApp conversation, with the ability
+ * to add notes/tags that write straight to Zinto (see zinto-crm-actions.ts).
+ * Purely additive to the chat view: collapsed by default, never blocks
+ * anything, and degrades gracefully when the cache has no record yet for
+ * this number.
  */
 export function ZintoCrmPanel({ phone }: { phone: string }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ZintoCrmPanelData | null>(null);
   const [error, setError] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [tagDraft, setTagDraft] = useState("");
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const reload = () => {
+    setLoading(true);
+    getZintoCrmPanelData(phone)
+      .then((result) => setData(result))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     setData(null);
     setError(false);
+    setWriteError(null);
     if (!open) return;
     let cancelled = false;
     setLoading(true);
@@ -37,6 +57,36 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
       cancelled = true;
     };
   }, [phone, open]);
+
+  const contactId = data?.contact?.zintoContactId;
+
+  function handleAddNote() {
+    if (!contactId || !noteDraft.trim()) return;
+    setWriteError(null);
+    startTransition(async () => {
+      const result = await addZintoCrmNote(contactId, noteDraft.trim());
+      if (result.ok) {
+        setNoteDraft("");
+        reload();
+      } else {
+        setWriteError(result.error);
+      }
+    });
+  }
+
+  function handleAddTag() {
+    if (!contactId || !tagDraft.trim()) return;
+    setWriteError(null);
+    startTransition(async () => {
+      const result = await addZintoCrmTag(contactId, tagDraft.trim());
+      if (result.ok) {
+        setTagDraft("");
+        reload();
+      } else {
+        setWriteError(result.error);
+      }
+    });
+  }
 
   return (
     <div className="border-t border-gold/15 bg-cream-50/60">
@@ -119,6 +169,58 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
               ) : (
                 <p className="text-[11px] italic text-ink/45">Sin notas en el CRM.</p>
               )}
+
+              <div className="space-y-1.5 border-t border-gold/10 pt-2.5">
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={tagDraft}
+                    onChange={(e) => setTagDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+                    placeholder="Agregar tag…"
+                    disabled={isPending}
+                    className="min-w-0 flex-1 rounded-md border border-gold/20 bg-white/70 px-2 py-1 text-[11px] text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTag}
+                    disabled={isPending || !tagDraft.trim()}
+                    className="flex items-center gap-1 rounded-md bg-gold/20 px-2 py-1 text-[10px] font-medium text-ink/70 transition hover:bg-gold/30 disabled:opacity-40"
+                  >
+                    <Plus size={11} strokeWidth={2} />
+                    Tag
+                  </button>
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
+                    placeholder="Agregar nota…"
+                    disabled={isPending}
+                    className="min-w-0 flex-1 rounded-md border border-gold/20 bg-white/70 px-2 py-1 text-[11px] text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddNote}
+                    disabled={isPending || !noteDraft.trim()}
+                    className="flex items-center gap-1 rounded-md bg-gold/20 px-2 py-1 text-[10px] font-medium text-ink/70 transition hover:bg-gold/30 disabled:opacity-40"
+                  >
+                    <Plus size={11} strokeWidth={2} />
+                    Nota
+                  </button>
+                </div>
+                {isPending && (
+                  <p className="flex items-center gap-1.5 text-[10px] text-ink/45">
+                    <Loader2 size={10} strokeWidth={1.75} className="animate-spin" />
+                    Guardando en Zinto…
+                  </p>
+                )}
+                {writeError && (
+                  <p className="text-[10px] text-red-600/80">{writeError}</p>
+                )}
+              </div>
 
               <p className="text-[9px] text-ink/35">
                 Sincronizado {formatNoteDate(data.contact.syncedAt)}
