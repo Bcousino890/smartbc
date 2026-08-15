@@ -27,6 +27,23 @@ En viewports ≥1024px apaisados la colección es ahora una **publicación pagin
 - Solo afecta a la superficie pública. El panel sigue en español. Las páginas terminales (caducada/revocada) siguen en español: en ese punto no se conoce el idioma.
 - Diccionario en `lib/viewing-collections/i18n.ts` (~35 claves × 8). **Traducciones escritas por IA: conviene que un hablante revise ar/tr/he antes de usarlas con clientes reales.**
 
+## 2 bis. La ficha del asesor muestra datos reales
+
+La página del asesor (y su equivalente en móvil) sale del **perfil del agente
+que firma la colección** — nombre, correo, teléfono y avatar. Si el perfil no
+tiene nombre, cae al contacto genérico de la agencia.
+
+Tres botones de acción (**WhatsApp · Llamar · Escribir**) y debajo la **línea de
+datos** con el correo y el teléfono en limpio, para leerlos o copiarlos. Se
+omite lo que el perfil no tenga; en árabe y hebreo cada dato lleva `dir="ltr"`
+para que el bidi no parta el prefijo del teléfono.
+
+⚠️ **Requisito de datos:** hasta ahora el formulario de `/es/admin/usuarios`
+solo enseñaba el campo *Teléfono* si el usuario era **cliente**, así que ningún
+agente tenía número y la ficha salía sin teléfono ni WhatsApp. Ya está visible
+para todos los roles (crear y editar); dejarlo vacío lo borra. **Cada agente que
+vaya a firmar colecciones necesita su teléfono guardado ahí.**
+
 ## 3. Títulos editoriales
 
 «Alquiler de piso en Calle de Jorge Juan» → **«Jorge Juan»**. Transformación de presentación (no toca `properties.title`): extrae el nombre de la vía si el título contiene una reconocible (calle, avenida, paseo, plaza…); ante cualquier duda conserva el original. 7 casos testeados. Verificado en producción: «Piso en venta en Calle José Abascal» se publica como «José Abascal».
@@ -55,6 +72,9 @@ Decisión del agente siempre — el diálogo muestra la coincidencia, nunca deci
 **Capturas** en `/tmp/book-shots/` y `/tmp/prod-book/` (regenerables con el banco `/v/design-preview?lang=…`).
 
 ## 6. QA manual pendiente (requiere tu sesión)
+
+**Primero de todo:** `/es/admin/usuarios` → edita tu usuario → guarda tu
+**teléfono**. Sin eso tu ficha de asesor sale sin número ni WhatsApp (§2 bis).
 
 Lo que no puedo probar sin login — **las cuatro pantallas prioritarias**:
 
