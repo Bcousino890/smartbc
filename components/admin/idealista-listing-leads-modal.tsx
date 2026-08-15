@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Phone, MessageCircle } from "lucide-react";
+import { Loader2, Phone, MessageCircle, CheckCircle2, ExternalLink } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { Modal } from "@/components/ui/modal";
 import { updateIdealistaLeadContactStatus } from "@/app/[country]/(admin)/admin/solicitudes/actions";
@@ -23,6 +23,9 @@ type LeadRow = {
   status: "nuevo" | "fichado" | "descartado";
   created_at: string;
   message_date: string | null;
+  whatsapp_conversation_id: string | null;
+  whatsapp_written: boolean;
+  whatsapp_last_message_at: string | null;
 };
 
 const CONTACT_STATUS_LABEL: Record<ContactStatus, string> = {
@@ -116,15 +119,37 @@ function LeadCard({ lead: initialLead }: { lead: LeadRow }) {
                 <Phone size={11} />
                 {lead.phone}
               </a>
-              <a
-                href={`https://wa.me/${lead.phone.replace(/[^\d]/g, "")}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700"
-              >
-                <MessageCircle size={11} />
-                WhatsApp
-              </a>
+              {lead.whatsapp_conversation_id ? (
+                <a
+                  href={`/es/admin/mensajes?tab=whatsapp&w=${lead.whatsapp_conversation_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${
+                    lead.whatsapp_written
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  }`}
+                  title={
+                    lead.whatsapp_written
+                      ? "Ya se le escribió por WhatsApp — abrir la conversación"
+                      : "Hay conversación pero todavía no se le escribió — abrir para escribirle"
+                  }
+                >
+                  {lead.whatsapp_written ? <CheckCircle2 size={11} /> : <ExternalLink size={11} />}
+                  {lead.whatsapp_written ? "Escrito por WhatsApp" : "Sin escribir aún"}
+                </a>
+              ) : (
+                <a
+                  href={`https://wa.me/${lead.phone.replace(/[^\d]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-ink/45 hover:text-ink"
+                  title="Sin conversación en Mensajes todavía — abre WhatsApp directo"
+                >
+                  <MessageCircle size={11} />
+                  Sin trazabilidad — abrir WhatsApp
+                </a>
+              )}
             </div>
           )}
         </div>

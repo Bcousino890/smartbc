@@ -14,6 +14,12 @@ import "server-only";
 // Chueca-Justicia" con precios parecidos, un falso positivo real que se vio
 // al probar esto contra datos reales.
 
+// OJO: "madrid" NO va acá aunque aparezca en casi todos los títulos — es
+// justo la única señal de zona que puede distinguir dos fichas propias en la
+// misma calle con precios parecidos (caso real: "Calle de Lagasca 105,
+// Castellana" vs "Calle de Lagasca, Castellana, Madrid" — con "madrid" como
+// stopword, el desempate por zona quedaba ciego y los leads de la segunda
+// cayeron todos en la primera).
 const STOPWORDS = new Set([
   "de",
   "del",
@@ -24,7 +30,6 @@ const STOPWORDS = new Set([
   "en",
   "a",
   "y",
-  "madrid",
   "calle",
   "avenida",
   "paseo",
@@ -78,8 +83,12 @@ export type AddressMatchCandidate = {
  * Empareja el título del lead ("Calle X, Zona, Ciudad") contra las
  * propiedades propias exigiendo que TODOS los tokens de calle del lead
  * aparezcan en la calle de la candidata, y que el precio esté dentro de
- * tolerancia. La zona solo suma como desempate entre candidatas empatadas en
- * calle — nunca alcanza por sí sola para matchear.
+ * tolerancia. Entre candidatas que pasan el filtro, gana la de precio más
+ * cercano (la señal más fuerte cuando dos fichas propias comparten calle);
+ * la zona solo desempata un resto de empate en precio. Si después de todo
+ * sigue habiendo empate exacto, se rinde y no matchea — adivinar mal
+ * contamina las métricas de leads por ficha, que es peor que dejarlo sin
+ * matchear.
  */
 export function matchPropertyByAddress(
   leadTitle: string | null,
@@ -91,7 +100,7 @@ export function matchPropertyByAddress(
   const leadZone = new Set(tokenize(leadTitle));
   const leadPriceNum = parsePriceToNumber(leadPrice);
 
-  let best: { id: string; score: number } | null = null;
+  const matches: { id: string; priceDiff: number; zoneOverlap: number }[] = [];
 
   for (const c of candidates) {
     const candStreet = streetTokens(c.street);
@@ -101,20 +110,24 @@ export function matchPropertyByAddress(
     const allStreetTokensMatch = leadStreet.every((t) => candStreet.includes(t));
     if (!allStreetTokensMatch) continue;
 
-    let priceOk = true;
+    let priceDiff = 0; // sin precio en alguno de los dos lados: no penaliza, no desempata
     if (leadPriceNum != null && c.price != null) {
-      const diff = Math.abs(leadPriceNum - c.price) / c.price;
-      priceOk = diff <= 0.08; // 8% de tolerancia (redondeos, cambios de precio)
+      priceDiff = Math.abs(leadPriceNum - c.price) / c.price;
+      if (priceDiff > 0.08) continue; // 8% de tolerancia (redondeos, cambios de precio)
     }
-    if (!priceOk) continue;
 
     const candZone = new Set(tokenize(c.zone));
     let zoneOverlap = 0;
     for (const t of leadZone) if (candZone.has(t)) zoneOverlap++;
 
-    const score = candStreet.length * 10 + zoneOverlap;
-    if (!best || score > best.score) best = { id: c.id, score };
+    matches.push({ id: c.id, priceDiff, zoneOverlap });
   }
 
-  return best?.id ?? null;
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0].id;
+
+  matches.sort((a, b) => a.priceDiff - b.priceDiff || b.zoneOverlap - a.zoneOverlap);
+  const [first, second] = matches;
+  const isAmbiguous = first.priceDiff === second.priceDiff && first.zoneOverlap === second.zoneOverlap;
+  return isAmbiguous ? null : first.id;
 }
