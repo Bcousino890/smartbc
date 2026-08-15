@@ -10,6 +10,8 @@ import {
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
+import { ParticularesScraperSection } from "./scraper-section";
+import { getIdealistaScraperConfig } from "@/lib/api/v1/idealista/config";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +31,10 @@ export default async function AdminParticularesPage({
     redirect(getCountryConfig(country).prefix);
   }
 
-  const [{ rows: enrichedRows }, staffOptions] = await Promise.all([
+  const [{ rows: enrichedRows }, staffOptions, scraperConfig] = await Promise.all([
     getParticularesPage(),
     getStaffOptions().catch(() => []),
+    getIdealistaScraperConfig(),
   ]);
 
   const rows = enrichedRows as unknown as ParticularRow[];
@@ -99,6 +102,8 @@ export default async function AdminParticularesPage({
           value={stats.last24h}
         />
       </div>
+
+      <ParticularesScraperSection config={scraperConfig} />
 
       <ParticularesClient
         rows={rows}
