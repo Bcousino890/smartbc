@@ -125,5 +125,32 @@ export default async function TokenSharePage({
     property.latitude = coords.lat;
     property.longitude = coords.lng;
   }
-  return <PublicPropertyView property={property} shareId={resolved.shareId} />;
+
+  // Vídeos y planos (property_media), igual que /compartir/[slug]. Un enlace
+  // sin media renderiza exactamente como antes.
+  const media =
+    (
+      resolved.property as {
+        property_media?: Array<{
+          url: string;
+          file_name?: string | null;
+          type?: string | null;
+        }>;
+      }
+    ).property_media ?? [];
+  const videos = media
+    .filter((m) => m.type === "video" && m.url)
+    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+  const plans = media
+    .filter((m) => m.type === "plan" && m.url)
+    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+
+  return (
+    <PublicPropertyView
+      property={property}
+      videos={videos}
+      plans={plans}
+      shareId={resolved.shareId}
+    />
+  );
 }

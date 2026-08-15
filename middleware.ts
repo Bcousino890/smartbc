@@ -11,7 +11,10 @@ import {
 // y `/c/{token}` (link único por envío comercial, con tracking). `/og/*`
 // son las imágenes para preview en redes sociales/WhatsApp. Todos
 // accesibles sin login.
-const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p"];
+// "/v" → Viewing Collections: colección privada de un itinerario publicado,
+// con su propio token. NO confundir con "/c", que es el SmartLink de UNA sola
+// propiedad. Ambas son públicas y se resuelven con service role en servidor.
+const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p", "/v"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes", "/documentacion"];
 // Los árboles de país (/es/admin, /cl/admin) también son admin: antes solo
 // se protegían en el layout; el middleware ni los miraba.

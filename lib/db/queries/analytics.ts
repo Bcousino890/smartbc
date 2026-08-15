@@ -5,6 +5,7 @@ export type PageViewRow = {
   id: string;
   property_id: string | null;
   share_id: string | null;
+  collection_share_id: string | null;
   page_type: string;
   page_path: string;
   session_id: string;

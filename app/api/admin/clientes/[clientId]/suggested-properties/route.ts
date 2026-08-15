@@ -1,60 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSuggestedProperties } from "@/lib/db/queries/suggested-properties";
-import { requireStaff } from "@/lib/db/auth-helpers";
-import { createClient } from "@/lib/db/server";
+import { requirePermission } from "@/lib/auth/guard";
+import { createAdminClient } from "@/lib/db/admin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  req: NextRequest,
-  {
-    params,
-  }: {
-    params: Promise<{ clientId: string }>;
-  },
+  _req: NextRequest,
+  { params }: { params: Promise<{ clientId: string }> },
 ) {
   try {
-    const supabase = await createClient();
-    const auth = await requireStaff(supabase);
-
-    if (!auth.ok) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const gate = await requirePermission("clientes", "view");
+    if (!gate.ok) return gate.response;
 
     const { clientId } = await params;
 
-    // Validate that the client exists and belongs to this staff
-    const { data: clientData, error: clientError } = await supabase
+    // El país del cliente aísla el catálogo: sin esto un cliente de España
+    // recibía sugerencias de Chile y viceversa.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: client } = await admin
       .from("profiles")
-      .select("id, role")
+      .select("id, role, country")
       .eq("id", clientId)
       .maybeSingle();
 
-    const client = clientData as any;
+    if (!client || client.role !== "client") {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
-    if (clientError || !client || client.role !== "client") {
+    const result = await getSuggestedProperties(clientId, {
+      country: client.country ?? undefined,
+    });
+
+    if (!result.ok) {
+      // "Sin preferencias" no es un error: es un estado normal del cliente y
+      // la UI lo distingue para poder invitar a configurarlas.
+      if (result.reason === "no_preferences") {
+        return NextResponse.json({
+          ok: true,
+          suggestions: [],
+          reason: "no_preferences",
+        });
+      }
       return NextResponse.json(
-        { error: "Client not found" },
-        { status: 404 },
+        { error: result.message, reason: "error" },
+        { status: 500 },
       );
     }
 
-    // Get suggested properties
-    const suggestions = await getSuggestedProperties(clientId);
-
-    return NextResponse.json({
-      ok: true,
-      suggestions,
-    });
+    return NextResponse.json({ ok: true, suggestions: result.suggestions });
   } catch (error) {
     console.error("Error in suggested properties endpoint:", error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal error",
-      },
+      { error: error instanceof Error ? error.message : "Internal error" },
       { status: 500 },
     );
   }

@@ -31,6 +31,7 @@ export class AnalyticsTracker {
     pageType: string
     propertyId?: string
     shareId?: string
+    collectionShareId?: string
   }): void {
     this.pageViewId = null
     this.timeOnPageStart = Date.now()
@@ -41,6 +42,7 @@ export class AnalyticsTracker {
     pageType: string
     propertyId?: string
     shareId?: string
+    collectionShareId?: string
   }): Promise<void> {
     try {
       const res = await fetch("/api/tracking/page-view", {
@@ -50,6 +52,7 @@ export class AnalyticsTracker {
           pageType: params.pageType,
           propertyId: params.propertyId ?? null,
           shareId: params.shareId ?? null,
+          collectionShareId: params.collectionShareId ?? null,
           sessionId: this.sessionId,
           referrer: document.referrer,
           pagePath: window.location.pathname,
@@ -94,6 +97,15 @@ export class AnalyticsTracker {
 
   trackVisitRequest(): void {
     this.enqueue({ eventType: "visit_request" })
+  }
+
+  /**
+   * Evento genérico. Lo usa la Viewing Collection para collection_open,
+   * stop_view, stop_expand y share_click sin necesitar un método por evento.
+   * El CHECK de page_events.event_type descarta cualquier valor no permitido.
+   */
+  trackEvent(eventType: string, data?: unknown): void {
+    this.enqueue({ eventType, data })
   }
 
   private enqueue(event: { eventType: string; data?: unknown }): void {

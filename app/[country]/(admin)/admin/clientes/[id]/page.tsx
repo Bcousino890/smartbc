@@ -2,6 +2,14 @@ import { notFound } from "next/navigation";
 import { clientRowToAdminClient } from "@/lib/db/adapters";
 import { getClientById } from "@/lib/db/queries/clients";
 import { guardPage } from "@/lib/auth/guard";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { getEffectivePermissions } from "@/lib/db/queries/permissions";
+import {
+  canAccessClient,
+  getClientItineraries,
+  getClientSelection,
+  getViewingCollectionsSettings,
+} from "@/lib/db/queries/viewing-collections";
 import type { Country } from "@/lib/country-config";
 import { ClientFichaView } from "./client-ficha-view";
 
@@ -16,6 +24,23 @@ export default async function ClientFichaPage({
   await guardPage("clientes", country);
   const rowData = await getClientById(id);
   if (!rowData) notFound();
+
+  // Viewing Collections. El feature flag y los permisos deciden si el bloque
+  // aparece; el scope (own/team/all) decide si este agente ve a este cliente.
+  const [vcSettings, profile] = await Promise.all([
+    getViewingCollectionsSettings(),
+    getCurrentProfile(),
+  ]);
+
+  const perms = profile
+    ? await getEffectivePermissions(profile.id, profile.role, country)
+    : null;
+  const vc = perms?.viewing_collections;
+  const inScope = vcSettings.enabled && Boolean(vc?.view) && (await canAccessClient(id));
+
+  const [selections, itineraries] = inScope
+    ? await Promise.all([getClientSelection(id), getClientItineraries(id)])
+    : [[], []];
 
   // getClientById retorna datos con count embebido distinto al getClients.
   // Adaptamos manualmente las relaciones para reusar el adaptador.
@@ -65,6 +90,18 @@ export default async function ClientFichaPage({
         propertyTitle: v.properties?.title ?? null,
         propertySlug: v.properties?.slug ?? null,
       }))}
+      viewingCollections={
+        inScope
+          ? {
+              selections,
+              itineraries,
+              canEdit: Boolean(vc?.edit),
+              canCreate: Boolean(vc?.create),
+              canDelete: Boolean(vc?.delete),
+              canPublish: Boolean(vc?.publish),
+            }
+          : null
+      }
     />
   );
 }

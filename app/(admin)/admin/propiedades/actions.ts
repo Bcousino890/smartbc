@@ -6,6 +6,7 @@ import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { checkPermission } from "@/lib/auth/guard";
 import { shareSlug } from "@/lib/share-slug";
+import { randomToken } from "@/lib/tokens";
 import type { Operation, StayType } from "@/lib/types";
 
 export type CreatePropertyInput = {
@@ -689,18 +690,6 @@ export type ShareSummary = {
   opens_count: number;
   last_opened_at: string | null;
 };
-
-function randomToken(len = 28): string {
-  // Token URL-safe (base64url sin padding). 28 chars ≈ 168 bits, suficiente.
-  const arr = new Uint8Array(len);
-  crypto.getRandomValues(arr);
-  return Buffer.from(arr)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-    .slice(0, len);
-}
 
 export type CreateShareResult =
   | { ok: true; token: string }

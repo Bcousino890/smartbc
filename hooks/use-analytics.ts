@@ -9,12 +9,14 @@ type PageType =
   | "property_list"
   | "home"
   | "contact"
+  | "viewing_collection"
   | "other";
 
 interface UseAnalyticsOptions {
   pageType: PageType;
   propertyId?: string;
   shareId?: string;
+  collectionShareId?: string;
 }
 
 /**
@@ -35,6 +37,7 @@ export function useAnalytics(options: UseAnalyticsOptions) {
         pageType: options.pageType,
         propertyId: options.propertyId,
         shareId: options.shareId,
+        collectionShareId: options.collectionShareId,
       });
     }
     // Solo inicializar una vez al montar — no re-inicializar si cambian las opciones

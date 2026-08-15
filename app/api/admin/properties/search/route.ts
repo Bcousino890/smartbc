@@ -1,30 +1,37 @@
 import "server-only";
-import { requireSession } from "@/lib/db/auth-helpers";
-import { createClient } from "@/lib/db/server";
+import { requirePermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient();
-    const auth = await requireSession(supabase);
-    if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
-
-    const isStaff = ["admin", "owner", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(auth.role);
-    if (!isStaff) return Response.json({ error: "Sin permiso" }, { status: 403 });
+    // Antes había un array de roles en línea que omitía `captadora` y no
+    // consultaba la matriz de permisos ni los overrides por usuario.
+    const gate = await requirePermission("properties", "view");
+    if (!gate.ok) return gate.response;
 
     const url = new URL(req.url);
     const q = url.searchParams.get("q") ?? "";
+    const countryParam = url.searchParams.get("country");
+    const country =
+      countryParam === "es" || countryParam === "cl" ? countryParam : null;
 
-    const admin = createAdminClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (admin as any)
+    let query = (createAdminClient() as any)
       .from("properties")
-      .select("id, slug, title, address, bc_reference, cover_photo_url, price, operation")
+      .select(
+        "id, slug, title, address, bc_reference, cover_photo_url, price, operation",
+      )
+      // Una propiedad archivada no debe poder añadirse a nada.
+      .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(20);
 
+    if (country) query = query.eq("country", country);
+
     if (q.trim()) {
-      query = query.or(`title.ilike.%${q}%,address.ilike.%${q}%,bc_reference.ilike.%${q}%`);
+      query = query.or(
+        `title.ilike.%${q}%,address.ilike.%${q}%,bc_reference.ilike.%${q}%`,
+      );
     }
 
     const { data, error } = await query;

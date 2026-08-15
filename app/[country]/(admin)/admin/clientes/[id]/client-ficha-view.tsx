@@ -17,10 +17,24 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageFooter } from "@/components/ui/page-footer";
 import { SuggestedPropertiesBlock } from "@/components/admin/clientes/suggested-properties-block";
+import {
+  AddToSelectionButton,
+  SelectedPropertiesBlock,
+} from "@/components/admin/viewing-collections/selected-properties-block";
+import {
+  addPropertiesToSelection,
+  addPropertyToSelection,
+} from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
+import { ViewingItinerariesBlock } from "@/components/admin/viewing-collections/viewing-itineraries-block";
+import type {
+  ItineraryWithStops,
+  SelectionWithProperty,
+} from "@/lib/viewing-collections/types";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient } from "@/lib/types";
@@ -75,14 +89,26 @@ const VISIT_STATUS_STYLES: Record<
   },
 };
 
+export type ViewingCollectionsProps = {
+  selections: SelectionWithProperty[];
+  itineraries: ItineraryWithStops[];
+  canEdit: boolean;
+  canCreate: boolean;
+  canDelete: boolean;
+  canPublish: boolean;
+};
+
 export function ClientFichaView({
   client,
   favorites,
   visits,
+  viewingCollections,
 }: {
   client: AdminClient;
   favorites: FavoriteRef[];
   visits: RawVisit[];
+  /** null cuando el módulo está apagado o el agente no tiene acceso. */
+  viewingCollections: ViewingCollectionsProps | null;
 }) {
   const t = useT();
   const params = useParams<{ country?: string }>();
@@ -237,12 +263,54 @@ export function ClientFichaView({
           <NotesCard client={client} />
         </div>
 
-        {/* Columna derecha */}
+        {/* Columna derecha.
+            Orden deliberado: primero la señal del propio cliente (favoritos),
+            después el trabajo comercial en curso (selección e itinerarios) y
+            al final la materia prima (sugerencias) y el registro (visitas). */}
         <div className="flex flex-col gap-5">
-          <FavoritesCard favorites={favorites} />
+          <FavoritesCard
+            favorites={favorites}
+            clientId={client.id}
+            selectedPropertyIds={
+              new Set(
+                (viewingCollections?.selections ?? []).map((s) => s.property_id),
+              )
+            }
+            canAddToSelection={Boolean(viewingCollections?.canCreate)}
+          />
+
+          {viewingCollections && (
+            <>
+              <SelectedPropertiesBlock
+                clientId={client.id}
+                clientName={`${client.firstName} ${client.lastName}`}
+                country={country}
+                selections={viewingCollections.selections}
+                canEdit={viewingCollections.canEdit}
+                canDelete={viewingCollections.canDelete}
+                canCreateItinerary={viewingCollections.canCreate}
+              />
+              <ViewingItinerariesBlock
+                clientId={client.id}
+                clientName={`${client.firstName} ${client.lastName}`}
+                country={country}
+                itineraries={viewingCollections.itineraries}
+                canEdit={viewingCollections.canEdit}
+                canDelete={viewingCollections.canDelete}
+                canPublish={viewingCollections.canPublish}
+              />
+            </>
+          )}
+
           <SuggestedPropertiesBlock
             clientId={client.id}
             clientName={`${client.firstName} ${client.lastName}`}
+            selectedPropertyIds={
+              new Set(
+                (viewingCollections?.selections ?? []).map((s) => s.property_id),
+              )
+            }
+            canAddToSelection={Boolean(viewingCollections?.canCreate)}
           />
           <VisitsCard visits={visits} />
         </div>
@@ -371,11 +439,25 @@ function NotesCard({ client }: { client: AdminClient }) {
   );
 }
 
-function FavoritesCard({ favorites }: { favorites: FavoriteRef[] }) {
+function FavoritesCard({
+  favorites,
+  clientId,
+  selectedPropertyIds,
+  canAddToSelection,
+}: {
+  favorites: FavoriteRef[];
+  clientId: string;
+  selectedPropertyIds: Set<string>;
+  canAddToSelection: boolean;
+}) {
   const t = useT();
   const params = useParams<{ country?: string }>();
   const country = isCountry(params?.country) ? params.country : "es";
   const config = getCountryConfig(country);
+  const router = useRouter();
+  const pendingAll = favorites.filter((f) => !selectedPropertyIds.has(f.id));
+  const [addingAll, startAddAll] = useTransition();
+
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
@@ -408,15 +490,25 @@ function FavoritesCard({ favorites }: { favorites: FavoriteRef[] }) {
                   {fav.title ?? `${fav.id.slice(0, 20)}…`}
                 </p>
               </div>
-              {/* La ruta de admin usa slug; sin slug no hay link válido. */}
-              {fav.slug && (
-                <Link
-                  href={`${config.prefix}/propiedades/${fav.slug}`}
-                  className="shrink-0 text-[11px] font-medium text-gold-dark transition hover:text-gold hover:underline"
-                >
-                  {t("clientes.ficha.favorites.viewProperty")}
-                </Link>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {canAddToSelection && (
+                  <AddToSelectionButton
+                    added={selectedPropertyIds.has(fav.id)}
+                    onAdd={() =>
+                      addPropertyToSelection(clientId, fav.id, "favorite")
+                    }
+                  />
+                )}
+                {/* La ruta de admin usa slug; sin slug no hay link válido. */}
+                {fav.slug && (
+                  <Link
+                    href={`${config.prefix}/propiedades/${fav.slug}`}
+                    className="text-[11px] font-medium text-gold-dark transition hover:text-gold hover:underline"
+                  >
+                    {t("clientes.ficha.favorites.viewProperty")}
+                  </Link>
+                )}
+              </div>
             </li>
           ))}
           {favorites.length > 8 && (
@@ -425,6 +517,28 @@ function FavoritesCard({ favorites }: { favorites: FavoriteRef[] }) {
             </li>
           )}
         </ul>
+      )}
+
+      {canAddToSelection && pendingAll.length > 0 && (
+        <button
+          type="button"
+          disabled={addingAll}
+          onClick={() =>
+            startAddAll(async () => {
+              await addPropertiesToSelection(
+                clientId,
+                pendingAll.map((f) => f.id),
+                "favorite",
+              );
+              router.refresh();
+            })
+          }
+          className="mt-3 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/70 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+        >
+          {addingAll
+            ? "Añadiendo…"
+            : `Añadir ${pendingAll.length} a la selección`}
+        </button>
       )}
     </section>
   );

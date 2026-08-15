@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       pageType?: string;
       propertyId?: string | null;
       shareId?: string | null;
+      collectionShareId?: string | null;
       sessionId?: string;
       pagePath?: string;
       referrer?: string | null;
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
       page_type?: string;
       property_id?: string | null;
       share_id?: string | null;
+      collection_share_id?: string | null;
       session_id?: string;
       page_path?: string;
       device_type?: string | null;
@@ -47,6 +49,8 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get("user-agent") ?? null;
 
     const result = await insertPageView({
+      collection_share_id:
+        body.collectionShareId ?? body.collection_share_id ?? null,
       property_id: body.propertyId ?? body.property_id ?? null,
       share_id: body.shareId ?? body.share_id ?? null,
       page_type: pageType,

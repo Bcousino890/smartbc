@@ -27,9 +27,16 @@ export type PermissionResource =
   | "configuracion"
   | "sindicacion"
   | "diagnostico"
-  | "calendario";
+  | "calendario"
+  | "viewing_collections";
 
-export type PermissionAction = "view" | "create" | "edit" | "delete" | "export";
+export type PermissionAction =
+  | "view"
+  | "create"
+  | "edit"
+  | "delete"
+  | "export"
+  | "publish";
 
 export type PermissionMatrix = Record<PermissionResource, Record<PermissionAction, boolean>>;
 
@@ -51,6 +58,7 @@ export const PERMISSION_RESOURCES: readonly PermissionResource[] = [
   "sindicacion",
   "diagnostico",
   "calendario",
+  "viewing_collections",
 ] as const;
 
 export const PERMISSION_ACTIONS: readonly PermissionAction[] = [
@@ -59,6 +67,7 @@ export const PERMISSION_ACTIONS: readonly PermissionAction[] = [
   "edit",
   "delete",
   "export",
+  "publish",
 ] as const;
 
 // ─── Etiquetas y descripciones en español (para la UI) ────────────────────────
@@ -79,6 +88,7 @@ export const RESOURCE_LABELS: Record<PermissionResource, string> = {
   sindicacion:   "Sindicación",
   diagnostico:   "Diagnóstico",
   calendario:    "Calendario",
+  viewing_collections: "Colecciones de visitas",
 };
 
 export const RESOURCE_DESCRIPTIONS: Record<PermissionResource, string> = {
@@ -97,6 +107,8 @@ export const RESOURCE_DESCRIPTIONS: Record<PermissionResource, string> = {
   sindicacion:   "Feeds de sindicación a portales externos.",
   diagnostico:   "Herramientas de diagnóstico técnico.",
   calendario:    "Agenda, citas y eventos.",
+  viewing_collections:
+    "Selecciones de propiedades por cliente, itinerarios de visitas y colecciones privadas compartibles.",
 };
 
 export const ACTION_LABELS: Record<PermissionAction, string> = {
@@ -105,6 +117,7 @@ export const ACTION_LABELS: Record<PermissionAction, string> = {
   edit:   "Editar",
   delete: "Eliminar",
   export: "Exportar",
+  publish: "Publicar",
 };
 
 export const ACTION_DESCRIPTIONS: Record<PermissionAction, string> = {
@@ -113,138 +126,147 @@ export const ACTION_DESCRIPTIONS: Record<PermissionAction, string> = {
   edit:   "Modificar registros existentes.",
   delete: "Eliminar registros de forma permanente.",
   export: "Descargar o exportar los datos.",
+  publish:
+    "Generar, renovar y revocar enlaces públicos dirigidos a clientes.",
 };
 
 // ─── Matrices por rol ─────────────────────────────────────────────────────────
 
 const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true,  create: false, edit: false, delete: false, export: false },
-  agencias:      { view: false, create: false, edit: false, delete: false, export: false },
-  particulares:  { view: true,  create: false, edit: false, delete: false, export: false },
-  publicacion:   { view: true,  create: false, edit: false, delete: false, export: false },
-  captaciones:   { view: false, create: false, edit: false, delete: false, export: false },
-  clientes:      { view: true,  create: false, edit: false, delete: false, export: false },
-  solicitudes:   { view: true,  create: false, edit: false, delete: false, export: false },
-  documentacion: { view: true,  create: false, edit: false, delete: false, export: false },
-  mensajes:      { view: true,  create: false, edit: false, delete: false, export: false },
-  reportes:      { view: false, create: false, edit: false, delete: false, export: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
-  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
-  calendario:    { view: true,  create: false, edit: false, delete: false, export: false },
+  properties:    { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  agencias:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  particulares:  { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  publicacion:   { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  captaciones:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  clientes:      { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  solicitudes:   { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  documentacion: { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  mensajes:      { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  reportes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  calendario:    { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  viewing_collections: { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
 };
 
 const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true,  create: true,  edit: true,  delete: false, export: true  },
-  agencias:      { view: true,  create: false, edit: false, delete: false, export: false },
-  particulares:  { view: true,  create: true,  edit: true,  delete: false, export: false },
-  publicacion:   { view: true,  create: true,  edit: true,  delete: false, export: false },
-  captaciones:   { view: true,  create: true,  edit: true,  delete: false, export: false },
-  clientes:      { view: true,  create: true,  edit: true,  delete: false, export: false },
-  solicitudes:   { view: true,  create: true,  edit: true,  delete: false, export: false },
-  documentacion: { view: true,  create: true,  edit: true,  delete: false, export: false },
-  mensajes:      { view: true,  create: true,  edit: false, delete: false, export: false },
-  reportes:      { view: true,  create: false, edit: false, delete: false, export: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
-  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
-  calendario:    { view: true,  create: true,  edit: true,  delete: false, export: false },
+  properties:    { view: true,  create: true,  edit: true,  delete: false, export: true, publish: false },
+  agencias:      { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  particulares:  { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  publicacion:   { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  captaciones:   { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  clientes:      { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  solicitudes:   { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  documentacion: { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  mensajes:      { view: true,  create: true,  edit: false, delete: false, export: false, publish: false },
+  reportes:      { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  calendario:    { view: true,  create: true,  edit: true,  delete: false, export: false, publish: false },
+  viewing_collections: { view: true,  create: true,  edit: true,  delete: false, export: false, publish: true  },
 };
 
 const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true, create: true,  edit: true, delete: true,  export: true  },
-  agencias:      { view: true, create: true,  edit: true, delete: false, export: false },
-  particulares:  { view: true, create: true,  edit: true, delete: true,  export: true  },
-  publicacion:   { view: true, create: true,  edit: true, delete: true,  export: true  },
-  captaciones:   { view: true, create: true,  edit: true, delete: true,  export: true  },
-  clientes:      { view: true, create: true,  edit: true, delete: true,  export: true  },
-  solicitudes:   { view: true, create: true,  edit: true, delete: true,  export: true  },
-  documentacion: { view: true, create: true,  edit: true, delete: true,  export: true  },
-  mensajes:      { view: true, create: true,  edit: true, delete: false, export: false },
-  reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
-  usuarios:      { view: true, create: true,  edit: true, delete: false, export: false },
-  configuracion: { view: true, create: false, edit: true, delete: false, export: false },
-  sindicacion:   { view: true, create: false, edit: false, delete: false, export: false },
-  diagnostico:   { view: true, create: false, edit: false, delete: false, export: false },
-  calendario:    { view: true, create: true,  edit: true, delete: true,  export: false },
+  properties:    { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  agencias:      { view: true, create: true,  edit: true, delete: false, export: false, publish: false },
+  particulares:  { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  publicacion:   { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  captaciones:   { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  clientes:      { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  solicitudes:   { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  documentacion: { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  mensajes:      { view: true, create: true,  edit: true, delete: false, export: false, publish: false },
+  reportes:      { view: true, create: false, edit: false, delete: false, export: true, publish: false },
+  usuarios:      { view: true, create: true,  edit: true, delete: false, export: false, publish: false },
+  configuracion: { view: true, create: false, edit: true, delete: false, export: false, publish: false },
+  sindicacion:   { view: true, create: false, edit: false, delete: false, export: false, publish: false },
+  diagnostico:   { view: true, create: false, edit: false, delete: false, export: false, publish: false },
+  calendario:    { view: true, create: true,  edit: true, delete: true,  export: false, publish: false },
+  viewing_collections: { view: true,  create: true,  edit: true,  delete: true,  export: true,  publish: true  },
 };
 
 // Roles con acceso total (owner, admin) — todo permitido
 const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true, create: true, edit: true, delete: true, export: true },
-  agencias:      { view: true, create: true, edit: true, delete: true, export: true },
-  particulares:  { view: true, create: true, edit: true, delete: true, export: true },
-  publicacion:   { view: true, create: true, edit: true, delete: true, export: true },
-  captaciones:   { view: true, create: true, edit: true, delete: true, export: true },
-  clientes:      { view: true, create: true, edit: true, delete: true, export: true },
-  solicitudes:   { view: true, create: true, edit: true, delete: true, export: true },
-  documentacion: { view: true, create: true, edit: true, delete: true, export: true },
-  mensajes:      { view: true, create: true, edit: true, delete: true, export: true },
-  reportes:      { view: true, create: true, edit: true, delete: true, export: true },
-  usuarios:      { view: true, create: true, edit: true, delete: true, export: true },
-  configuracion: { view: true, create: true, edit: true, delete: true, export: true },
-  sindicacion:   { view: true, create: true, edit: true, delete: true, export: true },
-  diagnostico:   { view: true, create: true, edit: true, delete: true, export: true },
-  calendario:    { view: true, create: true, edit: true, delete: true, export: true },
+  properties:    { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  agencias:      { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  particulares:  { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  publicacion:   { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  captaciones:   { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  clientes:      { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  solicitudes:   { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  documentacion: { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  mensajes:      { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  reportes:      { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  usuarios:      { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  configuracion: { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  sindicacion:   { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  diagnostico:   { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  calendario:    { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  viewing_collections: { view: true, create: true, edit: true, delete: true, export: true, publish: true },
 };
 
 // Advisor: similar a full access pero sin gestión total de usuarios/config
 const ADVISOR_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  agencias:      { view: true, create: false, edit: false, delete: false, export: false },
-  particulares:  { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  publicacion:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  captaciones:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  clientes:      { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  solicitudes:   { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  documentacion: { view: true, create: true,  edit: true,  delete: true,  export: true  },
-  mensajes:      { view: true, create: true,  edit: true,  delete: false, export: false },
-  reportes:      { view: true, create: false, edit: false, delete: false, export: true  },
-  usuarios:      { view: true, create: false, edit: false, delete: false, export: false },
-  configuracion: { view: true, create: false, edit: true,  delete: false, export: false },
-  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
-  calendario:    { view: true, create: true,  edit: true,  delete: true,  export: false },
+  properties:    { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  agencias:      { view: true, create: false, edit: false, delete: false, export: false, publish: false },
+  particulares:  { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  publicacion:   { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  captaciones:   { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  clientes:      { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  solicitudes:   { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  documentacion: { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  mensajes:      { view: true, create: true,  edit: true,  delete: false, export: false, publish: false },
+  reportes:      { view: true, create: false, edit: false, delete: false, export: true, publish: false },
+  usuarios:      { view: true, create: false, edit: false, delete: false, export: false, publish: false },
+  configuracion: { view: true, create: false, edit: true,  delete: false, export: false, publish: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  calendario:    { view: true, create: true,  edit: true,  delete: true,  export: false, publish: false },
+  viewing_collections: { view: true, create: true,  edit: true,  delete: true,  export: true,  publish: true  },
 };
 
 // Rol "captadora" — operaria de captaciones (solo ve y edita asignadas a ella)
 const CAPTADORA_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: false, create: false, edit: false, delete: false, export: false },
-  agencias:      { view: false, create: false, edit: false, delete: false, export: false },
-  particulares:  { view: false, create: false, edit: false, delete: false, export: false },
-  publicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  captaciones:   { view: true,  create: false, edit: true,  delete: false, export: false },
-  clientes:      { view: false, create: false, edit: false, delete: false, export: false },
-  solicitudes:   { view: false, create: false, edit: false, delete: false, export: false },
-  documentacion: { view: false, create: false, edit: false, delete: false, export: false },
-  mensajes:      { view: false, create: false, edit: false, delete: false, export: false },
-  reportes:      { view: false, create: false, edit: false, delete: false, export: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
-  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
-  calendario:    { view: false, create: false, edit: false, delete: false, export: false },
+  properties:    { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  agencias:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  particulares:  { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  publicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  captaciones:   { view: true,  create: false, edit: true,  delete: false, export: false, publish: false },
+  clientes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  solicitudes:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  documentacion: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  mensajes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  reportes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  calendario:    { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  viewing_collections: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
 };
 
 // Sin acceso (client, viewer, roles desconocidos)
 const NO_ACCESS_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: false, create: false, edit: false, delete: false, export: false },
-  agencias:      { view: false, create: false, edit: false, delete: false, export: false },
-  particulares:  { view: false, create: false, edit: false, delete: false, export: false },
-  publicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  captaciones:   { view: false, create: false, edit: false, delete: false, export: false },
-  clientes:      { view: false, create: false, edit: false, delete: false, export: false },
-  solicitudes:   { view: false, create: false, edit: false, delete: false, export: false },
-  documentacion: { view: false, create: false, edit: false, delete: false, export: false },
-  mensajes:      { view: false, create: false, edit: false, delete: false, export: false },
-  reportes:      { view: false, create: false, edit: false, delete: false, export: false },
-  usuarios:      { view: false, create: false, edit: false, delete: false, export: false },
-  configuracion: { view: false, create: false, edit: false, delete: false, export: false },
-  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false },
-  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false },
-  calendario:    { view: false, create: false, edit: false, delete: false, export: false },
+  properties:    { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  agencias:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  particulares:  { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  publicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  captaciones:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  clientes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  solicitudes:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  documentacion: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  mensajes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  reportes:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  usuarios:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  configuracion: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  sindicacion:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  diagnostico:   { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  calendario:    { view: false, create: false, edit: false, delete: false, export: false, publish: false },
+  viewing_collections: { view: false, create: false, edit: false, delete: false, export: false, publish: false },
 };
 
 // ─── Mapa de permisos por rol ─────────────────────────────────────────────────
@@ -604,7 +626,9 @@ export function getViewRestriction(
   }
 
   const isScopedBusinessData =
-    resource === "clientes" || resource === "solicitudes";
+    resource === "clientes" ||
+    resource === "solicitudes" ||
+    resource === "viewing_collections";
 
   switch (role) {
     case "owner":

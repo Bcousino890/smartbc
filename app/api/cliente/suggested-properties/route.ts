@@ -8,26 +8,37 @@ export async function GET() {
   try {
     const supabase = await createClient();
 
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get suggested properties
-    const properties = await getSuggestedProperties(user.id);
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("country")
+      .eq("id", user.id)
+      .maybeSingle();
 
-    return NextResponse.json({
-      ok: true,
-      properties: properties.map(p => ({
-        ...p,
-        stayType: "corta", // Add stayType for client display
-      })),
+    const result = await getSuggestedProperties(user.id, {
+      country: (profile as { country?: string } | null)?.country ?? undefined,
     });
+
+    if (!result.ok) {
+      if (result.reason === "no_preferences") {
+        return NextResponse.json({
+          ok: true,
+          properties: [],
+          reason: "no_preferences",
+        });
+      }
+      return NextResponse.json({ error: result.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, properties: result.suggestions });
   } catch (error) {
     console.error("Error fetching suggested properties:", error);
     return NextResponse.json(

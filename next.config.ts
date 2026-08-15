@@ -27,6 +27,22 @@ const nextConfig: NextConfig = {
     "merge-deep",
     "clone-deep",
   ],
+  async headers() {
+    return [
+      {
+        // Viewing Collections: colección privada de un cliente. Además del
+        // `robots` de generateMetadata, la cabecera cubre a los crawlers que
+        // no ejecutan JS ni leen el <head>.
+        source: "/v/:token*",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value: "noindex, nofollow, noarchive, nosnippet",
+          },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
