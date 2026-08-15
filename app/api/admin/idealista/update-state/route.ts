@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const validStates = ["draft", "published", "failed"];
+  const validStates = ["draft", "published", "unpublished", "failed"];
   if (!validStates.includes(newState)) {
     return NextResponse.json(
       { error: `Estado inválido. Debe ser uno de: ${validStates.join(", ")}` },

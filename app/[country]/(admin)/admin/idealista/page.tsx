@@ -151,6 +151,9 @@ export default async function AdminIdealistaPage({
     reference_code: string | null;
     operation: string | null;
     scheduled_publish_at: string | null;
+    archived_at: string | null;
+    published_at: string | null;
+    unpublished_at: string | null;
     created_at: string;
     updated_at: string;
   }>;

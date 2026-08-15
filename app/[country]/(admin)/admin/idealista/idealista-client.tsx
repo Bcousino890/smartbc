@@ -103,6 +103,8 @@ type DbIdealistaListing = {
   api_last_error: string | null;
   scheduled_publish_at: string | null;
   archived_at: string | null;
+  published_at: string | null;
+  unpublished_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -969,6 +971,20 @@ export function IdealistaClient({
                           router.refresh();
                         }}
                       />
+                      {(listing.published_at || listing.unpublished_at) && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink/40">
+                          {listing.published_at && (
+                            <span>
+                              ↑ Subida: {new Date(listing.published_at).toLocaleDateString("es-ES")}
+                            </span>
+                          )}
+                          {listing.unpublished_at && (
+                            <span>
+                              ↓ Bajada: {new Date(listing.unpublished_at).toLocaleDateString("es-ES")}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">

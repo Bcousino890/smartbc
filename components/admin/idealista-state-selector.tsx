@@ -3,11 +3,12 @@
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
-type StateOption = "draft" | "published" | "failed";
+type StateOption = "draft" | "published" | "unpublished" | "failed";
 
 const STATE_LABELS: Record<StateOption, { label: string; color: string; bg: string }> = {
   draft: { label: "Borrador", color: "text-amber-700", bg: "bg-amber-100" },
   published: { label: "Publicado", color: "text-emerald-700", bg: "bg-emerald-100" },
+  unpublished: { label: "Despublicado", color: "text-slate-700", bg: "bg-slate-200" },
   failed: { label: "Error", color: "text-red-700", bg: "bg-red-100" },
 };
 
@@ -79,6 +80,7 @@ export function IdealistaStateSelector({
         <option value="">Seleccionar estado...</option>
         <option value="draft">Borrador</option>
         <option value="published">Publicado</option>
+        <option value="unpublished">Despublicado</option>
         <option value="failed">Error</option>
       </select>
     </div>
