@@ -49,3 +49,7 @@ next-env.d.ts
 
 # Claude Code local settings
 .claude/
+
+# Python bytecode cache (scripts/wmrm)
+__pycache__/
+*.pyc

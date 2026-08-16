@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { downloadAndWatermark } from "../watermark";
+import { cleanDynamicWatermark } from "../watermark-dynamic";
 import { dedupeVideos, videoIdentity } from "./extract-videos";
 import type { ImportPreview } from "./types";
 
@@ -347,16 +348,33 @@ export async function insertImportedProperty(
   // proceso sigue vivo y completa la descarga/optimización de las fotos.
   //
   // NOTA: el borrado dinámico de marca (cleanDynamicWatermark) NO se ejecuta
-  // automáticamente. Con pocas fotos o sin marca real, la detección puede fallar
-  // y destrozar las fotos (le pasó a un anuncio sin marca de Vip Consultores).
-  // Se ejecuta SOLO a mano sobre anuncios concretos cuya agencia sí marca las
-  // fotos (scripts/wmrm/clean-property-watermark.sh <slug>).
+  // automáticamente para la mayoría de portales. Con pocas fotos o sin marca
+  // real, la detección puede fallar y destrozar las fotos (le pasó a un
+  // anuncio sin marca de Vip Consultores). Se ejecuta SOLO a mano sobre
+  // anuncios concretos cuya agencia sí marca las fotos
+  // (scripts/wmrm/clean-property-watermark.sh <slug>).
+  //
+  // EXCEPCIÓN: Inmovilla SÍ estampa marca (logo+teléfono de la agencia) en el
+  // 100% de sus fotos — no es un caso "algunas agencias sí, otras no" como
+  // Idealista/Fotocasa, así que aquí el auto-run es seguro. Se dispara tras
+  // terminar el re-alojado (el motor dinámico necesita las fotos ya en
+  // NUESTRO storage, no en la URL de origen).
   void rehostPhotosInBackground({
     propertyId,
     agencySlug,
     externalId: overrides.externalReference,
     sources,
-  }).catch(() => {});
+  })
+    .then(() => {
+      if (preview.portal !== "inmovilla") return;
+      return cleanDynamicWatermark({
+        propertyId,
+        agencySlug,
+        externalId: overrides.externalReference,
+        photoCount: sources.length,
+      });
+    })
+    .catch(() => {});
 
   return {
     ok: true,

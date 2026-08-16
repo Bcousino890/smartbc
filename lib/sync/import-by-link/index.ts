@@ -8,6 +8,8 @@ import { extractFotocasa } from "./extractors/fotocasa";
 import { extractGeneric } from "./extractors/generic";
 import { extractIdealista } from "./extractors/idealista";
 import { extractInmoweb } from "./extractors/inmoweb";
+import { extractInmovilla } from "./extractors/inmovilla";
+import { isInmovillaSite } from "../scrapers/inmovilla";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
 import { extractAirbnb, normalizeAirbnbUrl } from "./extractors/airbnb";
@@ -118,8 +120,17 @@ export async function extractFromUrl(
   const $ = cheerio.load(fetched.html);
   const finalUrl = fetched.finalUrl;
 
+  // Inmovilla es multi-tenant con dominio PROPIO por agencia (deurbanitas.com,
+  // etc.) — a diferencia de Inmoweb/Mobilia no hay host fijo que detectar
+  // antes de descargar el HTML, así que el sniff se hace aquí, con la página
+  // ya parseada, y solo si `detectPortal` no reconoció nada más específico.
+  let effectivePortal = detected.portal;
+  if (effectivePortal === "generic" && isInmovillaSite($, fetched.html)) {
+    effectivePortal = "inmovilla";
+  }
+
   let preview: ImportPreview;
-  switch (detected.portal) {
+  switch (effectivePortal) {
     case "idealista":
       preview = await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() });
       break;
@@ -128,6 +139,9 @@ export async function extractFromUrl(
       break;
     case "inmoweb":
       preview = extractInmoweb($, finalUrl);
+      break;
+    case "inmovilla":
+      preview = extractInmovilla($, finalUrl);
       break;
     case "clikalia":
       preview = extractClikalia($, finalUrl);
