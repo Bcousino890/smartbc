@@ -1,11 +1,71 @@
 # Viewing Collections — Handoff de cierre
 
-**Sprint final · 2026-08-16 · `main` @ `a25f94a`**
+**Sprint final · 2026-08-16 · `main` @ `6995de9`**
 
 **Estado: BCP PRIVATE VIEWING EXPERIENCE — COMPLETE & PRODUCTION HARDENED**
 salvo el QA manual con sesión que solo tú puedes hacer (§13).
 
 ---
+
+## 0. Añadido tras tu revisión (16-08, segunda tanda)
+
+### El libro, también en el móvil
+El teléfono tenía solo el recorrido vertical. Ahora se hojea igual que en
+portátil: **una página por pantalla**, fotografía arriba y texto debajo, con el
+mismo giro y el mismo swipe. No son dos plantillas: es la misma página, en dos
+columnas desde 768px y en dos filas por debajo.
+
+El criterio para activarlo es la **altura**, no el ancho. Lo que rompe la
+composición no es una pantalla estrecha (se apila en una columna) sino una
+baja, donde fotografía y texto no entran juntos. Por eso el móvil **apaisado**
+—unos 390px de alto— se queda con el scroll de siempre, igual que una ventana
+de escritorio muy achatada. Umbral: `min-height: 620px`.
+
+Detalles que costaron: `h-[100dvh]` en la raíz porque en iOS la barra del
+navegador se comía la navegación; y en el pie, las palabras «Anterior» y
+«Siguiente» se tocaban entre sí en 390px, así que ahí quedan solo las flechas.
+
+### La galería ya se deja usar
+Era lo que se sentía roto al tocarla. Auditado y corregido:
+
+| Estaba así | Ahora |
+|---|---|
+| Flechas de 12×14 px | Botones de 44 px reales |
+| La fotografía, zona muerta | Tercios laterales pasan foto |
+| Solo se cerraba con el enlace de arriba | El fondo alrededor de la imagen cierra |
+| El documento seguía scrolleando por detrás | Scroll bloqueado; al cerrar vuelves donde estabas |
+| Hueco negro en cada paso | Vecinas precargadas |
+| Esc cerraba todo desde la lámina | Esc vuelve al mosaico y luego cierra |
+| El foco se perdía al cerrar | Vuelve al elemento que la abrió |
+| En capítulo cancelado se transparentaba | Se monta con portal en el `body`, no hereda nada |
+
+Y tocar la fotografía grande abre **esa** fotografía, no una rejilla de
+miniaturas más pequeñas que la que estabas mirando.
+
+En móvil desaparece la cuadrícula en línea, que al cerrarse hacía saltar el
+contenido bajo el dedo y usaba la misma etiqueta para dos acciones distintas.
+Ahora móvil y libro usan exactamente la misma pieza.
+
+### «Hora por confirmar»
+Una parada sin hora bloqueaba la publicación, y no había forma de distinguir
+«aún no lo sé» de «se me ha pasado». Ahora el agente lo declara en el editor:
+publicar deja de exigir hora **en esa parada** y el cliente lee «Hora por
+confirmar» en vez de un guion, en los ocho idiomas.
+
+Excluyente con la hora por CHECK en la base (`vs_time_pending_excludes_time`,
+migración `0131`), no solo en el formulario: poner hora quita el estado y
+marcarlo borra la hora, en el mismo UPDATE. La función de publicación se
+recreó **copiando la original**, no de memoria — ahí viven el bucle que crea
+los SmartLinks y el control de propiedades archivadas, y reescribirla a ojo
+habría roto la publicación entera.
+
+### Añadir propiedades a un itinerario ya creado
+Antes solo se podían quitar, así que una propiedad más obligaba a rehacer el
+itinerario entero perdiendo horas, confirmaciones y SmartLinks. Ahora hay un
+botón **«Añadir propiedad»** con dos vías: de la selección del cliente, o
+buscando en el catálogo (la fila de selección se crea sola). La parada entra al
+final y sin hora; hay que ponerle hora y republicar para que el cliente la vea.
+
 
 ## 1. Private Gallery Mode
 
