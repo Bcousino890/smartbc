@@ -448,8 +448,8 @@ function BookIndexPage({
 }) {
   const STATUS_WORD = statusWord(dict);
   return (
-    <div className="flex h-full items-center justify-center overflow-y-auto px-6 py-8 sm:px-10 sm:py-10 lg:px-16">
-      <div className="w-full max-w-4xl">
+    <div className="flex h-full justify-center overflow-y-auto px-6 py-8 sm:px-10 sm:py-10 lg:px-16">
+      <div className="my-auto w-full max-w-4xl">
         <div className="text-center">
           <Label tone="gold">{dict.dayLabel}</Label>
           <h2 className="mt-3 font-serif text-[26px] font-normal vc-tight text-ink sm:text-[32px] lg:text-[44px]">
@@ -583,33 +583,39 @@ function BookResidencePage({
       className={cn(
         // Móvil: fotografía arriba (40% del alto), texto debajo.
         // Desde md: las dos a página, alternando de lado por capítulo.
-        "grid h-full grid-rows-[40%_minmax(0,1fr)] md:grid-cols-2 md:grid-rows-1",
+        "grid h-full grid-rows-[35%_minmax(0,1fr)] md:grid-cols-2 md:grid-rows-1",
         cancelled && "opacity-65",
       )}
     >
       {/* ── Panel editorial ── */}
       <div
         className={cn(
-          "flex min-h-0 flex-col justify-center overflow-y-auto px-6 py-6 md:px-10 md:py-10 lg:px-14 xl:px-20",
+          // Sin `justify-center`: centrar un contenedor con scroll RECORTA por
+          // arriba en cuanto el contenido no cabe (y el contenido varía con el
+          // largo del título y de la dirección). El centrado lo hace el
+          // `my-auto` de dentro: centra si cabe, y si no, desplaza desde
+          // arriba sin cortar nada.
+          "flex min-h-0 flex-col overflow-y-auto px-6 py-5 md:px-10 md:py-10 lg:px-14 xl:px-20",
           // En una sola columna el texto va SIEMPRE debajo de la fotografía;
           // alternar el lado solo tiene sentido con las dos a la vista.
           "order-2",
           flipped ? "md:order-2" : "md:order-1",
         )}
       >
+       <div className="my-auto w-full">
         <div className="flex items-center gap-4 md:gap-5">
           <ChapterMark index={stop.order} total={total} />
           <span aria-hidden className="h-px flex-1 bg-ink/12" />
         </div>
 
-        <Label tone="gold" className="mt-4 md:mt-7">
+        <Label tone="gold" className="mt-3.5 md:mt-7">
           {stop.zoneLabel}
         </Label>
         <h2 className="mt-2 max-w-[16ch] font-serif text-[26px] font-normal vc-tight text-ink sm:text-[30px] md:text-[34px] lg:text-[44px] xl:text-[50px]">
           {stop.title}
         </h2>
 
-        <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-2 md:mt-5">
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 md:mt-5 md:gap-y-2">
           {!stop.timeLabel && stop.timePending && !cancelled && (
             <span className="font-display text-[10px] font-medium uppercase vc-tracked text-gold-dark">
               {dict.timeToBeConfirmed}
@@ -630,13 +636,13 @@ function BookResidencePage({
           </StatusLine>
         </div>
 
-        <Rule className="my-4 md:my-6 lg:my-7" />
+        <Rule className="my-3.5 md:my-6 lg:my-7" />
 
         <p dir="ltr" className="font-serif text-[23px] leading-none vc-nums text-ink md:text-[26px] lg:text-[30px] rtl:text-right">
           {stop.priceLabel}
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4 md:mt-6 md:gap-x-10 lg:gap-x-12">
+        <div className="mt-3.5 flex flex-wrap gap-x-8 gap-y-3.5 md:mt-6 md:gap-x-10 md:gap-y-5 lg:gap-x-12">
           <DataPoint label={dict.bedrooms} value={stop.bedrooms} />
           <DataPoint label={dict.bathrooms} value={stop.bathrooms} />
           {stop.squareMeters ? (
@@ -652,7 +658,7 @@ function BookResidencePage({
           ) : null}
         </div>
 
-        <div className="mt-4 md:mt-6">
+        <div className="mt-3.5 md:mt-6">
           <Label>{dict.location}</Label>
           {stop.exactAddress ? (
             <p className="mt-1.5 font-sans text-[13.5px] leading-relaxed text-ink/80">
@@ -678,7 +684,7 @@ function BookResidencePage({
         ) : null}
 
         {stop.smartLinkUrl && !cancelled && (
-          <div className="mt-5 md:mt-8">
+          <div className="mt-4 md:mt-8">
             <EditorialAction href={stop.smartLinkUrl} onClick={onSmartLinkClick}>
               {dict.explore}
             </EditorialAction>
@@ -689,10 +695,11 @@ function BookResidencePage({
         )}
 
         {stop.bcReference && (
-          <p className="mt-5 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30 md:mt-7">
+          <p className="mt-4 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30 md:mt-7">
             Ref. {stop.bcReference}
           </p>
         )}
+       </div>
       </div>
 
       {/* ── Fotografía a página ── */}
@@ -747,8 +754,8 @@ function BookAdvisorPage({
     .toUpperCase();
 
   return (
-    <div className="flex h-full items-center justify-center overflow-y-auto px-10 py-10">
-      <div className="flex max-w-md flex-col items-center text-center">
+    <div className="flex h-full justify-center overflow-y-auto px-10 py-10">
+      <div className="my-auto flex max-w-md flex-col items-center text-center">
         <Label tone="gold">{dict.atYourService}</Label>
         <h2 className="mt-3 font-serif text-[32px] font-normal vc-tight text-ink lg:text-[40px]">
           {dict.yourAdvisor}
@@ -813,8 +820,8 @@ function BookColophonPage({
   dict: CollectionDictionary;
 }) {
   return (
-    <div className="flex h-full items-center justify-center overflow-y-auto bg-ink px-10 py-10 text-center text-cream-50">
-      <div className="max-w-xl">
+    <div className="flex h-full justify-center overflow-y-auto bg-ink px-10 py-10 text-center text-cream-50">
+      <div className="my-auto max-w-xl">
         <Image
           src="/logo.png"
           alt="Benjamín Cousiño Propiedades"

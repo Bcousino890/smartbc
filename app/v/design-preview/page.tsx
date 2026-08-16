@@ -123,8 +123,11 @@ const COLLECTION: PublicViewingCollection = {
       exactLat: 40.4331,
       exactLng: -3.6812,
     }),
+    // Caso "hora por confirmar": sin hora, pero declarada a propósito. Añade
+    // un renglón al bloque editorial, que es donde el móvil se quedaba corto.
     stop(SEEDS[2], 3, {
-      timeLabel: "11:30",
+      timeLabel: null,
+      timePending: true,
       status: "pending",
       availability: "reserved",
     }),
