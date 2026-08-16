@@ -567,6 +567,10 @@ const es: Strings = {
   "clientes.table.advisor": "ASESOR ASIGNADO",
   "clientes.table.actions": "ACCIONES",
   "clientes.table.viewDetails": "Ver detalle",
+  "clientes.table.delete": "Eliminar cliente",
+  "clientes.table.confirmDelete":
+    "¿Eliminar a {name}? Esta acción es permanente y borrará sus preferencias, favoritos y solicitudes.",
+  "clientes.table.deleteError": "Error al eliminar: {error}",
   "clientes.table.favorites": "FAV",
   "clientes.table.visits": "VISITAS",
   "clientes.profile.student": "Estudiante",
@@ -1584,6 +1588,10 @@ const en: Strings = {
   "clientes.table.advisor": "ASSIGNED ADVISOR",
   "clientes.table.actions": "ACTIONS",
   "clientes.table.viewDetails": "View details",
+  "clientes.table.delete": "Delete client",
+  "clientes.table.confirmDelete":
+    "Delete {name}? This is permanent and will erase their preferences, favorites and requests.",
+  "clientes.table.deleteError": "Error deleting: {error}",
   "clientes.table.favorites": "FAV",
   "clientes.table.visits": "VISITS",
   "clientes.profile.student": "Student",
@@ -2591,6 +2599,10 @@ const fr: Strings = {
   "clientes.table.advisor": "CONSEILLER ASSIGNÉ",
   "clientes.table.actions": "ACTIONS",
   "clientes.table.viewDetails": "Voir détails",
+  "clientes.table.delete": "Supprimer le client",
+  "clientes.table.confirmDelete":
+    "Supprimer {name} ? Action permanente : préférences, favoris et demandes seront effacés.",
+  "clientes.table.deleteError": "Erreur lors de la suppression : {error}",
   "clientes.table.favorites": "FAV",
   "clientes.table.visits": "VISITES",
   "clientes.profile.student": "Étudiant",
@@ -3556,6 +3568,10 @@ const de: Strings = {
   "clientes.table.advisor": "ZUGEW. BERATER",
   "clientes.table.actions": "AKTIONEN",
   "clientes.table.viewDetails": "Details ansehen",
+  "clientes.table.delete": "Kunde löschen",
+  "clientes.table.confirmDelete":
+    "{name} löschen? Dies ist endgültig und löscht Präferenzen, Favoriten und Anfragen.",
+  "clientes.table.deleteError": "Fehler beim Löschen: {error}",
   "clientes.table.favorites": "FAV",
   "clientes.table.visits": "BESUCHE",
   "clientes.profile.student": "Student",
