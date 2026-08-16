@@ -298,6 +298,14 @@ export function ItineraryBuilder({
               </p>
             )}
 
+            {!readOnly && stops.length > 1 && (
+              <p className="mt-2.5 text-[10.5px] leading-relaxed text-ink/45">
+                El orden lo marca la hora: primero las más tempranas y, al
+                final, las que aún no la tienen. Las flechas solo aparecen en
+                esas.
+              </p>
+            )}
+
             {!readOnly && (
               <button
                 type="button"
@@ -539,7 +547,10 @@ function StopRow({
           <span className="font-mono text-[11px] font-semibold text-ink/45">
             {index + 1}
           </span>
-          {!readOnly && (
+          {/* Las flechas solo aparecen SIN hora. Con hora, el orden lo decide
+              el reloj (ver lib/viewing-collections/order.ts) y unas flechas que
+              no mueven nada confunden más que ayudan. */}
+          {!readOnly && !stop.scheduled_at && (
             <>
               <button
                 type="button"
@@ -560,6 +571,15 @@ function StopRow({
                 <ArrowDown size={12} strokeWidth={2} />
               </button>
             </>
+          )}
+          {!readOnly && stop.scheduled_at && (
+            <span
+              title="El orden lo marca la hora"
+              aria-hidden
+              className="text-[9px] leading-none text-ink/20"
+            >
+              ⏱
+            </span>
           )}
         </div>
 

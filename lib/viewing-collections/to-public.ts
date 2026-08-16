@@ -14,6 +14,7 @@ import {
   type CollectionLanguage,
 } from "./i18n";
 import { shareSlug } from "@/lib/share-slug";
+import { compareStopsByDay } from "./order";
 import type {
   PublicAgentContact,
   PublicAreaLocation,
@@ -369,10 +370,8 @@ export function toPublicViewingCollection(
   //     no se aplicara), esto lo detiene antes de llegar al HTML.
   const visible = input.stops
     .filter((s) => s.hidden_from_client === false)
-    .sort(
-      (a, b) =>
-        a.position - b.position || a.created_at.localeCompare(b.created_at),
-    );
+    // Orden de jornada: por hora, y las que aún no la tienen, al final.
+    .sort(compareStopsByDay);
 
   // 2 · Proyectar renumerando 1..N sobre las visibles: sin huecos aunque haya
   //     paradas ocultas en medio.

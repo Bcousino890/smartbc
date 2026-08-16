@@ -10,6 +10,7 @@ import {
   type RawPublicStop,
 } from "@/lib/viewing-collections/to-public";
 import type { PublicCollectionResult } from "@/lib/viewing-collections/public-contract";
+import { compareStopsByDay } from "@/lib/viewing-collections/order";
 import {
   DEFAULT_VC_SETTINGS,
   deriveShareState,
@@ -582,10 +583,10 @@ function shapeItinerary(
           : null,
       };
     })
-    .sort(
-      (a: StopWithSelection, b: StopWithSelection) =>
-        a.position - b.position || a.created_at.localeCompare(b.created_at),
-    );
+    // El MISMO orden que verá el cliente (ver lib/viewing-collections/order.ts):
+    // por hora, y las que aún no la tienen, al final. Si el panel ordenara por
+    // su cuenta, el agente vería una jornada y el cliente otra.
+    .sort(compareStopsByDay);
 
   const shares = (row.viewing_collection_shares ?? []) as any[];
   const active =

@@ -34,6 +34,7 @@ import {
   nextPosition,
 } from "../lib/viewing-collections/types.ts";
 import { randomToken, URL_SAFE_TOKEN_RE } from "../lib/tokens.ts";
+import { compareStopsByDay } from "../lib/viewing-collections/order.ts";
 
 let failures = 0;
 
@@ -441,6 +442,47 @@ const badLang = toPublicViewingCollection(
   }),
 );
 check("idioma desconocido cae a español", badLang.language === "es");
+
+
+// ── Orden de jornada ────────────────────────────────────────────────────────
+// Una jornada se lee en el reloj, no en el orden en que el agente añadió las
+// propiedades. Fue un fallo real: el cliente veía 19:00 antes que 18:00.
+{
+  const s = (
+    position: number,
+    scheduled_at: string | null,
+    created_at = "2026-01-01T00:00:00Z",
+  ) => ({ position, scheduled_at, created_at });
+
+  const ordered = [
+    s(1, null),                          // sin hora, añadida la primera
+    s(2, "2026-08-17T17:00:00Z"),
+    s(3, "2026-08-17T13:00:00Z"),
+    s(4, null),                          // sin hora, añadida después
+    s(5, "2026-08-17T15:00:00Z"),
+  ]
+    .slice()
+    .sort(compareStopsByDay);
+
+  check(
+    "las paradas con hora van primero y en orden de reloj",
+    ordered[0].scheduled_at === "2026-08-17T13:00:00Z" &&
+      ordered[1].scheduled_at === "2026-08-17T15:00:00Z" &&
+      ordered[2].scheduled_at === "2026-08-17T17:00:00Z",
+  );
+  check(
+    "las que no tienen hora quedan al final, en el orden del agente",
+    ordered[3].scheduled_at === null &&
+      ordered[3].position === 1 &&
+      ordered[4].position === 4,
+  );
+
+  // Misma hora exacta: manda el orden manual, y no baila entre recargas.
+  const tie = [s(9, "2026-08-17T12:00:00Z"), s(2, "2026-08-17T12:00:00Z")]
+    .slice()
+    .sort(compareStopsByDay);
+  check("con la misma hora decide el orden manual", tie[0].position === 2);
+}
 
 // ============================================================================
 console.log(
