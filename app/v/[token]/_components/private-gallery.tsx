@@ -251,7 +251,7 @@ export function PrivateGallery({
             )}
           </div>
 
-          <footer className="flex shrink-0 items-center justify-between gap-4 px-2 lg:px-6">
+          <footer className="flex shrink-0 items-center justify-between gap-2 px-1 sm:gap-4 sm:px-2 lg:px-6">
             <button
               type="button"
               onClick={() => step(-1)}
@@ -270,11 +270,15 @@ export function PrivateGallery({
               </span>
             </button>
 
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-3 sm:gap-5">
               <button
                 type="button"
                 onClick={() => setIndex(null)}
-                className={cn("vc-focus px-2 py-4 vc-tracked-sm", chrome)}
+                className={cn(
+                  // En 390px el rótulo se partía en dos líneas.
+                  "vc-focus whitespace-nowrap px-2 py-4 tracking-[0.08em] sm:vc-tracked-sm",
+                  chrome,
+                )}
               >
                 {dict.galleryAll}
               </button>
