@@ -8,7 +8,10 @@
 // enlace reenviado, el portal, un SmartLink suelto— la ficha se comporta
 // exactamente igual que siempre y esto no existe.
 //
-// Va arriba, no abajo: en móvil el pie ya lo ocupa la barra de contacto.
+// Va arriba, y como FRANJA en el flujo (sticky), no como píldora flotante: una
+// píldora encima del contenido se comía el logotipo de la cabecera en móvil.
+// Así ocupa su propio sitio, no tapa nada y sigue visible al bajar. Abajo no
+// puede ir: en móvil el pie ya lo ocupa la barra de contacto.
 //
 // ── Volver es volver, no abrir otra ─────────────────────────────────────────
 // "Explorar residencia" abre esta ficha en una pestaña nueva y la colección se
@@ -66,15 +69,19 @@ export function CollectionReturnBar() {
   if (!ret) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3 sm:justify-start sm:p-4">
-      <a
-        href={ret.url}
-        onClick={goBack}
-        className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-cream-50/20 bg-ink/90 px-4 py-2.5 text-[11px] font-medium text-cream-50 shadow-lg backdrop-blur-sm transition-colors duration-300 hover:bg-ink"
-      >
-        <span aria-hidden>&larr;</span>
-        {ret.label}
-      </a>
+    <div className="sticky top-0 z-50 w-full bg-ink text-cream-50">
+      {/* Mismo contenedor y mismos márgenes que la cabecera de la ficha, para
+          que el texto caiga alineado con el logotipo de debajo. */}
+      <div className="mx-auto max-w-6xl px-4 md:px-8">
+        <a
+          href={ret.url}
+          onClick={goBack}
+          className="inline-flex items-center gap-2.5 py-3 text-[12px] font-medium text-cream-50/85 transition-colors duration-300 hover:text-cream-50"
+        >
+          <span aria-hidden>&larr;</span>
+          {ret.label}
+        </a>
+      </div>
     </div>
   );
 }
