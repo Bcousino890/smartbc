@@ -135,6 +135,8 @@ export type CollectionDictionary = {
   contents: string;
   pageOf: string;
 
+  /** La hora aún no está cerrada con el propietario. */
+  timeToBeConfirmed: string;
   minutesShort: string;
   perMonthSuffix: string;
 };
@@ -194,6 +196,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Siguiente",
     contents: "Índice",
     pageOf: "de",
+    timeToBeConfirmed: "Hora por confirmar",
     minutesShort: "min",
     perMonthSuffix: "/mes",
   },
@@ -234,6 +237,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Next",
     contents: "Contents",
     pageOf: "of",
+    timeToBeConfirmed: "Time to be confirmed",
     minutesShort: "min",
     perMonthSuffix: "/month",
   },
@@ -274,6 +278,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Suivant",
     contents: "Sommaire",
     pageOf: "sur",
+    timeToBeConfirmed: "Horaire à confirmer",
     minutesShort: "min",
     perMonthSuffix: "/mois",
   },
@@ -314,6 +319,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Successiva",
     contents: "Indice",
     pageOf: "di",
+    timeToBeConfirmed: "Orario da confermare",
     minutesShort: "min",
     perMonthSuffix: "/mese",
   },
@@ -355,6 +361,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Weiter",
     contents: "Inhalt",
     pageOf: "von",
+    timeToBeConfirmed: "Uhrzeit wird noch bestätigt",
     minutesShort: "Min.",
     perMonthSuffix: "/Monat",
   },
@@ -394,6 +401,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "التالي",
     contents: "الفهرس",
     pageOf: "من",
+    timeToBeConfirmed: "الموعد قيد التأكيد",
     minutesShort: "د",
     perMonthSuffix: "/شهرياً",
   },
@@ -434,6 +442,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Sonraki",
     contents: "İçindekiler",
     pageOf: "/",
+    timeToBeConfirmed: "Saat teyit edilecek",
     minutesShort: "dk",
     perMonthSuffix: "/ay",
   },
@@ -473,6 +482,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "הבא",
     contents: "תוכן",
     pageOf: "מתוך",
+    timeToBeConfirmed: "השעה טרם נקבעה",
     minutesShort: "דק׳",
     perMonthSuffix: "/לחודש",
   },

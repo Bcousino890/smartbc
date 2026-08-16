@@ -35,8 +35,16 @@ import { ChapterRail, ProgressBar } from "./_components/chapter-nav";
 import { AdvisorBlock, Colophon } from "./_components/closing";
 import { BookMode } from "./_components/book-mode";
 
-/** Libro en viewports amplios y apaisados; scroll en el resto. */
-const BOOK_MEDIA_QUERY = "(min-width: 1024px) and (orientation: landscape)";
+/**
+ * El libro se sirve allí donde CABE una página entera: móvil vertical, tablet
+ * y escritorio. El criterio es la altura, no el ancho — lo que rompe la
+ * composición no es una pantalla estrecha (se apila en una columna) sino una
+ * baja, donde la fotografía y el texto no entran juntos.
+ *
+ * Queda fuera el móvil apaisado (~390px de alto) y las ventanas de escritorio
+ * muy achatadas: ahí sigue el recorrido vertical de siempre.
+ */
+const BOOK_MEDIA_QUERY = "(min-height: 620px)";
 
 export function ViewingCollectionView({
   collection,
@@ -222,6 +230,7 @@ export function ViewingCollectionView({
                 total={collection.stopCount}
                 registerRef={registerRef}
                 dict={dict}
+                rtl={rtl}
                 onView={() => trackStopView(stop.order)}
                 onExpand={() => track("stop_expand", { order: stop.order })}
                 onSmartLinkClick={() => track("share_click", { order: stop.order })}

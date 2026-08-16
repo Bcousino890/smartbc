@@ -80,6 +80,7 @@ const PUBLIC_COLLECTION_SELECT = `
     viewing_stops (
       position,
       scheduled_at,
+      time_pending,
       duration_minutes,
       confirmation_status,
       address_visibility,
@@ -121,6 +122,7 @@ const PREVIEW_ITINERARY_SELECT = `
   viewing_stops (
     position,
     scheduled_at,
+    time_pending,
     duration_minutes,
     confirmation_status,
     address_visibility,
@@ -161,6 +163,7 @@ function shapeRawCollection(row: any): RawCollectionData | null {
       return {
         position: s.position,
         scheduled_at: s.scheduled_at,
+        time_pending: s.time_pending ?? false,
         duration_minutes: s.duration_minutes,
         confirmation_status: s.confirmation_status,
         address_visibility: s.address_visibility,
@@ -481,6 +484,9 @@ function computeReadiness(
   const withoutTime = visible.filter(
     (s) =>
       !s.scheduled_at &&
+      // Declarada "hora por confirmar": es una decisión del agente, no un
+      // olvido, y el cliente la lee como tal. No bloquea (ver migración 0131).
+      !s.time_pending &&
       !["cancelled", "declined"].includes(s.confirmation_status),
   ).length;
   if (withoutTime > 0) {

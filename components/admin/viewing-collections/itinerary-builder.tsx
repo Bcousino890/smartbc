@@ -29,6 +29,7 @@ import {
 } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
 import type {
   ItineraryWithStops,
+  SelectionWithProperty,
   StopWithSelection,
 } from "@/lib/viewing-collections/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -40,6 +41,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ViewingStopEditor } from "./viewing-stop-editor";
 import { PublishCollectionDialog } from "./publish-collection-dialog";
+import { AddStopDialog } from "./add-stop-dialog";
 import { CopyLinkButton } from "./copy-link-button";
 
 const CONFIRM_LABEL: Record<string, string> = {
@@ -64,6 +66,7 @@ export function ItineraryBuilder({
   itinerary,
   clientId,
   clientName,
+  selections,
   country,
   canEdit,
   canDelete,
@@ -73,6 +76,7 @@ export function ItineraryBuilder({
   itinerary: ItineraryWithStops;
   clientId: string;
   clientName: string;
+  selections: SelectionWithProperty[];
   country: Country;
   canEdit: boolean;
   canDelete: boolean;
@@ -83,6 +87,7 @@ export function ItineraryBuilder({
   const config = getCountryConfig(country);
   const [editingStop, setEditingStop] = useState<StopWithSelection | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -289,8 +294,19 @@ export function ItineraryBuilder({
 
             {stops.length === 0 && (
               <p className="mt-4 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-[12px] text-ink/55">
-                Sin paradas. Añádelas desde la selección del cliente.
+                Sin paradas todavía. Añade la primera con el botón de abajo.
               </p>
+            )}
+
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="mt-3 mr-2 inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-ink transition hover:border-gold/60"
+              >
+                <Plus size={11} strokeWidth={2} className="text-gold-dark" />
+                Añadir propiedad
+              </button>
             )}
 
             {!readOnly && stops.length > 0 && (
@@ -416,6 +432,18 @@ export function ItineraryBuilder({
           timezone={itinerary.timezone}
           scheduledDate={itinerary.scheduled_date}
           onClose={() => setEditingStop(null)}
+        />
+      )}
+
+      {addOpen && (
+        <AddStopDialog
+          itineraryId={itinerary.id}
+          country={country}
+          selections={selections}
+          alreadyInItinerary={
+            new Set(stops.map((s) => s.selection.property_id))
+          }
+          onClose={() => setAddOpen(false)}
         />
       )}
 
@@ -558,8 +586,13 @@ function StopRow({
                 {priceLabel}
               </p>
             </div>
-            <span className="shrink-0 font-mono text-[11px] font-medium tabular-nums text-ink/70">
-              {time ?? "sin hora"}
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[11px] font-medium tabular-nums",
+                stop.time_pending && !time ? "text-gold-dark" : "text-ink/70",
+              )}
+            >
+              {time ?? (stop.time_pending ? "por confirmar" : "sin hora")}
               {stop.duration_minutes ? ` · ${stop.duration_minutes}′` : ""}
             </span>
           </div>

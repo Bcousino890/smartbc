@@ -63,6 +63,7 @@ export function ResidenceChapter({
   onSmartLinkClick,
   registerRef,
   dict,
+  rtl = false,
 }: {
   stop: PublicViewingStop;
   total: number;
@@ -71,10 +72,10 @@ export function ResidenceChapter({
   onSmartLinkClick: () => void;
   registerRef: (order: number, el: HTMLElement | null) => void;
   dict: CollectionDictionary;
+  rtl?: boolean;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const viewed = useRef(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
   /** Índice de la lámina abierta a pantalla completa; null = ninguna. */
   const [plate, setPlate] = useState<number | null>(null);
 
@@ -166,14 +167,10 @@ export function ResidenceChapter({
               <button
                 type="button"
                 onClick={() => {
-                  // El aviso va FUERA del updater: React puede invocarlo dos
-                  // veces (StrictMode, render concurrente) y eso duplicaba el
-                  // evento stop_expand.
-                  if (!galleryOpen) onExpand();
-                  setGalleryOpen((open) => !open);
+                  onExpand();
+                  setPlate(0);
                 }}
-                aria-expanded={galleryOpen}
-                aria-controls={`gallery-${stop.order}`}
+                aria-haspopup="dialog"
                 className="vc-focus group relative block w-full overflow-hidden"
               >
                 <div className="aspect-[4/5] w-full sm:aspect-[3/2] lg:aspect-[16/8]">
@@ -189,41 +186,11 @@ export function ResidenceChapter({
 
                 {extraPhotos.length > 0 && (
                   <span className="pointer-events-none absolute bottom-5 right-5 border border-cream-50/45 bg-ink/55 px-4 py-2.5 font-display text-[9.5px] font-medium uppercase vc-tracked text-cream-50 backdrop-blur-sm md:bottom-8 md:right-8 md:text-[10px]">
-                    {galleryOpen
-                      ? dict.closeGallery
-                      : dict.viewPhotos(extraPhotos.length)}
+                    {dict.viewPhotos(extraPhotos.length)}
                   </span>
                 )}
               </button>
             </Reveal>
-          )}
-
-          {/* ── Galería diferida ─────────────────────────────────────────── */}
-          {galleryOpen && extraPhotos.length > 0 && (
-            <div
-              id={`gallery-${stop.order}`}
-              className="mt-1 grid grid-cols-2 gap-1 lg:grid-cols-3"
-            >
-              {extraPhotos.map((url, i) => (
-                <button
-                  key={`${url}-${i}`}
-                  type="button"
-                  onClick={() => setPlate(i + 1)}
-                  aria-haspopup="dialog"
-                  className="vc-focus block overflow-hidden"
-                  aria-label={`${stop.title} — ${i + 2}`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt={`${stop.title} — fotografía ${i + 2}`}
-                    loading="lazy"
-                    decoding="async"
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                </button>
-              ))}
-            </div>
           )}
 
           {/* La lámina: la fotografía entera sobre tinta, sin recorte ni
@@ -233,6 +200,7 @@ export function ResidenceChapter({
               title={stop.title}
               photos={allPhotos}
               dict={dict}
+              rtl={rtl}
               startIndex={plate}
               onClose={() => setPlate(null)}
             />
@@ -313,6 +281,11 @@ export function ResidenceChapter({
                       : "lg:border-l lg:pl-10",
                   )}
                 >
+                  {!stop.timeLabel && stop.timePending && !cancelled && (
+                    <span className="font-display text-[10px] font-medium uppercase vc-tracked text-gold-dark">
+                      {dict.timeToBeConfirmed}
+                    </span>
+                  )}
                   {stop.timeLabel && !cancelled && (
                     <p dir="ltr" className="font-serif text-[27px] leading-none text-ink vc-nums md:text-[32px] rtl:text-right">
                       {stop.timeLabel}

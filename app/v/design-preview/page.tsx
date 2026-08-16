@@ -75,6 +75,7 @@ function stop(
   return {
     order,
     timeLabel: null,
+    timePending: false,
     durationLabel: "30 min",
     status: "confirmed",
     title: seed.title,

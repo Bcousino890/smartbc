@@ -630,9 +630,22 @@ export async function reorderStop(
   return { ok: true };
 }
 
+/**
+ * Horario de la parada.
+ *
+ * ⚠️ `timePending` y `scheduledAt` son EXCLUYENTES y hay que resolverlo en el
+ * mismo UPDATE: el CHECK `vs_time_pending_excludes_time` (migración 0131)
+ * rechaza la fila si llegan los dos. Poner hora quita "por confirmar", y
+ * marcar "por confirmar" borra la hora — igual que cancelar revierte la
+ * dirección exacta. La garantía la impone la base, no el formulario.
+ */
 export async function updateStopSchedule(
   stopId: string,
-  input: { scheduledAt?: string | null; durationMinutes?: number | null },
+  input: {
+    scheduledAt?: string | null;
+    durationMinutes?: number | null;
+    timePending?: boolean;
+  },
 ): Promise<ActionResult> {
   const ctx = await clientIdOfStop(stopId);
   if (!ctx) return { ok: false, error: "Parada no encontrada." };
@@ -643,9 +656,16 @@ export async function updateStopSchedule(
   const patch: Record<string, unknown> = {};
   if (input.scheduledAt !== undefined) {
     patch.scheduled_at = input.scheduledAt || null;
+    // Dar hora deja de ser "por confirmar", sin que el formulario tenga que
+    // acordarse: si no, el CHECK rechazaría la fila.
+    if (input.scheduledAt) patch.time_pending = false;
   }
   if (input.durationMinutes !== undefined) {
     patch.duration_minutes = input.durationMinutes ?? null;
+  }
+  if (input.timePending !== undefined) {
+    patch.time_pending = input.timePending;
+    if (input.timePending) patch.scheduled_at = null;
   }
 
   const { error } = await db()

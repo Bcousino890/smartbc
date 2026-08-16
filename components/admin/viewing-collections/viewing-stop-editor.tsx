@@ -203,6 +203,36 @@ export function ViewingStopEditor({
                 Guardar
               </button>
             </div>
+
+            <div className="mt-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !stop.time_pending;
+                  if (next) setTime("");
+                  run(() =>
+                    updateStopSchedule(stop.id, {
+                      timePending: next,
+                      durationMinutes: duration,
+                    }),
+                  );
+                }}
+                disabled={pending}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-[11px] font-medium transition disabled:opacity-50",
+                  stop.time_pending
+                    ? "border-gold/55 bg-gold/15 text-ink"
+                    : "border-ink/15 bg-white text-ink/60 hover:border-gold/45",
+                )}
+              >
+                Hora por confirmar
+              </button>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink/45">
+                {stop.time_pending
+                  ? "El cliente ve «Hora por confirmar» en vez de un hueco vacío, y el itinerario se puede publicar así."
+                  : "Márcalo si el propietario aún no ha dado hora: publicar dejará de exigirla en esta parada."}
+              </p>
+            </div>
           </section>
 
           {/* Confirmación */}

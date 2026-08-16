@@ -93,6 +93,9 @@ export type ViewingStopRow = {
   selection_id: string;
   position: number;
   scheduled_at: string | null;
+  /** El agente declara que la hora está por confirmar (excluyente con
+   *  scheduled_at). No bloquea la publicación; el cliente lo lee así. */
+  time_pending: boolean;
   duration_minutes: number | null;
   confirmation_status: StopConfirmation;
   address_visibility: AddressVisibility;

@@ -1,10 +1,15 @@
 "use client";
 
 // ============================================================================
-// PRIVATE BOOK MODE · escritorio y tablet horizontal.
+// PRIVATE BOOK MODE · móvil vertical, tablet y escritorio.
 //
 // La colección se comporta como una publicación paginada: portada, índice, un
 // spread por residencia, asesor y colofón. Un viewport = una composición.
+//
+// La página de residencia se compone en DOS COLUMNAS a partir de 768px
+// (texto | fotografía, alternando de lado) y en DOS FILAS por debajo
+// (fotografía arriba, texto debajo). Es la misma página, no dos plantillas:
+// en un teléfono el libro se hojea igual, con el mismo giro y el mismo swipe.
 //
 // El paso de página es un giro real sobre el lomo (rotateY + perspectiva +
 // sombra de lomo, ver globals.css), ~700ms y la portada más marcada (~850ms).
@@ -240,7 +245,9 @@ export function BookMode({
           total={collection.stopCount}
           dict={dict}
           onOpenGallery={() => {
-            setGallery({ order: p.stop.order, startIndex: null });
+            // Se abre la fotografía que se acaba de tocar, no una rejilla de
+            // miniaturas más pequeñas que la que ya estabas mirando.
+            setGallery({ order: p.stop.order, startIndex: 0 });
             onStopExpand(p.stop.order);
           }}
           onSmartLinkClick={() => onSmartLinkClick(p.stop.order)}
@@ -291,7 +298,9 @@ export function BookMode({
     <div
       dir={rtl ? "rtl" : "ltr"}
       className={cn(
-        "fixed inset-0 flex flex-col overflow-hidden",
+        // h-[100dvh]: en iOS la barra del navegador se come el `inset-0` y
+        // la navegación del libro quedaba debajo de ella.
+        "fixed inset-0 h-[100dvh] flex flex-col overflow-hidden",
         isDark ? "bg-ink" : "bg-cream-50",
       )}
       onTouchStart={onTouchStart}
@@ -348,7 +357,7 @@ export function BookMode({
         <nav
           aria-label="Book navigation"
           className={cn(
-            "flex shrink-0 items-center justify-between border-t px-8 py-3.5 lg:px-12",
+            "flex shrink-0 items-center justify-between border-t px-4 py-3 sm:px-8 sm:py-3.5 lg:px-12",
             isDark
               ? "border-cream-50/15 text-cream-50"
               : "border-ink/10 text-ink",
@@ -358,7 +367,7 @@ export function BookMode({
             type="button"
             onClick={() => go(current - 1)}
             disabled={current === 0}
-            className="vc-focus group flex items-center gap-3 font-display text-[10px] font-medium uppercase vc-tracked opacity-60 transition-opacity duration-300 hover:opacity-100 disabled:opacity-20"
+            className="vc-focus group flex items-center gap-2 px-2 py-1.5 font-display text-[10px] font-medium uppercase vc-tracked opacity-60 transition-opacity duration-300 hover:opacity-100 disabled:opacity-20 sm:gap-3"
           >
             <span
               aria-hidden
@@ -366,10 +375,10 @@ export function BookMode({
             >
               &larr;
             </span>
-            {dict.previous}
+            <span className="hidden sm:inline">{dict.previous}</span>
           </button>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
             <button
               type="button"
               onClick={() => go(1)}
@@ -396,9 +405,9 @@ export function BookMode({
             type="button"
             onClick={() => go(current + 1)}
             disabled={current === pages.length - 1}
-            className="vc-focus group flex items-center gap-3 font-display text-[10px] font-medium uppercase vc-tracked opacity-60 transition-opacity duration-300 hover:opacity-100 disabled:opacity-20"
+            className="vc-focus group flex items-center gap-2 px-2 py-1.5 font-display text-[10px] font-medium uppercase vc-tracked opacity-60 transition-opacity duration-300 hover:opacity-100 disabled:opacity-20 sm:gap-3"
           >
-            {dict.next}
+            <span className="hidden sm:inline">{dict.next}</span>
             <span
               aria-hidden
               className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 rtl:rotate-180"
@@ -439,11 +448,11 @@ function BookIndexPage({
 }) {
   const STATUS_WORD = statusWord(dict);
   return (
-    <div className="flex h-full items-center justify-center overflow-y-auto px-10 py-10 lg:px-16">
+    <div className="flex h-full items-center justify-center overflow-y-auto px-6 py-8 sm:px-10 sm:py-10 lg:px-16">
       <div className="w-full max-w-4xl">
         <div className="text-center">
           <Label tone="gold">{dict.dayLabel}</Label>
-          <h2 className="mt-3 font-serif text-[32px] font-normal vc-tight text-ink lg:text-[44px]">
+          <h2 className="mt-3 font-serif text-[26px] font-normal vc-tight text-ink sm:text-[32px] lg:text-[44px]">
             {dict.dayTitle}
           </h2>
           {(collection.dateLabel || collection.windowLabel) && (
@@ -463,7 +472,9 @@ function BookIndexPage({
                 type="button"
                 onClick={() => onSelect(stop.order)}
                 className={cn(
-                  "vc-focus group grid w-full grid-cols-[3rem_6.5rem_1fr_auto] items-baseline gap-x-6 py-4 text-start transition-colors duration-500 lg:py-5",
+                  // Móvil: número + hora arriba, título debajo, estado al
+                  // final de la primera línea. Desde sm, la tabla de siempre.
+                  "vc-focus group grid w-full grid-cols-[2.2rem_1fr_auto] items-baseline gap-x-3 gap-y-0.5 py-3 text-start transition-colors duration-500 sm:grid-cols-[3rem_6.5rem_1fr_auto] sm:gap-x-6 sm:py-4 lg:py-5",
                   stop.status === "cancelled" && "opacity-45",
                 )}
               >
@@ -472,17 +483,24 @@ function BookIndexPage({
                 </span>
                 <span
                   className={cn(
-                    "font-serif text-[24px] leading-none vc-nums text-ink lg:text-[27px]",
+                    "font-serif text-[20px] leading-none vc-nums text-ink sm:text-[24px] lg:text-[27px]",
                     !stop.timeLabel && "text-ink/25",
                     stop.status === "cancelled" &&
                       stop.timeLabel &&
                       "line-through decoration-ink/25",
                   )}
                 >
-                  {stop.timeLabel ?? "—"}
+                  {stop.timeLabel ??
+                    (stop.timePending ? (
+                      <span className="font-display text-[9.5px] uppercase vc-tracked-sm text-gold-dark">
+                        {dict.timeToBeConfirmed}
+                      </span>
+                    ) : (
+                      "—"
+                    ))}
                 </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-display text-[13.5px] font-medium uppercase vc-tracked-sm text-ink transition-colors duration-500 group-hover:text-gold-dark">
+                <span className="col-span-3 min-w-0 sm:col-span-1">
+                  <span className="block truncate font-display text-[12px] font-medium uppercase vc-tracked-sm text-ink transition-colors duration-500 group-hover:text-gold-dark sm:text-[13.5px]">
                     {stop.title}
                   </span>
                   <span className="mt-0.5 block truncate font-sans text-[11.5px] text-ink/45">
@@ -492,7 +510,10 @@ function BookIndexPage({
                 <span
                   className={cn(
                     "font-display text-[9.5px] font-medium uppercase vc-tracked-sm",
-                    stop.status === "confirmed" && "text-ink/45",
+                    // En una columna el estado se coloca arriba a la derecha,
+                    // en la fila de la hora: si no, caía solo a una línea y
+                    // "por confirmar" se partía en dos.
+                    "col-start-3 row-start-1 justify-self-end whitespace-nowrap sm:col-start-auto sm:row-start-auto",
                     stop.status === "pending" && "text-gold-dark",
                     stop.status === "cancelled" && "text-ink/35",
                   )}
@@ -560,32 +581,42 @@ function BookResidencePage({
   return (
     <div
       className={cn(
-        "grid h-full grid-cols-2",
+        // Móvil: fotografía arriba (40% del alto), texto debajo.
+        // Desde md: las dos a página, alternando de lado por capítulo.
+        "grid h-full grid-rows-[40%_minmax(0,1fr)] md:grid-cols-2 md:grid-rows-1",
         cancelled && "opacity-65",
       )}
     >
       {/* ── Panel editorial ── */}
       <div
         className={cn(
-          "flex min-h-0 flex-col justify-center overflow-y-auto px-10 py-10 lg:px-14 xl:px-20",
-          flipped && "order-2",
+          "flex min-h-0 flex-col justify-center overflow-y-auto px-6 py-6 md:px-10 md:py-10 lg:px-14 xl:px-20",
+          // En una sola columna el texto va SIEMPRE debajo de la fotografía;
+          // alternar el lado solo tiene sentido con las dos a la vista.
+          "order-2",
+          flipped ? "md:order-2" : "md:order-1",
         )}
       >
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4 md:gap-5">
           <ChapterMark index={stop.order} total={total} />
           <span aria-hidden className="h-px flex-1 bg-ink/12" />
         </div>
 
-        <Label tone="gold" className="mt-7">
+        <Label tone="gold" className="mt-4 md:mt-7">
           {stop.zoneLabel}
         </Label>
-        <h2 className="mt-2.5 max-w-[16ch] font-serif text-[34px] font-normal vc-tight text-ink lg:text-[44px] xl:text-[50px]">
+        <h2 className="mt-2 max-w-[16ch] font-serif text-[26px] font-normal vc-tight text-ink sm:text-[30px] md:text-[34px] lg:text-[44px] xl:text-[50px]">
           {stop.title}
         </h2>
 
-        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-2 md:mt-5">
+          {!stop.timeLabel && stop.timePending && !cancelled && (
+            <span className="font-display text-[10px] font-medium uppercase vc-tracked text-gold-dark">
+              {dict.timeToBeConfirmed}
+            </span>
+          )}
           {stop.timeLabel && !cancelled && (
-            <span dir="ltr" className="inline-block font-serif text-[24px] leading-none vc-nums text-ink lg:text-[27px]">
+            <span dir="ltr" className="inline-block font-serif text-[21px] leading-none vc-nums text-ink md:text-[24px] lg:text-[27px]">
               {stop.timeLabel}
               {stop.durationLabel && (
                 <span className="ms-2 font-sans text-[11.5px] font-normal text-ink/40">
@@ -599,13 +630,13 @@ function BookResidencePage({
           </StatusLine>
         </div>
 
-        <Rule className="my-6 lg:my-7" />
+        <Rule className="my-4 md:my-6 lg:my-7" />
 
-        <p dir="ltr" className="font-serif text-[26px] leading-none vc-nums text-ink lg:text-[30px] rtl:text-right">
+        <p dir="ltr" className="font-serif text-[23px] leading-none vc-nums text-ink md:text-[26px] lg:text-[30px] rtl:text-right">
           {stop.priceLabel}
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-x-10 gap-y-5 lg:gap-x-12">
+        <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4 md:mt-6 md:gap-x-10 lg:gap-x-12">
           <DataPoint label={dict.bedrooms} value={stop.bedrooms} />
           <DataPoint label={dict.bathrooms} value={stop.bathrooms} />
           {stop.squareMeters ? (
@@ -621,7 +652,7 @@ function BookResidencePage({
           ) : null}
         </div>
 
-        <div className="mt-6">
+        <div className="mt-4 md:mt-6">
           <Label>{dict.location}</Label>
           {stop.exactAddress ? (
             <p className="mt-1.5 font-sans text-[13.5px] leading-relaxed text-ink/80">
@@ -647,7 +678,7 @@ function BookResidencePage({
         ) : null}
 
         {stop.smartLinkUrl && !cancelled && (
-          <div className="mt-8">
+          <div className="mt-5 md:mt-8">
             <EditorialAction href={stop.smartLinkUrl} onClick={onSmartLinkClick}>
               {dict.explore}
             </EditorialAction>
@@ -658,14 +689,19 @@ function BookResidencePage({
         )}
 
         {stop.bcReference && (
-          <p className="mt-7 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30">
+          <p className="mt-5 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30 md:mt-7">
             Ref. {stop.bcReference}
           </p>
         )}
       </div>
 
       {/* ── Fotografía a página ── */}
-      <div className={cn("relative min-h-0", flipped && "order-1")}>
+      <div
+        className={cn(
+          "relative min-h-0 order-1",
+          flipped ? "md:order-1" : "md:order-2",
+        )}
+      >
         {stop.coverPhotoUrl ? (
           <button
             type="button"

@@ -94,7 +94,14 @@ export function DayOverview({
                       "line-through decoration-ink/25",
                   )}
                 >
-                  {stop.timeLabel ?? "—"}
+                  {stop.timeLabel ??
+                    (stop.timePending ? (
+                      <span className="font-display text-[9.5px] uppercase vc-tracked-sm text-gold-dark">
+                        {dict.timeToBeConfirmed}
+                      </span>
+                    ) : (
+                      "—"
+                    ))}
                 </span>
 
                 {/* Residencia */}

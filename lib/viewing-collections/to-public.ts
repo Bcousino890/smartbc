@@ -62,6 +62,7 @@ export type RawPublicProperty = {
 export type RawPublicStop = {
   position: number;
   scheduled_at: string | null;
+  time_pending?: boolean;
   duration_minutes: number | null;
   confirmation_status: StopConfirmation;
   address_visibility: "area_only" | "exact";
@@ -384,6 +385,9 @@ export function toPublicViewingCollection(
     return {
       order: i + 1,
       timeLabel: formatTimeLabel(stop.scheduled_at, tz),
+      // Solo se anuncia como pendiente si de verdad no hay hora: una parada
+      // con hora nunca debe leerse "por confirmar".
+      timePending: !!stop.time_pending && !stop.scheduled_at,
       durationLabel: stop.duration_minutes
         ? `${stop.duration_minutes} ${dict.minutesShort}`
         : null,

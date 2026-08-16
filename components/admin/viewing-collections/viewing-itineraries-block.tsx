@@ -11,7 +11,10 @@ import {
   Pencil,
   XCircle,
 } from "lucide-react";
-import type { ItineraryWithStops } from "@/lib/viewing-collections/types";
+import type {
+  ItineraryWithStops,
+  SelectionWithProperty,
+} from "@/lib/viewing-collections/types";
 import type { Country } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 import { CollapsibleBlock } from "./collapsible-block";
@@ -39,6 +42,7 @@ export function ViewingItinerariesBlock({
   clientName,
   country,
   itineraries,
+  selections,
   canEdit,
   canDelete,
   canPublish,
@@ -47,6 +51,9 @@ export function ViewingItinerariesBlock({
   clientName: string;
   country: Country;
   itineraries: ItineraryWithStops[];
+  /** Selección del cliente: de aquí salen las propiedades que se pueden
+   *  añadir a un itinerario ya creado, sin rehacerlo. */
+  selections: SelectionWithProperty[];
   canEdit: boolean;
   canDelete: boolean;
   canPublish: boolean;
@@ -80,6 +87,7 @@ export function ViewingItinerariesBlock({
         <ItineraryBuilder
           itinerary={open}
           clientId={clientId}
+          selections={selections}
           clientName={clientName}
           country={country}
           canEdit={canEdit}

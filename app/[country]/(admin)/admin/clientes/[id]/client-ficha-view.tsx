@@ -295,6 +295,7 @@ export function ClientFichaView({
                 clientName={`${client.firstName} ${client.lastName}`}
                 country={country}
                 itineraries={viewingCollections.itineraries}
+                selections={viewingCollections.selections}
                 canEdit={viewingCollections.canEdit}
                 canDelete={viewingCollections.canDelete}
                 canPublish={viewingCollections.canPublish}

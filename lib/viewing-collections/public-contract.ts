@@ -50,6 +50,9 @@ export type PublicViewingStop = {
   order: number;
 
   timeLabel: string | null;
+  /** true = el agente ha declarado que la hora está por confirmar. Sin hora y
+   *  sin esto, la parada simplemente no tiene hora (cancelada, por ejemplo). */
+  timePending: boolean;
   durationLabel: string | null;
   status: PublicStopStatus;
 
