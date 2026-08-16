@@ -23,6 +23,24 @@ import {
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 
+/**
+ * Qué LEE el cliente con cada estado interno. Seis estados de proceso se
+ * proyectan en tres palabras públicas, y de memoria nadie recuerda cuál cae
+ * en cuál — de ahí este recordatorio bajo los botones.
+ */
+const CLIENT_SEES: Record<string, string> = {
+  pending: "El cliente lee «Por confirmar».",
+  proposed:
+    "El cliente lee «Por confirmar» — que la propuesta esté con el propietario es interno.",
+  confirmed:
+    "El cliente lee «Confirmada». Es el único estado, junto a completada, que permite enseñar la dirección exacta.",
+  declined:
+    "El cliente lee «Cancelada»; que la rechazara el propietario no se dice.",
+  cancelled:
+    "El cliente lee «Cancelada». La parada sigue visible para que entienda el cambio de plan, y la dirección exacta se oculta sola.",
+  completed: "El cliente lee «Confirmada».",
+};
+
 const CONFIRM_LABEL: Record<StopConfirmation, string> = {
   pending: "Pendiente",
   proposed: "Propuesta al propietario",
@@ -258,6 +276,11 @@ export function ViewingStopEditor({
                 </button>
               ))}
             </div>
+            {CLIENT_SEES[stop.confirmation_status] && (
+              <p className="mt-2 text-[10.5px] leading-relaxed text-ink/45">
+                {CLIENT_SEES[stop.confirmation_status]}
+              </p>
+            )}
           </section>
 
           {/* Dirección */}
