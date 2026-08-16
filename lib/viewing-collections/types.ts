@@ -99,6 +99,9 @@ export type ViewingStopRow = {
   duration_minutes: number | null;
   confirmation_status: StopConfirmation;
   address_visibility: AddressVisibility;
+  /** Dirección escrita a mano por el agente para ESTA visita. Gana sobre la de
+   *  la ficha; solo se muestra si address_visibility es 'exact'. */
+  exact_address_override: string | null;
   hidden_from_client: boolean;
   visit_request_id: string | null;
   property_share_id: string | null;
@@ -137,6 +140,9 @@ export type SelectionPropertySummary = {
   status: "available" | "reserved" | "sold" | "archived";
   isArchived: boolean;
   bcReference: string | null;
+  /** Dirección de la ficha. Solo para el panel: sirve de referencia al
+   *  agente cuando escribe la de la visita. */
+  address: string | null;
   /** Ya vía proxy /p/ — nunca la URL cruda de Storage. */
   coverPhotoUrl: string | null;
 };

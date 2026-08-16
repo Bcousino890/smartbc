@@ -67,6 +67,7 @@ export type RawPublicStop = {
   duration_minutes: number | null;
   confirmation_status: StopConfirmation;
   address_visibility: "area_only" | "exact";
+  exact_address_override?: string | null;
   hidden_from_client: boolean;
   created_at: string;
   smartLinkToken: string | null;
@@ -408,7 +409,13 @@ export function toPublicViewingCollection(
 
       // Dirección y coordenadas se deciden JUNTAS: ocultar la dirección y
       // enviar la coordenada real sería no ocultar nada.
-      exactAddress: showExact ? sanitizePublicAddress(prop.address) : null,
+      // La escrita a mano gana sobre la de la ficha (que llega del portal y
+      // a veces viene incompleta). Ambas pasan por el mismo saneado, y ambas
+      // solo salen si la visibilidad es 'exact'.
+      exactAddress: showExact
+        ? (sanitizePublicAddress(stop.exact_address_override ?? null) ??
+          sanitizePublicAddress(prop.address))
+        : null,
       exactLat: showExact ? prop.latitude : null,
       exactLng: showExact ? prop.longitude : null,
       areaLocation: showExact

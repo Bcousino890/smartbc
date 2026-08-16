@@ -106,6 +106,52 @@ check(
 );
 
 check("parada 'area_only' NO expone dirección", areaStop.exactAddress === null);
+
+// ── Dirección escrita a mano por el agente ──────────────────────────────────
+// La ficha llega del portal y a veces trae la calle a medias. El agente puede
+// escribir la de verdad para ESA visita, pero sin abrir ninguna puerta nueva.
+{
+  const withOverride = (
+    overrideValue: string | null,
+    visibility: "exact" | "area_only" = "exact",
+  ) => {
+    const base = mondayCollection();
+    const stops = base.stops.map((st, i) =>
+      i === 0
+        ? {
+            ...st,
+            address_visibility: visibility,
+            exact_address_override: overrideValue,
+          }
+        : st,
+    );
+    return toPublicViewingCollection({ ...base, stops }).stops[0];
+  };
+
+  check(
+    "la dirección escrita a mano gana sobre la de la ficha",
+    withOverride("Calle de Montesa 14, 2º B").exactAddress ===
+      "Calle de Montesa 14, 2º B",
+  );
+  check(
+    "sin escribir nada, se sigue usando la de la ficha",
+    withOverride(null).exactAddress === "Calle Trafalgar 24, 3ºB",
+  );
+  check(
+    "🔴 escrita a mano pero en 'solo zona': NO se muestra",
+    withOverride("Calle de Montesa 14, 2º B", "area_only").exactAddress ===
+      null,
+  );
+  check(
+    "una escrita a mano desmedida se descarta y cae a la de la ficha",
+    withOverride("x".repeat(200)).exactAddress === "Calle Trafalgar 24, 3ºB",
+  );
+  check(
+    "una escrita a mano con pinta de nota se descarta",
+    withOverride("Calle X 1. Llamar antes. Portero de 9 a 14. Ojo al perro.")
+      .exactAddress === "Calle Trafalgar 24, 3ºB",
+  );
+}
 check(
   "parada 'area_only' NO expone coordenadas reales",
   areaStop.exactLat === null && areaStop.exactLng === null,

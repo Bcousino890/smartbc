@@ -85,6 +85,7 @@ const PUBLIC_COLLECTION_SELECT = `
       duration_minutes,
       confirmation_status,
       address_visibility,
+      exact_address_override,
       hidden_from_client,
       created_at,
       property_shares ( token ),
@@ -127,6 +128,7 @@ const PREVIEW_ITINERARY_SELECT = `
     duration_minutes,
     confirmation_status,
     address_visibility,
+    exact_address_override,
     hidden_from_client,
     created_at,
     property_shares ( token ),
@@ -168,6 +170,7 @@ function shapeRawCollection(row: any): RawCollectionData | null {
         duration_minutes: s.duration_minutes,
         confirmation_status: s.confirmation_status,
         address_visibility: s.address_visibility,
+        exact_address_override: s.exact_address_override ?? null,
         hidden_from_client: s.hidden_from_client,
         created_at: s.created_at,
         smartLinkToken: share?.token ?? null,
@@ -351,6 +354,9 @@ function toPropertySummary(prop: any) {
     status: prop.status,
     isArchived: Boolean(prop.archived_at) || prop.status === "archived",
     bcReference: prop.bc_reference ?? null,
+    // Solo para el PANEL: el editor la enseña como referencia de lo que hay
+    // en la ficha. Al cliente nunca le llega desde aquí (ver to-public.ts).
+    address: prop.address ?? null,
     coverPhotoUrl: coverUrl(prop),
   };
 }
@@ -358,7 +364,7 @@ function toPropertySummary(prop: any) {
 
 const SELECTION_PROPERTY_SELECT = `
   id, slug, title, zone, subzone, bedrooms, bathrooms, square_meters,
-  price, currency, operation, status, archived_at, bc_reference,
+  price, currency, operation, status, archived_at, bc_reference, address,
   last_synced_at, updated_at,
   property_photos ( url, position )
 `;

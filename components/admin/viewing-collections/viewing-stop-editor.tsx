@@ -12,6 +12,7 @@ import {
   updateStopClientVisibility,
   updateStopConfirmation,
   updateStopNotes,
+  updateStopExactAddress,
   updateStopSchedule,
 } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
 import {
@@ -113,6 +114,10 @@ export function ViewingStopEditor({
       }
     });
   };
+
+  // Dirección escrita a mano. Vacío = se usa la de la ficha de la propiedad.
+  const [address, setAddress] = useState(stop.exact_address_override ?? "");
+  const propertyAddress = stop.selection.property.address ?? "";
 
   const canShowExactAddress = ["confirmed", "completed"].includes(
     stop.confirmation_status,
@@ -334,6 +339,46 @@ export function ViewingStopEditor({
                 </span>
               </label>
             </div>
+
+            {/* La ficha llega del portal y a veces trae la calle a medias o
+                nada. Aquí el agente escribe el portal y el piso de verdad. */}
+            {stop.address_visibility === "exact" && canShowExactAddress && (
+              <div className="mt-2.5">
+                <label className="block">
+                  <span className="text-[10px] text-ink/55">
+                    Dirección que verá el cliente
+                  </span>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <input
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      maxLength={120}
+                      placeholder={
+                        propertyAddress || "Calle, número, piso y puerta"
+                      }
+                      className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[12.5px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        run(() => updateStopExactAddress(stop.id, address))
+                      }
+                      disabled={pending}
+                      className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </label>
+                <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink/45">
+                  {address.trim()
+                    ? "Es la que aparece en la colección, por encima de la de la ficha."
+                    : propertyAddress
+                      ? `Vacío: se usa la de la ficha — «${propertyAddress}».`
+                      : "La ficha no tiene dirección, así que sin esto el cliente no verá ninguna."}
+                </p>
+              </div>
+            )}
           </section>
 
           {/* Visibilidad */}

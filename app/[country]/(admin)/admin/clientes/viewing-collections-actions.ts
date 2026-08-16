@@ -716,6 +716,46 @@ export async function updateStopConfirmation(
   return { ok: true };
 }
 
+/**
+ * Dirección escrita a mano para ESTA visita.
+ *
+ * Gana sobre la de la ficha de la propiedad, que llega del portal y a veces
+ * viene incompleta. Vacío = volver a usar la de la ficha.
+ *
+ * No relaja ninguna garantía: la dirección solo llega al cliente si la parada
+ * está en `exact`, y eso sigue exigiendo visita confirmada o completada.
+ */
+export async function updateStopExactAddress(
+  stopId: string,
+  address: string | null,
+): Promise<ActionResult> {
+  const ctx = await clientIdOfStop(stopId);
+  if (!ctx) return { ok: false, error: "Parada no encontrada." };
+
+  const g = await gate("edit", ctx.clientId);
+  if (!g.ok) return g;
+
+  const clean = (address ?? "").trim().replace(/\s+/g, " ");
+  if (clean && clean.length < 4) {
+    return { ok: false, error: "La dirección es demasiado corta." };
+  }
+  if (clean.length > 120) {
+    return {
+      ok: false,
+      error: "La dirección no puede pasar de 120 caracteres.",
+    };
+  }
+
+  const { error } = await db()
+    .from("viewing_stops")
+    .update({ exact_address_override: clean || null })
+    .eq("id", stopId);
+  if (error) return { ok: false, error: translateDbError(error.message) };
+
+  revalidateClient(ctx.clientId);
+  return { ok: true };
+}
+
 export async function updateStopAddressVisibility(
   stopId: string,
   visibility: AddressVisibility,
