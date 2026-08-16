@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { PublicPropertyView } from "@/app/compartir/[slug]/public-property-view";
+import { CollectionReturnBar } from "@/components/public/collection-return-bar";
 import { propertyRowToClientProperty } from "@/lib/db/adapters";
 import type { PropertyRow } from "@/lib/db/row-types";
 import {
@@ -146,11 +147,14 @@ export default async function TokenSharePage({
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
 
   return (
-    <PublicPropertyView
+    <>
+      <CollectionReturnBar />
+      <PublicPropertyView
       property={property}
       videos={videos}
       plans={plans}
       shareId={resolved.shareId}
-    />
+      />
+    </>
   );
 }

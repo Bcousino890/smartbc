@@ -135,6 +135,8 @@ export type CollectionDictionary = {
   contents: string;
   pageOf: string;
 
+  /** Vuelta a la colección desde la ficha de una propiedad. */
+  backToCollection: string;
   /** La hora aún no está cerrada con el propietario. */
   timeToBeConfirmed: string;
   minutesShort: string;
@@ -196,6 +198,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Siguiente",
     contents: "Índice",
     pageOf: "de",
+    backToCollection: "Volver a tu colección",
     timeToBeConfirmed: "Hora por confirmar",
     minutesShort: "min",
     perMonthSuffix: "/mes",
@@ -237,6 +240,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Next",
     contents: "Contents",
     pageOf: "of",
+    backToCollection: "Back to your collection",
     timeToBeConfirmed: "Time to be confirmed",
     minutesShort: "min",
     perMonthSuffix: "/month",
@@ -278,6 +282,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Suivant",
     contents: "Sommaire",
     pageOf: "sur",
+    backToCollection: "Retour à votre collection",
     timeToBeConfirmed: "Horaire à confirmer",
     minutesShort: "min",
     perMonthSuffix: "/mois",
@@ -319,6 +324,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Successiva",
     contents: "Indice",
     pageOf: "di",
+    backToCollection: "Torna alla tua collezione",
     timeToBeConfirmed: "Orario da confermare",
     minutesShort: "min",
     perMonthSuffix: "/mese",
@@ -361,6 +367,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Weiter",
     contents: "Inhalt",
     pageOf: "von",
+    backToCollection: "Zurück zu Ihrer Sammlung",
     timeToBeConfirmed: "Uhrzeit wird noch bestätigt",
     minutesShort: "Min.",
     perMonthSuffix: "/Monat",
@@ -401,6 +408,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "التالي",
     contents: "الفهرس",
     pageOf: "من",
+    backToCollection: "العودة إلى مجموعتك",
     timeToBeConfirmed: "الموعد قيد التأكيد",
     minutesShort: "د",
     perMonthSuffix: "/شهرياً",
@@ -442,6 +450,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "Sonraki",
     contents: "İçindekiler",
     pageOf: "/",
+    backToCollection: "Koleksiyonunuza dönün",
     timeToBeConfirmed: "Saat teyit edilecek",
     minutesShort: "dk",
     perMonthSuffix: "/ay",
@@ -482,6 +491,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     next: "הבא",
     contents: "תוכן",
     pageOf: "מתוך",
+    backToCollection: "חזרה לאוסף שלך",
     timeToBeConfirmed: "השעה טרם נקבעה",
     minutesShort: "דק׳",
     perMonthSuffix: "/לחודש",

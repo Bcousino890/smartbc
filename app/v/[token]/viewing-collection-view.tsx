@@ -27,6 +27,7 @@ import {
   getCollectionDictionary,
   isRtl,
 } from "@/lib/viewing-collections/i18n";
+import { rememberCollectionReturn } from "@/lib/viewing-collections/return-link";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { CollectionCover } from "./_components/collection-cover";
 import { DayOverview } from "./_components/day-overview";
@@ -81,6 +82,20 @@ export function ViewingCollectionView({
       trackerRef.current?.trackEvent?.(event, data);
     },
     [trackerRef, isPreview],
+  );
+
+  /**
+   * Al salir hacia la ficha de una propiedad se deja apuntada la vuelta. Se
+   * guarda en el navegador del cliente, NO en la URL de la propiedad: reenviar
+   * "mira este piso" no debe entregar la colección privada entera.
+   */
+  const onLeaveToProperty = useCallback(
+    (order: number) => {
+      track("share_click", { order });
+      if (isPreview || !collectionToken) return;
+      rememberCollectionReturn(`/v/${collectionToken}`, dict.backToCollection);
+    },
+    [track, isPreview, collectionToken, dict.backToCollection],
   );
 
   // Una residencia se cuenta como vista UNA vez por sesión. El registro vive
@@ -174,7 +189,7 @@ export function ViewingCollectionView({
         dict={dict}
         onStopView={trackStopView}
         onStopExpand={(order) => track("stop_expand", { order })}
-        onSmartLinkClick={(order) => track("share_click", { order })}
+        onSmartLinkClick={onLeaveToProperty}
       />
     );
   }
@@ -233,7 +248,7 @@ export function ViewingCollectionView({
                 rtl={rtl}
                 onView={() => trackStopView(stop.order)}
                 onExpand={() => track("stop_expand", { order: stop.order })}
-                onSmartLinkClick={() => track("share_click", { order: stop.order })}
+                onSmartLinkClick={() => onLeaveToProperty(stop.order)}
               />
             ))}
           </div>

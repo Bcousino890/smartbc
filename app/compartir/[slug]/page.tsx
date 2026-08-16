@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/queries/properties";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
 import { PublicPropertyView } from "./public-property-view";
+import { CollectionReturnBar } from "@/components/public/collection-return-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -185,6 +186,9 @@ export default async function PublicSharePage({
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
 
   return (
-    <PublicPropertyView property={property} videos={videos} plans={plans} />
+    <>
+      <CollectionReturnBar />
+      <PublicPropertyView property={property} videos={videos} plans={plans} />
+    </>
   );
 }

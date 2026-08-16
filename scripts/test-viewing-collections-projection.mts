@@ -35,6 +35,10 @@ import {
 } from "../lib/viewing-collections/types.ts";
 import { randomToken, URL_SAFE_TOKEN_RE } from "../lib/tokens.ts";
 import { compareStopsByDay } from "../lib/viewing-collections/order.ts";
+import {
+  readCollectionReturn,
+  rememberCollectionReturn,
+} from "../lib/viewing-collections/return-link.ts";
 
 let failures = 0;
 
@@ -482,6 +486,52 @@ check("idioma desconocido cae a español", badLang.language === "es");
     .slice()
     .sort(compareStopsByDay);
   check("con la misma hora decide el orden manual", tie[0].position === 2);
+}
+
+
+// ── Vuelta a la colección ───────────────────────────────────────────────────
+// El enlace de vuelta vive en el navegador del cliente, NUNCA en la URL de la
+// propiedad: reenviar "mira este piso" no debe entregar la colección entera.
+// Aquí se comprueba lo que impide que ese almacén se convierta en un agujero.
+{
+  const store = new Map<string, string>();
+  (globalThis as any).window = {
+    localStorage: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    },
+  };
+
+  const KEY = "bcp:vc-return";
+  const put = (v: unknown) => store.set(KEY, JSON.stringify(v));
+
+  rememberCollectionReturn("/v/uhwt3yc6fc5uqjza", "Volver a tu colección");
+  check(
+    "se guarda la vuelta y se recupera",
+    readCollectionReturn()?.url === "/v/uhwt3yc6fc5uqjza",
+  );
+
+  put({ url: "/v/abc123", label: "x", ts: Date.now() - 13 * 60 * 60 * 1000 });
+  check("una vuelta de hace 13 h ya no vale", readCollectionReturn() === null);
+  check("y se borra al caducar", store.get(KEY) === undefined);
+
+  put({ url: "https://evil.example/x", label: "x", ts: Date.now() });
+  check(
+    "una URL absoluta inyectada se rechaza",
+    readCollectionReturn() === null,
+  );
+
+  put({ url: "/admin/clientes", label: "x", ts: Date.now() });
+  check(
+    "una ruta que no sea de colección se rechaza",
+    readCollectionReturn() === null,
+  );
+
+  store.set(KEY, "esto no es json");
+  check("un valor corrupto no revienta", readCollectionReturn() === null);
+
+  delete (globalThis as any).window;
 }
 
 // ============================================================================
