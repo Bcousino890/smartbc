@@ -335,6 +335,7 @@ export function ResidenceChapter({
                   href={stop.smartLinkUrl}
                   onClick={onSmartLinkClick}
                   className="w-full sm:w-auto"
+                  sameOrigin
                 >
                   {dict.explore}
                 </EditorialAction>

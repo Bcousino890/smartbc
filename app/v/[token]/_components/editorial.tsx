@@ -241,6 +241,7 @@ export function EditorialAction({
   tone = "ink",
   className,
   external = true,
+  sameOrigin = false,
 }: {
   href: string;
   children: React.ReactNode;
@@ -248,13 +249,30 @@ export function EditorialAction({
   tone?: "ink" | "cream";
   className?: string;
   external?: boolean;
+  /**
+   * El destino es una página NUESTRA. Entonces se conserva `window.opener`,
+   * que es lo que permite a esa página devolver al lector a ESTA pestaña —con
+   * el libro abierto por donde estaba— en vez de abrirle otra copia.
+   *
+   * `noopener` existe para que un sitio ajeno no pueda manipular la pestaña de
+   * origen. Aquí el destino somos nosotros, en el mismo origen, así que no hay
+   * nada de lo que protegerse. NO usar esto en un enlace a un tercero.
+   *
+   * ⚠️ Hay que pedirlo con `rel="opener"` EXPLÍCITO: desde Chrome 88 (y
+   * equivalentes en Firefox y Safari) `target="_blank"` implica `noopener` por
+   * defecto, así que omitir el `rel` no basta — comprobado.
+   */
+  sameOrigin?: boolean;
 }) {
   return (
     <a
       href={href}
       onClick={onClick}
       {...(external
-        ? { target: "_blank", rel: "noopener noreferrer" }
+        ? {
+            target: "_blank",
+            rel: sameOrigin ? "opener" : "noopener noreferrer",
+          }
         : {})}
       className={cn(
         "group vc-focus inline-flex items-center justify-center gap-3 border px-8 py-4 font-display text-[11px] font-medium uppercase vc-tracked transition-colors duration-500 md:text-[11.5px]",

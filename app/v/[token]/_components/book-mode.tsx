@@ -685,7 +685,11 @@ function BookResidencePage({
 
         {stop.smartLinkUrl && !cancelled && (
           <div className="mt-4 md:mt-8">
-            <EditorialAction href={stop.smartLinkUrl} onClick={onSmartLinkClick}>
+            <EditorialAction
+              href={stop.smartLinkUrl}
+              onClick={onSmartLinkClick}
+              sameOrigin
+            >
               {dict.explore}
             </EditorialAction>
             <p className="mt-3 font-sans text-[11px] text-ink/40">

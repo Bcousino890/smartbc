@@ -9,10 +9,21 @@
 // exactamente igual que siempre y esto no existe.
 //
 // Va arriba, no abajo: en móvil el pie ya lo ocupa la barra de contacto.
+//
+// ── Volver es volver, no abrir otra ─────────────────────────────────────────
+// "Explorar residencia" abre esta ficha en una pestaña nueva y la colección se
+// queda intacta en la de atrás. Así que volver NO es navegar aquí —eso dejaba
+// la colección duplicada y las pestañas acumulándose según el cliente mira
+// pisos—: es devolver el foco a la pestaña de origen y cerrar esta. El lector
+// aterriza en su libro por la misma página que dejó.
+//
+// Si esta pestaña no la abrimos nosotros (un enlace guardado, un reenvío que
+// además tenga el retorno guardado en ese navegador), no hay pestaña a la que
+// volver y entonces sí se navega. Y si el navegador se niega a cerrar la
+// pestaña, se navega igualmente: nunca se queda el botón sin hacer nada.
 // ============================================================================
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import {
   readCollectionReturn,
   type CollectionReturn,
@@ -25,17 +36,45 @@ export function CollectionReturnBar() {
   // nunca puede formar parte del HTML servido a un visitante cualquiera.
   useEffect(() => setRet(readCollectionReturn()), []);
 
+  const goBack = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!ret) return;
+      // Clic con modificador o botón central: que el navegador haga lo suyo.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+
+      try {
+        const opener = window.opener as Window | null;
+        if (opener && !opener.closed) {
+          opener.focus();
+          window.close();
+          // Algunos navegadores se niegan a cerrar; si seguimos vivos, se
+          // navega aquí para que el botón siempre lleve a alguna parte.
+          window.setTimeout(() => {
+            window.location.href = ret.url;
+          }, 200);
+          return;
+        }
+      } catch {
+        // Acceso a `opener` bloqueado: se navega y ya está.
+      }
+      window.location.href = ret.url;
+    },
+    [ret],
+  );
+
   if (!ret) return null;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3 sm:justify-start sm:p-4">
-      <Link
+      <a
         href={ret.url}
+        onClick={goBack}
         className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-cream-50/20 bg-ink/90 px-4 py-2.5 text-[11px] font-medium text-cream-50 shadow-lg backdrop-blur-sm transition-colors duration-300 hover:bg-ink"
       >
         <span aria-hidden>&larr;</span>
         {ret.label}
-      </Link>
+      </a>
     </div>
   );
 }
