@@ -9,7 +9,8 @@ import {
 import {
   dedupeFotocasaZones,
   isKnownFotocasaZone,
-  FOTOCASA_MADRID_DISTRICTS,
+  normalizeZonePath,
+  FOTOCASA_LOCATIONS,
 } from "@/lib/sync/particulares/fotocasa-zones";
 
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 // Zonas de Madrid que el scraper de Fotocasa recorre entero.
 //
-// GET  → catálogo completo (distritos con sus barrios) + selección actual.
+// GET  → catálogo completo (localidades → distritos → zonas) + selección.
 // PUT  → guarda la selección { zones: string[] }.
 //
 // La selección vive en `app_settings` (misma casa que `scraping.proxyUrl`), no
@@ -33,7 +34,7 @@ export async function GET() {
   const selected = await readFotocasaZones(supabase);
 
   return NextResponse.json(
-    { districts: FOTOCASA_MADRID_DISTRICTS, selected },
+    { locations: FOTOCASA_LOCATIONS, selected },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -60,7 +61,7 @@ export async function PUT(req: Request) {
   // cron y el fallo no se vería hasta revisar los logs.
   const desconocidas = raw.filter(
     (z): z is string => typeof z === "string" && !isKnownFotocasaZone(z),
-  );
+  ).map(normalizeZonePath);
   if (desconocidas.length > 0) {
     return NextResponse.json(
       { error: `Zonas desconocidas: ${desconocidas.join(", ")}` },

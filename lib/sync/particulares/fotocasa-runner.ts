@@ -11,6 +11,8 @@ import {
 } from "@/lib/sync/particulares/fotocasa-scraper";
 import {
   dedupeFotocasaZones,
+  splitZonePath,
+  fotocasaZoneLabel,
   FOTOCASA_DEFAULT_ZONES,
 } from "@/lib/sync/particulares/fotocasa-zones";
 
@@ -85,6 +87,8 @@ export async function readFotocasaZones(supabase: SupabaseLike): Promise<string[
         ? (JSON.parse(raw) as unknown)
         : null;
     if (!Array.isArray(list) || list.length === 0) return [...FOTOCASA_DEFAULT_ZONES];
+    // `dedupeFotocasaZones` ya normaliza los slugs sueltos que se guardaron
+    // antes de que existieran las localidades ("centro" → "madrid-capital/centro").
     const clean = dedupeFotocasaZones(list.filter((z): z is string => typeof z === "string"));
     return clean.length > 0 ? clean : [...FOTOCASA_DEFAULT_ZONES];
   } catch {
@@ -411,22 +415,20 @@ export async function scrapeFotocasaParticulares(
     por_zona: {},
   };
 
-  // Sin zonas seleccionadas se recorre la ciudad entera de una vez (el
-  // comportamiento de siempre); con zonas, cada una es una búsqueda propia.
-  const zones = opts.zones.length > 0 ? opts.zones : ["todas-las-zonas"];
+  // Cada zona ya trae su localidad dentro (`madrid-capital/centro`), así que un
+  // mismo run puede recorrer Madrid capital, Pozuelo y La Moraleja: las zonas
+  // prime no están todas dentro de la capital.
+  const zones =
+    opts.zones.length > 0 ? opts.zones : [`${opts.location}/todas-las-zonas`];
 
-  for (const zone of zones) {
+  for (const zonePath of zones) {
+    const { location, zone } = splitZonePath(zonePath);
     const zoneStats = { particulares: 0, con_telefono: 0, nuevos: 0, paginas: 0 };
-    results.por_zona[zone] = zoneStats;
+    results.por_zona[zonePath] = zoneStats;
 
     for (const operation of opts.operations) {
       for (let page = opts.fromPage; page <= opts.toPage; page++) {
-      const url = buildFotocasaSearchUrl({
-        operation,
-        location: opts.location,
-        zone,
-        page,
-      });
+      const url = buildFotocasaSearchUrl({ operation, location, zone, page });
       const html = await fetchSearchPage(url, proxyUrl);
       results.paginas_pedidas++;
       zoneStats.paginas++;
@@ -442,7 +444,9 @@ export async function scrapeFotocasaParticulares(
       const listings = extractFotocasaSearchListings(html);
       if (listings.length === 0) {
         // Página vacía = esta zona/operación ya está recorrida entera.
-        console.log(`[cron-fotocasa] ${zone} ${operation} pag ${page}: 0 anuncios, fin`);
+        console.log(
+          `[cron-fotocasa] ${zonePath} ${operation} pag ${page}: 0 anuncios, fin`,
+        );
         break;
       }
       results.anuncios_vistos += listings.length;

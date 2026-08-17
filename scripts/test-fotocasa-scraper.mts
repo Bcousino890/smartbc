@@ -23,11 +23,13 @@ import {
   type MatchableListing,
 } from "../lib/sync/particulares/cross-match-phone.ts";
 import {
-  FOTOCASA_MADRID_DISTRICTS,
+  FOTOCASA_LOCATIONS,
   FOTOCASA_DEFAULT_ZONES,
   dedupeFotocasaZones,
   fotocasaZoneLabel,
   isKnownFotocasaZone,
+  normalizeZonePath,
+  splitZonePath,
 } from "../lib/sync/particulares/fotocasa-zones.ts";
 
 let ok = 0;
@@ -85,31 +87,53 @@ check(
 );
 
 console.log("\n── catálogo de zonas de Fotocasa ──");
-check("21 distritos de Madrid capital", FOTOCASA_MADRID_DISTRICTS.length === 21, FOTOCASA_MADRID_DISTRICTS.length);
+const madrid = FOTOCASA_LOCATIONS.find((l) => l.slug === "madrid-capital")!;
+check("3 localidades (Madrid capital, Pozuelo, La Moraleja)", FOTOCASA_LOCATIONS.length === 3, FOTOCASA_LOCATIONS.map((l) => l.slug));
+check("21 distritos de Madrid capital", madrid.districts.length === 21, madrid.districts.length);
 check("135 barrios en total",
-  FOTOCASA_MADRID_DISTRICTS.reduce((n, d) => n + d.subZones.length, 0) === 135,
-  FOTOCASA_MADRID_DISTRICTS.reduce((n, d) => n + d.subZones.length, 0));
+  madrid.districts.reduce((n, d) => n + d.subZones.length, 0) === 135,
+  madrid.districts.reduce((n, d) => n + d.subZones.length, 0));
 // Los slugs "obvios" dan 404 en el portal; estos son los reales.
-check("slug real de Salamanca", isKnownFotocasaZone("barrio-de-salamanca"));
-check("slug real de Justicia", isKnownFotocasaZone("justicia-chueca"));
-check("slug real de Ibiza", isKnownFotocasaZone("ibiza-de-madrid"));
-check("'salamanca' a secas NO existe", !isKnownFotocasaZone("salamanca"));
-check("'justicia' a secas NO existe", !isKnownFotocasaZone("justicia"));
-check("etiqueta legible", fotocasaZoneLabel("goya") === "Goya", fotocasaZoneLabel("goya"));
-check("las 5 zonas por defecto existen en el catálogo",
+check("slug real de Salamanca", isKnownFotocasaZone("madrid-capital/barrio-de-salamanca"));
+check("slug real de Justicia", isKnownFotocasaZone("madrid-capital/justicia-chueca"));
+check("slug real de Ibiza", isKnownFotocasaZone("madrid-capital/ibiza-de-madrid"));
+check("'salamanca' a secas NO existe", !isKnownFotocasaZone("madrid-capital/salamanca"));
+check("etiqueta legible", fotocasaZoneLabel("madrid-capital/goya") === "Goya", fotocasaZoneLabel("madrid-capital/goya"));
+check("las zonas por defecto existen en el catálogo",
   FOTOCASA_DEFAULT_ZONES.every(isKnownFotocasaZone), FOTOCASA_DEFAULT_ZONES.filter((z) => !isKnownFotocasaZone(z)));
+
+// Pozuelo y La Moraleja son LOCALIDADES propias del portal, no barrios de la
+// capital: buscarlas dentro de madrid-capital daría 404.
+check("Pozuelo es localidad propia", isKnownFotocasaZone("pozuelo-de-alarcon/todas-las-zonas"));
+check("La Moraleja es localidad propia", isKnownFotocasaZone("la-moraleja/todas-las-zonas"));
+check("Somosaguas cuelga de Pozuelo", isKnownFotocasaZone("pozuelo-de-alarcon/somosaguas"));
+check("El Soto cuelga de La Moraleja", isKnownFotocasaZone("la-moraleja/el-soto-de-la-moraleja"));
+check("Somosaguas NO existe dentro de Madrid capital", !isKnownFotocasaZone("madrid-capital/somosaguas"));
+check("splitZonePath separa localidad y zona",
+  splitZonePath("pozuelo-de-alarcon/somosaguas").location === "pozuelo-de-alarcon" &&
+    splitZonePath("pozuelo-de-alarcon/somosaguas").zone === "somosaguas");
+
+console.log("\n── compatibilidad y deduplicación ──");
+check("un slug suelto antiguo se entiende como Madrid capital",
+  normalizeZonePath("centro") === "madrid-capital/centro", normalizeZonePath("centro"));
 check("el distrito absorbe a sus barrios (no scrapear dos veces)",
-  dedupeFotocasaZones(["barrio-de-salamanca", "goya", "recoletos"]).join() === "barrio-de-salamanca",
-  dedupeFotocasaZones(["barrio-de-salamanca", "goya", "recoletos"]));
-check("barrios de distritos distintos se conservan",
-  dedupeFotocasaZones(["goya", "almagro"]).sort().join() === "almagro,goya",
-  dedupeFotocasaZones(["goya", "almagro"]));
-check("descarta slugs inventados", dedupeFotocasaZones(["goya", "no-existe"]).join() === "goya",
-  dedupeFotocasaZones(["goya", "no-existe"]));
+  dedupeFotocasaZones(["madrid-capital/barrio-de-salamanca", "madrid-capital/goya"]).join() === "madrid-capital/barrio-de-salamanca",
+  dedupeFotocasaZones(["madrid-capital/barrio-de-salamanca", "madrid-capital/goya"]));
+check("la localidad entera absorbe a sus distritos",
+  dedupeFotocasaZones(["pozuelo-de-alarcon/todas-las-zonas", "pozuelo-de-alarcon/somosaguas"]).join() === "pozuelo-de-alarcon/todas-las-zonas",
+  dedupeFotocasaZones(["pozuelo-de-alarcon/todas-las-zonas", "pozuelo-de-alarcon/somosaguas"]));
+check("zonas de localidades distintas se conservan",
+  dedupeFotocasaZones(["madrid-capital/goya", "pozuelo-de-alarcon/somosaguas"]).length === 2);
+check("descarta paths inventados",
+  dedupeFotocasaZones(["madrid-capital/goya", "madrid-capital/no-existe"]).join() === "madrid-capital/goya");
 check("URL de zona concreta",
   buildFotocasaSearchUrl({ operation: "rent", zone: "barrio-de-salamanca", page: 2 }) ===
     "https://www.fotocasa.es/es/alquiler/viviendas/madrid-capital/barrio-de-salamanca/l/2?sortType=publicationDate",
   buildFotocasaSearchUrl({ operation: "rent", zone: "barrio-de-salamanca", page: 2 }));
+check("URL fuera de Madrid capital",
+  buildFotocasaSearchUrl({ operation: "sale", location: "pozuelo-de-alarcon", zone: "somosaguas" }) ===
+    "https://www.fotocasa.es/es/comprar/viviendas/pozuelo-de-alarcon/somosaguas/l?sortType=publicationDate",
+  buildFotocasaSearchUrl({ operation: "sale", location: "pozuelo-de-alarcon", zone: "somosaguas" }));
 
 console.log("\n── zonas equivalentes entre portales ──");
 check("mismos tokens en otro orden", zonesCompatible("Lavapiés-Embajadores", "Embajadores - Lavapiés"));
