@@ -24,21 +24,49 @@ export async function signInAction(
   _prev: SignInState,
   formData: FormData
 ): Promise<SignInState> {
+  // Normalización defensiva del email: el teclado del móvil manda la primera
+  // letra en mayúscula y cuela un espacio al aceptar el autocorrector, y con
+  // eso el `.email()` de zod fallaba ANTES de preguntar a GoTrue. Resultado:
+  // "Email o contraseña incorrectos" en el móvil con las credenciales buenas.
+  const rawEmail = String(formData.get("email") ?? "");
+  const rawPassword = String(formData.get("password") ?? "");
+  const email = rawEmail.replace(/\s/g, "").toLowerCase();
+
   const parsed = credentialsSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
+    email,
+    password: rawPassword,
     role: formData.get("role"),
   });
 
   if (!parsed.success) {
-    return { error: "auth.error.invalidCredentials" };
+    // Diferenciado a propósito: un email mal escrito y una contraseña que no
+    // cuadra son dos problemas distintos, y verlos con el mismo texto rojo es
+    // lo que hacía imposible entender por qué no entraba.
+    const badEmail = parsed.error.issues.some((i) => i.path[0] === "email");
+    return {
+      error: badEmail ? "auth.error.invalidEmail" : "auth.error.invalidCredentials",
+    };
   }
 
   const supabase = await createClient();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
+  let { error: signInError } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   });
+
+  // Segundo intento sin espacios al principio/final de la contraseña: el mismo
+  // autocorrector del móvil añade uno al final y la deja irreconocible. Se
+  // prueba primero tal cual se escribió, así que a quien tenga un espacio de
+  // verdad en su contraseña no le rompemos nada.
+  if (signInError) {
+    const trimmedPassword = parsed.data.password.trim();
+    if (trimmedPassword && trimmedPassword !== parsed.data.password) {
+      ({ error: signInError } = await supabase.auth.signInWithPassword({
+        email: parsed.data.email,
+        password: trimmedPassword,
+      }));
+    }
+  }
 
   if (signInError) {
     return { error: "auth.error.invalidCredentials" };
@@ -116,8 +144,10 @@ export async function signOutAction() {
 }
 
 export async function requestPasswordResetAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "");
-  if (!email) return { error: "auth.error.invalidCredentials" };
+  // Mismo saneado que en el login: con un espacio del teclado del móvil, el
+  // correo de recuperación no llegaba a ninguna parte.
+  const email = String(formData.get("email") ?? "").replace(/\s/g, "").toLowerCase();
+  if (!email) return { error: "auth.error.invalidEmail" };
 
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(email, {

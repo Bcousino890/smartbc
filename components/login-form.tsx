@@ -77,9 +77,19 @@ export function LoginForm() {
             name="email"
             type="email"
             autoComplete="username"
+            inputMode="email"
+            // En el móvil el teclado escribe cosas que el email no admite: la
+            // primera letra en mayúscula, y un espacio al aceptar el
+            // autocorrector. Cualquiera de las dos hacía fallar el login sin
+            // que se vea nada raro en pantalla.
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             placeholder={t("login.email.placeholder")}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            // Un email nunca lleva espacios: se quitan al escribir (también los
+            // que cuela el pegado desde un gestor de contraseñas).
+            onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))}
             className="w-full bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </Field>
@@ -89,6 +99,11 @@ export function LoginForm() {
             name="password"
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
+            // Al pulsar el ojo el campo pasa a type="text", y ahí el teclado
+            // del móvil vuelve a capitalizar y autocorregir lo que se teclea.
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             placeholder={t("login.password.placeholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
