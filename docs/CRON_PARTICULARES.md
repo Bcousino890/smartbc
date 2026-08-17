@@ -2,10 +2,17 @@
 
 El scraper de particulares se ejecuta **cada hora** desde el VPS, no desde Vercel.
 
-## Qué hace (3 pasos encadenados, en este orden)
+> ⚠️ **Lo que corre de verdad en el VPS es `/opt/smartbc-particulares.sh`**, no
+> este script del repo (el crontab apunta ahí, y el fichero vive fuera del repo
+> para que el autodeploy no lo pise con `git reset --hard`). Hasta el
+> 2026-08-16 esa copia sólo lanzaba el paso 1, así que **el cross-match nunca
+> se llegó a ejecutar en producción** pese a estar documentado aquí desde hacía
+> meses. Si editas uno de los dos ficheros, copia el otro.
 
-`scripts/cron-particulares.sh` llama a 3 endpoints seguidos. Un fallo en uno
-no aborta el script — así que un corte de Idealista no impide que pisos.com
+## Qué hace (4 pasos encadenados, en este orden)
+
+`scripts/cron-particulares.sh` llama a los endpoints seguidos. Un fallo en uno
+no aborta el script — así que un corte de Idealista no impide que Fotocasa
 y el cross-match sigan corriendo:
 
 1. **`particulares/scrape`** (Idealista) — scrapea Idealista Madrid,
@@ -24,6 +31,44 @@ y el cross-match sigan corriendo:
    de `scrape-pisos` — primero se pueblan los teléfonos de pisos.com, luego
    se cruzan. No toca DataDome — es la vía que rellena teléfonos de forma
    fiable mientras el pool residencial esté baneado (`t=bv`).
+
+## Zonas de Fotocasa
+
+Fotocasa no se scrapea "todo Madrid" de una vez: la búsqueda global no deja
+paginar hasta el final, así que la ciudad entera nunca llega a recorrerse. Se va
+**zona por zona**, y así cada búsqueda cabe dentro de la paginación y sí se cubre
+al 100%.
+
+Las zonas activas se eligen en el panel (**Particulares → "Zonas a scrapear en
+Fotocasa"**) y se guardan en `app_settings.scraping.fotocasaZones`. Por defecto
+son las cinco del área prime: Barrio de Salamanca, Justicia-Chueca, Ibiza,
+Almagro y El Viso. Se puede marcar un distrito entero o barrios sueltos (Goya,
+Recoletos…); al marcar el distrito, sus barrios se descartan solos para no
+recorrer dos veces lo mismo.
+
+⚠️ **Los slugs de Fotocasa no son deducibles del nombre del barrio** —
+`salamanca`, `justicia` e `ibiza` dan 404; los buenos son `barrio-de-salamanca`,
+`justicia-chueca` e `ibiza-de-madrid`. Por eso el catálogo
+(`lib/sync/particulares/fotocasa-zones.ts`) está volcado del propio buscador y no
+escrito a mano.
+
+**Dos modos, por lo que cuesta el proxy:**
+
+| | cuándo | páginas por zona | coste aprox. |
+|---|---|---|---|
+| Incremental | cada pasada del cron | 3 (`FOTOCASA_MAX_PAGES`) | ~30 MB/día |
+| Barrido completo | 06:30, una vez al día | 40 (`?toPage=40`) | ~135 MB/pasada |
+
+El incremental basta para las novedades porque el listado va ordenado por fecha
+de publicación. Hacer el barrido completo en cada pasada serían ~18 GB de proxy
+al mes.
+
+Para un barrido puntual de zonas concretas:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  "http://localhost:3000/api/cron/particulares/scrape-fotocasa?zones=goya,recoletos&toPage=40"
+```
 
 ## Configuración
 
