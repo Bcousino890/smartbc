@@ -26,6 +26,7 @@ export interface LeadContactInfo {
 export async function openWhatsAppConversation(
   phone: string,
   lead?: LeadContactInfo,
+  country: "es" | "cl" = "es",
 ): Promise<OpenWhatsAppResult> {
   await assertPermission("mensajes", "create");
 
@@ -36,12 +37,18 @@ export async function openWhatsAppConversation(
 
   try {
     const config = await getZintoConfig();
-    const conv = await getOrCreateConversation(normalized, normalized, config?.channelId || 4, {
-      contactName: lead?.name ?? null,
-      contactMessage: lead?.message ?? null,
-      propertyTitle: lead?.propertyTitle ?? null,
-      leadId: lead?.leadId ?? null,
-    });
+    const conv = await getOrCreateConversation(
+      normalized,
+      normalized,
+      config?.channelId || 4,
+      {
+        contactName: lead?.name ?? null,
+        contactMessage: lead?.message ?? null,
+        propertyTitle: lead?.propertyTitle ?? null,
+        leadId: lead?.leadId ?? null,
+      },
+      country,
+    );
     return { ok: true, id: conv.id };
   } catch (error) {
     return {
