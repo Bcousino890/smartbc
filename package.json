@@ -25,7 +25,8 @@
     "idealista-leads:revalidate-match": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-revalidate-match.mts",
     "idealista-leads:rematch-listing": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-rematch-listing.mts",
     "test:viewing-collections": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-viewing-collections-projection.mts && node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-viewing-collections-permissions.mts",
-    "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts"
+    "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
+    "fotocasa:zones": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/fotocasa-zones-dump.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",

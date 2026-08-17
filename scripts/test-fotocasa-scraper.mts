@@ -88,7 +88,16 @@ check(
 
 console.log("\n── catálogo de zonas de Fotocasa ──");
 const madrid = FOTOCASA_LOCATIONS.find((l) => l.slug === "madrid-capital")!;
-check("3 localidades (Madrid capital, Pozuelo, La Moraleja)", FOTOCASA_LOCATIONS.length === 3, FOTOCASA_LOCATIONS.map((l) => l.slug));
+check("el catálogo trae varias localidades, no sólo Madrid", FOTOCASA_LOCATIONS.length >= 3, FOTOCASA_LOCATIONS.map((l) => l.slug));
+for (const slug of ["madrid-capital", "pozuelo-de-alarcon", "la-moraleja", "barcelona-capital"]) {
+  check(`localidad ${slug} en el catálogo`, FOTOCASA_LOCATIONS.some((l) => l.slug === slug));
+}
+// Cada localidad tiene su propio espacio de nombres: el mismo slug de zona
+// ("centro") existe en varias, y por eso la clave lleva la localidad delante.
+check("mismo nombre de zona en localidades distintas no colisiona",
+  isKnownFotocasaZone("madrid-capital/centro") && isKnownFotocasaZone("malaga-capital/centro") &&
+    fotocasaZoneLabel("barcelona-capital/eixample") === "Eixample",
+  fotocasaZoneLabel("barcelona-capital/eixample"));
 check("21 distritos de Madrid capital", madrid.districts.length === 21, madrid.districts.length);
 check("135 barrios en total",
   madrid.districts.reduce((n, d) => n + d.subZones.length, 0) === 135,
