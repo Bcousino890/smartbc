@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  ArrowDownWideNarrow,
   Calendar,
   CalendarPlus,
   Check,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Heart,
   Loader2,
@@ -15,8 +19,14 @@ import {
 } from "lucide-react";
 import {
   removePropertyFromSelection,
+  reorderSelections,
+  setSelectionRating,
   updateSelectionStatus,
 } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
+import { comparePriority, orderByRating, reorderIds } from "@/lib/ordering";
+// Átomo compartido: las estrellas se ven igual aquí y en los enlaces de
+// portales, que es lo que hace que se lean sin pensar.
+import { RatingStars } from "@/components/admin/clientes/portal-links/portal-links-ui";
 import type {
   SelectionStatus,
   SelectionWithProperty,
@@ -59,11 +69,72 @@ export function SelectedPropertiesBlock({
   canCreateItinerary: boolean;
 }) {
   const config = getCountryConfig(country);
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [searchOpen, setSearchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  // Orden optimista: arrastrar tiene que verse al instante, no esperar al
+  // round-trip. Se descarta en cuanto el servidor devuelve la lista nueva.
+  const [draftOrder, setDraftOrder] = useState<string[] | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const selectionsRef = useRef(selections);
+  useEffect(() => {
+    if (selectionsRef.current !== selections) {
+      selectionsRef.current = selections;
+      setDraftOrder(null);
+    }
+  }, [selections]);
+
+  const ordered = useMemo(() => {
+    const base = [...selections].sort((a, b) =>
+      comparePriority(a, b, (x) => x.added_at),
+    );
+    if (!draftOrder) return base;
+    const byId = new Map(base.map((s) => [s.id, s]));
+    const seen = new Set(draftOrder);
+    const out = draftOrder
+      .map((id) => byId.get(id))
+      .filter((s): s is SelectionWithProperty => Boolean(s));
+    for (const s of base) if (!seen.has(s.id)) out.push(s);
+    return out;
+  }, [selections, draftOrder]);
+
+  const commitOrder = (nextIds: string[]) => {
+    setDraftOrder(nextIds);
+    setError(null);
+    startTransition(async () => {
+      const res = await reorderSelections(clientId, nextIds);
+      if (!res.ok) {
+        setDraftOrder(null);
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const dropBefore = (movedId: string, beforeId: string | null) => {
+    const ids = ordered.map((s) => s.id);
+    const next = reorderIds(ids, movedId, beforeId);
+    setDragId(null);
+    setOverId(null);
+    if (next.join() === ids.join()) return;
+    commitOrder(next);
+  };
+
+  const moveBy = (id: string, direction: -1 | 1) => {
+    const ids = ordered.map((s) => s.id);
+    const from = ids.indexOf(id);
+    const to = from + direction;
+    if (from === -1 || to < 0 || to >= ids.length) return;
+    const beforeId = direction === -1 ? ids[to] : (ids[to + 1] ?? null);
+    commitOrder(reorderIds(ids, id, beforeId));
+  };
 
   const counts = useMemo(
     () => ({
@@ -79,14 +150,14 @@ export function SelectedPropertiesBlock({
   );
 
   const visible = useMemo(() => {
-    if (filter === "all") return selections;
+    if (filter === "all") return ordered;
     if (filter === "unplanned") {
-      return selections.filter(
+      return ordered.filter(
         (s) => !s.badges.inItinerary && s.status !== "discarded",
       );
     }
-    return selections.filter((s) => s.status === filter);
-  }, [selections, filter]);
+    return ordered.filter((s) => s.status === filter);
+  }, [ordered, filter]);
 
   const toggle = (id: string) => {
     setChecked((prev) => {
@@ -149,6 +220,39 @@ export function SelectedPropertiesBlock({
               ))}
             </div>
 
+            {canEdit && selections.some((s) => s.rating > 0 || s.client_rating > 0) && (
+              <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => commitOrder(orderByRating(ordered))}
+                  title="Pone arriba lo que TÚ has valorado mejor. Después puedes afinar arrastrando."
+                  className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
+                >
+                  <ArrowDownWideNarrow size={12} strokeWidth={1.75} className="text-gold-dark" />
+                  Ordenar por mi valoración
+                </button>
+                {selections.some((s) => s.client_rating > 0) && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() =>
+                      commitOrder(
+                        orderByRating(
+                          ordered.map((s) => ({ id: s.id, rating: s.client_rating })),
+                        ),
+                      )
+                    }
+                    title="Pone arriba lo que más le ha gustado AL CLIENTE en su enlace privado."
+                    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
+                  >
+                    <ArrowDownWideNarrow size={12} strokeWidth={1.75} className="text-gold-dark" />
+                    Ordenar por lo que dice el cliente
+                  </button>
+                )}
+              </div>
+            )}
+
             {error && (
               <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-[12px] text-rose-700">
                 {error}
@@ -156,7 +260,7 @@ export function SelectedPropertiesBlock({
             )}
 
             <ul className="mt-3 space-y-2">
-              {visible.map((sel) => (
+              {visible.map((sel, i) => (
                 <SelectionRow
                   key={sel.id}
                   selection={sel}
@@ -171,9 +275,37 @@ export function SelectedPropertiesBlock({
                   canEdit={canEdit}
                   canDelete={canDelete}
                   onError={setError}
+                  order={ordered.indexOf(sel) + 1}
+                  isDragging={dragId === sel.id}
+                  isDropTarget={Boolean(dragId) && overId === sel.id && dragId !== sel.id}
+                  onDragStart={() => setDragId(sel.id)}
+                  onDragEnter={() => setOverId(sel.id)}
+                  onDragEnd={() => {
+                    setDragId(null);
+                    setOverId(null);
+                  }}
+                  onDrop={() => dragId && dropBefore(dragId, sel.id)}
+                  onMove={(direction) => moveBy(sel.id, direction)}
+                  canMoveUp={i > 0}
+                  canMoveDown={i < visible.length - 1}
                 />
               ))}
             </ul>
+
+            {/* Soltar aquí = al final del todo. Sin esta zona no hay forma de
+                mandar una propiedad detrás de la última. */}
+            {dragId && (
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  dropBefore(dragId, null);
+                }}
+                className="mt-2 rounded-lg border border-dashed border-gold/40 bg-gold/5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-dark"
+              >
+                Soltar al final
+              </div>
+            )}
 
             {visible.length === 0 && (
               <p className="mt-3 text-center text-[12px] text-ink/45">
@@ -233,6 +365,16 @@ function SelectionRow({
   canEdit,
   canDelete,
   onError,
+  order,
+  isDragging,
+  isDropTarget,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  onDrop,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: {
   selection: SelectionWithProperty;
   country: Country;
@@ -242,6 +384,17 @@ function SelectionRow({
   canEdit: boolean;
   canDelete: boolean;
   onError: (msg: string | null) => void;
+  /** Puesto en el orden de prioridad, 1-based. */
+  order: number;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragEnd: () => void;
+  onDrop: () => void;
+  onMove: (direction: -1 | 1) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const config = getCountryConfig(country);
   const [pending, startTransition] = useTransition();
@@ -266,13 +419,58 @@ function SelectionRow({
 
   return (
     <li
+      // El arrastre nativo de HTML5 no pide dependencias pero no existe en
+      // táctil: las flechas de al lado son la única vía desde una tablet.
+      draggable={canEdit}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", selection.id);
+        onDragStart();
+      }}
+      onDragEnter={onDragEnter}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
       className={cn(
         "rounded-xl border bg-white/65 px-3 py-2.5 transition",
         checked ? "border-gold/50 bg-gold/5" : "border-ink/5",
         pending && "opacity-60",
+        isDragging && "opacity-40",
+        isDropTarget && "border-t-2 border-t-gold",
       )}
     >
       <div className="flex items-start gap-3">
+        {canEdit && (
+          <div className="mt-0.5 flex shrink-0 flex-col items-center">
+            <button
+              type="button"
+              disabled={!canMoveUp}
+              onClick={() => onMove(-1)}
+              aria-label="Subir en la prioridad"
+              className="text-ink/25 transition hover:text-gold-dark disabled:opacity-0"
+            >
+              <ChevronUp size={13} strokeWidth={2} />
+            </button>
+            <span
+              className="cursor-grab font-serif text-[11px] leading-none text-ink/35 active:cursor-grabbing"
+              title="Arrastra para cambiar la prioridad"
+            >
+              {String(order).padStart(2, "0")}
+            </span>
+            <button
+              type="button"
+              disabled={!canMoveDown}
+              onClick={() => onMove(1)}
+              aria-label="Bajar en la prioridad"
+              className="text-ink/25 transition hover:text-gold-dark disabled:opacity-0"
+            >
+              <ChevronDown size={13} strokeWidth={2} />
+            </button>
+          </div>
+        )}
         <button
           type="button"
           onClick={onToggle}
@@ -313,9 +511,40 @@ function SelectionRow({
                 {prop.squareMeters ? ` · ${prop.squareMeters} m²` : ""}
               </p>
             </div>
-            <p className="shrink-0 text-[12px] font-semibold text-ink">
-              {priceLabel}
-            </p>
+            <div className="shrink-0 text-right">
+              <p className="text-[12px] font-semibold text-ink">{priceLabel}</p>
+              <div className="mt-1 flex items-center justify-end gap-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-ink/35">
+                  Yo
+                </span>
+                <RatingStars
+                  value={selection.rating}
+                  disabled={!canEdit || pending}
+                  onChange={
+                    canEdit
+                      ? (next) =>
+                          startTransition(async () => {
+                            const res = await setSelectionRating(selection.id, next);
+                            if (!res.ok) onError(res.error);
+                          })
+                      : undefined
+                  }
+                />
+              </div>
+              {/* La opinión del cliente solo aparece cuando la ha dado: una
+                  fila de estrellas vacías se leería como "no le gusta". */}
+              {selection.client_feedback_at && (
+                <div
+                  className="mt-1 flex items-center justify-end gap-1.5"
+                  title="Lo que ha valorado el cliente desde su enlace privado"
+                >
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gold-dark">
+                    Cliente
+                  </span>
+                  <RatingStars value={selection.client_rating} />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">

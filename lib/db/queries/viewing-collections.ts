@@ -394,7 +394,10 @@ export async function getClientSelection(
       .from("client_property_selections")
       .select(`*, properties!inner ( ${SELECTION_PROPERTY_SELECT} )`)
       .eq("client_id", clientId)
-      .order("added_at", { ascending: false }),
+      // El orden lo fija el agente arrastrando. `nullsFirst: false` evita que
+      // Postgres suba arriba las filas sin posición, que es su default en ASC.
+      .order("position", { ascending: true, nullsFirst: false })
+      .order("added_at", { ascending: true }),
     admin
       .from("viewing_stops")
       .select(

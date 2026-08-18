@@ -63,6 +63,18 @@ export type ClientPropertySelectionRow = {
   status: SelectionStatus;
   source: SelectionSource;
   added_by: string | null;
+  /** Nota que pone EL AGENTE (0 = sin valorar). */
+  rating: number;
+  /** Orden de trabajo del agente. Enteros de 100 en 100. */
+  position: number | null;
+  /**
+   * Lo que dice EL CLIENTE desde su enlace privado. Deliberadamente separado
+   * de `rating`: cuando él puntúa un piso con 2, lo que hay que ver en la
+   * ficha es "yo le puse 5 y a él no le gusta", no un número sin dueño.
+   */
+  client_rating: number;
+  client_rank: number | null;
+  client_feedback_at: string | null;
   /** 🔒 INTERNO — nunca en el contrato público. */
   agent_notes: string | null;
   country: string;

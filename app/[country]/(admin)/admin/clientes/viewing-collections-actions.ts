@@ -164,6 +164,22 @@ async function clientIdOfStop(
 // Selección
 // ============================================================================
 
+/**
+ * Siguiente posición libre de la cola de un cliente. Las propiedades nuevas
+ * entran AL FINAL: el orden de arriba lo ha puesto el agente a mano y una
+ * incorporación no debe colarse por delante.
+ */
+async function nextSelectionPosition(clientId: string): Promise<number> {
+  const { data } = await db()
+    .from("client_property_selections")
+    .select("position")
+    .eq("client_id", clientId)
+    .order("position", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  return (((data as { position: number | null } | null)?.position ?? 0) + POSITION_STEP);
+}
+
 export async function addPropertyToSelection(
   clientId: string,
   propertyId: string,
@@ -193,6 +209,7 @@ export async function addPropertyToSelection(
       property_id: propertyId,
       source,
       added_by: g.userId,
+      position: await nextSelectionPosition(clientId),
     })
     .select("id")
     .single();
@@ -219,6 +236,7 @@ export async function addPropertiesToSelection(
     .in("property_id", propertyIds);
 
   const already = new Set((existing ?? []).map((r: any) => r.property_id));
+  let position = await nextSelectionPosition(clientId);
   const rows = propertyIds
     .filter((id) => !already.has(id))
     .map((id) => ({
@@ -226,6 +244,7 @@ export async function addPropertiesToSelection(
       property_id: id,
       source,
       added_by: g.userId,
+      position: (position += POSITION_STEP) - POSITION_STEP,
     }));
 
   if (rows.length === 0) {
@@ -1244,3 +1263,69 @@ export async function revokeCollectionShare(
   return { ok: true };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * La nota que pone EL AGENTE sobre cuánto le gusta al cliente. No toca
+ * `client_rating`, que es lo que dice el propio cliente desde su enlace: son
+ * dos opiniones y se leen juntas.
+ */
+export async function setSelectionRating(
+  selectionId: string,
+  rating: number,
+): Promise<ActionResult> {
+  if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
+    return { ok: false, error: "La valoración va de 0 a 5." };
+  }
+
+  const { data } = await db()
+    .from("client_property_selections")
+    .select("client_id")
+    .eq("id", selectionId)
+    .maybeSingle();
+  const clientId = (data as { client_id: string } | null)?.client_id;
+  if (!clientId) return { ok: false, error: "Esa propiedad ya no está en la selección." };
+
+  const g = await gate("edit", clientId);
+  if (!g.ok) return g;
+
+  const { error } = await db()
+    .from("client_property_selections")
+    .update({ rating })
+    .eq("id", selectionId);
+  if (error) return { ok: false, error: translateDbError(error.message) };
+
+  revalidateClient(clientId);
+  return { ok: true };
+}
+
+/**
+ * Reescribe el orden de la selección. Llega la lista COMPLETA de ids ya
+ * ordenada; la función de base de datos filtra por client_id, así que una
+ * lista manipulada no puede mover la selección de otra ficha.
+ */
+export async function reorderSelections(
+  clientId: string,
+  orderedIds: string[],
+): Promise<ActionResult<{ moved: number }>> {
+  const g = await gate("edit", clientId);
+  if (!g.ok) return g;
+
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return { ok: false, error: "No hay nada que ordenar." };
+  }
+  if (orderedIds.length > 500) {
+    return { ok: false, error: "Demasiadas propiedades para reordenar de una vez." };
+  }
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    return { ok: false, error: "La lista de orden trae ids repetidos." };
+  }
+
+  const { data, error } = await db().rpc("reorder_client_selections", {
+    p_client_id: clientId,
+    p_ids: orderedIds,
+  });
+  if (error) return { ok: false, error: translateDbError(error.message) };
+
+  revalidateClient(clientId);
+  return { ok: true, moved: typeof data === "number" ? data : orderedIds.length };
+}
