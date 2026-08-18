@@ -141,7 +141,13 @@ export function ShortlistView({
   const groups = useMemo(() => {
     const by = (d: ShortlistDecision) => items.filter((i) => i.decision === d);
     return {
-      must: by("must_visit"),
+      // Las prioritarias SE ORDENAN POR RANGO, no por el orden del array. Al
+      // mover una, el cambio optimista toca el rango pero no reordena la
+      // lista: sin este sort, el número cambiaba y la tarjeta se quedaba
+      // donde estaba hasta recargar.
+      must: by("must_visit").sort(
+        (a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9),
+      ),
       undecided: by("undecided"),
       maybe: by("maybe"),
       no: by("not_for_me"),
