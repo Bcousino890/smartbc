@@ -74,6 +74,9 @@ function stop(
   );
   return {
     order,
+    // Banco de pruebas visual: no hay base de datos detrás, así que la
+    // valoración no se puede guardar.
+    clientRating: 0,
     timeLabel: null,
     timePending: false,
     durationLabel: "30 min",

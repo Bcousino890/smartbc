@@ -285,6 +285,39 @@ llama después necesita leer lo que dijo el anterior, no pisarlo).
   cliente. Si el vínculo falla, la propiedad YA está creada — se avisa en vez
   de deshacer una importación buena.
 
+### La valoración del cliente (migraciones 0137-0138)
+`client_property_selections` guarda DOS opiniones sobre la misma propiedad y no
+deben fusionarse nunca:
+
+| columnas | quién |
+|---|---|
+| `rating` / `position` | el AGENTE: su nota y su orden de trabajo |
+| `client_rating` / `client_rank` / `client_feedback_at` | EL CLIENTE, desde `/v/[token]` |
+
+Cuando el cliente puntúa un piso con 2, lo que hay que ver en la ficha es "yo le
+puse 5 y a él no le gusta", no un número del que ya no se sabe de quién es. En
+el panel la fila del cliente solo aparece si ha contestado: cinco estrellas
+vacías se leerían como "no le gusta".
+
+⚠️ **Es la única escritura de todo el esquema que llega sin sesión.** Está
+encerrada en `record_collection_feedback()`, y las barreras son deliberadas:
+- Se entra por el **token**, nunca por un id de selección. La proyección pública
+  **no expone un solo UUID** (`scripts/test-viewing-collections-projection.mts`
+  lo vigila), así que el navegador nombra la residencia por su **puesto**
+  (1..N) y el servidor lo traduce con `compareStopsByDay` — el MISMO comparador
+  que las numeró. Si alguien ordena distinto en los dos sitios, el cliente
+  valora el piso de al lado.
+- La función revalida token ↔ parada dentro de la BD y solo toca las tres
+  columnas `client_*`. Token revocado, caducado, inventado, parada de otra
+  colección o nota fuera de rango → devuelve 0 sin escribir (verificado contra
+  Postgres 16).
+- La ruta responde **204 tanto si vale como si no**: distinguir "no existe" de
+  "no es tuyo" ya es información. Freno de 20 valoraciones por minuto y token.
+- ⚠️ La función se redefinió en **0138** con `p_rating integer` en vez de
+  `smallint`: PostgREST castea desde JSON y `smallint` es el tipo que más
+  fricción da. El `DROP` explícito de la firma vieja NO es opcional — con las
+  dos, PostgREST no sabe cuál llamar.
+
 **Extensión de Chrome** (`chrome-extension/portal-links.js`): pone un **＋** en
 cada anuncio de Idealista / Fotocasa / Habitaclia / pisos.com y una barra para
 mandar los marcados a la ficha de un cliente con el compañero que los va a

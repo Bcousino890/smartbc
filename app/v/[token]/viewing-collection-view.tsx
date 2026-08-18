@@ -190,6 +190,7 @@ export function ViewingCollectionView({
         onStopView={trackStopView}
         onStopExpand={(order) => track("stop_expand", { order })}
         onSmartLinkClick={onLeaveToProperty}
+        collectionToken={collectionToken}
       />
     );
   }
@@ -249,6 +250,7 @@ export function ViewingCollectionView({
                 onView={() => trackStopView(stop.order)}
                 onExpand={() => track("stop_expand", { order: stop.order })}
                 onSmartLinkClick={() => onLeaveToProperty(stop.order)}
+                collectionToken={collectionToken}
               />
             ))}
           </div>

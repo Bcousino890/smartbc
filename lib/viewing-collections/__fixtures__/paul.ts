@@ -74,8 +74,14 @@ function property(over: Partial<RawPublicProperty> = {}): RawPublicProperty {
   };
 }
 
+let stopSeq = 0;
+
 function stop(over: Partial<RawPublicStop> = {}): RawPublicStop {
   return {
+    // Id estable y legible: los tests comparan proyecciones enteras y un uuid
+    // aleatorio las haría distintas en cada ejecución.
+    id: `00000000-0000-4000-8000-${String(++stopSeq).padStart(12, "0")}`,
+    client_rating: 0,
     position: 100,
     scheduled_at: `${MONDAY}T08:00:00Z`, // 10:00 en Europe/Madrid (CEST)
     duration_minutes: 30,

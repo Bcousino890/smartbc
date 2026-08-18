@@ -18,6 +18,7 @@ import type {
   PublicViewingStop,
 } from "@/lib/viewing-collections/public-contract";
 import { cn } from "@/lib/utils";
+import { ResidenceRating } from "./residence-rating";
 import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
 import { PrivateGallery } from "./private-gallery";
 import {
@@ -64,6 +65,7 @@ export function ResidenceChapter({
   registerRef,
   dict,
   rtl = false,
+  collectionToken = "",
 }: {
   stop: PublicViewingStop;
   total: number;
@@ -73,6 +75,8 @@ export function ResidenceChapter({
   registerRef: (order: number, el: HTMLElement | null) => void;
   dict: CollectionDictionary;
   rtl?: boolean;
+  /** Vacío en la previsualización del agente: entonces no se guarda nada. */
+  collectionToken?: string;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const viewed = useRef(false);
@@ -343,6 +347,17 @@ export function ResidenceChapter({
                   {dict.exploreHint}
                 </p>
               </div>
+            )}
+
+            {/* Lo único que el cliente escribe. No aparece en una residencia
+                que se ha caído: preguntar por algo cancelado es ruido. */}
+            {!cancelled && (
+              <ResidenceRating
+                order={stop.order}
+                initialRating={stop.clientRating}
+                collectionToken={collectionToken}
+                dict={dict}
+              />
             )}
           </Reveal>
         </>

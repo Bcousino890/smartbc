@@ -115,6 +115,10 @@ export type CollectionDictionary = {
   addressOnConfirm: string;
   explore: string;
   exploreHint: string;
+  /** Valoración del cliente al pie de cada residencia. */
+  feedbackPrompt: string;
+  feedbackHint: string;
+  feedbackSaved: string;
 
   reserved: string;
   sold: string;
@@ -185,6 +189,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
       "La dirección exacta se facilita al confirmar la visita.",
     explore: "Explorar residencia",
     exploreHint: "Galería completa, descripción, vídeo y planos.",
+    feedbackPrompt: "¿Qué le parece esta residencia?",
+    feedbackHint: "Solo lo vemos nosotros: nos ayuda a afinar la selección.",
+    feedbackSaved: "Anotado, gracias.",
     reserved: "Reservada",
     sold: "Vendida",
     noLongerAvailable: "Esta residencia ya no está disponible.",
@@ -227,6 +234,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
       "The exact address is provided once the viewing is confirmed.",
     explore: "Explore residence",
     exploreHint: "Full gallery, description, video and floor plans.",
+    feedbackPrompt: "What do you make of this residence?",
+    feedbackHint: "Only we see this — it helps us refine the selection.",
+    feedbackSaved: "Noted, thank you.",
     reserved: "Reserved",
     sold: "Sold",
     noLongerAvailable: "This residence is no longer available.",
@@ -269,6 +279,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
       "L'adresse exacte est communiquée une fois la visite confirmée.",
     explore: "Découvrir la résidence",
     exploreHint: "Galerie complète, description, vidéo et plans.",
+    feedbackPrompt: "Que pensez-vous de cette résidence ?",
+    feedbackHint: "Vous seul et nous : cela nous aide à affiner la sélection.",
+    feedbackSaved: "C’est noté, merci.",
     reserved: "Réservée",
     sold: "Vendue",
     noLongerAvailable: "Cette résidence n'est plus disponible.",
@@ -311,6 +324,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
       "L'indirizzo esatto viene fornito alla conferma della visita.",
     explore: "Esplora la residenza",
     exploreHint: "Galleria completa, descrizione, video e planimetrie.",
+    feedbackPrompt: "Che ne pensa di questa residenza?",
+    feedbackHint: "Lo vediamo solo noi: ci aiuta a perfezionare la selezione.",
+    feedbackSaved: "Annotato, grazie.",
     reserved: "Riservata",
     sold: "Venduta",
     noLongerAvailable: "Questa residenza non è più disponibile.",
@@ -353,6 +369,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
       "Die genaue Adresse wird nach Bestätigung der Besichtigung mitgeteilt.",
     explore: "Residenz entdecken",
     exploreHint: "Vollständige Galerie, Beschreibung, Video und Grundrisse.",
+    feedbackPrompt: "Wie gefällt Ihnen diese Residenz?",
+    feedbackHint: "Nur wir sehen das — es hilft uns, die Auswahl zu verfeinern.",
+    feedbackSaved: "Notiert, vielen Dank.",
     reserved: "Reserviert",
     sold: "Verkauft",
     noLongerAvailable: "Diese Residenz ist nicht mehr verfügbar.",
@@ -395,6 +414,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     addressOnConfirm: "يُقدَّم العنوان الدقيق عند تأكيد المعاينة.",
     explore: "استكشاف المسكن",
     exploreHint: "معرض كامل، وصف، فيديو ومخططات.",
+    feedbackPrompt: "ما رأيك في هذا المسكن؟",
+    feedbackHint: "نحن وحدنا نطّلع على ذلك، ويساعدنا في تنقيح الاختيار.",
+    feedbackSaved: "تم التسجيل، شكراً لك.",
     reserved: "محجوز",
     sold: "مُباع",
     noLongerAvailable: "لم يعد هذا المسكن متاحاً.",
@@ -436,6 +458,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     addressOnConfirm: "Kesin adres, ziyaret onaylandığında paylaşılır.",
     explore: "Rezidansı keşfet",
     exploreHint: "Tam galeri, açıklama, video ve planlar.",
+    feedbackPrompt: "Bu konut hakkında ne düşünüyorsunuz?",
+    feedbackHint: "Yalnızca biz görüyoruz; seçkiyi iyileştirmemize yardımcı oluyor.",
+    feedbackSaved: "Not edildi, teşekkürler.",
     reserved: "Rezerve",
     sold: "Satıldı",
     noLongerAvailable: "Bu rezidans artık mevcut değil.",
@@ -478,6 +503,9 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     addressOnConfirm: "הכתובת המדויקת תימסר עם אישור הביקור.",
     explore: "לגלות את הנכס",
     exploreHint: "גלריה מלאה, תיאור, וידאו ותוכניות.",
+    feedbackPrompt: "מה דעתך על הנכס הזה?",
+    feedbackHint: "רק אנחנו רואים זאת — זה עוזר לנו לדייק את הבחירה.",
+    feedbackSaved: "נרשם, תודה.",
     reserved: "שמור",
     sold: "נמכר",
     noLongerAvailable: "נכס זה אינו זמין עוד.",

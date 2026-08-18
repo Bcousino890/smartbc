@@ -79,6 +79,7 @@ const PUBLIC_COLLECTION_SELECT = `
     client:profiles!viewing_itineraries_client_id_fkey ( full_name ),
     agent:profiles!viewing_itineraries_created_by_fkey ( full_name, email, phone, avatar_url ),
     viewing_stops (
+      id,
       position,
       scheduled_at,
       time_pending,
@@ -90,6 +91,7 @@ const PUBLIC_COLLECTION_SELECT = `
       created_at,
       property_shares ( token ),
       client_property_selections!inner (
+        client_rating,
         properties!inner (
           slug, title, title_rent, property_type,
           zone, subzone, address,
@@ -164,6 +166,8 @@ function shapeRawCollection(row: any): RawCollectionData | null {
       if (!prop) return null;
       const share = pickOne<any>(s.property_shares);
       return {
+        id: s.id,
+        client_rating: sel?.client_rating ?? 0,
         position: s.position,
         scheduled_at: s.scheduled_at,
         time_pending: s.time_pending ?? false,
@@ -287,6 +291,45 @@ export async function getPreviewCollection(
     shareId: "",
     collection: toPublicViewingCollection(shaped),
   };
+}
+
+/**
+ * Traduce el `order` que ve el cliente (1..N) al id de la parada.
+ *
+ * Existe porque la proyección pública NO expone ni un UUID, así que el
+ * navegador solo puede nombrar una residencia por su puesto en la jornada. La
+ * traducción usa el MISMO filtro y el MISMO comparador que la proyección
+ * (`compareStopsByDay`, que vive aparte justo para esto): si aquí se ordenara
+ * de otra forma, el cliente valoraría la residencia de al lado.
+ *
+ * Devuelve null si el token no vale, ha caducado, o ese puesto no existe.
+ */
+export async function resolveStopIdByPublicOrder(
+  token: string,
+  order: number,
+): Promise<string | null> {
+  if (!Number.isInteger(order) || order < 1) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { data, error } = await supabase
+    .from("viewing_collection_shares")
+    .select(PUBLIC_COLLECTION_SELECT)
+    .eq("token", token)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const shaped = shapeRawCollection(data);
+  if (!shaped) return null;
+
+  const visible = shaped.stops
+    .filter((s) => s.hidden_from_client === false)
+    .sort(compareStopsByDay);
+
+  return visible[order - 1]?.id ?? null;
 }
 
 /** Apertura registrada en servidor: no la bloquea un ad-blocker. */

@@ -41,6 +41,7 @@ import { CollectionCover } from "./collection-cover";
 import { AgentContactData } from "./closing";
 import { statusWord } from "./day-overview";
 import { PrivateGallery } from "./private-gallery";
+import { ResidenceRating } from "./residence-rating";
 import {
   ChapterMark,
   DataPoint,
@@ -64,12 +65,15 @@ export function BookMode({
   onStopView,
   onStopExpand,
   onSmartLinkClick,
+  collectionToken = "",
 }: {
   collection: PublicViewingCollection;
   dict: CollectionDictionary;
   onStopView: (order: number) => void;
   onStopExpand: (order: number) => void;
   onSmartLinkClick: (order: number) => void;
+  /** Vacío en la previsualización del agente: entonces no se guarda nada. */
+  collectionToken?: string;
 }) {
   const rtl = isRtl(collection.language);
 
@@ -251,6 +255,7 @@ export function BookMode({
             onStopExpand(p.stop.order);
           }}
           onSmartLinkClick={() => onSmartLinkClick(p.stop.order)}
+          collectionToken={collectionToken}
         />
       )}
       {p.kind === "advisor" && (
@@ -538,12 +543,14 @@ function BookResidencePage({
   dict,
   onOpenGallery,
   onSmartLinkClick,
+  collectionToken,
 }: {
   stop: PublicViewingStop;
   total: number;
   dict: CollectionDictionary;
   onOpenGallery: () => void;
   onSmartLinkClick: () => void;
+  collectionToken: string;
 }) {
   const flipped = stop.order % 2 === 0;
   const cancelled = stop.status === "cancelled";
@@ -702,6 +709,16 @@ function BookResidencePage({
           <p className="mt-4 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30 md:mt-7">
             Ref. {stop.bcReference}
           </p>
+        )}
+
+        {!cancelled && (
+          <ResidenceRating
+            order={stop.order}
+            initialRating={stop.clientRating}
+            collectionToken={collectionToken}
+            dict={dict}
+            compact
+          />
         )}
        </div>
       </div>

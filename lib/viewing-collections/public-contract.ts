@@ -49,6 +49,16 @@ export type PublicViewingStop = {
   /** 1..N sobre las paradas VISIBLES, recalculado tras filtrar. Sin huecos. */
   order: number;
 
+  /**
+   * Lo que YA valoró el cliente (0 = todavía no ha dicho nada).
+   *
+   * Para GUARDAR una valoración nueva se manda `order`, nunca un id: la
+   * proyección pública no expone un solo UUID (hay un test que lo vigila) y el
+   * servidor traduce ese orden a la parada con el MISMO comparador que usó
+   * para numerarlas.
+   */
+  clientRating: number;
+
   timeLabel: string | null;
   /** true = el agente ha declarado que la hora está por confirmar. Sin hora y
    *  sin esto, la parada simplemente no tiene hora (cancelada, por ejemplo). */

@@ -61,6 +61,9 @@ export type RawPublicProperty = {
 };
 
 export type RawPublicStop = {
+  id: string;
+  /** Valoración que ya dejó el cliente en su enlace. */
+  client_rating?: number | null;
   position: number;
   scheduled_at: string | null;
   time_pending?: boolean;
@@ -384,6 +387,8 @@ export function toPublicViewingCollection(
 
     return {
       order: i + 1,
+      clientRating:
+        typeof stop.client_rating === "number" ? stop.client_rating : 0,
       timeLabel: formatTimeLabel(stop.scheduled_at, tz),
       // Solo se anuncia como pendiente si de verdad no hay hora: una parada
       // con hora nunca debe leerse "por confirmar".
