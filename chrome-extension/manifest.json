@@ -1,11 +1,14 @@
 {
   "manifest_version": 3,
   "name": "SmartBC → Idealista",
-  "version": "1.7.0",
-  "description": "Rellena y publica anuncios en Idealista con los datos de SmartBC, y captura los contactos del inbox hacia el portal.",
+  "version": "1.8.0",
+  "description": "Rellena y publica anuncios en Idealista con los datos de SmartBC, captura los contactos del inbox y manda anuncios de portales a la ficha de un cliente.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.idealista.com/*",
+    "https://www.fotocasa.es/*",
+    "https://www.habitaclia.com/*",
+    "https://www.pisos.com/*",
     "https://portal.bcousinoprop.com/*"
   ],
   "options_ui": {
@@ -21,6 +24,16 @@
     {
       "matches": ["https://www.idealista.com/inbox*"],
       "js": ["inbox-leads.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.idealista.com/*",
+        "https://www.fotocasa.es/*",
+        "https://www.habitaclia.com/*",
+        "https://www.pisos.com/*"
+      ],
+      "js": ["portal-links.js"],
       "run_at": "document_idle"
     }
   ]

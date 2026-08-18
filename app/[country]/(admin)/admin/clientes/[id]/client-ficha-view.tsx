@@ -31,6 +31,11 @@ import {
   addPropertyToSelection,
 } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
 import { ViewingItinerariesBlock } from "@/components/admin/viewing-collections/viewing-itineraries-block";
+import { PortalLinksBlock } from "@/components/admin/clientes/portal-links/portal-links-block";
+import type {
+  PortalLinkWithNotes,
+  StaffRef,
+} from "@/lib/portal-links/types";
 import type {
   ItineraryWithStops,
   SelectionWithProperty,
@@ -89,6 +94,16 @@ const VISIT_STATUS_STYLES: Record<
   },
 };
 
+export type PortalLinksProps = {
+  links: PortalLinkWithNotes[];
+  staff: StaffRef[];
+  /** Para el filtro "Míos" de quien entra a llamar. */
+  currentUserId: string | null;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+};
+
 export type ViewingCollectionsProps = {
   selections: SelectionWithProperty[];
   itineraries: ItineraryWithStops[];
@@ -102,11 +117,14 @@ export function ClientFichaView({
   client,
   favorites,
   visits,
+  portalLinks,
   viewingCollections,
 }: {
   client: AdminClient;
   favorites: FavoriteRef[];
   visits: RawVisit[];
+  /** null cuando el módulo está apagado o el agente no tiene acceso. */
+  portalLinks: PortalLinksProps | null;
   /** null cuando el módulo está apagado o el agente no tiene acceso. */
   viewingCollections: ViewingCollectionsProps | null;
 }) {
@@ -278,6 +296,23 @@ export function ClientFichaView({
             }
             canAddToSelection={Boolean(viewingCollections?.canCreate)}
           />
+
+          {/* El orden narra el flujo: primero lo que todavía es de otros
+              (enlaces de portales), después lo que ya es nuestro (selección) y
+              al final la jornada de visitas. */}
+          {portalLinks && (
+            <PortalLinksBlock
+              clientId={client.id}
+              clientName={client.firstName}
+              country={country}
+              currentUserId={portalLinks.currentUserId}
+              links={portalLinks.links}
+              staff={portalLinks.staff}
+              canCreate={portalLinks.canCreate}
+              canEdit={portalLinks.canEdit}
+              canDelete={portalLinks.canDelete}
+            />
+          )}
 
           {viewingCollections && (
             <>

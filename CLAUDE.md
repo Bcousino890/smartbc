@@ -236,3 +236,53 @@ oficial de casos de prueba de Idealista (`scripts/idealista-run-official-testcas
 El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
 selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo
 importan para el listado oficial de pruebas, no para `mapper.ts`.
+
+## Enlaces de portales en la ficha del cliente (`lib/portal-links/**`)
+El paso que faltaba **antes** de la selección: el piso que se ve con el cliente
+en Idealista todavía no es ficha nuestra, así que no cabe en
+`client_property_selections` (que exige un `property_id` real). El flujo entero:
+
+```
+se marca en el portal → llega a la ficha → se llama → o se descarta
+  → o se crea la ficha → entra en la selección → itinerario → colección privada
+```
+
+Migración **0135**: `client_portal_links` (el anuncio) y
+`client_portal_link_notes` (el registro de llamadas, que es un HILO — quien
+llama después necesita leer lo que dijo el anterior, no pisarlo).
+
+**Cosas que conviene saber antes de tocarlo:**
+- **La deduplicación es la promesa del módulo.** `url_key` es la URL
+  normalizada (sin `www.`, sin barra final, sin parámetros de tracking) y, si
+  el portal lleva la referencia del anuncio en la ruta, es directamente
+  `host#referencia`. Gracias a eso se puede recorrer un listado entero
+  reenviando páginas sin sembrar duplicados. Está cubierto por
+  `npm run test:portal-links` — si tocas `parsePortalUrl`, ejecútalo.
+- **`status = 'converted'` NO se elige en un desplegable.** El CHECK
+  `cpl_converted_requires_property` impide que exista sin ficha vinculada; solo
+  lo escribe `linkPropertyToPortalLink()`, que además mete la propiedad en la
+  selección del cliente. Si alguien "simplifica" ese CHECK, el estado empieza a
+  mentir.
+- **No hay recurso de permisos nuevo:** usa `viewing_collections`, porque es la
+  fase previa del mismo trabajo. Efecto colateral querido: si se apaga el flag
+  del módulo de colecciones, el panel de enlaces desaparece con él.
+- **Sin superficie pública.** El cliente nunca ve estos enlaces ni las notas
+  internas: no hay proyección a `/v/[token]` ni RLS para anon.
+- **Crear la ficha reutiliza el importador por enlace**
+  (`/admin/propiedades/importar?url=…&linkId=…&clienteId=…`): previsualiza
+  solo, y al confirmar vincula la propiedad al enlace y vuelve a la ficha del
+  cliente. Si el vínculo falla, la propiedad YA está creada — se avisa en vez
+  de deshacer una importación buena.
+
+**Extensión de Chrome** (`chrome-extension/portal-links.js`): pone un **＋** en
+cada anuncio de Idealista / Fotocasa / Habitaclia / pisos.com y una barra para
+mandar los marcados a la ficha de un cliente con el compañero que los va a
+llamar ya asignado. Usa el **mismo token** que los leads del inbox. Rutas:
+`POST /api/extension/portal-links` y `GET /api/extension/clients` (Bearer +
+CORS por lista explícita de orígenes — nunca `*`: estas rutas escriben en la
+ficha de un cliente).
+
+⚠️ La extracción del listado (título, precio, m²…) va anclada a **URLs y regex
+de texto, nunca a clases CSS**. Si un portal cambia su maquetación el campo
+llega vacío pero **el enlace se envía igual**, que es lo único imprescindible
+para llamar. No "arregles" eso metiendo selectores CSS: duran semanas.

@@ -10,6 +10,10 @@ import {
   getClientSelection,
   getViewingCollectionsSettings,
 } from "@/lib/db/queries/viewing-collections";
+import {
+  getAssignableStaff,
+  getClientPortalLinks,
+} from "@/lib/db/queries/portal-links";
 import type { Country } from "@/lib/country-config";
 import { ClientFichaView } from "./client-ficha-view";
 
@@ -40,6 +44,13 @@ export default async function ClientFichaPage({
 
   const [selections, itineraries] = inScope
     ? await Promise.all([getClientSelection(id), getClientItineraries(id)])
+    : [[], []];
+
+  // Enlaces de portales: mismo gate que la colección (mismo permiso, misma
+  // ficha, mismo trabajo en dos fases). El listado de compañeros solo hace
+  // falta si el bloque se va a pintar.
+  const [portalLinks, staff] = inScope
+    ? await Promise.all([getClientPortalLinks(id), getAssignableStaff()])
     : [[], []];
 
   // getClientById retorna datos con count embebido distinto al getClients.
@@ -90,6 +101,18 @@ export default async function ClientFichaPage({
         propertyTitle: v.properties?.title ?? null,
         propertySlug: v.properties?.slug ?? null,
       }))}
+      portalLinks={
+        inScope
+          ? {
+              links: portalLinks,
+              staff,
+              currentUserId: profile?.id ?? null,
+              canCreate: Boolean(vc?.create),
+              canEdit: Boolean(vc?.edit),
+              canDelete: Boolean(vc?.delete),
+            }
+          : null
+      }
       viewingCollections={
         inScope
           ? {

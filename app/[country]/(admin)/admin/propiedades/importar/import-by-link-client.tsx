@@ -8,8 +8,8 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { useState, useTransition } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   confirmByLink,
   previewByLink,
@@ -66,9 +66,18 @@ export function ImportByLinkClient({
 }) {
   const router = useRouter();
   const params = useParams<{ country?: string }>();
+  const searchParams = useSearchParams();
   const country = isCountry(params?.country) ? params.country : "es";
   const config = getCountryConfig(country);
-  const [url, setUrl] = useState("");
+
+  // Se llega aquí desde el bloque "Enlaces de portales" de una ficha de
+  // cliente con el anuncio ya elegido. Al confirmar, la ficha creada se
+  // vincula a ese enlace y entra en la selección del cliente.
+  const prefilledUrl = searchParams.get("url") ?? "";
+  const portalLinkId = searchParams.get("linkId");
+  const clienteId = searchParams.get("clienteId");
+
+  const [url, setUrl] = useState(prefilledUrl);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,25 +85,40 @@ export function ImportByLinkClient({
   const [previewing, startPreview] = useTransition();
   const [confirming, startConfirm] = useTransition();
 
-  function handlePreview() {
-    setError(null);
-    setSuccess(null);
-    startPreview(async () => {
-      const result = await previewByLink(url);
-      if (!result.ok) {
-        setError(result.error);
-        setPreview(null);
-        setForm(null);
-        return;
-      }
-      setPreview(result.preview);
-      // Los pisos importados por link van TODOS a la agencia genérica
-      // "Portales externos" (slug `portales-externos`). El usuario puede
-      // recategorizar después desde la ficha si tiene un acuerdo con la
-      // agencia o portal concretos.
-      setForm(previewToFormState(result.preview, "portales-externos"));
-    });
-  }
+  const handlePreview = useCallback(
+    (rawUrl?: string) => {
+      const target = (rawUrl ?? url).trim();
+      if (!target) return;
+      setError(null);
+      setSuccess(null);
+      startPreview(async () => {
+        const result = await previewByLink(target);
+        if (!result.ok) {
+          setError(result.error);
+          setPreview(null);
+          setForm(null);
+          return;
+        }
+        setPreview(result.preview);
+        // Los pisos importados por link van TODOS a la agencia genérica
+        // "Portales externos" (slug `portales-externos`). El usuario puede
+        // recategorizar después desde la ficha si tiene un acuerdo con la
+        // agencia o portal concretos.
+        setForm(previewToFormState(result.preview, "portales-externos"));
+      });
+    },
+    [url],
+  );
+
+  // Con el enlace ya en la URL, la previsualización arranca sola: quien viene
+  // de la ficha del cliente ya eligió el anuncio, no tiene que pulsar otra vez.
+  // El ref evita repetirla si React remonta el componente.
+  const autoPreviewed = useRef(false);
+  useEffect(() => {
+    if (!prefilledUrl || autoPreviewed.current) return;
+    autoPreviewed.current = true;
+    handlePreview(prefilledUrl);
+  }, [prefilledUrl, handlePreview]);
 
   function handleConfirm() {
     if (!preview || !form) return;
@@ -131,6 +155,7 @@ export function ImportByLinkClient({
           preview,
           agencySlug: form.agencySlug,
           country,
+          ...(portalLinkId ? { portalLinkId } : {}),
           overrides: {
             title: form.title,
             description: form.description || null,
@@ -152,10 +177,24 @@ export function ImportByLinkClient({
           return;
         }
         setSuccess(
-          `Propiedad creada con ${result.photosProcessed} fotos. Slug: ${result.slug}`,
+          `Propiedad creada con ${result.photosProcessed} fotos. Slug: ${result.slug}` +
+            (result.linkedToClient === true
+              ? " · Añadida a la selección del cliente."
+              : result.linkedToClient === false
+                ? " · No se pudo vincular con la ficha del cliente: añádela a su selección a mano."
+                : ""),
         );
-        // Vuelve al listado tras 1.5s.
-        setTimeout(() => router.push(`${config.prefix}/propiedades`), 1500);
+        // Con origen en una ficha de cliente se vuelve allí, que es donde
+        // sigue el trabajo (itinerario y colección). Si no, al listado.
+        setTimeout(
+          () =>
+            router.push(
+              clienteId
+                ? `${config.prefix}/clientes/${clienteId}#portal-links`
+                : `${config.prefix}/propiedades`,
+            ),
+          1800,
+        );
       } catch {
         // Si la acción falla o tarda demasiado (muchas fotos), mostramos un
         // aviso en vez de dejar que reviente la página. La propiedad puede
@@ -190,7 +229,7 @@ export function ImportByLinkClient({
           />
           <button
             type="button"
-            onClick={handlePreview}
+            onClick={() => handlePreview()}
             disabled={!url.trim() || previewing || confirming}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-cream-50 transition disabled:opacity-50"
           >
