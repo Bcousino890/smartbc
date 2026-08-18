@@ -258,6 +258,17 @@ llama después necesita leer lo que dijo el anterior, no pisarlo).
   `host#referencia`. Gracias a eso se puede recorrer un listado entero
   reenviando páginas sin sembrar duplicados. Está cubierto por
   `npm run test:portal-links` — si tocas `parsePortalUrl`, ejecútalo.
+- **`rating` y `status` son cosas distintas y no deben fusionarse.** `rating`
+  (0-5) es cuánto le gusta AL CLIENTE; `status` es cómo va la llamada. Un piso
+  puede gustarle 5 y estar descartado porque no aceptan 11 meses.
+- **El orden lo fija `position`** (enteros de 100 en 100, como `viewing_stops`).
+  Al arrastrar, el panel manda la lista COMPLETA de ids ya ordenada y la función
+  `reorder_client_portal_links` reescribe todas las posiciones en una ida y
+  vuelta: no existe el caso borde de "no queda hueco entre dos vecinos". Esa
+  función filtra por `client_id`, así que una lista de ids manipulada no puede
+  mover enlaces de otra ficha. Los anuncios nuevos entran al final de la cola.
+- **Las flechas ▲▼ de cada fila no son un adorno:** el arrastre nativo de HTML5
+  no existe en táctil, y la ficha se usa desde tablet.
 - **`status = 'converted'` NO se elige en un desplegable.** El CHECK
   `cpl_converted_requires_property` impide que exista sin ficha vinculada; solo
   lo escribe `linkPropertyToPortalLink()`, que además mete la propiedad en la

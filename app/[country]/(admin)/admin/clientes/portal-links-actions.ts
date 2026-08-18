@@ -27,6 +27,7 @@ import {
 import {
   isLinkStatus,
   LINK_STATUS_LABEL,
+  MAX_RATING,
   SELECTABLE_LINK_STATUSES,
   type PortalLinkInput,
   type PortalLinkStatus,
@@ -361,4 +362,69 @@ export async function linkPropertyToPortalLink(
 
   revalidateClient(clientId);
   return { ok: true, addedToSelection };
+}
+
+/**
+ * Cuánto le gusta al cliente, de 0 (sin valorar) a 5.
+ *
+ * No deja rastro en el hilo de llamadas a propósito: valorar es un gesto que se
+ * repite mientras se enseñan los pisos, y llenaría el registro de ruido. Lo que
+ * hay que poder leer después es qué dijeron por teléfono.
+ */
+export async function setPortalLinkRating(
+  linkId: string,
+  rating: number,
+): Promise<LinkActionResult> {
+  if (!Number.isInteger(rating) || rating < 0 || rating > MAX_RATING) {
+    return { ok: false, error: `La valoración va de 0 a ${MAX_RATING}.` };
+  }
+
+  const clientId = await clientIdOfLink(linkId);
+  if (!clientId) return { ok: false, error: "Ese enlace ya no existe." };
+  const g = await gate("edit", clientId);
+  if (!g.ok) return g;
+
+  const { error } = await db()
+    .from("client_portal_links")
+    .update({ rating })
+    .eq("id", linkId);
+  if (error) return { ok: false, error: translateLinkDbError(error.message) };
+
+  revalidateClient(clientId);
+  return { ok: true };
+}
+
+/**
+ * Reescribe el orden de prioridad. Llega la lista COMPLETA de ids ya ordenada
+ * (la calcula el panel al soltar), no un "mueve este de A a B": así no existe
+ * el caso borde de "no queda hueco entre dos vecinos".
+ *
+ * La función de base de datos filtra además por client_id, así que una lista
+ * manipulada no puede tocar los enlaces de otra ficha.
+ */
+export async function reorderPortalLinks(
+  clientId: string,
+  orderedIds: string[],
+): Promise<LinkActionResult<{ moved: number }>> {
+  const g = await gate("edit", clientId);
+  if (!g.ok) return g;
+
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return { ok: false, error: "No hay nada que ordenar." };
+  }
+  if (orderedIds.length > 500) {
+    return { ok: false, error: "Demasiados enlaces para reordenar de una vez." };
+  }
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    return { ok: false, error: "La lista de orden trae ids repetidos." };
+  }
+
+  const { data, error } = await db().rpc("reorder_client_portal_links", {
+    p_client_id: clientId,
+    p_ids: orderedIds,
+  });
+  if (error) return { ok: false, error: translateLinkDbError(error.message) };
+
+  revalidateClient(clientId);
+  return { ok: true, moved: typeof data === "number" ? data : orderedIds.length };
 }

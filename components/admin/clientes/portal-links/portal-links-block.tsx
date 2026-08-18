@@ -13,13 +13,19 @@
 // diferencia es la densidad — esto se usa con el teléfono en la mano.
 // ============================================================================
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Link2, Loader2, Plus, Puzzle } from "lucide-react";
-import { assignPortalLinks } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
+import { ArrowDownWideNarrow, Link2, Loader2, Plus, Puzzle } from "lucide-react";
 import {
+  assignPortalLinks,
+  reorderPortalLinks,
+} from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
+import {
+  compareByPriority,
   countLinks,
   isPendingCall,
+  orderByRating,
+  reorderIds,
   type PortalLinkWithNotes,
   type StaffRef,
 } from "@/lib/portal-links/types";
@@ -60,6 +66,68 @@ export function PortalLinksBlock({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // Orden optimista: arrastrar tiene que verse al instante, no esperar al
+  // round-trip. Se descarta en cuanto el servidor devuelve la lista nueva.
+  const [draftOrder, setDraftOrder] = useState<string[] | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const linksRef = useRef(links);
+  useEffect(() => {
+    if (linksRef.current !== links) {
+      linksRef.current = links;
+      setDraftOrder(null);
+    }
+  }, [links]);
+
+  /** La lista en orden de prioridad, con el arrastre en curso ya aplicado. */
+  const ordered = useMemo(() => {
+    const base = [...links].sort(compareByPriority);
+    if (!draftOrder) return base;
+    const byId = new Map(base.map((l) => [l.id, l]));
+    const seen = new Set(draftOrder);
+    const out = draftOrder
+      .map((id) => byId.get(id))
+      .filter((l): l is PortalLinkWithNotes => Boolean(l));
+    // Un enlace que haya llegado mientras se arrastraba no debe desaparecer.
+    for (const l of base) if (!seen.has(l.id)) out.push(l);
+    return out;
+  }, [links, draftOrder]);
+
+  const commitOrder = (nextIds: string[]) => {
+    setDraftOrder(nextIds);
+    setError(null);
+    startTransition(async () => {
+      const res = await reorderPortalLinks(clientId, nextIds);
+      if (!res.ok) {
+        setDraftOrder(null);
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  /** Suelta `movedId` justo delante de `beforeId` (null = al final). */
+  const dropBefore = (movedId: string, beforeId: string | null) => {
+    const next = reorderIds(ordered.map((l) => l.id), movedId, beforeId);
+    setDragId(null);
+    setOverId(null);
+    if (next.join() === ordered.map((l) => l.id).join()) return;
+    commitOrder(next);
+  };
+
+  /** Flechas: la vía que sí funciona en una tablet. */
+  const moveBy = (id: string, direction: -1 | 1) => {
+    const ids = ordered.map((l) => l.id);
+    const from = ids.indexOf(id);
+    const to = from + direction;
+    if (from === -1 || to < 0 || to >= ids.length) return;
+    // Bajar es "colocarse delante del que va DOS más abajo": si no, moverse
+    // delante del vecino inmediato deja la lista igual.
+    const beforeId = direction === -1 ? ids[to] : (ids[to + 1] ?? null);
+    commitOrder(reorderIds(ids, id, beforeId));
+  };
+
   const counts = useMemo(() => countLinks(links), [links]);
   const mineCount = useMemo(
     () =>
@@ -74,21 +142,21 @@ export function PortalLinksBlock({
   const visible = useMemo(() => {
     switch (filter) {
       case "toCall":
-        return links.filter((l) => isPendingCall(l.status));
+        return ordered.filter((l) => isPendingCall(l.status));
       case "mine":
-        return links.filter(
+        return ordered.filter(
           (l) => l.assigned_to === currentUserId && isPendingCall(l.status),
         );
       case "toVisit":
-        return links.filter((l) => l.status === "to_visit");
+        return ordered.filter((l) => l.status === "to_visit");
       case "discarded":
-        return links.filter((l) => l.status === "discarded");
+        return ordered.filter((l) => l.status === "discarded");
       case "converted":
-        return links.filter((l) => l.status === "converted");
+        return ordered.filter((l) => l.status === "converted");
       default:
-        return links;
+        return ordered;
     }
-  }, [links, filter, currentUserId]);
+  }, [ordered, filter, currentUserId]);
 
   /** Quien ya lleva enlaces de este cliente es el candidato natural. */
   const defaultAssignee = useMemo(
@@ -175,6 +243,11 @@ export function PortalLinksBlock({
               )}
               {counts.toVisit > 0 && ` · ${counts.toVisit} para visitar`}
               {counts.converted > 0 && ` · ${counts.converted} ya con ficha`}
+              {canEdit && counts.all > 1 && (
+                <span className="text-ink/40">
+                  {" "}· arrastra para cambiar la prioridad
+                </span>
+              )}
             </p>
           )}
         </header>
@@ -202,6 +275,19 @@ export function PortalLinksBlock({
                 ))}
               </div>
 
+              {canEdit && links.some((l) => l.rating > 0) && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => commitOrder(orderByRating(ordered))}
+                  title="Reordena la lista poniendo arriba lo que más le gusta al cliente. Después puedes afinar arrastrando."
+                  className="mt-2.5 inline-flex items-center gap-1.5 font-sans text-[11.5px] font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
+                >
+                  <ArrowDownWideNarrow size={12} strokeWidth={1.75} className="text-gold-dark" />
+                  Ordenar por valoración
+                </button>
+              )}
+
               {error && (
                 <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 font-sans text-[12px] text-rose-700">
                   {error}
@@ -211,7 +297,7 @@ export function PortalLinksBlock({
               <Rule className="mt-3" tone="gold" />
 
               <ul>
-                {visible.map((link) => (
+                {visible.map((link, i) => (
                   <PortalLinkRow
                     key={link.id}
                     link={link}
@@ -222,9 +308,37 @@ export function PortalLinksBlock({
                     checked={checked.has(link.id)}
                     onToggle={() => toggle(link.id)}
                     onError={setError}
+                    order={ordered.indexOf(link) + 1}
+                    isDragging={dragId === link.id}
+                    isDropTarget={Boolean(dragId) && overId === link.id && dragId !== link.id}
+                    onDragStart={() => setDragId(link.id)}
+                    onDragEnter={() => setOverId(link.id)}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setOverId(null);
+                    }}
+                    onDrop={() => dragId && dropBefore(dragId, link.id)}
+                    onMove={(direction) => moveBy(link.id, direction)}
+                    canMoveUp={i > 0}
+                    canMoveDown={i < visible.length - 1}
                   />
                 ))}
               </ul>
+
+              {/* Soltar aquí = al final del todo. Sin esta zona no hay forma de
+                  mandar un anuncio detrás del último. */}
+              {dragId && (
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    dropBefore(dragId, null);
+                  }}
+                  className="mt-1 rounded-lg border border-dashed border-gold/40 bg-gold/5 py-2 text-center font-display text-[9.5px] uppercase vc-tracked-sm text-gold-dark"
+                >
+                  Soltar al final
+                </div>
+              )}
 
               {visible.length === 0 && (
                 <p className="py-6 text-center font-sans text-[12px] text-ink/45">

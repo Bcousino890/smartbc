@@ -87,6 +87,14 @@ export type ClientPortalLinkRow = {
   contact_name: string | null;
   contact_phone: string | null;
   status: PortalLinkStatus;
+  /**
+   * Cuánto le gusta AL CLIENTE, de 0 (sin valorar) a 5. Es su opinión, no la
+   * nuestra, y por eso no se mezcla con `status`: un piso puede gustarle 5 y
+   * estar descartado porque no aceptan contratos de 11 meses.
+   */
+  rating: number;
+  /** Orden de prioridad. Enteros de 100 en 100, como en `viewing_stops`. */
+  position: number | null;
   /** 🔒 INTERNO. */
   notes: string | null;
   proposed_visit_at: string | null;
@@ -170,6 +178,58 @@ export type PortalLinkCounts = {
  */
 export function isPendingCall(status: PortalLinkStatus): boolean {
   return status === "pending" || status === "no_answer" || status === "callback";
+}
+
+export const MAX_RATING = 5;
+
+/**
+ * Orden de trabajo de la lista. `position` manda; los enlaces sin posición
+ * (una fila creada entre el deploy del código y el de la migración) caen al
+ * final por fecha, en vez de desordenar el resto.
+ */
+export function compareByPriority(
+  a: { position: number | null; created_at: string },
+  b: { position: number | null; created_at: string },
+): number {
+  if (a.position != null && b.position != null) return a.position - b.position;
+  if (a.position != null) return -1;
+  if (b.position != null) return 1;
+  return a.created_at.localeCompare(b.created_at);
+}
+
+/**
+ * Reordena moviendo `movedId` justo delante de `beforeId` (o al final si es
+ * null). Devuelve la lista COMPLETA de ids en su nuevo orden, que es lo que
+ * se manda al servidor: reescribir todas las posiciones no tiene el caso
+ * borde de "no queda hueco entre dos vecinos".
+ *
+ * Puro para poder probarlo sin DOM: es la lógica que más fácil se rompe al
+ * tocar el arrastre.
+ */
+export function reorderIds(
+  ids: string[],
+  movedId: string,
+  beforeId: string | null,
+): string[] {
+  if (movedId === beforeId) return ids;
+  const rest = ids.filter((id) => id !== movedId);
+  if (rest.length === ids.length) return ids; // el id no estaba: no se toca nada
+  if (beforeId == null) return [...rest, movedId];
+  const at = rest.indexOf(beforeId);
+  if (at === -1) return ids;
+  return [...rest.slice(0, at), movedId, ...rest.slice(at)];
+}
+
+/** Orden sugerido por valoración: primero lo que más le gusta al cliente. */
+export function orderByRating<T extends { id: string; rating: number }>(
+  links: T[],
+): string[] {
+  return links
+    .map((l, i) => ({ l, i }))
+    // El índice desempata para que dos enlaces con la misma nota conserven el
+    // orden que ya tenían en vez de bailar en cada pulsación.
+    .sort((a, b) => b.l.rating - a.l.rating || a.i - b.i)
+    .map(({ l }) => l.id);
 }
 
 export function countLinks(

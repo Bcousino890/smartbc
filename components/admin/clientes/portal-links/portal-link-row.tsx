@@ -15,7 +15,9 @@ import {
   Building2,
   Check,
   ChevronDown,
+  ChevronUp,
   ExternalLink,
+  GripVertical,
   Loader2,
   Phone,
   Trash2,
@@ -24,6 +26,7 @@ import { addPropertyToSelection } from "@/app/[country]/(admin)/admin/clientes/v
 import {
   addPortalLinkNote,
   deletePortalLink,
+  setPortalLinkRating,
   updatePortalLink,
   updatePortalLinkStatus,
 } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
@@ -40,6 +43,7 @@ import {
   Figure,
   Label,
   PortalTag,
+  RatingStars,
   Rule,
   StatusWord,
   formatAgo,
@@ -71,6 +75,16 @@ export function PortalLinkRow({
   checked,
   onToggle,
   onError,
+  order,
+  isDragging,
+  isDropTarget,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  onDrop,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: {
   link: PortalLinkWithNotes;
   clientId: string;
@@ -80,6 +94,17 @@ export function PortalLinkRow({
   checked: boolean;
   onToggle: () => void;
   onError: (message: string | null) => void;
+  /** Puesto en la lista de prioridad, 1-based. */
+  order: number;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragEnd: () => void;
+  onDrop: () => void;
+  onMove: (direction: -1 | 1) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const config = getCountryConfig(country);
   const [open, setOpen] = useState(false);
@@ -120,14 +145,60 @@ export function PortalLinkRow({
 
   return (
     <li
+      // El arrastre nativo de HTML5 no pide dependencias, pero no existe en
+      // táctil: por eso las flechas de al lado no son un adorno, son la única
+      // forma de reordenar desde una tablet.
+      draggable={canEdit}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", link.id);
+        onDragStart();
+      }}
+      onDragEnter={onDragEnter}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
       className={cn(
         "group -mx-1 px-1 transition-colors",
         checked && "bg-gold/5",
         pending && "opacity-60",
         link.status === "discarded" && !open && "opacity-60",
+        isDragging && "opacity-40",
+        isDropTarget && "border-t-2 border-gold",
       )}
     >
       <div className="flex items-start gap-3 py-3.5">
+        {canEdit && (
+          <div className="mt-0.5 flex shrink-0 flex-col items-center">
+            <button
+              type="button"
+              disabled={!canMoveUp}
+              onClick={() => onMove(-1)}
+              aria-label="Subir en la prioridad"
+              className="text-ink/25 transition hover:text-gold-dark disabled:opacity-0"
+            >
+              <ChevronUp size={13} strokeWidth={2} />
+            </button>
+            <span
+              className="cursor-grab font-serif text-[11px] leading-none vc-nums text-ink/35 active:cursor-grabbing"
+              title="Arrastra para cambiar la prioridad"
+            >
+              {String(order).padStart(2, "0")}
+            </span>
+            <button
+              type="button"
+              disabled={!canMoveDown}
+              onClick={() => onMove(1)}
+              aria-label="Bajar en la prioridad"
+              className="text-ink/25 transition hover:text-gold-dark disabled:opacity-0"
+            >
+              <ChevronDown size={13} strokeWidth={2} />
+            </button>
+          </div>
+        )}
         {canEdit && (
           <button
             type="button"
@@ -181,7 +252,17 @@ export function PortalLinkRow({
 
             <div className="shrink-0 text-right">
               {priceText && <Figure className="text-[17px]">{priceText}</Figure>}
-              <div className="mt-1.5">
+              <div className="mt-1.5 flex items-center justify-end gap-2">
+                <RatingStars
+                  value={link.rating}
+                  disabled={!canEdit || pending}
+                  onChange={
+                    canEdit
+                      ? (next) =>
+                          run(() => setPortalLinkRating(link.id, next))
+                      : undefined
+                  }
+                />
                 <StatusWord status={link.status} />
               </div>
             </div>

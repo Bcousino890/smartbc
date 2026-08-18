@@ -13,6 +13,9 @@ import { createAdminClient } from "@/lib/db/admin";
 import { parsePortalUrl } from "./portals";
 import type { PortalLinkInput } from "./types";
 
+/** Mismo escalón que `viewing_stops`: deja hueco para insertar entre vecinos. */
+const POSITION_STEP = 100;
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function db() {
   return createAdminClient() as any;
@@ -168,6 +171,24 @@ export async function insertPortalLinks(params: {
   }
 
   if (rows.length === 0) return { inserted: 0, skipped: 0, invalid };
+
+  // Los anuncios nuevos entran AL FINAL de la cola de prioridad, en el orden en
+  // que venían del listado del portal. Se lee el máximo actual una sola vez: si
+  // dos envíos coinciden, alguna posición se repetirá y el desempate por fecha
+  // lo resuelve — no vale la pena un lock por algo que el agente reordena a
+  // mano de todas formas.
+  const { data: last } = await db()
+    .from("client_portal_links")
+    .select("position")
+    .eq("client_id", params.clientId)
+    .order("position", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  let next = ((last as { position: number | null } | null)?.position ?? 0) + POSITION_STEP;
+  for (const row of rows) {
+    row.position = next;
+    next += POSITION_STEP;
+  }
 
   const { data, error } = await db()
     .from("client_portal_links")

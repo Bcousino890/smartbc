@@ -18,10 +18,13 @@ import {
   portalLabel,
 } from "../lib/portal-links/portals.ts";
 import {
+  compareByPriority,
   countLinks,
   isLinkStatus,
   isPendingCall,
   LINK_STATUS_LABEL,
+  orderByRating,
+  reorderIds,
   SELECTABLE_LINK_STATUSES,
   type PortalLinkStatus,
 } from "../lib/portal-links/types.ts";
@@ -225,6 +228,81 @@ check(
     counts.discarded === 1 &&
     counts.converted === 1,
   JSON.stringify(counts),
+);
+
+// ============================================================================
+section("↕️  PRIORIDAD · arrastrar y valorar");
+// ============================================================================
+
+const lista = ["a", "b", "c", "d"];
+
+check(
+  "mover uno delante de otro",
+  reorderIds(lista, "d", "b").join() === "a,d,b,c",
+  reorderIds(lista, "d", "b").join(),
+);
+
+check(
+  "mover al principio",
+  reorderIds(lista, "c", "a").join() === "c,a,b,d",
+);
+
+check(
+  "mover al final (sin vecino delante)",
+  reorderIds(lista, "a", null).join() === "b,c,d,a",
+);
+
+check(
+  "soltar sobre sí mismo no cambia nada",
+  reorderIds(lista, "b", "b").join() === lista.join(),
+);
+
+check(
+  "bajar una posición: delante del que va dos más abajo",
+  reorderIds(lista, "a", "c").join() === "b,a,c,d",
+);
+
+check(
+  "un id que no está en la lista la deja intacta",
+  reorderIds(lista, "z", "b").join() === lista.join(),
+);
+
+check(
+  "un destino que no está en la lista la deja intacta",
+  reorderIds(lista, "a", "z").join() === lista.join(),
+);
+
+const conPos = [
+  { id: "x", position: 300, created_at: "2026-08-01T10:00:00Z", rating: 2 },
+  { id: "y", position: 100, created_at: "2026-08-03T10:00:00Z", rating: 5 },
+  { id: "z", position: 200, created_at: "2026-08-02T10:00:00Z", rating: 5 },
+];
+
+check(
+  "la posición manda sobre la fecha",
+  [...conPos].sort(compareByPriority).map((l) => l.id).join() === "y,z,x",
+);
+
+const sinPos = [
+  { id: "nuevo", position: null, created_at: "2026-08-05T10:00:00Z", rating: 0 },
+  ...conPos,
+];
+check(
+  "un enlace sin posición cae al final, no desordena el resto",
+  [...sinPos].sort(compareByPriority).map((l) => l.id).join() === "y,z,x,nuevo",
+);
+
+check(
+  "ordenar por valoración: primero lo que más le gusta",
+  orderByRating(conPos).join() === "y,z,x",
+);
+
+check(
+  "y con la misma nota se respeta el orden que ya tenían",
+  orderByRating([
+    { id: "primero", rating: 5 },
+    { id: "segundo", rating: 5 },
+  ]).join() === "primero,segundo",
 );
 
 // ============================================================================

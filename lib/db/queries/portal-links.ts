@@ -32,8 +32,9 @@ export async function canAccessClientLinks(clientId: string): Promise<boolean> {
 const LINK_COLUMNS = `
   id, client_id, url, url_key, portal, external_ref, title, price, price_label,
   operation, zone, bedrooms, bathrooms, square_meters, image_url, contact_name,
-  contact_phone, status, notes, proposed_visit_at, assigned_to, added_by,
-  last_called_at, property_id, country, created_at, updated_at
+  contact_phone, status, rating, position, notes, proposed_visit_at,
+  assigned_to, added_by, last_called_at, property_id, country, created_at,
+  updated_at
 `;
 
 /**
@@ -54,7 +55,11 @@ export async function getClientPortalLinks(
     .from("client_portal_links")
     .select(LINK_COLUMNS)
     .eq("client_id", clientId)
-    .order("created_at", { ascending: false });
+    // El orden de prioridad manda (lo fija el agente arrastrando). Las filas
+    // sin posición van al final por fecha; `nullsFirst: false` es lo que evita
+    // que Postgres las coloque arriba, que es su default para ASC.
+    .order("position", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
 
   if (error) {
     // Tabla todavía sin migrar en este entorno: el panel se muestra vacío en

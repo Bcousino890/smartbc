@@ -11,6 +11,7 @@
 // un vistazo, así que las escalas son más pequeñas y el aire, menor.
 // ============================================================================
 
+import { Star } from "lucide-react";
 import { portalLabel } from "@/lib/portal-links/portals";
 import {
   LINK_STATUS_LABEL,
@@ -122,6 +123,65 @@ export function PortalTag({
       {portalLabel(portal)}
       {externalRef ? ` · ${externalRef}` : ""}
     </span>
+  );
+}
+
+/**
+ * Valoración del CLIENTE, de 0 a 5. Pulsar la misma estrella que ya estaba
+ * puesta la quita: sin ese gesto, una nota mal dada solo se corrige bajándola
+ * a 1, nunca a "sin valorar".
+ *
+ * Es el único icono del panel. Se gana el sitio: cinco estrellas se leen de un
+ * vistazo al repasar catorce anuncios, y no hay forma tipográfica de decir eso
+ * igual de rápido.
+ */
+export function RatingStars({
+  value,
+  onChange,
+  disabled,
+  className,
+}: {
+  value: number;
+  onChange?: (next: number) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const readOnly = !onChange || disabled;
+  return (
+    <div
+      className={cn("inline-flex items-center gap-0.5", className)}
+      role={readOnly ? "img" : "radiogroup"}
+      aria-label={`Le gusta al cliente: ${value} de 5`}
+    >
+      {[1, 2, 3, 4, 5].map((n) => {
+        const on = n <= value;
+        return (
+          <button
+            key={n}
+            type="button"
+            disabled={readOnly}
+            aria-label={`${n} de 5`}
+            aria-pressed={on}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange?.(value === n ? 0 : n);
+            }}
+            className={cn(
+              "transition",
+              readOnly ? "cursor-default" : "cursor-pointer hover:scale-110",
+            )}
+          >
+            <Star
+              size={13}
+              strokeWidth={1.75}
+              className={cn(
+                on ? "fill-gold text-gold" : "fill-transparent text-ink/20",
+              )}
+            />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
