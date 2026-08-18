@@ -10,6 +10,7 @@ type PageType =
   | "home"
   | "contact"
   | "viewing_collection"
+  | "client_shortlist"
   | "other";
 
 interface UseAnalyticsOptions {
@@ -17,6 +18,9 @@ interface UseAnalyticsOptions {
   propertyId?: string;
   shareId?: string;
   collectionToken?: string;
+  /** Token del Shortlist. El servidor lo cambia por su id: el token no se
+   *  guarda jamás en la tabla de métricas. */
+  shortlistToken?: string;
   /** Desactiva la instrumentación (previsualizaciones internas). */
   disabled?: boolean;
 }
@@ -41,6 +45,7 @@ export function useAnalytics(options: UseAnalyticsOptions) {
         propertyId: options.propertyId,
         shareId: options.shareId,
         collectionToken: options.collectionToken,
+        shortlistToken: options.shortlistToken,
       });
     }
     // Solo inicializar una vez al montar — no re-inicializar si cambian las opciones

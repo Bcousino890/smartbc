@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       propertyId?: string | null;
       shareId?: string | null;
       collectionToken?: string | null;
+      shortlistToken?: string | null;
       sessionId?: string;
       pagePath?: string;
       referrer?: string | null;
@@ -54,6 +55,16 @@ export async function POST(req: NextRequest) {
       collectionShareId = await resolveCollectionShareId(collectionToken);
     }
 
+    // Igual que con la colección: llega el TOKEN y aquí se cambia por el id.
+    // El token no entra nunca en la tabla de métricas.
+    let shortlistId: string | null = null;
+    if (body.shortlistToken) {
+      const { resolveShortlistByToken } = await import(
+        "@/lib/db/queries/client-shortlists"
+      );
+      shortlistId = (await resolveShortlistByToken(body.shortlistToken))?.id ?? null;
+    }
+
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       req.headers.get("x-real-ip") ??
@@ -62,6 +73,7 @@ export async function POST(req: NextRequest) {
 
     const result = await insertPageView({
       collection_share_id: collectionShareId,
+      shortlist_id: shortlistId,
       property_id: body.propertyId ?? body.property_id ?? null,
       share_id: body.shareId ?? body.share_id ?? null,
       page_type: pageType,

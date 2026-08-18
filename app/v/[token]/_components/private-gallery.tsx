@@ -32,7 +32,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CollectionDictionary } from "@/lib/viewing-collections/i18n";
+/**
+ * Los CUATRO rótulos que necesita la galería, y ninguno más. Así la usan tanto
+ * la colección como el shortlist sin que uno tenga que arrastrar el
+ * vocabulario del otro. `CollectionDictionary` encaja aquí por estructura.
+ */
+export type GalleryDictionary = {
+  closeGallery: string;
+  galleryAll: string;
+  previous: string;
+  next: string;
+};
 import { cn } from "@/lib/utils";
 
 export function PrivateGallery({
@@ -46,7 +56,7 @@ export function PrivateGallery({
 }: {
   title: string;
   photos: string[];
-  dict: CollectionDictionary;
+  dict: GalleryDictionary;
   rtl?: boolean;
   startIndex?: number | null;
   onClose: () => void;

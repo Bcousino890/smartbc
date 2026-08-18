@@ -6,6 +6,7 @@ export type PageViewRow = {
   property_id: string | null;
   share_id: string | null;
   collection_share_id: string | null;
+  shortlist_id?: string | null;
   page_type: string;
   page_path: string;
   session_id: string;
@@ -426,6 +427,7 @@ export async function insertPageView(
       property_id: data.property_id,
       share_id: data.share_id,
       collection_share_id: data.collection_share_id ?? null,
+      shortlist_id: data.shortlist_id ?? null,
       page_type: data.page_type,
       page_path: data.page_path,
       referrer: extra["referrer"] ?? null,

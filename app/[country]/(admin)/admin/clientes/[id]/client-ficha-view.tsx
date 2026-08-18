@@ -32,6 +32,7 @@ import {
 } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
 import { ViewingItinerariesBlock } from "@/components/admin/viewing-collections/viewing-itineraries-block";
 import { PortalLinksBlock } from "@/components/admin/clientes/portal-links/portal-links-block";
+import { ClientShortlistBlock } from "@/components/admin/client-shortlist/client-shortlist-block";
 import type {
   PortalLinkWithNotes,
   StaffRef,
@@ -40,6 +41,7 @@ import type {
   ItineraryWithStops,
   SelectionWithProperty,
 } from "@/lib/viewing-collections/types";
+import type { ShortlistWithItems } from "@/lib/client-shortlist/types";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient } from "@/lib/types";
@@ -107,6 +109,8 @@ export type PortalLinksProps = {
 export type ViewingCollectionsProps = {
   selections: SelectionWithProperty[];
   itineraries: ItineraryWithStops[];
+  /** Selecciones privadas mandadas al cliente: la fase previa al itinerario. */
+  shortlists: ShortlistWithItems[];
   canEdit: boolean;
   canCreate: boolean;
   canDelete: boolean;
@@ -324,6 +328,14 @@ export function ClientFichaView({
                 canEdit={viewingCollections.canEdit}
                 canDelete={viewingCollections.canDelete}
                 canCreateItinerary={viewingCollections.canCreate}
+              />
+              <ClientShortlistBlock
+                clientId={client.id}
+                country={country}
+                shortlists={viewingCollections.shortlists}
+                selections={viewingCollections.selections}
+                canEdit={viewingCollections.canEdit}
+                canCreate={viewingCollections.canCreate}
               />
               <ViewingItinerariesBlock
                 clientId={client.id}

@@ -14,6 +14,7 @@ import {
   getAssignableStaff,
   getClientPortalLinks,
 } from "@/lib/db/queries/portal-links";
+import { getClientShortlists } from "@/lib/db/queries/client-shortlists";
 import type { Country } from "@/lib/country-config";
 import { ClientFichaView } from "./client-ficha-view";
 
@@ -42,9 +43,13 @@ export default async function ClientFichaPage({
   const vc = perms?.viewing_collections;
   const inScope = vcSettings.enabled && Boolean(vc?.view) && (await canAccessClient(id));
 
-  const [selections, itineraries] = inScope
-    ? await Promise.all([getClientSelection(id), getClientItineraries(id)])
-    : [[], []];
+  const [selections, itineraries, shortlists] = inScope
+    ? await Promise.all([
+        getClientSelection(id),
+        getClientItineraries(id),
+        getClientShortlists(id),
+      ])
+    : [[], [], []];
 
   // Enlaces de portales: mismo gate que la colección (mismo permiso, misma
   // ficha, mismo trabajo en dos fases). El listado de compañeros solo hace
@@ -118,6 +123,7 @@ export default async function ClientFichaPage({
           ? {
               selections,
               itineraries,
+              shortlists,
               canEdit: Boolean(vc?.edit),
               canCreate: Boolean(vc?.create),
               canDelete: Boolean(vc?.delete),
