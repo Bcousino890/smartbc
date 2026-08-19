@@ -41,17 +41,58 @@ const PUBLIC_PROPERTY_SELECT = `
   property_photos ( url, position )
 `;
 
+/** Lo que se puede enseñar de un anuncio que TODAVÍA no es ficha nuestra.
+ *  Nunca la url ni el portal: el cliente no tiene por qué saber que esto sale
+ *  de un anuncio ajeno, y menos aún poder ir a verlo por su cuenta. */
+const PUBLIC_PORTAL_LINK_SELECT = `
+  id, title, price, price_label, operation, zone,
+  bedrooms, bathrooms, square_meters, image_url
+`;
+
+// ⚠️ `properties` va SIN `!inner`. Con el inner join, PostgREST descartaba en
+// silencio todo item cuyo property_id fuera null — es decir, todos los que son
+// un enlace de portal. El shortlist salía vacío o a medias sin un solo error.
 const SHORTLIST_SELECT = `
   id, client_id, title, language, country, status, token,
   expires_at, revoked_at, submitted_at, client_updated_at, first_opened_at,
   revision, created_at,
   client:profiles!client_shortlists_client_id_fkey ( full_name ),
   client_shortlist_items (
-    id, property_id, origin, decision, rank, client_comment, position,
-    decided_at,
-    properties!inner ( ${PUBLIC_PROPERTY_SELECT} )
+    id, property_id, portal_link_id, origin, decision, rank, client_comment,
+    position, decided_at,
+    properties ( ${PUBLIC_PROPERTY_SELECT} ),
+    client_portal_links ( ${PUBLIC_PORTAL_LINK_SELECT} )
   )
 `;
+
+/**
+ * Un anuncio de portal disfrazado de propiedad, para que el proyector no tenga
+ * que saber que existen dos fuentes. Lo que no tenemos va a null en vez de a
+ * cero: "0 baños" en la tarjeta de un cliente parece un dato, y es un hueco.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+function portalLinkAsProperty(link: any) {
+  return {
+    id: link.id,
+    // Sin ficha no hay slug, y sin slug no hay proxy de fotos: por eso las
+    // suyas viajan aparte, en externalPhotoUrls.
+    slug: "",
+    title: link.title ?? "",
+    zone: link.zone ?? "",
+    subzone: null,
+    bedrooms: link.bedrooms ?? null,
+    bathrooms: link.bathrooms ?? null,
+    square_meters: link.square_meters ?? null,
+    price: link.price == null ? null : Number(link.price),
+    currency: null,
+    operation: link.operation ?? "rent",
+    status: "available",
+    archived_at: null,
+    // La referencia BC-#### solo existe cuando la propiedad es nuestra.
+    bc_reference: null,
+    property_photos: null,
+  };
+}
 
 /**
  * Resuelve un shortlist por su token PARA ESCRITURA.
@@ -106,7 +147,10 @@ export async function getPublicShortlistByToken(
     revision: data.revision,
     items: (data.client_shortlist_items ?? [])
       .map((it: any) => {
-        const prop = pickOne<any>(it.properties);
+        const link = pickOne<any>(it.client_portal_links);
+        const prop = link
+          ? portalLinkAsProperty(link)
+          : pickOne<any>(it.properties);
         if (!prop) return null;
         // Una propiedad archivada deja de mostrarse: el cliente no debe
         // priorizar algo que ya no se puede visitar.
@@ -119,6 +163,9 @@ export async function getPublicShortlistByToken(
           client_comment: it.client_comment,
           position: it.position,
           property: prop,
+          ...(link
+            ? { externalPhotoUrls: link.image_url ? [link.image_url] : [] }
+            : {}),
         };
       })
       .filter(Boolean),
@@ -203,11 +250,18 @@ export async function getClientShortlists(
 
     const items = (row.client_shortlist_items ?? [])
       .map((it: any) => {
-        const prop = pickOne<any>(it.properties);
+        // Dos fuentes posibles: ficha nuestra o anuncio de portal todavía sin
+        // ficha. El panel las muestra igual; lo que cambia es que del enlace
+        // no hay slug al que enlazar ni referencia BC-####.
+        const link = pickOne<any>(it.client_portal_links);
+        const prop = link
+          ? portalLinkAsProperty(link)
+          : pickOne<any>(it.properties);
         if (!prop) return null;
         return {
           id: it.id,
           property_id: it.property_id,
+          portal_link_id: it.portal_link_id ?? null,
           origin: it.origin,
           decision: it.decision,
           rank: it.rank,
@@ -220,16 +274,19 @@ export async function getClientShortlists(
             title: prop.title,
             displayTitle: editorialResidenceTitle(prop.title),
             zoneLabel: shortlistZoneLabel(prop),
-            priceLabel: cfg.formatPrice(
-              Number(prop.price),
-              prop.currency,
-              prop.operation,
-            ),
+            priceLabel: link
+              ? (link.price_label ??
+                cfg.formatPrice(prop.price, null, prop.operation))
+              : cfg.formatPrice(Number(prop.price), prop.currency, prop.operation),
             bcReference: prop.bc_reference ?? null,
-            coverPhotoUrl: coverUrl(prop),
+            coverPhotoUrl: link ? (link.image_url ?? null) : coverUrl(prop),
             isArchived: Boolean(prop.archived_at) || prop.status === "archived",
+            /** Sin ficha todavía: el panel lo dice y no ofrece "Ver ficha". */
+            pendingProperty: Boolean(link),
           },
-          inSelection: inSelection.has(it.property_id),
+          inSelection: it.property_id
+            ? inSelection.has(it.property_id)
+            : false,
         };
       })
       .filter(Boolean)
@@ -293,7 +350,12 @@ export async function getShortlistPreview(
     revision: data.revision,
     items: (data.client_shortlist_items ?? [])
       .map((it: any) => {
-        const prop = pickOne<any>(it.properties);
+        // La previsualización del agente tiene que enseñar EXACTAMENTE lo
+        // mismo que verá el cliente, enlaces de portal incluidos.
+        const link = pickOne<any>(it.client_portal_links);
+        const prop = link
+          ? portalLinkAsProperty(link)
+          : pickOne<any>(it.properties);
         if (!prop) return null;
         if (prop.archived_at || prop.status === "archived") return null;
         return {
@@ -304,6 +366,9 @@ export async function getShortlistPreview(
           client_comment: it.client_comment,
           position: it.position,
           property: prop,
+          ...(link
+            ? { externalPhotoUrls: link.image_url ? [link.image_url] : [] }
+            : {}),
         };
       })
       .filter(Boolean),

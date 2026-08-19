@@ -30,10 +30,17 @@ export type PublicShortlistProperty = {
   /** Zona y subzona. NUNCA la calle: esto ocurre antes de confirmar la visita. */
   zoneLabel: string;
   priceLabel: string;
-  bedrooms: number;
-  bathrooms: number;
+  /** null cuando el anuncio del portal no lo traía. No se inventa un 0. */
+  bedrooms: number | null;
+  bathrooms: number | null;
   squareMeters: number | null;
   bcReference: string | null;
+  /**
+   * true = todavía no es ficha nuestra, es un anuncio que estamos revisando.
+   * El cliente no ve de qué portal viene; esto solo sirve para no prometer
+   * una galería que no existe.
+   */
+  pendingProperty: boolean;
   /** Siempre vía proxy /p/. Nunca la URL de Storage. */
   coverPhotoUrl: string | null;
   photoUrls: string[];

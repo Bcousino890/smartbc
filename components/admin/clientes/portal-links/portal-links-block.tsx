@@ -15,11 +15,12 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownWideNarrow, Link2, Loader2, Plus, Puzzle } from "lucide-react";
+import { ArrowDownWideNarrow, Link2, Loader2, Plus, Puzzle, Send } from "lucide-react";
 import {
   assignPortalLinks,
   reorderPortalLinks,
 } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
+import { createClientShortlist } from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
 import {
   compareByPriority,
   countLinks,
@@ -171,6 +172,26 @@ export function PortalLinksBlock({
       else next.add(id);
       return next;
     });
+
+  /**
+   * Manda los marcados al cliente para que los ordene, SIN crearles ficha
+   * antes: media lista se va a caer en la primera llamada y no tiene sentido
+   * importar quince anuncios para eso. El shortlist los acepta tal cual.
+   */
+  const sendToClient = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await createClientShortlist(clientId, {
+        portalLinkIds: [...checked],
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setChecked(new Set());
+      router.refresh();
+    });
+  };
 
   const assign = () => {
     setError(null);
@@ -373,6 +394,22 @@ export function PortalLinksBlock({
                     {pending && <Loader2 size={11} className="animate-spin" />}
                     Pasar para llamar
                   </button>
+                  {canCreate && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={sendToClient}
+                      title="Crea una selección privada con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+                    >
+                      {pending ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <Send size={11} strokeWidth={1.75} />
+                      )}
+                      Mandar al cliente
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setChecked(new Set())}

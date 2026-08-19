@@ -61,14 +61,39 @@ function revalidateClient(clientId: string) {
  */
 export async function createClientShortlist(
   clientId: string,
-  input: { propertyIds: string[]; language?: string; title?: string },
+  input: {
+    propertyIds?: string[];
+    /**
+     * Anuncios de portal que todavía NO son ficha nuestra. Es lo que permite
+     * mandarle al cliente lo que se vio con él en Idealista sin importar
+     * quince fichas que la mitad se van a caer en la primera llamada.
+     */
+    portalLinkIds?: string[];
+    language?: string;
+    title?: string;
+  },
 ): Promise<ActionResult<{ shortlistId: string; token: string }>> {
   const g = await gate("create");
   if (!g.ok) return g;
 
   const propertyIds = [...new Set(input.propertyIds ?? [])];
-  if (propertyIds.length === 0) {
-    return { ok: false, error: "Elige al menos una propiedad." };
+  const portalLinkIds = [...new Set(input.portalLinkIds ?? [])];
+  if (propertyIds.length + portalLinkIds.length === 0) {
+    return { ok: false, error: "Elige al menos una propiedad o un anuncio." };
+  }
+
+  // Los enlaces tienen que ser de ESTE cliente. Sin esta comprobación, una
+  // lista de ids manipulada metería en su shortlist anuncios de otra ficha.
+  if (portalLinkIds.length > 0) {
+    const { data: owned } = await db()
+      .from("client_portal_links")
+      .select("id")
+      .eq("client_id", clientId)
+      .in("id", portalLinkIds);
+    const ownedIds = new Set(((owned ?? []) as Array<{ id: string }>).map((l) => l.id));
+    if (ownedIds.size !== portalLinkIds.length) {
+      return { ok: false, error: "Alguno de esos anuncios no es de este cliente." };
+    }
   }
 
   const { data: client } = await db()
@@ -97,18 +122,26 @@ export async function createClientShortlist(
 
   if (error) return { ok: false, error: error.message };
 
-  const rows = propertyIds.map((propertyId, i) => ({
-    shortlist_id: shortlist.id,
-    property_id: propertyId,
-    origin: "bcp_curated",
-    position: i + 1,
-  }));
+  // Las fichas primero y los anuncios después: lo que ya es nuestro se
+  // presenta mejor, y el cliente empieza por ahí.
+  const rows = [
+    ...propertyIds.map((propertyId) => ({
+      shortlist_id: shortlist.id,
+      property_id: propertyId,
+      origin: "bcp_curated",
+    })),
+    ...portalLinkIds.map((portalLinkId) => ({
+      shortlist_id: shortlist.id,
+      portal_link_id: portalLinkId,
+      origin: "bcp_curated",
+    })),
+  ].map((row, i) => ({ ...row, position: i + 1 }));
   const { error: itemsError } = await db()
     .from("client_shortlist_items")
     .insert(rows);
 
   if (itemsError) {
-    // Sin propiedades no sirve de nada: se deshace en vez de dejar un enlace
+    // Sin nada dentro no sirve de nada: se deshace en vez de dejar un enlace
     // que abriría vacío.
     await db().from("client_shortlists").delete().eq("id", shortlist.id);
     return { ok: false, error: itemsError.message };
@@ -195,7 +228,7 @@ export async function archiveClientShortlist(
 export async function createItineraryFromShortlist(
   shortlistId: string,
   options: { includeMaybe?: boolean; title?: string } = {},
-): Promise<ActionResult<{ itineraryId: string }>> {
+): Promise<ActionResult<{ itineraryId: string; skippedPending: number }>> {
   const g = await gate("create");
   if (!g.ok) return g;
 
@@ -210,7 +243,7 @@ export async function createItineraryFromShortlist(
 
   if (!shortlist) return { ok: false, error: "Selección no encontrada." };
 
-  const wanted = (shortlist.client_shortlist_items ?? [])
+  let wanted = (shortlist.client_shortlist_items ?? [])
     .filter(
       (i: any) =>
         i.decision === "must_visit" ||
@@ -225,6 +258,21 @@ export async function createItineraryFromShortlist(
 
   if (wanted.length === 0) {
     return { ok: false, error: "El cliente no ha marcado ninguna para visitar." };
+  }
+
+  // Un anuncio de portal que el cliente marcó para visitar TODAVÍA no es una
+  // ficha, y una parada exige una. Se aparta aquí con un mensaje que dice qué
+  // hacer, en vez de reventar más abajo con un id nulo.
+  const pendingCount = wanted.filter((i: any) => !i.property_id).length;
+  wanted = wanted.filter((i: any) => Boolean(i.property_id));
+  if (wanted.length === 0) {
+    return {
+      ok: false,
+      error:
+        pendingCount > 0
+          ? `Las ${pendingCount} que ha elegido son anuncios que aún no son ficha. Créalas desde «Enlaces de portales» y vuelve a intentarlo.`
+          : "El cliente no ha marcado ninguna para visitar.",
+    };
   }
 
   // Las propiedades archivadas no pueden ser una parada (lo impide la propia
@@ -296,5 +344,5 @@ export async function createItineraryFromShortlist(
   if (!res.ok) return res;
 
   revalidateClient(shortlist.client_id);
-  return { ok: true, itineraryId: res.itineraryId };
+  return { ok: true, itineraryId: res.itineraryId, skippedPending: pendingCount };
 }

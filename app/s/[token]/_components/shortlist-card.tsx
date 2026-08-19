@@ -126,6 +126,10 @@ export function ShortlistCard({
               alt={property.title}
               loading="lazy"
               decoding="async"
+              // La foto de un anuncio todavía sin ficha vive en el CDN del
+              // portal. Sin esto, el navegador del cliente le mandaría a
+              // Idealista la URL privada de este shortlist en el Referer.
+              referrerPolicy="no-referrer"
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
             />
           ) : (
@@ -152,10 +156,23 @@ export function ShortlistCard({
           <p dir="ltr" className="mt-1 font-serif text-[15px] vc-nums text-ink rtl:text-right">
             {property.priceLabel}
           </p>
-          <p className="mt-0.5 font-sans text-[10.5px] text-ink/45">
-            {property.bedrooms} · {property.bathrooms}
-            {property.squareMeters ? ` · ${property.squareMeters} m²` : ""}
-          </p>
+          {/* Lo que el anuncio no traía se OMITE. Un "0 baños" en la tarjeta
+              de un cliente se lee como un dato, y es un hueco. */}
+          {(property.bedrooms != null ||
+            property.bathrooms != null ||
+            property.squareMeters != null) && (
+            <p className="mt-0.5 font-sans text-[10.5px] text-ink/45">
+              {[
+                property.bedrooms != null ? String(property.bedrooms) : null,
+                property.bathrooms != null ? String(property.bathrooms) : null,
+                property.squareMeters != null
+                  ? `${property.squareMeters} m²`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
         </div>
       </div>
 

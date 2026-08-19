@@ -35,10 +35,11 @@ export type RawShortlistProperty = {
   title: string;
   zone: string;
   subzone: string | null;
-  bedrooms: number;
-  bathrooms: number;
+  bedrooms: number | null;
+  bathrooms: number | null;
   square_meters: number | null;
-  price: number;
+  /** null en un anuncio de portal que no traía precio legible. */
+  price: number | null;
   currency: string | null;
   operation: "rent" | "sale";
   status: string;
@@ -57,6 +58,13 @@ export type RawShortlistItem = {
   client_comment: string | null;
   position: number;
   property: RawShortlistProperty;
+  /**
+   * Fotos ya resueltas, para los items que todavía NO son ficha nuestra (un
+   * anuncio de portal). El proxy `/p/{slug}/{i}` no puede servirlas: no hay
+   * slug ni fila en property_photos, la imagen vive en el CDN del portal.
+   * Cuando está presente, manda sobre `proxyPhotoUrls`.
+   */
+  externalPhotoUrls?: string[];
 };
 
 export type RawShortlist = {
@@ -120,13 +128,16 @@ export function toPublicClientShortlist(
     .sort(compareShortlistItems)
     .map((item) => {
       const prop = item.property;
-      const photos = proxyPhotoUrls(prop as never);
+      // Un anuncio sin ficha trae su foto del portal; una ficha nuestra pasa
+      // SIEMPRE por el proxy, que es lo que impide que salga una ruta de
+      // Storage al navegador del cliente.
+      const photos = item.externalPhotoUrls ?? proxyPhotoUrls(prop as never);
       return {
         itemId: item.id,
         title: editorialResidenceTitle(prop.title),
         zoneLabel: shortlistZoneLabel(prop),
         priceLabel: cfg.formatPrice(
-          Number(prop.price),
+          prop.price == null ? null : Number(prop.price),
           prop.currency,
           prop.operation,
         ),
@@ -138,6 +149,7 @@ export function toPublicClientShortlist(
         // Hasta 8: suficiente para recordar la casa, sin cargar 14 galerías
         // enteras en un móvil.
         photoUrls: photos.slice(0, 8),
+        pendingProperty: Boolean(item.externalPhotoUrls),
         origin: item.origin,
         decision: item.decision,
         rank: item.rank,

@@ -210,6 +210,7 @@ export function PrivateGallery({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                referrerPolicy="no-referrer"
                   src={url}
                   alt={`${title} — ${i + 1}`}
                   loading={i < 6 ? "eager" : "lazy"}
@@ -234,6 +235,7 @@ export function PrivateGallery({
             <div className="pointer-events-none flex h-full items-center justify-center px-4 lg:px-16">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                referrerPolicy="no-referrer"
                 src={photos[index]}
                 alt={`${title} — ${index + 1}`}
                 decoding="async"
