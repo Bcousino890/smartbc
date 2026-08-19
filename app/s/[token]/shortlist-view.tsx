@@ -35,7 +35,9 @@ import { useFlipLayout } from "@/hooks/use-flip-layout";
 import { useReorderList } from "@/hooks/use-reorder-list";
 import { PrivateGallery } from "@/app/v/[token]/_components/private-gallery";
 import { cn } from "@/lib/utils";
-import { ShortlistCard } from "./_components/shortlist-card";
+import { ShortlistNav, type ShortlistMode } from "./_components/shortlist-nav";
+import { ReviewStage } from "./_components/review-stage";
+import { PriorityRow } from "./_components/priority-row";
 import { NoteSheet } from "./_components/note-sheet";
 import { AddResidenceSheet } from "./_components/add-residence-sheet";
 import { SubmitBar } from "./_components/submit-bar";
@@ -44,7 +46,6 @@ import {
   setShortlistComment,
   setShortlistDecision,
   setShortlistOrder,
-  setShortlistReviewOrder,
   submitShortlist,
 } from "./actions";
 
@@ -264,64 +265,10 @@ export function ShortlistView({
     );
   };
 
-  /**
-   * Mismo mecanismo que las prioritarias, pero para "Por revisar" — ANTES de
-   * que el cliente haya marcado nada. Escribe `position`, no `rank`: el rank
-   * tiene un CHECK que solo lo permite en 'must_visit'.
-   *
-   * Es lo que hacía falta para que el orden se pudiera cambiar desde el
-   * principio, y no solo después de decidir la primera residencia.
-   */
-  const applyReviewOrder = useCallback((orderedIds: string[]) => {
-    const posById = new Map(orderedIds.map((id, i) => [id, i + 1]));
-    setItems((prev) =>
-      prev.map((i) =>
-        posById.has(i.itemId) ? { ...i, position: posById.get(i.itemId)! } : i,
-      ),
-    );
-  }, []);
-
-  const commitReviewOrder = useCallback(
-    (orderedIds: string[]) => {
-      const before = itemsRef.current;
-      applyReviewOrder(orderedIds);
-      track("priority_change", { via: "drag", group: "undecided" });
-      void commit(before, () => setShortlistReviewOrder(token, orderedIds));
-    },
-    [applyReviewOrder, commit, token, track],
-  );
-
-  const {
-    draggingId: draggingReviewId,
-    handleProps: reviewHandleProps,
-    itemProps: reviewItemProps,
-  } = useReorderList({
-    ids: groups.undecided.map((m) => m.itemId),
-    onReorder: applyReviewOrder,
-    onCommit: commitReviewOrder,
-    disabled: isPreview,
-  });
-
-  const moveReview = (item: PublicShortlistProperty, dir: -1 | 1) => {
-    const before = items;
-    const pending = groups.undecided;
-    const idx = pending.findIndex((m) => m.itemId === item.itemId);
-    const target = idx + dir;
-    if (idx < 0 || target < 0 || target >= pending.length) return;
-
-    const reordered = [...pending];
-    [reordered[idx], reordered[target]] = [reordered[target], reordered[idx]];
-    const posById = new Map(reordered.map((m, i) => [m.itemId, i + 1]));
-    setItems(
-      items.map((i) =>
-        posById.has(i.itemId) ? { ...i, position: posById.get(i.itemId)! } : i,
-      ),
-    );
-    track("priority_change", { to: target + 1, group: "undecided" });
-    void commit(before, () =>
-      setShortlistReviewOrder(token, reordered.map((m) => m.itemId)),
-    );
-  };
+  // NOTA: el reordenado de las pendientes desapareció con el modo «una
+  // residencia cada vez» — ya no hay una lista que colocar, se recorren en
+  // orden. La acción de servidor (setShortlistReviewOrder) se conserva por si
+  // vuelve a hacer falta.
 
   const saveNote = (item: PublicShortlistProperty, comment: string) => {
     const before = items;
@@ -375,18 +322,90 @@ export function ShortlistView({
     next: t.nextPhoto,
   };
 
+  // ── Modo activo ────────────────────────────────────────────────────────────
+  // Decidir y ordenar son tareas distintas: mezclarlas en una sola página
+  // obliga a recorrer diecinueve láminas. Se abre en «revisar» mientras quede
+  // algo pendiente, y en «prioridades» si ya está todo decidido.
+  const [mode, setMode] = useState<ShortlistMode>(() =>
+    shortlist.properties.some((p) => p.decision === "undecided")
+      ? "review"
+      : "priorities",
+  );
+  /** Qué residencia se está revisando. Índice sobre la lista completa. */
+  const [cursor, setCursor] = useState(0);
+  const [confirmPending, setConfirmPending] = useState(false);
+
+  // Orden de recorrido en «revisar»: el mismo que ve el cliente en la lista.
+  const reviewOrder = useMemo(
+    () =>
+      [...items].sort(
+        (a, b) => a.position - b.position || a.itemId.localeCompare(b.itemId),
+      ),
+    [items],
+  );
+  const current = reviewOrder[Math.min(cursor, reviewOrder.length - 1)];
+
+  // property_view cuando la residencia pasa a ser LA ACTIVA de verdad, una
+  // sola vez por residencia. Ni por animaciones, ni por cambios de tamaño.
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    if (mode !== "review" || !current) return;
+    if (seen.current.has(current.itemId)) return;
+    seen.current.add(current.itemId);
+    track("property_view", { origin: current.origin });
+  }, [mode, current, track]);
+
+  /** La siguiente sin decidir a partir de una posición. */
+  const nextPendingFrom = useCallback(
+    (from: number) => {
+      for (let i = from; i < reviewOrder.length; i++) {
+        if (reviewOrder[i].decision === "undecided") return i;
+      }
+      for (let i = 0; i < from; i++) {
+        if (reviewOrder[i].decision === "undecided") return i;
+      }
+      return -1;
+    },
+    [reviewOrder],
+  );
+
+  const decideAndAdvance = (
+    item: PublicShortlistProperty,
+    decision: ShortlistDecision,
+  ) => {
+    decide(item, decision);
+    // Se pasa sola a la siguiente pendiente: el cliente no tiene que pulsar
+    // «siguiente» después de cada decisión. Si no queda ninguna, se queda
+    // donde está y la barra de arriba ya marca «todas revisadas».
+    const next = nextPendingFrom(cursor + 1);
+    if (next >= 0) window.setTimeout(() => setCursor(next), 220);
+  };
+
+  const goToPending = () => {
+    const next = nextPendingFrom(0);
+    if (next >= 0) {
+      setCursor(next);
+      setMode("review");
+    }
+  };
+
+  const counts = {
+    must: groups.must.length,
+    maybe: groups.maybe.length,
+    no: groups.no.length,
+  };
+
   return (
     <div dir={rtl ? "rtl" : "ltr"} className="min-h-[100dvh] bg-cream-50 pb-44 sm:pb-40">
       {/* ── Apertura ── */}
-      <header className="mx-auto max-w-3xl px-5 pt-10 text-center sm:pt-14">
+      <header className="mx-auto max-w-3xl px-5 pt-9 text-center sm:pt-12">
         <p className="font-display text-[9.5px] font-medium uppercase vc-tracked text-ink/45">
           Benjamín Cousiño
         </p>
         <p className="mt-1 font-display text-[8.5px] font-medium uppercase vc-tracked-sm text-ink/35">
           {t.privateClientServices}
         </p>
-
-        <h1 className="mt-9 font-serif text-[30px] font-normal vc-tight text-ink sm:text-[40px]">
+        <h1 className="mt-7 font-serif text-[30px] font-normal vc-tight text-ink sm:text-[40px]">
           {shortlist.clientFirstName}
         </h1>
         <p className="mt-3 font-sans text-[14px] leading-relaxed text-ink/70">
@@ -395,144 +414,232 @@ export function ShortlistView({
         <p className="mx-auto mt-2 max-w-[46ch] font-sans text-[13px] leading-relaxed text-ink/45">
           {t.invitation}
         </p>
-
-        <Progress done={decided} total={items.length} t={t} />
       </header>
 
-      <main className="mx-auto mt-10 max-w-5xl space-y-14 px-5 sm:px-6">
-        {items.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-ink/15 px-5 py-10 text-center font-sans text-[13px] text-ink/45">
-            {t.emptyState}
-          </p>
-        )}
+      <div className="mt-8">
+        <ShortlistNav
+          t={t}
+          mode={mode}
+          onMode={setMode}
+          pending={groups.undecided.length}
+          total={items.length}
+          counts={counts}
+        />
+      </div>
 
-        <Group
-          title={t.priorityHomes}
-          hint={t.priorityHint}
-          count={groups.must.length}
-          show={groups.must.length > 0}
-        >
-          {groups.must.map((p, i) => (
-            <ShortlistCard
-              key={p.itemId}
-              property={p}
-              t={t}
-              rankLabel={String(i + 1).padStart(2, "0")}
-              canMoveUp={i > 0}
-              canMoveDown={i < groups.must.length - 1}
-              onMove={(d) => move(p, d)}
-              onDecide={(d) => decide(p, d)}
-              onView={() => {
-                setGallery(p);
-                track("property_view");
-              }}
-              onNote={() => setNoteFor(p)}
-              busy={busyId === p.itemId}
-              dragHandleProps={handleProps(p.itemId)}
-              isDragging={draggingId === p.itemId}
-              itemRef={itemProps(p.itemId).ref}
-              itemStyle={itemProps(p.itemId).style}
+      {items.length === 0 && (
+        <p className="mx-auto mt-10 max-w-3xl px-5 text-center font-sans text-[13px] text-ink/45">
+          {t.emptyState}
+        </p>
+      )}
+
+      {/* ── REVISAR ── */}
+      {mode === "review" && current && (
+        <ReviewStage
+          key={current.itemId}
+          property={current}
+          index={cursor}
+          total={reviewOrder.length}
+          t={t}
+          rtl={rtl}
+          busy={busyId === current.itemId}
+          onDecide={(d) => decideAndAdvance(current, d)}
+          onPrev={() => setCursor((c) => Math.max(0, c - 1))}
+          onNext={() =>
+            setCursor((c) => Math.min(reviewOrder.length - 1, c + 1))
+          }
+          onView={() => setGallery(current)}
+          onNote={() => setNoteFor(current)}
+          hasPrev={cursor > 0}
+          hasNext={cursor < reviewOrder.length - 1}
+        />
+      )}
+
+      {/* ── PRIORIDADES ── */}
+      {mode === "priorities" && (
+        <main className="mx-auto mt-8 max-w-5xl space-y-12 px-5 sm:px-6">
+          <section>
+            <SectionHead
+              title={t.priorityHomes}
+              hint={t.priorityHint}
+              count={counts.must}
             />
-          ))}
-        </Group>
+            {counts.must === 0 ? (
+              <p className="mt-4 font-sans text-[12.5px] text-ink/40">
+                {t.emptyState}
+              </p>
+            ) : (
+              <div className="mt-3 divide-y divide-ink/8">
+                {groups.must.map((p, i) => (
+                  <PriorityRow
+                    key={p.itemId}
+                    property={p}
+                    t={t}
+                    rankLabel={String(i + 1).padStart(2, "0")}
+                    canMoveUp={i > 0}
+                    canMoveDown={i < groups.must.length - 1}
+                    onMove={(d) => move(p, d)}
+                    onView={() => setGallery(p)}
+                    onNote={() => setNoteFor(p)}
+                    onDecide={(d) => decide(p, d)}
+                    busy={busyId === p.itemId}
+                    dragHandleProps={handleProps(p.itemId)}
+                    isDragging={draggingId === p.itemId}
+                    {...itemProps(p.itemId)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
 
-        <Group
-          title={t.toReview}
-          hint={t.toReviewHint}
-          count={groups.undecided.length}
-          show={groups.undecided.length > 0}
-        >
-          {groups.undecided.map((p, i) => (
-            <ShortlistCard
-              key={p.itemId}
-              property={p}
-              t={t}
-              rankLabel={String(i + 1).padStart(2, "0")}
-              canMoveUp={i > 0}
-              canMoveDown={i < groups.undecided.length - 1}
-              onMove={(d) => moveReview(p, d)}
-              onDecide={(d) => decide(p, d)}
-              onView={() => {
-                setGallery(p);
-                track("property_view");
-              }}
-              onNote={() => setNoteFor(p)}
-              busy={busyId === p.itemId}
-              dragHandleProps={reviewHandleProps(p.itemId)}
-              isDragging={draggingReviewId === p.itemId}
-              itemRef={reviewItemProps(p.itemId).ref}
-              itemStyle={reviewItemProps(p.itemId).style}
-            />
-          ))}
-        </Group>
-
-        <Group
-          title={t.maybeGroup}
-          count={groups.maybe.length}
-          show={groups.maybe.length > 0}
-        >
-          {groups.maybe.map((p) => (
-            <ShortlistCard
-              key={p.itemId}
-              property={p}
-              t={t}
-              onDecide={(d) => decide(p, d)}
-              onView={() => {
-                setGallery(p);
-                track("property_view");
-              }}
-              onNote={() => setNoteFor(p)}
-              busy={busyId === p.itemId}
-            />
-          ))}
-        </Group>
-
-        <Group
-          title={t.notForMeGroup}
-          count={groups.no.length}
-          show={groups.no.length > 0}
-          dim
-        >
-          {groups.no.map((p) => (
-            <ShortlistCard
-              key={p.itemId}
-              property={p}
-              t={t}
-              onDecide={(d) => decide(p, d)}
-              onView={() => {
-                setGallery(p);
-                track("property_view");
-              }}
-              onNote={() => setNoteFor(p)}
-              busy={busyId === p.itemId}
-            />
-          ))}
-        </Group>
-
-        {!isPreview && (
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="vc-focus w-full rounded-2xl border border-dashed border-gold/35 bg-gold/5 px-5 py-4 font-display text-[10.5px] font-medium uppercase vc-tracked text-gold-dark transition hover:border-gold/60 hover:bg-gold/10"
+          <CollapsibleSection
+            title={t.maybeGroup}
+            count={counts.maybe}
+            defaultOpen={counts.maybe <= 3}
           >
-            + {t.addResidence}
-          </button>
-        )}
-      </main>
+            {groups.maybe.map((p) => (
+              <PriorityRow
+                key={p.itemId}
+                property={p}
+                t={t}
+                compact
+                onView={() => setGallery(p)}
+                onNote={() => setNoteFor(p)}
+                onDecide={(d) => decide(p, d)}
+                busy={busyId === p.itemId}
+              />
+            ))}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title={t.notForMeGroup}
+            count={counts.no}
+            defaultOpen={false}
+          >
+            {groups.no.map((p) => (
+              <PriorityRow
+                key={p.itemId}
+                property={p}
+                t={t}
+                compact
+                onView={() => setGallery(p)}
+                onNote={() => setNoteFor(p)}
+                onDecide={(d) => decide(p, d)}
+                busy={busyId === p.itemId}
+              />
+            ))}
+          </CollapsibleSection>
+
+          {!isPreview && (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="vc-focus w-full border border-dashed border-gold/35 bg-gold/5 px-5 py-4 font-display text-[10.5px] font-medium uppercase vc-tracked text-gold-dark transition hover:border-gold/60 hover:bg-gold/10"
+            >
+              + {t.addResidence}
+            </button>
+          )}
+        </main>
+      )}
+
+      {/* ── RESUMEN ── */}
+      {mode === "summary" && (
+        <main className="mx-auto mt-10 max-w-3xl px-5 sm:px-6">
+          <h2 className="font-serif text-[26px] text-ink sm:text-[32px]">
+            {t.summaryTitle}
+          </h2>
+          <p className="mt-2 font-display text-[10px] font-medium uppercase vc-tracked-sm text-ink/45">
+            {t.submitSummary(counts.must, counts.maybe, counts.no)}
+          </p>
+
+          <div className="mt-8 space-y-8">
+            <SummaryList
+              title={t.priorityHomes}
+              items={groups.must}
+              numbered
+            />
+            <SummaryList title={t.maybeGroup} items={groups.maybe} />
+            <SummaryList title={t.notForMeGroup} items={groups.no} dim />
+          </div>
+
+          {groups.undecided.length > 0 && (
+            <p className="mt-8 border-s-2 border-gold/40 ps-3 font-sans text-[12.5px] leading-relaxed text-ink/55">
+              {t.undecidedWarning(groups.undecided.length)}{" "}
+              <button
+                type="button"
+                onClick={goToPending}
+                className="vc-focus vc-underline font-medium text-gold-dark"
+              >
+                {t.continueReviewing}
+              </button>
+            </p>
+          )}
+        </main>
+      )}
 
       <SubmitBar
         t={t}
-        must={groups.must.length}
-        maybe={groups.maybe.length}
-        no={groups.no.length}
+        must={counts.must}
+        maybe={counts.maybe}
+        no={counts.no}
         submitted={submitted}
         submittedAtLabel={shortlist.submittedAtLabel}
         dirtySinceSubmit={dirtySinceSubmit}
         saveState={save}
         onRetry={() => retry.current?.()}
-        onSubmit={send}
+        onSubmit={() => {
+          // Con residencias sin revisar se pregunta, no se bloquea: puede que
+          // el cliente ya sepa que esas no le interesan.
+          if (groups.undecided.length > 0 && !confirmPending) {
+            setMode("summary");
+            setConfirmPending(true);
+            return;
+          }
+          void send();
+        }}
         disabled={isPreview || items.length === 0}
       />
+
+      {/* Confirmación de envío con pendientes */}
+      {confirmPending && groups.undecided.length > 0 && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={() => setConfirmPending(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-t-3xl border border-ink/10 bg-cream-50 p-6 shadow-2xl sm:rounded-3xl"
+          >
+            <p className="font-serif text-[19px] leading-snug text-ink">
+              {t.undecidedWarning(groups.undecided.length)}
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmPending(false);
+                  goToPending();
+                }}
+                className="vc-focus px-5 py-3 font-display text-[10px] font-medium uppercase vc-tracked-sm text-ink/60 transition hover:text-ink"
+              >
+                {t.continueReviewing}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmPending(false);
+                  void send();
+                }}
+                className="vc-focus bg-ink px-6 py-3 font-display text-[10px] font-medium uppercase vc-tracked text-cream-50 transition hover:bg-ink-soft"
+              >
+                {t.sendAnyway}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {gallery && (
         <PrivateGallery
@@ -566,65 +673,18 @@ export function ShortlistView({
   );
 }
 
-function Progress({
-  done,
-  total,
-  t,
-}: {
-  done: number;
-  total: number;
-  t: ShortlistDictionary;
-}) {
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  const pending = total - done;
-  return (
-    <div className="mx-auto mt-8 max-w-xs">
-      <p
-        className="font-display text-[10px] font-medium uppercase vc-tracked text-ink/45"
-        aria-live="polite"
-      >
-        {t.reviewed(done, total)}
-        {pending > 0 && (
-          <span className="ms-2 text-ink/30">· {t.pending(pending)}</span>
-        )}
-      </p>
-      <div
-        className="mt-2 h-px w-full bg-ink/10"
-        role="progressbar"
-        aria-valuenow={done}
-        aria-valuemin={0}
-        aria-valuemax={total}
-      >
-        <div
-          className="h-px bg-gold transition-[width] duration-700 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Group({
+/** Cabecera de sección: filete, rótulo espaciado y la cifra al otro extremo. */
+function SectionHead({
   title,
   hint,
   count,
-  show,
-  dim,
-  children,
 }: {
   title: string;
   hint?: string;
   count: number;
-  show: boolean;
-  dim?: boolean;
-  children: React.ReactNode;
 }) {
-  if (!show) return null;
   return (
-    <section className={cn(dim && "opacity-70")}>
-      {/* Cabecera de sección al modo del libro: filete, rótulo espaciado y la
-          cifra al otro extremo. Lo que separa un grupo de otro es el aire,
-          no una caja. */}
+    <>
       <span aria-hidden className="block h-px w-full bg-ink/12" />
       <div className="mt-3 flex items-baseline justify-between gap-3">
         <h2 className="font-display text-[10px] font-medium uppercase vc-tracked text-ink/50">
@@ -639,10 +699,90 @@ function Group({
           {hint}
         </p>
       )}
-      {/* Sin bordes entre residencias: una línea de pelo y mucho aire. */}
-      <div className="mt-5 divide-y divide-ink/8">
-        {children}
-      </div>
+    </>
+  );
+}
+
+/** Alternativas y descartadas: plegadas cuando son muchas. */
+function CollapsibleSection({
+  title,
+  count,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  count: number;
+  defaultOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (count === 0) return null;
+  return (
+    <section>
+      <span aria-hidden className="block h-px w-full bg-ink/12" />
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="vc-focus mt-3 flex w-full items-baseline justify-between gap-3 py-1 text-start"
+      >
+        <span className="font-display text-[10px] font-medium uppercase vc-tracked text-ink/50">
+          {title}
+          <span aria-hidden className="ms-2 text-ink/25">
+            {open ? "−" : "+"}
+          </span>
+        </span>
+        <span className="font-display text-[10px] vc-nums text-ink/25">
+          {String(count).padStart(2, "0")}
+        </span>
+      </button>
+      {open && <div className="mt-2 divide-y divide-ink/8">{children}</div>}
     </section>
   );
 }
+
+/** Resumen: solo texto. Aquí ya no hacen falta fotografías grandes. */
+function SummaryList({
+  title,
+  items,
+  numbered,
+  dim,
+}: {
+  title: string;
+  items: PublicShortlistProperty[];
+  numbered?: boolean;
+  dim?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className={cn(dim && "opacity-60")}>
+      <p className="font-display text-[10px] font-medium uppercase vc-tracked text-ink/45">
+        {title}
+      </p>
+      <ul className="mt-2.5 space-y-1.5">
+        {items.map((p, i) => (
+          <li key={p.itemId} className="flex items-baseline gap-3">
+            {numbered && (
+              <span className="w-6 shrink-0 font-serif text-[15px] vc-nums text-gold-dark">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+            )}
+            <span className="min-w-0">
+              <span className="font-serif text-[17px] text-ink">{p.title}</span>
+              <span className="ms-2 font-sans text-[11.5px] text-ink/40">
+                {p.zoneLabel}
+              </span>
+              {p.comment && (
+                <span className="mt-0.5 block font-sans text-[11.5px] italic text-ink/45">
+                  {p.comment}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+
