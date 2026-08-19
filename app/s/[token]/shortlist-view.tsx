@@ -266,9 +266,8 @@ export function ShortlistView({
   };
 
   // NOTA: el reordenado de las pendientes desapareció con el modo «una
-  // residencia cada vez» — ya no hay una lista que colocar, se recorren en
-  // orden. La acción de servidor (setShortlistReviewOrder) se conserva por si
-  // vuelve a hacer falta.
+  // residencia cada vez». Su acción de servidor también se retiró: renumeraba
+  // solo las pendientes y dejaba varias residencias compartiendo posición.
 
   const saveNote = (item: PublicShortlistProperty, comment: string) => {
     const before = items;
