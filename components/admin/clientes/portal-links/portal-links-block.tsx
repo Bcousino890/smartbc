@@ -20,7 +20,10 @@ import {
   assignPortalLinks,
   reorderPortalLinks,
 } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
-import { createClientShortlist } from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
+import {
+  addToClientShortlist,
+  createClientShortlist,
+} from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
 import {
   compareByPriority,
   countLinks,
@@ -45,6 +48,7 @@ export function PortalLinksBlock({
   currentUserId,
   links,
   staff,
+  openShortlist = null,
   canCreate,
   canEdit,
   canDelete,
@@ -55,6 +59,8 @@ export function PortalLinksBlock({
   currentUserId: string | null;
   links: PortalLinkWithNotes[];
   staff: StaffRef[];
+  /** Selección privada abierta del cliente, si la tiene. */
+  openShortlist?: { id: string; title: string | null } | null;
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -176,14 +182,18 @@ export function PortalLinksBlock({
   /**
    * Manda los marcados al cliente para que los ordene, SIN crearles ficha
    * antes: media lista se va a caer en la primera llamada y no tiene sentido
-   * importar quince anuncios para eso. El shortlist los acepta tal cual.
+   * importar quince anuncios para eso. La selección privada los acepta así.
+   *
+   * Si el cliente YA tiene una abierta, se añaden a esa: crear otra le dejaría
+   * con dos enlaces y habría que volver a mandarle el nuevo.
    */
   const sendToClient = () => {
     setError(null);
     startTransition(async () => {
-      const res = await createClientShortlist(clientId, {
-        portalLinkIds: [...checked],
-      });
+      const ids = [...checked];
+      const res = openShortlist
+        ? await addToClientShortlist(openShortlist.id, { portalLinkIds: ids })
+        : await createClientShortlist(clientId, { portalLinkIds: ids });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -399,7 +409,11 @@ export function PortalLinksBlock({
                       type="button"
                       disabled={pending}
                       onClick={sendToClient}
-                      title="Crea una selección privada con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
+                      title={
+                        openShortlist
+                          ? "Los añade a la selección privada que el cliente ya tiene, sin cambiarle el enlace."
+                          : "Crea una selección privada con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
+                      }
                       className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                     >
                       {pending ? (
@@ -407,7 +421,9 @@ export function PortalLinksBlock({
                       ) : (
                         <Send size={11} strokeWidth={1.75} />
                       )}
-                      Mandar al cliente
+                      {openShortlist
+                        ? "Añadir a su selección"
+                        : "Mandar al cliente"}
                     </button>
                   )}
                   <button

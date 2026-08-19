@@ -151,6 +151,112 @@ export async function createClientShortlist(
   return { ok: true, shortlistId: shortlist.id, token: shortlist.token };
 }
 
+/**
+ * Añade propiedades o anuncios a una selección privada QUE YA EXISTE, sin
+ * tocar su token.
+ *
+ * Existe porque la alternativa —crear otra— obliga a volver a mandarle el
+ * enlace al cliente, y el que ya tiene deja de servir. Cuando se juntan quince
+ * pisos en Idealista después de haberle mandado la primera tanda, lo que se
+ * quiere es ampliarla, no empezar de cero.
+ *
+ * ⚠️ Un shortlist es una INSTANTÁNEA: lo que el cliente está ordenando no debe
+ * cambiarle debajo. Por eso esto NO toca lo que ya hay (ni posiciones, ni
+ * decisiones, ni orden) — solo añade al final. Y si el cliente YA lo envió, se
+ * rechaza: ampliar algo que él dio por cerrado le haría creer que su respuesta
+ * sigue valiendo cuando ya no está completa.
+ */
+export async function addToClientShortlist(
+  shortlistId: string,
+  input: { propertyIds?: string[]; portalLinkIds?: string[] },
+): Promise<ActionResult<{ added: number; skipped: number }>> {
+  const g = await gate("edit");
+  if (!g.ok) return g;
+
+  const propertyIds = [...new Set(input.propertyIds ?? [])];
+  const portalLinkIds = [...new Set(input.portalLinkIds ?? [])];
+  if (propertyIds.length + portalLinkIds.length === 0) {
+    return { ok: false, error: "No has marcado nada." };
+  }
+
+  const { data: shortlist } = await db()
+    .from("client_shortlists")
+    .select("id, client_id, status, revoked_at, expires_at")
+    .eq("id", shortlistId)
+    .maybeSingle();
+  if (!shortlist) return { ok: false, error: "Esa selección privada ya no existe." };
+
+  if (shortlist.status === "archived") {
+    return { ok: false, error: "Esa selección está archivada." };
+  }
+  if (shortlist.status === "submitted") {
+    return {
+      ok: false,
+      error:
+        "El cliente ya la envió. Crea una selección nueva en vez de ampliar la que él dio por cerrada.",
+    };
+  }
+  if (shortlist.revoked_at || new Date(shortlist.expires_at) < new Date()) {
+    return { ok: false, error: "Ese enlace ya no está activo. Renuévalo primero." };
+  }
+
+  // Todo lo que entre tiene que ser de ESTE cliente.
+  if (portalLinkIds.length > 0) {
+    const { data: owned } = await db()
+      .from("client_portal_links")
+      .select("id")
+      .eq("client_id", shortlist.client_id)
+      .in("id", portalLinkIds);
+    if (((owned ?? []) as unknown[]).length !== portalLinkIds.length) {
+      return { ok: false, error: "Alguno de esos anuncios no es de este cliente." };
+    }
+  }
+
+  // Lo que ya estuviera dentro se ignora en silencio: volver a marcarlo y
+  // mandarlo es un gesto normal, no un error que merezca un aviso rojo.
+  const { data: current } = await db()
+    .from("client_shortlist_items")
+    .select("property_id, portal_link_id, position")
+    .eq("shortlist_id", shortlistId);
+
+  const rows = (current ?? []) as Array<{
+    property_id: string | null;
+    portal_link_id: string | null;
+    position: number;
+  }>;
+  const havePropertyIds = new Set(rows.map((r) => r.property_id).filter(Boolean));
+  const haveLinkIds = new Set(rows.map((r) => r.portal_link_id).filter(Boolean));
+  let position = rows.reduce((max, r) => Math.max(max, r.position), 0);
+
+  const toInsert = [
+    ...propertyIds
+      .filter((id) => !havePropertyIds.has(id))
+      .map((property_id) => ({
+        shortlist_id: shortlistId,
+        property_id,
+        origin: "bcp_curated",
+      })),
+    ...portalLinkIds
+      .filter((id) => !haveLinkIds.has(id))
+      .map((portal_link_id) => ({
+        shortlist_id: shortlistId,
+        portal_link_id,
+        origin: "bcp_curated",
+      })),
+  ].map((row) => ({ ...row, position: ++position }));
+
+  const skipped = propertyIds.length + portalLinkIds.length - toInsert.length;
+  if (toInsert.length === 0) {
+    return { ok: true, added: 0, skipped };
+  }
+
+  const { error } = await db().from("client_shortlist_items").insert(toInsert);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateClient(shortlist.client_id);
+  return { ok: true, added: toInsert.length, skipped };
+}
+
 /** Renueva la caducidad. El enlace que el cliente ya tiene sigue valiendo. */
 export async function renewClientShortlist(
   shortlistId: string,
