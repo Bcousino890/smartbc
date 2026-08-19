@@ -20,7 +20,7 @@ export default async function AdminClientesPage({
     redirect(getCountryConfig(country).prefix);
   }
   const [rows, stats] = await Promise.all([getClients(country), getClientStats(country)]);
-  const clients = rows.map(clientRowToAdminClient);
+  const clients = rows.map((row) => clientRowToAdminClient(row));
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">

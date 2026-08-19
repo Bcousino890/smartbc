@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { assertPermission } from "@/lib/auth/guard";
-import type { Operation, StayType } from "@/lib/types";
+import type { ClientProfileType, Operation, StayType } from "@/lib/types";
 
 export type SaveClientPreferencesInput = {
   clientId: string;
@@ -89,7 +89,7 @@ export type CreateClientInput = {
   lastName: string;
   email: string;
   phone?: string;
-  profileType: "student" | "worker" | "company";
+  profileType: ClientProfileType;
   sector: string;
   operation: Operation;
   stayType: StayType;
@@ -195,10 +195,12 @@ export async function createNewClient(
   }
 
   // Create tag for profile type (Estudiante/Trabajador/Empresa)
-  const profileTypeTagName = {
+  const profileTypeTagName: string | undefined = {
     student: "Estudiante",
     worker: "Trabajador",
     company: "Empresa",
+    family: "Familia",
+    investor: "Inversor",
   }[input.profileType];
 
   if (profileTypeTagName) {

@@ -149,9 +149,31 @@ const PROFILE_TYPE_BY_TAG: Record<string, ClientProfileType> = {
   Estudiante: "student",
   Trabajador: "worker",
   Empresa: "company",
+  Familia: "family",
+  Inversor: "investor",
 };
 
-export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
+/**
+ * Señales que la fila de `profiles` no lleva encima y que, sin ellas, esta
+ * función se inventaba: el asesor, lo que el cliente ha mirado y su última
+ * señal de vida. Quien las sepa las pasa; quien no, obtiene `null` y la ficha
+ * dice "sin dato" en vez de un cero con pinta de medida.
+ */
+export type AdminClientSignals = {
+  advisorName?: string | null;
+  propertiesViewed?: number | null;
+  messages?: number | null;
+  /** Marca más reciente de actividad real, venga de donde venga. */
+  lastActivityAt?: string | null;
+};
+
+/** Ventana con la que se considera vivo a un cliente. */
+const ACTIVE_WINDOW_DAYS = 90;
+
+export function clientRowToAdminClient(
+  row: ClientWithRelations,
+  signals: AdminClientSignals = {},
+): AdminClient {
   const tags = row.client_tag_assignments?.map((a) => a.client_tags) ?? [];
   const fullName = row.full_name?.trim() || row.email;
   const [firstName, ...rest] = fullName.split(/\s+/);
@@ -169,6 +191,27 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
   const favoritesCount = row.favorites?.[0]?.count ?? 0;
   const visitsCount = row.visit_requests?.[0]?.count ?? 0;
 
+  // La prioridad SÍ tiene origen: las etiquetas de categoría `priority` (VIP).
+  // Antes era la constante "normal", así que la estrella no aparecía nunca por
+  // mucho que alguien etiquetara al cliente.
+  const priority: ClientPriority = tags.some(
+    (t) => t?.category === "priority",
+  )
+    ? "high"
+    : "normal";
+
+  // Tampoco hay columna de estado, pero sí hay actividad datable. "Activo" es
+  // una definición explícita —movimiento en los últimos 90 días— y no una
+  // constante: antes los siete clientes salían activos, incluidos los que
+  // nadie había tocado desde su alta.
+  const lastSignal = signals.lastActivityAt ?? row.updated_at ?? row.created_at;
+  const status: ClientStatus =
+    lastSignal &&
+    Date.now() - new Date(lastSignal).getTime() <
+      ACTIVE_WINDOW_DAYS * 86_400_000
+      ? "active"
+      : "inactive";
+
   return {
     id: row.id,
     firstName: firstName ?? "",
@@ -181,7 +224,9 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     operation,
     stayType,
     preferredZone: prefs?.zones?.[0] ?? "—",
-    sector: "Madrid",
+    // No existe columna de sector para un cliente: lo que había aquí era la
+    // cadena "Madrid" para todo el mundo, Chile incluido.
+    sector: "",
     budgetMin: Number(prefs?.min_price ?? 0),
     budgetMax: Number(prefs?.max_price ?? 0),
     occupants: prefs?.occupants ?? 1,
@@ -189,17 +234,17 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     workers: prefs?.workers ?? 1,
     pets: prefs?.pets ?? false,
     universities: (prefs as any)?.universities ?? undefined,
-    lastAccessText: undefined,
-    status: "active" as ClientStatus,
-    assignedAdvisor: "—",
+    lastAccessText: signals.lastActivityAt ?? undefined,
+    status,
+    assignedAdvisor: signals.advisorName ?? "",
     activity: {
-      propertiesViewed: 0,
+      propertiesViewed: signals.propertiesViewed ?? 0,
       favorites: favoritesCount,
       visitsRequested: visitsCount,
-      messages: 0,
+      messages: signals.messages ?? 0,
     },
     internalNotes: prefs?.notes ? [prefs.notes] : [],
-    priority: "normal" as ClientPriority,
+    priority,
   };
 }
 

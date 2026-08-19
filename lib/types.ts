@@ -276,7 +276,12 @@ export type AgencyDetail = Agency & {
 };
 
 // Admin / Clients view
-export type ClientProfileType = "student" | "worker" | "company";
+export type ClientProfileType =
+  | "student"
+  | "worker"
+  | "company"
+  | "family"
+  | "investor";
 export type ClientStatus = "active" | "inactive";
 export type ClientPriority = "normal" | "high";
 

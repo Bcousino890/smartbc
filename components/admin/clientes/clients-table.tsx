@@ -16,6 +16,8 @@ const PROFILE_KEYS: Record<ClientProfileType, string> = {
   student: "clientes.profile.student",
   worker: "clientes.profile.worker",
   company: "clientes.profile.company",
+  family: "clientes.profile.family",
+  investor: "clientes.profile.investor",
 };
 
 type StatusFilter = "all" | ClientStatus;
