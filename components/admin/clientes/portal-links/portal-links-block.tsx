@@ -15,10 +15,20 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownWideNarrow, Link2, Loader2, Plus, Puzzle, Send } from "lucide-react";
+import {
+  ArrowDownWideNarrow,
+  Building2,
+  Link2,
+  Loader2,
+  Plus,
+  Puzzle,
+  Send,
+} from "lucide-react";
 import {
   assignPortalLinks,
+  bulkCreatePropertiesFromLinks,
   reorderPortalLinks,
+  type BulkImportOutcome,
 } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
 import { createClientShortlist } from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
 import {
@@ -227,6 +237,32 @@ export function PortalLinksBlock({
     });
   };
 
+  /**
+   * "Crear fichas de los marcados" — el botón de una sola pulsada. Va uno por
+   * uno en el servidor (misma extracción, misma inserción que el importador
+   * de siempre) para no tener que abrir 15 formularios a mano. Puede tardar:
+   * son 15 descargas reales de Idealista, una detrás de otra a propósito.
+   */
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkImportOutcome[] | null>(null);
+  const bulkImport = () => {
+    setError(null);
+    setBulkResults(null);
+    setBulkCreating(true);
+    const ids = [...checked];
+    void bulkCreatePropertiesFromLinks(clientId, ids)
+      .then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setBulkResults(res.results);
+        setChecked(new Set());
+        router.refresh();
+      })
+      .finally(() => setBulkCreating(false));
+  };
+
   const filters: Array<[Filter, string, number]> = [
     ["all", "Todos", counts.all],
     ["toCall", "Por llamar", counts.toCall],
@@ -413,6 +449,24 @@ export function PortalLinksBlock({
                     Pasar para llamar
                   </button>
                   {canCreate && (
+                    <button
+                      type="button"
+                      disabled={bulkCreating}
+                      onClick={bulkImport}
+                      title="Crea la ficha de cada anuncio marcado leyendo su página completa en el portal (título, precio, todas las fotos) y lo vincula a la selección del cliente. Uno detrás de otro; con muchos puede tardar."
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+                    >
+                      {bulkCreating ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <Building2 size={11} strokeWidth={1.75} />
+                      )}
+                      {bulkCreating
+                        ? `Creando fichas… (${checked.size})`
+                        : `Crear ${checked.size} ficha${checked.size > 1 ? "s" : ""}`}
+                    </button>
+                  )}
+                  {canCreate && (
                     <>
                       <select
                         value={sendLanguage}
@@ -448,6 +502,41 @@ export function PortalLinksBlock({
                     className="ml-auto font-sans text-[11.5px] text-ink/50 transition hover:text-ink"
                   >
                     Quitar marcas
+                  </button>
+                </div>
+              )}
+
+              {bulkResults && (
+                <div className="mt-3 rounded-xl border border-gold/25 bg-gold/5 px-4 py-3">
+                  <p className="font-sans text-[12px] font-medium text-ink/75">
+                    {bulkResults.filter((r) => r.ok).length} ficha
+                    {bulkResults.filter((r) => r.ok).length === 1 ? "" : "s"} creada
+                    {bulkResults.filter((r) => r.ok).length === 1 ? "" : "s"}
+                    {bulkResults.some((r) => !r.ok)
+                      ? ` · ${bulkResults.filter((r) => !r.ok).length} pendiente${
+                          bulkResults.filter((r) => !r.ok).length === 1 ? "" : "s"
+                        }`
+                      : ""}
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {bulkResults.map((r) => (
+                      <li
+                        key={r.linkId}
+                        className={cn(
+                          "font-sans text-[11.5px]",
+                          r.ok ? "text-emerald-700" : "text-rose-700",
+                        )}
+                      >
+                        {r.ok ? "✓" : "✗"} {r.detail}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setBulkResults(null)}
+                    className="mt-2 font-sans text-[11px] text-ink/45 transition hover:text-ink"
+                  >
+                    Cerrar
                   </button>
                 </div>
               )}

@@ -428,3 +428,147 @@ export async function reorderPortalLinks(
   revalidateClient(clientId);
   return { ok: true, moved: typeof data === "number" ? data : orderedIds.length };
 }
+
+// ============================================================================
+// Crear fichas en bloque
+// ============================================================================
+// El botón "una sola pulsada" para no repetir 15 veces el mismo camino:
+// enlace → previsualizar → confirmar → vincular. Va enlace por enlace en el
+// SERVIDOR, con la misma extracción y la misma inserción que usa el
+// importador normal — no es un atajo con menos garantías, es el mismo camino
+// sin que nadie tenga que estar delante clicando.
+//
+// Secuencial, no en paralelo: son fetches reales contra Idealista (o el
+// portal que sea) y machacarlo con 15 peticiones a la vez es justo lo que
+// dispara los bloqueos anti-bot que el resto del pipeline ya se esfuerza en
+// esquivar. Uno detrás de otro tarda más, pero termina.
+//
+// Un fallo en un enlace NO tumba el lote: se anota el motivo y se sigue con
+// el siguiente. Al final se devuelve un resultado por enlace, para que el
+// panel pueda decir exactamente cuáles quedaron pendientes y por qué.
+// ============================================================================
+
+const BULK_IMPORT_AGENCY_SLUG = "portales-externos";
+
+export type BulkImportOutcome = {
+  linkId: string;
+  ok: boolean;
+  /** Motivo legible cuando ok=false; título de la ficha creada cuando ok=true. */
+  detail: string;
+};
+
+export async function bulkCreatePropertiesFromLinks(
+  clientId: string,
+  linkIds: string[],
+): Promise<LinkActionResult<{ results: BulkImportOutcome[] }>> {
+  const g = await gate("create", clientId);
+  if (!g.ok) return g;
+
+  const ids = [...new Set(linkIds)].slice(0, 30);
+  if (ids.length === 0) return { ok: false, error: "No has marcado ningún anuncio." };
+
+  // Solo enlaces de ESTE cliente y que todavía no sean ficha: repetir la
+  // acción sobre uno ya convertido no debe crear una segunda propiedad.
+  const { data: links } = await db()
+    .from("client_portal_links")
+    .select("id, url, country, status")
+    .eq("client_id", clientId)
+    .in("id", ids)
+    .neq("status", "converted");
+  const rows = (links ?? []) as Array<{
+    id: string;
+    url: string;
+    country: string;
+    status: string;
+  }>;
+
+  if (rows.length === 0) {
+    return { ok: false, error: "Los marcados ya tienen ficha o no son de este cliente." };
+  }
+
+  const { data: agency } = await db()
+    .from("agencies")
+    .select("id")
+    .eq("slug", BULK_IMPORT_AGENCY_SLUG)
+    .maybeSingle();
+  if (!agency) {
+    return { ok: false, error: `No existe la agencia "${BULK_IMPORT_AGENCY_SLUG}".` };
+  }
+
+  // Import dinámico: este módulo trae scrapers pesados (Playwright, etc.) que
+  // no hace falta cargar en el resto de acciones de este fichero.
+  const { extractFromUrl } = await import("@/lib/sync/import-by-link");
+  const { insertImportedProperty } = await import("@/lib/sync/import-by-link/insert");
+
+  const results: BulkImportOutcome[] = [];
+
+  for (const link of rows) {
+    const extracted = await extractFromUrl(link.url);
+    if (!extracted.ok) {
+      const REASONS: Record<string, string> = {
+        fetch_failed: "no se pudo descargar la página",
+        blocked: "el portal bloqueó la petición",
+        unsupported_url: "portal no soportado",
+        parse_failed: "no se pudo leer el HTML",
+      };
+      results.push({
+        linkId: link.id,
+        ok: false,
+        detail: REASONS[extracted.error.kind] ?? "fallo desconocido",
+      });
+      continue;
+    }
+
+    const preview = extracted.preview;
+    const title = preview.title?.trim();
+    const zone = preview.zone?.trim();
+    // Mismas validaciones mínimas que confirmByLink: si el scraping no trajo
+    // lo imprescindible, mejor dejarlo pendiente que crear una ficha coja.
+    if (!title || !zone || !preview.price || preview.price <= 0) {
+      results.push({
+        linkId: link.id,
+        ok: false,
+        detail: "faltan datos básicos (título, zona o precio) en el anuncio",
+      });
+      continue;
+    }
+
+    const inserted = await insertImportedProperty({
+      preview,
+      agencyId: (agency as { id: string }).id,
+      agencySlug: BULK_IMPORT_AGENCY_SLUG,
+      country: link.country === "cl" ? "cl" : "es",
+      overrides: {
+        title,
+        description: preview.description?.trim() || null,
+        operation: preview.operation === "rent" ? "rent" : "sale",
+        stay: preview.stay ?? null,
+        price: preview.price,
+        bedrooms: preview.bedrooms ?? 0,
+        bathrooms: preview.bathrooms ?? 0,
+        squareMeters: preview.squareMeters ?? null,
+        zone,
+        address: preview.address?.trim() || null,
+        features: preview.features,
+        externalReference: preview.externalReference,
+      },
+    });
+
+    if (!inserted.ok) {
+      results.push({ linkId: link.id, ok: false, detail: inserted.error });
+      continue;
+    }
+
+    const linked = await linkPropertyToPortalLink(link.id, inserted.propertyId);
+    results.push({
+      linkId: link.id,
+      ok: true,
+      // La ficha YA existe aunque el vínculo falle: se avisa en vez de
+      // deshacer una importación buena, igual que en el camino de uno en uno.
+      detail: linked.ok ? title : `${title} (ficha creada, pero sin vincular)`,
+    });
+  }
+
+  revalidateClient(clientId);
+  return { ok: true, results };
+}
