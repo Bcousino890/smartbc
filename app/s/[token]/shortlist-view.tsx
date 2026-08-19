@@ -31,6 +31,7 @@ import {
 import { isRtl } from "@/lib/viewing-collections/i18n";
 import type { ShortlistDecision } from "@/lib/client-shortlist/types";
 import { useAnalytics } from "@/hooks/use-analytics";
+import { useFlipLayout } from "@/hooks/use-flip-layout";
 import { useReorderList } from "@/hooks/use-reorder-list";
 import { PrivateGallery } from "@/app/v/[token]/_components/private-gallery";
 import { cn } from "@/lib/utils";
@@ -232,6 +233,15 @@ export function ShortlistView({
     onCommit: commitOrder,
     disabled: isPreview,
   });
+
+  // La disposición cambia cuando cambia una decisión, un rango o el número de
+  // residencias. Es lo que dispara el viaje de la tarjeta a su nueva sección.
+  const layoutSignature = useMemo(
+    () => items.map((i) => `${i.itemId}:${i.decision}:${i.rank ?? 0}`).join("|"),
+    [items],
+  );
+  useFlipLayout(layoutSignature, { disabled: Boolean(draggingId) });
+
 
   const move = (item: PublicShortlistProperty, dir: -1 | 1) => {
     const before = items;

@@ -410,11 +410,14 @@
    Solo transform y opacity, y nada si el sistema pide menos movimiento.
    ========================================================================== */
 @keyframes vcShortlistSettle {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
+  /* Solo opacidad: el desplazamiento a la sección nueva lo hace el FLIP
+     (hooks/use-flip-layout.ts). Animar los dos a la vez daba un doble
+     movimiento que se leía como un salto. */
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .vc-shortlist-item {
-  animation: vcShortlistSettle 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: vcShortlistSettle 360ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -69,13 +69,13 @@ export function ShortlistCard({
       className={cn(
         // `vc-plate-in` da la entrada suave cuando la residencia cambia de
         // sección: aparece en su grupo nuevo en vez de saltar.
-        "vc-shortlist-item group relative bg-cream-50 py-6 transition-[opacity,transform] duration-500 ease-out first:pt-0",
+        "vc-shortlist-item group relative bg-cream-50 py-7 transition-[opacity,transform] duration-500 ease-out first:pt-0 sm:py-10",
         discarded && "opacity-55",
         busy && "opacity-75",
         isDragging && "z-10 opacity-95 shadow-[0_18px_40px_-24px_rgba(40,28,10,0.5)]",
       )}
     >
-      <div className="sm:flex sm:items-stretch sm:gap-6">
+      <div className="sm:flex sm:items-stretch sm:gap-10">
         {/* ── Fotografía ──
             Móvil: a todo el ancho, formato editorial 16:10. Escritorio: media
             columna. Es lo que de verdad ayuda a decidir entre quince casas. */}
@@ -110,9 +110,13 @@ export function ShortlistCard({
 
           {/* El número de prioridad, sobre la fotografía. Es donde se lee de un
               vistazo cuál va primera. */}
+          {/* El número, en grande y sin caja. En una selección de catorce
+              casas, la prioridad es un dato tan importante como el nombre. */}
           {rankLabel && (
-            <span className="pointer-events-none absolute start-0 top-0 flex h-12 w-12 items-center justify-center bg-cream-50/92 font-serif text-[20px] leading-none vc-nums text-ink sm:h-14 sm:w-14 sm:text-[24px]">
-              {rankLabel}
+            <span className="pointer-events-none absolute start-0 top-0 flex items-start">
+              <span className="bg-cream-50 px-3 py-1.5 font-serif text-[30px] leading-none vc-nums text-ink sm:px-4 sm:py-2 sm:text-[40px]">
+                {rankLabel}
+              </span>
             </span>
           )}
 
@@ -124,24 +128,24 @@ export function ShortlistCard({
         </button>
 
         {/* ── Texto ── */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center py-4 sm:py-6">
+        <div className="flex min-w-0 flex-1 flex-col justify-center pt-5 sm:pt-0">
           {property.zoneLabel && (
             <p className="font-display text-[10px] font-medium uppercase vc-tracked text-gold-dark">
               {property.zoneLabel}
             </p>
           )}
-          <h3 className="mt-1.5 font-serif text-[24px] leading-[1.1] text-ink sm:text-[28px]">
+          <h3 className="mt-2 font-serif text-[27px] leading-[1.05] text-ink sm:text-[34px]">
             {property.title}
           </h3>
 
           <p
             dir="ltr"
-            className="mt-2.5 font-serif text-[19px] vc-nums text-ink/85 rtl:text-right sm:text-[21px]"
+            className="mt-3.5 font-serif text-[20px] vc-nums text-ink/80 rtl:text-right sm:text-[23px]"
           >
             {property.priceLabel}
           </p>
 
-          <p className="mt-1.5 font-sans text-[11.5px] text-ink/45">
+          <p className="mt-2 font-sans text-[11.5px] leading-relaxed text-ink/40">
             {[
               property.bedrooms ? `${property.bedrooms} ${t.bedrooms}` : null,
               property.bathrooms ? `${property.bathrooms} ${t.bathrooms}` : null,
@@ -160,7 +164,7 @@ export function ShortlistCard({
           {/* ── Decisión ──
               Texto, no píldoras. La elegida se subraya en oro; las otras
               esperan en gris. Área de toque cómoda sin dibujar un botón. */}
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1">
+          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-1 sm:mt-7">
             {discarded ? (
               <Choice active onClick={() => onDecide("undecided")} disabled={busy}>
                 {t.restore}
@@ -194,7 +198,8 @@ export function ShortlistCard({
           </div>
 
           {/* ── Acciones secundarias ── */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1">
+            {/* Sin fotografías no se ofrece verlas: sería una promesa vacía. */}
             {hasPhotos && (
               <Secondary onClick={onView}>{t.viewResidence}</Secondary>
             )}
