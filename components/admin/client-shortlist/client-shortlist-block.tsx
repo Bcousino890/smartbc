@@ -36,6 +36,7 @@ import {
   renewClientShortlist,
   revokeClientShortlist,
 } from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
+import type { PortalLinkWithNotes } from "@/lib/portal-links/types";
 import { CreateShortlistDialog } from "./create-shortlist-dialog";
 
 const DECISION_LABEL: Record<string, string> = {
@@ -70,6 +71,7 @@ export function ClientShortlistBlock({
   country,
   shortlists,
   selections,
+  portalLinks = [],
   canEdit,
   canCreate,
 }: {
@@ -77,6 +79,8 @@ export function ClientShortlistBlock({
   country: Country;
   shortlists: ShortlistWithItems[];
   selections: SelectionWithProperty[];
+  /** Anuncios del cliente que aún no son ficha; también pueden mandarse. */
+  portalLinks?: PortalLinkWithNotes[];
   canEdit: boolean;
   canCreate: boolean;
 }) {
@@ -111,11 +115,11 @@ export function ClientShortlistBlock({
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            disabled={selections.length === 0}
+            disabled={selections.length === 0 && portalLinks.length === 0}
             className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-ink transition hover:border-gold/60 disabled:opacity-40"
             title={
-              selections.length === 0
-                ? "Primero añade propiedades a su selección"
+              selections.length === 0 && portalLinks.length === 0
+                ? "Primero añade propiedades a su selección o enlaces de portales"
                 : undefined
             }
           >
@@ -130,6 +134,7 @@ export function ClientShortlistBlock({
           clientId={clientId}
           country={country}
           selections={selections}
+          portalLinks={portalLinks}
           onClose={() => setCreateOpen(false)}
         />
       )}

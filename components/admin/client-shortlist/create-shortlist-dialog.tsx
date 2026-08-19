@@ -1,13 +1,22 @@
 "use client";
 
-// Crear la selección privada: qué propiedades entran y en qué idioma.
-// Por defecto entran todas las de la selección de BCP, que es el caso normal
-// después de una reunión.
+// Crear la selección privada: qué entra y en qué idioma.
+//
+// Dos fuentes, y las dos hacen falta:
+//   · Propiedades seleccionadas — fichas nuestras, con su fotografía.
+//   · Enlaces de portales — lo que se vio con el cliente en Idealista y aún no
+//     es ficha. Media lista se cae en la primera llamada, así que obligar a
+//     importarlas antes sería trabajo tirado.
+//
+// Por defecto entra TODO lo seleccionado y NADA de los enlaces: los anuncios
+// suelen estar sin llamar, y mandarlos es una decisión, no el caso normal.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
 import type { SelectionWithProperty } from "@/lib/viewing-collections/types";
+import type { PortalLinkWithNotes } from "@/lib/portal-links/types";
+import { LINK_STATUS_LABEL } from "@/lib/portal-links/types";
 import {
   COLLECTION_LANGUAGES,
   LANGUAGE_LABELS,
@@ -21,18 +30,25 @@ export function CreateShortlistDialog({
   clientId,
   country: _country,
   selections,
+  portalLinks = [],
   onClose,
 }: {
   clientId: string;
   country: Country;
   selections: SelectionWithProperty[];
+  /** Anuncios de portal del cliente que todavía no son ficha. */
+  portalLinks?: PortalLinkWithNotes[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const available = selections.filter((s) => !s.property.isArchived);
+  // Los ya convertidos en ficha se excluyen: entrarían dos veces, una por cada
+  // lista, y el cliente vería la misma casa repetida.
+  const availableLinks = portalLinks.filter((l) => !l.property_id);
   const [chosen, setChosen] = useState<Set<string>>(
     new Set(available.map((s) => s.property_id)),
   );
+  const [chosenLinks, setChosenLinks] = useState<Set<string>>(new Set());
   const [language, setLanguage] = useState("es");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -45,11 +61,22 @@ export function CreateShortlistDialog({
       return next;
     });
 
+  const toggleLink = (id: string) =>
+    setChosenLinks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const total = chosen.size + chosenLinks.size;
+
   const create = () => {
     setError(null);
     start(async () => {
       const res = await createClientShortlist(clientId, {
         propertyIds: [...chosen],
+        portalLinkIds: [...chosenLinks],
         language,
       });
       if (!res.ok) {
@@ -109,7 +136,7 @@ export function CreateShortlistDialog({
           </label>
 
           <p className="mt-4 text-[11px] font-medium text-ink/55">
-            Propiedades ({chosen.size} de {available.length})
+            Propiedades seleccionadas ({chosen.size} de {available.length})
           </p>
           <ul className="mt-2 space-y-1.5">
             {available.map((s) => (
@@ -141,6 +168,67 @@ export function CreateShortlistDialog({
             ))}
           </ul>
 
+          {availableLinks.length > 0 && (
+            <>
+              <div className="mt-5 flex items-baseline justify-between gap-3">
+                <p className="text-[11px] font-medium text-ink/55">
+                  Enlaces de portales ({chosenLinks.size} de{" "}
+                  {availableLinks.length})
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChosenLinks(
+                      chosenLinks.size === availableLinks.length
+                        ? new Set()
+                        : new Set(availableLinks.map((l) => l.id)),
+                    )
+                  }
+                  className="text-[11px] font-medium text-gold-dark transition hover:text-gold"
+                >
+                  {chosenLinks.size === availableLinks.length
+                    ? "Ninguno"
+                    : "Todos"}
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-ink/45">
+                Anuncios que todavía no son ficha. El cliente los verá con la
+                foto del portal y sin galería, hasta que les crees ficha.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {availableLinks.map((l) => (
+                  <li key={l.id}>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition",
+                        chosenLinks.has(l.id)
+                          ? "border-gold/45 bg-gold/5"
+                          : "border-ink/10 bg-white",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={chosenLinks.has(l.id)}
+                        onChange={() => toggleLink(l.id)}
+                        className="h-3.5 w-3.5 accent-[#a8814a]"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[12.5px] text-ink">
+                          {l.title ?? l.url.replace(/^https?:\/\//, "")}
+                        </span>
+                        <span className="text-[11px] text-ink/45">
+                          {LINK_STATUS_LABEL[l.status]}
+                          {l.zone ? ` · ${l.zone}` : ""}
+                          {l.price_label ? ` · ${l.price_label}` : ""}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
           {error && (
             <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
               {error}
@@ -159,7 +247,7 @@ export function CreateShortlistDialog({
           <button
             type="button"
             onClick={create}
-            disabled={pending || chosen.size === 0}
+            disabled={pending || total === 0}
             className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {pending && <Loader2 size={12} className="animate-spin" />}

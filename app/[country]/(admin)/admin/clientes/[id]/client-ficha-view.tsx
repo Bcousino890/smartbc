@@ -341,6 +341,9 @@ export function ClientFichaView({
                 country={country}
                 shortlists={viewingCollections.shortlists}
                 selections={viewingCollections.selections}
+                // Desde aquí también se pueden mandar los anuncios que todavía
+                // no son ficha: es donde la gente busca "crear selección".
+                portalLinks={portalLinks?.links ?? []}
                 canEdit={viewingCollections.canEdit}
                 canCreate={viewingCollections.canCreate}
               />
