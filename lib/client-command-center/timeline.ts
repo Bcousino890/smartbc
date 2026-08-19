@@ -314,6 +314,8 @@ export function buildTimeline(input: TimelineInput): TimelineEvent[] {
         s.pageType === "client_shortlist"
           ? "cc.tl.sessionShortlist"
           : "cc.tl.sessionCollection",
+      // Los contadores viajan como variables y los compone la vista: en
+      // español "1 páginas" delata que nadie miró el caso de uno.
       vars: { views: s.views, actions: interactions },
       detail: [s.city, s.device].filter(Boolean).join(" · ") || null,
     });

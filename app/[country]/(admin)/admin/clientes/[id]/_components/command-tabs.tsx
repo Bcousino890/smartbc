@@ -35,7 +35,13 @@ export function CommandTabs({
       aria-label={t("cc.tabs.label")}
       className="sticky top-0 z-30 border-b border-ink/10 bg-cream-50/95 backdrop-blur-sm"
     >
-      <div className="mx-auto flex max-w-[1320px] gap-1 overflow-x-auto px-4 lg:px-8">
+      {/* Cinco pestañas no caben en 390px por mucho que se aprieten, así que
+          la tira se desliza. Lo que no puede pasar es que no se NOTE: el velo
+          del borde derecho existe para eso, y desaparece en cuanto sobra
+          sitio. Recortar los rótulos sería peor: "Solicitud" y "Actividad"
+          abreviados dejan de leerse de un vistazo. */}
+      <div className="relative">
+        <div className="mx-auto flex max-w-[1320px] gap-1 overflow-x-auto px-3 [scrollbar-width:none] sm:px-4 lg:px-8 [&::-webkit-scrollbar]:hidden">
         {COMMAND_TABS.map((tab) => {
           const count = counts[tab];
           const on = tab === active;
@@ -47,7 +53,7 @@ export function CommandTabs({
               aria-selected={on}
               onClick={() => onChange(tab)}
               className={cn(
-                "relative shrink-0 px-3 py-2.5 text-[12px] font-medium transition-colors",
+                "relative shrink-0 px-2 py-2.5 text-[12px] font-medium transition-colors sm:px-3",
                 on ? "text-ink" : "text-ink/45 hover:text-ink/75",
               )}
             >
@@ -72,6 +78,11 @@ export function CommandTabs({
             </button>
           );
         })}
+        </div>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 end-0 w-8 bg-gradient-to-l from-cream-50 to-transparent sm:hidden"
+        />
       </div>
     </nav>
   );

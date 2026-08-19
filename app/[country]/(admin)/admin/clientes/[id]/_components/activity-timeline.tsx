@@ -26,10 +26,31 @@ import {
 } from "lucide-react";
 import type { TimelineEvent, TimelineSource } from "@/lib/client-command-center/types";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "./plural";
 import { cn } from "@/lib/utils";
 import { formatDate } from "./format";
 import { RelativeTime } from "./relative-time";
 import { Empty, Panel } from "./ui";
+
+/**
+ * Lo que va detrás del titular. En las sesiones se compone aquí porque son DOS
+ * contadores —páginas y acciones— y cada uno tiene su propio singular.
+ */
+function detailOf(
+  e: TimelineEvent,
+  tn: (key: string, count: number, vars?: Record<string, string | number>) => string,
+): string | null {
+  if (e.source !== "analytics") return e.detail ?? null;
+  const views = Number(e.vars?.views ?? 0);
+  const actions = Number(e.vars?.actions ?? 0);
+  return [
+    views > 0 ? tn("cc.tl.pages", views) : null,
+    actions > 0 ? tn("cc.tl.actions", actions) : null,
+    e.detail,
+  ]
+    .filter(Boolean)
+    .join(" · ") || null;
+}
 
 const ICON: Record<TimelineSource, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = {
   client: UserRound,
@@ -59,6 +80,7 @@ export function ActivityTimeline({
   title?: string;
 }) {
   const t = useT();
+  const tn = useTn();
   const [actor, setActor] = useState<ActorFilter>("all");
   const [limit, setLimit] = useState(initial);
 
@@ -144,9 +166,11 @@ export function ActivityTimeline({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-[12.5px] leading-snug text-ink/80">
-                            {t(e.titleKey, e.vars)}
-                            {e.detail && (
-                              <span className="text-ink/45"> · {e.detail}</span>
+                            {typeof e.vars?.count === "number"
+                              ? tn(e.titleKey, e.vars.count, e.vars)
+                              : t(e.titleKey, e.vars)}
+                            {detailOf(e, tn) && (
+                              <span className="text-ink/45"> · {detailOf(e, tn)}</span>
                             )}
                           </p>
                           <p className="mt-px text-[10.5px] text-ink/35">
@@ -168,7 +192,7 @@ export function ActivityTimeline({
               onClick={() => setLimit((n) => n + 60)}
               className="mt-4 w-full rounded-md border border-ink/12 py-2 text-[11.5px] font-medium text-ink/60 transition hover:border-gold/45 hover:text-ink"
             >
-              {t("cc.timeline.more", { count: filtered.length - shown.length })}
+              {tn("cc.timeline.more", filtered.length - shown.length)}
             </button>
           )}
         </>

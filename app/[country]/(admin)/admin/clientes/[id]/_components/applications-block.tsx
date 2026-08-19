@@ -18,6 +18,7 @@ import Link from "next/link";
 import type { ClientApplication } from "@/lib/db/queries/client-command-center";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "./plural";
 import { cn } from "@/lib/utils";
 import { formatDate } from "./format";
 import { Empty, Panel, Pill, type Tone } from "./ui";
@@ -74,6 +75,7 @@ function ApplicationCard({
   prefix: string;
 }) {
   const t = useT();
+  const tn = useTn();
   const [open, setOpen] = useState(app.documentsPending > 0);
 
   const verified = app.documents.filter((d) => d.status === "verified").length;
@@ -156,7 +158,7 @@ function ApplicationCard({
             </span>
             {app.documentsPending > 0 && (
               <Pill tone="warning">
-                {t("cc.applications.pending", { count: app.documentsPending })}
+                {tn("cc.applications.pending", app.documentsPending)}
               </Pill>
             )}
           </span>

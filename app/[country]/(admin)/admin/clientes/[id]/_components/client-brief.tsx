@@ -17,6 +17,7 @@ import { Pencil } from "lucide-react";
 import type { ClientPreferencesFull } from "@/lib/db/queries/client-command-center";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "./plural";
 import { formatDate } from "./format";
 import { Button, Empty, Field, Panel } from "./ui";
 
@@ -32,6 +33,7 @@ export function ClientBrief({
   onEdit: () => void;
 }) {
   const t = useT();
+  const tn = useTn();
   const config = getCountryConfig(country);
 
   const edit = canEdit ? (
@@ -115,8 +117,8 @@ export function ClientBrief({
     prefs.occupants
       ? [
           prefs.occupants,
-          prefs.students ? t("cc.brief.students", { n: prefs.students }) : null,
-          prefs.workers ? t("cc.brief.workers", { n: prefs.workers }) : null,
+          prefs.students ? tn("cc.brief.students", prefs.students, { n: prefs.students }) : null,
+          prefs.workers ? tn("cc.brief.workers", prefs.workers, { n: prefs.workers }) : null,
         ]
           .filter(Boolean)
           .join(" · ")

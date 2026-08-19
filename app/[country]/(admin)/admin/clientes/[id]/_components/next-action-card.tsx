@@ -16,6 +16,7 @@
 import { ArrowRight } from "lucide-react";
 import type { NextAction } from "@/lib/client-command-center/types";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "./plural";
 import { cn } from "@/lib/utils";
 import { Panel } from "./ui";
 
@@ -33,7 +34,13 @@ export function NextActionCard({
   onGo: (action: NextAction) => void;
 }) {
   const t = useT();
+  const tn = useTn();
   const [head, ...rest] = actions;
+
+  // Las acciones cuentan cosas ("3 paradas sin confirmar"), y en singular hay
+  // que decirlo en singular. Si no hay contador, 2 = usa la forma plural.
+  const say = (key: string, a: NextAction) =>
+    tn(key, Number(a.vars?.count ?? a.vars?.days ?? 2), a.vars);
 
   return (
     <Panel title={t("cc.next.title")}>
@@ -48,11 +55,11 @@ export function NextActionCard({
             />
             <div className="min-w-0 flex-1">
               <p className="font-serif text-[17px] leading-snug text-ink">
-                {t(head.titleKey, head.vars)}
+                {say(head.titleKey, head)}
               </p>
               {head.detailKey && (
                 <p className="mt-1 text-[12.5px] leading-relaxed text-ink/55">
-                  {t(head.detailKey, head.vars)}
+                  {say(head.detailKey, head)}
                 </p>
               )}
               <button
@@ -79,7 +86,7 @@ export function NextActionCard({
                       aria-hidden
                       className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT[a.urgency])}
                     />
-                    <span className="truncate">{t(a.titleKey, a.vars)}</span>
+                    <span className="truncate">{say(a.titleKey, a)}</span>
                   </button>
                 </li>
               ))}

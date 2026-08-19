@@ -44,6 +44,7 @@ import type { ShortlistWithItems } from "@/lib/client-shortlist/types";
 import type { AdminClient } from "@/lib/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "./_components/plural";
 import { PageFooter } from "@/components/ui/page-footer";
 import { SuggestedPropertiesBlock } from "@/components/admin/clientes/suggested-properties-block";
 import { SelectedPropertiesBlock } from "@/components/admin/viewing-collections/selected-properties-block";
@@ -121,6 +122,7 @@ export function ClientFichaView({
   cc: CommandCenterProps;
 }) {
   const t = useT();
+  const tn = useTn();
   const router = useRouter();
   const params = useSearchParams();
   const config = getCountryConfig(country);
@@ -222,7 +224,7 @@ export function ClientFichaView({
                 hint={
                   cc.metrics.views === null
                     ? t("cc.metric.viewsNone")
-                    : t("cc.metric.viewsHint", {
+                    : tn("cc.metric.viewsHint", cc.engagement.sessions, {
                         sessions: cc.engagement.sessions,
                       })
                 }

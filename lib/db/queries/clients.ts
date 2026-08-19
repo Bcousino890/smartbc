@@ -34,6 +34,12 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
     restriction !== "all" && userId ? userId : null;
 
   // Try full query with joins first (session client, respects RLS)
+  // ⚠️ `visit_requests` tiene DOS claves ajenas a `profiles` (client_id y
+  // assigned_to), así que PostgREST no sabe por cuál embeber y devolvía
+  // PGRST201. La consulta caía SIEMPRE al plan B —un `select("*")` pelado— y
+  // por eso el listado se pintaba sin preferencias, sin etiquetas y con los
+  // contadores a cero: no era que faltaran los datos, es que nunca llegaban.
+  // `getClientById` ya nombraba la relación; esta se había quedado atrás.
   let fullQ = supabase
     .from("profiles")
     .select(`
@@ -41,7 +47,7 @@ export async function getClients(country?: string): Promise<ClientWithRelations[
       client_preferences(*),
       client_tag_assignments!client_tag_assignments_client_id_fkey(tag_id, client_tags(id, name, category, color)),
       favorites(count),
-      visit_requests(count)
+      visit_requests!visit_requests_client_id_fkey(count)
     `)
     .eq("role", "client");
   if (country) fullQ = fullQ.eq("country", country);

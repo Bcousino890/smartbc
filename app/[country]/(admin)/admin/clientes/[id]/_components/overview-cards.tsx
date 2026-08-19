@@ -12,6 +12,7 @@ import { ArrowRight, Eye } from "lucide-react";
 import type { ShortlistWithItems } from "@/lib/client-shortlist/types";
 import type { ItineraryWithStops } from "@/lib/viewing-collections/types";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "./plural";
 import { cn } from "@/lib/utils";
 import { compareStopsByDay } from "@/lib/viewing-collections/order";
 import { daysAway, formatDate } from "./format";
@@ -128,6 +129,7 @@ export function ViewingDayCard({
   onGo: () => void;
 }) {
   const t = useT();
+  const tn = useTn();
 
   // La jornada "activa" es la publicada o en borrador con la fecha más
   // cercana. Una completada o cancelada no es lo que uno busca al abrir la
@@ -155,7 +157,7 @@ export function ViewingDayCard({
             </Pill>
             {live.status === "draft" && live.readiness.blockers.length > 0 && (
               <Pill tone="warning">
-                {t("cc.itinerary.blockers", { count: live.readiness.blockers.length })}
+                {tn("cc.itinerary.blockers", live.readiness.blockers.length)}
               </Pill>
             )}
           </div>
@@ -171,7 +173,7 @@ export function ViewingDayCard({
           </p>
           {live.scheduled_date && (
             <p className="text-[11px] text-ink/45">
-              {relativeDayLabel(live.scheduled_date, t)}
+              {relativeDayLabel(live.scheduled_date, t, tn)}
             </p>
           )}
 
@@ -214,7 +216,7 @@ export function ViewingDayCard({
           {live.activeShare && (
             <p className="mt-3 flex items-center gap-1.5 text-[10.5px] text-ink/45">
               <Eye size={11} strokeWidth={1.75} className="text-emerald-600" />
-              {t("cc.itinerary.opens", { count: live.activeShare.opensCount })}
+              {tn("cc.itinerary.opens", live.activeShare.opensCount)}
             </p>
           )}
         </>
@@ -223,13 +225,17 @@ export function ViewingDayCard({
   );
 }
 
-function relativeDayLabel(iso: string, t: (k: string, v?: Record<string, string | number>) => string) {
+function relativeDayLabel(
+  iso: string,
+  t: (k: string, v?: Record<string, string | number>) => string,
+  tn: (k: string, n: number, v?: Record<string, string | number>) => string,
+) {
   const d = daysAway(iso);
   if (d === null) return "";
   if (d === 0) return t("cc.itinerary.today");
   if (d === 1) return t("cc.itinerary.tomorrow");
   if (d > 0) return t("cc.itinerary.inDays", { count: d });
-  return t("cc.itinerary.daysAgo", { count: Math.abs(d) });
+  return tn("cc.itinerary.daysAgo", Math.abs(d));
 }
 
 function Cell({
