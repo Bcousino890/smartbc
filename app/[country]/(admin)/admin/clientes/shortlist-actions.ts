@@ -228,7 +228,11 @@ export async function archiveClientShortlist(
 export async function createItineraryFromShortlist(
   shortlistId: string,
   options: { includeMaybe?: boolean; title?: string } = {},
-): Promise<ActionResult<{ itineraryId: string; skippedPending: number }>> {
+): Promise<ActionResult<{
+    itineraryId: string;
+    skippedPending: number;
+    skippedArchived: number;
+  }>> {
   const g = await gate("create");
   if (!g.ok) return g;
 
@@ -288,6 +292,7 @@ export async function createItineraryFromShortlist(
       .map((p: any) => p.id),
   );
   const ordered = wanted.filter((i: any) => usable.has(i.property_id));
+  const skippedArchived = wanted.length - ordered.length;
   if (ordered.length === 0) {
     return {
       ok: false,
@@ -344,5 +349,13 @@ export async function createItineraryFromShortlist(
   if (!res.ok) return res;
 
   revalidateClient(shortlist.client_id);
-  return { ok: true, itineraryId: res.itineraryId, skippedPending: pendingCount };
+  // Lo que NO entró viaja de vuelta: si el cliente eligió cinco y solo tres
+  // eran ficha (o una estaba archivada), el agente tiene que enterarse en vez
+  // de contar tres paradas y preguntarse dónde están las otras dos.
+  return {
+    ok: true,
+    itineraryId: res.itineraryId,
+    skippedPending: pendingCount,
+    skippedArchived,
+  };
 }

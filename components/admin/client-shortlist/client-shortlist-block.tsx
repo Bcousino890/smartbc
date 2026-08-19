@@ -278,7 +278,26 @@ function ShortlistRow({
             onClick={() =>
               run(async () => {
                 const res = await createItineraryFromShortlist(s.id);
-                if (res.ok) router.push(`${prefix}/clientes/${s.client_id}#viewing-collections`);
+                if (res.ok) {
+                  // Lo que se quedó fuera se dice ANTES de navegar: si no, el
+                  // agente cuenta tres paradas donde el cliente eligió cinco y
+                  // no sabe por qué.
+                  const fuera: string[] = [];
+                  if (res.skippedPending > 0) {
+                    fuera.push(
+                      `${res.skippedPending} son anuncios que todavía no son ficha`,
+                    );
+                  }
+                  if (res.skippedArchived > 0) {
+                    fuera.push(`${res.skippedArchived} ya no están disponibles`);
+                  }
+                  if (fuera.length > 0) {
+                    alert(
+                      `Itinerario creado, pero no han entrado todas: ${fuera.join(" y ")}.`,
+                    );
+                  }
+                  router.push(`${prefix}/clientes/${s.client_id}#viewing-collections`);
+                }
                 return res;
               })
             }
