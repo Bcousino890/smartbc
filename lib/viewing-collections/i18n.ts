@@ -117,6 +117,8 @@ export type CollectionDictionary = {
   exploreHint: string;
   /** Valoración del cliente al pie de cada residencia. */
   feedbackPrompt: string;
+  /** La misma pregunta, para una sola línea (modo libro, altura fija). */
+  feedbackPromptShort: string;
   feedbackHint: string;
   feedbackSaved: string;
 
@@ -190,6 +192,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Explorar residencia",
     exploreHint: "Galería completa, descripción, vídeo y planos.",
     feedbackPrompt: "¿Qué le parece esta residencia?",
+    feedbackPromptShort: "¿Le gusta?",
     feedbackHint: "Solo lo vemos nosotros: nos ayuda a afinar la selección.",
     feedbackSaved: "Anotado, gracias.",
     reserved: "Reservada",
@@ -235,6 +238,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Explore residence",
     exploreHint: "Full gallery, description, video and floor plans.",
     feedbackPrompt: "What do you make of this residence?",
+    feedbackPromptShort: "Rate it",
     feedbackHint: "Only we see this — it helps us refine the selection.",
     feedbackSaved: "Noted, thank you.",
     reserved: "Reserved",
@@ -280,6 +284,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Découvrir la résidence",
     exploreHint: "Galerie complète, description, vidéo et plans.",
     feedbackPrompt: "Que pensez-vous de cette résidence ?",
+    feedbackPromptShort: "Votre avis",
     feedbackHint: "Vous seul et nous : cela nous aide à affiner la sélection.",
     feedbackSaved: "C’est noté, merci.",
     reserved: "Réservée",
@@ -325,6 +330,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Esplora la residenza",
     exploreHint: "Galleria completa, descrizione, video e planimetrie.",
     feedbackPrompt: "Che ne pensa di questa residenza?",
+    feedbackPromptShort: "Le piace?",
     feedbackHint: "Lo vediamo solo noi: ci aiuta a perfezionare la selezione.",
     feedbackSaved: "Annotato, grazie.",
     reserved: "Riservata",
@@ -370,6 +376,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Residenz entdecken",
     exploreHint: "Vollständige Galerie, Beschreibung, Video und Grundrisse.",
     feedbackPrompt: "Wie gefällt Ihnen diese Residenz?",
+    feedbackPromptShort: "Ihr Urteil",
     feedbackHint: "Nur wir sehen das — es hilft uns, die Auswahl zu verfeinern.",
     feedbackSaved: "Notiert, vielen Dank.",
     reserved: "Reserviert",
@@ -415,6 +422,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "استكشاف المسكن",
     exploreHint: "معرض كامل، وصف، فيديو ومخططات.",
     feedbackPrompt: "ما رأيك في هذا المسكن؟",
+    feedbackPromptShort: "تقييمك",
     feedbackHint: "نحن وحدنا نطّلع على ذلك، ويساعدنا في تنقيح الاختيار.",
     feedbackSaved: "تم التسجيل، شكراً لك.",
     reserved: "محجوز",
@@ -459,6 +467,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Rezidansı keşfet",
     exploreHint: "Tam galeri, açıklama, video ve planlar.",
     feedbackPrompt: "Bu konut hakkında ne düşünüyorsunuz?",
+    feedbackPromptShort: "Beğendiniz mi?",
     feedbackHint: "Yalnızca biz görüyoruz; seçkiyi iyileştirmemize yardımcı oluyor.",
     feedbackSaved: "Not edildi, teşekkürler.",
     reserved: "Rezerve",
@@ -504,6 +513,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "לגלות את הנכס",
     exploreHint: "גלריה מלאה, תיאור, וידאו ותוכניות.",
     feedbackPrompt: "מה דעתך על הנכס הזה?",
+    feedbackPromptShort: "הדירוג שלך",
     feedbackHint: "רק אנחנו רואים זאת — זה עוזר לנו לדייק את הבחירה.",
     feedbackSaved: "נרשם, תודה.",
     reserved: "שמור",

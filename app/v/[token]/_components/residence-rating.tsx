@@ -33,9 +33,13 @@ export function ResidenceRating({
   dict: CollectionDictionary;
   className?: string;
   /**
-   * Modo libro: la página tiene ALTURA FIJA y no puede crecer, así que se
-   * recorta a etiqueta + estrellas. El matiz de "solo lo vemos nosotros" se
-   * pierde ahí, pero un bloque que desborde rompería la composición entera.
+   * Modo libro: la página tiene ALTURA FIJA y no puede crecer.
+   *
+   * ⚠️ La primera versión apilaba etiqueta y estrellas y DESBORDABA en móvil
+   * vertical —que entra en modo libro, no en scroll: el media query mira la
+   * ALTURA (min-height: 620px)—. Las estrellas quedaban cortadas por el filete
+   * del pie. Ahora es UNA sola fila con la pregunta abreviada, pensada para
+   * compartir renglón con la referencia BC-####: añade ~12px, no ~120px.
    */
   compact?: boolean;
 }) {
@@ -62,12 +66,50 @@ export function ResidenceRating({
     });
   };
 
+  if (compact) {
+    return (
+      <div
+        className={cn("flex items-center gap-2", className)}
+        role={readOnly ? "img" : "radiogroup"}
+        aria-label={dict.feedbackPrompt}
+      >
+        <Label tone="gold" className="shrink-0">
+          {dict.feedbackPromptShort}
+        </Label>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((n) => {
+            const on = n <= value;
+            return (
+              <button
+                key={n}
+                type="button"
+                disabled={readOnly || pending}
+                aria-label={`${n}/5`}
+                aria-pressed={on}
+                title={dict.feedbackPrompt}
+                onClick={() => send(value === n ? 0 : n)}
+                className={cn(
+                  "vc-focus font-serif text-[19px] leading-none transition-colors duration-300",
+                  on ? "text-gold-dark" : "text-ink/20",
+                  !readOnly && "hover:text-gold-dark",
+                  readOnly && "cursor-default",
+                )}
+              >
+                {on ? "★" : "☆"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn(compact ? "mt-5" : "mt-8 md:mt-10", className)}>
+    <div className={cn("mt-8 md:mt-10", className)}>
       <Label tone="gold">{dict.feedbackPrompt}</Label>
 
       <div
-        className={cn("flex items-center gap-3", compact ? "mt-2" : "mt-3")}
+        className="mt-3 flex items-center gap-3"
         role={readOnly ? "img" : "radiogroup"}
         aria-label={dict.feedbackPrompt}
       >
@@ -85,8 +127,7 @@ export function ResidenceRating({
                 // valoración dada sin querer solo se puede bajar a 1.
                 onClick={() => send(value === n ? 0 : n)}
                 className={cn(
-                  "vc-focus font-serif leading-none transition-colors duration-300",
-                  compact ? "text-[20px]" : "text-[26px] md:text-[30px]",
+                  "vc-focus font-serif text-[26px] leading-none transition-colors duration-300 md:text-[30px]",
                   on ? "text-gold-dark" : "text-ink/20",
                   !readOnly && "hover:text-gold-dark",
                   readOnly && "cursor-default",
@@ -105,11 +146,9 @@ export function ResidenceRating({
         )}
       </div>
 
-      {!compact && (
-        <p className="mt-3 font-sans text-[11.5px] text-ink/40">
-          {dict.feedbackHint}
-        </p>
-      )}
+      <p className="mt-3 font-sans text-[11.5px] text-ink/40">
+        {dict.feedbackHint}
+      </p>
     </div>
   );
 }

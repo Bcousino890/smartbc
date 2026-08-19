@@ -705,20 +705,28 @@ function BookResidencePage({
           </div>
         )}
 
-        {stop.bcReference && (
-          <p className="mt-4 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30 md:mt-7">
-            Ref. {stop.bcReference}
-          </p>
-        )}
-
-        {!cancelled && (
-          <ResidenceRating
-            order={stop.order}
-            initialRating={stop.clientRating}
-            collectionToken={collectionToken}
-            dict={dict}
-            compact
-          />
+        {/* Referencia y valoración COMPARTEN RENGLÓN. La página del libro
+            tiene altura fija: apilarlas desbordaba en móvil vertical y las
+            estrellas salían cortadas por el filete del pie. */}
+        {(stop.bcReference || !cancelled) && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:mt-7">
+            {stop.bcReference ? (
+              <p className="font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/30">
+                Ref. {stop.bcReference}
+              </p>
+            ) : (
+              <span />
+            )}
+            {!cancelled && (
+              <ResidenceRating
+                order={stop.order}
+                initialRating={stop.clientRating}
+                collectionToken={collectionToken}
+                dict={dict}
+                compact
+              />
+            )}
+          </div>
         )}
        </div>
       </div>

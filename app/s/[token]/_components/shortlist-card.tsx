@@ -156,15 +156,26 @@ export function ShortlistCard({
           <p dir="ltr" className="mt-1 font-serif text-[15px] vc-nums text-ink rtl:text-right">
             {property.priceLabel}
           </p>
-          {/* Lo que el anuncio no traía se OMITE. Un "0 baños" en la tarjeta
-              de un cliente se lee como un dato, y es un hueco. */}
+          {/* Lo que el anuncio no traía se OMITE: un "0 baños" en la tarjeta
+              de un cliente se lee como un dato, y es un hueco.
+              Y cada cifra lleva SU PALABRA. Antes iban desnudas ("4 · 3 · 250
+              m²"), que se entendía porque el m² del final anclaba la lectura;
+              en un anuncio sin baños ni superficie quedaba un "4" solo,
+              colgando bajo el precio, que no dice absolutamente nada.
+              La etiqueta va TAL CUAL viene del diccionario, sin pasarla a
+              minúsculas: en alemán los sustantivos se escriben con mayúscula
+              y "schlafzimmer" estaría mal escrito. */}
           {(property.bedrooms != null ||
             property.bathrooms != null ||
             property.squareMeters != null) && (
             <p className="mt-0.5 font-sans text-[10.5px] text-ink/45">
               {[
-                property.bedrooms != null ? String(property.bedrooms) : null,
-                property.bathrooms != null ? String(property.bathrooms) : null,
+                property.bedrooms != null
+                  ? `${property.bedrooms} ${t.bedrooms}`
+                  : null,
+                property.bathrooms != null
+                  ? `${property.bathrooms} ${t.bathrooms}`
+                  : null,
                 property.squareMeters != null
                   ? `${property.squareMeters} m²`
                   : null,
