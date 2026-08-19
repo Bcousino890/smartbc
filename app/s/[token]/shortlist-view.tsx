@@ -331,8 +331,21 @@ export function ShortlistView({
       ? "review"
       : "priorities",
   );
-  /** Qué residencia se está revisando. Índice sobre la lista completa. */
-  const [cursor, setCursor] = useState(0);
+  /**
+   * Qué residencia se está revisando. Índice sobre la lista completa: se
+   * recorren TODAS para poder volver atrás y cambiar de idea.
+   *
+   * Pero se ABRE en la primera que falte por decidir. Arrancar en la 1 de 19
+   * dejaba al cliente en una que ya había resuelto, con la barra diciéndole
+   * que le faltaban tres y sin pista de dónde estaban.
+   */
+  const [cursor, setCursor] = useState(() => {
+    const ordered = [...shortlist.properties].sort(
+      (a, b) => a.position - b.position || a.itemId.localeCompare(b.itemId),
+    );
+    const first = ordered.findIndex((p) => p.decision === "undecided");
+    return first >= 0 ? first : 0;
+  });
   const [confirmPending, setConfirmPending] = useState(false);
 
   // Orden de recorrido en «revisar»: el mismo que ve el cliente en la lista.
@@ -443,7 +456,15 @@ export function ShortlistView({
         <ShortlistNav
           t={t}
           mode={mode}
-          onMode={setMode}
+          onMode={(m) => {
+            // Volver a "revisar" es volver a LO QUE FALTA, no a la primera de
+            // la lista: es lo que promete el contador de la barra.
+            if (m === "review") {
+              const next = nextPendingFrom(0);
+              if (next >= 0) setCursor(next);
+            }
+            setMode(m);
+          }}
           pending={groups.undecided.length}
           total={items.length}
           counts={counts}

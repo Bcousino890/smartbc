@@ -169,6 +169,13 @@ function ShortlistRow({
     });
   };
 
+  // ⚠️ Una nota sobre una residencia que el cliente todavía no ha decidido es
+  // igual de valiosa —a veces más: "me gusta pero me preocupa el salón"— y no
+  // aparecía en ninguna parte, porque solo se listaban los tres grupos con
+  // decisión. Sus notas se muestran aparte.
+  const pendingWithNotes = s.items.filter(
+    (i) => i.decision === "undecided" && i.client_comment,
+  );
   const must = s.items.filter((i) => i.decision === "must_visit");
   const maybe = s.items.filter((i) => i.decision === "maybe");
   const no = s.items.filter((i) => i.decision === "not_for_me");
@@ -215,11 +222,15 @@ function ShortlistRow({
         )}
       </p>
 
-      {s.counts.decided > 0 && (
+      {(s.counts.decided > 0 || pendingWithNotes.length > 0) && (
         <div className="mt-2.5 space-y-2">
           <Group label="Quiere visitar" items={must} numbered />
           <Group label="Alternativas" items={maybe} />
           <Group label="Descartadas" items={no} dim />
+          <Group
+            label="Con nota, todavía sin decidir"
+            items={pendingWithNotes}
+          />
         </div>
       )}
 
