@@ -143,7 +143,12 @@ export function toPublicClientShortlist(
       // Un anuncio sin ficha trae su foto del portal; una ficha nuestra pasa
       // SIEMPRE por el proxy, que es lo que impide que salga una ruta de
       // Storage al navegador del cliente.
-      const photos = item.externalPhotoUrls ?? proxyPhotoUrls(prop as never);
+      // La foto de un anuncio de portal viaja SIEMPRE por nuestro proxy: su
+      // URL de origen (img4.idealista.com/...) le contaba al cliente de dónde
+      // sale la propiedad. Ver app/p/i/[itemId]/route.ts.
+      const photos = item.externalPhotoUrls
+        ? item.externalPhotoUrls.map(() => `/p/i/${item.id}`)
+        : proxyPhotoUrls(prop as never);
       return {
         itemId: item.id,
         // Con red: un título genérico o que delate el portal se sustituye

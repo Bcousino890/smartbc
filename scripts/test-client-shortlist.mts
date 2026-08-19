@@ -117,6 +117,34 @@ section("🔴 SEGURIDAD · el contrato público no filtra");
     "las fotos van SIEMPRE por el proxy /p/",
     out.properties[0].photoUrls.every((u) => u.startsWith("/p/")),
   );
+
+  // 🔴 Un anuncio de portal todavía sin ficha: su foto vive en el CDN del
+  // portal y servirla tal cual le contaba al cliente de dónde sale la casa.
+  {
+    const withExternal = toPublicClientShortlist(
+      shortlist({
+        items: [
+          {
+            ...item({ id: "ext-1" }),
+            externalPhotoUrls: [
+              "https://img4.idealista.com/blur/480_360_mq/0/id.pro.es.image.jpg",
+            ],
+          } as RawShortlistItem,
+        ],
+      }),
+    );
+    const urls = withExternal.properties[0].photoUrls;
+    check(
+      "la foto de un anuncio de portal NO sale con la URL del portal",
+      urls.every((u) => !/idealista|fotocasa|habitaclia|https?:/i.test(u)),
+      urls.join(" "),
+    );
+    check(
+      "y viaja por nuestro proxy",
+      urls.every((u) => u.startsWith("/p/i/")),
+      urls.join(" "),
+    );
+  }
   check(
     "solo se manda el nombre de pila",
     out.clientFirstName === "Paul",
