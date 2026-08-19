@@ -223,3 +223,31 @@ Hay un shortlist de QA creado y **en punto de partida limpio**:
 - Estado: sin abrir, nada decidido.
 
 Al terminar de probarlo, se puede archivar o revocar desde su ficha.
+
+---
+
+## 16. Arrastrar para ordenar (añadido 2026-08-19)
+
+Las prioritarias ya se podían ordenar con las flechas ▲▼. Ahora también
+**arrastrando desde el asa ⠿**, que es lo que se pide instintivamente cuando
+hay catorce tarjetas.
+
+⚠️ **No usa el arrastre nativo de HTML5.** `draggable` **no dispara eventos con
+el dedo** en Safari de iOS ni en Chrome de Android, y un shortlist se abre
+casi siempre en el móvil: habría sido una función que solo existe con ratón.
+Va con **Pointer Events** (`hooks/use-reorder-list.ts`, sin dependencias).
+
+Tres detalles que hacen que se sienta bien, y que conviene no "simplificar":
+
+- **Se arrastra solo desde el asa.** Si arrastrara toda la tarjeta, no se
+  podría hacer scroll con el dedo encima de la lista.
+- **`touch-action: none` en el asa.** Sin eso el navegador se queda el gesto
+  como scroll y el arrastre se pierde en cuanto el dedo se mueve.
+- **La página se desplaza sola cerca del borde**, en su propio bucle de
+  animación: el dedo puede quedarse quieto ahí y la lista tiene que seguir
+  corriendo. Sin ello, llevar la primera al final es imposible en un móvil.
+
+**Las flechas se quedan.** No son un resto del pasado: son la vía accesible
+(teclado y lector de pantalla) y el plan B si el arrastre falla en algún
+navegador. Las dos rutas terminan en la MISMA `setShortlistOrder(token, ids)`
+con la lista completa ya ordenada, así que no pueden divergir.

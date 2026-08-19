@@ -31,6 +31,7 @@ import {
 import { isRtl } from "@/lib/viewing-collections/i18n";
 import type { ShortlistDecision } from "@/lib/client-shortlist/types";
 import { useAnalytics } from "@/hooks/use-analytics";
+import { useReorderList } from "@/hooks/use-reorder-list";
 import { PrivateGallery } from "@/app/v/[token]/_components/private-gallery";
 import { cn } from "@/lib/utils";
 import { ShortlistCard } from "./_components/shortlist-card";
@@ -61,6 +62,11 @@ export function ShortlistView({
   const isPreview = !token;
 
   const [items, setItems] = useState(shortlist.properties);
+  // Espejo en ref: `commitOrder` necesita el estado actual para poder
+  // deshacer si el envío falla, y no puede depender de `items` sin recrearse
+  // en cada pulsación (el arrastre lo llama con el dedo aún en la pantalla).
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const [revision, setRevision] = useState(shortlist.revision);
   const [save, setSave] = useState<SaveState>("idle");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -189,6 +195,41 @@ export function ShortlistView({
     ).finally(() => setBusyId(null));
   };
 
+  /**
+   * Reordenado por arrastre. Comparte destino con las flechas —
+   * `setShortlistOrder` recibe la lista completa ya ordenada— así que las dos
+   * vías no pueden divergir. Las flechas siguen siendo imprescindibles: son la
+   * alternativa accesible y la que funciona con lector de pantalla.
+   */
+  const applyOrder = useCallback(
+    (orderedIds: string[]) => {
+      const rankById = new Map(orderedIds.map((id, i) => [id, i + 1]));
+      setItems((prev) =>
+        prev.map((i) =>
+          rankById.has(i.itemId) ? { ...i, rank: rankById.get(i.itemId)! } : i,
+        ),
+      );
+    },
+    [],
+  );
+
+  const commitOrder = useCallback(
+    (orderedIds: string[]) => {
+      const before = itemsRef.current;
+      applyOrder(orderedIds);
+      track("priority_change", { via: "drag" });
+      void commit(before, () => setShortlistOrder(token, orderedIds));
+    },
+    [applyOrder, commit, token, track],
+  );
+
+  const { draggingId, handleProps, itemProps } = useReorderList({
+    ids: groups.must.map((m) => m.itemId),
+    onReorder: applyOrder,
+    onCommit: commitOrder,
+    disabled: isPreview,
+  });
+
   const move = (item: PublicShortlistProperty, dir: -1 | 1) => {
     const before = items;
     const musts = groups.must;
@@ -315,6 +356,10 @@ export function ShortlistView({
               }}
               onNote={() => setNoteFor(p)}
               busy={busyId === p.itemId}
+              dragHandleProps={handleProps(p.itemId)}
+              isDragging={draggingId === p.itemId}
+              itemRef={itemProps(p.itemId).ref}
+              itemStyle={itemProps(p.itemId).style}
             />
           ))}
         </Group>

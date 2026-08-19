@@ -26,6 +26,10 @@ export function ShortlistCard({
   onView,
   onNote,
   busy,
+  dragHandleProps,
+  isDragging,
+  itemRef,
+  itemStyle,
 }: {
   property: PublicShortlistProperty;
   t: ShortlistDictionary;
@@ -38,15 +42,28 @@ export function ShortlistCard({
   onView: () => void;
   onNote: () => void;
   busy?: boolean;
+  /** Manejadores de puntero del asa de arrastre (ver useReorderList). */
+  dragHandleProps?: React.ComponentProps<"button">;
+  isDragging?: boolean;
+  /** Registro del elemento para medir su altura durante el arrastre. */
+  itemRef?: (el: HTMLElement | null) => void;
+  itemStyle?: React.CSSProperties;
 }) {
   const discarded = property.decision === "not_for_me";
 
   return (
     <article
+      ref={itemRef}
+      style={itemStyle}
+      data-reorder-id={property.itemId}
       className={cn(
         "vc-card group relative overflow-hidden rounded-2xl border border-ink/10 bg-white/70 transition-opacity duration-300",
         discarded && "opacity-60",
         busy && "opacity-70",
+        // Levantada mientras se arrastra: sin una señal clara, en un móvil no
+        // se sabe cuál de las catorce se está moviendo.
+        isDragging &&
+          "border-gold/60 shadow-[0_12px_28px_-10px_rgba(40,28,10,0.45)] ring-1 ring-gold/40",
       )}
     >
       <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
@@ -78,6 +95,20 @@ export function ShortlistCard({
                   <span aria-hidden>&darr;</span>
                 </button>
               </>
+            )}
+            {dragHandleProps && (
+              <button
+                type="button"
+                {...dragHandleProps}
+                aria-label={t.dragToReorder}
+                title={t.dragToReorder}
+                className="vc-focus mt-0.5 flex h-7 w-7 touch-none items-center justify-center rounded-full text-ink/25 transition hover:bg-ink/5 hover:text-ink active:cursor-grabbing"
+              >
+                {/* Seis puntos: el asa de toda la vida, sin importar un icono. */}
+                <span aria-hidden className="text-[13px] leading-none tracking-[0.12em]">
+                  ⠿
+                </span>
+              </button>
             )}
           </div>
         )}
