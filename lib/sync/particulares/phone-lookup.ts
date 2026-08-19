@@ -31,7 +31,7 @@ export type PhoneLookupOptions = {
   proxyUrl?: string;
   /** Saltar la carga de HTML y llamar directo al AJAX (cuando el caller ya tiene el HTML/advertiserInfo de otra fuente). */
   ajaxOnly?: boolean;
-  /** No intentar el fallback AJAX (proxy+CapSolver+Playwright) — solo HTML/descripción, barato. */
+  /** No intentar el fallback AJAX (proxy+Playwright) — solo HTML/descripción, barato. */
   skipAjax?: boolean;
   debug?: boolean;
 };
@@ -46,7 +46,7 @@ export type PhoneLookupOptions = {
  *   2. Teléfono escrito a mano en la descripción (extractPhoneFromHtmlDescription) — gratis,
  *      reutiliza el mismo HTML ya descargado en el paso 1.
  *   3. Endpoint AJAX "Ver teléfono" (fetchIdealistaPhoneViaAjax) — caro
- *      (proxy + posible CapSolver + fallback Playwright). Se trata como
+ *      (proxy + fallback Playwright). Se trata como
  *      caja negra: acá NO se reimplementa su lógica de t=bv/t=fe ni de
  *      reintentos — eso vive intacto en idealista-advertiser-detector.ts.
  *
@@ -55,7 +55,7 @@ export type PhoneLookupOptions = {
  * distinto de DataDome. Antes esto solo lo hacía el backfill del cron;
  * refresh-phones/verify-phones se rendían directamente. Se unifica hacia el
  * comportamiento más completo (más intentos, no más gasto: el AJAX ya trae
- * su propio corte t=bv sin CapSolver).
+ * su propio corte t=bv).
  */
 export async function lookupIdealistaPhone(
   sourceUrl: string,

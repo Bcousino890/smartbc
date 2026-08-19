@@ -5,7 +5,7 @@
  * del 403 en dos formatos (ambos capturados en real de idealista.com):
  *   1) JSON: {"url":"https://geo.captcha-delivery.com/captcha/?...&t=fe"}
  *   2) HTML interstitial con  var dd={'cid':...,'hsh':...,'t':'fe',...}
- * De ambos hay que reconstruir la captchaUrl que CapSolver necesita. Solo t=fe
+ * De ambos hay que reconstruir la captchaUrl del reto. Solo t=fe
  * es resoluble (slider); t=bv es bloqueo duro (IP baneada).
  *
  * Ejecutar:  node --experimental-strip-types scripts/test-datadome-challenge.mts
@@ -34,7 +34,7 @@ check("HTML var dd → reconstruye initialCid", r2.type === "fe" && !!r2.url?.in
 check("HTML var dd → incluye hash + t=fe", !!r2.url?.includes("hash=AC81") && !!r2.url?.includes("t=fe"), r2);
 
 const r3 = extractDatadomeChallengeUrl(bvBody);
-check("t=bv detectado (bloqueo duro, no gastar CapSolver)", r3.type === "bv", r3);
+check("t=bv detectado (bloqueo duro)", r3.type === "bv", r3);
 
 const r4 = extractDatadomeChallengeUrl("respuesta normal sin reto");
 check("sin reto → null", r4.url === null && r4.type === null, r4);

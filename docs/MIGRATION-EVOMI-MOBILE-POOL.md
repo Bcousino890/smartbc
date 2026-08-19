@@ -67,7 +67,6 @@ git push origin main
 3. Busca en el JSON:
    - **"proxy_status":** debe ser ✅ (conecta sin error)
    - **"datadome_verdicts":** debe mostrar `"t=fe"` (SOLVABLE) o `"OK"` en lugar de `"t=bv"`
-   - **"capsolver_end_to_end":** si aparece `"t=fe"`, debe devolver `"solved": true`
 
 ### Via logs (alternativa)
 
@@ -109,7 +108,8 @@ El código en `lib/sync/proxy-config.ts`:
 - Cambiar de residential a mobile es **solo cambiar la URL**, sin código
 
 **Costo estimado:** Mobile Pool cuesta ~3-5x más que residential por GB.  
-**Ganancia:** DataDome raramente bloquea IPs mobile → CAPTCHAs solvables → CapSolver funciona.
+**Ganancia:** DataDome raramente bloquea IPs mobile → menos retos que nos dejen
+sin teléfono (ya no hay resolvedor de CAPTCHA: CapSolver fue eliminado).
 
 ---
 

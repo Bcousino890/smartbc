@@ -6,7 +6,7 @@ import { normalizeSpanishPhone } from "./idealista-advertiser-detector";
 //
 // Por qué existe: muchos dueños publican el MISMO piso en Idealista y en
 // Fotocasa, pero enseñan el teléfono en UNO solo de los dos. En Idealista el
-// teléfono está detrás de DataDome (proxy + CapSolver, caro y frágil); en
+// teléfono está detrás de DataDome (proxy residencial, caro y frágil); en
 // Fotocasa viene REGALADO en el HTML. Trayendo el anuncio de Fotocasa, el
 // cross-match (`cross-match-phone.ts`) copia ese teléfono al gemelo de
 // Idealista que no lo enseña.

@@ -19,8 +19,7 @@ y el cross-match sigan corriendo:
    detecta nuevos anuncios, bajas (404) y reactivaciones, trackea cambios
    (precio, retirada, etc.) y preserva todos los datos aunque el anuncio se
    retire. Intenta extraer el teléfono peleando contra DataDome (proxy
-   residencial Evomi + CapSolver cuando hace falta) — puede fallar según el
-   estado del proxy/pool.
+   residencial Evomi) — puede fallar según el estado del proxy/pool.
 2. **`particulares/scrape-pisos`** (pisos.com) — misma lógica de scrape,
    pero pisos.com expone el teléfono directo en el HTML sin DataDome, así
    que es mucho más fiable para conseguir teléfonos.
@@ -119,16 +118,17 @@ Además del cron horario, existe el workflow de GitHub Actions "Sweep
 missing phones (particulares)" (`.github/workflows/sweep-missing-phones.yml`)
 para priorizar un distrito concreto en vez de esperar el barrido general.
 Requiere el secret `CRON_SECRET` en Settings → Secrets and variables →
-Actions (mismo valor que usa el cron del VPS). Se corta solo si el saldo de
-CapSolver cae debajo del mínimo configurado, para no fundirlo en un barrido
-masivo.
+Actions (mismo valor que usa el cron del VPS). Se corta solo cuando el propio
+endpoint indica que se ha detenido (campo `stopped`) o al llegar al tope de
+tandas.
 
 ## Coste
 
 - Proxy residencial: Evomi (ver `/admin/configuracion` → Proxy configuration).
-- CapSolver solo se gasta cuando Idealista devuelve un slider resoluble
-  (`t=fe`) — un bloqueo duro (`t=bv`) corta sin gastar saldo.
-- pisos.com no necesita proxy residencial ni CapSolver (sin DataDome).
+- Ya NO se usa ningún resolvedor de CAPTCHA (CapSolver eliminado): ante un
+  reto de DataDome el flujo de Idealista se rinde y se tira de las fuentes
+  alternativas.
+- pisos.com no necesita proxy residencial (sin DataDome).
 
 ## Alternativas
 
@@ -138,4 +138,4 @@ Si prefieres ejecutar cada X minutos en lugar de cada hora, cambiar el cron:
 - `*/15 * * * *` = cada 15 minutos
 - `*/5 * * * *` = cada 5 minutos
 
-Pero ten en cuenta que aumenta el consumo de proxy/CapSolver.
+Pero ten en cuenta que aumenta el consumo de proxy.

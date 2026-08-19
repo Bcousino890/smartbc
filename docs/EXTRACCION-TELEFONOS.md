@@ -1,5 +1,14 @@
 # Extracción de teléfonos de particulares — Idealista
 
+> ⚠️ **CapSolver fue ELIMINADO del código (2026-08-19).** Todo lo que este
+> documento cuenta sobre resolver el slider `t=fe` con CapSolver es HISTORIA:
+> ya no existen `solve-datadome-with-capsolver.ts`, `capsolver-config.ts` ni
+> `capsolver-guard.ts`, ni la API key en `app_settings` (migración 0140). Hoy,
+> ante un reto de DataDome el flujo de Idealista se rinde y el teléfono se
+> busca por las vías que no dependen de él: HTML/descripción, pisos.com y
+> Fotocasa (cross-match). El resto del documento —proxy, sticky sessions,
+> `t=fe`/`t=bv`, parsers— sigue vigente.
+
 > Documento técnico del trabajo de extracción de teléfonos: qué hace el sistema,
 > qué se probó, qué **no** funcionó y por qué, y cómo está montada la
 > infraestructura (proxy residencial + CapSolver). Sirve de referencia para

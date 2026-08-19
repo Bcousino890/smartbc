@@ -37,7 +37,6 @@ export default function ConfiguracionClient() {
   const [scrapingProxyUrl, setScrapingProxyUrl] = useState("");
   const [proxyConfigs, setProxyConfigs] = useState<ProxyConfig[]>([]);
   const [activeProxyProvider, setActiveProxyProvider] = useState<ProxyProvider>("evomi");
-  const [scrapingCapSolverKey, setScrapingCapSolverKey] = useState("");
   const [mlClientSecret, setMlClientSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -75,9 +74,6 @@ export default function ConfiguracionClient() {
           secret = secret.replace(/^["']+|["']+$/g, "").trim();
           setMlClientSecret(secret || "");
         }
-        if (typeof data["scraping.capsolver.api_key"] === "string") {
-          setScrapingCapSolverKey(data["scraping.capsolver.api_key"]);
-        }
       })
       .catch(() => {
         // Si falla la carga, se mantienen los valores mock
@@ -97,7 +93,6 @@ export default function ConfiguracionClient() {
           notifications: settings.notifications,
           "scraping.proxyUrl": scrapingProxyUrl,
           "scraping.proxyConfigs": JSON.stringify(proxyConfigs),
-          "scraping.capsolver.api_key": scrapingCapSolverKey,
           "ml.chile.client_secret": mlClientSecret,
         }),
       });
@@ -299,15 +294,6 @@ export default function ConfiguracionClient() {
           titleKey="config.scraping.title"
         >
           <div className="space-y-3">
-            <p className="text-xs text-ink/55">
-              CapSolver API Key para resolver CAPTCHAs de DataDome automáticamente:
-            </p>
-            <PasswordField
-              label="CapSolver API Key"
-              value={scrapingCapSolverKey}
-              onChange={setScrapingCapSolverKey}
-              placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-            />
             <ProxyConfigClient
               configs={proxyConfigs}
               activeProvider={activeProxyProvider}

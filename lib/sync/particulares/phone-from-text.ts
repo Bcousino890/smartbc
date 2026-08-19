@@ -21,8 +21,8 @@ function normalizeSpanishPhone(raw: string | null | undefined): string | null {
 // anunciantes ESCRIBEN su teléfono en la descripción del anuncio para saltarse
 // el "chat only" del portal ("Interesados llamar al 666 77 88 99",
 // "WhatsApp 600123123", etc.). Ese texto lo obtenemos con el UA de WhatsApp que
-// pasa DataDome — NO depende de romper el botón "Ver teléfono", ni de proxy,
-// CapSolver o Playwright.
+// pasa DataDome — NO depende de romper el botón "Ver teléfono", ni de proxy
+// o Playwright.
 //
 // El reto es evitar falsos positivos (referencias, precios, m², códigos postales,
 // años). Por eso:

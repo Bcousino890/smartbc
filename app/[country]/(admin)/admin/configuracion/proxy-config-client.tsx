@@ -297,7 +297,7 @@ function PhoneExtractionTester() {
       <div>
         <h3 className="font-semibold text-sm">Testear extracción de teléfono (Idealista)</h3>
         <p className="text-xs text-gray-500">
-          Corre el flujo real (proxy + CapSolver + fallback Playwright) contra un anuncio concreto.
+          Corre el flujo real (proxy + fallback Playwright) contra un anuncio concreto.
           Puede tardar hasta 40s.
         </p>
       </div>

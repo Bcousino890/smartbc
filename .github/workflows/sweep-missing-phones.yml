@@ -6,7 +6,7 @@ name: Sweep missing phones (particulares)
 # CRON_SECRET, no necesita sesión de admin ni SSH al VPS — pega
 # directamente a la URL pública). Se frena solo si:
 #   - ya no quedan anuncios sin teléfono en ese distrito, o
-#   - el propio endpoint reporta saldo bajo de CapSolver (stopped=low_capsolver_balance)
+#   - el propio endpoint reporta que se ha detenido (campo `stopped`)
 #   - se llega al tope de tandas de seguridad (max_batches)
 #
 # Requiere el secret CRON_SECRET (Settings → Secrets and variables →

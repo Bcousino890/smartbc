@@ -4,8 +4,7 @@ import { normalizeSpanishPhone } from "./idealista-advertiser-detector";
 // ─────────────────────────────────────────────────────────────────────────────
 // Scraper de pisos.com — FUENTE ALTERNATIVA de teléfonos de particulares.
 //
-// A diferencia de Idealista (teléfono tras DataDome + slider + CapSolver +
-// proxy residencial), pisos.com incrusta el teléfono del anunciante DIRECTAMENTE
+// A diferencia de Idealista (teléfono tras DataDome + proxy residencial), pisos.com incrusta el teléfono del anunciante DIRECTAMENTE
 // en el HTML de la ficha, sin captcha ni anti-bot:
 //   ...,"telefono":"622383562","caracteristicasInmueble":...
 // Verificado: 8/8 fichas de particulares exponían el teléfono. Esta es la vía

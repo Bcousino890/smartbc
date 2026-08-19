@@ -9,10 +9,8 @@ export type PlaywrightPhoneResult = {
   error?: string;
 };
 
-// Chrome 131: debe coincidir con el UA que CapSolver exige (fuerza >= Chrome
-// 124), porque el cid del reto DataDome queda ligado al UA de la navegación; si
-// el browser navega con Chrome 120 pero CapSolver resuelve con 131, DataDome
-// rechaza con "userAgent does not match".
+// Chrome 131: el cid del reto DataDome queda ligado al UA de la navegación,
+// así que debe ser un UA de navegador actual y el MISMO en todo el flujo.
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -22,29 +20,6 @@ const PHONE_ENDPOINTS = [
   "adContactInfoForDetail",
   "adContactInfoForMobileDevices",
 ];
-
-// Extrae la URL del reto DataDome (geo.captcha-delivery.com/captcha/?...) de la
-// página bloqueada. CapSolver la necesita como `captchaUrl` para resolver el
-// slider; sin ella no puede (pasarle la URL de la ficha no sirve). La buscamos
-// en los iframes cargados y, si no, en el HTML renderizado.
-async function extractDatadomeCaptchaUrl(page: Page): Promise<string | null> {
-  try {
-    for (const frame of page.frames()) {
-      const url = frame.url();
-      if (url && url.includes("geo.captcha-delivery.com")) return url;
-    }
-  } catch {
-    // ignorar
-  }
-  try {
-    const html = await page.content();
-    const m = html.match(/https?:\/\/geo\.captcha-delivery\.com\/captcha\/[^"'\s<>]+/);
-    if (m?.[0]) return m[0].replace(/&amp;/g, "&");
-  } catch {
-    // ignorar
-  }
-  return null;
-}
 
 function parsePhoneFromAjaxBody(text: string): { phone: string | null; contactName: string | null } {
   try {
@@ -104,19 +79,16 @@ export async function fetchIdealistaPhoneViaPlaywright(
     chromium = pwChromium as unknown as typeof chromium;
     console.log(`[playwright-phone] Using playwright-extra + stealth`);
 
-    // Sticky session: TODO el flujo de este adId (navegación del browser +
-    // los reintentos de CapSolver más abajo) debe salir por la MISMA IP
+    // Sticky session: TODO el flujo de este adId debe salir por la MISMA IP
     // residencial. El navegador abre varias conexiones al proxy durante la
     // carga (documento + XHR de "Ver teléfono"); sin anclar la sesión, cada
     // conexión puede salir por una IP distinta si el endpoint es rotativo, y
-    // DataDome rechaza la cookie emitida para otra IP con bloqueo duro. Y si
-    // CapSolver resolviera el reto usando una IP DISTINTA a la que navegó el
-    // browser, el token tampoco sería válido para esa sesión.
+    // DataDome rechaza la cookie emitida para otra IP con bloqueo duro.
     //
     // Sesión sticky vía `getFreshResidentialProxyUrl` (genera un sessionId
     // nuevo y lo ancla según el proveedor detectado — ver proxy-config.ts).
-    // life=3: la sesión de Playwright (navegación + posible CapSolver) es algo
-    // más larga que el flujo curl puro; un poco de margen extra.
+    // life=3: la sesión de Playwright es algo más larga que el flujo curl
+    // puro; un poco de margen extra.
     let stickyProxyUrl: string | undefined;
     try {
       const { getFreshResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
@@ -230,89 +202,12 @@ export async function fetchIdealistaPhoneViaPlaywright(
     }
 
     if (pageBlocked) {
-      // Try CapSolver to solve DataDome CAPTCHA
-      console.log(`[playwright-phone] Attempting DataDome CAPTCHA solution via CapSolver...`);
-      const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
-
-      try {
-        // Reutilizar la MISMA IP sticky que navegó el browser — CapSolver
-        // debe resolver el reto desde la misma IP que verá la cookie aplicada,
-        // si no, el token no será válido para esta sesión.
-        const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
-        console.log(`[playwright-phone] DataDome captchaUrl: ${captchaUrl.slice(0, 80)}`);
-        const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
-          proxyUrl: stickyProxyUrl,
-          websiteURL: pageUrl,
-        });
-
-        if (solverResult.token) {
-          // Use token as cookie. DataDome typically uses "dd" or similar cookie name
-          // CapSolver returns the raw token; we store it as a datadome cookie
-          await page
-            .context()
-            .addCookies([
-              {
-                name: "datadome",
-                value: solverResult.token,
-                domain: ".idealista.com",
-                path: "/",
-                expires: Date.now() / 1000 + 3600, // 1 hour
-              },
-            ])
-            .catch(() => {
-              // If cookie fails, continue anyway
-            });
-
-          console.log(`[playwright-phone] CAPTCHA token applied, reloading page...`);
-          // Reload with CAPTCHA token
-          await page.reload({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
-          const reloadTitle = await page.title().catch(() => "");
-          console.log(`[playwright-phone] Title after reload: "${reloadTitle.slice(0, 60)}"`);
-
-          // If page still blocked after token, give up
-          if (reloadTitle === "idealista.com" || reloadTitle === "") {
-            console.log(`[playwright-phone] Page still blocked after token, giving up`);
-            return {
-              phone: null,
-              phoneConfidence: null,
-              contactName: null,
-              error: "DataDome CAPTCHA not resolved",
-            };
-          }
-
-          // Page loaded, continue to extract phone
-          pageBlocked = false;
-        } else {
-          console.log(
-            `[playwright-phone] CapSolver failed: ${solverResult.error}, giving up`,
-          );
-          return {
-            phone: null,
-            phoneConfidence: null,
-            contactName: null,
-            error: `CapSolver failed: ${solverResult.error}`,
-          };
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[playwright-phone] CapSolver error: ${msg}`);
-        return {
-          phone: null,
-          phoneConfidence: null,
-          contactName: null,
-          error: `CapSolver error: ${msg}`,
-        };
-      }
-
-      // If pageBlocked still true after trying CapSolver, fail
-      if (pageBlocked) {
-        return {
-          phone: null,
-          phoneConfidence: null,
-          contactName: null,
-          error: "DataDome blocked page load",
-        };
-      }
+      return {
+        phone: null,
+        phoneConfidence: null,
+        contactName: null,
+        error: "DataDome blocked page load",
+      };
     }
 
     // Short wait for any post-load JS
@@ -353,66 +248,6 @@ export async function fetchIdealistaPhoneViaPlaywright(
     // Wait up to 10s for the AJAX response to arrive
     for (let i = 0; i < 20 && !ajaxCaptured; i++) {
       await page.waitForTimeout(500);
-    }
-
-    // If AJAX was blocked by DataDome (even after clicking), attempt CapSolver
-    if (!phoneFromAjax && !clicked) {
-      console.log(`[playwright-phone] AJAX blocked or not available. Attempting CapSolver to resolve CAPTCHA...`);
-      const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
-
-      try {
-        // Misma IP sticky que el resto del flujo (ver comentario más arriba).
-        const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
-        const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
-          proxyUrl: stickyProxyUrl,
-          websiteURL: pageUrl,
-        });
-
-        if (solverResult.token) {
-          console.log(`[playwright-phone] CAPTCHA solved, applying token and retrying AJAX...`);
-          await page
-            .context()
-            .addCookies([
-              {
-                name: "datadome",
-                value: solverResult.token,
-                domain: ".idealista.com",
-                path: "/",
-                expires: Date.now() / 1000 + 3600,
-              },
-            ])
-            .catch(() => {});
-
-          // Reload to apply cookie
-          await page.reload({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
-
-          // Reset AJAX capture and try clicking again
-          phoneFromAjax = null;
-          ajaxCaptured = false;
-
-          for (const sel of selectors) {
-            try {
-              const el = page.locator(sel).first();
-              const visible = await el.isVisible({ timeout: 2000 }).catch(() => false);
-              if (visible) {
-                await el.click({ timeout: 5000 });
-                console.log(`[playwright-phone] Clicked after CapSolver: ${sel}`);
-                break;
-              }
-            } catch {}
-          }
-
-          // Wait for AJAX after CapSolver
-          for (let i = 0; i < 20 && !ajaxCaptured; i++) {
-            await page.waitForTimeout(500);
-          }
-        } else {
-          console.log(`[playwright-phone] CapSolver failed: ${solverResult.error}`);
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[playwright-phone] CapSolver fallback error: ${msg}`);
-      }
     }
 
     // DOM fallback: check if phone was injected into the page after clicking

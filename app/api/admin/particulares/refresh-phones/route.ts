@@ -5,7 +5,6 @@ import { canAccess } from "@/lib/permissions";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 import { lookupIdealistaPhone } from "@/lib/sync/particulares/phone-lookup";
 import { withMigration0035Fallback } from "@/lib/sync/particulares/migration-fallback";
-import { checkCapSolverBalanceGuard } from "@/lib/sync/particulares/capsolver-guard";
 import { buildPhoneCandidateQuery } from "@/lib/sync/particulares/phone-candidates";
 import { normalizeZone } from "@/lib/madrid-zones";
 
@@ -40,18 +39,6 @@ export async function POST(req: Request) {
   const limit = Math.min(50, Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 10) || 20));
   // Distrito de Madrid a barrer (p.ej. "Salamanca", "Chamberí"). Vacío = sin filtro.
   const zone = (searchParams.get("zone") ?? "").trim();
-
-  // Freno de saldo ANTES de gastar un solo request: si ya está bajo, ni arranca.
-  const guard = await checkCapSolverBalanceGuard();
-  if (guard.blocked) {
-    return Response.json({
-      ok: false,
-      stopped: "low_capsolver_balance",
-      capsolver_balance: guard.balance,
-      min_required: guard.min,
-      message: `Saldo de CapSolver ($${guard.balance}) por debajo del mínimo ($${guard.min}) — barrido detenido para no fundirlo.`,
-    }, { status: 200 });
-  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;

@@ -5,7 +5,6 @@ import { requirePermission } from "@/lib/auth/guard";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 import { lookupIdealistaPhone } from "@/lib/sync/particulares/phone-lookup";
 import { withMigration0035Fallback } from "@/lib/sync/particulares/migration-fallback";
-import { checkCapSolverBalanceGuard } from "@/lib/sync/particulares/capsolver-guard";
 import { buildPhoneCandidateQuery } from "@/lib/sync/particulares/phone-candidates";
 import { resolveChatOnly } from "@/lib/sync/particulares/chat-only";
 
@@ -49,10 +48,6 @@ type VerifyResponse = {
   // Teléfono encontrado (solo en verificación de un anuncio concreto, para
   // que el cliente actualice la UI sin recargar).
   foundPhone?: string | null;
-  // Freno de saldo de CapSolver (mismo criterio que refresh-phones).
-  stopped?: "low_capsolver_balance";
-  capsolver_balance?: number;
-  min_required?: number;
 };
 
 type ParticularRow = {
@@ -69,27 +64,6 @@ async function verifyByScraping(
   limit: number,
   onlyId?: string | null,
 ): Promise<VerifyResponse> {
-  // Freno de saldo ANTES de gastar un solo request (no aplica a la
-  // verificación puntual de un anuncio desde el modal: ese es un solo
-  // request, de bajo riesgo, y bloquearlo sería más molesto que útil).
-  if (!onlyId) {
-    const guard = await checkCapSolverBalanceGuard();
-    if (guard.blocked) {
-      return {
-        ok: false,
-        mode,
-        checked: 0,
-        updated: 0,
-        withPhone: 0,
-        chatOnly: 0,
-        errors: 0,
-        stopped: "low_capsolver_balance",
-        capsolver_balance: guard.balance,
-        min_required: guard.min,
-      };
-    }
-  }
-
   const proxyUrl = await getProxyUrl();
   // Activos, los menos verificados primero (updated_at asc). En "missing"
   // solo los que no tienen teléfono. Con `onlyId`, ese anuncio concreto

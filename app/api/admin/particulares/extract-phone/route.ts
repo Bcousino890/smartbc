@@ -16,7 +16,7 @@ const WHATSAPP_UA = "WhatsApp/2.23.20.0";
 
 // Presupuesto de tiempo para el flujo AJAX en el panel "Testear". El flujo real
 // (fetchIdealistaPhoneViaAjax) puede tardar minutos (rota hasta 8 países ×
-// carga de página + CapSolver), y el reverse-proxy (nginx) corta la conexión
+// carga de página), y el reverse-proxy (nginx) corta la conexión
 // (~60s) → 502 con cuerpo vacío → el cliente falla con "Unexpected end of JSON
 // input". Acotamos el test para SIEMPRE devolver JSON válido: si el AJAX no
 // termina a tiempo, devolvemos resultado parcial + nota (el cron sin límite de
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     // de DataDome) aunque el proxy funcione — es el comportamiento esperado. NO
     // abortamos aquí: el teléfono real se obtiene por el flujo AJAX de
     // /contact-phones (fetchIdealistaPhoneViaAjax), que ancla su propia IP
-    // sticky, rota país y resuelve el slider t=fe con CapSolver. Este endpoint
+    // sticky y rota país. Este endpoint
     // debe reflejar ese camino real, no morir en el 403 de la página.
     // Page fetch acotado (1 intento, 12s): es solo diagnóstico; si da 403
     // seguimos con el AJAX igualmente. Sin esto, el default (2 reintentos × 20s)
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     }
 
     // Camino REAL (usado por el cron): AJAX /contact-phones con IP sticky +
-    // rotación de país + CapSolver. Se ejecuta siempre que falte teléfono,
+    // rotación de país. Se ejecuta siempre que falte teléfono,
     // INCLUSO si la página completa dio 403 (que es lo normal).
     let ajaxDebug: Array<{ endpoint: string; status: number; bodySnippet: string }> | undefined;
     let ajaxTimedOut = false;
@@ -139,7 +139,7 @@ export async function POST(req: Request) {
       address,
       price,
       note: ajaxTimedOut
-        ? `El flujo AJAX superó el presupuesto del test (${AJAX_TEST_BUDGET_MS / 1000}s) y se dejó de esperar — el cron sin límite de nginx procesa los anuncios en lote. Revisa /api/admin/particulares/proxy-health para el veredicto de DataDome (t=fe/t=bv) y CapSolver.`
+        ? `El flujo AJAX superó el presupuesto del test (${AJAX_TEST_BUDGET_MS / 1000}s) y se dejó de esperar — el cron sin límite de nginx procesa los anuncios en lote. Revisa /api/admin/particulares/proxy-health para el veredicto de DataDome (t=fe/t=bv).`
         : undefined,
       debug: {
         pageOk,

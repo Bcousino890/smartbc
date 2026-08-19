@@ -8,7 +8,6 @@ import {
 } from "@/lib/sync/particulares/idealista-advertiser-detector";
 import { getProxyUrl } from "@/lib/sync/proxy-config";
 import { withMigration0035Fallback } from "@/lib/sync/particulares/migration-fallback";
-import { checkCapSolverBalanceGuard } from "@/lib/sync/particulares/capsolver-guard";
 import { buildPhoneCandidateQuery } from "@/lib/sync/particulares/phone-candidates";
 import { lookupIdealistaPhone } from "@/lib/sync/particulares/phone-lookup";
 
@@ -501,14 +500,6 @@ async function backfillPhonesViaAjax(
   chatOnlyFirst = false,
   deadline?: number,
 ): Promise<number> {
-  const guard = await checkCapSolverBalanceGuard();
-  if (guard.blocked) {
-    console.warn(
-      `[cron-particulares] backfill: saldo CapSolver ($${guard.balance}) bajo el mínimo ($${guard.min}) — fase saltada`,
-    );
-    return 0;
-  }
-
   const { data, error } = await buildPhoneCandidateQuery(
     supabase,
     chatOnlyFirst ? "chat_only" : "missing_unclassified",
