@@ -117,7 +117,15 @@ export type CollectionDictionary = {
   exploreHint: string;
   /** Valoración del cliente al pie de cada residencia. */
   feedbackPrompt: string;
-  /** La misma pregunta, para una sola línea (modo libro, altura fija). */
+  /**
+   * La misma pregunta, para UNA SOLA LÍNEA (modo libro, altura fija).
+   *
+   * ⚠️ Tiene que ser CORTA de verdad. Comparte renglón con la referencia
+   * BC-#### y las cinco estrellas, y a 390px de ancho la última estrella
+   * queda a 24px del borde. Medido: con "¿Le gusta?" (10 caracteres) entra;
+   * pasando de ~11 la fila salta a dos líneas. No es catastrófico —hay
+   * `flex-wrap` y ~17px de aire por debajo— pero se ve peor.
+   */
   feedbackPromptShort: string;
   feedbackHint: string;
   feedbackSaved: string;
@@ -467,7 +475,7 @@ const DICTIONARIES: Record<CollectionLanguage, CollectionDictionary> = {
     explore: "Rezidansı keşfet",
     exploreHint: "Tam galeri, açıklama, video ve planlar.",
     feedbackPrompt: "Bu konut hakkında ne düşünüyorsunuz?",
-    feedbackPromptShort: "Beğendiniz mi?",
+    feedbackPromptShort: "Puanlayın",
     feedbackHint: "Yalnızca biz görüyoruz; seçkiyi iyileştirmemize yardımcı oluyor.",
     feedbackSaved: "Not edildi, teşekkürler.",
     reserved: "Rezerve",
