@@ -47,6 +47,13 @@ export type PublicShortlistProperty = {
   origin: ShortlistItemOrigin;
   decision: ShortlistDecision;
   rank: number | null;
+  /**
+   * Orden dentro de "Por revisar", ANTES de decidir nada. Hermano de `rank`
+   * pero sin su restricción: `rank` solo existe en las prioritarias (lo
+   * impone un CHECK), y el cliente tiene que poder ordenar la lista de
+   * revisión desde el principio, no solo después de marcar la primera.
+   */
+  position: number;
   comment: string | null;
 };
 

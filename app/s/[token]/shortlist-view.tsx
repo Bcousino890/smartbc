@@ -43,6 +43,7 @@ import {
   setShortlistComment,
   setShortlistDecision,
   setShortlistOrder,
+  setShortlistReviewOrder,
   submitShortlist,
 } from "./actions";
 
@@ -154,7 +155,9 @@ export function ShortlistView({
       must: by("must_visit").sort(
         (a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9),
       ),
-      undecided: by("undecided"),
+      // Mismo motivo que "must": sin este sort, mover una en "Por revisar"
+      // tocaría `position` pero la tarjeta no se movería hasta recargar.
+      undecided: by("undecided").sort((a, b) => a.position - b.position),
       maybe: by("maybe"),
       no: by("not_for_me"),
     };
@@ -248,6 +251,65 @@ export function ShortlistView({
     track("priority_change", { to: target + 1 });
     void commit(before, () =>
       setShortlistOrder(token, reordered.map((m) => m.itemId)),
+    );
+  };
+
+  /**
+   * Mismo mecanismo que las prioritarias, pero para "Por revisar" — ANTES de
+   * que el cliente haya marcado nada. Escribe `position`, no `rank`: el rank
+   * tiene un CHECK que solo lo permite en 'must_visit'.
+   *
+   * Es lo que hacía falta para que el orden se pudiera cambiar desde el
+   * principio, y no solo después de decidir la primera residencia.
+   */
+  const applyReviewOrder = useCallback((orderedIds: string[]) => {
+    const posById = new Map(orderedIds.map((id, i) => [id, i + 1]));
+    setItems((prev) =>
+      prev.map((i) =>
+        posById.has(i.itemId) ? { ...i, position: posById.get(i.itemId)! } : i,
+      ),
+    );
+  }, []);
+
+  const commitReviewOrder = useCallback(
+    (orderedIds: string[]) => {
+      const before = itemsRef.current;
+      applyReviewOrder(orderedIds);
+      track("priority_change", { via: "drag", group: "undecided" });
+      void commit(before, () => setShortlistReviewOrder(token, orderedIds));
+    },
+    [applyReviewOrder, commit, token, track],
+  );
+
+  const {
+    draggingId: draggingReviewId,
+    handleProps: reviewHandleProps,
+    itemProps: reviewItemProps,
+  } = useReorderList({
+    ids: groups.undecided.map((m) => m.itemId),
+    onReorder: applyReviewOrder,
+    onCommit: commitReviewOrder,
+    disabled: isPreview,
+  });
+
+  const moveReview = (item: PublicShortlistProperty, dir: -1 | 1) => {
+    const before = items;
+    const pending = groups.undecided;
+    const idx = pending.findIndex((m) => m.itemId === item.itemId);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= pending.length) return;
+
+    const reordered = [...pending];
+    [reordered[idx], reordered[target]] = [reordered[target], reordered[idx]];
+    const posById = new Map(reordered.map((m, i) => [m.itemId, i + 1]));
+    setItems(
+      items.map((i) =>
+        posById.has(i.itemId) ? { ...i, position: posById.get(i.itemId)! } : i,
+      ),
+    );
+    track("priority_change", { to: target + 1, group: "undecided" });
+    void commit(before, () =>
+      setShortlistReviewOrder(token, reordered.map((m) => m.itemId)),
     );
   };
 
@@ -366,14 +428,19 @@ export function ShortlistView({
 
         <Group
           title={t.toReview}
+          hint={t.toReviewHint}
           count={groups.undecided.length}
           show={groups.undecided.length > 0}
         >
-          {groups.undecided.map((p) => (
+          {groups.undecided.map((p, i) => (
             <ShortlistCard
               key={p.itemId}
               property={p}
               t={t}
+              rankLabel={String(i + 1).padStart(2, "0")}
+              canMoveUp={i > 0}
+              canMoveDown={i < groups.undecided.length - 1}
+              onMove={(d) => moveReview(p, d)}
               onDecide={(d) => decide(p, d)}
               onView={() => {
                 setGallery(p);
@@ -381,6 +448,10 @@ export function ShortlistView({
               }}
               onNote={() => setNoteFor(p)}
               busy={busyId === p.itemId}
+              dragHandleProps={reviewHandleProps(p.itemId)}
+              isDragging={draggingReviewId === p.itemId}
+              itemRef={reviewItemProps(p.itemId).ref}
+              itemStyle={reviewItemProps(p.itemId).style}
             />
           ))}
         </Group>

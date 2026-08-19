@@ -153,6 +153,7 @@ export function toPublicClientShortlist(
         origin: item.origin,
         decision: item.decision,
         rank: item.rank,
+        position: item.position,
         comment: item.client_comment,
       };
     });

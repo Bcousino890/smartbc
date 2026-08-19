@@ -158,6 +158,69 @@ export async function setShortlistDecision(
   return { ok: true, revision: await touch(gate.id, gate.revision) };
 }
 
+/**
+ * Renumera "Por revisar" 1..N respetando el orden pedido. Hermana de
+ * `renumber`, pero escribe `position` en vez de `rank`: el rank tiene un
+ * CHECK que solo lo permite en 'must_visit' (csi_rank_only_must_visit), y
+ * aquí el cliente todavía no ha decidido nada.
+ */
+async function renumberUndecided(shortlistId: string, orderedIds: string[]) {
+  const { data } = await db()
+    .from("client_shortlist_items")
+    .select("id, position")
+    .eq("shortlist_id", shortlistId)
+    .eq("decision", "undecided");
+
+  const rows = (data ?? []) as any[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const named = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+  const rest = rows
+    .filter((r) => !orderedIds.includes(r.id))
+    .sort((a, b) => a.position - b.position);
+  const ordered = [...named, ...rest];
+
+  await Promise.all(
+    ordered.map((r, i) =>
+      r.position === i + 1
+        ? Promise.resolve()
+        : db()
+            .from("client_shortlist_items")
+            .update({ position: i + 1, updated_at: new Date().toISOString() })
+            .eq("id", r.id),
+    ),
+  );
+}
+
+/**
+ * Reordenar "Por revisar", ANTES de decidir nada. Mismo contrato que
+ * `setShortlistOrder`: llega la lista completa en el orden deseado, y solo se
+ * aceptan ids que sean de este shortlist y sigan sin decidir — si alguna se
+ * decidió a mitad de un arrastre (dos pestañas abiertas), se ignora en vez de
+ * reventar.
+ */
+export async function setShortlistReviewOrder(
+  token: string,
+  orderedItemIds: string[],
+): Promise<ShortlistWriteResult> {
+  const { gate, error } = await open(token);
+  if (!gate) return { ok: false, error: error! };
+  if (!Array.isArray(orderedItemIds) || orderedItemIds.length > 200) {
+    return { ok: false, error: "Orden no válido." };
+  }
+
+  const { data } = await db()
+    .from("client_shortlist_items")
+    .select("id")
+    .eq("shortlist_id", gate.id)
+    .eq("decision", "undecided");
+  const mine = new Set((data ?? []).map((r: any) => r.id));
+  const clean = orderedItemIds.filter((id) => mine.has(id));
+
+  await renumberUndecided(gate.id, clean);
+  return { ok: true, revision: await touch(gate.id, gate.revision) };
+}
+
 /** Reordenar las prioritarias. Llega la lista completa, en el orden deseado. */
 export async function setShortlistOrder(
   token: string,

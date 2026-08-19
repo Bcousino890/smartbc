@@ -25,6 +25,8 @@ export type ShortlistDictionary = {
   maybeGroup: string;
   notForMeGroup: string;
   toReview: string;
+  /** Explica que "Por revisar" también se puede ordenar, antes de decidir nada. */
+  toReviewHint: string;
   /** Decisiones */
   mustVisit: string;
   maybe: string;
@@ -82,6 +84,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "Alternativas",
     notForMeGroup: "Descartadas",
     toReview: "Por revisar",
+    toReviewHint: "Arrástralas para decidir primero las que más te interesan.",
     mustVisit: "Quiero visitarla",
     maybe: "Quizá",
     notForMe: "Descartar",
@@ -132,6 +135,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "Alternatives",
     notForMeGroup: "Set aside",
     toReview: "To review",
+    toReviewHint: "Drag them to decide the ones you care about first.",
     mustVisit: "I want to visit",
     maybe: "Maybe",
     notForMe: "Set aside",
@@ -182,6 +186,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "Alternatives",
     notForMeGroup: "Écartées",
     toReview: "À examiner",
+    toReviewHint: "Faites-les glisser pour décider d’abord celles qui vous intéressent.",
     mustVisit: "Je veux la visiter",
     maybe: "Peut-être",
     notForMe: "Écarter",
@@ -232,6 +237,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "Alternative",
     notForMeGroup: "Da parte",
     toReview: "Da rivedere",
+    toReviewHint: "Le trascini per decidere prima quelle che le interessano di più.",
     mustVisit: "Voglio visitarla",
     maybe: "Forse",
     notForMe: "Metti da parte",
@@ -282,6 +288,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "Alternativen",
     notForMeGroup: "Zurückgestellt",
     toReview: "Zu prüfen",
+    toReviewHint: "Ziehen Sie sie, um zuerst über die für Sie wichtigsten zu entscheiden.",
     mustVisit: "Möchte ich besichtigen",
     maybe: "Vielleicht",
     notForMe: "Zurückstellen",
@@ -332,6 +339,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "بدائل",
     notForMeGroup: "مستبعدة",
     toReview: "للمراجعة",
+    toReviewHint: "اسحبها لتقرر أولاً ما يهمك أكثر.",
     mustVisit: "أرغب بزيارتها",
     maybe: "ربما",
     notForMe: "استبعاد",
@@ -381,6 +389,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "Alternatifler",
     notForMeGroup: "Bir kenara",
     toReview: "İncelenecek",
+    toReviewHint: "En çok ilginizi çekenlere önce karar vermek için sürükleyin.",
     mustVisit: "Görmek istiyorum",
     maybe: "Belki",
     notForMe: "Bir kenara ayır",
@@ -431,6 +440,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     maybeGroup: "חלופות",
     notForMeGroup: "הוסרו",
     toReview: "לבדיקה",
+    toReviewHint: "גרור אותן כדי להחליט קודם על אלה שמעניינות אותך.",
     mustVisit: "מעוניין לראות",
     maybe: "אולי",
     notForMe: "להסיר",

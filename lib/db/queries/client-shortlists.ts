@@ -91,9 +91,14 @@ function portalLinkAsProperty(link: any) {
     title,
     zone: link.zone ?? "",
     subzone: null,
+    // bedrooms=0 es un dato real (estudio de un ambiente): se deja tal cual.
     bedrooms: link.bedrooms ?? null,
-    bathrooms: link.bathrooms ?? null,
-    square_meters: link.square_meters ?? null,
+    // bathrooms=0 y square_meters=0 no existen en un piso real: es lo que la
+    // extensión no capturó, guardado como 0 en vez de NULL. `??` no lo
+    // convierte (0 no es nullish), así que aquí SÍ hace falta el `||` para
+    // que "0 baños"/"0 m²" no se cuele como si fuera un dato de verdad.
+    bathrooms: link.bathrooms || null,
+    square_meters: link.square_meters || null,
     price: link.price == null ? null : Number(link.price),
     currency: null,
     operation: link.operation ?? "rent",

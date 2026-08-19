@@ -113,9 +113,17 @@ export function PortalLinkRow({
 
   const specs = [
     link.zone,
+    // bedrooms=0 es un dato real (estudio de un ambiente): no se toca.
     link.bedrooms != null ? `${link.bedrooms} hab` : null,
-    link.bathrooms != null ? `${link.bathrooms} baños` : null,
-    link.square_meters != null ? `${link.square_meters} m²` : null,
+    // bathrooms=0 y square_meters=0 no existen en un piso real: es lo que la
+    // extensión no pudo capturar, guardado como 0 en vez de NULL. Se trata
+    // igual que un null: se omite en vez de enseñar un "0 baños" falso.
+    link.bathrooms != null && link.bathrooms !== 0
+      ? `${link.bathrooms} baños`
+      : null,
+    link.square_meters != null && link.square_meters !== 0
+      ? `${link.square_meters} m²`
+      : null,
   ].filter(Boolean);
 
   // El portal casi siempre da el precio ya escrito ("1.500 €/mes"); si no,
