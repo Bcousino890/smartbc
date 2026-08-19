@@ -78,7 +78,7 @@ export function ShortlistCard({
           type="button"
           onClick={onView}
           aria-label={`${t.viewResidence}: ${property.title}`}
-          className="vc-focus relative block w-full overflow-hidden bg-ink/5 sm:w-[46%] sm:shrink-0"
+          className="vc-focus relative block w-full overflow-hidden bg-ink/5 sm:w-[52%] sm:shrink-0"
         >
           <span className="block aspect-[16/10] w-full sm:aspect-[4/3]">
             {property.coverPhotoUrl ? (

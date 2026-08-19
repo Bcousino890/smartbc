@@ -327,7 +327,7 @@ export function ShortlistView({
         <Progress done={decided} total={items.length} t={t} />
       </header>
 
-      <main className="mx-auto mt-10 max-w-3xl space-y-14 px-5 sm:px-6">
+      <main className="mx-auto mt-10 max-w-5xl space-y-14 px-5 sm:px-6">
         {items.length === 0 && (
           <p className="rounded-2xl border border-dashed border-ink/15 px-5 py-10 text-center font-sans text-[13px] text-ink/45">
             {t.emptyState}
