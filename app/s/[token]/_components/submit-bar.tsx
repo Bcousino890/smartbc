@@ -38,7 +38,7 @@ export function SubmitBar({
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-cream-50/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-5">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-[10px] font-medium uppercase vc-tracked-sm text-ink/50">
+          <p className="font-display text-[9.5px] font-medium uppercase tracking-[0.1em] leading-relaxed text-ink/50 sm:text-[10px] sm:vc-tracked-sm">
             {t.submitSummary(must, maybe, no)}
           </p>
           <p className="mt-0.5 h-[14px] font-sans text-[10.5px] text-ink/45" aria-live="polite">

@@ -117,9 +117,11 @@ export function ShortlistCard({
 
         {/* ── Texto ── */}
         <div className="flex min-w-0 flex-1 flex-col justify-center py-4 sm:py-6">
-          <p className="font-display text-[9.5px] font-medium uppercase vc-tracked text-gold-dark">
-            {property.zoneLabel}
-          </p>
+          {property.zoneLabel && (
+            <p className="font-display text-[10px] font-medium uppercase vc-tracked text-gold-dark">
+              {property.zoneLabel}
+            </p>
+          )}
           <h3 className="mt-1.5 font-serif text-[24px] leading-[1.1] text-ink sm:text-[28px]">
             {property.title}
           </h3>
