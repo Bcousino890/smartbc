@@ -55,6 +55,11 @@ export function ShortlistCard({
   itemStyle?: React.CSSProperties;
 }) {
   const discarded = property.decision === "not_for_me";
+  // Un anuncio de portal sin ficha a veces llega sin ni una foto capturada.
+  // Sin esto, "Ver residencia" abría una galería de 0 fotos: una lámina de
+  // imagen rota sobre fondo opaco que parecía "no pasa nada" al pulsarla.
+  // Mejor no ofrecer una acción que no puede cumplir.
+  const hasPhotos = property.photoUrls.length > 0;
 
   return (
     <article
@@ -76,9 +81,10 @@ export function ShortlistCard({
             columna. Es lo que de verdad ayuda a decidir entre quince casas. */}
         <button
           type="button"
-          onClick={onView}
+          onClick={hasPhotos ? onView : undefined}
+          disabled={!hasPhotos}
           aria-label={`${t.viewResidence}: ${property.title}`}
-          className="vc-focus relative block w-full overflow-hidden bg-ink/5 sm:w-[52%] sm:shrink-0"
+          className="vc-focus relative block w-full overflow-hidden bg-ink/5 disabled:cursor-default sm:w-[52%] sm:shrink-0"
         >
           <span className="block aspect-[16/10] w-full sm:aspect-[4/3]">
             {property.coverPhotoUrl ? (
@@ -110,9 +116,11 @@ export function ShortlistCard({
             </span>
           )}
 
-          <span className="pointer-events-none absolute bottom-3 end-3 bg-ink/55 px-3 py-1.5 font-display text-[9px] font-medium uppercase vc-tracked text-cream-50 opacity-0 backdrop-blur-sm transition-opacity duration-500 group-hover:opacity-100">
-            {t.viewResidence}
-          </span>
+          {hasPhotos && (
+            <span className="pointer-events-none absolute bottom-3 end-3 bg-ink/55 px-3 py-1.5 font-display text-[9px] font-medium uppercase vc-tracked text-cream-50 opacity-0 backdrop-blur-sm transition-opacity duration-500 group-hover:opacity-100">
+              {t.viewResidence}
+            </span>
+          )}
         </button>
 
         {/* ── Texto ── */}
@@ -187,7 +195,9 @@ export function ShortlistCard({
 
           {/* ── Acciones secundarias ── */}
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
-            <Secondary onClick={onView}>{t.viewResidence}</Secondary>
+            {hasPhotos && (
+              <Secondary onClick={onView}>{t.viewResidence}</Secondary>
+            )}
             <Secondary onClick={onNote} highlighted={Boolean(property.comment)}>
               {property.comment ? t.editNote : t.addNote}
             </Secondary>
@@ -216,9 +226,9 @@ export function ShortlistCard({
                     {...dragHandleProps}
                     aria-label={t.dragToReorder}
                     title={t.dragToReorder}
-                    className="vc-focus flex h-11 w-11 cursor-grab items-center justify-center text-ink/25 transition-colors duration-300 hover:text-ink/60 active:cursor-grabbing"
+                    className="vc-focus flex h-11 w-11 cursor-grab items-center justify-center rounded-full border border-gold/30 bg-gold/[0.06] text-gold-dark transition-colors duration-300 hover:border-gold/55 hover:bg-gold/15 active:cursor-grabbing"
                   >
-                    <span aria-hidden className="text-[15px] leading-none">
+                    <span aria-hidden className="text-[17px] leading-none">
                       ⠿
                     </span>
                   </button>
@@ -315,7 +325,7 @@ function IconBtn({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="vc-focus flex h-11 w-11 items-center justify-center text-[13px] text-ink/30 transition-colors duration-300 hover:text-ink/70 disabled:opacity-20"
+      className="vc-focus flex h-11 w-11 items-center justify-center rounded-full border border-gold/30 bg-gold/[0.06] text-[17px] text-gold-dark transition-colors duration-300 hover:border-gold/55 hover:bg-gold/15 disabled:border-ink/10 disabled:bg-transparent disabled:text-ink/20"
     >
       {children}
     </button>

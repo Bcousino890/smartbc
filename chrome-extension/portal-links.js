@@ -88,22 +88,41 @@
     return null;
   }
 
+  /**
+   * ⚠️ Bug real corregido aquí (no una corazonada): un listado con carga
+   * perezosa deja en `src` un placeholder base64 hasta que la imagen entra en
+   * viewport, y la URL de verdad va en `data-src` u otro atributo. La versión
+   * anterior probaba `src || data-src || …` con OR: si `src` traía ALGO (el
+   * base64, que no está vacío), el resto de la cadena nunca se llegaba a
+   * mirar, y como el base64 se rechaza después, la foto quedaba en null
+   * aunque `data-src` tuviera la URL real ahí mismo. Ahora se recorren TODOS
+   * los candidatos y se descarta cada base64 en vez de rendirse en el primero.
+   */
   function imageFrom(container) {
     const img = container.querySelector("img");
     if (!img) return null;
-    const candidate =
-      img.getAttribute("src") ||
-      img.getAttribute("data-src") ||
-      img.getAttribute("data-ondemand-img") ||
-      (img.getAttribute("srcset") || "").split(" ")[0];
-    if (!candidate) return null;
-    // Los placeholders en base64 pesan y no sirven de nada en la ficha.
-    if (/^data:/i.test(candidate)) return null;
-    try {
-      return new URL(candidate, location.href).toString();
-    } catch {
-      return null;
+    const firstOfSrcset = (v) => (v || "").split(",")[0]?.trim().split(" ")[0] || null;
+    const candidates = [
+      img.getAttribute("src"),
+      img.getAttribute("data-src"),
+      img.getAttribute("data-ondemand-img"),
+      img.getAttribute("data-lazy"),
+      img.getAttribute("data-lazy-src"),
+      img.getAttribute("data-original"),
+      firstOfSrcset(img.getAttribute("srcset")),
+      firstOfSrcset(img.getAttribute("data-srcset")),
+    ];
+    for (const candidate of candidates) {
+      // Los placeholders en base64 pesan y no sirven de nada en la ficha:
+      // se descartan y se sigue probando, no se abandona la búsqueda.
+      if (!candidate || /^data:/i.test(candidate)) continue;
+      try {
+        return new URL(candidate, location.href).toString();
+      } catch {
+        continue;
+      }
     }
+    return null;
   }
 
   /**

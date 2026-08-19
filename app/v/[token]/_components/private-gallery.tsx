@@ -70,6 +70,15 @@ export function PrivateGallery({
 
   useEffect(() => setMounted(true), []);
 
+  // Sin fotos no hay nada que enseñar. Sin este freno, `startIndex={0}` abría
+  // igual sobre `photos[0]` (undefined): una lámina de imagen rota sobre fondo
+  // opaco que, a ojos de quien la abre, es indistinguible de "no pasó nada".
+  // Mejor cerrar sola que fingir un visor vacío.
+  useEffect(() => {
+    if (total === 0) onClose();
+  }, [total, onClose]);
+  if (total === 0) return null;
+
   const step = useCallback(
     (delta: number) => {
       setIndex((i) => (i === null ? null : (i + delta + total) % total));
