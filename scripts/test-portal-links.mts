@@ -180,6 +180,30 @@ const muchos = Array.from(
 check("respeta el tope", extractUrls(muchos, 5).length === 5);
 check("y sin tope los devuelve todos", extractUrls(muchos).length === 10);
 
+// Bug real reportado en producción: pegar el enlace TAL CUAL lo copia el
+// navegador (sin "https://" delante) dejaba el diálogo con el botón "Añadir"
+// deshabilitado y sin ningún aviso — extractUrls devolvía 0 enlaces porque
+// el regex exigía el esquema literal en el texto.
+check(
+  "un enlace sin esquema, con www., SÍ se reconoce",
+  extractUrls("www.idealista.com/inmueble/111905585").length === 1,
+);
+check(
+  "y se le añade https:// para que parsePortalUrl lo acepte",
+  extractUrls("www.idealista.com/inmueble/111905585")[0] ===
+    "https://www.idealista.com/inmueble/111905585",
+);
+check(
+  "el mismo enlace con y sin esquema no duplica",
+  extractUrls(
+    "www.idealista.com/inmueble/1\nhttps://www.idealista.com/inmueble/1",
+  ).length === 1,
+);
+check(
+  "un dominio de correo en prosa NO se confunde con un enlace",
+  extractUrls("Contacta en info@agencia.com para más info").length === 0,
+);
+
 // ============================================================================
 section("📞 COLA DE LLAMADAS · estados");
 // ============================================================================

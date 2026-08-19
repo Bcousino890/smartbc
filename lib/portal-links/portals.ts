@@ -140,12 +140,23 @@ export function parsePortalUrl(raw: string): ParsedPortalUrl | null {
  * se acepta prosa con URLs entremedias.
  */
 export function extractUrls(text: string, limit = 60): string[] {
-  const found = text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
+  // Con esquema completo, como toda la vida.
+  const withScheme = text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
+  // Sin esquema pero con "www." — señal inequívoca de que es una web y no un
+  // dominio de correo suelto en una firma. Sin esto, pegar
+  // "www.idealista.com/inmueble/123" (así lo copia el navegador en muchas
+  // configuraciones, y así lo escribe cualquiera de memoria) no reconocía
+  // NADA: el diálogo se quedaba con el botón "Añadir" deshabilitado sin decir
+  // por qué. El lookbehind evita re-capturar el "www." que ya viene dentro de
+  // una URL con esquema (se dedupline abajo de todos modos).
+  const bareWww = text.match(/(?<![\w@.])www\.[^\s<>"')\]]+/gi) ?? [];
+  const found = [...withScheme, ...bareWww];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of found) {
     // Los signos de puntuación finales rara vez son parte del enlace.
-    const cleaned = raw.replace(/[.,;:!?]+$/, "");
+    const trimmed = raw.replace(/[.,;:!?]+$/, "");
+    const cleaned = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     if (seen.has(cleaned)) continue;
     seen.add(cleaned);
     out.push(cleaned);
