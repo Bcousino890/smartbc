@@ -20,7 +20,7 @@ import { createAdminClient } from "../admin";
  */
 
 const BASE_COLUMNS =
-  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, photos, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, detected_at, created_at, is_active";
+  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, cover_url, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, detected_at, created_at, is_active";
 
 // Columnas de la migración 0036 (plano + vídeo). Pueden no existir aún en el
 // VPS — por eso van en intentos separados (degradación elegante).
