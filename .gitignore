@@ -12,11 +12,11 @@
 /coverage
 
 # next.js
-/.next/
-/.next.new/
-/.next.old/
-/.next.prev/
-/.next.failed/
+# Un patrón, no una lista: el despliegue crea .next.new/.old/.prev/.failed y
+# cualquier QA visual compila en el suyo (NEXT_BUILD_DIR). Enumerarlos uno a
+# uno dejaba el siguiente sin ignorar, y un build de 50 MB acababa en
+# `git status` pidiendo que se commiteara.
+/.next*/
 /out/
 
 # production
