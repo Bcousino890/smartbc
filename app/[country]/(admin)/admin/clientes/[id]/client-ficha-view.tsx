@@ -99,12 +99,6 @@ const VISIT_STATUS_STYLES: Record<
 export type PortalLinksProps = {
   links: PortalLinkWithNotes[];
   staff: StaffRef[];
-  /**
-   * La selección privada ABIERTA del cliente, si la hay. Con ella, mandar
-   * anuncios los añade a la que ya tiene (mismo enlace) en vez de crear otra
-   * que obligaría a volver a compartirlo.
-   */
-  openShortlist: { id: string; title: string | null } | null;
   /** Para el filtro "Míos" de quien entra a llamar. */
   currentUserId: string | null;
   canCreate: boolean;
@@ -318,7 +312,6 @@ export function ClientFichaView({
               currentUserId={portalLinks.currentUserId}
               links={portalLinks.links}
               staff={portalLinks.staff}
-              openShortlist={portalLinks.openShortlist}
               canCreate={portalLinks.canCreate}
               canEdit={portalLinks.canEdit}
               canDelete={portalLinks.canDelete}

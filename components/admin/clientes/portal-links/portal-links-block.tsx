@@ -20,10 +20,7 @@ import {
   assignPortalLinks,
   reorderPortalLinks,
 } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
-import {
-  addToClientShortlist,
-  createClientShortlist,
-} from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
+import { createClientShortlist } from "@/app/[country]/(admin)/admin/clientes/shortlist-actions";
 import {
   compareByPriority,
   countLinks,
@@ -33,6 +30,10 @@ import {
   type PortalLinkWithNotes,
   type StaffRef,
 } from "@/lib/portal-links/types";
+import {
+  COLLECTION_LANGUAGES,
+  LANGUAGE_LABELS,
+} from "@/lib/viewing-collections/i18n";
 import type { Country } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
 import { AddLinksDialog } from "./add-links-dialog";
@@ -48,7 +49,6 @@ export function PortalLinksBlock({
   currentUserId,
   links,
   staff,
-  openShortlist = null,
   canCreate,
   canEdit,
   canDelete,
@@ -59,8 +59,6 @@ export function PortalLinksBlock({
   currentUserId: string | null;
   links: PortalLinkWithNotes[];
   staff: StaffRef[];
-  /** Selección privada abierta del cliente, si la tiene. */
-  openShortlist?: { id: string; title: string | null } | null;
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -70,6 +68,7 @@ export function PortalLinksBlock({
   const [addOpen, setAddOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [assignee, setAssignee] = useState("");
+  const [sendLanguage, setSendLanguage] = useState("es");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -184,16 +183,25 @@ export function PortalLinksBlock({
    * antes: media lista se va a caer en la primera llamada y no tiene sentido
    * importar quince anuncios para eso. La selección privada los acepta así.
    *
-   * Si el cliente YA tiene una abierta, se añaden a esa: crear otra le dejaría
-   * con dos enlaces y habría que volver a mandarle el nuevo.
+   * Crea SIEMPRE una selección nueva, aunque el cliente ya tenga otra abierta.
+   * Añadirlos a la anterior mezclaría los anuncios de hoy con lo que se le
+   * mandó la semana pasada, y lo que el cliente tiene que ordenar es la tanda
+   * que se acaba de ver con él. Cada ronda, su propio enlace.
+   *
+   * El título lleva la fecha para poder distinguirlas de un vistazo en la
+   * ficha. Es interno: el cliente no lo ve.
    */
   const sendToClient = () => {
     setError(null);
     startTransition(async () => {
-      const ids = [...checked];
-      const res = openShortlist
-        ? await addToClientShortlist(openShortlist.id, { portalLinkIds: ids })
-        : await createClientShortlist(clientId, { portalLinkIds: ids });
+      const res = await createClientShortlist(clientId, {
+        portalLinkIds: [...checked],
+        language: sendLanguage,
+        title: `Anuncios · ${new Date().toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "short",
+        })}`,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -405,26 +413,34 @@ export function PortalLinksBlock({
                     Pasar para llamar
                   </button>
                   {canCreate && (
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={sendToClient}
-                      title={
-                        openShortlist
-                          ? "Los añade a la selección privada que el cliente ya tiene, sin cambiarle el enlace."
-                          : "Crea una selección privada con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
-                      }
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
-                    >
-                      {pending ? (
-                        <Loader2 size={11} className="animate-spin" />
-                      ) : (
-                        <Send size={11} strokeWidth={1.75} />
-                      )}
-                      {openShortlist
-                        ? "Añadir a su selección"
-                        : "Mandar al cliente"}
-                    </button>
+                    <>
+                      <select
+                        value={sendLanguage}
+                        onChange={(e) => setSendLanguage(e.target.value)}
+                        title="Idioma de la selección privada que se le manda al cliente."
+                        className="rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-[11.5px] text-ink focus:border-gold/55 focus:outline-none"
+                      >
+                        {COLLECTION_LANGUAGES.map((l) => (
+                          <option key={l} value={l}>
+                            {LANGUAGE_LABELS[l]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={sendToClient}
+                        title="Crea una selección privada NUEVA con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+                      >
+                        {pending ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <Send size={11} strokeWidth={1.75} />
+                        )}
+                        Mandar al cliente
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"

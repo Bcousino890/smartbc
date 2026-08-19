@@ -111,12 +111,6 @@ export default async function ClientFichaPage({
           ? {
               links: portalLinks,
               staff,
-              // Solo cuenta la que el cliente todavía puede tocar: una
-              // enviada o archivada no debe ampliarse a su espalda.
-              openShortlist:
-                shortlists.find(
-                  (s) => s.status === "reviewing" && s.linkState === "active",
-                ) ?? null,
               currentUserId: profile?.id ?? null,
               canCreate: Boolean(vc?.create),
               canEdit: Boolean(vc?.edit),

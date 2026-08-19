@@ -12,6 +12,7 @@ import "server-only";
 
 import { createAdminClient } from "../admin";
 import { checkPermission } from "@/lib/auth/guard";
+import { portalLabel } from "@/lib/portal-links/portals";
 import type {
   PublicShortlistResult,
 } from "@/lib/client-shortlist/public-contract";
@@ -46,7 +47,7 @@ const PUBLIC_PROPERTY_SELECT = `
  *  de un anuncio ajeno, y menos aún poder ir a verlo por su cuenta. */
 const PUBLIC_PORTAL_LINK_SELECT = `
   id, title, price, price_label, operation, zone,
-  bedrooms, bathrooms, square_meters, image_url
+  bedrooms, bathrooms, square_meters, image_url, portal, external_ref
 `;
 
 // ⚠️ `properties` va SIN `!inner`. Con el inner join, PostgREST descartaba en
@@ -69,15 +70,25 @@ const SHORTLIST_SELECT = `
  * Un anuncio de portal disfrazado de propiedad, para que el proyector no tenga
  * que saber que existen dos fuentes. Lo que no tenemos va a null en vez de a
  * cero: "0 baños" en la tarjeta de un cliente parece un dato, y es un hueco.
+ *
+ * ⚠️ El título es la EXCEPCIÓN a esa regla: no puede ir a null. Un enlace
+ * pegado a mano sin previsualizar (una URL suelta, sin scraping) no trae
+ * título, y una tarjeta sin foto Y sin título es indistinguible de una
+ * rota — el cliente ve un rectángulo gris con «BCP» y nada más. Con algo que
+ * leer («Idealista · 111905585») sigue siendo una tarjeta pobre, pero se
+ * entiende que es un anuncio pendiente de revisar, no un fallo.
  */
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 function portalLinkAsProperty(link: any) {
+  const title =
+    (link.title as string | null)?.trim() ||
+    [portalLabel(link.portal), link.external_ref].filter(Boolean).join(" · ");
   return {
     id: link.id,
     // Sin ficha no hay slug, y sin slug no hay proxy de fotos: por eso las
     // suyas viajan aparte, en externalPhotoUrls.
     slug: "",
-    title: link.title ?? "",
+    title,
     zone: link.zone ?? "",
     subzone: null,
     bedrooms: link.bedrooms ?? null,
