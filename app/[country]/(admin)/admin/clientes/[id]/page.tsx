@@ -20,6 +20,7 @@ import {
   getClientAdvisor,
   getClientApplications,
   getClientEngagement,
+  getClientOrigin,
   getClientPreferencesFull,
   getClientTags,
 } from "@/lib/db/queries/client-command-center";
@@ -89,11 +90,12 @@ export default async function ClientCommandCenterPage({
 
   // Lo que la ficha nunca había traído. Cada una devuelve algo vacío si falla:
   // que no haya analítica no puede impedir abrir la ficha de un cliente.
-  const [prefs, tags, applications, engagement] = await Promise.all([
+  const [prefs, tags, applications, engagement, origin] = await Promise.all([
     getClientPreferencesFull(id),
     getClientTags(id),
     getClientApplications(id),
     inScope ? getClientEngagement(id) : Promise.resolve(EMPTY_CLIENT_ENGAGEMENT),
+    getClientOrigin(id),
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,6 +254,13 @@ export default async function ClientCommandCenterPage({
       })),
     })),
     sessions: engagement.sessionList,
+    origin: origin
+      ? {
+          receivedAt: origin.receivedAt,
+          convertedAt: origin.convertedAt,
+          propertyTitle: origin.propertyTitle,
+        }
+      : null,
   });
 
   // El adaptador ya no inventa: las señales que la fila de `profiles` no lleva
@@ -317,6 +326,7 @@ export default async function ClientCommandCenterPage({
         tags,
         applications,
         engagement,
+        origin,
         canEditClient: editGate.ok,
       }}
     />

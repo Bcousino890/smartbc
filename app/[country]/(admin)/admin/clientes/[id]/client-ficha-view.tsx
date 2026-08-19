@@ -32,6 +32,7 @@ import type {
   AdvisorRef,
   ClientApplication,
   ClientEngagement,
+  ClientOrigin,
   ClientPreferencesFull,
   ClientTagRef,
 } from "@/lib/db/queries/client-command-center";
@@ -43,6 +44,7 @@ import type {
 import type { ShortlistWithItems } from "@/lib/client-shortlist/types";
 import type { AdminClient } from "@/lib/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import Link from "next/link";
 import { useT } from "@/lib/i18n/provider";
 import { useTn } from "./_components/plural";
 import { PageFooter } from "@/components/ui/page-footer";
@@ -66,6 +68,7 @@ import {
   type FavoriteRef,
   type RawVisit,
 } from "./_components/simple-blocks";
+import { formatDate } from "./_components/format";
 import { Empty, Metric, Panel } from "./_components/ui";
 
 export type PortalLinksProps = {
@@ -99,6 +102,8 @@ export type CommandCenterProps = {
   tags: ClientTagRef[];
   applications: ClientApplication[];
   engagement: ClientEngagement;
+  /** De dónde salió el cliente, si vino de un lead. */
+  origin: ClientOrigin | null;
   canEditClient: boolean;
 };
 
@@ -257,6 +262,9 @@ export function ClientFichaView({
                   locale={config.locale}
                   onGo={() => goTab("viewings")}
                 />
+                {cc.origin && (
+                  <OriginPanel origin={cc.origin} locale={config.locale} country={country} />
+                )}
               </div>
             </div>
 
@@ -388,6 +396,51 @@ export function ClientFichaView({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * DE DÓNDE VINO.
+ *
+ * El momento fundacional de la relación —qué preguntó, por qué piso, qué día—
+ * se perdía al convertir el lead. Ahora se conserva y se enseña aquí, con un
+ * enlace de vuelta a la solicitud original: no es un segundo inbox, es la
+ * primera línea de la historia.
+ */
+function OriginPanel({
+  origin,
+  locale,
+  country,
+}: {
+  origin: ClientOrigin;
+  locale: string;
+  country: Country;
+}) {
+  const t = useT();
+  const config = getCountryConfig(country);
+  return (
+    <Panel title={t("cc.origin.title")}>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12px]">
+        <span className="font-medium text-ink">{t("inbox.source.idealista")}</span>
+        <span className="text-ink/40">{formatDate(origin.receivedAt, locale)}</span>
+      </div>
+      {origin.propertyTitle && (
+        <p className="mt-1.5 text-[12.5px] text-ink/70">
+          {t("cc.origin.interestedIn", { property: origin.propertyTitle })}
+        </p>
+      )}
+      {origin.message && (
+        <p className="mt-2 line-clamp-4 border-s-2 border-gold/30 ps-2.5 text-[12.5px] italic leading-relaxed text-ink/55">
+          {origin.message}
+        </p>
+      )}
+      <Link
+        href={`${config.prefix}/solicitudes?lead=${origin.leadId}&view=all`}
+        className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-ink/55 transition hover:text-ink"
+      >
+        {t("cc.origin.openLead")}
+      </Link>
+    </Panel>
   );
 }
 

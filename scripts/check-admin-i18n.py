@@ -12,7 +12,8 @@ for lang in ("es", "en", "fr", "de"):
     blocks[lang] = keys
 
 FILES = []
-for root in ("app/[country]/(admin)/admin/clientes/[id]", "lib/client-command-center"):
+for root in ("app/[country]/(admin)/admin/clientes/[id]", "lib/client-command-center",
+             "app/[country]/(admin)/admin/solicitudes", "lib/sales-inbox"):
     for dp, _, fns in os.walk(root):
         for fn in fns:
             if fn.endswith((".ts", ".tsx")):
@@ -21,7 +22,7 @@ for root in ("app/[country]/(admin)/admin/clientes/[id]", "lib/client-command-ce
 used = set()
 for f in FILES:
     code = open(f, encoding="utf-8").read()
-    used |= set(re.findall(r'(?<![A-Za-z0-9_])t\(\s*"([a-zA-Z0-9_.]+)"', code))
+    used |= set(re.findall(r'(?<![A-Za-z0-9_])t\(\s*"([a-zA-Z0-9_.-]+)"', code))
     used |= set(re.findall(r'titleKey:\s*"([a-zA-Z0-9_.]+)"', code))
     used |= set(re.findall(r'detailKey:\s*"([a-zA-Z0-9_.]+)"', code))
 
@@ -45,6 +46,20 @@ TEMPLATES = {
                "share_click","shortlist_open","shortlist_submitted","stop_expand",
                "stop_view","time_on_page"],
  "clientes.profile.": ["student","worker","company","family","investor"],
+ "inbox.view.": ["needs-attention","new","follow-up","my-leads","unassigned","all"],
+ "inbox.empty.": ["needs-attention","new","follow-up","my-leads","unassigned","all"],
+ "inbox.state.": ["new","contacted","engaged","converted","discarded"],
+ "inbox.sort.": ["default","newest","oldest","activity","due"],
+ "inbox.type.": ["particular","agencia","relocation"],
+ "inbox.reason.": ["reply_unanswered","follow_up_overdue","follow_up_due_today",
+                   "chat_opened_no_message","fresh_uncontacted","assigned_untouched",
+                   "unmatched_property","possible_duplicate","missing_contact",
+                   "client_exists_unlinked"],
+ "inbox.log.call.": ["answered","no_answer","callback"],
+ "inbox.client.matchedBy.": ["email","phone","phone_tail"],
+ "inbox.activity.kind.": ["call","whatsapp","email","note","assignment","follow_up",
+                          "conversion","discarded","status"],
+ "inbox.property.status.": ["available","reserved","rented","sold","archived","draft"],
  "clientes.ficha.visits.status.": ["pending","confirmed","completed","cancelled"],
  "filters.operation.": ["rent","sale"],
  "card.stay.": ["short","long"],
@@ -66,7 +81,7 @@ if problems:
     sys.exit(1)
 # Paridad total de las claves cc.* : si una forma singular solo existe en
 # español, `useTn` la elige y el resto de idiomas ve la cadena equivocada.
-cc = {lang: {k for k in ks if k.startswith("cc.")} for lang, ks in blocks.items()}
+cc = {lang: {k for k in ks if k.startswith("cc.") or k.startswith("inbox.")} for lang, ks in blocks.items()}
 desync = []
 for lang in ("en","fr","de"):
     for k in sorted(cc["es"] ^ cc[lang]):
@@ -77,5 +92,5 @@ if desync:
         print("  %-50s %s" % (k, lang))
     sys.exit(1)
 
-print("OK — %d claves usadas presentes en es/en/fr/de; %d claves cc.* en paridad"
+print("OK — %d claves usadas presentes en es/en/fr/de; %d claves cc.*/inbox.* en paridad"
       % (len(used), len(cc["es"])))

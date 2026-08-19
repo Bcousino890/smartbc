@@ -515,3 +515,51 @@ export async function getClientTags(clientId: string): Promise<ClientTagRef[]> {
     return [];
   }
 }
+
+// ─── Origen del cliente ──────────────────────────────────────────────────────
+
+export type ClientOrigin = {
+  leadId: string;
+  source: "idealista";
+  receivedAt: string;
+  convertedAt: string | null;
+  message: string | null;
+  propertyTitle: string | null;
+  isInternational: boolean;
+};
+
+/**
+ * De dónde salió este cliente.
+ *
+ * Hasta la Sales Inbox esto no se podía saber: al convertir un lead se perdía
+ * el momento fundacional de la relación —qué preguntó, por qué piso, qué día—
+ * y la ficha empezaba en el aire. Ahora `idealista_leads.client_id` lo guarda.
+ *
+ * Devuelve el lead MÁS ANTIGUO: si la misma persona escribió tres veces, el
+ * origen es la primera.
+ */
+export async function getClientOrigin(
+  clientId: string,
+): Promise<ClientOrigin | null> {
+  try {
+    const { data } = await admin()
+      .from("idealista_leads")
+      .select("id, created_at, converted_at, message, property_title, is_international")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      leadId: data.id,
+      source: "idealista",
+      receivedAt: data.created_at,
+      convertedAt: data.converted_at ?? null,
+      message: data.message ?? null,
+      propertyTitle: data.property_title ?? null,
+      isInternational: Boolean(data.is_international),
+    };
+  } catch {
+    return null;
+  }
+}

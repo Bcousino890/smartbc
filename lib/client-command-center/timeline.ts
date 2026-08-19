@@ -88,6 +88,14 @@ export type TimelineInput = {
     documents: Array<{ id: string; fileName: string; createdAt: string }>;
   }>;
 
+  /** De dónde salió el cliente. Solo el origen y la conversión: la línea de
+   *  tiempo del cliente no es un segundo inbox. */
+  origin: {
+    receivedAt: string;
+    convertedAt: string | null;
+    propertyTitle: string | null;
+  } | null;
+
   sessions: Array<{
     sessionId: string;
     at: string;
@@ -298,6 +306,25 @@ export function buildTimeline(input: TimelineInput): TimelineEvent[] {
         detail: d.fileName,
       });
     }
+  }
+
+  // ── De dónde vino ──
+  if (input.origin) {
+    push(input.origin.receivedAt, {
+      id: "origin:received",
+      source: "client",
+      kind: "lead_received",
+      actor: "client",
+      titleKey: "cc.tl.leadReceived",
+      detail: input.origin.propertyTitle,
+    });
+    push(input.origin.convertedAt, {
+      id: "origin:converted",
+      source: "client",
+      kind: "lead_converted",
+      actor: "agent",
+      titleKey: "cc.tl.leadConverted",
+    });
   }
 
   // ── Analítica, una entrada por sesión ──
