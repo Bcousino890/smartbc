@@ -19,6 +19,8 @@ export type ShortlistDictionary = {
   invitation: string;
   /** Progreso */
   reviewed: (done: number, total: number) => string;
+  /** Cuántas quedan por decidir. */
+  pending: (n: number) => string;
   /** Grupos */
   priorityHomes: string;
   priorityHint: string;
@@ -55,6 +57,8 @@ export type ShortlistDictionary = {
   dragToReorder: string;
   /** Guardado */
   saved: string;
+  /** Confirmación discreta del autoguardado. */
+  savedChanges: string;
   saving: string;
   saveFailed: string;
   retry: string;
@@ -79,6 +83,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "Elige las que de verdad quieres visitar, ordénalas a tu gusto y déjanos las notas que quieras.",
     reviewed: (d, t) => `${d} de ${t} revisadas`,
+    pending: (n) => `${n} sin decidir`,
     priorityHomes: "Tus prioridades",
     priorityHint: "El orden es tu preferencia, no un horario. Arrástralas para cambiarlo.",
     maybeGroup: "Alternativas",
@@ -109,6 +114,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "Bajar",
     dragToReorder: "Arrastra para cambiar el orden",
     saved: "Guardado",
+    savedChanges: "Cambios guardados",
     saving: "Guardando",
     saveFailed: "No se ha guardado",
     retry: "Reintentar",
@@ -130,6 +136,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "Choose the ones you would truly like to visit, arrange them in your preferred order, and leave us any notes.",
     reviewed: (d, t) => `${d} of ${t} reviewed`,
+    pending: (n) => `${n} still to decide`,
     priorityHomes: "Your priorities",
     priorityHint: "The order is your preference, not a schedule. Drag them to change it.",
     maybeGroup: "Alternatives",
@@ -160,6 +167,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "Move down",
     dragToReorder: "Drag to reorder",
     saved: "Saved",
+    savedChanges: "Changes saved",
     saving: "Saving",
     saveFailed: "Not saved",
     retry: "Try again",
@@ -181,6 +189,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "Choisissez celles que vous souhaitez vraiment visiter, classez-les selon vos préférences et laissez-nous vos notes.",
     reviewed: (d, t) => `${d} sur ${t} passées en revue`,
+    pending: (n) => `${n} à décider`,
     priorityHomes: "Vos priorités",
     priorityHint: "L'ordre est votre préférence, pas un horaire. Faites-les glisser pour le modifier.",
     maybeGroup: "Alternatives",
@@ -211,6 +220,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "Descendre",
     dragToReorder: "Faites glisser pour réordonner",
     saved: "Enregistré",
+    savedChanges: "Modifications enregistrées",
     saving: "Enregistrement",
     saveFailed: "Non enregistré",
     retry: "Réessayer",
@@ -232,6 +242,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "Scelga quelle che desidera davvero visitare, le ordini come preferisce e ci lasci le sue note.",
     reviewed: (d, t) => `${d} di ${t} riviste`,
+    pending: (n) => `${n} da decidere`,
     priorityHomes: "Le sue priorità",
     priorityHint: "L'ordine è la sua preferenza, non un orario. Le trascini per cambiarlo.",
     maybeGroup: "Alternative",
@@ -262,6 +273,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "Sposta giù",
     dragToReorder: "Trascina per riordinare",
     saved: "Salvato",
+    savedChanges: "Modifiche salvate",
     saving: "Salvataggio",
     saveFailed: "Non salvato",
     retry: "Riprova",
@@ -283,6 +295,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "Wählen Sie die aus, die Sie wirklich besichtigen möchten, ordnen Sie sie nach Ihren Wünschen und hinterlassen Sie uns Ihre Anmerkungen.",
     reviewed: (d, t) => `${d} von ${t} durchgesehen`,
+    pending: (n) => `${n} noch offen`,
     priorityHomes: "Ihre Prioritäten",
     priorityHint: "Die Reihenfolge ist Ihr Wunsch, kein Termin. Ziehen Sie sie, um sie zu ändern.",
     maybeGroup: "Alternativen",
@@ -313,6 +326,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "Nach unten",
     dragToReorder: "Zum Umsortieren ziehen",
     saved: "Gespeichert",
+    savedChanges: "Änderungen gespeichert",
     saving: "Wird gespeichert",
     saveFailed: "Nicht gespeichert",
     retry: "Erneut versuchen",
@@ -334,6 +348,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "اختر ما ترغب بزيارته فعلاً، ورتّبها حسب أفضليتك، واترك لنا ملاحظاتك.",
     reviewed: (d, t) => `${d} من ${t} تمت مراجعتها`,
+    pending: (n) => `${n} دون قرار`,
     priorityHomes: "أولوياتك",
     priorityHint: "الترتيب تفضيلك، وليس موعداً. اسحبها لتغييره.",
     maybeGroup: "بدائل",
@@ -364,6 +379,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "أسفل",
     dragToReorder: "اسحب لإعادة الترتيب",
     saved: "تم الحفظ",
+    savedChanges: "تم حفظ التغييرات",
     saving: "جارٍ الحفظ",
     saveFailed: "لم يتم الحفظ",
     retry: "إعادة المحاولة",
@@ -384,6 +400,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "Gerçekten görmek istediklerinizi seçin, tercih ettiğiniz sıraya dizin ve notlarınızı bırakın.",
     reviewed: (d, t) => `${t} konuttan ${d} tanesi incelendi`,
+    pending: (n) => `${n} karar bekliyor`,
     priorityHomes: "Önceliğiniz",
     priorityHint: "Sıra sizin tercihiniz, bir randevu değil. Değiştirmek için sürükleyin.",
     maybeGroup: "Alternatifler",
@@ -414,6 +431,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "Aşağı",
     dragToReorder: "Sıralamak için sürükleyin",
     saved: "Kaydedildi",
+    savedChanges: "Değişiklikler kaydedildi",
     saving: "Kaydediliyor",
     saveFailed: "Kaydedilmedi",
     retry: "Tekrar dene",
@@ -435,6 +453,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     invitation:
       "בחר את אלה שתרצה באמת לראות, סדר אותם לפי העדפתך, והשאר לנו הערות.",
     reviewed: (d, t) => `${d} מתוך ${t} נבדקו`,
+    pending: (n) => `${n} ללא החלטה`,
     priorityHomes: "העדיפויות שלך",
     priorityHint: "הסדר הוא ההעדפה שלך, לא מועד. גרור אותן כדי לשנות.",
     maybeGroup: "חלופות",
@@ -465,6 +484,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     moveDown: "למטה",
     dragToReorder: "גרור כדי לשנות את הסדר",
     saved: "נשמר",
+    savedChanges: "השינויים נשמרו",
     saving: "שומר",
     saveFailed: "לא נשמר",
     retry: "לנסות שוב",

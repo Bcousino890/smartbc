@@ -246,6 +246,37 @@ export function editorialResidenceTitle(rawTitle: string): string {
     .join(" ");
 }
 
+/**
+ * Títulos que NO pueden llegar al cliente porque delatan de dónde salió el
+ * anuncio: «Idealista · 111905585», «Fotocasa 4471», una ristra de dígitos que
+ * es el id del portal. El contrato prohíbe exponer el origen, y un título es
+ * tan público como cualquier otro campo.
+ */
+const PORTAL_TITLE_RE =
+  /(idealista|fotocasa|habitaclia|pisos\.com|milanuncios|kyero|thinkspain)|(^|\s)\d{6,}(\s|$)/i;
+
+/**
+ * El título que ve el cliente, con red de seguridad.
+ *
+ * Devuelve el nombre de la vía cuando se puede extraer; si el original es
+ * genérico («Titulo»), está vacío o delata el portal, construye uno con datos
+ * seguros: «Residencia en Chamberí». Nunca devuelve el crudo en esos casos.
+ */
+export function safeResidenceTitle(
+  rawTitle: string | null | undefined,
+  zone: string | null | undefined,
+  residenceWord = "Residencia",
+): string {
+  const raw = (rawTitle ?? "").trim();
+  const zoneName = (zone ?? "").trim();
+  const unusable =
+    !raw || GENERIC_TITLE_RE.test(raw) || PORTAL_TITLE_RE.test(raw);
+  if (unusable) {
+    return zoneName ? `${residenceWord} en ${zoneName}` : residenceWord;
+  }
+  return editorialResidenceTitle(raw);
+}
+
 const GENERIC_TITLE_RE =
   /^(t[ií]tulos?|titles?|propiedad|sin t[ií]tulo|untitled|—|-)$/i;
 

@@ -12,7 +12,6 @@ import "server-only";
 
 import { createAdminClient } from "../admin";
 import { checkPermission } from "@/lib/auth/guard";
-import { portalLabel } from "@/lib/portal-links/portals";
 import type {
   PublicShortlistResult,
 } from "@/lib/client-shortlist/public-contract";
@@ -80,9 +79,11 @@ const SHORTLIST_SELECT = `
  */
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 function portalLinkAsProperty(link: any) {
-  const title =
-    (link.title as string | null)?.trim() ||
-    [portalLabel(link.portal), link.external_ref].filter(Boolean).join(" · ");
+  // ⚠️ NO se fabrica «Idealista · 111905585»: eso delata el portal de origen
+  // al cliente, que es justo lo que el contrato público prohíbe. Sin título se
+  // deja vacío y la proyección construye uno con la zona («Residencia en
+  // Chamberí»), que se lee igual de bien y no cuenta de dónde salió.
+  const title = (link.title as string | null)?.trim() || "";
   return {
     id: link.id,
     // Sin ficha no hay slug, y sin slug no hay proxy de fotos: por eso las
