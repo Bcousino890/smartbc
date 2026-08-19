@@ -389,6 +389,10 @@ export function ShortlistView({
     }
   };
 
+  /** El cliente ya está trabajando: ha decidido algo o ha pasado de página. */
+  const started =
+    cursor > 0 || items.some((i) => i.decision !== "undecided");
+
   const counts = {
     must: groups.must.length,
     maybe: groups.maybe.length,
@@ -397,26 +401,45 @@ export function ShortlistView({
 
   return (
     <div dir={rtl ? "rtl" : "ltr"} className="min-h-[100dvh] bg-cream-50 pb-44 sm:pb-40">
-      {/* ── Apertura ── */}
-      <header className="mx-auto max-w-3xl px-5 pt-9 text-center sm:pt-12">
+      {/* ── Apertura ──
+          Se presenta entera una sola vez. En cuanto el cliente empieza a
+          decidir se encoge: la bienvenida ya la ha leído, y lo que necesita
+          es que la residencia quepa en la pantalla. */}
+      <header
+        className={cn(
+          "mx-auto max-w-3xl px-5 text-center transition-all duration-700 ease-out",
+          started ? "pt-5 sm:pt-6" : "pt-9 sm:pt-12",
+        )}
+      >
         <p className="font-display text-[9.5px] font-medium uppercase vc-tracked text-ink/45">
           Benjamín Cousiño
         </p>
         <p className="mt-1 font-display text-[8.5px] font-medium uppercase vc-tracked-sm text-ink/35">
           {t.privateClientServices}
         </p>
-        <h1 className="mt-7 font-serif text-[30px] font-normal vc-tight text-ink sm:text-[40px]">
+        <h1
+          className={cn(
+            "font-serif font-normal vc-tight text-ink transition-all duration-700 ease-out",
+            started
+              ? "mt-2 text-[19px] sm:text-[22px]"
+              : "mt-7 text-[30px] sm:text-[40px]",
+          )}
+        >
           {shortlist.clientFirstName}
         </h1>
-        <p className="mt-3 font-sans text-[14px] leading-relaxed text-ink/70">
-          {t.intro(items.length)}
-        </p>
-        <p className="mx-auto mt-2 max-w-[46ch] font-sans text-[13px] leading-relaxed text-ink/45">
-          {t.invitation}
-        </p>
+        {!started && (
+          <>
+            <p className="mt-3 font-sans text-[14px] leading-relaxed text-ink/70">
+              {t.intro(items.length)}
+            </p>
+            <p className="mx-auto mt-2 max-w-[46ch] font-sans text-[13px] leading-relaxed text-ink/45">
+              {t.invitation}
+            </p>
+          </>
+        )}
       </header>
 
-      <div className="mt-8">
+      <div className={cn(started ? "mt-4" : "mt-8")}>
         <ShortlistNav
           t={t}
           mode={mode}
