@@ -97,3 +97,66 @@ Altura de la composición al empezar a revisar:
 5. En las fotografías de producción se ven **marcas de agua de los portales**
    ("SUM", "JV", "BARNES"). Es del pipeline de imágenes, no de esta pantalla,
    pero se le está enseñando al cliente.
+
+---
+
+## Cierre · marcas de agua y flujo del agente
+
+### Marcas de agua — investigado, y la conclusión NO es la esperada
+
+Dos causas distintas, y solo una era arreglable en código.
+
+**1 · Fotos de anuncios de portal → CORREGIDO.** 90 de los 152 items de una
+selección son anuncios que todavía no son ficha, y su fotografía se servía
+**directamente desde `img4.idealista.com`**. Además de traer la marca del
+portal, cada carga le contaba al cliente de dónde sale la casa — una fuga de
+origen del mismo tipo que el contrato prohíbe. Ahora viajan por nuestro proxy
+(`/p/i/{itemId}`), sin referrer, y solo responden mientras la selección siga
+viva. Verificado en producción: la imagen sirve 200 y el HTML ya no nombra al
+portal. Con test.
+
+**2 · Fotos nuestras con marca (SUM, JV, BARNES) → NO se debe "arreglar".**
+Las 469 fotografías de las 14 propiedades están en **nuestro** storage: la
+marca está horneada en nuestra copia. No existe una "versión limpia" que
+elegir — el limpiado dinámico **sobrescribe el fichero**, no crea una copia.
+
+Nunca se ejecutó, y hay un motivo para no ejecutarlo: **lo probé sobre una
+copia y el resultado destroza la fotografía**. El motor detecta la marca
+(`alpha=0.95, zona=5%`) y la quita, pero deja la imagen fantasmeada y lavada,
+como una doble exposición. Comprobado en dos fotos distintas.
+
+Conclusión: la superficie del cliente ya usa la única versión que existe. El
+arreglo real está aguas arriba —reimportar de una fuente sin marca, o afinar
+el motor— y **no** en pasar el limpiador por el catálogo, que empeoraría las
+fotos. Que sea manual y opt-in nos ha protegido.
+
+### Flujo del agente — verificado hasta donde llega sin sesión
+
+Escenario listo en la ficha de Paul: **5 prioritarias (1..5), 2 alternativas,
+2 descartadas, enviada**. Comprobado a nivel de datos y de lógica:
+
+- el recuento que verá la ficha es el correcto;
+- el ranking va del 1 al 5 **sin huecos**;
+- consta como enviada, con su fecha;
+- 4 de las prioritarias necesitarán alta en la selección, con
+  `source='client_shortlist'` — origen admitido por la base;
+- ninguna prioritaria está archivada (romperían la publicación).
+
+Y un hueco corregido de camino: si el cliente marca cinco y dos son anuncios
+sin ficha, se creaba el itinerario con tres **sin decir nada**. Ahora avisa
+antes de navegar, distinguiendo las que faltan por crear de las que ya no
+están disponibles.
+
+**Lo que solo puedes hacer tú:** pulsar `Crear itinerario con sus prioridades`
+y comprobar que el borrador sale con las cinco en el orden 1..5, sin fecha,
+sin horas y sin confirmaciones.
+
+### Regresión final
+
+```
+npm run test:client-shortlist      verde (incluye la fuga por foto de portal)
+npm run test:viewing-collections   verde
+npm run test:idealista             100/100
+npx tsc --noEmit                   limpio
+npm run build                      ok
+```
