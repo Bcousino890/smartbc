@@ -21,6 +21,7 @@ import { ZintoConfigClient } from "./zinto-config-client";
 import { ProxyConfigClient, type ProxyConfig, type ProxyProvider } from "./proxy-config-client";
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
+import { DeployRetryManager } from "./deploy-retry-manager";
 import { RepairConversionsManager } from "./repair-conversions-manager";
 import { IdealistaImagesManager } from "./idealista-images-manager";
 import { useT } from "@/lib/i18n/provider";
@@ -356,6 +357,9 @@ export default function ConfiguracionClient() {
 
         {/* Migrations Manager */}
         <MigrationsManager />
+
+        {/* Reintentar despliegue atascado (node_modules corrupto, build sin memoria, etc.) */}
+        <DeployRetryManager />
 
         {/* Reparar propiedades ya convertidas (fotos + datos del dueño) */}
         <RepairConversionsManager />
