@@ -12,7 +12,9 @@ import { getStaffOptions } from "@/lib/db/queries/particulares";
 import { visitRequestRowToLegacy } from "@/lib/db/adapters";
 import {
   DEFAULT_PAGE_SIZE,
+  GROUP_PAGE_SIZE,
   isCommercialState,
+  isInboxGrouping,
   isInboxSort,
   isInboxView,
   type InboxFilters,
@@ -84,9 +86,21 @@ export default async function SalesInboxPage({
   const viewParam = one(sp.view);
   const sortParam = one(sp.sort);
   const stateParam = one(sp.state);
+  const groupParam = one(sp.group);
+  const view = isInboxView(viewParam) ? viewParam : "needs-attention";
+  const grouping = isInboxGrouping(groupParam) ? groupParam : "none";
+
+  // El orden por prioridad es lo que necesita la cola de atención; en el resto
+  // de vistas lo que se espera es una bandeja: lo más reciente arriba.
+  const sort = isInboxSort(sortParam)
+    ? sortParam
+    : view === "needs-attention"
+      ? "attention"
+      : "newest";
 
   const filters: InboxFilters = {
-    view: isInboxView(viewParam) ? viewParam : "needs-attention",
+    view,
+    grouping,
     search: one(sp.q),
     assignedTo: one(sp.assigned),
     state: isCommercialState(stateParam) ? stateParam : undefined,
@@ -94,8 +108,8 @@ export default async function SalesInboxPage({
     international: one(sp.intl) === "1" ? true : undefined,
     unmatchedProperty: one(sp.unmatched) === "1",
     page: Math.max(1, Number(one(sp.page) ?? 1) || 1),
-    pageSize: DEFAULT_PAGE_SIZE,
-    sort: isInboxSort(sortParam) ? sortParam : "attention",
+    pageSize: grouping === "property" ? GROUP_PAGE_SIZE : DEFAULT_PAGE_SIZE,
+    sort,
   };
 
   const leadId = one(sp.lead) ?? null;
@@ -123,6 +137,8 @@ export default async function SalesInboxPage({
       view={filters.view}
       counts={counts}
       items={pageData.items}
+      groups={pageData.groups}
+      grouping={grouping}
       total={pageData.total}
       page={pageData.page}
       pageSize={pageData.pageSize}

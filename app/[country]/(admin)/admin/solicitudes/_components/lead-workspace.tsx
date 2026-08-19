@@ -783,9 +783,7 @@ function FollowUp({
     <Panel title={t("inbox.followUp.title")}>
       {lead.nextActionAt ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Pill
-            tone={new Date(lead.nextActionAt) < new Date() ? "critical" : "info"}
-          >
+          <Pill tone={lead.followUp === "overdue" ? "critical" : "info"}>
             {formatDateTime(lead.nextActionAt, locale)}
           </Pill>
           {lead.nextActionNote && (

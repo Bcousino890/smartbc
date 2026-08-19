@@ -161,9 +161,17 @@ export const LEAD_SOURCES: readonly LeadSource[] = [
   "visit_request",
 ] as const;
 
+/** Cómo se agrupa la lista. */
+export type InboxGrouping = "none" | "property";
+
+export function isInboxGrouping(v: unknown): v is InboxGrouping {
+  return v === "none" || v === "property";
+}
+
 /** Filtros de la bandeja. Viajan en la URL y se aplican EN SERVIDOR. */
 export type InboxFilters = {
   view: InboxView;
+  grouping: InboxGrouping;
   search?: string;
   source?: LeadSource;
   assignedTo?: string;
@@ -191,6 +199,39 @@ export function isInboxSort(v: unknown): v is InboxSort {
 }
 
 export const DEFAULT_PAGE_SIZE = 40;
+
+/** Agrupando, se pagina por PROPIEDAD, no por lead. */
+export const GROUP_PAGE_SIZE = 12;
+
+/**
+ * Un piso con todos los que han preguntado por él.
+ *
+ * En producción, 332 consultas se reparten en **27 propiedades**: una de ellas
+ * concentra 61. Verlas juntas convierte una lista interminable en una lista de
+ * pisos con su demanda debajo — y de paso deja ver de un vistazo qué piso está
+ * tirando y cuál no.
+ */
+export type LeadGroup = {
+  /** `<uuid de la ficha>` o `t:<título del anuncio>` cuando no hay ficha. */
+  key: string;
+  propertyId: string | null;
+  title: string | null;
+  zone: string | null;
+  reference: string | null;
+  price: number | null;
+  operation: string | null;
+  status: string | null;
+  coverUrl: string | null;
+  leads: LeadListItem[];
+  /** Cuántas consultas tiene en total (puede superar a `leads` si se recorta). */
+  count: number;
+  /** La consulta más reciente: es lo que ordena los grupos. */
+  lastLeadAt: string;
+  /** Cuántas siguen sin trabajar. */
+  newCount: number;
+  /** Cuántas reclaman atención. */
+  attentionCount: number;
+};
 
 /** Cifras del encabezado. Reales y accionables; ninguna decorativa. */
 export type InboxCounts = {

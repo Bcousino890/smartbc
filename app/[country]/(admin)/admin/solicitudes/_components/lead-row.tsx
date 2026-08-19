@@ -36,6 +36,7 @@ export function LeadRow({
   selected,
   selectable,
   locale,
+  grouped,
   onOpen,
   onToggleSelect,
 }: {
@@ -44,6 +45,8 @@ export function LeadRow({
   selected: boolean;
   selectable: boolean;
   locale: string;
+  /** Dentro de un piso: la propiedad ya la dice la cabecera, no se repite. */
+  grouped?: boolean;
   onOpen: () => void;
   onToggleSelect: (checked: boolean) => void;
 }) {
@@ -60,7 +63,8 @@ export function LeadRow({
     <li className="relative">
       <div
         className={cn(
-          "group flex gap-2 border-b border-ink/6 px-3 py-2 transition-colors",
+          "group flex gap-2 border-b border-ink/6 py-2 transition-colors",
+          grouped ? "ps-9 pe-3" : "px-3",
           active ? "bg-gold/[0.07]" : "hover:bg-ink/[0.025]",
         )}
       >
@@ -104,10 +108,12 @@ export function LeadRow({
             </span>
           </div>
 
-          {/* Línea 2 — por qué escribió */}
-          <p className="truncate text-[11.5px] leading-[1.35] text-ink/50">
-            {lead.propertyTitle ?? t("inbox.row.noProperty")}
-          </p>
+          {/* Línea 2 — por qué escribió (redundante dentro de un piso) */}
+          {!grouped && (
+            <p className="truncate text-[11.5px] leading-[1.35] text-ink/50">
+              {lead.propertyTitle ?? t("inbox.row.noProperty")}
+            </p>
+          )}
 
           {/* Línea 3 — por dónde va y qué reclama */}
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px] text-ink/45">

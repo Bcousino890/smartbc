@@ -1448,6 +1448,20 @@ const es: Strings = {
   "cc.origin.openLead": "Ver la solicitud original",
   "cc.tl.leadReceived": "Escribió por Idealista",
   "cc.tl.leadConverted": "Se creó su ficha desde la solicitud",
+
+  // Sales Inbox · agrupado por piso
+  "inbox.group.by.none": "Por fecha",
+  "inbox.group.by.property": "Por piso",
+  "inbox.group.count": "{count} consultas",
+  "inbox.group.count.one": "1 consulta",
+  "inbox.group.newCount": "{count} sin trabajar",
+  "inbox.group.newCount.one": "1 sin trabajar",
+  "inbox.group.noProperty": "Sin propiedad identificada",
+  "inbox.group.noFile": "Sin ficha",
+  "inbox.group.selectAll": "Seleccionar las consultas de {property}",
+  "inbox.resultsGrouped": "{count} pisos",
+  "inbox.resultsGrouped.one": "1 piso",
+  "inbox.results.one": "1 solicitud",
 };
 
 const en: Strings = {
@@ -2853,6 +2867,20 @@ const en: Strings = {
   "cc.origin.openLead": "See the original enquiry",
   "cc.tl.leadReceived": "Wrote in through Idealista",
   "cc.tl.leadConverted": "Their file was created from the enquiry",
+
+  // Sales Inbox · agrupado por piso
+  "inbox.group.by.none": "By date",
+  "inbox.group.by.property": "By home",
+  "inbox.group.count": "{count} enquiries",
+  "inbox.group.count.one": "1 enquiry",
+  "inbox.group.newCount": "{count} untouched",
+  "inbox.group.newCount.one": "1 untouched",
+  "inbox.group.noProperty": "Property not identified",
+  "inbox.group.noFile": "Not on our books",
+  "inbox.group.selectAll": "Select the enquiries for {property}",
+  "inbox.resultsGrouped": "{count} homes",
+  "inbox.resultsGrouped.one": "1 home",
+  "inbox.results.one": "1 enquiry",
 };
 
 const fr: Strings = {
@@ -4244,6 +4272,20 @@ const fr: Strings = {
   "cc.origin.openLead": "Voir la demande d'origine",
   "cc.tl.leadReceived": "A écrit via Idealista",
   "cc.tl.leadConverted": "Sa fiche a été créée à partir de la demande",
+
+  // Sales Inbox · agrupado por piso
+  "inbox.group.by.none": "Par date",
+  "inbox.group.by.property": "Par bien",
+  "inbox.group.count": "{count} demandes",
+  "inbox.group.count.one": "1 demande",
+  "inbox.group.newCount": "{count} non traitées",
+  "inbox.group.newCount.one": "1 non traitée",
+  "inbox.group.noProperty": "Bien non identifié",
+  "inbox.group.noFile": "Hors portefeuille",
+  "inbox.group.selectAll": "Sélectionner les demandes de {property}",
+  "inbox.resultsGrouped": "{count} biens",
+  "inbox.resultsGrouped.one": "1 bien",
+  "inbox.results.one": "1 demande",
 };
 
 const de: Strings = {
@@ -5636,6 +5678,20 @@ const de: Strings = {
   "cc.origin.openLead": "Ursprüngliche Anfrage ansehen",
   "cc.tl.leadReceived": "Schrieb über Idealista",
   "cc.tl.leadConverted": "Die Akte entstand aus der Anfrage",
+
+  // Sales Inbox · agrupado por piso
+  "inbox.group.by.none": "Nach Datum",
+  "inbox.group.by.property": "Nach Objekt",
+  "inbox.group.count": "{count} Anfragen",
+  "inbox.group.count.one": "1 Anfrage",
+  "inbox.group.newCount": "{count} unbearbeitet",
+  "inbox.group.newCount.one": "1 unbearbeitet",
+  "inbox.group.noProperty": "Objekt nicht erkannt",
+  "inbox.group.noFile": "Nicht im Bestand",
+  "inbox.group.selectAll": "Anfragen zu {property} auswählen",
+  "inbox.resultsGrouped": "{count} Objekte",
+  "inbox.resultsGrouped.one": "1 Objekt",
+  "inbox.results.one": "1 Anfrage",
 };
 
 export const dictionary: Record<Lang, Strings> = { es, en, fr, de };

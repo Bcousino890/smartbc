@@ -22,16 +22,20 @@ import type { LeadDetail } from "@/lib/db/queries/sales-inbox";
 import type {
   CommercialState,
   InboxCounts,
+  InboxGrouping,
   InboxSort,
   InboxView,
+  LeadGroup,
   LeadListItem,
 } from "@/lib/sales-inbox/types";
 import { COMMERCIAL_STATES, INBOX_VIEWS } from "@/lib/sales-inbox/types";
 import type { StaffRef } from "@/lib/portal-links/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
+import { useTn } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/plural";
 import { cn } from "@/lib/utils";
 import { Button, Empty, Select } from "@/components/admin/ui/primitives";
+import { LeadGroupBlock } from "./lead-group";
 import { LeadRow } from "./lead-row";
 import { LeadWorkspace } from "./lead-workspace";
 import { bulkAssign, bulkDiscard, bulkSetFollowUp } from "../inbox-actions";
@@ -49,6 +53,8 @@ export function InboxShell({
   view,
   counts,
   items,
+  groups,
+  grouping,
   total,
   page,
   pageSize,
@@ -60,6 +66,8 @@ export function InboxShell({
   view: InboxView;
   counts: InboxCounts;
   items: LeadListItem[];
+  groups: LeadGroup[];
+  grouping: InboxGrouping;
   total: number;
   page: number;
   pageSize: number;
@@ -69,6 +77,7 @@ export function InboxShell({
   canEdit: boolean;
 }) {
   const t = useT();
+  const tn = useTn();
   const router = useRouter();
   const params = useSearchParams();
   const config = getCountryConfig(country);
@@ -147,7 +156,7 @@ export function InboxShell({
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="font-serif text-[20px] text-ink">{t("inbox.title")}</h1>
           <div className="flex items-center gap-2">
-            <label className="flex w-full max-w-xs items-center gap-2 rounded-md border border-ink/12 bg-white px-2.5 py-1.5 focus-within:border-gold/55">
+            <label className="flex w-full max-w-[240px] items-center gap-2 rounded-md border border-ink/12 bg-white px-2.5 py-1.5 focus-within:border-gold/55 sm:max-w-xs">
               <Search size={13} strokeWidth={1.9} className="shrink-0 text-ink/40" />
               <input
                 type="search"
@@ -168,6 +177,25 @@ export function InboxShell({
                 </button>
               )}
             </label>
+            {/* 332 consultas son 27 pisos: agruparlas cambia por completo
+                cómo se lee la bandeja, así que el conmutador va a la vista, no
+                escondido en los filtros. */}
+            <div className="flex items-center gap-0.5 rounded-md border border-ink/12 p-0.5">
+              {(["none", "property"] as InboxGrouping[]).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setParams({ group: g === "none" ? null : g })}
+                  aria-pressed={grouping === g}
+                  className={cn(
+                    "whitespace-nowrap rounded px-2 py-1 text-[11px] font-medium transition",
+                    grouping === g ? "bg-ink text-cream-50" : "text-ink/50 hover:text-ink",
+                  )}
+                >
+                  {t(`inbox.group.by.${g}`)}
+                </button>
+              ))}
+            </div>
             <Button
               size="sm"
               onClick={() => setShowFilters((v) => !v)}
@@ -327,13 +355,16 @@ export function InboxShell({
                 onChange={(e) =>
                   setSelected(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())
                 }
+                disabled={items.length === 0}
                 aria-label={t("inbox.bulk.selectAll")}
                 className="h-3.5 w-3.5 accent-[#8a6d3b]"
               />
               <span className="text-[11px] text-ink/45">
                 {selected.size > 0
                   ? t("inbox.bulk.selected", { count: selected.size })
-                  : t("inbox.results", { count: total })}
+                  : grouping === "property"
+                    ? tn("inbox.resultsGrouped", total)
+                    : tn("inbox.results", total)}
               </span>
               {pending && <span className="ms-auto text-[10.5px] text-ink/35">…</span>}
             </div>
@@ -344,6 +375,36 @@ export function InboxShell({
               <li className="p-4">
                 <Empty>{t(`inbox.empty.${view}`)}</Empty>
               </li>
+            ) : grouping === "property" ? (
+              groups.map((g) => (
+                <LeadGroupBlock
+                  key={g.key}
+                  group={g}
+                  country={country}
+                  activeLeadId={selectedId}
+                  selected={selected}
+                  selectable={canEdit}
+                  onOpen={(id) => setParams({ lead: id }, { keepLead: true })}
+                  onToggleSelect={(id, checked) =>
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.add(id);
+                      else next.delete(id);
+                      return next;
+                    })
+                  }
+                  onToggleGroup={(ids, checked) =>
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      for (const id of ids) {
+                        if (checked) next.add(id);
+                        else next.delete(id);
+                      }
+                      return next;
+                    })
+                  }
+                />
+              ))
             ) : (
               items.map((lead) => (
                 <LeadRow

@@ -24,13 +24,16 @@ import {
   attentionScore,
   deriveAttention,
   deriveCommercialState,
+  deriveFollowUpState,
   deriveLastActivityAt,
   needsAttention,
+  type FollowUpState,
   type LeadFacts,
 } from "@/lib/sales-inbox/derive";
 import {
-  DEFAULT_PAGE_SIZE,
+  GROUP_PAGE_SIZE,
   type CommercialState,
+  type LeadGroup,
   type InboxCounts,
   type InboxFilters,
   type LeadListItem,
@@ -209,12 +212,17 @@ function applySort(q: any, f: InboxFilters) {
 
 export type InboxPage = {
   items: LeadListItem[];
+  /** Agrupando por propiedad: los pisos de esta página, con sus consultas. */
+  groups: LeadGroup[];
   total: number;
   page: number;
   pageSize: number;
   /** true si la vista se ordena/filtra por atención (paginación aproximada). */
   attentionMode: boolean;
 };
+
+/** Techo del modo agrupado y del de atención. Ver la nota de `getInboxPage`. */
+const SCAN_LIMIT = 2000;
 
 /**
  * Una página de la bandeja.
@@ -234,7 +242,7 @@ export type InboxPage = {
 export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
   const gate = await checkPermission("solicitudes", "view");
   if (!gate.ok) {
-    return { items: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
+    return { items: [], groups: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
   }
 
   const scopeRaw = await resolveViewScope("solicitudes");
@@ -243,13 +251,18 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
     userId: scopeRaw.userId,
   };
   if (scope.restriction === "none") {
-    return { items: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
+    return { items: [], groups: [], total: 0, page: 1, pageSize: filters.pageSize, attentionMode: false };
   }
 
   const now = new Date();
   const staffNames = await getStaffNames();
   const attentionMode =
     filters.view === "needs-attention" || filters.sort === "attention";
+
+  // Agrupar por piso recorre el mismo conjunto acotado que el modo atención.
+  if (filters.grouping === "property") {
+    return groupByProperty(filters, scope, now, staffNames);
+  }
 
   if (!attentionMode) {
     let q = db().from(VIEW).select(LIST_COLUMNS, { count: "exact" });
@@ -261,10 +274,11 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
     const { data, count, error } = await q.range(from, from + filters.pageSize - 1);
     if (error) {
       console.error("[getInboxPage]", error.message);
-      return { items: [], total: 0, page: filters.page, pageSize: filters.pageSize, attentionMode };
+      return { items: [], groups: [], total: 0, page: filters.page, pageSize: filters.pageSize, attentionMode };
     }
     return {
       items: (data ?? []).map((r: any) => toListItem(r, now, staffNames)),
+      groups: [],
       total: count ?? 0,
       page: filters.page,
       pageSize: filters.pageSize,
@@ -282,10 +296,10 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
 
   const { data, error } = await q
     .order("created_at", { ascending: false })
-    .limit(2000);
+    .limit(SCAN_LIMIT);
   if (error) {
     console.error("[getInboxPage attention]", error.message);
-    return { items: [], total: 0, page: filters.page, pageSize: filters.pageSize, attentionMode };
+    return { items: [], groups: [], total: 0, page: filters.page, pageSize: filters.pageSize, attentionMode };
   }
 
   const all = (data ?? [])
@@ -298,10 +312,136 @@ export async function getInboxPage(filters: InboxFilters): Promise<InboxPage> {
   const from = (filters.page - 1) * filters.pageSize;
   return {
     items: all.slice(from, from + filters.pageSize),
+    groups: [],
     total: all.length,
     page: filters.page,
     pageSize: filters.pageSize,
     attentionMode,
+  };
+}
+
+/**
+ * La bandeja agrupada por piso.
+ *
+ * En producción, 332 consultas se reparten en 27 propiedades y una sola
+ * concentra 61: agrupar convierte una lista interminable en una lista de pisos
+ * con su demanda debajo.
+ *
+ * Los grupos se ordenan por la consulta MÁS RECIENTE, así que el piso que está
+ * tirando ahora sube solo — igual que un hilo de correo al que acaban de
+ * contestar.
+ *
+ * ⚠️ Se agrupa en memoria sobre un conjunto acotado (`SCAN_LIMIT`). Con 332
+ * leads es exacto; por encima habría que llevar la agregación a SQL. El techo
+ * está anotado a propósito para que no pase inadvertido.
+ */
+async function groupByProperty(
+  filters: InboxFilters,
+  scope: InboxScope,
+  now: Date,
+  staffNames: Map<string, string>,
+): Promise<InboxPage> {
+  let q = db().from(VIEW).select(LIST_COLUMNS + ", property_title");
+  q = applyScope(q, scope);
+  q = applyFilters(q, filters, scope.userId);
+  if (filters.view === "needs-attention") {
+    q = q.not("commercial_state", "in", "(converted,discarded)");
+  }
+
+  const { data, error } = await q
+    .order("created_at", { ascending: false })
+    .limit(SCAN_LIMIT);
+  if (error) {
+    console.error("[groupByProperty]", error.message);
+    return { items: [], groups: [], total: 0, page: filters.page, pageSize: GROUP_PAGE_SIZE, attentionMode: false };
+  }
+
+  const rows = (data ?? []) as any[];
+  const byKey = new Map<string, LeadGroup>();
+
+  for (const r of rows) {
+    const item = toListItem(r, now, staffNames);
+    if (filters.view === "needs-attention" && !needsAttention(item.reasons)) continue;
+
+    // Sin ficha propia se agrupa por el TÍTULO del anuncio: es lo único que
+    // tenemos, y en 190 de 332 casos es lo único que va a haber.
+    const title = (r.property_title ?? "").trim();
+    const key = r.matched_property_id
+      ? String(r.matched_property_id)
+      : title
+        ? `t:${title.toLowerCase()}`
+        : "t:";
+
+    const g = byKey.get(key);
+    if (g) {
+      g.leads.push(item);
+      g.count += 1;
+      if (item.state === "new") g.newCount += 1;
+      if (needsAttention(item.reasons)) g.attentionCount += 1;
+      if (new Date(item.createdAt) > new Date(g.lastLeadAt)) g.lastLeadAt = item.createdAt;
+    } else {
+      byKey.set(key, {
+        key,
+        propertyId: r.matched_property_id ?? null,
+        title: title || null,
+        zone: null,
+        reference: null,
+        price: null,
+        operation: null,
+        status: null,
+        coverUrl: null,
+        leads: [item],
+        count: 1,
+        lastLeadAt: item.createdAt,
+        newCount: item.state === "new" ? 1 : 0,
+        attentionCount: needsAttention(item.reasons) ? 1 : 0,
+      });
+    }
+  }
+
+  const ordered = [...byKey.values()].sort(
+    (a, b) => new Date(b.lastLeadAt).getTime() - new Date(a.lastLeadAt).getTime(),
+  );
+
+  const from = (filters.page - 1) * GROUP_PAGE_SIZE;
+  const page = ordered.slice(from, from + GROUP_PAGE_SIZE);
+
+  // Solo se piden los datos de las fichas VISIBLES: sin esto sería un N+1
+  // sobre todas las propiedades del listado.
+  const ids = page.map((g) => g.propertyId).filter((x): x is string => Boolean(x));
+  if (ids.length) {
+    const { data: props } = await db()
+      .from("properties")
+      .select("id, title, zone, property_reference, price, operation, status, cover_photo_url")
+      .in("id", ids);
+    const map = new Map<string, any>((props ?? []).map((p: any) => [p.id, p]));
+    for (const g of page) {
+      const p = g.propertyId ? map.get(g.propertyId) : null;
+      if (!p) continue;
+      g.title = p.title ?? g.title;
+      g.zone = p.zone ?? null;
+      g.reference = p.property_reference ?? null;
+      g.price = p.price === null ? null : Number(p.price);
+      g.operation = p.operation ?? null;
+      g.status = p.status ?? null;
+      g.coverUrl = p.cover_photo_url ?? null;
+    }
+  }
+
+  // Dentro de cada piso, lo más reciente arriba.
+  for (const g of page) {
+    g.leads.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+
+  return {
+    items: page.flatMap((g) => g.leads),
+    groups: page,
+    total: ordered.length,
+    page: filters.page,
+    pageSize: GROUP_PAGE_SIZE,
+    attentionMode: false,
   };
 }
 
@@ -334,6 +474,7 @@ export async function getInboxCounts(): Promise<InboxCounts> {
   // entera; se cuenta sobre el mismo conjunto acotado que usa la vista.
   const attention = await getInboxPage({
     view: "needs-attention",
+    grouping: "none",
     page: 1,
     pageSize: 1,
     sort: "attention",
@@ -424,6 +565,9 @@ export type LeadDetail = {
   convertedAt: string | null;
   nextActionAt: string | null;
   nextActionNote: string | null;
+  /** Vencido / hoy / más adelante. Se calcula aquí para que el navegador no
+   *  tenga que comparar relojes al hidratar. */
+  followUp: FollowUpState;
   state: CommercialState;
   reasons: ReturnType<typeof deriveAttention>;
   whatsapp: LeadListItem["whatsapp"];
@@ -519,6 +663,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     convertedAt: row.converted_at ?? null,
     nextActionAt: row.next_action_at ?? null,
     nextActionNote: row.next_action_note ?? null,
+    followUp: deriveFollowUpState(row.next_action_at ?? null),
     state: deriveCommercialState(facts),
     reasons: deriveAttention(facts),
     whatsapp: facts.whatsapp,
