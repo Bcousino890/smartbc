@@ -357,6 +357,21 @@ export function ShortlistView({
   );
   const current = reviewOrder[Math.min(cursor, reviewOrder.length - 1)];
 
+  /**
+   * Puesto de la residencia actual DENTRO de lo que falta por decidir. La
+   * barra de arriba cuenta pendientes y el contador de aquí contaba la lista
+   * entera: dos cifras distintas, sin etiqueta, leídas como una contradicción
+   * («Revisar 3» encima de «2 de 19»). Ahora cada una dice qué mide.
+   */
+  const pendingIds = useMemo(
+    () =>
+      reviewOrder
+        .filter((p) => p.decision === "undecided")
+        .map((p) => p.itemId),
+    [reviewOrder],
+  );
+  const pendingIndex = current ? pendingIds.indexOf(current.itemId) : -1;
+
   // property_view cuando la residencia pasa a ser LA ACTIVA de verdad, una
   // sola vez por residencia. Ni por animaciones, ni por cambios de tamaño.
   const seen = useRef(new Set<string>());
@@ -483,6 +498,8 @@ export function ShortlistView({
           property={current}
           index={cursor}
           total={reviewOrder.length}
+          pendingIndex={pendingIndex}
+          pendingTotal={pendingIds.length}
           t={t}
           rtl={rtl}
           busy={busyId === current.itemId}

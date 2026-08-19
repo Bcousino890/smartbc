@@ -27,6 +27,10 @@ export type ShortlistDictionary = {
   modeSummary: string;
   reviewAllDone: string;
   ofTotal: (n: number, total: number) => string;
+  /** Posición DENTRO de lo que falta por decidir: «Sin decidir · 1 de 3». */
+  pendingOfTotal: (n: number, total: number) => string;
+  /** Rótulo para una residencia que ya tiene decisión. */
+  alreadyDecided: string;
   goToPending: string;
   summaryTitle: string;
   undecidedWarning: (n: number) => string;
@@ -101,6 +105,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "Resumen",
     reviewAllDone: "Todas revisadas",
     ofTotal: (n, total) => `${n} de ${total}`,
+    pendingOfTotal: (n, total) => `Sin decidir · ${n} de ${total}`,
+    alreadyDecided: "Ya decidida",
     goToPending: "Ir a la siguiente",
     summaryTitle: "Tu selección",
     undecidedWarning: (n) => `Quedan ${n} residencias sin revisar.`,
@@ -164,6 +170,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "Summary",
     reviewAllDone: "All reviewed",
     ofTotal: (n, total) => `${n} of ${total}`,
+    pendingOfTotal: (n, total) => `Undecided · ${n} of ${total}`,
+    alreadyDecided: "Already decided",
     goToPending: "Go to the next one",
     summaryTitle: "Your selection",
     undecidedWarning: (n) => `${n} residences are still undecided.`,
@@ -227,6 +235,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "Résumé",
     reviewAllDone: "Tout est vu",
     ofTotal: (n, total) => `${n} sur ${total}`,
+    pendingOfTotal: (n, total) => `Sans décision · ${n} sur ${total}`,
+    alreadyDecided: "Déjà décidée",
     goToPending: "Aller à la suivante",
     summaryTitle: "Votre sélection",
     undecidedWarning: (n) => `Il reste ${n} résidences à examiner.`,
@@ -290,6 +300,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "Riepilogo",
     reviewAllDone: "Tutto rivisto",
     ofTotal: (n, total) => `${n} di ${total}`,
+    pendingOfTotal: (n, total) => `Da decidere · ${n} di ${total}`,
+    alreadyDecided: "Già decisa",
     goToPending: "Vai alla prossima",
     summaryTitle: "La sua selezione",
     undecidedWarning: (n) => `Restano ${n} residenze da rivedere.`,
@@ -353,6 +365,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "Übersicht",
     reviewAllDone: "Alles gesehen",
     ofTotal: (n, total) => `${n} von ${total}`,
+    pendingOfTotal: (n, total) => `Offen · ${n} von ${total}`,
+    alreadyDecided: "Bereits entschieden",
     goToPending: "Zur nächsten",
     summaryTitle: "Ihre Auswahl",
     undecidedWarning: (n) => `${n} Residenzen sind noch offen.`,
@@ -416,6 +430,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "الملخص",
     reviewAllDone: "اكتملت المراجعة",
     ofTotal: (n, total) => `${n} من ${total}`,
+    pendingOfTotal: (n, total) => `لم تُحدَّد بعد · ${n} من ${total}`,
+    alreadyDecided: "تم تحديدها",
     goToPending: "إلى التالية",
     summaryTitle: "اختيارك",
     undecidedWarning: (n) => `بقيت ${n} من المساكن دون مراجعة.`,
@@ -478,6 +494,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "Özet",
     reviewAllDone: "Tümü incelendi",
     ofTotal: (n, total) => `${total} içinden ${n}`,
+    pendingOfTotal: (n, total) => `Karar verilmedi · ${total} içinden ${n}`,
+    alreadyDecided: "Karar verildi",
     goToPending: "Sıradakine geç",
     summaryTitle: "Seçiminiz",
     undecidedWarning: (n) => `${n} konut hâlâ incelenmedi.`,
@@ -541,6 +559,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     modeSummary: "סיכום",
     reviewAllDone: "הכול נסקר",
     ofTotal: (n, total) => `${n} מתוך ${total}`,
+    pendingOfTotal: (n, total) => `ללא החלטה · ${n} מתוך ${total}`,
+    alreadyDecided: "כבר הוחלט",
     goToPending: "למשל הבא",
     summaryTitle: "הבחירה שלך",
     undecidedWarning: (n) => `נותרו ${n} נכסים לסקירה.`,

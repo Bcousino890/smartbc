@@ -24,6 +24,8 @@ export function ReviewStage({
   property,
   index,
   total,
+  pendingIndex,
+  pendingTotal,
   t,
   rtl,
   busy,
@@ -38,6 +40,10 @@ export function ReviewStage({
   property: PublicShortlistProperty;
   index: number;
   total: number;
+  /** Puesto dentro de LO QUE FALTA (0-based); -1 si esta ya está decidida. */
+  pendingIndex: number;
+  /** Cuántas quedan por decidir en toda la selección. */
+  pendingTotal: number;
   t: ShortlistDictionary;
   rtl: boolean;
   busy?: boolean;
@@ -91,8 +97,24 @@ export function ReviewStage({
       }}
       className="mx-auto max-w-5xl px-5 pb-4 pt-6 sm:px-6 sm:pt-8"
     >
-      <p className="font-display text-[10px] font-medium uppercase vc-tracked text-ink/35">
-        {t.ofTotal(index + 1, total)}
+      {/* El contador dice DOS cosas y no debe confundirlas: dónde estás dentro
+          de lo que te falta, y dónde estás dentro de la selección entera.
+          Enseñar solo «2 de 19» junto a un «Revisar 3» arriba parecía una
+          contradicción: dos cifras sin etiqueta que miden cosas distintas. */}
+      <p className="font-display text-[10px] font-medium uppercase vc-tracked">
+        {pendingIndex >= 0 ? (
+          <>
+            <span className="text-gold-dark">
+              {t.pendingOfTotal(pendingIndex + 1, pendingTotal)}
+            </span>
+            <span className="text-ink/25"> · {t.ofTotal(index + 1, total)}</span>
+          </>
+        ) : (
+          <>
+            <span className="text-ink/35">{t.ofTotal(index + 1, total)}</span>
+            <span className="text-ink/25"> · {t.alreadyDecided}</span>
+          </>
+        )}
       </p>
 
       <div className="mt-4 gap-10 md:flex md:items-start">
