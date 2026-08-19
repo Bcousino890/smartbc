@@ -6,6 +6,7 @@ import { useEffect, useOptimistic, useRef, useState, useTransition } from "react
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { useT } from "@/lib/i18n/provider";
 import { detectLanguage } from "@/lib/lang-detect";
+import { PORTAL_URL } from "@/lib/portal-url";
 import { formatRelativeMinutes } from "@/lib/relative-time";
 import { shareSlug } from "@/lib/share-slug";
 import type { VisitRequest, VisitRequestStatus } from "@/lib/types";
@@ -1296,12 +1297,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PropertySearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [origin, setOrigin] = useState("");
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   // Al abrir el picker (query vacía) carga y previsualiza las fichas guardadas
   // más recientes; al teclear, busca con debounce. Así el admin puede elegir
@@ -1351,7 +1347,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
     ? shareSlug(lead.matched_property_slug, lead.matched_property_reference)
     : null;
   const relativeShareUrl = publicSlug ? `/compartir/${publicSlug}` : null;
-  const absoluteShareUrl = publicSlug ? `${origin}/compartir/${publicSlug}` : null;
+  const absoluteShareUrl = publicSlug ? `${PORTAL_URL}/compartir/${publicSlug}` : null;
 
   if (!editing) {
     return (

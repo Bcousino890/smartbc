@@ -17,6 +17,7 @@ import {
 } from "@/app/(admin)/admin/propiedades/actions";
 import { useT } from "@/lib/i18n/provider";
 import { formatRelativeMinutes } from "@/lib/relative-time";
+import { PORTAL_URL } from "@/lib/portal-url";
 import { cn } from "@/lib/utils";
 
 export type SmartLinkRow = {
@@ -125,10 +126,7 @@ function LinkRow({ link, slug }: { link: SmartLinkRow; slug: string }) {
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const url =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/c/${link.token}`
-      : `/c/${link.token}`;
+  const url = `${PORTAL_URL}/c/${link.token}`;
 
   const handleCopy = async () => {
     try {

@@ -28,6 +28,7 @@ import type { ShortlistWithItems } from "@/lib/client-shortlist/types";
 import type { SelectionWithProperty } from "@/lib/viewing-collections/types";
 import { LANGUAGE_LABELS } from "@/lib/viewing-collections/i18n";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { PORTAL_URL } from "@/lib/portal-url";
 import { cn } from "@/lib/utils";
 import { CollapsibleBlock } from "@/components/admin/viewing-collections/collapsible-block";
 import {
@@ -157,10 +158,7 @@ function ShortlistRow({
   const [copied, setCopied] = useState(false);
   const prefix = getCountryConfig(country).prefix;
 
-  const url =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/s/${s.token}`
-      : `/s/${s.token}`;
+  const url = `${PORTAL_URL}/s/${s.token}`;
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setError(null);

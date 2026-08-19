@@ -8,6 +8,7 @@ import { PLACEHOLDER_GRADIENT } from "@/lib/constants";
 import { formatPrice } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
 import { formatRelativeMinutes } from "@/lib/relative-time";
+import { PORTAL_URL } from "@/lib/portal-url";
 import type { AgencyPropertyRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -134,8 +135,7 @@ export function AgencyPropertiesTable({
     [properties, selected],
   );
 
-  const shareUrl = (id: string) =>
-    `${typeof window !== "undefined" ? window.location.origin : ""}/compartir/${id}`;
+  const shareUrl = (id: string) => `${PORTAL_URL}/compartir/${id}`;
 
   const copyToClipboard = async (text: string, okMessage: string) => {
     try {

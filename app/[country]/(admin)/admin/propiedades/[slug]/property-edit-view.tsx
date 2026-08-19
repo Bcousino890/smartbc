@@ -55,6 +55,7 @@ import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { sectorsForCommune } from "@/lib/mock-properties";
 import { useT } from "@/lib/i18n/provider";
 import { shareSlug } from "@/lib/share-slug";
+import { PORTAL_URL } from "@/lib/portal-url";
 import { cn } from "@/lib/utils";
 
 type Photo = {
@@ -410,13 +411,11 @@ export function PropertyEditView({
   const isScraped = property.source === "scrape";
 
   // SmartLink: URL pública del compartir, con la referencia BC al inicio del
-  // slug (bc0871-…). En cliente usamos window.origin para que funcione tanto
-  // en local (localhost) como en producción.
+  // slug (bc0871-…). Dominio fijo (PORTAL_URL), no window.origin: un agente
+  // logueado por accidente en el dominio de marketing (www.bcousinoprop.com)
+  // generaría ahí mismo el enlace que le manda al cliente.
   const publicSlug = shareSlug(property.slug, property.bc_reference);
-  const smartLinkBase =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/compartir/${publicSlug}`
-      : `/compartir/${publicSlug}`;
+  const smartLinkBase = `${PORTAL_URL}/compartir/${publicSlug}`;
   // Propiedad dual: cada operación tiene su propia variante del SmartLink
   // (?op=sale / ?op=rent) para que el título, el precio y el PDF que ve el
   // cliente correspondan a la operación que le interesa, sin ambigüedad.
