@@ -47,6 +47,9 @@ export function useReorderList({
   const elements = useRef(new Map<string, HTMLElement>());
   const order = useRef(ids);
   order.current = ids;
+  /** Temporizador de la pulsación mantenida; null = no hay nada armado. */
+  const armed = useRef<number | null>(null);
+  const startY = useRef(0);
   const startOrder = useRef<string[]>([]);
   const pointerY = useRef(0);
   const frame = useRef(0);
@@ -103,30 +106,79 @@ export function useReorderList({
 
   const handleProps = useCallback(
     (id: string) => ({
-      // `none` para que el navegador no interprete el gesto como scroll: sin
-      // esto, en móvil el arrastre se pierde en cuanto el dedo se mueve.
-      style: { touchAction: "none" as const, cursor: "grab" },
+      // ⚠️ `pan-y`, NO `none`.
+      //
+      // Con `touch-action: none` el asa se traga el gesto ANTES de saber qué
+      // quiere hacer el dedo, así que empezar a deslizar sobre ella dejaba la
+      // página clavada: el cliente creía que el scroll estaba roto.
+      //
+      // Con `pan-y` el navegador sigue pudiendo desplazar la página, y el
+      // arrastre se activa solo cuando de verdad se quiere: al instante con
+      // ratón, y con una pulsación mantenida (220 ms) con el dedo. Si el dedo
+      // se va antes de ese tiempo, era un scroll y se deja pasar.
+      style: { touchAction: "pan-y" as const, cursor: "grab" },
       onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
         if (disabled || e.button !== 0) return;
-        e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        startOrder.current = order.current;
+        const el = e.currentTarget;
+        const pointerId = e.pointerId;
+        startY.current = e.clientY;
         pointerY.current = e.clientY;
-        setDraggingId(id);
+
+        const begin = () => {
+          armed.current = null;
+          try {
+            el.setPointerCapture(pointerId);
+          } catch {
+            /* el puntero ya se fue */
+          }
+          startOrder.current = order.current;
+          setDraggingId(id);
+          // Un toque háptico corto, si el aparato lo tiene: confirma que la
+          // tarjeta se ha "cogido" sin ningún adorno visual.
+          navigator.vibrate?.(8);
+        };
+
+        if (e.pointerType === "mouse") {
+          e.preventDefault();
+          begin();
+          return;
+        }
+        armed.current = window.setTimeout(begin, 220);
       },
       onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+        // Todavía decidiendo: si el dedo se desplaza, era scroll.
+        if (armed.current !== null) {
+          if (Math.abs(e.clientY - startY.current) > 8) {
+            window.clearTimeout(armed.current);
+            armed.current = null;
+          }
+          return;
+        }
         if (!draggingId) return;
+        e.preventDefault();
         pointerY.current = e.clientY;
         placeAt(draggingId, e.clientY);
       },
       onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+        if (armed.current !== null) {
+          window.clearTimeout(armed.current);
+          armed.current = null;
+        }
         if (!draggingId) return;
-        e.currentTarget.releasePointerCapture(e.pointerId);
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ya liberado */
+        }
         const next = order.current;
         setDraggingId(null);
         if (next.join() !== startOrder.current.join()) onCommit(next);
       },
       onPointerCancel: () => {
+        if (armed.current !== null) {
+          window.clearTimeout(armed.current);
+          armed.current = null;
+        }
         if (!draggingId) return;
         const next = order.current;
         setDraggingId(null);

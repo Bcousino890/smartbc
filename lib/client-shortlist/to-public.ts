@@ -11,9 +11,9 @@
 // ============================================================================
 
 import {
-  editorialResidenceTitle,
   firstNameOnly,
   proxyPhotoUrls,
+  safeResidenceTitle,
 } from "@/lib/viewing-collections/to-public";
 import {
   intlLocale,
@@ -93,6 +93,18 @@ export function shortlistZoneLabel(prop: RawShortlistProperty): string {
  * Se calcula aquí y no en SQL para que el panel y el cliente compartan
  * exactamente el mismo criterio.
  */
+/** «Residencia en Chamberí» cuando el título no sirve. Una palabra por idioma. */
+const RESIDENCE_WORD: Record<string, string> = {
+  es: "Residencia",
+  en: "Residence",
+  fr: "Résidence",
+  it: "Residenza",
+  de: "Residenz",
+  ar: "مسكن",
+  tr: "Konut",
+  he: "נכס",
+};
+
 const DECISION_ORDER: Record<ShortlistDecision, number> = {
   must_visit: 0,
   undecided: 1,
@@ -134,7 +146,9 @@ export function toPublicClientShortlist(
       const photos = item.externalPhotoUrls ?? proxyPhotoUrls(prop as never);
       return {
         itemId: item.id,
-        title: editorialResidenceTitle(prop.title),
+        // Con red: un título genérico o que delate el portal se sustituye
+        // por uno construido con la zona. Ver safeResidenceTitle.
+        title: safeResidenceTitle(prop.title, prop.zone, RESIDENCE_WORD[language]),
         zoneLabel: shortlistZoneLabel(prop),
         priceLabel: cfg.formatPrice(
           prop.price == null ? null : Number(prop.price),

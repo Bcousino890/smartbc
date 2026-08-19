@@ -304,7 +304,7 @@ export function ShortlistView({
   };
 
   return (
-    <div dir={rtl ? "rtl" : "ltr"} className="min-h-[100dvh] bg-cream-50 pb-32">
+    <div dir={rtl ? "rtl" : "ltr"} className="min-h-[100dvh] bg-cream-50 pb-44 sm:pb-40">
       {/* ── Apertura ── */}
       <header className="mx-auto max-w-3xl px-5 pt-10 text-center sm:pt-14">
         <p className="font-display text-[9.5px] font-medium uppercase vc-tracked text-ink/45">
@@ -327,7 +327,7 @@ export function ShortlistView({
         <Progress done={decided} total={items.length} t={t} />
       </header>
 
-      <main className="mx-auto mt-8 max-w-3xl space-y-8 px-4 sm:px-5">
+      <main className="mx-auto mt-10 max-w-3xl space-y-14 px-5 sm:px-6">
         {items.length === 0 && (
           <p className="rounded-2xl border border-dashed border-ink/15 px-5 py-10 text-center font-sans text-[13px] text-ink/45">
             {t.emptyState}
@@ -495,6 +495,7 @@ function Progress({
   t: ShortlistDictionary;
 }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
+  const pending = total - done;
   return (
     <div className="mx-auto mt-8 max-w-xs">
       <p
@@ -502,6 +503,9 @@ function Progress({
         aria-live="polite"
       >
         {t.reviewed(done, total)}
+        {pending > 0 && (
+          <span className="ms-2 text-ink/30">· {t.pending(pending)}</span>
+        )}
       </p>
       <div
         className="mt-2 h-px w-full bg-ink/10"
@@ -536,19 +540,28 @@ function Group({
 }) {
   if (!show) return null;
   return (
-    <section className={cn(dim && "opacity-80")}>
-      <div className="flex items-baseline justify-between gap-3 px-1">
-        <h2 className="font-display text-[10.5px] font-medium uppercase vc-tracked text-ink/55">
+    <section className={cn(dim && "opacity-70")}>
+      {/* Cabecera de sección al modo del libro: filete, rótulo espaciado y la
+          cifra al otro extremo. Lo que separa un grupo de otro es el aire,
+          no una caja. */}
+      <span aria-hidden className="block h-px w-full bg-ink/12" />
+      <div className="mt-3 flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-[10px] font-medium uppercase vc-tracked text-ink/50">
           {title}
         </h2>
-        <span className="font-display text-[10.5px] vc-nums text-ink/30">
+        <span className="font-display text-[10px] vc-nums text-ink/25">
           {String(count).padStart(2, "0")}
         </span>
       </div>
       {hint && (
-        <p className="mt-1 px-1 font-sans text-[11px] text-ink/40">{hint}</p>
+        <p className="mt-1.5 max-w-[46ch] font-sans text-[11px] leading-relaxed text-ink/35">
+          {hint}
+        </p>
       )}
-      <div className="mt-3 space-y-2.5">{children}</div>
+      {/* Sin bordes entre residencias: una línea de pelo y mucho aire. */}
+      <div className="mt-5 divide-y divide-ink/8">
+        {children}
+      </div>
     </section>
   );
 }
