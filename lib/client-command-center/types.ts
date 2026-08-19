@@ -130,6 +130,14 @@ export type TimelineEvent = {
   /** Texto literal del dato (título de propiedad, nota…). No se traduce. */
   detail?: string | null;
   actorName?: string | null;
+  /**
+   * Cuántos gestos iguales y seguidos se han plegado en esta fila. Ausente o 1
+   * = una sola cosa. Añadir veinte propiedades a la selección son veinte filas
+   * en la base y UN gesto para quien lee la ficha.
+   */
+  count?: number;
+  /** Los primeros detalles del grupo, para no perder de qué iba. */
+  details?: string[];
 };
 
 // ─── Métricas comerciales ────────────────────────────────────────────────────

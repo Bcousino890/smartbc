@@ -1300,6 +1300,10 @@ const es: Strings = {
   "cc.tl.pages.one": "1 página",
   "cc.tl.actions": "{count} acciones",
   "cc.tl.actions.one": "1 acción",
+  "cc.timeline.andMore": "y {count} más",
+  "cc.timeline.andMore.one": "y 1 más",
+  "cc.tl.visits": "{count} visitas",
+  "cc.tl.visits.one": "1 visita",
 };
 
 const en: Strings = {
@@ -2557,6 +2561,10 @@ const en: Strings = {
   "cc.tl.pages.one": "1 page",
   "cc.tl.actions": "{count} actions",
   "cc.tl.actions.one": "1 action",
+  "cc.timeline.andMore": "and {count} more",
+  "cc.timeline.andMore.one": "and 1 more",
+  "cc.tl.visits": "{count} visits",
+  "cc.tl.visits.one": "1 visit",
 };
 
 const fr: Strings = {
@@ -3800,6 +3808,10 @@ const fr: Strings = {
   "cc.tl.pages.one": "1 page",
   "cc.tl.actions": "{count} actions",
   "cc.tl.actions.one": "1 action",
+  "cc.timeline.andMore": "et {count} de plus",
+  "cc.timeline.andMore.one": "et 1 de plus",
+  "cc.tl.visits": "{count} visites",
+  "cc.tl.visits.one": "1 visite",
 };
 
 const de: Strings = {
@@ -5044,6 +5056,10 @@ const de: Strings = {
   "cc.tl.pages.one": "1 Seite",
   "cc.tl.actions": "{count} Aktionen",
   "cc.tl.actions.one": "1 Aktion",
+  "cc.timeline.andMore": "und {count} weitere",
+  "cc.timeline.andMore.one": "und 1 weitere",
+  "cc.tl.visits": "{count} Besuche",
+  "cc.tl.visits.one": "1 Besuch",
 };
 
 export const dictionary: Record<Lang, Strings> = { es, en, fr, de };

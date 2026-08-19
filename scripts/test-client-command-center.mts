@@ -646,6 +646,152 @@ check(
   ).find((e) => e.kind === "call")?.actorName === "Fabricio",
 );
 
+check(
+  "dos ratos del MISMO día se cuentan como un renglón, sumando páginas",
+  (() => {
+    const hoy = new Date(NOW.getTime() - 3600_000).toISOString();
+    const hoyAntes = new Date(NOW.getTime() - 5 * 3600_000).toISOString();
+    const ev = buildTimeline(
+      timelineInput({
+        client: { createdAt: null },
+        preferencesUpdatedAt: null,
+        sessions: [
+          { sessionId: "a", at: hoy, views: 4, pageType: "client_shortlist", device: "mobile", city: "Madrid", events: { property_view: 2 } },
+          { sessionId: "b", at: hoyAntes, views: 3, pageType: "client_shortlist", device: "mobile", city: "Madrid", events: { property_view: 1 } },
+        ],
+      }),
+    );
+    return (
+      ev.length === 1 &&
+      ev[0].count === 2 &&
+      ev[0].vars?.views === 7 &&
+      ev[0].vars?.actions === 3 &&
+      // la marca es la del rato MÁS RECIENTE
+      ev[0].at === hoy
+    );
+  })(),
+);
+
+check(
+  "…pero días distintos NO se mezclan",
+  buildTimeline(
+    timelineInput({
+      client: { createdAt: null },
+      preferencesUpdatedAt: null,
+      sessions: [
+        { sessionId: "a", at: daysAgo(0.2), views: 4, pageType: "client_shortlist", device: null, city: null, events: {} },
+        { sessionId: "b", at: daysAgo(2), views: 3, pageType: "client_shortlist", device: null, city: null, events: {} },
+      ],
+    }),
+  ).length === 2,
+);
+
+check(
+  "…ni se mezclan la selección privada y la colección del mismo día",
+  buildTimeline(
+    timelineInput({
+      client: { createdAt: null },
+      preferencesUpdatedAt: null,
+      sessions: [
+        { sessionId: "a", at: new Date(NOW.getTime() - 3600_000).toISOString(), views: 4, pageType: "client_shortlist", device: null, city: null, events: {} },
+        { sessionId: "b", at: new Date(NOW.getTime() - 7200_000).toISOString(), views: 3, pageType: "viewing_collection", device: null, city: null, events: {} },
+      ],
+    }),
+  ).length === 2,
+);
+
+check(
+  "veinte propiedades añadidas de golpe son UN renglón, no veinte",
+  (() => {
+    const base = NOW.getTime() - 3 * 86_400_000;
+    const ev = buildTimeline(
+      timelineInput({
+        client: { createdAt: null },
+        preferencesUpdatedAt: null,
+        selections: Array.from({ length: 20 }, (_, i) => ({
+          id: `s${i}`,
+          // segundos de diferencia: es una sola tacada
+          added_at: new Date(base + i * 1000).toISOString(),
+          client_feedback_at: null,
+          client_rating: 0,
+          property: { title: `Residencia ${i + 1}` },
+        })),
+      }),
+    );
+    return (
+      ev.length === 1 &&
+      ev[0].count === 20 &&
+      // se conservan los tres primeros para reconocer de qué iba
+      ev[0].details?.length === 3
+    );
+  })(),
+);
+
+check(
+  "pero dos gestos separados por horas siguen siendo dos renglones",
+  buildTimeline(
+    timelineInput({
+      client: { createdAt: null },
+      preferencesUpdatedAt: null,
+      selections: [
+        { id: "a", added_at: daysAgo(1), client_feedback_at: null, client_rating: 0, property: { title: "A" } },
+        { id: "b", added_at: daysAgo(2), client_feedback_at: null, client_rating: 0, property: { title: "B" } },
+      ],
+    }),
+  ).length === 2,
+);
+
+check(
+  "plegar no mezcla gestos distintos aunque caigan seguidos",
+  (() => {
+    const t0 = NOW.getTime() - 86_400_000;
+    const ev = buildTimeline(
+      timelineInput({
+        client: { createdAt: null },
+        preferencesUpdatedAt: null,
+        selections: [
+          { id: "a", added_at: new Date(t0).toISOString(), client_feedback_at: new Date(t0 + 1000).toISOString(), client_rating: 4, property: { title: "A" } },
+        ],
+      }),
+    );
+    // "se añadió" (nuestro) y "la puntuó" (suyo) no pueden acabar en la misma fila
+    return ev.length === 2 && ev.every((e) => e.count === 1);
+  })(),
+);
+
+check(
+  "una racha NO se parte porque otro gesto caiga en medio",
+  (() => {
+    const base = NOW.getTime() - 3 * 86_400_000;
+    const ev = buildTimeline(
+      timelineInput({
+        client: { createdAt: null },
+        // El encargo se guarda en mitad de la tacada de veinte.
+        preferencesUpdatedAt: new Date(base + 10_000).toISOString(),
+        selections: Array.from({ length: 20 }, (_, i) => ({
+          id: `s${i}`,
+          added_at: new Date(base + i * 1000).toISOString(),
+          client_feedback_at: null,
+          client_rating: 0,
+          property: { title: `Residencia ${i + 1}` },
+        })),
+      }),
+    );
+    const añadidos = ev.filter((e) => e.kind === "added");
+    return añadidos.length === 1 && añadidos[0].count === 20;
+  })(),
+);
+
+check(
+  "un gesto suelto sin detalle no dice 'y 1 más' de sí mismo",
+  (() => {
+    const ev = buildTimeline(
+      timelineInput({ client: { createdAt: daysAgo(5) }, preferencesUpdatedAt: null }),
+    );
+    return ev.length === 1 && ev[0].count === 1 && ev[0].details?.length === 0;
+  })(),
+);
+
 // ── Escenario real: Paul ─────────────────────────────────────────────────────
 console.log("\n👤 ESCENARIO PAUL (datos de producción)\n");
 

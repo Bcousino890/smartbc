@@ -40,16 +40,37 @@ function detailOf(
   e: TimelineEvent,
   tn: (key: string, count: number, vars?: Record<string, string | number>) => string,
 ): string | null {
-  if (e.source !== "analytics") return e.detail ?? null;
-  const views = Number(e.vars?.views ?? 0);
-  const actions = Number(e.vars?.actions ?? 0);
-  return [
-    views > 0 ? tn("cc.tl.pages", views) : null,
-    actions > 0 ? tn("cc.tl.actions", actions) : null,
-    e.detail,
-  ]
-    .filter(Boolean)
-    .join(" · ") || null;
+  if (e.source === "analytics") {
+    const visits = e.count ?? 1;
+    const views = Number(e.vars?.views ?? 0);
+    const actions = Number(e.vars?.actions ?? 0);
+    return (
+      [
+        visits > 1 ? tn("cc.tl.visits", visits) : null,
+        views > 0 ? tn("cc.tl.pages", views) : null,
+        actions > 0 ? tn("cc.tl.actions", actions) : null,
+        e.detail,
+      ]
+        .filter(Boolean)
+        .join(" · ") || null
+    );
+  }
+
+  // Racha plegada: se nombran los primeros y se dice cuántos quedan fuera.
+  const shown = e.details ?? (e.detail ? [e.detail] : []);
+  const total = e.count ?? 1;
+  // Si NINGUNO traía detalle, el primero también cuenta como "enseñado": sin
+  // esto un gesto suelto sin detalle acababa diciendo "y 1 más" de sí mismo.
+  const hidden = Math.max(0, total - Math.max(shown.length, 1));
+  const parts = [...shown];
+  if (hidden > 0) parts.push(tn("cc.timeline.andMore", hidden));
+  return parts.join(" · ") || null;
+}
+
+/** Clave de día en la zona de quien mira, que es la que se rotula. */
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
 const ICON: Record<TimelineSource, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = {
@@ -99,7 +120,9 @@ export function ActivityTimeline({
   const groups = useMemo(() => {
     const map = new Map<string, TimelineEvent[]>();
     for (const e of shown) {
-      const day = e.at.slice(0, 10);
+      // Por la fecha LOCAL, no por la del ISO (que es UTC): agrupando en UTC y
+      // rotulando en local salían dos cabeceras seguidas con el mismo día.
+      const day = dayKey(e.at);
       const list = map.get(day);
       if (list) list.push(e);
       else map.set(day, [e]);
@@ -169,6 +192,11 @@ export function ActivityTimeline({
                             {typeof e.vars?.count === "number"
                               ? tn(e.titleKey, e.vars.count, e.vars)
                               : t(e.titleKey, e.vars)}
+                            {(e.count ?? 1) > 1 && e.source !== "analytics" && (
+                              <span className="ms-1.5 rounded bg-ink/[0.06] px-1 py-px text-[10.5px] font-semibold tabular-nums text-ink/50">
+                                ×{e.count}
+                              </span>
+                            )}
                             {detailOf(e, tn) && (
                               <span className="text-ink/45"> · {detailOf(e, tn)}</span>
                             )}

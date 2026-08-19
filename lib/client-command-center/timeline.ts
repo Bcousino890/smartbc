@@ -321,5 +321,107 @@ export function buildTimeline(input: TimelineInput): TimelineEvent[] {
     });
   }
 
-  return out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return collapseBursts(groupAnalyticsByDay(out));
+}
+
+/**
+ * La analítica, un renglón por día y superficie.
+ *
+ * Aunque las vistas ya vengan agrupadas en visitas, un cliente que abre su
+ * selección treinta veces en cinco días deja treinta renglones idénticos —
+ * "Estuvo en su selección · 1 página"— que entierran la llamada de teléfono
+ * que sí hay que leer. El día es la unidad con la que uno recuerda las cosas:
+ * "el miércoles estuvo mirando", no "el miércoles a las 17:42, y otra vez a
+ * las 17:51".
+ *
+ * No se pierde nada: el desglose fino vive en "Qué ha mirado", que para eso
+ * está.
+ */
+function groupAnalyticsByDay(events: TimelineEvent[]): TimelineEvent[] {
+  const out: TimelineEvent[] = [];
+  const byDay = new Map<string, TimelineEvent>();
+
+  for (const e of events) {
+    if (e.source !== "analytics") {
+      out.push(e);
+      continue;
+    }
+    const key = `${e.at.slice(0, 10)}|${e.kind}`;
+    const open = byDay.get(key);
+    if (!open) {
+      // Los eventos llegan de más nuevo a más viejo, así que el primero de
+      // cada día ya trae la marca correcta: la última vez que estuvo.
+      const seed: TimelineEvent = { ...e, count: 1 };
+      byDay.set(key, seed);
+      out.push(seed);
+      continue;
+    }
+    open.count = (open.count ?? 1) + 1;
+    open.vars = {
+      views: Number(open.vars?.views ?? 0) + Number(e.vars?.views ?? 0),
+      actions: Number(open.vars?.actions ?? 0) + Number(e.vars?.actions ?? 0),
+    };
+    // El sitio desde el que se conectó se queda con el del rato más reciente.
+  }
+
+  return out;
+}
+
+/** Ventana dentro de la cual varios gestos iguales son EL MISMO gesto. */
+const BURST_MS = 30 * 60_000;
+
+/** Cuántos detalles se conservan al plegar. Tres bastan para reconocerlo. */
+const KEEP_DETAILS = 3;
+
+/**
+ * Pliega rachas: gestos seguidos, del mismo tipo y del mismo autor, hechos en
+ * la misma media hora.
+ *
+ * Añadir veinte propiedades a la selección de una vez son veinte filas en la
+ * base y **un** gesto para quien lee la ficha; sin plegarlas, esas veinte
+ * entierran la llamada de teléfono que sí hay que ver. Se conserva la marca
+ * más reciente, el número y los primeros detalles.
+ */
+export function collapseBursts(events: TimelineEvent[]): TimelineEvent[] {
+  const out: TimelineEvent[] = [];
+
+  // ⚠️ No basta con mirar la fila ANTERIOR. Al añadir veinte propiedades de
+  // una tacada, cualquier otro gesto que caiga en medio —guardar el encargo,
+  // por ejemplo— parte la racha en dos y aparecen "×19" y un huérfano. Se
+  // guarda un grupo abierto por tipo de gesto, y se cierra cuando pasa la
+  // media hora.
+  const open = new Map<string, TimelineEvent>();
+
+  for (const e of events) {
+    // La analítica ya viene agrupada por día; volver a plegarla aquí sumaría
+    // dos ratos distintos en uno solo y falsearía el "cuándo".
+    if (e.source === "analytics") {
+      out.push({ ...e, count: e.count ?? 1, details: [] });
+      continue;
+    }
+
+    const key = `${e.source}|${e.kind}|${e.actor}`;
+    const group = open.get(key);
+    const at = new Date(e.at).getTime();
+
+    if (group && new Date(group.at).getTime() - at <= BURST_MS) {
+      group.count = (group.count ?? 1) + 1;
+      if (e.detail && (group.details?.length ?? 0) < KEEP_DETAILS) {
+        group.details = [...(group.details ?? []), e.detail];
+      }
+      continue;
+    }
+
+    const fresh: TimelineEvent = {
+      ...e,
+      // `count` puede venir ya puesto: pisarlo con un 1 borraría esa cuenta.
+      count: e.count ?? 1,
+      details: e.details ?? (e.detail ? [e.detail] : []),
+    };
+    open.set(key, fresh);
+    out.push(fresh);
+  }
+
+  return out;
 }

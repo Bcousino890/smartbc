@@ -187,22 +187,44 @@ export async function getClientEngagement(
       else eventsByView.set(e.page_view_id, [e.event_type]);
     }
 
-    // Una sesión = una visita de verdad. 203 filas de `page_views` son unas
-    // pocas decenas de sesiones: la línea de tiempo se lee, y no se ahoga.
-    const bySession = new Map<string, EngagementSession>();
-    for (const r of rows) {
-      const key = r.session_id ?? r.id;
-      const found = bySession.get(key);
+    // Una VISITA es lo que una persona reconocería como "se sentó a mirarlo":
+    // páginas seguidas, sin un hueco largo entre medias.
+    //
+    // ⚠️ No vale agrupar por `session_id`. El rastreador acuña uno nuevo con
+    // mucha más frecuencia de la que dura una visita real —208 vistas de Paul
+    // llevan 132 identificadores distintos, 1,58 páginas cada uno—, así que
+    // agrupar por ese campo devolvía la lista cruda con otro nombre: la línea
+    // de tiempo se llenaba de "Estuvo en su selección · 1 página" repetido.
+    //
+    // Se agrupa por CERCANÍA EN EL TIEMPO: se corta cuando pasan más de 30
+    // minutos entre dos páginas. Cambiar de superficie a media visita (de la
+    // selección privada a la colección y volver) NO parte la visita — sería
+    // volver a trocear lo mismo—; la etiqueta se queda con la superficie donde
+    // más rato estuvo.
+    const ascending = [...rows].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+
+    const VISIT_GAP_MS = 30 * 60_000;
+    const visits: EngagementSession[] = [];
+    const typeTally: Array<Record<string, number>> = [];
+    let open: EngagementSession | null = null;
+    let openAt = 0;
+
+    for (const r of ascending) {
+      const t = new Date(r.created_at).getTime();
       const evts = eventsByView.get(r.id) ?? [];
-      if (found) {
-        found.views += 1;
-        if (new Date(r.created_at) > new Date(found.at)) found.at = r.created_at;
-        for (const t of evts) found.events[t] = (found.events[t] ?? 0) + 1;
+
+      if (open && t - openAt <= VISIT_GAP_MS) {
+        open.views += 1;
+        open.at = r.created_at; // la marca es la última página de la visita
+        for (const type of evts) open.events[type] = (open.events[type] ?? 0) + 1;
+        if (r.city && !open.city) open.city = r.city;
       } else {
         const acc: Record<string, number> = {};
-        for (const t of evts) acc[t] = (acc[t] ?? 0) + 1;
-        bySession.set(key, {
-          sessionId: key,
+        for (const type of evts) acc[type] = (acc[type] ?? 0) + 1;
+        open = {
+          sessionId: r.session_id ?? r.id,
           at: r.created_at,
           views: 1,
           pageType: r.page_type,
@@ -210,11 +232,23 @@ export async function getClientEngagement(
           city: r.city,
           country: r.country_name,
           events: acc,
-        });
+        };
+        visits.push(open);
+        typeTally.push({});
       }
+      const tally = typeTally[typeTally.length - 1];
+      if (r.page_type) tally[r.page_type] = (tally[r.page_type] ?? 0) + 1;
+      openAt = t;
     }
 
-    const sessions = [...bySession.values()].sort(
+    // La superficie de la visita es en la que más páginas vio.
+    visits.forEach((v, i) => {
+      const tally = typeTally[i];
+      const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+      if (top) v.pageType = top[0];
+    });
+
+    const sessions = visits.sort(
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
     );
 
