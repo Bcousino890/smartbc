@@ -78,9 +78,15 @@ export function validateClaims(
   );
 
   for (const claim of claims) {
-    const text = `${claim.source_text} ${claim.fact}`;
+    // Deduplicación: SOLO sobre el hecho extraído. Una frase origen puede
+    // empaquetar varios hechos ("tres dormitorios… y una estancia revestida en
+    // madera"): que uno sea duplicado no puede invalidar a los demás (defecto
+    // real detectado en el piloto BC-1416).
+    const factText = claim.fact;
+    // Conflictos y boilerplate: hecho + frase completa (contexto necesario).
+    const fullText = `${claim.source_text} ${claim.fact}`;
 
-    if (BOILERPLATE_RE.test(text)) {
+    if (BOILERPLATE_RE.test(fullText)) {
       claim.category = "boilerplate";
       claim.is_duplicate = false;
       claim.conflict = false;
@@ -88,39 +94,85 @@ export function validateClaims(
     }
 
     // ── Conflictos numéricos: specs mandan (regla dura 7-8) ──
-    const beds = extractCount(text, "dormitorios?|habitaciones?");
-    if (beds != null && facts.bedrooms != null && beds !== facts.bedrooms) {
+    // Primario: el número está en el HECHO (es lo que se publicaría).
+    // Respaldo: el número contradictorio está solo en la FRASE origen — en ese
+    // caso el conflicto se atribuye a los claims cuya categoría corresponde a
+    // esa dimensión (private para dormitorios/baños, overview para m²), no a
+    // hechos ajenos que comparten frase.
+    const flagConflict = (reason: string) => {
       claim.conflict = true;
-      claim.conflict_reason = `El texto dice ${beds} dormitorios; la ficha tiene ${facts.bedrooms}.`;
-    }
-    const baths = extractCount(text, "baños?|aseos? y baños?");
-    if (baths != null && facts.bathrooms != null && baths !== facts.bathrooms) {
-      claim.conflict = true;
-      claim.conflict_reason = `El texto dice ${baths} baños; la ficha tiene ${facts.bathrooms}.`;
-    }
-    const sqm = text.match(/(\d{2,4})\s*m²|(\d{2,4})\s*m2\b|(\d{2,4})\s*metros/i);
-    if (sqm && facts.squareMeters) {
-      const n = Number(sqm[1] ?? sqm[2] ?? sqm[3]);
+      claim.conflict_reason = reason;
+    };
+    // ¿El HECHO trae alguna cifra propia (dorm/baños/m²)? Si sí, el claim se
+    // valida por sí mismo y el respaldo por frase no le aplica: un "cuatro
+    // baños" correcto no hereda el conflicto de un "cinco dormitorios" que
+    // viaja en la misma frase (ese conflicto ya bloquea a SU claim).
+    const factOwnBeds = extractCount(factText, "dormitorios?|habitaciones?");
+    const factOwnBaths = extractCount(factText, "baños?|aseos? y baños?");
+    const factOwnSqm = /(\d{2,4})\s*(m²|m2\b|metros)/i.test(factText);
+    const factHasOwnNumber =
+      factOwnBeds != null || factOwnBaths != null || factOwnSqm;
+    const checkDim = (
+      nounRe: string,
+      structured: number | null,
+      label: string,
+      categories: string[],
+    ): number | null => {
+      const inFact = extractCount(factText, nounRe);
+      if (inFact != null && structured != null && inFact !== structured) {
+        flagConflict(`El texto dice ${inFact} ${label}; la ficha tiene ${structured}.`);
+        return inFact;
+      }
+      const inSource = extractCount(claim.source_text, nounRe);
+      if (
+        inSource != null &&
+        structured != null &&
+        inSource !== structured &&
+        !factHasOwnNumber &&
+        categories.includes(claim.category)
+      ) {
+        flagConflict(`La frase origen dice ${inSource} ${label}; la ficha tiene ${structured}.`);
+      }
+      return inFact ?? inSource;
+    };
+    const beds = checkDim("dormitorios?|habitaciones?", facts.bedrooms, "dormitorios", ["private", "overview"]);
+    const baths = checkDim("baños?|aseos? y baños?", facts.bathrooms, "baños", ["private", "overview"]);
+    const sqmOf = (t: string) => t.match(/(\d{2,4})\s*m²|(\d{2,4})\s*m2\b|(\d{2,4})\s*metros/i);
+    const sqmFact = sqmOf(factText);
+    const sqmFull = sqmOf(fullText);
+    if (facts.squareMeters) {
       // Tolerancia ±5%: útil vs construida es una diferencia legítima.
-      if (n > 20 && Math.abs(n - facts.squareMeters) / facts.squareMeters > 0.05) {
-        claim.conflict = true;
-        claim.conflict_reason = `El texto dice ${n} m²; la ficha tiene ${facts.squareMeters} m².`;
+      const bad = (m: RegExpMatchArray | null) => {
+        if (!m) return null;
+        const n = Number(m[1] ?? m[2] ?? m[3]);
+        return n > 20 && Math.abs(n - facts.squareMeters!) / facts.squareMeters! > 0.05 ? n : null;
+      };
+      const nFact = bad(sqmFact);
+      const nSource = bad(sqmFull);
+      if (nFact != null) flagConflict(`El texto dice ${nFact} m²; la ficha tiene ${facts.squareMeters} m².`);
+      else if (nSource != null && ["overview"].includes(claim.category)) {
+        flagConflict(`La frase origen dice ${nSource} m²; la ficha tiene ${facts.squareMeters} m².`);
       }
     }
 
-    // ── Duplicados contra hechos estructurados (regla dura 12) ──
+    // ── Duplicados contra hechos estructurados (regla dura 12) — sobre el
+    //    HECHO, nunca sobre la frase completa ──
     if (!claim.conflict) {
-      const dupBeds = beds != null && facts.bedrooms != null && beds === facts.bedrooms;
-      const dupBaths = baths != null && facts.bathrooms != null && baths === facts.bathrooms;
-      const dupSqm = !!sqm && !!facts.squareMeters &&
-        Math.abs(Number(sqm[1] ?? sqm[2] ?? sqm[3]) - facts.squareMeters) / facts.squareMeters <= 0.05;
+      const factBeds = extractCount(factText, "dormitorios?|habitaciones?");
+      const factBaths = extractCount(factText, "baños?|aseos? y baños?");
+      const dupBeds = factBeds != null && facts.bedrooms != null && factBeds === facts.bedrooms;
+      const dupBaths = factBaths != null && facts.bathrooms != null && factBaths === facts.bathrooms;
+      const dupSqm = !!sqmFact && !!facts.squareMeters &&
+        Math.abs(Number(sqmFact[1] ?? sqmFact[2] ?? sqmFact[3]) - facts.squareMeters) / facts.squareMeters <= 0.05;
       const dupFeature = FEATURE_DUP_KEYS.some(
-        (f) => featureKeys.has(f.key) && f.re.test(text),
+        (f) => featureKeys.has(f.key) && f.re.test(factText),
       );
       if (dupBeds || dupBaths || dupSqm || dupFeature) {
         claim.is_duplicate = true;
       }
     }
+    void beds;
+    void baths;
   }
   return claims;
 }

@@ -66,10 +66,21 @@ function parseFloorText(raw: string, loose: boolean): number | null {
   return null;
 }
 
+// En textos largos, una mención de planta solo es fiable si la frase habla de
+// la VIVIENDA. "En la planta baja del edificio, la propiedad dispone de un
+// trastero acondicionado como gimnasio…" describe la ubicación del trastero,
+// no de la residencia (caso real BC-1416: pintaba "Planta 0ª" sin evidencia).
+// Regla contextual general: se descarta cualquier frase cuyo sujeto sea un
+// elemento secundario del inmueble.
+const SECONDARY_CONTEXT_RE =
+  /\b(trastero|garaje|gimnasio|almacen|almacén|bodega|portal|zonas? comunes|piscina|parking|plaza de aparcamiento|local)\b/;
+
 /**
  * Devuelve el número de planta del anuncio, o null si no se puede deducir.
  * Mira primero las features (atributos cortos, parsing permisivo) y después
- * los textos largos (título/descripción, parsing estricto).
+ * los textos largos (título/descripción) frase a frase, ignorando las frases
+ * que hablan de trastero/garaje/zonas comunes y no de la vivienda.
+ * "Desconocido" es null — NUNCA se convierte en 0.
  */
 export function extractFloor(
   features: string[] | null | undefined,
@@ -81,8 +92,11 @@ export function extractFloor(
   }
   for (const t of texts) {
     if (!t) continue;
-    const n = parseFloorText(t, false);
-    if (n != null) return n;
+    for (const sentence of t.split(/(?<=[.!?])\s+/)) {
+      if (SECONDARY_CONTEXT_RE.test(fold(sentence))) continue;
+      const n = parseFloorText(sentence, false);
+      if (n != null) return n;
+    }
   }
   return null;
 }

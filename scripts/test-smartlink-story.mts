@@ -11,6 +11,7 @@ import { validateClaims } from "../lib/services/story/validate";
 import type { StoryClaim } from "../lib/services/story/types";
 import { groupFeatures } from "../lib/property-features-taxonomy";
 import { computePoiTravel } from "../lib/geo/poi-distance";
+import { extractFloor } from "../lib/floor";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -70,6 +71,69 @@ console.log("Validación de claims:");
   check("'techos de tres metros' NO es conflicto de dormitorios", claims[4].conflict === false);
   check("boilerplate web/off-market descartado", claims[5].category === "boilerplate");
   check("boilerplate call center descartado", claims[6].category === "boilerplate");
+}
+
+// ── 2b) Dedupe sobre el HECHO, no la frase (fix del piloto BC-1416) ──
+console.log("Dedupe por hecho (frase multi-hecho):");
+{
+  const mk = (source: string, fact: string, category: StoryClaim["category"]): StoryClaim => ({
+    source_text: source, source_field: "description", category,
+    fact, confidence: 0.9, is_duplicate: false, conflict: false,
+  });
+  const facts = {
+    bedrooms: 3, bathrooms: 4, squareMeters: 322, floor: null,
+    features: ["Baño en suite", "Ascensor", "Trastero", "Reformado", "Amueblado"],
+  };
+  const S1 =
+    "La zona de noche cuenta con tres amplios dormitorios, todos ellos con baño en suite y carpintería a medida, además de una estancia revestida en madera.";
+  // Caso 1: 1 duplicate + 2 unique en la MISMA frase.
+  const c1 = [
+    mk(S1, "Tres amplios dormitorios con baño en suite.", "private"),
+    mk(S1, "Carpintería a medida en dormitorios.", "finishes"),
+    mk(S1, "Estancia revestida en madera que funciona como despacho.", "private"),
+  ];
+  validateClaims(c1, facts);
+  check("dup: '3 dormitorios + suite' → duplicate", c1[0].is_duplicate === true && !c1[0].conflict);
+  check("unique: 'carpintería a medida' sobrevive", !c1[1].is_duplicate && !c1[1].conflict);
+  check("unique: 'estancia en madera' sobrevive", !c1[2].is_duplicate && !c1[2].conflict);
+
+  // Caso 2: 2 duplicates + 1 unique en la misma frase.
+  const S2 = "Edificio clásico de 1945 dotado de ascensor, conserjería y trastero.";
+  const c2 = [
+    mk(S2, "Dispone de ascensor.", "building"),
+    mk(S2, "Cuenta con trastero.", "building"),
+    mk(S2, "Edificio clásico de 1945 perfectamente conservado.", "building"),
+  ];
+  validateClaims(c2, facts);
+  check("2 dups: ascensor y trastero → duplicate", c2[0].is_duplicate && c2[1].is_duplicate);
+  check("unique: '1945' sobrevive al dedupe", !c2[2].is_duplicate && !c2[2].conflict);
+
+  // Caso 3: duplicate y conflict coexistiendo en la misma frase origen.
+  const S3 = "La vivienda ofrece cuatro baños y cinco dormitorios amplios.";
+  const c3 = [
+    mk(S3, "Cuatro baños completos.", "private"),
+    mk(S3, "Cinco dormitorios amplios.", "private"),
+    mk(S3, "Dormitorios amplios.", "private"),
+  ];
+  validateClaims(c3, facts);
+  check("mismo origen: '4 baños' → duplicate", c3[0].is_duplicate === true);
+  check("mismo origen: '5 dormitorios' → CONFLICT (specs=3)", c3[1].conflict === true);
+  check("respaldo por frase acotado a la dimensión (private)", c3[2].conflict === true);
+}
+
+// ── 2c) Planta: regresión BC-1416 (contexto de elemento secundario) ──
+console.log("Planta (regla contextual):");
+{
+  const DESC_1416 =
+    "Con una superficie de 322 m² construidos, la vivienda presenta una distribución elegante. En la planta baja del edificio, la propiedad dispone de un trastero actualmente acondicionado como gimnasio privado equipado con material NOHRD en nogal.";
+  check("BC-1416: 'planta baja del trastero' NO se atribuye a la vivienda → null",
+    extractFloor(["Reformado", "Amueblado", "Balcón", "Trastero", "Ascensor"], "Vivienda única de diseño", DESC_1416) === null);
+  check("legítimo: 'tercera planta exterior de una finca clásica' → 3",
+    extractFloor([], null, "Ubicado en la tercera planta exterior de una finca clásica de 1945, el edificio cuenta con ascensor.") === 3);
+  check("feature corta 'Planta 3ª exterior' sigue funcionando → 3",
+    extractFloor(["Planta 3ª exterior"], null, null) === 3);
+  check("garaje en planta -1 no contamina → null",
+    extractFloor([], null, "El garaje se encuentra en la planta -1 del edificio.") === null);
 }
 
 // ── 3) Taxonomía de features ──

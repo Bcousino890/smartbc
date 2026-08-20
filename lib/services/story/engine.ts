@@ -79,6 +79,14 @@ function sha256(s: string): string {
   return createHash("sha256").update(s).digest("hex");
 }
 
+// Versión de la LÓGICA del motor (extractor+validador+compresor). Entra en la
+// huella de caché: cambiar la lógica invalida las versiones generadas con la
+// anterior y fuerza regeneración limpia — nunca se reutiliza silenciosamente
+// un story producido por un motor ya corregido.
+// v2: dedupe sobre el hecho extraído (no la frase origen completa) +
+//     conflictos con respaldo de frase acotado por categoría.
+const ENGINE_VERSION = 2;
+
 export type GenerateResult =
   | { ok: true; versionId: string; blocks: number; conflicts: number; reused: boolean }
   | { ok: false; error: string };
@@ -105,7 +113,7 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
     features: [...(row.features ?? []), ...(row.features_manual ?? [])],
   };
   const sourceHash = sha256(
-    JSON.stringify([description, facts.bedrooms, facts.bathrooms, facts.squareMeters, facts.features]),
+    JSON.stringify([ENGINE_VERSION, description, facts.bedrooms, facts.bathrooms, facts.squareMeters, facts.features]),
   );
 
   // Caché por huella: si ya existe una versión de esta misma fuente, no se
