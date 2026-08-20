@@ -672,6 +672,14 @@ export function PropertyEditView({
           <p className="mt-1 text-xs text-ink/55">
             {property.zone} · {property.bedrooms} hbt · {property.bathrooms} baños
             {property.square_meters ? ` · ${property.square_meters} m²` : ""}
+            {" · "}
+            {/* SmartLink 2.0: workflow de story (generar/revisar/publicar). */}
+            <a
+              href={`/${country}/admin/propiedades/${property.slug}/story`}
+              className="text-gold-dark hover:underline"
+            >
+              Story del SmartLink
+            </a>
             {property.source_url && (
               <>
                 {" · "}

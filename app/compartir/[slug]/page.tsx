@@ -6,6 +6,8 @@ import {
   resolveLegacySlug,
 } from "@/lib/db/queries/properties";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
+import { getApprovedStoryPublic } from "@/lib/db/queries/story";
+import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 import { PublicPropertyView } from "./public-property-view";
 import { CollectionReturnBar } from "@/components/public/collection-return-bar";
 
@@ -177,18 +179,57 @@ export default async function PublicSharePage({
   }
 
   // Videos y planos subidos desde /admin/publicacion (tabla property_media).
-  const media = row.property_media ?? [];
+  // SmartLink 2.0: los vídeos viajan CON su metadata (source/format/medidas)
+  // para que el renderer decida hero vs signature vs contenedor vertical.
+  const media = (row.property_media ?? []) as Array<{
+    url: string;
+    file_name?: string | null;
+    type?: string | null;
+    source?: string | null;
+    format?: string | null;
+    width?: number | null;
+    height?: number | null;
+    duration_seconds?: number | null;
+    poster_url?: string | null;
+  }>;
   const videos = media
     .filter((m) => m.type === "video" && m.url)
-    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+    .map((m) => ({
+      url: m.url,
+      file_name: m.file_name ?? null,
+      source: m.source ?? null,
+      format: m.format ?? null,
+      width: m.width ?? null,
+      height: m.height ?? null,
+      durationSeconds: m.duration_seconds != null ? Number(m.duration_seconds) : null,
+      posterUrl: m.poster_url ?? null,
+    }));
   const plans = media
     .filter((m) => m.type === "plan" && m.url)
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
 
+  // Story aprobado (o null → fallback determinista) y capa curada de barrio.
+  // Ambos tolerantes a fallos: sin migración 0144 el SmartLink no se cae.
+  const [story, neighborhood] = await Promise.all([
+    getApprovedStoryPublic(row.id),
+    getNeighborhoodPublic({
+      zone: row.zone,
+      subzone: (row as { subzone?: string | null }).subzone ?? null,
+      lat: property.latitude ?? null,
+      lng: property.longitude ?? null,
+    }),
+  ]);
+
   return (
     <>
       <CollectionReturnBar />
-      <PublicPropertyView property={property} videos={videos} plans={plans} />
+      <PublicPropertyView
+        property={property}
+        videos={videos}
+        plans={plans}
+        story={story}
+        neighborhood={neighborhood}
+      />
     </>
   );
 }

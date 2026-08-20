@@ -9,6 +9,7 @@
     "start": "next start --port 3137",
     "lint": "next lint",
     "test:typography": "node scripts/check-crm-typography.mjs",
+    "test:smartlink": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-smartlink-story.mts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",

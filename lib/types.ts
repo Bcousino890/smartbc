@@ -103,6 +103,9 @@ export type Property = {
   // Nº de planta deducido de features/título/descripción (ver lib/floor.ts).
   // null si el anuncio no lo menciona. Ático = ATICO_FLOOR.
   floor?: number | null;
+  // SmartLink 2.0: clase de estancia por foto (alineada 1:1 con `photos`).
+  // Solo el nombre de la clase — nada más de la metadata IA cruza al cliente.
+  photoClasses?: Array<string | null>;
 };
 
 export type Filters = {

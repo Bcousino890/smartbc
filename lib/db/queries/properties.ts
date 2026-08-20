@@ -103,7 +103,7 @@ export async function getPropertyBySlugPublic(slug: string) {
     try {
       const { data: media, error } = await (supabase as any)
         .from("property_media")
-        .select("id, url, file_name, type, storage_path")
+        .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
         .eq("property_id", row.id)
         .in("type", ["video", "plan"]);
       return { ...row, property_media: error ? [] : (media ?? []) };
@@ -141,7 +141,7 @@ export async function getPropertyBySlugForAdmin(slug: string) {
   // Cargar videos y planos de property_media
   const { data: media } = await (supabase as any)
     .from("property_media")
-    .select("id, url, file_name, type, storage_path")
+    .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
     .eq("property_id", (data as any).id)
     .in("type", ["video", "plan"]);
 

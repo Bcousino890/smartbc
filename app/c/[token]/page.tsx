@@ -10,6 +10,8 @@ import {
   recordShareOpen,
 } from "@/lib/db/queries/shares";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
+import { getApprovedStoryPublic } from "@/lib/db/queries/story";
+import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 
 export const dynamic = "force-dynamic";
 
@@ -141,19 +143,57 @@ export default async function TokenSharePage({
     ).property_media ?? [];
   const videos = media
     .filter((m) => m.type === "video" && m.url)
-    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+    .map((m) => {
+      const meta = m as typeof m & {
+        source?: string | null;
+        format?: string | null;
+        width?: number | null;
+        height?: number | null;
+        duration_seconds?: number | null;
+        poster_url?: string | null;
+      };
+      return {
+        url: m.url,
+        file_name: m.file_name ?? null,
+        source: meta.source ?? null,
+        format: meta.format ?? null,
+        width: meta.width ?? null,
+        height: meta.height ?? null,
+        durationSeconds: meta.duration_seconds != null ? Number(meta.duration_seconds) : null,
+        posterUrl: meta.poster_url ?? null,
+      };
+    });
   const plans = media
     .filter((m) => m.type === "plan" && m.url)
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+
+  const [story, neighborhood] = await Promise.all([
+    getApprovedStoryPublic(row.id),
+    getNeighborhoodPublic({
+      zone: row.zone,
+      subzone: (row as { subzone?: string | null }).subzone ?? null,
+      lat: property.latitude ?? null,
+      lng: property.longitude ?? null,
+    }),
+  ]);
+
+  // El visitante de /c/{token} debe REENVIAR esta misma URL tokenizada por
+  // WhatsApp — antes se degradaba a /compartir/{slug} y se perdía el tracking.
+  const portalUrl =
+    process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.bcousinoprop.com";
+  const publicUrl = `${portalUrl}/c/${token}`;
 
   return (
     <>
       <CollectionReturnBar />
       <PublicPropertyView
-      property={property}
-      videos={videos}
-      plans={plans}
-      shareId={resolved.shareId}
+        property={property}
+        videos={videos}
+        plans={plans}
+        shareId={resolved.shareId}
+        publicUrl={publicUrl}
+        story={story}
+        neighborhood={neighborhood}
       />
     </>
   );

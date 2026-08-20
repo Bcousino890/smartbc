@@ -403,6 +403,19 @@ export function propertyRowToClientProperty(
     (_, i) => `/p/${row.slug}/${i}?v=${orderHash}`,
   );
   const cover = photoUrls[0];
+  // SmartLink 2.0: clase de estancia por foto, alineada con photoUrls. El
+  // override humano manda; SOLO cruza el nombre de la clase (nada de hashes,
+  // modelo ni confianza — el umbral de uso se aplica aquí, server-side).
+  const photoClasses = sortedPhotos.map((p) => {
+    const meta = p as {
+      class_override?: string | null;
+      ai_class?: string | null;
+      ai_confidence?: number | null;
+    };
+    if (meta.class_override) return meta.class_override;
+    if (meta.ai_class && (meta.ai_confidence ?? 0) >= 0.75) return meta.ai_class;
+    return null;
+  });
   return {
     id: row.slug,
     title: displayPropertyTitle(row, effectiveTitleRaw),
@@ -427,6 +440,7 @@ export function propertyRowToClientProperty(
     ),
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
+    photoClasses,
     bcReference: row.bc_reference ?? null,
     floor: extractFloor(
       [...(row.features ?? []), ...(row.features_manual ?? [])],

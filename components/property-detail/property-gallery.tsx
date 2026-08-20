@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PLACEHOLDER_GRADIENTS } from "@/lib/constants";
 import { useT } from "@/lib/i18n/provider";
@@ -17,9 +17,18 @@ const BADGE_KEYS: Record<PropertyBadge, string> = {
 export function PropertyGallery({
   property,
   onPhotoView,
+  mode = "grid",
+  forceOpenAt = null,
+  onLightboxClose,
 }: {
   property: Property;
   onPhotoView?: (index: number) => void;
+  // SmartLink 2.0: "lightbox-only" no pinta el grid — la lightbox se abre
+  // desde fuera (botón del hero) vía forceOpenAt. El portal cliente sigue
+  // usando "grid" por defecto sin cambios.
+  mode?: "grid" | "lightbox-only";
+  forceOpenAt?: number | null;
+  onLightboxClose?: () => void;
 }) {
   const t = useT();
   const photos = property.photos ?? [];
@@ -29,11 +38,41 @@ export function PropertyGallery({
   const extraCount = Math.max(0, photos.length - 4);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (forceOpenAt != null && photos.length > 0) {
+      setLightboxIndex(Math.min(forceOpenAt, photos.length - 1));
+      onPhotoView?.(forceOpenAt);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceOpenAt]);
+
   const openAt = (i: number) => {
     if (photos.length === 0) return;
     setLightboxIndex(i);
     onPhotoView?.(i);
   };
+
+  // photo_view también al NAVEGAR (antes solo al abrir → dato infrarreportado).
+  const changeTo = (i: number) => {
+    setLightboxIndex(i);
+    onPhotoView?.(i);
+  };
+
+  const closeLightbox = () => {
+    setLightboxIndex(null);
+    onLightboxClose?.();
+  };
+
+  if (mode === "lightbox-only") {
+    return lightboxIndex !== null && photos.length > 0 ? (
+      <Lightbox
+        photos={photos}
+        index={lightboxIndex}
+        onClose={closeLightbox}
+        onChange={changeTo}
+      />
+    ) : null;
+  }
 
   return (
     <>
@@ -71,7 +110,9 @@ export function PropertyGallery({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openAt(0);
+                      // Abre en la PRIMERA foto no visible del grid (antes
+                      // abría en la 0, que ya estabas viendo).
+                      openAt(4);
                     }}
                     className="absolute inset-0 flex items-center justify-center bg-ink/55 text-cream-50 backdrop-blur-[2px] transition hover:bg-ink/70"
                     aria-label={t("detail.gallery.viewAll", {
@@ -96,8 +137,8 @@ export function PropertyGallery({
         <Lightbox
           photos={photos}
           index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onChange={setLightboxIndex}
+          onClose={closeLightbox}
+          onChange={changeTo}
         />
       )}
     </>
@@ -136,12 +177,31 @@ function Lightbox({
     return () => window.removeEventListener("keydown", handler);
   }, [index, photos.length, onChange, onClose]);
 
+  // Swipe táctil (Gallery 2.0): la ficha se ve sobre todo en móvil y el
+  // arrastre horizontal es el gesto natural para pasar foto.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) onChange((index + 1) % photos.length);
+    else onChange((index - 1 + photos.length) % photos.length);
+  };
+
   if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex flex-col bg-ink/95 backdrop-blur-sm"
       onClick={onClose}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <header className="flex items-center justify-between px-4 py-3 text-cream-50">
         <span className="text-sm font-medium">
@@ -209,7 +269,7 @@ function Lightbox({
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p} alt="" className="h-full w-full object-cover" />
+            <img src={p} alt="" loading="lazy" className="h-full w-full object-cover" />
           </button>
         ))}
       </footer>
@@ -246,6 +306,7 @@ function Tile({
         <img
           src={photo}
           alt=""
+          loading="lazy"
           className={cn(
             "h-full w-full object-cover transition",
             interactive && "group-hover:scale-[1.02]",

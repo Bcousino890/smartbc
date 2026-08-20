@@ -1,0 +1,54 @@
+// SmartLink 2.0 · tiempos a POIs calculados por geometría — nunca inventados.
+//
+// Mismo enfoque que lib/distance/estimate.ts (universidades): haversine con
+// factor de callejero urbano y velocidades medias conservadoras. El resultado
+// se presenta SIEMPRE como aproximado ("≈ N min a pie"). Si la propiedad no
+// tiene coordenadas geocodificadas, no se muestran minutos (regla del sprint:
+// sin dato fiable, sin número).
+
+export type PoiTravel = {
+  name: string;
+  category: string;
+  minutes: number;
+  mode: "walk" | "drive";
+};
+
+const EARTH_RADIUS_KM = 6371;
+// Distancia en línea recta × factor de manzana urbana ≈ distancia andando real.
+const STREET_FACTOR = 1.3;
+const WALK_KMH = 4.8;
+const DRIVE_KMH = 18; // media urbana Madrid, conservadora
+const DRIVE_OVERHEAD_MIN = 3; // aparcar/arrancar
+// Por encima de esto, andar deja de ser la recomendación y se muestra coche.
+const MAX_WALK_MINUTES = 22;
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+}
+
+export function computePoiTravel(
+  property: { lat: number; lng: number },
+  poi: {
+    name: string;
+    category: string;
+    latitude: number;
+    longitude: number;
+    travel_modes: string[];
+  },
+): PoiTravel | null {
+  const km = haversineKm(property.lat, property.lng, poi.latitude, poi.longitude) * STREET_FACTOR;
+  const walkMin = Math.max(1, Math.round((km / WALK_KMH) * 60));
+  const driveMin = Math.max(2, Math.round((km / DRIVE_KMH) * 60) + DRIVE_OVERHEAD_MIN);
+
+  const canWalk = poi.travel_modes.includes("walk") && walkMin <= MAX_WALK_MINUTES;
+  const canDrive = poi.travel_modes.includes("drive");
+  if (canWalk) return { name: poi.name, category: poi.category, minutes: walkMin, mode: "walk" };
+  if (canDrive) return { name: poi.name, category: poi.category, minutes: driveMin, mode: "drive" };
+  return null;
+}
