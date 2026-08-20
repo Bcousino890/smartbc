@@ -58,18 +58,25 @@ const COMPRESS_SCHEMA = {
 } as const;
 
 const EXTRACT_SYSTEM = `Eres un extractor de hechos para fichas inmobiliarias de lujo en Madrid.
-Recibes la descripción cruda de UNA vivienda. Tu única tarea: trocearla en claims.
+Recibes la descripción cruda de UNA vivienda. Tu única tarea: trocearla en claims ATÓMICOS.
 Reglas absolutas:
 - Cada claim CITA la frase literal de la que sale (source_text). Nada sin cita.
 - No inventes NADA: ni habitaciones, ni materiales, ni vistas, ni estado, ni cercanías.
 - category: overview (qué es la vivienda), living (salón/luz/distribución social), kitchen (cocina/comedor), private (dormitorios/baños/vestidores), outdoor (terraza/balcón/jardín), finishes (materiales/suelos/techos/clima/reforma), building (finca/época/ascensor/portero/zonas comunes), barrio (ubicación/entorno/servicios de la zona), boilerplate (marketing de la agencia: web, call center, off-market…), other (no encaja).
-- Un claim = un hecho. Frases con varios hechos → varios claims con la misma cita.
+- ATOMICIDAD ESTRICTA: un claim = UN solo hecho. PROHIBIDO combinar dos hechos en
+  un fact. "Edificio de 1945 con ascensor y trastero" son TRES claims (época /
+  ascensor / trastero) con la misma cita. Las enumeraciones se separan SIEMPRE.
+- Si te doy una lista de ATRIBUTOS YA ESTRUCTURADOS, cada mención de uno de
+  ellos va en su PROPIO claim, nunca mezclada con hechos nuevos de la frase.
 - confidence baja (<0.6) si la frase es ambigua.`;
 
 const COMPRESS_SYSTEM = `Eres el editor de los SmartLinks de BCP (inmobiliaria de lujo, Madrid). Tono sobrio y factual, español.
 Recibes claims VALIDADOS agrupados por capítulo. Redacta un bloque por capítulo con ≥1 claim.
 Reglas absolutas:
 - Usa SOLO los claims recibidos. Prohibido añadir cualquier dato que no esté en ellos.
+- PROHIBIDO amplificar: nada de intensificadores temporales, cuantitativos o
+  sensoriales que no estén en el claim ("durante todo el día", "abundante",
+  "espectacular"…). Parafrasear ≠ embellecer.
 - 20–60 palabras por bloque. NUNCA más de 70.
 - Una idea central por bloque. Sin listas, sin superlativos vacíos, sin mayúsculas gritadas.
 - No repitas cifras de dormitorios/baños/m² (ya se muestran aparte).
@@ -85,7 +92,9 @@ function sha256(s: string): string {
 // un story producido por un motor ya corregido.
 // v2: dedupe sobre el hecho extraído (no la frase origen completa) +
 //     conflictos con respaldo de frase acotado por categoría.
-const ENGINE_VERSION = 2;
+// v3: extractor con atomicidad estricta (features estructuradas en claims
+//     propios) + compresor sin amplificaciones sin evidencia.
+const ENGINE_VERSION = 3;
 
 export type GenerateResult =
   | { ok: true; versionId: string; blocks: number; conflicts: number; reused: boolean }
@@ -133,8 +142,12 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
   try {
     const raw = await aiComplete({
       system: EXTRACT_SYSTEM,
-      userText: `Descripción de la vivienda "${row.title}" (zona ${row.subzone ?? row.zone}):\n\n${description}`,
-      maxTokens: 3000,
+      userText:
+        `Descripción de la vivienda "${row.title}" (zona ${row.subzone ?? row.zone}):\n\n${description}` +
+        (facts.features.length
+          ? `\n\nATRIBUTOS YA ESTRUCTURADOS (cada mención → claim propio, separado): ${facts.features.join(", ")}.`
+          : ""),
+      maxTokens: 6000,
       jsonSchema: EXTRACT_SCHEMA as unknown as Record<string, unknown>,
     });
     const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as { claims: Array<Record<string, unknown>> };
@@ -174,7 +187,7 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
         userText:
           "Claims validados (index · capítulo · hecho):\n" +
           usable.map((c) => `${c.index} · ${c.category} · ${c.fact}`).join("\n"),
-        maxTokens: 2200,
+        maxTokens: 3000,
         jsonSchema: COMPRESS_SCHEMA as unknown as Record<string, unknown>,
       });
       const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as {
