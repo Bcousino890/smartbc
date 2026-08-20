@@ -12,6 +12,7 @@ import type { StoryClaim } from "../lib/services/story/types";
 import { groupFeatures } from "../lib/property-features-taxonomy";
 import { computePoiTravel } from "../lib/geo/poi-distance";
 import { extractFloor } from "../lib/floor";
+import { enforceStoryInvariants } from "../lib/services/story/structure";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -134,6 +135,60 @@ console.log("Planta (regla contextual):");
     extractFloor(["Planta 3ª exterior"], null, null) === 3);
   check("garaje en planta -1 no contamina → null",
     extractFloor([], null, "El garaje se encuentra en la planta -1 del edificio.") === null);
+}
+
+// ── 2d) Invariantes v4: un bloque/capítulo, ownership, entidades ──
+console.log("Invariantes editoriales (v4):");
+{
+  const mkClaim = (fact: string, category: StoryClaim["category"], source = fact): StoryClaim => ({
+    source_text: source, source_field: "description", category,
+    fact, confidence: 0.9, is_duplicate: false, conflict: false,
+  });
+  const claims = [
+    mkClaim("Suelos de roble en espiga", "finishes"),                       // 0
+    mkClaim("Carpinterías a medida", "finishes"),                            // 1
+    mkClaim("Lavandería independiente", "private"),                          // 2
+    mkClaim("Cocina Moretti equipada con Miele y Quooker", "kitchen"),       // 3
+    mkClaim("Vivienda única de diseño", "overview",
+      "Vivienda única de diseño en el corazón de Almagro"),                  // 4
+  ];
+  const drafts = [
+    // Dos bloques del MISMO capítulo (finishes) → debe quedar UNO.
+    { chapter: "finishes" as const, copy: "Suelos de roble en espiga.", claim_indexes: [0] },
+    { chapter: "finishes" as const, copy: "Carpinterías a medida y suelos de roble.", claim_indexes: [0, 1] },
+    // Cocina intentando robar la lavandería (private) → ownership la expulsa.
+    { chapter: "kitchen" as const, copy: "Cocina Moretti con Miele y Quooker, junto a lavandería.", claim_indexes: [3, 2] },
+    // Entidad sustituida: la fuente dice Almagro; el copy dice Madrid → conflict.
+    { chapter: "overview" as const, copy: "Vivienda única de diseño en el corazón de Madrid.", claim_indexes: [4] },
+  ];
+  const { blocks, unusedValid } = enforceStoryInvariants(drafts, claims);
+  const finishes = blocks.filter((b) => b.chapter === "finishes");
+  check("un solo bloque por capítulo (finishes ×2 → ×1)", finishes.length === 1);
+  check("gana el bloque con más claims propios", finishes[0]?.claim_indexes.length === 2);
+  const kitchen = blocks.find((b) => b.chapter === "kitchen");
+  check("ownership: la lavandería (private) NO alimenta cocina",
+    kitchen != null && !kitchen.claim_indexes.includes(2));
+  check("la lavandería queda como claim válido sin usar", unusedValid.includes(2));
+  const overview = blocks.find((b) => b.chapter === "overview");
+  check("entidad sustituida (Almagro→Madrid) → bloque en conflict",
+    overview?.status === "conflict" && /Madrid/.test(overview?.conflictNote ?? ""));
+  check("entidad respaldada NO dispara conflicto",
+    enforceStoryInvariants(
+      [{ chapter: "kitchen", copy: "Cocina Moretti con electrodomésticos Miele.", claim_indexes: [3] }],
+      claims,
+    ).blocks[0]?.status === "generated");
+  check("un claim no alimenta dos bloques",
+    (() => {
+      const r = enforceStoryInvariants(
+        [
+          { chapter: "finishes", copy: "Suelos de roble en espiga.", claim_indexes: [0] },
+          { chapter: "finishes", copy: "Roble en espiga y carpinterías.", claim_indexes: [0, 1] },
+        ],
+        claims,
+      );
+      const all = r.blocks.flatMap((b) => b.claim_indexes);
+      return new Set(all).size === all.length;
+    })());
 }
 
 // ── 3) Taxonomía de features ──

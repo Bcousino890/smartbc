@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/db/admin";
 import { aiComplete, AI_SETTINGS_KEY } from "@/lib/services/ai/chat";
 import { validateClaims, copyWordCount, type StructuredFacts } from "./validate";
+import { enforceStoryInvariants } from "./structure";
 import { STORY_CHAPTERS, type StoryChapter, type StoryClaim } from "./types";
 
 const EXTRACT_SCHEMA = {
@@ -71,13 +72,23 @@ Reglas absolutas:
 - confidence baja (<0.6) si la frase es ambigua.`;
 
 const COMPRESS_SYSTEM = `Eres el editor de los SmartLinks de BCP (inmobiliaria de lujo, Madrid). Tono sobrio y factual, español.
-Recibes claims VALIDADOS agrupados por capítulo. Redacta un bloque por capítulo con ≥1 claim.
+Recibes claims VALIDADOS agrupados por capítulo. Redacta EXACTAMENTE UN bloque por capítulo que tenga claims (o ninguno si el capítulo no los tiene).
 Reglas absolutas:
+- UN solo bloque por capítulo. JAMÁS dos bloques del mismo capítulo.
+- Cada bloque usa EXCLUSIVAMENTE claims de SU capítulo. Prohibido tomar un
+  claim de otro capítulo aunque comparta frase origen (p. ej. una lavandería
+  de "private" nunca entra en el bloque de cocina).
 - Usa SOLO los claims recibidos. Prohibido añadir cualquier dato que no esté en ellos.
+- ENTIDADES EXACTAS: los nombres propios de los claims (barrios, calles,
+  marcas, estudios, materiales, sistemas) se conservan TAL CUAL. Prohibido
+  sustituirlos por genéricos o por otra entidad ("Almagro" nunca se convierte
+  en "Madrid").
 - PROHIBIDO amplificar: nada de intensificadores temporales, cuantitativos o
   sensoriales que no estén en el claim ("durante todo el día", "abundante",
   "espectacular"…). Parafrasear ≠ embellecer.
-- 20–60 palabras por bloque. NUNCA más de 70.
+- Techo duro: 70 palabras por bloque. Si no caben todos los claims del
+  capítulo, prioriza los de mayor valor y deja fuera el resto (target 20–60,
+  pero un bloque corto es mejor que relleno: no alargues sin evidencia).
 - Una idea central por bloque. Sin listas, sin superlativos vacíos, sin mayúsculas gritadas.
 - No repitas cifras de dormitorios/baños/m² (ya se muestran aparte).
 - Devuelve claim_indexes con los índices de los claims usados en cada bloque.`;
@@ -94,7 +105,11 @@ function sha256(s: string): string {
 //     conflictos con respaldo de frase acotado por categoría.
 // v3: extractor con atomicidad estricta (features estructuradas en claims
 //     propios) + compresor sin amplificaciones sin evidencia.
-const ENGINE_VERSION = 3;
+// v4: invariantes deterministas post-compresión (lib/services/story/structure.ts):
+//     un bloque por capítulo, ownership de claims por categoría, preservación
+//     de entidades (violación → bloque en 'conflict', editable pero no
+//     aprobable tal cual).
+const ENGINE_VERSION = 4;
 
 export type GenerateResult =
   | { ok: true; versionId: string; blocks: number; conflicts: number; reused: boolean }
@@ -201,6 +216,11 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
     }
   }
 
+  // ── INVARIANTES v4 (deterministas, post-compresión) ──
+  // Un bloque por capítulo · ownership de claims por categoría · entidades
+  // respaldadas (violación → 'conflict', obliga a editar antes de aprobar).
+  const enforced = enforceStoryInvariants(blocks, claims);
+
   // ── PERSIST (capa 1+2+3) ──
   // Metadatos de trazabilidad del modelo: mismo lugar que la config del panel.
   const cfg = await db
@@ -242,19 +262,19 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
 
   const chapterOrder = (ch: StoryChapter) => STORY_CHAPTERS.indexOf(ch);
   const rowsToInsert = [
-    ...blocks.map((b, i) => ({
+    ...enforced.blocks.map((b) => ({
       version_id: version.id,
       chapter: b.chapter,
       copy: b.copy,
-      position: chapterOrder(b.chapter) * 10 + i,
-      status: conflictChapters.has(b.chapter) ? "conflict" : "generated",
+      position: chapterOrder(b.chapter) * 10,
+      status: conflictChapters.has(b.chapter) ? "conflict" : b.status,
       confidence: Math.min(...b.claim_indexes.map((idx) => claims[idx]?.confidence ?? 0.5), 1),
       claim_ids: b.claim_indexes.map(claimIdByIndex).filter(Boolean),
     })),
     // Capítulos SOLO en conflicto (sin bloque publicable): fila 'conflict'
     // vacía de copy publicable para que el revisor la vea con su motivo.
     ...[...conflictChapters]
-      .filter((ch) => !blocks.some((b) => b.chapter === ch))
+      .filter((ch) => !enforced.blocks.some((b) => b.chapter === ch))
       .map((ch) => ({
         version_id: version.id,
         chapter: ch,
@@ -272,11 +292,23 @@ export async function generateStoryForProperty(propertyId: string): Promise<Gene
     if (bErr) return { ok: false, error: bErr.message };
   }
 
+  // Avisos de entidad (bloques degradados a 'conflict' por la invariante 3):
+  // quedan en notes de la versión para que el revisor vea el motivo.
+  const entityNotes = enforced.blocks
+    .filter((b) => b.conflictNote)
+    .map((b) => `${b.chapter}: ${b.conflictNote}`);
+  if (entityNotes.length > 0) {
+    await db
+      .from("property_story_versions")
+      .update({ notes: entityNotes.join(" · ") })
+      .eq("id", version.id);
+  }
+
   return {
     ok: true,
     versionId: version.id,
-    blocks: blocks.length,
-    conflicts: conflictChapters.size,
+    blocks: enforced.blocks.length,
+    conflicts: conflictChapters.size + enforced.blocks.filter((b) => b.status === "conflict").length,
     reused: false,
   };
 }
