@@ -164,6 +164,11 @@ on conflict (zone_key) do nothing;
 
 -- POIs curados (coordenadas de lugares públicos notorios; los minutos se
 -- calculan por geometría en runtime — nunca se almacenan ni se inventan).
+-- Idempotente por lote: neighborhood_pois no tiene constraint único natural,
+-- así que se borra el lote curado antes de reinsertarlo (necesario porque una
+-- pasada parcial de esta migración puede haber insertado ya los seeds — psql
+-- aplica sentencia a sentencia, no en una transacción).
+delete from neighborhood_pois where verified_source = 'curated-2026-08';
 with n as (select id, zone_key from neighborhoods)
 insert into neighborhood_pois (neighborhood_id, name, category, latitude, longitude, priority, travel_modes, verified_source)
 select n.id, p.name, p.category, p.lat, p.lng, p.priority, p.modes::text[], 'curated-2026-08'
@@ -208,16 +213,14 @@ join (values
 on conflict do nothing;
 
 -- ─── ANALÍTICA · eventos nuevos del SmartLink 2.0 ───────────────────────────
-
+-- El CHECK cerrado de 0057 ya NO existe en producción: el esquema evolucionó a
+-- vocabulario abierto (Shortlist registra shortlist_open, decision_change,
+-- property_view… sin migración por evento). Se respeta esa decisión: los
+-- eventos nuevos del SmartLink 2.0 (photo_gallery_open, hero_video_play,
+-- video_progress, story_chapter_view, location_view, poi_click) no requieren
+-- DDL — este drop queda solo por si alguna instalación conserva el CHECK viejo,
+-- que rechazaría los eventos nuevos.
 alter table page_events drop constraint if exists valid_event_type;
-alter table page_events add constraint valid_event_type check (event_type in (
-  'photo_view', 'video_play', 'plan_view', 'scroll',
-  'contact_click', 'visit_request', 'share_click', 'time_on_page',
-  'collection_open', 'stop_view', 'stop_expand',
-  -- SmartLink 2.0
-  'photo_gallery_open', 'hero_video_play', 'video_progress',
-  'story_chapter_view', 'location_view', 'poi_click'
-));
 
 -- ─── RLS ─────────────────────────────────────────────────────────────────────
 -- Mismas garantías que el resto del esquema: sin policies para anon; el
