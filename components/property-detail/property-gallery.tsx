@@ -45,7 +45,9 @@ export function PropertyGallery({
           onClick={main ? () => openAt(0) : undefined}
         >
           {property.badge && (
-            <span className="absolute left-4 top-4 rounded-md bg-cream-50/95 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-gold-dark shadow-sm">
+            // Clases legacy (11px) para portal cliente; dentro de .smartlink-root
+            // el token crm-badge las pisa por especificidad (12px, Lato 700).
+            <span className="crm-badge absolute left-4 top-4 rounded-md bg-cream-50/95 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-gold-dark shadow-sm">
               {t(BADGE_KEYS[property.badge])}
             </span>
           )}

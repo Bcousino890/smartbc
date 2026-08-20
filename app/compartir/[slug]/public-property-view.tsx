@@ -92,7 +92,7 @@ export function PublicPropertyView({
   const waLink = `https://wa.me/${BC_CONTACT.whatsapp}?text=${waText}`;
 
   return (
-    <div className="min-h-screen bg-cream-50">
+    <div className="smartlink-root min-h-screen bg-cream-50">
       {/* Header sobrio con la marca BC */}
       <header className="border-b border-gold/15 bg-cream-50/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-8">
@@ -108,7 +108,7 @@ export function PublicPropertyView({
           </div>
           <a
             href={`mailto:${BC_CONTACT.email}`}
-            className="hidden items-center gap-2 rounded-lg border border-ink/15 bg-white/80 px-3 py-2 text-[12px] font-medium text-ink/70 transition hover:border-gold/55 hover:text-ink md:inline-flex"
+            className="hidden items-center gap-2 rounded-lg border border-ink/15 bg-white/80 px-3 py-2 crm-button text-ink/70 transition hover:border-gold/55 hover:text-ink md:inline-flex"
           >
             <Mail size={13} strokeWidth={1.75} className="text-gold" />
             <span>{BC_CONTACT.email}</span>
@@ -128,7 +128,7 @@ export function PublicPropertyView({
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-dark">
+                <p className="crm-label text-gold-dark">
                   {[
                     isRent ? "Alquiler" : "Venta",
                     property.propertyTypeLabel,
@@ -138,14 +138,14 @@ export function PublicPropertyView({
                 </p>
                 {property.bcReference && (
                   <span
-                    className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold-dark"
+                    className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-bold tracking-wider text-gold-dark"
                     aria-label={`Referencia interna ${property.bcReference}`}
                   >
                     Ref. {property.bcReference}
                   </span>
                 )}
               </div>
-              <h1 className="mt-2 font-serif text-3xl font-medium leading-tight text-ink md:text-4xl">
+              <h1 className="crm-page-title mt-2 text-ink">
                 {property.title}
               </h1>
               <div className="mt-3 inline-flex items-center gap-2 text-sm text-ink/65">
@@ -157,7 +157,7 @@ export function PublicPropertyView({
               </div>
             </div>
             <div className="shrink-0 text-left md:text-right">
-              <p className="font-serif text-3xl font-medium text-ink md:text-4xl">
+              <p className="crm-number text-3xl text-ink md:text-4xl">
                 {price} €
                 {isRent && (
                   <span className="ml-1 text-base font-normal text-ink/55">
@@ -191,10 +191,10 @@ export function PublicPropertyView({
         {/* Descripción */}
         {property.longDescription && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
-            <h2 className="font-serif text-2xl font-medium text-ink">
+            <h2 className="crm-section-title text-ink">
               Descripción
             </h2>
-            <div className="mt-4 space-y-3 text-sm leading-relaxed text-ink/75 md:text-base">
+            <div className="mt-4 space-y-3 text-base leading-relaxed text-ink/75">
               {property.longDescription.split(/\n\n+/).map((p, i) => (
                 <p key={i}>{p}</p>
               ))}
@@ -206,10 +206,10 @@ export function PublicPropertyView({
         {videos && videos.length > 0 && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
             <div className="flex items-baseline justify-between">
-              <h2 className="font-serif text-2xl font-medium text-ink">
+              <h2 className="crm-section-title text-ink">
                 {videos.length > 1 ? "Vídeos" : "Vídeo"}
               </h2>
-              <span className="hidden text-[11px] uppercase tracking-[0.18em] text-gold-dark/70 sm:inline">
+              <span className="hidden crm-label-sm text-gold-dark/70 sm:inline">
                 Tour cinematográfico
               </span>
             </div>
@@ -245,7 +245,7 @@ export function PublicPropertyView({
         {/* Plano de la vivienda (subido desde /admin/publicacion) */}
         {plans && plans.length > 0 && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
-            <h2 className="font-serif text-2xl font-medium text-ink">
+            <h2 className="crm-section-title text-ink">
               {plans.length > 1 ? "Planos" : "Plano"}
             </h2>
             <div className="mt-4 space-y-4">
@@ -288,10 +288,10 @@ export function PublicPropertyView({
           id="contacto"
           className="mt-5 rounded-2xl border border-gold/25 bg-ink p-6 text-cream-50 shadow-[0_25px_50px_-25px_rgba(40,28,10,0.6)] md:p-8"
         >
-          <h2 className="font-serif text-2xl font-medium">
+          <h2 className="crm-section-title">
             ¿Te interesa esta propiedad?
           </h2>
-          <p className="mt-2 text-sm text-cream-50/75">
+          <p className="mt-2 text-base text-cream-50/75">
             Te atendemos de forma personalizada. Contáctanos para más
             información, visitas y todas las propiedades de tu interés.
           </p>
@@ -301,7 +301,7 @@ export function PublicPropertyView({
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackerRef.current?.trackContactClick('whatsapp')}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#25D366] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#1ebd5b]"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#25D366] px-5 py-3 crm-button text-white transition hover:bg-[#1ebd5b]"
             >
               <WhatsAppIcon size={16} />
               <span>WhatsApp</span>
@@ -311,7 +311,7 @@ export function PublicPropertyView({
                 property.title,
               )}`}
               onClick={() => trackerRef.current?.trackContactClick('email')}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-5 py-3 text-sm font-medium text-ink transition hover:bg-gold-dark"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-5 py-3 crm-button text-ink transition hover:bg-gold-dark"
             >
               <Mail size={15} strokeWidth={1.75} />
               <span>Email</span>
@@ -319,7 +319,7 @@ export function PublicPropertyView({
             <a
               href={`tel:${BC_CONTACT.phoneE164}`}
               onClick={() => trackerRef.current?.trackContactClick('phone')}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-cream-50/30 bg-cream-50/5 px-5 py-3 text-sm font-medium text-cream-50 transition hover:bg-cream-50/10"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-cream-50/30 bg-cream-50/5 px-5 py-3 crm-button text-cream-50 transition hover:bg-cream-50/10"
             >
               <Phone size={15} strokeWidth={1.75} />
               <span>{BC_CONTACT.phoneDisplay}</span>
@@ -327,7 +327,7 @@ export function PublicPropertyView({
           </div>
         </section>
 
-        <footer className="mt-8 pb-24 text-center text-[11px] text-ink/45 md:pb-0">
+        <footer className="mt-8 pb-24 text-center crm-meta text-ink/45 md:pb-0">
           © {new Date().getFullYear()} Benjamín Cousiño Propiedades · Madrid
         </footer>
       </main>
@@ -342,7 +342,7 @@ export function PublicPropertyView({
             rel="noopener noreferrer"
             aria-label="Contactar por WhatsApp"
             onClick={() => trackerRef.current?.trackContactClick('whatsapp')}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-3 py-2.5 text-sm font-medium text-white"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-3 py-2.5 crm-button text-white"
           >
             <WhatsAppIcon size={15} />
             <span>WhatsApp</span>
@@ -383,7 +383,7 @@ function Spec({
   return (
     <div className="flex flex-col items-center text-center">
       <span className="text-gold">{icon}</span>
-      <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+      <p className="crm-label-sm mt-1 text-ink/55">
         {label}
       </p>
       <p className="mt-0.5 font-medium text-ink">{value}</p>
@@ -503,7 +503,7 @@ function VideoThumb({
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
       ) : info.type === "vimeo" ? (
-        <div className="flex h-full w-full items-center justify-center bg-ink/85 text-[11px] uppercase tracking-wider text-cream-50/70">
+        <div className="flex h-full w-full items-center justify-center bg-ink/85 crm-label-sm text-cream-50/70">
           Vídeo
         </div>
       ) : (
@@ -531,7 +531,7 @@ function VideoThumb({
       </span>
 
       {active && (
-        <span className="absolute left-2 top-2 rounded-full bg-gold px-2 py-0.5 text-[10px] font-semibold text-ink shadow">
+        <span className="absolute left-2 top-2 rounded-full bg-gold px-2 py-0.5 crm-badge text-ink shadow">
           Viendo
         </span>
       )}
@@ -554,7 +554,7 @@ function FeaturesSection({ features }: { features: string[] }) {
 
   return (
     <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
-      <h2 className="font-serif text-2xl font-medium text-ink">
+      <h2 className="crm-section-title text-ink">
         Características
       </h2>
       <div className="mt-5 space-y-5">
@@ -618,10 +618,10 @@ function ZoneMap({
   return (
     <section className="mt-5 overflow-hidden rounded-2xl border border-gold/20 bg-white/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm">
       <div className="px-6 pt-6 md:px-8 md:pt-8">
-        <h2 className="font-serif text-2xl font-medium text-ink">
+        <h2 className="crm-section-title text-ink">
           Ubicación · {zone}
         </h2>
-        <p className="mt-1 text-[12px] text-ink/55">
+        <p className="mt-1 text-xs text-ink/55">
           {hasPreciseCoords
             ? "Ubicación exacta de la propiedad."
             : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
@@ -649,7 +649,7 @@ function ZoneMap({
           href={externalLink}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[12px] text-gold-dark hover:underline"
+          className="text-xs text-gold-dark hover:underline"
         >
           Ver mapa en pantalla completa ↗
         </a>
@@ -670,7 +670,7 @@ function RequirementsAndServices({ isRent }: { isRent: boolean }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-gold-dark">
             <FileSignature size={17} strokeWidth={1.75} />
           </span>
-          <h2 className="font-serif text-xl font-medium text-ink md:text-2xl">
+          <h2 className="crm-section-title text-ink">
             Requisitos
           </h2>
         </div>
@@ -742,7 +742,7 @@ function RequirementsAndServices({ isRent }: { isRent: boolean }) {
             </>
           )}
         </ul>
-        <p className="mt-4 text-[11px] text-ink/55">
+        <p className="mt-4 crm-meta text-ink/55">
           Importes concretos a coordinar con tu agente BC al planificar la
           visita.
         </p>
@@ -753,11 +753,11 @@ function RequirementsAndServices({ isRent }: { isRent: boolean }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 text-gold">
             <Sparkles size={17} strokeWidth={1.75} />
           </span>
-          <h2 className="font-serif text-xl font-medium md:text-2xl">
+          <h2 className="crm-section-title">
             Personal Shopper Inmobiliario
           </h2>
         </div>
-        <p className="mt-4 text-sm leading-relaxed text-cream-50/80">
+        <p className="mt-4 text-base leading-relaxed text-cream-50/80">
           En Benjamín Cousiño Propiedades no solo enseñamos pisos: te
           acompañamos en todo el proceso como tu Personal Shopper
           inmobiliario.
@@ -790,7 +790,7 @@ function RequirementsAndServices({ isRent }: { isRent: boolean }) {
 function FeatureBlock({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-dark">
+      <p className="crm-label-sm text-gold-dark">
         {title}
       </p>
       <ul className="mt-2 grid grid-cols-1 gap-2 text-sm text-ink/75 sm:grid-cols-2 md:grid-cols-3">

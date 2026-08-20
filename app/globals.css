@@ -31,10 +31,16 @@
     --crm-font-display: Optima, Candara, "Segoe UI", var(--font-lato), sans-serif;
   }
 
-  /* Raíz del CRM interno: la ponen los layouts de /admin (ES y [country]) y el
-     login. Fija Lato como familia por defecto de TODO el árbol admin sin tocar
-     el body global (que sigue siendo Inter para las superficies públicas). */
-  .crm-root {
+  /* Raíces del sistema EMAAR. `.crm-root` la ponen los layouts de /admin (ES y
+     [country]) y el login; `.smartlink-root` la pone PublicPropertyView, que
+     comparten /compartir/[slug] y /c/[token] (SmartLinks). Ambas fijan Lato
+     como familia por defecto de su árbol sin tocar el body global (Inter) ni
+     las demás superficies públicas (/web, /v, /s, portal cliente). Los tokens
+     .crm-* de abajo solo actúan bajo una de las dos raíces, y beben de las
+     mismas variables: cuando llegue la Optima licenciada, CRM y SmartLinks la
+     heredan del mismo punto central. */
+  .crm-root,
+  .smartlink-root {
     font-family: var(--crm-font-sans);
   }
 }
@@ -49,7 +55,8 @@
      ========================================================================== */
 
   /* Display mayor — uso excepcional (portadas, momentos hero del admin). */
-  .crm-root .crm-display {
+  .crm-root .crm-display,
+  .smartlink-root .crm-display {
     font-family: var(--crm-font-display);
     font-weight: 400;
     text-transform: uppercase;
@@ -58,13 +65,15 @@
     line-height: 1.25;
   }
   @screen md {
-    .crm-root .crm-display {
+    .crm-root .crm-display,
+    .smartlink-root .crm-display {
       font-size: 46px;
     }
   }
 
   /* Título de página canónico (EMAAR H2 section). */
-  .crm-root .crm-page-title {
+  .crm-root .crm-page-title,
+  .smartlink-root .crm-page-title {
     font-family: var(--crm-font-display);
     font-weight: 400;
     text-transform: uppercase;
@@ -73,14 +82,16 @@
     line-height: 1.15;
   }
   @screen md {
-    .crm-root .crm-page-title {
+    .crm-root .crm-page-title,
+    .smartlink-root .crm-page-title {
       font-size: 36px;
       line-height: 1.11;
     }
   }
 
   /* Título de sección / card / modal (EMAAR card title). */
-  .crm-root .crm-section-title {
+  .crm-root .crm-section-title,
+  .smartlink-root .crm-section-title {
     font-family: var(--crm-font-display);
     font-weight: 400;
     text-transform: uppercase;
@@ -89,21 +100,24 @@
     line-height: 1.35;
   }
   @screen md {
-    .crm-root .crm-section-title {
+    .crm-root .crm-section-title,
+    .smartlink-root .crm-section-title {
       font-size: 24px;
     }
   }
 
   /* Cuerpo operativo. Suelo 14px en todos los viewports (adaptación 60+
      deliberada: NO se reproduce el body móvil de 12px de EMAAR). */
-  .crm-root .crm-body {
+  .crm-root .crm-body,
+  .smartlink-root .crm-body {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 14px;
     line-height: 1.43;
   }
 
-  .crm-root .crm-body-strong {
+  .crm-root .crm-body-strong,
+  .smartlink-root .crm-body-strong {
     font-family: var(--crm-font-sans);
     font-weight: 700;
     font-size: 14px;
@@ -113,7 +127,8 @@
   /* Navegación (sidebar): gramática EMAAR con suelo de legibilidad 14px y
      tracking contenido (el 0.10em/12px del nav marketing de EMAAR no se
      replica a propósito — ver sprint §5). */
-  .crm-root .crm-nav {
+  .crm-root .crm-nav,
+  .smartlink-root .crm-nav {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 14px;
@@ -122,7 +137,8 @@
   }
 
   /* Eyebrow / label de alto nivel (EMAAR eyebrow). */
-  .crm-root .crm-label {
+  .crm-root .crm-label,
+  .smartlink-root .crm-label {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 14px;
@@ -132,7 +148,8 @@
   }
 
   /* Label denso (campos de formulario, cabeceras de panel). Suelo 12px. */
-  .crm-root .crm-label-sm {
+  .crm-root .crm-label-sm,
+  .smartlink-root .crm-label-sm {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 12px;
@@ -142,14 +159,16 @@
   }
 
   /* Metadata / caption. */
-  .crm-root .crm-meta {
+  .crm-root .crm-meta,
+  .smartlink-root .crm-meta {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 12px;
     line-height: 1.34;
   }
 
-  .crm-root .crm-caption {
+  .crm-root .crm-caption,
+  .smartlink-root .crm-caption {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 12px;
@@ -157,7 +176,8 @@
   }
 
   /* Cabecera de tabla (mapeado del nav/footer link de EMAAR). Nunca Optima. */
-  .crm-root .crm-table-header {
+  .crm-root .crm-table-header,
+  .smartlink-root .crm-table-header {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 12px;
@@ -167,7 +187,8 @@
   }
 
   /* Cuerpo de tabla — 14px mínimo, sin excepciones (sprint §8). */
-  .crm-root .crm-table-body {
+  .crm-root .crm-table-body,
+  .smartlink-root .crm-table-body {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 14px;
@@ -178,7 +199,8 @@
      desplegada no trae cifras tabulares reales; el feature se declara igual
      (inofensivo si no existe) y la limitación queda documentada en el handoff.
      Prohibido meter Optima en tablas para "arreglar" esto. */
-  .crm-root .crm-price {
+  .crm-root .crm-price,
+  .smartlink-root .crm-price {
     font-family: var(--crm-font-sans);
     font-weight: 700;
     font-size: 14px;
@@ -187,14 +209,16 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .crm-root .crm-number {
+  .crm-root .crm-number,
+  .smartlink-root .crm-number {
     font-family: var(--crm-font-sans);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
 
   /* Botón (EMAAR primary button, literal). */
-  .crm-root .crm-button {
+  .crm-root .crm-button,
+  .smartlink-root .crm-button {
     font-family: var(--crm-font-sans);
     font-weight: 700;
     font-size: 12px;
@@ -204,7 +228,8 @@
   }
 
   /* Texto editable — 16px (sprint §9: los valores importantes no son microtexto). */
-  .crm-root .crm-input {
+  .crm-root .crm-input,
+  .smartlink-root .crm-input {
     font-family: var(--crm-font-sans);
     font-weight: 400;
     font-size: 16px;
@@ -212,7 +237,8 @@
   }
 
   /* Badge (EMAAR utility). El color/semántica de estado no se toca. */
-  .crm-root .crm-badge {
+  .crm-root .crm-badge,
+  .smartlink-root .crm-badge {
     font-family: var(--crm-font-sans);
     font-weight: 700;
     font-size: 12px;
