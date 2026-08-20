@@ -1,6 +1,8 @@
 # SMARTLINK 2.0 — BCP LUXURY PROPERTY EXPERIENCE COMPLETE
 ## Handoff de implementación · 2026-08-21 · desplegado en producción (`760038a`)
 
+> **FIRST APPROVED PRODUCTION PROPERTY STORY** · BC-1416 ("Vivienda única de diseño en el corazón de Almagro") · **Engine v4** (baseline cerrado: dedupe por hecho, planta contextual, un bloque por capítulo, claim ownership, preservación de entidades) · **6 approved chapters** (Salón y luz · Cocina y comedor · Zona privada · Acabados y confort [solo-texto] · La finca [fachada #45] · Vivir en Almagro) · **1 intentionally rejected weak intro** · **0 conflicts** · 43 claims con cita literal (25 usados, 11 duplicados retirados, 2 boilerplate descartados) · fotos 47/47 clasificadas (caché, 0 re-llamadas) · floor=null (inferencia errónea de "planta baja del trastero" corregida con regla contextual) · subzone=Almagro verificada · smoke QA en producción: 1440/390/zoom 125 — 0 overflow, 0 errores JS, sin Key Fact PLANTA, alternancia imagen/copy correcta.
+
 ## Arquitectura implementada
 Un único **Adaptive Property Renderer** (`app/compartir/[slug]/public-property-view.tsx`) compartido por `/compartir/[slug]` y `/c/[token]`, con la biblioteca canónica de 18 módulos y estados RICH / MEDIA-RICH / STANDARD / SPARSE emergentes de los datos (sin plantillas separadas, sin headings vacíos, sin placeholders). Naming visible en español sobrio (D6). Tipografía EMAAR intacta; `OPTIMA_LICENSE_REQUIRED` sin cambios.
 
