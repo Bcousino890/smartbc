@@ -37,7 +37,7 @@ const db = () => createAdminClient() as any;
 const PUBLIC_PROPERTY_SELECT = `
   id, slug, title, zone, subzone, bedrooms, bathrooms, square_meters,
   price, currency, operation, status, archived_at, bc_reference,
-  last_synced_at, updated_at, analytics_token,
+  last_synced_at, updated_at,
   property_photos ( url, position )
 `;
 

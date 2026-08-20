@@ -74,8 +74,6 @@ function stop(
   );
   return {
     order,
-    // Banco de pruebas: sin base detrás no hay token analítico que mandar.
-    analyticsRef: null,
     // Banco de pruebas visual: no hay base de datos detrás, así que la
     // valoración no se puede guardar.
     clientRating: 0,

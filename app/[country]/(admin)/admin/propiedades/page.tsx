@@ -1,113 +1,112 @@
-import { checkPermission, guardPage } from "@/lib/auth/guard";
-import {
-  getPropertyWorkspaceDetail,
-  getWorkspaceCounts,
-  getWorkspaceFilterOptions,
-  getWorkspacePage,
-} from "@/lib/db/queries/properties-workspace";
-import {
-  WORKSPACE_PAGE_SIZE,
-  isWorkspaceSort,
-  isWorkspaceTab,
-  isWorkspaceView,
-  type WorkspaceFilters,
-} from "@/lib/properties-workspace/types";
-import { isCountry, type Country } from "@/lib/country-config";
-import { WorkspaceShell } from "./_components/workspace-shell";
+import { redirect } from "next/navigation";
+import { Building2, Home, Sparkles, Tag } from "lucide-react";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { PageFooter } from "@/components/ui/page-footer";
+import { StatCard } from "@/components/ui/stat-card";
+import { propertyRowToAdminProperty } from "@/lib/db/adapters";
+import { getAgencies } from "@/lib/db/queries/agencies";
+import { getProperties } from "@/lib/db/queries/properties";
+import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
+import { getCountryConfig, type Country } from "@/lib/country-config";
+import { PropertiesAdminClient } from "./properties-admin-client";
 
+// Datos en vivo: el catálogo tiene que reflejar altas/ediciones/imports al
+// instante. Sin esto, Next servía una versión cacheada y las propiedades recién
+// importadas no aparecían hasta que expiraba la caché.
 export const dynamic = "force-dynamic";
 
-type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined): string | undefined =>
-  Array.isArray(v) ? v[0] : v;
-const num = (v: string | undefined): number | undefined => {
-  if (!v) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-};
-
-export default async function PropertiesWorkspacePage({
+export default async function AdminPropiedadesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ country: Country }>;
-  searchParams: Promise<SP>;
+  searchParams: Promise<{ archivadas?: string }>;
 }) {
-  const { country: raw } = await params;
-  const country: Country = isCountry(raw) ? raw : "es";
+  const { country } = await params;
   const sp = await searchParams;
-
-  // ⚠️ Antes esta página entraba por `canAccess(role, …)` — rol puro. Ahora usa
-  // el mismo gate que el resto del panel: rol + overrides + rol personalizado.
-  await guardPage("properties", country);
-  const [editGate, publishGate, createGate] = await Promise.all([
-    checkPermission("properties", "edit", { country }),
-    checkPermission("properties", "publish", { country }),
-    checkPermission("properties", "create", { country }),
+  const showArchived = sp?.archivadas === "1" || sp?.archivadas === "true";
+  const [rows, agencyRows, currentProfile] = await Promise.all([
+    // Límite alto: el admin debe ver TODO el catálogo activo (cientos de pisos
+    // de todas las agencias). Con un tope bajo, el total y el filtro de agencia
+    // se quedaban cortos (faltaban agencias). Buscador/filtros operan en cliente.
+    // country: filtra por país; sin esto se mezclaba con el catálogo del otro país.
+    getProperties({ includeUnavailable: true, includeArchived: showArchived, country }, 2000),
+    getAgencies(),
+    getCurrentProfile(),
   ]);
+  if (!canAccess(currentProfile?.role ?? "", "properties", "view")) {
+    redirect(getCountryConfig(country).prefix);
+  }
+  const properties = rows.map(propertyRowToAdminProperty);
+  const agencies = ((agencyRows ?? []) as Array<{
+    slug: string;
+    name: string;
+  }>).map((a) => ({ slug: a.slug, name: a.name }));
 
-  const viewParam = one(sp.view);
-  const sortParam = one(sp.sort);
-  const view = isWorkspaceView(viewParam) ? viewParam : "all";
-
-  const filters: WorkspaceFilters = {
-    view,
-    search: one(sp.q),
-    operation: one(sp.operation),
-    zone: one(sp.zona),
-    agencyId: one(sp.agencia),
-    bedrooms: num(one(sp.dormitorios)),
-    bathrooms: num(one(sp.banos)),
-    priceMin: num(one(sp.precioMin)),
-    priceMax: num(one(sp.precioMax)),
-    sqmMin: num(one(sp.m2Min)),
-    sqmMax: num(one(sp.m2Max)),
-    publishedWeb: one(sp.pub) === "1" ? true : undefined,
-    hasPhotos: one(sp.fotos) === "0" ? false : one(sp.fotos) === "1" ? true : undefined,
-    hasVideo: one(sp.video) === "1" ? true : undefined,
-    hasPlan: one(sp.plano) === "1" ? true : undefined,
-    missingAddress: one(sp.sinDireccion) === "1",
-    missingCoords: one(sp.sinCoords) === "1",
-    staleSync: one(sp.rancias) === "1",
-    source: one(sp.origen),
-    page: Math.max(1, Number(one(sp.page) ?? 1) || 1),
-    pageSize: WORKSPACE_PAGE_SIZE,
-    sort: isWorkspaceSort(sortParam)
-      ? sortParam
-      : view === "needs-attention"
-        ? "attention"
-        : view === "upcoming-viewings"
-          ? "viewing"
-          : "newest",
+  const stats = {
+    total: properties.length,
+    rent: properties.filter((p) => p.operation === "alquiler").length,
+    sale: properties.filter((p) => p.operation === "venta").length,
+    featured: properties.filter((p) => p.featured).length,
   };
 
-  const selectedId = one(sp.p) ?? null;
-  const tabParam = one(sp.t);
-  const tab = isWorkspaceTab(tabParam) ? tabParam : "overview";
-
-  const [counts, pageData, options, detail] = await Promise.all([
-    getWorkspaceCounts(country),
-    getWorkspacePage(filters, country),
-    getWorkspaceFilterOptions(country),
-    selectedId ? getPropertyWorkspaceDetail(selectedId) : Promise.resolve(null),
-  ]);
-
   return (
-    <WorkspaceShell
-      view={view}
-      tab={tab}
-      counts={counts}
-      items={pageData.items}
-      total={pageData.total}
-      page={pageData.page}
-      pageSize={pageData.pageSize}
-      detail={detail}
-      zones={options.zones}
-      agencies={options.agencies}
-      country={country}
-      canCreate={createGate.ok}
-      canEdit={editGate.ok}
-      canPublish={publishGate.ok}
-    />
+    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-6 pb-10 lg:px-10">
+      <AdminPageHeader
+        titleKey="adminProps.title"
+        subtitleKey="adminProps.subtitle"
+      />
+
+      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={<Building2 size={20} strokeWidth={1.75} />}
+          labelKey="adminProps.stats.total"
+          helpKey="adminProps.stats.help"
+          value={stats.total}
+        />
+        <StatCard
+          icon={<Home size={20} strokeWidth={1.75} />}
+          labelKey="adminProps.stats.rent"
+          helpKey="adminProps.stats.help"
+          value={stats.rent}
+        />
+        <StatCard
+          icon={<Tag size={19} strokeWidth={1.75} />}
+          labelKey="adminProps.stats.sale"
+          helpKey="adminProps.stats.help"
+          value={stats.sale}
+        />
+        <StatCard
+          icon={<Sparkles size={19} strokeWidth={1.75} />}
+          labelKey="adminProps.stats.featured"
+          helpKey="adminProps.stats.help"
+          value={stats.featured}
+        />
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-3">
+        {showArchived && (
+          <span className="text-[12px] text-ink/55">
+            Mostrando también propiedades archivadas
+          </span>
+        )}
+        <a
+          href={showArchived ? "?archivadas=0" : "?archivadas=1"}
+          className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+        >
+          {showArchived ? "Ocultar archivadas" : "Ver archivadas"}
+        </a>
+      </div>
+
+      <PropertiesAdminClient
+        properties={properties}
+        agencies={agencies}
+        currentRole={currentProfile?.role}
+        country={country}
+      />
+
+      <PageFooter textKey="admin.realtime.footer" variant="inline" />
+    </div>
   );
 }
