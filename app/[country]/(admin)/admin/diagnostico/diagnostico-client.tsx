@@ -181,7 +181,7 @@ export function DiagnosticoClient() {
     <div className="mt-7 flex flex-col gap-5">
       {/* Barra de acciones */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+        <div className="flex items-center gap-2 crm-label-sm text-ink/55">
           <Stethoscope size={15} strokeWidth={1.75} className="text-gold" />
           <span>Diagnóstico del sistema de usuarios</span>
         </div>
@@ -263,7 +263,7 @@ export function DiagnosticoClient() {
           <RawJsonPanel data={data} />
 
           {data.timestamp && (
-            <p className="text-center text-[11px] text-ink/40">
+            <p className="text-center text-xs text-ink/40">
               Última ejecución:{" "}
               {new Date(data.timestamp).toLocaleString("es-ES")}
             </p>
@@ -343,7 +343,7 @@ function SummaryBanner({ tone, verdicts }: { tone: Tone; verdicts: Verdict[] }) 
       <div className="flex items-start gap-3">
         <Icon size={26} strokeWidth={1.75} className={cn("shrink-0", style.text)} />
         <div className="min-w-0">
-          <h2 className={cn("font-serif text-xl font-medium", style.text)}>
+          <h2 className={cn("crm-section-title", style.text)}>
             {headline}
           </h2>
           <p className={cn("mt-1 text-sm", style.text, "opacity-90")}>
@@ -373,7 +373,7 @@ function VerdictCard({ verdict }: { verdict: Verdict }) {
           <p className={cn("text-sm font-semibold", style.text)}>
             {verdict.title}
           </p>
-          <p className={cn("mt-1 text-[13px] leading-relaxed", style.text, "opacity-90")}>
+          <p className={cn("mt-1 text-sm leading-relaxed", style.text, "opacity-90")}>
             {verdict.detail}
           </p>
         </div>
@@ -390,7 +390,7 @@ function CardHeader({
   title: string;
 }) {
   return (
-    <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+    <header className="flex items-center gap-2 crm-label-sm text-ink/55">
       <span className="text-gold">{icon}</span>
       <span>{title}</span>
     </header>
@@ -447,7 +447,7 @@ function EnvCard({ env }: { env?: DebugData["env"] }) {
               <StatusDot ok={r.ok} />
               <span className="truncate text-sm text-ink">{r.label}</span>
             </div>
-            <span className="shrink-0 text-right text-[11px] text-ink/50">
+            <span className="shrink-0 text-right text-xs text-ink/50">
               {r.ok ? r.note ?? "presente" : "falta"}
             </span>
           </li>
@@ -505,11 +505,11 @@ function Row({
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="shrink-0 text-[12px] text-ink/55">{label}</span>
+      <span className="shrink-0 text-xs text-ink/55">{label}</span>
       <span
         className={cn(
-          "min-w-0 break-all text-right text-[13px] text-ink",
-          mono && "font-mono text-[11px]",
+          "min-w-0 break-all text-right text-sm text-ink",
+          mono && "font-mono text-xs",
         )}
       >
         {value}
@@ -530,13 +530,13 @@ function BoolRow({
   const ok = value === true;
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="font-mono text-[12px] text-ink/65">{label}</span>
+      <span className="font-mono text-xs text-ink/65">{label}</span>
       {error ? (
-        <span className="text-[11px] text-red-700">error</span>
+        <span className="text-xs text-red-700">error</span>
       ) : (
         <span
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
+            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
             ok
               ? "bg-green-100 text-green-800"
               : value === false
@@ -579,18 +579,18 @@ function ClientCard({
         />
         <StatusDot ok={ok} />
       </div>
-      <p className="mt-2 text-[12px] leading-relaxed text-ink/55">{subtitle}</p>
+      <p className="mt-2 text-xs leading-relaxed text-ink/55">{subtitle}</p>
 
       {report?.error ? (
-        <p className="mt-3 break-words rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-700">
+        <p className="mt-3 break-words rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
           {report.error}
         </p>
       ) : (
         <div className="mt-3 flex items-baseline gap-2">
-          <span className="font-serif text-3xl font-medium text-ink">
+          <span className="crm-number text-3xl text-ink">
             {count}
           </span>
-          <span className="text-[12px] text-ink/55">
+          <span className="text-xs text-ink/55">
             perfil{count === 1 ? "" : "es"} visible{count === 1 ? "" : "s"}
           </span>
         </div>
@@ -598,7 +598,7 @@ function ClientCard({
 
       {roles.length > 0 && (
         <div className="mt-3 overflow-hidden rounded-lg border border-gold/10">
-          <table className="w-full text-left text-[12px]">
+          <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-cream-100/60 text-ink/50">
                 <th className="px-3 py-1.5 font-medium">Rol</th>
@@ -735,7 +735,7 @@ function MigrationsPanel() {
               onToggle={() => setShowOutput((o) => !o)}
               label="Ver salida del proceso"
             >
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink p-3 text-[11px] leading-relaxed text-cream-50/90">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink p-3 text-xs leading-relaxed text-cream-50/90">
                 {result.output ?? result.error}
               </pre>
             </Collapsible>
@@ -769,7 +769,7 @@ function RawJsonPanel({ data }: { data: DebugData }) {
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55"
+          className="flex items-center gap-2 crm-label-sm text-ink/55"
         >
           <ChevronDown
             size={15}
@@ -784,7 +784,7 @@ function RawJsonPanel({ data }: { data: DebugData }) {
         <button
           type="button"
           onClick={copy}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gold/25 px-2.5 py-1 text-[11px] font-medium text-ink transition hover:bg-cream-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gold/25 px-2.5 py-1 text-xs font-medium text-ink transition hover:bg-cream-50"
         >
           {copied ? (
             <CheckCircle2 size={13} strokeWidth={2} className="text-green-600" />
@@ -795,7 +795,7 @@ function RawJsonPanel({ data }: { data: DebugData }) {
         </button>
       </div>
       {open && (
-        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink p-3 text-[11px] leading-relaxed text-cream-50/90">
+        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink p-3 text-xs leading-relaxed text-cream-50/90">
           {json}
         </pre>
       )}
@@ -821,7 +821,7 @@ function Collapsible({
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1.5 text-[12px] font-medium text-ink/60 hover:text-ink"
+        className="flex items-center gap-1.5 text-xs font-medium text-ink/60 hover:text-ink"
       >
         <ChevronDown
           size={14}

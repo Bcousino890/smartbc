@@ -57,7 +57,7 @@ export function ImportPropertyModal({
       size="lg"
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5 text-[12px] font-medium text-ink/80">
+        <label className="flex flex-col gap-1.5 text-xs font-medium text-ink/80">
           <span>{t("adminProps.import.urlLabel")}</span>
           <input
             type="url"
@@ -68,13 +68,13 @@ export function ImportPropertyModal({
             required
             className="w-full rounded-lg border border-ink/10 bg-white/85 px-3 py-2.5 text-sm text-ink focus:border-gold/55 focus:outline-none"
           />
-          <span className="text-[11px] font-normal text-ink/55">
+          <span className="text-xs font-normal text-ink/55">
             {t("adminProps.import.urlHint")}
           </span>
         </label>
 
         {feedback.kind === "soon" && (
-          <div className="flex items-start gap-2 rounded-lg border border-gold/30 bg-gold/10 p-3 text-[12px] text-ink/80">
+          <div className="flex items-start gap-2 rounded-lg border border-gold/30 bg-gold/10 p-3 text-xs text-ink/80">
             <Sparkles
               size={14}
               strokeWidth={1.75}
@@ -85,7 +85,7 @@ export function ImportPropertyModal({
         )}
 
         {feedback.kind === "error" && (
-          <div className="rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-[12px] text-rose-700">
+          <div className="rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-xs text-rose-700">
             {t("adminProps.import.error", { error: feedback.msg })}
           </div>
         )}
@@ -95,14 +95,14 @@ export function ImportPropertyModal({
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="rounded-lg border border-ink/15 bg-white/85 px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:bg-white"
+            className="rounded-lg border border-ink/15 bg-white/85 px-4 py-2 text-xs font-medium text-ink/75 transition hover:bg-white"
           >
             {t("common.cancel")}
           </button>
           <button
             type="submit"
             disabled={isPending || url.trim().length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {isPending ? (
               <Loader2 size={13} className="animate-spin" />

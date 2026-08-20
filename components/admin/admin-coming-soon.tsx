@@ -22,7 +22,7 @@ export function AdminComingSoon({
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-gold/40 text-gold">
             <Sparkles size={20} strokeWidth={1.5} />
           </span>
-          <p className="mt-4 font-serif text-xl text-ink">
+          <p className="mt-4 crm-section-title text-ink">
             {t("comingSoon.title")}
           </p>
           <p className="mt-2 max-w-sm text-sm text-ink/60">

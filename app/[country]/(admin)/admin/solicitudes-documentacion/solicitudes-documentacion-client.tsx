@@ -95,7 +95,7 @@ const COUNTRY_FLAG: Record<ApplicationCountry, string> = {
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 75 ? "bg-green-100 text-green-700" : score >= 50 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
   return (
-    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${color}`}>
+    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${color}`}>
       <Star size={9} />
       {score}
     </span>
@@ -111,7 +111,7 @@ function DocProgress({ docs }: { docs: { status: string }[] }) {
       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-ink/10">
         <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[11px] text-ink/50">{verified}/{total}</span>
+      <span className="text-xs text-ink/50">{verified}/{total}</span>
     </div>
   );
 }
@@ -276,7 +276,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           className={`${statCardBase} border-cream-50/60 bg-cream-50/80 backdrop-blur-sm ${isDefaultFilters && !searchTerm ? "ring-1 ring-gold/50" : ""}`}
         >
           <p className="text-xs text-ink/50">Total solicitudes</p>
-          <p className="mt-1 font-serif text-2xl text-ink">{totalCount}</p>
+          <p className="crm-number mt-1 text-2xl text-ink">{totalCount}</p>
         </button>
         <button
           onClick={() => setFilterStatus(filterStatus === "pending_review" ? "all" : "pending_review")}
@@ -284,7 +284,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           className={`${statCardBase} border-blue-100 bg-blue-50/80 ${filterStatus === "pending_review" ? "ring-1 ring-blue-400" : ""}`}
         >
           <p className="text-xs text-blue-600">Pendientes revisión</p>
-          <p className="mt-1 font-serif text-2xl text-blue-700">{pendingCount}</p>
+          <p className="crm-number mt-1 text-2xl text-blue-700">{pendingCount}</p>
         </button>
         <button
           onClick={() => setFilterStatus(filterStatus === "approved" ? "all" : "approved")}
@@ -292,7 +292,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           className={`${statCardBase} border-green-100 bg-green-50/80 ${filterStatus === "approved" ? "ring-1 ring-green-400" : ""}`}
         >
           <p className="text-xs text-green-600">Aprobadas</p>
-          <p className="mt-1 font-serif text-2xl text-green-700">{approvedCount}</p>
+          <p className="crm-number mt-1 text-2xl text-green-700">{approvedCount}</p>
         </button>
         <button
           onClick={() => setFilterOperation(filterOperation === "sale" ? "all" : "sale")}
@@ -300,7 +300,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           className={`${statCardBase} border-violet-100 bg-violet-50/80 ${filterOperation === "sale" ? "ring-1 ring-violet-400" : ""}`}
         >
           <p className="text-xs text-violet-600">Compras</p>
-          <p className="mt-1 font-serif text-2xl text-violet-700">{saleCount}</p>
+          <p className="crm-number mt-1 text-2xl text-violet-700">{saleCount}</p>
         </button>
       </div>
 
@@ -376,22 +376,22 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
           <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr className="border-b border-ink/8 text-left">
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">Cliente</th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">Propiedad</th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">Operación</th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">Cliente</th>
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">Propiedad</th>
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">Operación</th>
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">
                   <button onClick={() => toggleSort("score")} className="flex items-center gap-1 uppercase tracking-wide transition hover:text-ink" title="Ordenar por score">
                     Score <SortIndicator column="score" />
                   </button>
                 </th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">Docs</th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">Estado</th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">Docs</th>
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">Estado</th>
+                <th className="px-5 py-3.5 crm-table-header text-ink/50">
                   <button onClick={() => toggleSort("date")} className="flex items-center gap-1 uppercase tracking-wide transition hover:text-ink" title="Ordenar por fecha">
                     Enviada <SortIndicator column="date" />
                   </button>
                 </th>
-                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-ink/50"></th>
+                <th className="px-5 py-3.5 crm-table-header text-ink/50"></th>
               </tr>
             </thead>
             <tbody>
@@ -411,7 +411,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                     <td className="px-5 py-4">
                       <div>
                         <p className="font-medium text-ink">{clientName}</p>
-                        <p className="text-[11px] text-ink/45">{app.profiles?.email}</p>
+                        <p className="text-xs text-ink/45">{app.profiles?.email}</p>
                       </div>
                     </td>
                     <td className="px-5 py-4">
@@ -419,7 +419,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                         <div>
                           <p className="text-ink/80">{app.properties.title}</p>
                           {app.properties.bc_reference && (
-                            <p className="text-[11px] text-ink/40">{app.properties.bc_reference}</p>
+                            <p className="text-xs text-ink/40">{app.properties.bc_reference}</p>
                           )}
                         </div>
                       ) : (
@@ -428,7 +428,7 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className={`flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${opCfg.className}`}>
+                        <span className={`flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${opCfg.className}`}>
                           <OpIcon size={10} />
                           {opCfg.label}
                         </span>
@@ -439,16 +439,16 @@ export function SolicitudesDocumentacionClient({ initialApplications, totalCount
                       {score ? (
                         <ScoreBadge score={score.total_score} />
                       ) : app.property_application_documents.length > 0 ? (
-                        <span className="text-[11px] text-ink/30">Calculando...</span>
+                        <span className="text-xs text-ink/30">Calculando...</span>
                       ) : (
-                        <span className="text-[11px] text-ink/30">Sin docs</span>
+                        <span className="text-xs text-ink/30">Sin docs</span>
                       )}
                     </td>
                     <td className="px-5 py-4">
                       <DocProgress docs={app.property_application_documents} />
                     </td>
                     <td className="px-5 py-4">
-                      <span className={`flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusCfg.className}`}>
+                      <span className={`flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusCfg.className}`}>
                         <StatusIcon size={10} />
                         {statusCfg.label}
                       </span>

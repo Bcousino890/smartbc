@@ -68,7 +68,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-sm md:items-center"
+      className="crm-root fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-sm md:items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isPending) onClose();
       }}
@@ -81,7 +81,7 @@ export function Modal({
       >
         <header className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="font-serif text-xl font-medium text-ink md:text-2xl">
+            <h2 className="crm-section-title text-ink">
               {title}
             </h2>
             {subtitle && (

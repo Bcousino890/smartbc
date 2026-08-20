@@ -76,7 +76,7 @@ export function LogsViewer() {
             <p className="text-sm text-ink/50 py-4 text-center">No logs available</p>
           ) : (
             <>
-              <div className="max-h-[400px] overflow-y-auto bg-ink/3 rounded-lg border border-ink/10 p-3 font-mono text-[11px] text-ink/75">
+              <div className="max-h-[400px] overflow-y-auto bg-ink/3 rounded-lg border border-ink/10 p-3 font-mono text-xs text-ink/75">
                 {displayLogs.map((line, i) => (
                   <div key={i} className="whitespace-pre-wrap break-words">
                     {line}

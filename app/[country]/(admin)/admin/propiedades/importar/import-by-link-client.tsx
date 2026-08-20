@@ -315,7 +315,7 @@ export function ImportByLinkClient({
                   {agencies.find((a) => a.slug === form.agencySlug)?.name ??
                     "Portales externos"}
                 </span>
-                <span className="ml-auto text-[10px] uppercase tracking-wider text-ink/45">
+                <span className="ml-auto crm-label-sm text-ink/45">
                   por defecto
                 </span>
               </div>

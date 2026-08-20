@@ -110,7 +110,7 @@ export function ClientsTable({
                 type="button"
                 onClick={() => setStatusFilter(tab.value)}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition",
                   statusFilter === tab.value
                     ? "bg-ink text-cream-50 shadow-sm"
                     : "text-ink/60 hover:text-ink",
@@ -125,7 +125,7 @@ export function ClientsTable({
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] font-medium text-ink/70 transition hover:border-gold/40 focus:border-gold/55 focus:outline-none"
+            className="appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-xs font-medium text-ink/70 transition hover:border-gold/40 focus:border-gold/55 focus:outline-none"
           >
             <option value="recent">{t("clientes.sort.recent")}</option>
             <option value="name">{t("clientes.sort.name")}</option>
@@ -139,7 +139,7 @@ export function ClientsTable({
       <div className="mt-5 flex-1 overflow-x-auto">
         <table className="w-full min-w-[900px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <tr className="crm-table-header text-ink/50">
               <th className="px-3 pb-2">{t("clientes.table.client")}</th>
               <th className="px-3 pb-2">{t("clientes.table.profile")}</th>
               <th className="px-3 pb-2">{t("clientes.table.operation")}</th>
@@ -177,7 +177,7 @@ export function ClientsTable({
       </div>
 
       {/* Pagination */}
-      <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gold/15 pt-4 text-[12px]">
+      <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gold/15 pt-4 text-xs">
         <p className="text-ink/55">
           {t("clientes.pagination.showing", {
             from: visibleFrom,
@@ -207,7 +207,7 @@ function ClientRow({
   return (
     <tr
       className={cn(
-        "cursor-pointer text-[13px] transition",
+        "cursor-pointer text-sm transition",
         selected
           ? "bg-cream-100/80 ring-2 ring-gold/40"
           : "bg-white/55 hover:bg-white/85",
@@ -216,17 +216,17 @@ function ClientRow({
     >
       <td className="rounded-l-xl px-3 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-[10px] font-medium text-cream-50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-cream-50">
             {client.avatarInitials}
           </span>
           <div className="min-w-0">
             <p className="truncate font-medium text-ink">{fullName}</p>
-            <p className="truncate text-[11px] text-ink/55">{client.email}</p>
+            <p className="truncate text-xs text-ink/55">{client.email}</p>
           </div>
         </div>
       </td>
       <td className="px-3 py-3">
-        <span className="rounded-md border border-ink/10 bg-cream-100/80 px-2.5 py-1 text-[11px] font-medium text-ink/75">
+        <span className="rounded-md border border-ink/10 bg-cream-100/80 px-2.5 py-1 text-xs font-medium text-ink/75">
           {t(PROFILE_KEYS[client.profileType])}
         </span>
       </td>
@@ -237,17 +237,17 @@ function ClientRow({
       </td>
       <td className="px-3 py-3 text-ink/75">
         <p>{client.preferredZone}</p>
-        <p className="text-[11px] text-ink/55">
+        <p className="text-xs text-ink/55">
           {t(`card.stay.${client.stayType === "corta" ? "short" : "long"}`)}
         </p>
       </td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">
+      <td className="px-3 py-3 text-xs text-ink/65">
         {client.lastAccessLabelKey
           ? t(client.lastAccessLabelKey, { time: client.lastAccessValue ?? "" })
           : (client.lastAccessText ?? "—")}
       </td>
       <td className="px-3 py-3">
-        <span className="flex items-center gap-1.5 text-[12px] text-ink/75">
+        <span className="flex items-center gap-1.5 text-xs text-ink/75">
           <span
             className={cn(
               "h-2 w-2 rounded-full",
@@ -262,7 +262,7 @@ function ClientRow({
         <Link
           href={`/admin/clientes/${client.id}`}
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+          className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
         >
           <span>{t("clientes.table.viewDetails")}</span>
           <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
@@ -322,7 +322,7 @@ function PageButton({
       type="button"
       {...rest}
       className={cn(
-        "flex h-7 min-w-7 items-center justify-center rounded-md px-2 text-[12px] font-medium transition",
+        "flex h-7 min-w-7 items-center justify-center rounded-md px-2 text-xs font-medium transition",
         active
           ? "bg-gold text-ink"
           : "border border-ink/10 bg-white/70 text-ink/65 hover:border-gold/40 hover:text-ink",

@@ -14,19 +14,19 @@ export function AgencyIdentityCard({ agency }: { agency: AgencyDetail }) {
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.25)] backdrop-blur-sm md:p-7">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr_auto] md:items-start">
         {/* Logo circle */}
-        <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-base font-medium tracking-[0.18em] text-cream-50 shadow-md md:h-32 md:w-32">
+        <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-ink text-base font-bold text-cream-50 shadow-md md:h-32 md:w-32">
           {agency.initials}
         </div>
 
         {/* Identity */}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-serif text-3xl font-medium leading-tight text-ink md:text-4xl">
+            <h1 className="crm-page-title text-ink">
               {agency.name}
             </h1>
             <span
               className={cn(
-                "rounded-full border px-3 py-0.5 text-[12px] font-medium",
+                "rounded-full border px-3 py-0.5 text-xs font-medium",
                 isActive
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-ink/15 bg-ink/5 text-ink/55",
@@ -56,7 +56,7 @@ export function AgencyIdentityCard({ agency }: { agency: AgencyDetail }) {
         </div>
 
         {/* Last update */}
-        <p className="flex items-center gap-1.5 text-[12px] text-ink/55 md:self-start md:pt-2">
+        <p className="flex items-center gap-1.5 text-xs text-ink/55 md:self-start md:pt-2">
           <RefreshCw size={13} strokeWidth={1.75} className="text-gold" />
           <span>{t("admin.lastUpdate.label")}</span>
           <span>{formatRelativeMinutes(agency.lastUpdateMinutes, t)}</span>

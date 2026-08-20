@@ -84,7 +84,7 @@ export function NotificationsBell() {
       >
         <Bell size={16} strokeWidth={1.75} />
         {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-semibold leading-none text-white">
             {count > 99 ? "99+" : count}
           </span>
         )}
@@ -97,7 +97,7 @@ export function NotificationsBell() {
             <span className="text-sm font-semibold text-ink">
               Notificaciones
             </span>
-            <span className="text-[11px] text-ink/45">
+            <span className="text-xs text-ink/45">
               {count > 0 ? `${count} nueva${count !== 1 ? "s" : ""}` : "Al día"}
             </span>
           </div>
@@ -127,14 +127,14 @@ export function NotificationsBell() {
                     >
                       {ICON_MAP[n.type]}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-semibold text-ink">
+                        <p className="truncate text-sm font-semibold text-ink">
                           {n.title}
                         </p>
-                        <p className="mt-0.5 line-clamp-2 text-[12px] text-ink/55">
+                        <p className="mt-0.5 line-clamp-2 text-xs text-ink/55">
                           {n.subtitle}
                         </p>
                       </div>
-                      <span className="shrink-0 text-[11px] text-ink/35">
+                      <span className="shrink-0 text-xs text-ink/35">
                         {timeAgo(n.created_at)}
                       </span>
                     </Link>

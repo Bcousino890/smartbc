@@ -201,7 +201,7 @@ export function PropertyVideoPanel({
       </div>
 
       {ffmpegMissing && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           <AlertCircle size={15} className="mt-0.5 shrink-0" />
           <span>
             {/* El motivo real (no está / no ejecutable / está fuera del PATH que
@@ -248,15 +248,15 @@ export function PropertyVideoPanel({
       </div>
 
       {loading ? (
-        <p className="flex items-center gap-2 text-[12px] text-ink/50">
+        <p className="flex items-center gap-2 text-xs text-ink/50">
           <Loader2 size={13} className="animate-spin" /> Calculando…
         </p>
       ) : estimate && !estimate.ok ? (
-        <p className="text-[12px] text-ink/60">{estimate.error}</p>
+        <p className="text-xs text-ink/60">{estimate.error}</p>
       ) : plan ? (
         <>
           {/* La estimación de peso, que es lo que hay que ver ANTES de generar. */}
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-4">
             <div>
               <dt className="text-ink/45">Fotos</dt>
               <dd className="font-medium text-ink">
@@ -280,7 +280,7 @@ export function PropertyVideoPanel({
             </div>
           </dl>
 
-          <p className="mt-2 flex items-start gap-1.5 text-[11px] text-ink/45">
+          <p className="mt-2 flex items-start gap-1.5 text-xs text-ink/45">
             <Info size={12} className="mt-0.5 shrink-0" />
             <span>
               Entre {plan.rangeLabel} según el detalle de las fotos; nunca más de{" "}
@@ -293,7 +293,7 @@ export function PropertyVideoPanel({
           </p>
 
           {plan.warnings.map((warning) => (
-            <p key={warning} className="mt-1.5 text-[11px] text-amber-700">
+            <p key={warning} className="mt-1.5 text-xs text-amber-700">
               ⚠ {warning}
             </p>
           ))}
@@ -303,7 +303,7 @@ export function PropertyVideoPanel({
               type="button"
               onClick={generate}
               disabled={running || !estimate?.ffmpegAvailable}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-cream-50 transition hover:bg-emerald-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-cream-50 transition hover:bg-emerald-700 disabled:opacity-50"
             >
               {running ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -324,7 +324,7 @@ export function PropertyVideoPanel({
             {(hasExistingVideo || job?.status === "done") && (
               <a
                 href={`${base}/download-video?format=${format}`}
-                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
               >
                 <Download size={13} className="text-gold-dark" />
                 Descargar vídeo
@@ -333,7 +333,7 @@ export function PropertyVideoPanel({
           </div>
 
           {running && (
-            <p className="mt-2 text-[11px] text-ink/50">
+            <p className="mt-2 text-xs text-ink/50">
               {job?.status === "processing"
                 ? `Renderizando en el servidor, tarda alrededor de ${plan.renderLabel}. `
                 : job?.queuePosition
@@ -347,7 +347,7 @@ export function PropertyVideoPanel({
       ) : null}
 
       {job?.status === "done" && (
-        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-800">
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
           <p className="font-semibold">
             Vídeo generado
             {job.sizeLabel ? ` · ${job.sizeLabel}` : ""}
@@ -361,14 +361,14 @@ export function PropertyVideoPanel({
       )}
 
       {job?.status === "error" && job.error && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[12px] text-red-700">
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
           <p className="font-semibold">No se pudo generar el vídeo</p>
           <p className="mt-0.5">{job.error}</p>
         </div>
       )}
 
       {error && (
-        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</p>
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
       )}
     </div>
   );

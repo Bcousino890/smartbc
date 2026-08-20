@@ -151,7 +151,7 @@ function PropertyPreviewCard({ refStr }: { refStr: string }) {
 
   if (loading) {
     return (
-      <div className="mt-1.5 flex h-14 w-64 items-center gap-2 rounded-lg border border-gold/15 bg-cream-50/70 px-3 text-[11px] text-ink/50">
+      <div className="mt-1.5 flex h-14 w-64 items-center gap-2 rounded-lg border border-gold/15 bg-cream-50/70 px-3 text-xs text-ink/50">
         <Loader2 size={12} strokeWidth={1.75} className="animate-spin text-gold" />
         <span>Cargando propiedad…</span>
       </div>
@@ -220,13 +220,13 @@ function PropertyPreviewCard({ refStr }: { refStr: string }) {
         {/* Reference + status */}
         <div className="flex items-center gap-1.5">
           {(data.bcReference ?? data.partReference) && (
-            <span className="font-mono text-[9px] font-semibold uppercase tracking-wider text-ink/40">
+            <span className="font-mono crm-label-sm text-ink/40">
               {data.bcReference ?? data.partReference}
             </span>
           )}
           <span
             className={cn(
-              "rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+              "rounded-full px-1.5 py-0.5 text-xs font-semibold",
               badgeColor,
             )}
           >
@@ -235,13 +235,13 @@ function PropertyPreviewCard({ refStr }: { refStr: string }) {
         </div>
 
         {/* Title */}
-        <p className="truncate text-[11px] font-semibold leading-tight text-ink">
+        <p className="truncate text-xs font-semibold leading-tight text-ink">
           {data.title}
         </p>
 
         {/* Zone + price */}
         {(data.zone || priceLabel) && (
-          <p className="truncate text-[10px] text-ink/55">
+          <p className="truncate text-xs text-ink/55">
             {[data.zone, priceLabel].filter(Boolean).join(" · ")}
           </p>
         )}
@@ -249,19 +249,19 @@ function PropertyPreviewCard({ refStr }: { refStr: string }) {
         {/* Beds / baths / m² */}
         <div className="mt-0.5 flex items-center gap-2">
           {data.bedrooms !== null && (
-            <span className="flex items-center gap-0.5 text-[10px] text-ink/50">
+            <span className="flex items-center gap-0.5 text-xs text-ink/50">
               <Bed size={10} strokeWidth={1.75} />
               {data.bedrooms}
             </span>
           )}
           {data.bathrooms !== null && (
-            <span className="flex items-center gap-0.5 text-[10px] text-ink/50">
+            <span className="flex items-center gap-0.5 text-xs text-ink/50">
               <Bath size={10} strokeWidth={1.75} />
               {data.bathrooms}
             </span>
           )}
           {data.squareMeters !== null && (
-            <span className="flex items-center gap-0.5 text-[10px] text-ink/50">
+            <span className="flex items-center gap-0.5 text-xs text-ink/50">
               <Maximize2 size={9} strokeWidth={1.75} />
               {data.squareMeters} m²
             </span>
@@ -316,7 +316,7 @@ function PropiedadDropdown({
 
   return (
     <div className="absolute bottom-full left-0 z-40 mb-1 w-72 overflow-hidden rounded-lg border border-gold/20 bg-cream-50 shadow-lg">
-      <p className="border-b border-gold/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink/40">
+      <p className="border-b border-gold/10 px-3 py-1.5 crm-label-sm text-ink/40">
         Propiedades recientes
       </p>
       <ul className="max-h-48 overflow-y-auto">
@@ -327,14 +327,14 @@ function PropiedadDropdown({
               className="flex w-full items-start gap-2 px-3 py-2 text-left transition hover:bg-gold/8"
               onClick={() => onSelect(p.bc_reference)}
             >
-              <span className="font-mono text-[10px] text-ink/45 mt-0.5">
+              <span className="font-mono text-xs text-ink/45 mt-0.5">
                 {p.bc_reference}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-medium text-ink">
+                <span className="block truncate text-xs font-medium text-ink">
                   {p.title}
                 </span>
-                <span className="text-[10px] text-ink/50">{p.zone}</span>
+                <span className="text-xs text-ink/50">{p.zone}</span>
               </span>
             </button>
           </li>
@@ -694,7 +694,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
         <aside className="flex flex-col overflow-hidden border-b border-gold/15 md:border-b-0 md:border-r">
           {/* Channels section header */}
           <div className="border-b border-gold/15 px-4 py-3">
-            <p className="font-serif text-sm font-semibold text-ink">Canales</p>
+            <p className="text-sm font-bold text-ink">Canales</p>
           </div>
           <ul className="py-2">
             {channels.map((ch) => {
@@ -724,7 +724,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
 
           {/* DMs section */}
           <div className="border-t border-gold/15 px-4 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink/40">
+            <p className="crm-label-sm text-ink/40">
               Mensajes Directos
             </p>
           </div>
@@ -757,7 +757,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                   >
                     <span
                       className={cn(
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-serif text-[10px] font-semibold",
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                         active
                           ? "bg-ink text-cream-50"
                           : "bg-gold/20 text-gold-dark"
@@ -767,7 +767,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                     </span>
                     <span className="flex-1 truncate">{conv.otherName}</span>
                     {conv.unreadCount > 0 && (
-                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-semibold text-ink">
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-xs font-semibold text-ink">
                         {conv.unreadCount}
                       </span>
                     )}
@@ -802,11 +802,11 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                       {activeChannel.emoji}
                     </span>
                     <div>
-                      <p className="font-serif text-base font-semibold text-ink">
+                      <p className="text-base font-bold text-ink">
                         #{activeChannel.name}
                       </p>
                       {activeChannel.description && (
-                        <p className="text-[11px] text-ink/55">
+                        <p className="text-xs text-ink/55">
                           {activeChannel.description}
                         </p>
                       )}
@@ -814,14 +814,14 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                   </>
                 ) : activeView.type === "dm" ? (
                   <>
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 font-serif text-sm font-semibold text-gold-dark">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 text-sm font-bold text-gold-dark">
                       {activeView.otherInitials}
                     </span>
                     <div>
-                      <p className="font-serif text-base font-semibold text-ink">
+                      <p className="text-base font-bold text-ink">
                         {activeView.otherName}
                       </p>
-                      <p className="text-[11px] text-ink/55">Mensaje directo</p>
+                      <p className="text-xs text-ink/55">Mensaje directo</p>
                     </div>
                   </>
                 ) : null}
@@ -894,7 +894,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
               </div>
 
               {error && (
-                <p className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+                <p className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                   {error}
                 </p>
               )}
@@ -926,7 +926,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                 <button
                   type="submit"
                   disabled={draft.trim().length === 0 || sending}
-                  className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {sending ? (
                     <Loader2
@@ -962,7 +962,7 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
           <div className="mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-gold/15 bg-cream-50 shadow-[0_25px_60px_-15px_rgba(40,28,10,0.30)]">
             {/* Modal header */}
             <div className="flex items-center justify-between border-b border-gold/15 px-5 py-4">
-              <p className="font-serif text-base font-semibold text-ink">
+              <p className="text-base font-bold text-ink">
                 Nuevo mensaje directo
               </p>
               <button
@@ -996,14 +996,14 @@ export function TeamChat({ currentUserId }: { currentUserId: string }) {
                     onClick={() => startDm(m)}
                     className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-gold/8"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold/20 font-serif text-sm font-semibold text-gold-dark">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold/20 text-sm font-bold text-gold-dark">
                       {m.initials}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold text-ink">
+                      <p className="truncate text-sm font-semibold text-ink">
                         {m.name}
                       </p>
-                      <p className="truncate text-[11px] text-ink/50">
+                      <p className="truncate text-xs text-ink/50">
                         {m.email}
                       </p>
                     </div>
@@ -1036,7 +1036,7 @@ function ChannelMessageRow({
       {showHeader ? (
         <span
           className={cn(
-            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-serif text-xs font-semibold",
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
             isOwn ? "bg-ink text-cream-50" : "bg-gold/20 text-gold-dark"
           )}
         >
@@ -1048,10 +1048,10 @@ function ChannelMessageRow({
       <div className="min-w-0 flex-1">
         {showHeader && (
           <div className="flex items-baseline gap-2">
-            <span className="text-[13px] font-semibold text-ink">
+            <span className="text-sm font-semibold text-ink">
               {msg.userName}
             </span>
-            <span className="text-[10px] text-ink/45">{time}</span>
+            <span className="text-xs text-ink/45">{time}</span>
           </div>
         )}
         <p className="break-words text-sm leading-relaxed text-ink/85">
@@ -1083,7 +1083,7 @@ function DmMessageRow({
       {showHeader ? (
         <span
           className={cn(
-            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-serif text-xs font-semibold",
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
             isOwn ? "bg-ink text-cream-50" : "bg-gold/20 text-gold-dark"
           )}
         >
@@ -1095,10 +1095,10 @@ function DmMessageRow({
       <div className="min-w-0 flex-1">
         {showHeader && (
           <div className="flex items-baseline gap-2">
-            <span className="text-[13px] font-semibold text-ink">
+            <span className="text-sm font-semibold text-ink">
               {msg.senderName}
             </span>
-            <span className="text-[10px] text-ink/45">{time}</span>
+            <span className="text-xs text-ink/45">{time}</span>
           </div>
         )}
         <p className="break-words text-sm leading-relaxed text-ink/85">

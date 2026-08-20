@@ -294,7 +294,7 @@ export function CaptacionesClient({
               onChange={(e) =>
                 setAssignSelection((prev) => ({ ...prev, [c.id]: e.target.value }))
               }
-              className="min-w-0 flex-1 rounded-md border border-ink/10 bg-white px-1.5 py-1 text-[11px] focus:border-gold/50 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-ink/10 bg-white px-1.5 py-1 text-xs focus:border-gold/50 focus:outline-none"
             >
               <option value="">Asignar a...</option>
               {assignableUsers.map((u) => (
@@ -308,7 +308,7 @@ export function CaptacionesClient({
               onClick={() => handleQuickAssign(c)}
               disabled={!assignSelection[c.id] || assigningId === c.id}
               title="Asignar ya para que llame"
-              className="flex items-center gap-1 rounded-md bg-ink px-2 py-1 text-[11px] font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-40"
+              className="flex items-center gap-1 rounded-md bg-ink px-2 py-1 text-xs font-medium text-cream-50 transition hover:bg-ink/90 disabled:opacity-40"
             >
               {assigningId === c.id ? (
                 <Loader2 size={11} className="animate-spin" />
@@ -324,7 +324,7 @@ export function CaptacionesClient({
             onClick={() => handleDelete(c)}
             disabled={deletingId === c.id}
             title="Eliminar captación"
-            className="flex items-center gap-1 text-[11px] text-ink/40 transition hover:text-red-600 disabled:opacity-40"
+            className="flex items-center gap-1 text-xs text-ink/40 transition hover:text-red-600 disabled:opacity-40"
           >
             {deletingId === c.id ? (
               <Loader2 size={11} className="animate-spin" />
@@ -498,7 +498,7 @@ export function CaptacionesClient({
           teléfono, etc. Los conteos son sobre el total; al activarlos se
           filtra lo que se ve abajo (se pueden combinar varios a la vez). */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="flex items-center gap-1 text-[11px] font-medium text-ink/40">
+        <span className="flex items-center gap-1 text-xs font-medium text-ink/40">
           <Filter size={11} />
           Filtros:
         </span>
@@ -517,7 +517,7 @@ export function CaptacionesClient({
                 })
               }
               className={cn(
-                "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                "rounded-full border px-2.5 py-1 text-xs font-medium transition",
                 isActive
                   ? "border-gold bg-gold/15 text-ink"
                   : "border-ink/10 bg-white text-ink/60 hover:border-ink/20"
@@ -530,7 +530,7 @@ export function CaptacionesClient({
         {activeDataFilters.size > 0 && (
           <button
             onClick={() => setActiveDataFilters(new Set())}
-            className="text-[11px] text-ink/40 underline hover:text-ink/60"
+            className="text-xs text-ink/40 underline hover:text-ink/60"
           >
             Limpiar
           </button>
@@ -569,7 +569,7 @@ export function CaptacionesClient({
                 <div className="mb-2 flex items-center gap-2 px-1">
                   <span className={cn("h-2 w-2 rounded-full", color.dot)} />
                   <h3 className="text-xs font-semibold text-ink/70">{stage.label}</h3>
-                  <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-[10px] font-medium text-ink/50">
+                  <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-xs font-medium text-ink/50">
                     {items.length}
                   </span>
                 </div>
@@ -596,7 +596,7 @@ export function CaptacionesClient({
                   )}
                 >
                   {items.length === 0 ? (
-                    <p className="py-4 text-center text-[11px] text-ink/30">
+                    <p className="py-4 text-center text-xs text-ink/30">
                       {isDragOver ? "Suelta aquí" : "Vacío"}
                     </p>
                   ) : (
@@ -636,11 +636,11 @@ export function CaptacionesClient({
                           <p className="text-xs font-semibold text-ink line-clamp-2 leading-snug">
                             {c.title || "Sin título"}
                           </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/55">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/55">
                             {c.operation && (
                               <span
                                 className={cn(
-                                  "rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
+                                  "rounded-full px-1.5 py-px text-xs font-semibold uppercase",
                                   c.operation === "arriendo"
                                     ? "bg-sky-100 text-sky-700"
                                     : "bg-amber-100 text-amber-700"
@@ -658,13 +658,13 @@ export function CaptacionesClient({
                             {c.price && <span className="font-semibold text-ink/75">{formatPrice(c)}</span>}
                           </div>
                           {c.owner_confirmed && (
-                            <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+                            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
                               <Check size={10} />
                               Dueño confirmado
                             </p>
                           )}
                           {c.assigned_to && stage.stage_type !== "draft" && (
-                            <p className="mt-1 flex items-center gap-1 text-[10px] text-ink/40">
+                            <p className="mt-1 flex items-center gap-1 text-xs text-ink/40">
                               <UserPlus size={9} />
                               {assignableUsers.find((u) => u.id === c.assigned_to)?.full_name ||
                                 "Asignada"}
@@ -708,7 +708,7 @@ export function CaptacionesClient({
                       {c.operation && (
                         <span
                           className={cn(
-                            "rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
+                            "rounded-full px-1.5 py-px text-xs font-semibold uppercase",
                             c.operation === "arriendo"
                               ? "bg-sky-100 text-sky-700"
                               : "bg-amber-100 text-amber-700"
@@ -732,10 +732,10 @@ export function CaptacionesClient({
                         </span>
                       )}
                       {c.scrape_status === "failed" && (
-                        <span className="text-red-600 text-[10px]">❌ Error scrape</span>
+                        <span className="text-red-600 text-xs">❌ Error scrape</span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-[10px] text-ink/40">
+                    <p className="mt-0.5 text-xs text-ink/40">
                       Hace {new Date(c.created_at).toLocaleDateString("es-CL")}
                     </p>
                   </div>
@@ -744,14 +744,14 @@ export function CaptacionesClient({
                 <div className="flex-shrink-0 text-right">
                   <div
                     className={cn(
-                      "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium",
+                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
                       color?.badge || "bg-gray-100 text-gray-700"
                     )}
                   >
                     {stage?.label || "Sin etapa"}
                   </div>
                   {c.owner_confirmed && (
-                    <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-emerald-600">
+                    <div className="mt-1 flex items-center justify-end gap-1 text-xs text-emerald-600">
                       <Check size={10} />
                       Dueño confirmado
                     </div>

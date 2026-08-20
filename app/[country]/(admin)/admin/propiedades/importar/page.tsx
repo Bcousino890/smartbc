@@ -33,7 +33,7 @@ export default async function AdminImportByLinkPage({
             <Link2 size={18} strokeWidth={1.75} />
           </div>
           <div>
-            <h2 className="font-serif text-xl font-medium text-ink">
+            <h2 className="crm-section-title text-ink">
               Importar propiedad por link
             </h2>
             <p className="mt-1 text-sm text-ink/60">

@@ -78,8 +78,8 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl border border-ink/10 bg-cream-50/60 px-4 py-3">
-      <div className="text-[11px] uppercase tracking-wide text-ink/50">{label}</div>
-      <div className="mt-1 font-serif text-lg font-semibold text-ink">{value}</div>
+      <div className="crm-label-sm text-ink/50">{label}</div>
+      <div className="crm-number mt-1 text-[22px] text-ink">{value}</div>
       {detail ? <div className="mt-0.5 text-xs text-ink/55">{detail}</div> : null}
     </div>
   );
@@ -136,7 +136,7 @@ export function ScraperStatusPanel() {
       <div className={`flex flex-wrap items-center gap-4 rounded-2xl border p-5 ${style.className}`}>
         <StateIcon size={32} />
         <div className="flex-1">
-          <div className="font-serif text-xl font-semibold">{style.label}</div>
+          <div className="crm-section-title">{style.label}</div>
           <div className="text-sm opacity-80">{style.hint}</div>
         </div>
         <button
@@ -169,7 +169,7 @@ export function ScraperStatusPanel() {
       {/* Cuota mensual */}
       <div className="rounded-2xl border border-ink/10 bg-cream-50/70 p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-serif text-base font-semibold text-ink">Cuota del mes</h3>
+          <h3 className="text-base font-bold text-ink">Cuota del mes</h3>
           <span
             className={`text-sm font-semibold ${
               overBudget ? "text-red-700" : nearBudget ? "text-amber-700" : "text-ink/70"
@@ -213,7 +213,7 @@ export function ScraperStatusPanel() {
 
       {/* Último run */}
       <div className="rounded-2xl border border-ink/10 bg-cream-50/70 p-5">
-        <h3 className="mb-3 font-serif text-base font-semibold text-ink">Última ejecución</h3>
+        <h3 className="mb-3 text-base font-bold text-ink">Última ejecución</h3>
         {status.last_run ? (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
@@ -268,7 +268,7 @@ export function ScraperStatusPanel() {
 
       {/* Workers */}
       <div className="rounded-2xl border border-ink/10 bg-cream-50/70 p-5">
-        <h3 className="mb-3 font-serif text-base font-semibold text-ink">Workers</h3>
+        <h3 className="mb-3 text-base font-bold text-ink">Workers</h3>
         {status.workers.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-ink/55">
             <CircleSlash size={16} />

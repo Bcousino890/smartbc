@@ -4,7 +4,7 @@ import { LoginForm } from "@/components/login-form";
 
 export default function LoginPage() {
   return (
-    <main className="relative min-h-screen overflow-y-auto md:h-screen md:overflow-hidden">
+    <main className="crm-root relative min-h-screen overflow-y-auto md:h-screen md:overflow-hidden">
       {/* Lobby photo background */}
       <Image
         src="/login-bg.jpg"

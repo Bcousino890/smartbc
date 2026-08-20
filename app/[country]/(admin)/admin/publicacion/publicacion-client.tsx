@@ -97,7 +97,7 @@ function ApiKeyModal({
       >
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h2 className="font-serif text-xl font-semibold text-ink">
+            <h2 className="crm-section-title text-ink">
               Clave API Idealista
             </h2>
             <p className="mt-0.5 text-sm text-ink/55">
@@ -119,7 +119,7 @@ function ApiKeyModal({
           </p>
         </div>
 
-        <label className="block text-xs font-semibold uppercase tracking-wider text-ink/50 mb-1.5">
+        <label className="block crm-label-sm text-ink/50 mb-1.5">
           API Key
         </label>
         <input
@@ -350,7 +350,7 @@ export function PublicacionClient({
               type="button"
               onClick={() => setSourceFilter(value)}
               className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition",
+                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 sourceFilter === value
                   ? "border-ink bg-ink text-cream-50"
                   : "border-ink/10 bg-white/85 text-ink/65 hover:border-ink/25 hover:text-ink",
@@ -362,7 +362,7 @@ export function PublicacionClient({
               {value === "unknown" && <AlertTriangle size={11} strokeWidth={1.75} />}
               {label}
               <span className={cn(
-                "rounded-full px-1.5 py-0.5 text-[10px]",
+                "rounded-full px-1.5 py-0.5 text-xs",
                 sourceFilter === value ? "bg-white/20 text-white" : "bg-ink/8 text-ink/55"
               )}>
                 {count}
@@ -370,7 +370,7 @@ export function PublicacionClient({
             </button>
           ))}
           {sourceFilter !== "own" && (
-            <span className="flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700">
+            <span className="flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
               <AlertTriangle size={11} strokeWidth={1.75} />
               Solo publica propiedades &quot;Propias BC&quot;
             </span>
@@ -393,7 +393,7 @@ export function PublicacionClient({
           <select
             value={operation}
             onChange={(e) => setOperation(e.target.value as typeof operation)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Todas las operaciones</option>
             <option value="rent">Alquiler</option>
@@ -405,7 +405,7 @@ export function PublicacionClient({
             type="button"
             onClick={() => setShowApiKeyModal(true)}
             className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px] transition",
+              "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition",
               apiKey
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                 : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
@@ -420,7 +420,7 @@ export function PublicacionClient({
               type="button"
               onClick={publishSelected}
               disabled={isBulkPublishing}
-              className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
             >
               {isBulkPublishing ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -434,7 +434,7 @@ export function PublicacionClient({
           {bulkMessage && (
             <span
               className={cn(
-                "rounded-lg px-3 py-2 text-[11px] font-medium",
+                "rounded-lg px-3 py-2 text-xs font-medium",
                 bulkMessage.type === "success"
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-red-100 text-red-700",
@@ -444,7 +444,7 @@ export function PublicacionClient({
             </span>
           )}
 
-          <span className="ml-auto text-[11px] text-ink/55">
+          <span className="ml-auto text-xs text-ink/55">
             {filtered.length} propiedades
             {selected.size > 0 && ` · ${selected.size} seleccionadas`}
           </span>
@@ -454,7 +454,7 @@ export function PublicacionClient({
         <div className="mt-5 overflow-x-auto">
           <table className="w-full min-w-[780px] border-separate border-spacing-y-1.5 text-left text-sm">
             <thead>
-              <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+              <tr className="crm-table-header text-ink/50">
                 <th className="px-3 pb-2">
                   <input
                     type="checkbox"
@@ -512,12 +512,12 @@ export function PublicacionClient({
                           <p className="truncate font-medium text-ink max-w-[220px]">
                             {p.title}
                           </p>
-                          <p className="text-[11px] text-ink/55">{p.zone ?? "—"}</p>
+                          <p className="text-xs text-ink/55">{p.zone ?? "—"}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <span className="rounded-md border border-ink/10 px-2 py-0.5 text-[11px] font-medium text-ink/70">
+                      <span className="rounded-md border border-ink/10 px-2 py-0.5 text-xs font-medium text-ink/70">
                         {p.operation === "rent" ? "Alquiler" : "Venta"}
                       </span>
                     </td>
@@ -526,25 +526,25 @@ export function PublicacionClient({
                         ? `${formatPrice(Number(p.price))}${p.operation === "rent" ? "/mes" : ""}`
                         : "—"}
                     </td>
-                    <td className="px-3 py-3 text-[12px] text-ink/60">
+                    <td className="px-3 py-3 text-xs text-ink/60">
                       <div className="flex flex-col gap-1">
                         <span>{p.bc_reference ?? p.external_id ?? "—"}</span>
                         <span className={cn(
-                          "inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                          "inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-xs font-medium",
                           SOURCE_STYLE[getSource(p)]
                         )}>
                           {SOURCE_LABEL[getSource(p)]}
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-[12px] text-ink/60">
+                    <td className="px-3 py-3 text-xs text-ink/60">
                       {DATE_FMT.format(new Date(p.created_at))}
                     </td>
                     <td className="rounded-r-xl px-3 py-3 text-right">
                       <button
                         type="button"
                         onClick={() => setEditingIdealistaProperty(p)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold-dark transition hover:bg-gold/20"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs font-medium text-gold-dark transition hover:bg-gold/20"
                       >
                         <ImagePlus size={12} strokeWidth={1.75} />
                         Preparar Idealista
@@ -564,7 +564,7 @@ export function PublicacionClient({
         </div>
 
         {/* Info API */}
-        <div className="mt-4 rounded-xl border border-ink/8 bg-white/50 px-4 py-3 text-[12px] text-ink/55">
+        <div className="mt-4 rounded-xl border border-ink/8 bg-white/50 px-4 py-3 text-xs text-ink/55">
           <span className="font-semibold text-ink/70">Volcado a Idealista: </span>
           Las propiedades se envían mediante la API de importación masiva de Idealista.
           Necesitas la clave API que Idealista te entrega como cliente profesional.{" "}

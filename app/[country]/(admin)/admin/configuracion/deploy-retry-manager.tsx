@@ -123,19 +123,19 @@ export function DeployRetryManager() {
 
       {tail && (
         <div className="mt-4">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-ink/50">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink/50">
             {tail.includes("[ok] reintento completado") ? (
               <CheckCircle2 size={13} className="text-emerald-600" />
             ) : null}
             <span>Últimas líneas del log</span>
           </div>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink p-3 text-[11px] leading-relaxed text-cream-50/90">
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink p-3 text-xs leading-relaxed text-cream-50/90">
             {tail}
           </pre>
         </div>
       )}
 
-      <p className="mt-4 text-[11px] text-ink/55">
+      <p className="mt-4 text-xs text-ink/55">
         ⚠️ Solo tiene efecto una vez que este mismo botón ya llegó a
         producción una primera vez (es parte del código de la app: si el
         build sigue roto, primero hay que destrabarlo por SSH).

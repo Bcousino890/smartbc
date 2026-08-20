@@ -68,7 +68,7 @@ export function CreateItineraryDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
-          <h3 className="font-serif text-lg font-semibold text-ink">
+          <h3 className="crm-section-title text-ink">
             Crear itinerario
           </h3>
           <button
@@ -83,7 +83,7 @@ export function CreateItineraryDialog({
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           <label className="block">
-            <span className="text-[11px] font-medium text-ink/55">Título</span>
+            <span className="text-xs font-medium text-ink/55">Título</span>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -91,14 +91,14 @@ export function CreateItineraryDialog({
               placeholder="Visitas del lunes"
               className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             />
-            <span className="mt-1 block text-[10px] text-ink/45">
+            <span className="mt-1 block text-xs text-ink/45">
               El cliente verá este título en la colección.
             </span>
           </label>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
             <label className="col-span-3 sm:col-span-1">
-              <span className="text-[11px] font-medium text-ink/55">Fecha</span>
+              <span className="text-xs font-medium text-ink/55">Fecha</span>
               <input
                 type="date"
                 value={date}
@@ -107,7 +107,7 @@ export function CreateItineraryDialog({
               />
             </label>
             <label>
-              <span className="text-[11px] font-medium text-ink/55">Desde</span>
+              <span className="text-xs font-medium text-ink/55">Desde</span>
               <input
                 type="time"
                 value={from}
@@ -116,7 +116,7 @@ export function CreateItineraryDialog({
               />
             </label>
             <label>
-              <span className="text-[11px] font-medium text-ink/55">Hasta</span>
+              <span className="text-xs font-medium text-ink/55">Hasta</span>
               <input
                 type="time"
                 value={to}
@@ -125,12 +125,12 @@ export function CreateItineraryDialog({
               />
             </label>
           </div>
-          <p className="mt-1.5 text-[10px] text-ink/45">
+          <p className="mt-1.5 text-xs text-ink/45">
             Puedes dejar la fecha vacía y guardarlo como borrador.
           </p>
 
           <label className="mt-4 block">
-            <span className="text-[11px] font-medium text-ink/55">
+            <span className="text-xs font-medium text-ink/55">
               Idioma de la colección
             </span>
             <select
@@ -145,7 +145,7 @@ export function CreateItineraryDialog({
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-[10px] text-ink/45">
+            <span className="mt-1 block text-xs text-ink/45">
               El enlace que verá el cliente se sirve en este idioma.
               {TRANSLATION_REVIEW_REQUIRED.has(language as never) && (
                 <span className="mt-0.5 block text-amber-700">
@@ -157,7 +157,7 @@ export function CreateItineraryDialog({
           </label>
 
           <div className="mt-5">
-            <p className="text-[11px] font-medium text-ink/55">
+            <p className="text-xs font-medium text-ink/55">
               Propiedades ({chosen.size})
             </p>
             <ul className="mt-2 space-y-1.5">
@@ -177,10 +177,10 @@ export function CreateItineraryDialog({
                       }
                       className="h-3.5 w-3.5 accent-[#a8814a]"
                     />
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-ink">
+                    <span className="min-w-0 flex-1 truncate text-xs text-ink">
                       {sel.property.title}
                     </span>
-                    <span className="shrink-0 text-[11px] text-ink/55">
+                    <span className="shrink-0 text-xs text-ink/55">
                       {config.formatPrice(
                         sel.property.price,
                         sel.property.currency,
@@ -188,7 +188,7 @@ export function CreateItineraryDialog({
                       )}
                     </span>
                     {sel.badges.inItinerary && (
-                      <span className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-700">
+                      <span className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                         Ya en otro
                       </span>
                     )}
@@ -197,7 +197,7 @@ export function CreateItineraryDialog({
               ))}
             </ul>
             {chosen.size > 0 && (
-              <p className="mt-2 text-[11px] text-ink/50">
+              <p className="mt-2 text-xs text-ink/50">
                 ~{Math.floor(totalMinutes / 60)} h {totalMinutes % 60} min
                 estimadas
               </p>
@@ -205,7 +205,7 @@ export function CreateItineraryDialog({
           </div>
 
           {error && (
-            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {error}
             </p>
           )}
@@ -215,7 +215,7 @@ export function CreateItineraryDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/70 transition hover:border-ink/30"
+            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/70 transition hover:border-ink/30"
           >
             Cancelar
           </button>
@@ -223,7 +223,7 @@ export function CreateItineraryDialog({
             type="button"
             onClick={submit}
             disabled={pending}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {pending && <Loader2 size={13} className="animate-spin" />}
             Crear borrador

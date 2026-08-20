@@ -30,7 +30,7 @@ export function CopyLinkButton({
       type="button"
       onClick={copy}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition",
+        "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
         copied
           ? "border-emerald-300 bg-emerald-50 text-emerald-700"
           : "border-ink/15 bg-white text-ink/75 hover:border-gold/55 hover:text-ink",

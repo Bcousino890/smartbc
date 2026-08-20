@@ -56,7 +56,7 @@ export function IdealistaStatusModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gold/10 px-6 py-4">
           <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wide text-ink/50">Historial de estados</p>
+            <p className="crm-label-sm text-ink/50">Historial de estados</p>
             <h2 className="truncate text-lg font-semibold text-ink">{title}</h2>
           </div>
           <button

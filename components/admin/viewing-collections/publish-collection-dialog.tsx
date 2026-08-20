@@ -65,7 +65,7 @@ export function PublishCollectionDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
-          <h3 className="font-serif text-lg font-semibold text-ink">
+          <h3 className="crm-section-title text-ink">
             {result ? "Colección publicada" : "Publicar colección"}
           </h3>
           <button
@@ -80,16 +80,16 @@ export function PublishCollectionDialog({
 
         {result ? (
           <div className="px-5 py-5">
-            <p className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
+            <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
               <Check size={15} strokeWidth={2.5} />
               Enlace privado generado
             </p>
 
-            <p className="mt-3 break-all rounded-lg border border-ink/10 bg-white px-3 py-2 font-mono text-[11px] text-ink/75">
+            <p className="mt-3 break-all rounded-lg border border-ink/10 bg-white px-3 py-2 font-mono text-xs text-ink/75">
               {result.url}
             </p>
 
-            <p className="mt-2 text-[11px] text-ink/55">
+            <p className="mt-2 text-xs text-ink/55">
               Caduca el{" "}
               {new Date(result.expiresAt).toLocaleDateString("es-ES", {
                 day: "2-digit",
@@ -106,7 +106,7 @@ export function PublishCollectionDialog({
                 href={result.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55"
               >
                 <ExternalLink size={11} strokeWidth={1.75} className="text-gold-dark" />
                 Abrir
@@ -115,13 +115,13 @@ export function PublishCollectionDialog({
                 href={`https://wa.me/?text=${encodeURIComponent(result.url)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
               >
                 WhatsApp
               </a>
             </div>
 
-            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-800">
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800">
               Los cambios que hagas a partir de ahora son visibles al instante
               para el cliente.
             </p>
@@ -156,7 +156,7 @@ export function PublishCollectionDialog({
                   {itinerary.readiness.warnings.map((w, i) => (
                     <p
                       key={i}
-                      className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-800"
+                      className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800"
                     >
                       <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                       {w.kind === "overlaps" && `${w.count} solape(s) de horario.`}
@@ -173,20 +173,20 @@ export function PublishCollectionDialog({
                 href={`/v/preview/${itinerary.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1 flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+                className="mt-1 flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
               >
                 <Eye size={12} strokeWidth={1.75} className="text-gold-dark" />
                 Previsualizar como lo verá el cliente
               </a>
 
               <label className="block pt-1">
-                <span className="text-[11px] font-medium text-ink/55">
+                <span className="text-xs font-medium text-ink/55">
                   Caducidad
                 </span>
                 <select
                   value={days}
                   onChange={(e) => setDays(Number(e.target.value))}
-                  className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-2 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
                 >
                   {[30, 60, 90, 180].map((d) => (
                     <option key={d} value={d}>
@@ -197,7 +197,7 @@ export function PublishCollectionDialog({
               </label>
 
               {error && (
-                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                   {error}
                 </p>
               )}
@@ -207,7 +207,7 @@ export function PublishCollectionDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/70 transition hover:border-ink/30"
+                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/70 transition hover:border-ink/30"
               >
                 Cancelar
               </button>
@@ -215,7 +215,7 @@ export function PublishCollectionDialog({
                 type="button"
                 onClick={publish}
                 disabled={pending}
-                className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
               >
                 {pending ? (
                   <Loader2 size={13} className="animate-spin" />
@@ -242,7 +242,7 @@ function Row({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-[12px]">
+    <div className="flex items-center justify-between gap-3 text-xs">
       <span className="flex items-center gap-1.5 text-ink/60">
         <Check
           size={12}

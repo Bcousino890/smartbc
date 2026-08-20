@@ -87,13 +87,13 @@ export default async function AdminPropiedadesPage({
 
       <div className="mt-6 flex items-center justify-end gap-3">
         {showArchived && (
-          <span className="text-[12px] text-ink/55">
+          <span className="text-xs text-ink/55">
             Mostrando también propiedades archivadas
           </span>
         )}
         <a
           href={showArchived ? "?archivadas=0" : "?archivadas=1"}
-          className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+          className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
         >
           {showArchived ? "Ocultar archivadas" : "Ver archivadas"}
         </a>

@@ -35,17 +35,17 @@ export function ParticularesScraperSection({ config }: { config: IdealistaScrape
 
       {open && (
         <div className="border-t border-ink/10 px-4 py-5">
-          <h3 className="font-serif text-base font-semibold text-ink">Idealista</h3>
+          <h3 className="text-base font-bold text-ink">Idealista</h3>
           <div className="mt-3 space-y-8">
             <section>
-              <h4 className="mb-3 font-serif text-sm font-semibold text-ink/80">Estado</h4>
+              <h4 className="mb-3 text-sm font-bold text-ink/80">Estado</h4>
               <ScraperStatusPanel />
             </section>
             <section>
-              <h4 className="font-serif text-sm font-semibold text-ink/80">Configuración</h4>
+              <h4 className="text-sm font-bold text-ink/80">Configuración</h4>
               <p className="mb-4 mt-1 max-w-3xl text-xs text-ink/55">
                 Estos valores no están escritos en el código del scraper: el proveedor los lee en{" "}
-                <code className="rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[11px]">
+                <code className="rounded bg-ink/5 px-1.5 py-0.5 font-mono text-xs">
                   GET /api/v1/idealista/config
                 </code>{" "}
                 y los aplica en su siguiente consulta.
@@ -55,7 +55,7 @@ export function ParticularesScraperSection({ config }: { config: IdealistaScrape
           </div>
 
           <div className="mt-10 border-t border-ink/10 pt-6">
-            <h3 className="font-serif text-base font-semibold text-ink">Fotocasa</h3>
+            <h3 className="text-base font-bold text-ink">Fotocasa</h3>
             <p className="mb-4 mt-1 max-w-3xl text-xs text-ink/55">
               Fotocasa no se recorre de una vez: su buscador no deja paginar hasta el final, así que
               &quot;todo Madrid&quot; nunca llega a cubrirse entero. Se va zona por zona, y así cada

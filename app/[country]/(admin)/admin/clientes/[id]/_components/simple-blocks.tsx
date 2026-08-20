@@ -109,7 +109,7 @@ export function FavoritesBlock({
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <Heart size={12} strokeWidth={1.75} className="shrink-0 text-gold" />
-                  <span className="truncate text-[12.5px] text-ink">
+                  <span className="truncate text-xs text-ink">
                     {fav.title ?? "—"}
                   </span>
                 </span>
@@ -123,7 +123,7 @@ export function FavoritesBlock({
                   {fav.slug && (
                     <Link
                       href={`${config.prefix}/propiedades/${fav.slug}`}
-                      className="text-[11px] font-medium text-gold-dark hover:underline"
+                      className="text-xs font-medium text-gold-dark hover:underline"
                     >
                       {t("clientes.ficha.favorites.viewProperty")}
                     </Link>
@@ -136,7 +136,7 @@ export function FavoritesBlock({
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="mt-2 w-full text-[11.5px] font-medium text-ink/50 transition hover:text-ink"
+              className="mt-2 w-full text-xs font-medium text-ink/50 transition hover:text-ink"
             >
               {showAll
                 ? t("cc.showLess")
@@ -179,16 +179,16 @@ export function VisitsBlock({
                     {v.propertySlug ? (
                       <Link
                         href={`${config.prefix}/propiedades/${v.propertySlug}`}
-                        className="block truncate text-[12.5px] text-ink hover:underline"
+                        className="block truncate text-xs text-ink hover:underline"
                       >
                         {v.propertyTitle ?? "—"}
                       </Link>
                     ) : (
-                      <span className="block truncate text-[12.5px] text-ink">
+                      <span className="block truncate text-xs text-ink">
                         {v.propertyTitle ?? "—"}
                       </span>
                     )}
-                    <span className="block text-[10.5px] text-ink/40">
+                    <span className="block text-xs text-ink/40">
                       {formatDate(v.requested_at, config.locale)}
                     </span>
                   </span>
@@ -203,7 +203,7 @@ export function VisitsBlock({
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="mt-2 w-full text-[11.5px] font-medium text-ink/50 transition hover:text-ink"
+              className="mt-2 w-full text-xs font-medium text-ink/50 transition hover:text-ink"
             >
               {showAll
                 ? t("cc.showLess")

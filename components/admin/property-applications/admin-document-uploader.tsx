@@ -136,7 +136,7 @@ export function AdminDocumentUploader({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Upload size={13} className="text-ink/40" />
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+          <p className="crm-label-sm text-ink/50">
             Añadir documentos (en nombre del cliente)
           </p>
         </div>
@@ -150,8 +150,8 @@ export function AdminDocumentUploader({
               onClick={() => setSelectedCountry(c)}
               className={
                 selectedCountry === c
-                  ? "rounded-md bg-ink px-2.5 py-1 text-[11px] font-medium text-cream-50 shadow-sm"
-                  : "rounded-md px-2.5 py-1 text-[11px] text-ink/55 transition hover:text-ink"
+                  ? "rounded-md bg-ink px-2.5 py-1 text-xs font-medium text-cream-50 shadow-sm"
+                  : "rounded-md px-2.5 py-1 text-xs text-ink/55 transition hover:text-ink"
               }
             >
               {COUNTRY_LABEL[c]}
@@ -161,7 +161,7 @@ export function AdminDocumentUploader({
       </div>
 
       {isForeignCountry && (
-        <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+        <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
           <Globe size={12} className="mt-0.5 shrink-0" />
           Documentación de {COUNTRY_LABEL[selectedCountry]} para una solicitud de {COUNTRY_LABEL[country]}:
           la IA detecta la moneda del documento y convierte los importes automáticamente
@@ -206,7 +206,7 @@ export function AdminDocumentUploader({
 
       {uploadedTypes.length > 0 && (
         <div className="mt-3 border-t border-ink/5 pt-3">
-          <p className="mb-2 text-[11px] text-ink/40">Subir nueva versión de un documento existente:</p>
+          <p className="mb-2 text-xs text-ink/40">Subir nueva versión de un documento existente:</p>
           <div className="flex flex-wrap gap-2">
             {uploadedTypes.map((t) => renderUploadButton(t, true))}
           </div>

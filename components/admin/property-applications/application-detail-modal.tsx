@@ -205,7 +205,7 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4">
           <div className="min-w-0">
-            <h2 className="font-serif text-lg text-ink">
+            <h2 className="crm-section-title text-ink">
               Solicitud de {opLabel} {countryFlag}
             </h2>
             {application && (
@@ -226,7 +226,7 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <span className="text-[11px] tabular-nums text-ink/40">
+                <span className="text-xs tabular-nums text-ink/40">
                   {navPosition.index + 1}/{navPosition.total}
                 </span>
                 <button
@@ -319,7 +319,7 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
                     <button
                       onClick={handleRecalculate}
                       disabled={actionLoading}
-                      className="flex items-center gap-1 text-[11px] font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
+                      className="flex items-center gap-1 text-xs font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
                     >
                       <Sparkles size={11} />
                       {actionLoading ? "Recalculando..." : "Recalcular score y conversiones"}
@@ -361,7 +361,7 @@ export function ApplicationDetailModal({ applicationId, onClose, onUpdated, onNa
                     Documentos ({verifiedCount}/{docs.length} verificados)
                   </h3>
                   {allVerified && (
-                    <span className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+                    <span className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
                       <CheckCircle size={11} />
                       Todo verificado
                     </span>

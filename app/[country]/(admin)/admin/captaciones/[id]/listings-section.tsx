@@ -67,8 +67,8 @@ function OperationBadge({ operation }: { operation: Listing["operation"] }) {
     <span
       className={
         operation === "arriendo"
-          ? "rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700"
-          : "rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700"
+          ? "rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold uppercase text-sky-700"
+          : "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700"
       }
     >
       {operation === "arriendo" ? "Arriendo" : "Venta"}
@@ -271,7 +271,7 @@ export function ListingsSection({
                       </button>
                       <OperationBadge operation={listing.operation} />
                       {listing.external_reference && (
-                        <span className="rounded-full bg-ink/6 px-2 py-0.5 text-[10px] font-medium text-ink/60">
+                        <span className="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink/60">
                           {listing.external_reference}
                         </span>
                       )}
@@ -319,7 +319,7 @@ export function ListingsSection({
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 flex items-center gap-3 flex-wrap text-[11px] text-ink/45">
+                    <div className="mt-1 flex items-center gap-3 flex-wrap text-xs text-ink/45">
                       {location && (
                         <span className="flex items-center gap-1">
                           <MapPin size={10} />
@@ -334,7 +334,7 @@ export function ListingsSection({
 
                     {/* Historial de precios (trazabilidad) */}
                     {(listing.prices?.length ?? 0) > 1 && (
-                      <p className="mt-1.5 text-[11px] text-ink/45">
+                      <p className="mt-1.5 text-xs text-ink/45">
                         Historial:{" "}
                         {listing.prices
                           .map(
@@ -494,7 +494,7 @@ function ListingFicha({
               </h3>
               <OperationBadge operation={listing.operation} />
               {listing.external_reference && (
-                <span className="flex items-center gap-1 rounded-full bg-ink/6 px-2 py-0.5 text-[10px] font-medium text-ink/60">
+                <span className="flex items-center gap-1 rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink/60">
                   <Tag size={10} />
                   {listing.external_reference}
                 </span>
@@ -503,7 +503,7 @@ function ListingFicha({
             {listing.title && (
               <p className="mt-1 text-sm text-ink/60">{listing.title}</p>
             )}
-            <div className="mt-1.5 flex items-center gap-3 flex-wrap text-[11px] text-ink/45">
+            <div className="mt-1.5 flex items-center gap-3 flex-wrap text-xs text-ink/45">
               {listing.portal_publication_number && (
                 <span>Publicación #{listing.portal_publication_number}</span>
               )}
@@ -738,7 +738,7 @@ function ListingFicha({
 function FichaRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] text-ink/50 uppercase tracking-wide">{label}</p>
+      <p className="text-xs text-ink/50 uppercase tracking-wide">{label}</p>
       <p className="mt-0.5 text-sm font-medium text-ink">{children}</p>
     </div>
   );

@@ -154,7 +154,7 @@ export function InboxShell({
       {/* ── Encabezado: cifras reales, no adornos ── */}
       <header className="relative shrink-0 border-b border-ink/10 bg-cream-50/70 px-4 pt-3 lg:px-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="font-serif text-[20px] text-ink">{t("inbox.title")}</h1>
+          <h1 className="crm-page-title text-ink">{t("inbox.title")}</h1>
           <div className="flex items-center gap-2">
             <label className="flex w-full max-w-[240px] items-center gap-2 rounded-md border border-ink/12 bg-white px-2.5 py-1.5 focus-within:border-gold/55 sm:max-w-xs">
               <Search size={13} strokeWidth={1.9} className="shrink-0 text-ink/40" />
@@ -164,7 +164,7 @@ export function InboxShell({
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("inbox.searchPlaceholder")}
                 aria-label={t("inbox.searchPlaceholder")}
-                className="w-full bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink/35"
+                className="crm-input w-full bg-transparent text-ink outline-none placeholder:text-ink/35"
               />
               {search && (
                 <button
@@ -188,7 +188,7 @@ export function InboxShell({
                   onClick={() => setParams({ group: g === "none" ? null : g })}
                   aria-pressed={grouping === g}
                   className={cn(
-                    "whitespace-nowrap rounded px-2 py-1 text-[11px] font-medium transition",
+                    "whitespace-nowrap rounded px-2 py-1 text-xs font-medium transition",
                     grouping === g ? "bg-ink text-cream-50" : "text-ink/50 hover:text-ink",
                   )}
                 >
@@ -204,7 +204,7 @@ export function InboxShell({
               <SlidersHorizontal size={12} strokeWidth={1.9} />
               {t("inbox.filters")}
               {activeFilters > 0 && (
-                <span className="rounded bg-gold/20 px-1 text-[10px] font-semibold text-gold-dark">
+                <span className="rounded bg-gold/20 px-1 text-xs font-semibold text-gold-dark">
                   {activeFilters}
                 </span>
               )}
@@ -230,7 +230,7 @@ export function InboxShell({
                 aria-selected={on}
                 onClick={() => setParams({ view: v === "needs-attention" ? null : v })}
                 className={cn(
-                  "relative shrink-0 px-2.5 py-2 text-[12px] font-medium transition-colors sm:px-3",
+                  "relative shrink-0 px-2.5 py-2 text-xs font-medium transition-colors sm:px-3",
                   on ? "text-ink" : "text-ink/45 hover:text-ink/75",
                 )}
               >
@@ -238,7 +238,7 @@ export function InboxShell({
                 {n > 0 && (
                   <span
                     className={cn(
-                      "ms-1.5 rounded px-1 py-px text-[10px] font-semibold tabular-nums",
+                      "ms-1.5 rounded px-1 py-px text-xs font-semibold tabular-nums",
                       on
                         ? v === "needs-attention"
                           ? "bg-rose-100 text-rose-700"
@@ -271,7 +271,7 @@ export function InboxShell({
               value={params?.get("state") ?? ""}
               onChange={(e) => setParams({ state: e.target.value || null })}
               aria-label={t("inbox.filter.state")}
-              className="w-auto py-1 text-[11.5px]"
+              className="w-auto py-1 text-xs"
             >
               <option value="">{t("inbox.filter.state")}</option>
               {COMMERCIAL_STATES.map((s: CommercialState) => (
@@ -284,7 +284,7 @@ export function InboxShell({
               value={params?.get("assigned") ?? ""}
               onChange={(e) => setParams({ assigned: e.target.value || null })}
               aria-label={t("inbox.assign.label")}
-              className="w-auto py-1 text-[11.5px]"
+              className="w-auto py-1 text-xs"
             >
               <option value="">{t("inbox.filter.anyAgent")}</option>
               <option value="me">{t("inbox.filter.mine")}</option>
@@ -299,7 +299,7 @@ export function InboxShell({
               value={params?.get("type") ?? ""}
               onChange={(e) => setParams({ type: e.target.value || null })}
               aria-label={t("inbox.filter.type")}
-              className="w-auto py-1 text-[11.5px]"
+              className="w-auto py-1 text-xs"
             >
               <option value="">{t("inbox.filter.type")}</option>
               {["particular", "agencia", "relocation"].map((x) => (
@@ -324,7 +324,7 @@ export function InboxShell({
               value={params?.get("sort") ?? ""}
               onChange={(e) => setParams({ sort: e.target.value || null })}
               aria-label={t("inbox.sort.label")}
-              className="ms-auto w-auto py-1 text-[11.5px]"
+              className="ms-auto w-auto py-1 text-xs"
             >
               <option value="">{t("inbox.sort.default")}</option>
               {(["newest", "oldest", "activity", "due"] as InboxSort[]).map((s) => (
@@ -359,14 +359,14 @@ export function InboxShell({
                 aria-label={t("inbox.bulk.selectAll")}
                 className="h-3.5 w-3.5 accent-[#8a6d3b]"
               />
-              <span className="text-[11px] text-ink/45">
+              <span className="text-xs text-ink/45">
                 {selected.size > 0
                   ? t("inbox.bulk.selected", { count: selected.size })
                   : grouping === "property"
                     ? tn("inbox.resultsGrouped", total)
                     : tn("inbox.results", total)}
               </span>
-              {pending && <span className="ms-auto text-[10.5px] text-ink/35">…</span>}
+              {pending && <span className="ms-auto text-xs text-ink/35">…</span>}
             </div>
           )}
 
@@ -440,7 +440,7 @@ export function InboxShell({
               >
                 <ChevronLeft size={12} />
               </Button>
-              <span className="text-[11px] tabular-nums text-ink/45">
+              <span className="text-xs tabular-nums text-ink/45">
                 {t("inbox.pageOf", { page, total: totalPages })}
               </span>
               <Button
@@ -466,7 +466,7 @@ export function InboxShell({
               <button
                 type="button"
                 onClick={() => setParams({ lead: null }, { keepLead: false })}
-                className="flex w-full items-center gap-1.5 border-b border-ink/10 px-4 py-2 text-[12px] text-ink/60 lg:hidden"
+                className="flex w-full items-center gap-1.5 border-b border-ink/10 px-4 py-2 text-xs text-ink/60 lg:hidden"
               >
                 <ArrowLeft size={14} strokeWidth={1.9} />
                 {t("inbox.backToList")}
@@ -480,7 +480,7 @@ export function InboxShell({
             </>
           ) : (
             <div className="flex h-full items-center justify-center p-8">
-              <p className="max-w-xs text-center text-[12.5px] text-ink/35">
+              <p className="max-w-xs text-center text-xs text-ink/35">
                 {t("inbox.pickOne")}
               </p>
             </div>
@@ -518,7 +518,7 @@ function FilterToggle({
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "rounded-md border px-2.5 py-1 text-[11.5px] font-medium transition",
+        "rounded-md border px-2.5 py-1 text-xs font-medium transition",
         on
           ? "border-gold/50 bg-gold/10 text-gold-dark"
           : "border-ink/12 bg-white text-ink/55 hover:border-gold/40",
@@ -564,7 +564,7 @@ function BulkBar({
   return (
     <div className="shrink-0 border-t border-ink/10 bg-ink px-4 py-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12px] font-medium text-cream-50">
+        <span className="text-xs font-medium text-cream-50">
           {t("inbox.bulk.selected", { count: ids.length })}
         </span>
         <Select
@@ -575,7 +575,7 @@ function BulkBar({
             if (!e.target.value) return;
             run(() => bulkAssign(ids, e.target.value));
           }}
-          className="w-auto py-1 text-[11.5px]"
+          className="w-auto py-1 text-xs"
         >
           <option value="">{t("inbox.bulk.assign")}</option>
           {staff.map((s) => (

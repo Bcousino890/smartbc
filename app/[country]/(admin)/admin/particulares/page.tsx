@@ -74,7 +74,7 @@ export default async function AdminParticularesPage({
           value={stats.total}
           footer={
             Object.keys(portalCounts).length > 0 ? (
-              <p className="text-[11px] text-ink/50">
+              <p className="text-xs text-ink/50">
                 {Object.entries(portalCounts)
                   .sort((a, b) => b[1] - a[1])
                   .map(([portal, count]) => `${portal}: ${count}`)

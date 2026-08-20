@@ -153,17 +153,17 @@ export function ClientBrief({
 
       {prefs.notes && (
         <div className="mt-4 border-t border-ink/8 pt-3">
-          <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink/40">
+          <p className="crm-label-sm text-ink/40">
             {t("clientes.ficha.notes.title")}
           </p>
-          <p className="mt-1.5 whitespace-pre-line text-[12.5px] leading-relaxed text-ink/70">
+          <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-ink/70">
             {prefs.notes}
           </p>
         </div>
       )}
 
       {prefs.updated_at && (
-        <p className="mt-3 text-[10.5px] text-ink/35">
+        <p className="mt-3 text-xs text-ink/35">
           {t("cc.brief.updated", { date: formatDate(prefs.updated_at, config.locale) })}
         </p>
       )}

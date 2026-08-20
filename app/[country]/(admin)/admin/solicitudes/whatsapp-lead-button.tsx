@@ -56,7 +56,7 @@ export function WhatsAppLeadButton({
       onClick={handleClick}
       disabled={pending}
       title={error ? "No se pudo abrir el chat" : "Escribir por WhatsApp"}
-      className="inline-flex items-center gap-1 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+      className="inline-flex items-center gap-1 rounded-md border border-[#25D366]/40 bg-[#25D366]/10 px-1.5 py-0.5 text-xs font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
     >
       {pending ? (
         <Loader2 size={size} strokeWidth={2} className="animate-spin" />

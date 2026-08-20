@@ -140,7 +140,7 @@ export function EmailConfigClient() {
   if (loading) {
     return (
       <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-        <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+        <header className="flex items-center gap-2 crm-label-sm text-ink/55">
           <span className="text-gold">
             <Mail size={16} strokeWidth={1.75} />
           </span>
@@ -159,7 +159,7 @@ export function EmailConfigClient() {
 
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+      <header className="flex items-center gap-2 crm-label-sm text-ink/55">
         <span className="text-gold">
           <Mail size={16} strokeWidth={1.75} />
         </span>
@@ -222,7 +222,7 @@ export function EmailConfigClient() {
 
           {/* AWS Secret Access Key */}
           <div className="flex flex-col gap-1.5 md:col-span-2">
-            <label className="text-[11px] font-medium text-ink/65">
+            <label className="text-xs font-medium text-ink/65">
               AWS Secret Access Key {flags.hasSecretAccessKey && <span className="text-green-700">· guardada</span>}
             </label>
             <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
@@ -271,7 +271,7 @@ export function EmailConfigClient() {
 
         {/* Send test to specific address */}
         <div className="border-t border-ink/8 pt-4 mt-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/45 mb-3">Enviar correo de prueba</p>
+          <p className="crm-label-sm text-ink/45 mb-3">Enviar correo de prueba</p>
           {sendToStatus !== "idle" && (
             <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm mb-3 ${sendToStatus === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
               {sendToStatus === "success" ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
@@ -323,7 +323,7 @@ export function EmailConfigClient() {
         </div>
 
         {/* Info Text */}
-        <p className="text-[11px] text-ink/55 pt-2">
+        <p className="text-xs text-ink/55 pt-2">
           Las credenciales se guardan encriptadas en la base de datos. Se utilizarán para enviar correos de restablecimiento de contraseña e invitaciones.
         </p>
       </div>
@@ -350,7 +350,7 @@ function Field({
 }: FieldProps) {
   return (
     <label className={`flex flex-col gap-1.5 ${fullWidth ? "md:col-span-2" : ""}`}>
-      <span className="text-[11px] font-medium text-ink/65">{labelKey}</span>
+      <span className="text-xs font-medium text-ink/65">{labelKey}</span>
       <input
         type={type}
         value={value}

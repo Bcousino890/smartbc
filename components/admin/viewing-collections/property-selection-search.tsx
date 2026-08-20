@@ -80,7 +80,7 @@ export function PropertySelectionSearch({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
-          <h3 className="font-serif text-lg font-semibold text-ink">
+          <h3 className="crm-section-title text-ink">
             Buscar propiedad
           </h3>
           <button
@@ -111,14 +111,14 @@ export function PropertySelectionSearch({
         </div>
 
         {error && (
-          <p className="mx-5 mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+          <p className="mx-5 mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
             {error}
           </p>
         )}
 
         <ul className="max-h-[50vh] overflow-y-auto p-3">
           {results.length === 0 && !loading && (
-            <li className="px-2 py-8 text-center text-[12px] text-ink/45">
+            <li className="px-2 py-8 text-center text-xs text-ink/45">
               {q ? "Sin resultados." : "Escribe para buscar."}
             </li>
           )}
@@ -130,16 +130,16 @@ export function PropertySelectionSearch({
                 className="flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 hover:bg-white/70"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium text-ink">
+                  <p className="truncate text-sm font-medium text-ink">
                     {r.title}
                   </p>
-                  <p className="truncate text-[11px] text-ink/50">
+                  <p className="truncate text-xs text-ink/50">
                     {r.bc_reference ? `${r.bc_reference} · ` : ""}
                     {config.formatPrice(r.price, null, r.operation)}
                   </p>
                 </div>
                 {isIn ? (
-                  <span className="shrink-0 text-[11px] font-medium text-emerald-700">
+                  <span className="shrink-0 text-xs font-medium text-emerald-700">
                     En selección
                   </span>
                 ) : (
@@ -147,7 +147,7 @@ export function PropertySelectionSearch({
                     type="button"
                     onClick={() => add(r.id)}
                     disabled={pending}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
                   >
                     <Plus size={11} strokeWidth={2} className="text-gold-dark" />
                     Añadir

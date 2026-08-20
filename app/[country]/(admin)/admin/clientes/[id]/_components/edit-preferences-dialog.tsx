@@ -154,7 +154,7 @@ export function EditPreferencesDialog({
       title={t("cc.editPrefs.title")}
       footer={
         <>
-          {error && <p className="me-auto text-[11.5px] text-rose-600">{error}</p>}
+          {error && <p className="me-auto text-xs text-rose-600">{error}</p>}
           <Button onClick={onClose} disabled={saving}>
             {t("cc.cancel")}
           </Button>
@@ -309,7 +309,7 @@ function Section({
 }) {
   return (
     <section>
-      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink/40">
+      <h3 className="mb-2 crm-label-sm text-ink/40">
         {title}
       </h3>
       <div

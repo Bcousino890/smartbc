@@ -50,7 +50,7 @@ export function ExtensionTokenSection() {
     <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <div className="mb-4 flex items-center gap-2">
         <KeyRound size={20} className="text-gold" />
-        <h2 className="font-serif text-lg font-semibold text-ink">Token de la extensión de Chrome</h2>
+        <h2 className="crm-section-title text-ink">Token de la extensión de Chrome</h2>
       </div>
       <p className="mb-4 text-sm text-ink/60">
         La extensión necesita este token para enviar los contactos del inbox de Idealista al portal.
@@ -72,7 +72,7 @@ export function ExtensionTokenSection() {
       {token && (
         <div className="mt-4">
           <div className="flex items-start gap-2 rounded-xl border border-ink/10 bg-ink/[0.04] p-3">
-            <code className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-ink/80">{token}</code>
+            <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-ink/80">{token}</code>
             <button
               type="button"
               onClick={copyToken}
@@ -82,7 +82,7 @@ export function ExtensionTokenSection() {
               {copied ? <Check size={16} className="text-teal-700" /> : <Copy size={16} />}
             </button>
           </div>
-          <p className="mt-2 text-[12px] text-ink/45">
+          <p className="mt-2 text-xs text-ink/45">
             {copied ? "✓ Copiado al portapapeles. " : ""}
             {expiresAt ? `Válido hasta ${new Date(expiresAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}. ` : ""}
             Guárdalo en las Opciones de la extensión — no se vuelve a mostrar al salir de esta página.

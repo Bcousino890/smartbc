@@ -119,22 +119,22 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
               {docType?.display_name ?? "Documento"}
             </p>
             {!docType?.is_required && (
-              <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-[10px] text-ink/50">Opcional</span>
+              <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-xs text-ink/50">Opcional</span>
             )}
             {docType?.country && applicationCountry && docType.country !== applicationCountry && (
-              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                 {docType.country === "CL" ? "🇨🇱 Doc. de Chile" : "🇪🇸 Doc. de España"}
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-[11px] text-ink/50">{doc.file_name}</p>
+          <p className="mt-0.5 text-xs text-ink/50">{doc.file_name}</p>
 
           {/* Análisis IA */}
           <div className="mt-2 flex items-center gap-3">
             {analysis && (
               <button
                 onClick={() => setShowAiAnalysis(!showAiAnalysis)}
-                className="flex items-center gap-1 text-[11px] font-medium text-ink/60 transition hover:text-ink"
+                className="flex items-center gap-1 text-xs font-medium text-ink/60 transition hover:text-ink"
               >
                 Análisis IA
                 {showAiAnalysis ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
@@ -143,7 +143,7 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
             <button
               onClick={handleReanalyze}
               disabled={analyzing}
-              className="flex items-center gap-1 text-[11px] font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
+              className="flex items-center gap-1 text-xs font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
             >
               <Sparkles size={11} />
               {analyzing ? "Analizando..." : analysis ? "Reanalizar con IA" : "Analizar con IA"}
@@ -267,7 +267,7 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
               <div>
                 <button
                   onClick={() => setShowAnnotation(!showAnnotation)}
-                  className="flex items-center gap-1.5 text-[11px] text-ink/50 transition hover:text-ink"
+                  className="flex items-center gap-1.5 text-xs text-ink/50 transition hover:text-ink"
                 >
                   <MessageSquare size={11} />
                   {showAnnotation ? "Cancelar anotación" : "Añadir anotación al cliente"}
@@ -304,7 +304,7 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
             href={doc.signed_url ?? doc.file_url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 transition hover:text-ink"
+            className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-ink/60 transition hover:text-ink"
           >
             <ExternalLink size={11} />
             Ver doc
@@ -315,7 +315,7 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
             <button
               onClick={() => handleVerify("verified")}
               disabled={loading}
-              className="flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
             >
               <CheckCircle size={11} />
               {loading ? "..." : "Verificar"}
@@ -326,7 +326,7 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
             <button
               onClick={() => handleVerify("needs_correction")}
               disabled={loading}
-              className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
             >
               <AlertCircle size={11} />
               Corregir
@@ -337,7 +337,7 @@ export function DocumentVerificationRow({ document: doc, onVerified, application
             <button
               onClick={() => handleVerify("rejected")}
               disabled={loading}
-              className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
             >
               <XCircle size={11} />
               Rechazar

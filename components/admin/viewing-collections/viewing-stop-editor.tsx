@@ -155,10 +155,10 @@ export function ViewingStopEditor({
       >
         <div className="flex items-start justify-between gap-3 border-b border-gold/15 px-5 py-4">
           <div className="min-w-0">
-            <h3 className="truncate font-serif text-base font-semibold text-ink">
+            <h3 className="truncate text-base font-bold text-ink">
               {prop.title}
             </h3>
-            <p className="mt-0.5 truncate text-[11px] text-ink/55">
+            <p className="mt-0.5 truncate text-xs text-ink/55">
               {prop.bcReference ? `${prop.bcReference} · ` : ""}
               {prop.zone}
               {prop.subzone ? ` · ${prop.subzone}` : ""} ·{" "}
@@ -177,12 +177,12 @@ export function ViewingStopEditor({
 
         <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-4">
           {error && (
-            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {error}
             </p>
           )}
           {warning && (
-            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <AlertTriangle size={13} className="mt-0.5 shrink-0" />
               {warning}
             </p>
@@ -190,25 +190,25 @@ export function ViewingStopEditor({
 
           {/* Horario */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               Horario
             </p>
             <div className="mt-2 flex flex-wrap items-end gap-2">
               <label>
-                <span className="text-[10px] text-ink/55">Hora</span>
+                <span className="text-xs text-ink/55">Hora</span>
                 <input
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="mt-1 block rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                  className="mt-1 block rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                 />
               </label>
               <label>
-                <span className="text-[10px] text-ink/55">Duración</span>
+                <span className="text-xs text-ink/55">Duración</span>
                 <select
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
-                  className="mt-1 block rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                  className="mt-1 block rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                 >
                   {[15, 20, 30, 45, 60, 90].map((m) => (
                     <option key={m} value={m}>
@@ -221,7 +221,7 @@ export function ViewingStopEditor({
                 type="button"
                 onClick={saveSchedule}
                 disabled={pending}
-                className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
               >
                 Guardar
               </button>
@@ -242,7 +242,7 @@ export function ViewingStopEditor({
                 }}
                 disabled={pending}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-[11px] font-medium transition disabled:opacity-50",
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50",
                   stop.time_pending
                     ? "border-gold/55 bg-gold/15 text-ink"
                     : "border-ink/15 bg-white text-ink/60 hover:border-gold/45",
@@ -250,7 +250,7 @@ export function ViewingStopEditor({
               >
                 Hora por confirmar
               </button>
-              <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink/45">
+              <p className="mt-1.5 text-xs leading-relaxed text-ink/45">
                 {stop.time_pending
                   ? "El cliente ve «Hora por confirmar» en vez de un hueco vacío, y el itinerario se puede publicar así."
                   : "Márcalo si el propietario aún no ha dado hora: publicar dejará de exigirla en esta parada."}
@@ -260,7 +260,7 @@ export function ViewingStopEditor({
 
           {/* Confirmación */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               Confirmación
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -271,7 +271,7 @@ export function ViewingStopEditor({
                   onClick={() => run(() => updateStopConfirmation(stop.id, s))}
                   disabled={pending}
                   className={cn(
-                    "rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-50",
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50",
                     stop.confirmation_status === s
                       ? "border-gold/50 bg-gold/15 text-ink"
                       : "border-ink/10 bg-white text-ink/60 hover:border-gold/30",
@@ -282,7 +282,7 @@ export function ViewingStopEditor({
               ))}
             </div>
             {CLIENT_SEES[stop.confirmation_status] && (
-              <p className="mt-2 text-[10.5px] leading-relaxed text-ink/45">
+              <p className="mt-2 text-xs leading-relaxed text-ink/45">
                 {CLIENT_SEES[stop.confirmation_status]}
               </p>
             )}
@@ -290,7 +290,7 @@ export function ViewingStopEditor({
 
           {/* Dirección */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               Dirección visible para el cliente
             </p>
             <div className="mt-2 space-y-1.5">
@@ -304,7 +304,7 @@ export function ViewingStopEditor({
                   disabled={pending}
                   className="mt-0.5 accent-[#a8814a]"
                 />
-                <span className="text-[12px] text-ink/80">
+                <span className="text-xs text-ink/80">
                   Solo zona
                   <span className="ml-1 text-ink/50">
                     — «{prop.zone}
@@ -329,10 +329,10 @@ export function ViewingStopEditor({
                   disabled={pending || !canShowExactAddress}
                   className="mt-0.5 accent-[#a8814a]"
                 />
-                <span className="text-[12px] text-ink/80">
+                <span className="text-xs text-ink/80">
                   Dirección exacta
                   {!canShowExactAddress && (
-                    <span className="mt-0.5 block text-[10px] text-ink/45">
+                    <span className="mt-0.5 block text-xs text-ink/45">
                       Disponible al confirmar o completar la visita.
                     </span>
                   )}
@@ -345,7 +345,7 @@ export function ViewingStopEditor({
             {stop.address_visibility === "exact" && canShowExactAddress && (
               <div className="mt-2.5">
                 <label className="block">
-                  <span className="text-[10px] text-ink/55">
+                  <span className="text-xs text-ink/55">
                     Dirección que verá el cliente
                   </span>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -356,7 +356,7 @@ export function ViewingStopEditor({
                       placeholder={
                         propertyAddress || "Calle, número, piso y puerta"
                       }
-                      className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[12.5px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                      className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
                     />
                     <button
                       type="button"
@@ -364,13 +364,13 @@ export function ViewingStopEditor({
                         run(() => updateStopExactAddress(stop.id, address))
                       }
                       disabled={pending}
-                      className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                      className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
                     >
                       Guardar
                     </button>
                   </div>
                 </label>
-                <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink/45">
+                <p className="mt-1.5 text-xs leading-relaxed text-ink/45">
                   {address.trim()
                     ? "Es la que aparece en la colección, por encima de la de la ficha."
                     : propertyAddress
@@ -384,7 +384,7 @@ export function ViewingStopEditor({
           {/* Visibilidad */}
           {canHide && (
             <section>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+              <p className="crm-label-sm text-ink/50">
                 Visibilidad en la colección
               </p>
               <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-ink/10 bg-white/65 px-3 py-2">
@@ -399,9 +399,9 @@ export function ViewingStopEditor({
                   disabled={pending}
                   className="accent-[#a8814a]"
                 />
-                <span className="text-[12px] text-ink/80">
+                <span className="text-xs text-ink/80">
                   Ocultar esta parada al cliente
-                  <span className="mt-0.5 block text-[10px] text-ink/45">
+                  <span className="mt-0.5 block text-xs text-ink/45">
                     Se conserva en el CRM; la colección pública no la muestra y
                     renumera el resto sin dejar huecos.
                   </span>
@@ -412,15 +412,15 @@ export function ViewingStopEditor({
 
           {/* SmartLink */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               SmartLink
             </p>
             {stop.smartLink ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-50/50 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink/70">
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink/70">
                   /c/{stop.smartLink.token}
                 </span>
-                <span className="text-[11px] text-ink/55">
+                <span className="text-xs text-ink/55">
                   {stop.smartLink.opensCount} apertura
                   {stop.smartLink.opensCount === 1 ? "" : "s"}
                 </span>
@@ -440,13 +440,13 @@ export function ViewingStopEditor({
                   type="button"
                   onClick={() => run(() => createSmartLinkForStop(stop.id))}
                   disabled={pending}
-                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
                 >
                   Crear SmartLink ahora
                 </button>
                 {shares.length > 0 && (
                   <label className="block">
-                    <span className="text-[10px] text-ink/55">
+                    <span className="text-xs text-ink/55">
                       O reutilizar uno existente
                     </span>
                     <select
@@ -458,7 +458,7 @@ export function ViewingStopEditor({
                         );
                       }}
                       disabled={pending}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[11px] text-ink focus:border-gold/55 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                     >
                       <option value="">Selecciona…</option>
                       {shares.map((s) => (
@@ -470,7 +470,7 @@ export function ViewingStopEditor({
                     </select>
                   </label>
                 )}
-                <p className="text-[10px] text-ink/45">
+                <p className="text-xs text-ink/45">
                   Si no creas ninguno, se generará automáticamente al publicar.
                 </p>
               </div>
@@ -479,19 +479,19 @@ export function ViewingStopEditor({
 
           {/* Visita en el CRM */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               Visita en el CRM
             </p>
             {stop.visitRequest ? (
               <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200/60 bg-blue-50/50 px-3 py-2">
-                <span className="text-[11px] text-ink/70">
+                <span className="text-xs text-ink/70">
                   Agendada · estado {stop.visitRequest.status}
                 </span>
                 <button
                   type="button"
                   onClick={() => run(() => unlinkVisitRequest(stop.id))}
                   disabled={pending}
-                  className="text-[11px] font-medium text-ink/55 transition hover:text-rose-600 disabled:opacity-50"
+                  className="text-xs font-medium text-ink/55 transition hover:text-rose-600 disabled:opacity-50"
                 >
                   Desvincular
                 </button>
@@ -504,7 +504,7 @@ export function ViewingStopEditor({
                 title={
                   stop.scheduled_at ? undefined : "Asigna una hora primero"
                 }
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-40"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-40"
               >
                 {pending ? (
                   <Loader2 size={12} className="animate-spin" />
@@ -518,7 +518,7 @@ export function ViewingStopEditor({
 
           {/* Notas internas */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               Notas internas
               <span className="ml-1.5 font-normal normal-case tracking-normal text-ink/40">
                 🔒 nunca visibles para el cliente
@@ -534,7 +534,7 @@ export function ViewingStopEditor({
               }}
               rows={2}
               placeholder="El propietario pide avisar 30 min antes…"
-              className="mt-2 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
             />
           </section>
         </div>
@@ -543,7 +543,7 @@ export function ViewingStopEditor({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/70 transition hover:border-ink/30"
+            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/70 transition hover:border-ink/30"
           >
             Cerrar
           </button>

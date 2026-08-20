@@ -5,10 +5,11 @@
 //
 // Toman prestado el lenguaje de la colección privada (/v/[token]): la
 // información se compone con TIPOGRAFÍA y FILETES, no con cajas ni badges de
-// colores. Cinzel en versalitas para las etiquetas, Playfair para las cifras,
-// una línea de oro para separar. La diferencia con la colección es la
-// densidad: esto es una herramienta de trabajo y hay que ver diez anuncios de
-// un vistazo, así que las escalas son más pequeñas y el aire, menor.
+// colores. Etiquetas en versalitas (crm-label-sm), cifras tabulares
+// (crm-number), una línea de oro para separar. La diferencia con la colección
+// es la densidad: esto es una herramienta de trabajo y hay que ver diez
+// anuncios de un vistazo, así que las escalas son más pequeñas y el aire,
+// menor.
 // ============================================================================
 
 import { Star } from "lucide-react";
@@ -32,7 +33,7 @@ export function Label({
   return (
     <span
       className={cn(
-        "block font-display text-[9.5px] font-medium uppercase vc-tracked-sm",
+        "block crm-label-sm",
         tone === "ink" && "text-ink/45",
         tone === "gold" && "text-gold-dark",
         tone === "cream" && "text-cream-50/70",
@@ -93,7 +94,7 @@ export function StatusWord({
   return (
     <span
       className={cn(
-        "font-display text-[9.5px] font-medium uppercase vc-tracked-sm",
+        "crm-label-sm",
         STATUS_TONE[status],
         className,
       )}
@@ -116,7 +117,7 @@ export function PortalTag({
   return (
     <span
       className={cn(
-        "font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/35",
+        "crm-label-sm text-ink/35",
         className,
       )}
     >
@@ -185,7 +186,7 @@ export function RatingStars({
   );
 }
 
-/** Cifra editorial: Playfair, tabular, sin caja. */
+/** Cifra editorial: tabular, sin caja. */
 export function Figure({
   children,
   className,
@@ -194,7 +195,7 @@ export function Figure({
   className?: string;
 }) {
   return (
-    <span className={cn("font-serif vc-nums leading-none text-ink", className)}>
+    <span className={cn("crm-number leading-none text-ink", className)}>
       {children}
     </span>
   );

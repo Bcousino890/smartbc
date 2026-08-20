@@ -606,14 +606,14 @@ export function PropertyEditView({
       <div className="flex items-center justify-between pt-7">
         <Link
           href={`${config.prefix}/propiedades`}
-          className="inline-flex items-center gap-2 text-[12px] font-medium text-ink/65 transition hover:text-ink"
+          className="inline-flex items-center gap-2 text-xs font-medium text-ink/65 transition hover:text-ink"
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
           <span>{t("adminProps.detail.back")}</span>
         </Link>
         <span
           className={cn(
-            "rounded-md border px-2.5 py-1 text-[11px] font-medium",
+            "rounded-md border px-2.5 py-1 text-xs font-medium",
             isScraped
               ? "border-gold/35 bg-gold/10 text-gold-dark"
               : "border-ink/15 bg-ink/5 text-ink/65",
@@ -653,23 +653,23 @@ export function PropertyEditView({
           <div className="flex flex-wrap items-center gap-2">
             {property.property_reference && (
               <span
-                className="rounded-md border border-ink/10 bg-ink/5 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-ink/80"
+                className="rounded-md border border-ink/10 bg-ink/5 px-2 py-0.5 font-mono text-xs font-semibold tracking-wider text-ink/80"
               >
                 {property.property_reference}
               </span>
             )}
             {property.bc_reference && (
               <span
-                className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-gold-dark"
+                className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-xs font-semibold tracking-wider text-gold-dark"
               >
                 {property.bc_reference}
               </span>
             )}
           </div>
-          <h1 className="mt-1 font-serif text-2xl font-medium leading-tight text-ink md:text-3xl">
+          <h1 className="mt-1 text-2xl font-bold leading-tight text-ink md:text-[28px]">
             {property.title}
           </h1>
-          <p className="mt-1 text-[12px] text-ink/55">
+          <p className="mt-1 text-xs text-ink/55">
             {property.zone} · {property.bedrooms} hbt · {property.bathrooms} baños
             {property.square_meters ? ` · ${property.square_meters} m²` : ""}
             {property.source_url && (
@@ -700,14 +700,14 @@ export function PropertyEditView({
               key={op}
               className="flex flex-wrap items-center gap-2 rounded-xl border border-ink/10 bg-white/60 p-2.5"
             >
-              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-gold-dark">
+              <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 crm-label-sm text-gold-dark">
                 {op === "sale" ? "Venta" : "Alquiler"}
               </span>
               <a
                 href={smartLinkFor(op)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
               >
                 <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
                 <span>{t("adminProps.detail.viewAsClient")}</span>
@@ -716,7 +716,7 @@ export function PropertyEditView({
                 type="button"
                 onClick={() => handleCopyLink(op)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[12px] font-medium transition",
+                  "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-medium transition",
                   copied === op
                     ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                     : "border-gold/30 bg-cream-50 text-ink hover:border-gold/55 hover:bg-white",
@@ -737,7 +737,7 @@ export function PropertyEditView({
                 href={pdfHrefFor(op)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+                className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
               >
                 <FileDown size={13} strokeWidth={1.75} className="text-gold-dark" />
                 <span>{t("adminProps.detail.downloadPdf")}</span>
@@ -751,7 +751,7 @@ export function PropertyEditView({
             href={smartLinkBase}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
           >
             <ExternalLink size={13} strokeWidth={1.75} className="text-gold-dark" />
             <span>{t("adminProps.detail.viewAsClient")}</span>
@@ -760,7 +760,7 @@ export function PropertyEditView({
             type="button"
             onClick={() => handleCopyLink("single")}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[12px] font-medium transition",
+              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-medium transition",
               copied === "single"
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "border-gold/30 bg-cream-50 text-ink hover:border-gold/55 hover:bg-white",
@@ -781,7 +781,7 @@ export function PropertyEditView({
             href={`/api/admin/properties/${property.slug}/pdf`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
           >
             <FileDown size={13} strokeWidth={1.75} className="text-gold-dark" />
             <span>{t("adminProps.detail.downloadPdf")}</span>
@@ -795,7 +795,7 @@ export function PropertyEditView({
         {property.photos.length > 0 && (
           <a
             href={`/api/admin/properties/${property.slug}/download-photos`}
-            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
           >
             <ImageIcon size={13} strokeWidth={1.75} className="text-gold-dark" />
             <span>{t("adminProps.detail.downloadPhotos")}</span>
@@ -804,7 +804,7 @@ export function PropertyEditView({
         {videos.length > 0 && (
           <a
             href={`/api/admin/properties/${property.slug}/download-video`}
-            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-cream-50 px-4 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
           >
             <Video size={13} strokeWidth={1.75} className="text-gold-dark" />
             <span>Descargar vídeo</span>
@@ -814,7 +814,7 @@ export function PropertyEditView({
           type="button"
           onClick={handleDeleteProperty}
           disabled={deletingProperty}
-          className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-[12px] font-medium text-red-700 transition hover:border-red-400 hover:bg-red-100 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 transition hover:border-red-400 hover:bg-red-100 disabled:opacity-50"
         >
           <Trash2 size={13} strokeWidth={1.75} />
           <span>{deletingProperty ? "Eliminando..." : "Eliminar propiedad"}</span>
@@ -823,7 +823,7 @@ export function PropertyEditView({
 
       {/* Aviso para propiedades sindicadas */}
       {isScraped && (
-        <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-gold/30 bg-gold/10 p-3.5 text-[12px] text-ink/80">
+        <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-gold/30 bg-gold/10 p-3.5 text-xs text-ink/80">
           <AlertTriangle
             size={16}
             strokeWidth={1.75}
@@ -871,14 +871,14 @@ export function PropertyEditView({
               />
             </Field>
           )}
-          <label className="flex flex-col gap-1.5 text-[12px] font-medium text-ink/80">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-ink/80">
             <span className="flex items-center justify-between gap-2">
               {t("adminProps.detail.description")}
               <button
                 type="button"
                 onClick={generateDescription}
                 disabled={generatingDesc}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-2.5 py-1 text-[11px] font-semibold text-gold-dark transition hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-2.5 py-1 text-xs font-semibold text-gold-dark transition hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generatingDesc ? (
                   <Loader2 size={12} className="animate-spin" />
@@ -899,7 +899,7 @@ export function PropertyEditView({
               className={cn(inputClass, "resize-y")}
             />
             {descError && (
-              <span className="text-[11px] text-orange-600">{descError}</span>
+              <span className="text-xs text-orange-600">{descError}</span>
             )}
           </label>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1147,21 +1147,21 @@ export function PropertyEditView({
               para importaciones (Airbnb, Fotocasa…) que no traen coordenadas. */}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[12px] text-ink/60">
+              <p className="text-xs text-ink/60">
                 Fija la ubicación exacta: haz clic en el mapa o arrastra el pin. Se guarda al pulsar “Guardar cambios”.
               </p>
               <button
                 type="button"
                 onClick={geocodeFromAddress}
                 disabled={geocoding}
-                className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[12px] font-medium text-ink/70 transition hover:bg-ink/5 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:bg-ink/5 disabled:opacity-50"
               >
                 {geocoding ? <Loader2 size={13} className="animate-spin" /> : <MapIcon size={13} />}
                 Buscar por dirección
               </button>
             </div>
             {geocodeError && (
-              <p className="text-[11px] text-orange-600">{geocodeError}</p>
+              <p className="text-xs text-orange-600">{geocodeError}</p>
             )}
             <div className="overflow-hidden rounded-lg border border-ink/15">
               <MapPicker
@@ -1175,7 +1175,7 @@ export function PropertyEditView({
                 country={country}
               />
             </div>
-            <p className="text-[11px] text-ink/45">
+            <p className="text-xs text-ink/45">
               {latitude && longitude
                 ? `Coordenadas fijadas: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} · el SmartLink mostrará este punto exacto.`
                 : "Sin coordenadas fijadas — coloca el pin para marcar la ubicación exacta del piso."}
@@ -1237,14 +1237,14 @@ export function PropertyEditView({
         >
           {property.features.length > 0 && (
             <div className="mb-4">
-              <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+              <p className="mb-2 crm-label-sm text-ink/55">
                 Auto-detectadas
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {property.features.map((f) => (
                   <span
                     key={`auto-${f}`}
-                    className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 text-[12px] text-ink/70"
+                    className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 text-xs text-ink/70"
                   >
                     {f}
                   </span>
@@ -1253,7 +1253,7 @@ export function PropertyEditView({
             </div>
           )}
           <div className="mb-4">
-            <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+            <p className="mb-2 crm-label-sm text-ink/55">
               Checklist ({isCL ? "PortalInmobiliario" : "habituales"})
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -1268,7 +1268,7 @@ export function PropertyEditView({
                     onClick={() => toggleFeature(f)}
                     aria-pressed={active}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition",
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition",
                       active
                         ? "border-gold/50 bg-gold/15 text-ink"
                         : "border-ink/12 bg-white/50 text-ink/60 hover:border-gold/40 hover:text-ink",
@@ -1282,7 +1282,7 @@ export function PropertyEditView({
             </div>
           </div>
           <div>
-            <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-ink/55">
+            <p className="mb-2 crm-label-sm text-ink/55">
               Manuales
             </p>
             {featuresManual.length > 0 && (
@@ -1290,7 +1290,7 @@ export function PropertyEditView({
                 {featuresManual.map((f) => (
                   <span
                     key={`man-${f}`}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-[12px] text-ink"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs text-ink"
                   >
                     {f}
                     <button
@@ -1323,7 +1323,7 @@ export function PropertyEditView({
                 type="button"
                 onClick={addManualFeature}
                 disabled={!newFeature.trim()}
-                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
               >
                 Añadir
               </button>
@@ -1348,7 +1348,7 @@ export function PropertyEditView({
             <button
               type="button"
               onClick={() => setPhotosOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
             >
               <ImageIcon size={13} strokeWidth={1.75} className="text-gold" />
               <span>
@@ -1361,7 +1361,7 @@ export function PropertyEditView({
               type="button"
               onClick={handleCleanWatermark}
               disabled={cleaningWatermark}
-              className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-[12px] font-medium text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-medium text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
               title="Quita la marca de agua de la agencia de origen (reprocesa las fotos, necesita ≥8)"
             >
               {cleaningWatermark ? (
@@ -1373,7 +1373,7 @@ export function PropertyEditView({
             </button>
           </div>
           {watermarkMsg && (
-            <p className="mt-2 text-[12px] text-ink/60">{watermarkMsg}</p>
+            <p className="mt-2 text-xs text-ink/60">{watermarkMsg}</p>
           )}
         </Section>
 
@@ -1408,7 +1408,7 @@ export function PropertyEditView({
               type="button"
               onClick={() => void handleAddVideo()}
               disabled={addingVideo || !videoUrl.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
             >
               {addingVideo ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -1419,7 +1419,7 @@ export function PropertyEditView({
             </button>
           </div>
           {uploadingVideo ? (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/5 p-3 text-[12px] text-ink/70">
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/5 p-3 text-xs text-ink/70">
               <Loader2 size={14} className="animate-spin text-gold" />
               <span className="font-medium">Subiendo vídeo… no cierres esta página</span>
             </div>
@@ -1427,14 +1427,14 @@ export function PropertyEditView({
             <button
               type="button"
               onClick={() => videoFileInputRef.current?.click()}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
             >
               <Plus size={13} strokeWidth={1.75} />
               Subir video (.mp4)
             </button>
           )}
           {videoError && (
-            <p className="mt-1 text-[12px] text-rose-700">{videoError}</p>
+            <p className="mt-1 text-xs text-rose-700">{videoError}</p>
           )}
           {videos.length > 0 && (
             <div className="mt-3 flex flex-col gap-3">
@@ -1485,7 +1485,7 @@ export function PropertyEditView({
             </div>
           )}
           {videos.length === 0 && (
-            <p className="mt-2 text-[12px] text-ink/45">
+            <p className="mt-2 text-xs text-ink/45">
               Sin videos aún. Añade un enlace de YouTube/Vimeo o sube un archivo MP4.
             </p>
           )}
@@ -1516,7 +1516,7 @@ export function PropertyEditView({
             type="button"
             onClick={() => planInputRef.current?.click()}
             disabled={uploadingPlan}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
           >
             {uploadingPlan ? (
               <Loader2 size={13} className="animate-spin" />
@@ -1526,7 +1526,7 @@ export function PropertyEditView({
             Subir plano
           </button>
           {planError && (
-            <p className="mt-1 text-[12px] text-rose-700">{planError}</p>
+            <p className="mt-1 text-xs text-rose-700">{planError}</p>
           )}
           {plans.length > 0 && (
             <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -1550,7 +1550,7 @@ export function PropertyEditView({
                   >
                     <Trash2 size={13} strokeWidth={1.75} />
                   </button>
-                  <div className="absolute inset-x-0 bottom-0 truncate bg-ink/60 px-2 py-1 text-[11px] text-white opacity-0 transition group-hover:opacity-100">
+                  <div className="absolute inset-x-0 bottom-0 truncate bg-ink/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
                     {item.file_name}
                   </div>
                 </div>
@@ -1558,7 +1558,7 @@ export function PropertyEditView({
             </div>
           )}
           {plans.length === 0 && (
-            <p className="mt-2 text-[12px] text-ink/45">
+            <p className="mt-2 text-xs text-ink/45">
               Sin planos aún. Sube imágenes de la distribución.
             </p>
           )}
@@ -1594,7 +1594,7 @@ export function PropertyEditView({
             </span>
           </div>
           {publishedWeb && (
-            <p className="text-[12px] text-ink/50">
+            <p className="text-xs text-ink/50">
               La propiedad aparecerá en{" "}
               <a
                 href="/web/propiedades"
@@ -1611,7 +1611,7 @@ export function PropertyEditView({
 
         {/* Barra inferior sticky con guardar */}
         <div className="sticky bottom-4 mt-2 flex items-center justify-between gap-3 rounded-xl border border-gold/25 bg-cream-50/95 px-4 py-3 shadow-[0_15px_40px_-20px_rgba(40,28,10,0.35)] backdrop-blur">
-          <div className="text-[12px] text-ink/65">
+          <div className="text-xs text-ink/65">
             {saveState.kind === "saved" && (
               <span className="text-emerald-700">
                 ✓ {t("adminProps.detail.saved")}
@@ -1626,7 +1626,7 @@ export function PropertyEditView({
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {isPending ? (
               <Loader2 size={14} className="animate-spin" />
@@ -1672,9 +1672,9 @@ function Section({
       <header className="flex items-start gap-2.5">
         <span className="mt-0.5 text-gold-dark">{icon}</span>
         <div>
-          <h2 className="font-serif text-lg font-medium text-ink">{title}</h2>
+          <h2 className="crm-section-title text-ink">{title}</h2>
           {subtitle && (
-            <p className="mt-0.5 text-[11px] text-ink/55">{subtitle}</p>
+            <p className="mt-0.5 text-xs text-ink/55">{subtitle}</p>
           )}
         </div>
       </header>
@@ -1691,7 +1691,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5 text-[12px] font-medium text-ink/80">
+    <label className="flex flex-col gap-1.5 text-xs font-medium text-ink/80">
       <span>{label}</span>
       {children}
     </label>

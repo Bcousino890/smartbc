@@ -420,23 +420,23 @@ function OriginPanel({
   const config = getCountryConfig(country);
   return (
     <Panel title={t("cc.origin.title")}>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12px]">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
         <span className="font-medium text-ink">{t("inbox.source.idealista")}</span>
         <span className="text-ink/40">{formatDate(origin.receivedAt, locale)}</span>
       </div>
       {origin.propertyTitle && (
-        <p className="mt-1.5 text-[12.5px] text-ink/70">
+        <p className="mt-1.5 text-xs text-ink/70">
           {t("cc.origin.interestedIn", { property: origin.propertyTitle })}
         </p>
       )}
       {origin.message && (
-        <p className="mt-2 line-clamp-4 border-s-2 border-gold/30 ps-2.5 text-[12.5px] italic leading-relaxed text-ink/55">
+        <p className="mt-2 line-clamp-4 border-s-2 border-gold/30 ps-2.5 text-xs italic leading-relaxed text-ink/55">
           {origin.message}
         </p>
       )}
       <Link
         href={`${config.prefix}/solicitudes?lead=${origin.leadId}&view=all`}
-        className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-ink/55 transition hover:text-ink"
+        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-ink/55 transition hover:text-ink"
       >
         {t("cc.origin.openLead")}
       </Link>
@@ -477,7 +477,7 @@ function EngagementPanel({ engagement }: { engagement: ClientEngagement }) {
               {entries.map(([type, count]) => (
                 <li
                   key={type}
-                  className="flex items-baseline justify-between gap-2 border-b border-ink/6 pb-1 text-[12px]"
+                  className="flex items-baseline justify-between gap-2 border-b border-ink/6 pb-1 text-xs"
                 >
                   <span className="truncate text-ink/55">
                     {t(`cc.event.${type}`)}

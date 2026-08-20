@@ -72,7 +72,7 @@ function Badge({ value }: { value: string | null }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
         statusTone(value),
       )}
     >
@@ -101,11 +101,11 @@ export function LeadsAdminClient({
       <div className="mb-5 flex items-center gap-2">
         <button className={tabBtn(tab === "leads")} onClick={() => setTab("leads")}>
           <Users className="h-4 w-4" /> Leads
-          <span className="ml-1 rounded-full bg-black/10 px-1.5 text-[11px]">{leads.length}</span>
+          <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">{leads.length}</span>
         </button>
         <button className={tabBtn(tab === "campaigns")} onClick={() => setTab("campaigns")}>
           <Megaphone className="h-4 w-4" /> Campañas
-          <span className="ml-1 rounded-full bg-black/10 px-1.5 text-[11px]">
+          <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">
             {campaigns.length}
           </span>
         </button>
@@ -129,7 +129,7 @@ function LeadsTable({ leads }: { leads: LeadView[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-ink/10 bg-white">
       <table className="w-full min-w-[820px] text-left text-sm">
-        <thead className="border-b border-ink/10 bg-ink/[0.02] text-[12px] uppercase tracking-wide text-ink/45">
+        <thead className="border-b border-ink/10 bg-ink/[0.02] crm-table-header text-ink/45">
           <tr>
             <Th>Contacto</Th>
             <Th>Ubicación</Th>
@@ -145,8 +145,8 @@ function LeadsTable({ leads }: { leads: LeadView[] }) {
             <tr key={l.id} className="hover:bg-ink/[0.015]">
               <Td>
                 <div className="font-medium text-ink">{l.fullName || "—"}</div>
-                {l.company && <div className="text-[12px] text-ink/50">{l.company}</div>}
-                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-ink/55">
+                {l.company && <div className="text-xs text-ink/50">{l.company}</div>}
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink/55">
                   {l.phone && (
                     <span className="inline-flex items-center gap-1">
                       <Phone className="h-3 w-3" />+{l.phone.replace(/\D/g, "")}
@@ -173,10 +173,10 @@ function LeadsTable({ leads }: { leads: LeadView[] }) {
                 <Badge value={l.syncStatus} />
               </Td>
               <Td>
-                <span className="text-[12px] text-ink/55">{l.campaign || "—"}</span>
+                <span className="text-xs text-ink/55">{l.campaign || "—"}</span>
               </Td>
               <Td>
-                <span className="text-[12px] text-ink/45">{fmtDate(l.updatedAt)}</span>
+                <span className="text-xs text-ink/45">{fmtDate(l.updatedAt)}</span>
               </Td>
             </tr>
           ))}
@@ -273,7 +273,7 @@ function CampaignRow({ campaign }: { campaign: CampaignView }) {
             <span className="font-medium text-ink">{campaign.name || campaign.externalId || "—"}</span>
             <Badge value={campaign.status} />
           </div>
-          <div className="mt-0.5 text-[12px] text-ink/50">
+          <div className="mt-0.5 text-xs text-ink/50">
             {[campaign.city, campaign.country].filter(Boolean).join(", ") || "—"}
             {campaign.externalId && <span className="ml-2 text-ink/35">· {campaign.externalId}</span>}
           </div>
@@ -301,7 +301,7 @@ function CampaignRow({ campaign }: { campaign: CampaignView }) {
       </div>
 
       {preview && (
-        <div className="mt-3 flex flex-wrap gap-4 rounded-lg bg-ink/[0.02] px-3 py-2 text-[13px]">
+        <div className="mt-3 flex flex-wrap gap-4 rounded-lg bg-ink/[0.02] px-3 py-2 text-sm">
           <span className="text-ink/70">
             Total: <b>{preview.total}</b>
           </span>
@@ -318,7 +318,7 @@ function CampaignRow({ campaign }: { campaign: CampaignView }) {
       )}
 
       {job && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           <CheckCircle2 className="h-4 w-4" />
           Job <code className="font-mono">{job.id}</code> · estado: <b>{job.state}</b>
           <button
@@ -333,7 +333,7 @@ function CampaignRow({ campaign }: { campaign: CampaignView }) {
       )}
 
       {error && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           <AlertCircle className="h-4 w-4" />
           {error}
         </div>
@@ -356,7 +356,7 @@ function EmptyState({
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-ink/5">
         {icon}
       </div>
-      <h3 className="font-serif text-lg text-ink">{title}</h3>
+      <h3 className="crm-section-title text-ink">{title}</h3>
       <p className="mt-1 max-w-md text-sm text-ink/55">{body}</p>
     </div>
   );

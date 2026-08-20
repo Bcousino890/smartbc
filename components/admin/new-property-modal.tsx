@@ -265,7 +265,7 @@ export function NewPropertyModal({
     >
       {isCL && (
         <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3">
-          <p className="text-[11px] font-semibold text-gold-dark">
+          <p className="text-xs font-semibold text-gold-dark">
             ★ = Campo requerido por PortalInmobiliario.com
           </p>
         </div>
@@ -280,21 +280,21 @@ export function NewPropertyModal({
               placeholder={isCL ? `${title.length}/60 caracteres` : undefined}
             />
             {isCL && title.length > 50 && (
-              <p className={cn("mt-1 text-[10px]", title.length >= 60 ? "text-red-600" : "text-amber-600")}>
+              <p className={cn("mt-1 text-xs", title.length >= 60 ? "text-red-600" : "text-amber-600")}>
                 {title.length}/60 caracteres
               </p>
             )}
           </Field>
           <Field label={t("adminProps.new.field.agency")} required>
             {agencies.length === 0 ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700">
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                 {t("adminProps.new.error.noAgencies")}
               </p>
             ) : (
               <select
                 value={agencySlug}
                 onChange={(e) => setAgencySlug(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {agencies.map((a) => (
                   <option key={a.slug} value={a.slug}>
@@ -309,7 +309,7 @@ export function NewPropertyModal({
               <select
                 value={propertyType}
                 onChange={(e) => setPropertyType(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {PROPERTY_TYPE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -331,7 +331,7 @@ export function NewPropertyModal({
             <select
               value={operation}
               onChange={(e) => setOperation(e.target.value as Operation)}
-              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             >
               <option value="alquiler">{isCL ? "Arriendo" : t("filters.operation.rent")}</option>
               <option value="venta">{isCL ? "Venta" : t("filters.operation.sale")}</option>
@@ -342,7 +342,7 @@ export function NewPropertyModal({
               <select
                 value={stayType}
                 onChange={(e) => setStayType(e.target.value as StayType)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 <option value="larga">{t("filters.stay.long")}</option>
                 <option value="corta">{t("filters.stay.short")}</option>
@@ -354,7 +354,7 @@ export function NewPropertyModal({
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {CURRENCY_OPTIONS_CL.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -408,7 +408,7 @@ export function NewPropertyModal({
                     onChange={(e) => setIsCondominium(e.target.checked)}
                     className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
                   />
-                  <span className="text-[13px] text-ink/75">Sí</span>
+                  <span className="text-sm text-ink/75">Sí</span>
                 </div>
               </Field>
             </>
@@ -422,7 +422,7 @@ export function NewPropertyModal({
                 <select
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
                 >
                   {CHILE_REGIONS.map((r) => (
                     <option key={r} value={r}>{r}</option>
@@ -436,7 +436,7 @@ export function NewPropertyModal({
                   value={commune}
                   onChange={(e) => setCommune(e.target.value)}
                   placeholder="Ej: Las Condes, Providencia…"
-                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
                 />
                 <datalist id="cl-communes">
                   {CHILE_COMMUNES_SANTIAGO.map((c) => (
@@ -451,7 +451,7 @@ export function NewPropertyModal({
                   value={sector}
                   onChange={(e) => setSector(e.target.value)}
                   placeholder="Ej. Chicureo, Huinganal, Los Trapenses…"
-                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
                 />
                 <datalist id="cl-sectors">
                   {sectorsForCommune(commune).map((s) => (
@@ -468,7 +468,7 @@ export function NewPropertyModal({
               <select
                 value={zone}
                 onChange={(e) => setZone(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {MADRID_ZONES.map((z) => (
                   <option key={z} value={z}>{z}</option>
@@ -484,7 +484,7 @@ export function NewPropertyModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
               placeholder={isCL ? "Describe la propiedad en detalle (requerido por PortalInmobiliario)" : t("adminProps.new.field.description.placeholder")}
             />
           </Field>
@@ -502,7 +502,7 @@ export function NewPropertyModal({
                     onClick={() => toggleFeature(f)}
                     aria-pressed={active}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition",
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition",
                       active
                         ? "border-gold/50 bg-gold/15 text-ink"
                         : "border-ink/12 bg-white/50 text-ink/60 hover:border-gold/40 hover:text-ink",
@@ -521,7 +521,7 @@ export function NewPropertyModal({
                   .map((f) => (
                     <span
                       key={f}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-[12px] text-ink"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs text-ink"
                     >
                       {f}
                       <button
@@ -548,13 +548,13 @@ export function NewPropertyModal({
                   }
                 }}
                 placeholder="Otra característica…"
-                className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={addManualFeature}
                 disabled={!newFeature.trim()}
-                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
               >
                 Añadir
               </button>
@@ -585,10 +585,10 @@ export function NewPropertyModal({
               )}
             >
               <ImagePlus size={20} strokeWidth={1.75} className="text-gold-dark" />
-              <span className="text-[12px] font-medium text-ink/70">
+              <span className="text-xs font-medium text-ink/70">
                 {t("adminProps.new.photos.add")}
               </span>
-              <span className="text-[11px] text-ink/45">
+              <span className="text-xs text-ink/45">
                 {t("adminProps.new.photos.hint")}
               </span>
             </button>
@@ -605,7 +605,7 @@ export function NewPropertyModal({
             />
             {photos.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px] text-ink/45">
+                <p className="text-xs text-ink/45">
                   {t("adminProps.new.photos.count", { n: photos.length })}
                 </p>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -622,7 +622,7 @@ export function NewPropertyModal({
                         className="h-full w-full object-cover"
                       />
                       {i === 0 && (
-                        <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-md bg-ink/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-cream-50">
+                        <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-md bg-ink/80 px-1.5 py-0.5 crm-label-sm text-cream-50">
                           <Star size={9} strokeWidth={2} className="text-gold" />
                           {t("adminProps.new.photos.cover")}
                         </span>
@@ -644,7 +644,7 @@ export function NewPropertyModal({
         </Section>
 
         {feedback.kind === "error" && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
             {feedback.msg}
           </p>
         )}
@@ -654,7 +654,7 @@ export function NewPropertyModal({
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[13px] font-medium text-ink/70 transition hover:border-ink/30 hover:text-ink disabled:opacity-50"
+            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink/70 transition hover:border-ink/30 hover:text-ink disabled:opacity-50"
           >
             {t("common.cancel")}
           </button>
@@ -662,7 +662,7 @@ export function NewPropertyModal({
             type="submit"
             disabled={!canSubmit}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-cream-50 transition",
+              "inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition",
               "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
@@ -709,7 +709,7 @@ function Section({
 }) {
   return (
     <section className="mt-5 space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+      <p className="crm-label-sm text-ink/45">
         {title}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{children}</div>
@@ -729,7 +729,7 @@ function Field({
   wide?: boolean;
 }) {
   return (
-    <label className={cn("block text-[12px] font-medium text-ink/65", wide && "sm:col-span-3")}>
+    <label className={cn("block text-xs font-medium text-ink/65", wide && "sm:col-span-3")}>
       <span>
         {label}
         {required && <span className="ml-1 text-gold-dark">*</span>}
@@ -758,7 +758,7 @@ function TextInput({
       placeholder={placeholder}
       // biome-ignore lint/a11y/noAutofocus: campo principal del modal
       autoFocus={autoFocus}
-      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
     />
   );
 }
@@ -781,7 +781,7 @@ function NumberInput({
         const n = Number(e.target.value);
         onChange(Number.isFinite(n) ? n : 0);
       }}
-      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
     />
   );
 }

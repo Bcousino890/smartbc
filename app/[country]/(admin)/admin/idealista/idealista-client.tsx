@@ -804,12 +804,12 @@ export function IdealistaClient({
           </div>
 
           {seeding === "link" && (
-            <p className="mt-2 text-[11px] text-ink/45">
+            <p className="mt-2 text-xs text-ink/45">
               Leyendo el anuncio y limpiando fotos... puede tardar unos segundos.
             </p>
           )}
           {seedError && (
-            <p className="mt-2 text-[11px] text-red-600">{seedError}</p>
+            <p className="mt-2 text-xs text-red-600">{seedError}</p>
           )}
 
           <button
@@ -848,13 +848,13 @@ export function IdealistaClient({
                         </span>
                       )}
                       {listing && (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                           ✓ Preparada
                         </span>
                       )}
                       {leadCountsByProperty[property.id] > 0 && (
                         <span
-                          className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700"
+                          className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700"
                           title="Contactos del inbox de Idealista matcheados a esta propiedad (ver Solicitudes)"
                         >
                           👤 {leadCountsByProperty[property.id]} lead{leadCountsByProperty[property.id] === 1 ? "" : "s"}
@@ -893,7 +893,7 @@ export function IdealistaClient({
       {activeListings.length > 0 && (
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/45">
+            <h3 className="crm-label-sm text-ink/45">
               Fichas guardadas ({filteredActiveListings.length}
               {searchTerm ? ` de ${activeListings.length}` : ""})
             </h3>
@@ -997,7 +997,7 @@ export function IdealistaClient({
                         ) : null;
                       })()}
                       {listing.reference_code && (
-                        <span className="rounded-full bg-blue-100/60 px-2 py-0.5 text-[10px] font-medium text-blue-700 font-mono">
+                        <span className="rounded-full bg-blue-100/60 px-2 py-0.5 text-xs font-medium text-blue-700 font-mono">
                           {listing.reference_code}
                         </span>
                       )}
@@ -1008,7 +1008,7 @@ export function IdealistaClient({
                             setLeadsModalTitle(displayTitle);
                             setLeadsModalOpen(true);
                           }}
-                          className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 transition hover:bg-violet-200"
+                          className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 transition hover:bg-violet-200"
                           title="Ver los contactos del inbox de Idealista matcheados a esta ficha"
                         >
                           👤 {leadCountsByListing[listing.id]} lead{leadCountsByListing[listing.id] === 1 ? "" : "s"}
@@ -1018,12 +1018,12 @@ export function IdealistaClient({
                         // Checklist: ¿la ficha está lista para publicar?
                         const missing = listingMissingFields(listing);
                         return missing.length === 0 ? (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600" title="La ficha tiene todo lo necesario para publicar">
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600" title="La ficha tiene todo lo necesario para publicar">
                             ✓ Lista
                           </span>
                         ) : (
                           <span
-                            className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700"
+                            className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700"
                             title={`Antes de publicar completa: ${missing.join(", ")}`}
                           >
                             ⚠ Faltan: {missing.join(", ")}
@@ -1031,13 +1031,13 @@ export function IdealistaClient({
                         );
                       })()}
                       {publishResults[listing.id] && (
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${publishResults[listing.id].ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${publishResults[listing.id].ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
                           {publishResults[listing.id].msg}
                         </span>
                       )}
                       {listing.api_property_id && (
                         <span
-                          className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700"
+                          className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700"
                           title={`Publicado por API — propertyId ${listing.api_property_id}`}
                         >
                           API {listing.api_property_id}
@@ -1048,7 +1048,7 @@ export function IdealistaClient({
                           enseña, el operador no sabe por qué no salió el anuncio. */}
                       {!publishResults[listing.id] && listing.api_last_error && (
                         <span
-                          className="max-w-[28rem] truncate rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-600"
+                          className="max-w-[28rem] truncate rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600"
                           title={listing.api_last_error}
                         >
                           ⚠ API: {listing.api_last_error}
@@ -1068,7 +1068,7 @@ export function IdealistaClient({
                         }}
                       />
                       {(listing.published_at || listing.unpublished_at) && (
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink/40">
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink/40">
                           {listing.published_at && (
                             <span>
                               ↑ Subida: {new Date(listing.published_at).toLocaleDateString("es-ES")}
@@ -1213,7 +1213,7 @@ export function IdealistaClient({
 
       {archivedListings.length > 0 && (
         <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink/45">
+          <h3 className="mb-3 crm-label-sm text-ink/45">
             Archivadas — bajadas de Idealista ({archivedListings.length})
           </h3>
           <div className="space-y-2">
@@ -1230,7 +1230,7 @@ export function IdealistaClient({
                     <p className="truncate text-sm font-medium text-ink/70">{displayTitle}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/45">
                       {listing.reference_code && (
-                        <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-medium font-mono">
+                        <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-medium font-mono">
                           {listing.reference_code}
                         </span>
                       )}

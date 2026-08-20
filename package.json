@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start --port 3137",
     "lint": "next lint",
+    "test:typography": "node scripts/check-crm-typography.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",

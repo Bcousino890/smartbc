@@ -76,7 +76,7 @@ export function EditClientDialog({
       footer={
         <>
           {error && (
-            <p className="me-auto text-[11.5px] text-rose-600">{error}</p>
+            <p className="me-auto text-xs text-rose-600">{error}</p>
           )}
           <Button onClick={onClose} disabled={saving}>
             {t("cc.cancel")}
@@ -116,14 +116,14 @@ export function EditClientDialog({
         </Labeled>
 
         <div>
-          <span className="mb-1 flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink/45">
+          <span className="mb-1 flex items-center gap-1.5 crm-label-sm text-ink/45">
             <Lock size={10} strokeWidth={2} />
             {t("cc.editClient.email")}
           </span>
-          <p className="rounded-md border border-ink/10 bg-ink/[0.03] px-2.5 py-1.5 text-[13px] text-ink/50">
+          <p className="rounded-md border border-ink/10 bg-ink/[0.03] px-2.5 py-1.5 text-sm text-ink/50">
             {client.email}
           </p>
-          <p className="mt-1 text-[10.5px] leading-relaxed text-ink/40">
+          <p className="mt-1 text-xs leading-relaxed text-ink/40">
             {t("cc.editClient.emailLocked")}
           </p>
         </div>

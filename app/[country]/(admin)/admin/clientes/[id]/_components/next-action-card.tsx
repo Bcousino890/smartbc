@@ -45,7 +45,7 @@ export function NextActionCard({
   return (
     <Panel title={t("cc.next.title")}>
       {!head ? (
-        <p className="text-[13px] text-ink/50">{t("cc.next.empty")}</p>
+        <p className="text-sm text-ink/50">{t("cc.next.empty")}</p>
       ) : (
         <>
           <div className="flex items-start gap-2.5">
@@ -54,18 +54,18 @@ export function NextActionCard({
               className={cn("mt-[7px] h-2 w-2 shrink-0 rounded-full", DOT[head.urgency])}
             />
             <div className="min-w-0 flex-1">
-              <p className="font-serif text-[17px] leading-snug text-ink">
+              <p className="text-lg leading-snug text-ink">
                 {say(head.titleKey, head)}
               </p>
               {head.detailKey && (
-                <p className="mt-1 text-[12.5px] leading-relaxed text-ink/55">
+                <p className="mt-1 text-xs leading-relaxed text-ink/55">
                   {say(head.detailKey, head)}
                 </p>
               )}
               <button
                 type="button"
                 onClick={() => onGo(head)}
-                className="mt-2.5 inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[11.5px] font-medium text-cream-50 transition hover:bg-ink-soft"
+                className="mt-2.5 inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
               >
                 {t(`cc.next.cta.${head.tab}`)}
                 <ArrowRight size={12} strokeWidth={2} className="text-gold" />
@@ -80,7 +80,7 @@ export function NextActionCard({
                   <button
                     type="button"
                     onClick={() => onGo(a)}
-                    className="flex w-full items-center gap-2 text-left text-[12px] text-ink/60 transition hover:text-ink"
+                    className="flex w-full items-center gap-2 text-left text-xs text-ink/60 transition hover:text-ink"
                   >
                     <span
                       aria-hidden

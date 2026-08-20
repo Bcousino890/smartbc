@@ -89,7 +89,7 @@ export function LeadRow({
           <div className="flex items-baseline gap-2">
             <span
               className={cn(
-                "min-w-0 truncate text-[13px]",
+                "min-w-0 truncate text-sm",
                 active ? "font-semibold text-ink" : "font-medium text-ink/90",
               )}
             >
@@ -103,20 +103,20 @@ export function LeadRow({
                 aria-label={t("inbox.filter.international")}
               />
             )}
-            <span className="ms-auto shrink-0 text-[10.5px] text-ink/35">
+            <span className="ms-auto shrink-0 text-xs text-ink/35">
               <RelativeTime at={lead.createdAt} locale={locale} />
             </span>
           </div>
 
           {/* Línea 2 — por qué escribió (redundante dentro de un piso) */}
           {!grouped && (
-            <p className="truncate text-[11.5px] leading-[1.35] text-ink/50">
+            <p className="truncate text-xs leading-[1.35] text-ink/50">
               {lead.propertyTitle ?? t("inbox.row.noProperty")}
             </p>
           )}
 
           {/* Línea 3 — por dónde va y qué reclama */}
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px] text-ink/45">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/45">
             <Pill tone={STATE_TONE[lead.state] ?? "neutral"}>
               {t(`inbox.state.${lead.state}`)}
             </Pill>

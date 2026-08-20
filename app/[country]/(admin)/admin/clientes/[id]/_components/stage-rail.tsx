@@ -22,7 +22,7 @@ export function StageRail({ stage }: { stage: ClientStage }) {
 
   return (
     <div className="flex items-center gap-2.5">
-      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
+      <span className="shrink-0 crm-label-sm text-ink">
         {t(`cc.stage.${stage}`)}
       </span>
       <div
@@ -46,7 +46,7 @@ export function StageRail({ stage }: { stage: ClientStage }) {
           />
         ))}
       </div>
-      <span className="shrink-0 text-[10.5px] tabular-nums text-ink/35">
+      <span className="shrink-0 text-xs tabular-nums text-ink/35">
         {current + 1}/{CLIENT_STAGES.length}
       </span>
     </div>

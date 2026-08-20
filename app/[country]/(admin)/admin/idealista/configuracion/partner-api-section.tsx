@@ -165,7 +165,7 @@ export function PartnerApiSection() {
     <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <div className="mb-4 flex items-center gap-2">
         <Plug size={20} className="text-gold" />
-        <h2 className="font-serif text-lg font-semibold text-ink">API en tiempo real (Partner API)</h2>
+        <h2 className="crm-section-title text-ink">API en tiempo real (Partner API)</h2>
       </div>
       <p className="mb-5 text-sm text-ink/60">
         Publica los anuncios llamando directamente a Idealista, con respuesta inmediata y control de huecos.
@@ -198,7 +198,7 @@ export function PartnerApiSection() {
         <input
           value={feedKey}
           onChange={(e) => setFeedKey(e.target.value)}
-          className={`${inputCls} font-mono text-[12px]`}
+          className={`${inputCls} font-mono text-xs`}
           placeholder="ilc…"
         />
         <p className="mt-1 text-xs text-ink/50">
@@ -280,7 +280,7 @@ export function PartnerApiSection() {
         >
           <p className="font-medium">{message.text}</p>
           {message.details?.length ? (
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[13px]">
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-sm">
               {message.details.map((detail, i) => (
                 <li key={i} className="break-words">{detail}</li>
               ))}
@@ -297,7 +297,7 @@ export function PartnerApiSection() {
           <p className="mt-0.5 text-xs text-amber-800/80">
             No se ha tocado ninguno. Revísalos para decidir si crear la ficha o darlos de baja.
           </p>
-          <ul className="mt-2 space-y-1 text-[13px] text-amber-900/90">
+          <ul className="mt-2 space-y-1 text-sm text-amber-900/90">
             {orphans.slice(0, 25).map((orphan) => (
               <li key={orphan.propertyId}>
                 <span className="font-mono">{orphan.propertyId}</span>

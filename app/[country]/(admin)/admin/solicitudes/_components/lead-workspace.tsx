@@ -104,14 +104,14 @@ export function LeadWorkspace({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate font-serif text-[19px] leading-tight text-ink">
+              <h2 className="truncate text-[22px] font-bold leading-tight text-ink">
                 {lead.name?.trim() || t("inbox.row.noName")}
               </h2>
               {lead.isInternational && (
                 <Globe size={13} strokeWidth={1.8} className="shrink-0 text-ink/35" />
               )}
             </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/50">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink/50">
               <Pill tone={STATE_TONE[lead.state] ?? "neutral"}>
                 {t(`inbox.state.${lead.state}`)}
               </Pill>
@@ -135,7 +135,7 @@ export function LeadWorkspace({
                 onChange={(e) => run(() => assignLead(lead.id, e.target.value || null))}
                 aria-label={t("inbox.assign.label")}
                 className={cn(
-                  "max-w-[170px] py-1 text-[11.5px]",
+                  "max-w-[170px] py-1 text-xs",
                   !lead.assignedTo && "border-amber-300 bg-amber-50 text-amber-800",
                 )}
               >
@@ -161,7 +161,7 @@ export function LeadWorkspace({
             <>
               <a
                 href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-[11.5px] font-medium text-ink/75 transition hover:border-gold/50 hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/50 hover:text-ink"
               >
                 <Phone size={11} strokeWidth={2} className="text-gold" />
                 {lead.phone}
@@ -181,7 +181,7 @@ export function LeadWorkspace({
             href={lead.idealistaThreadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/45 transition hover:text-ink"
+            className="inline-flex items-center gap-1 text-xs font-medium text-ink/45 transition hover:text-ink"
           >
             {t("inbox.openThread")}
             <ExternalLink size={10} strokeWidth={2} />
@@ -199,17 +199,17 @@ export function LeadWorkspace({
           )}
         </div>
 
-        {error && <p className="mt-2 text-[11.5px] text-rose-600">{error}</p>}
+        {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
       </header>
 
       {/* ── Cuerpo ── */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {lead.duplicates.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-            <p className="text-[11.5px] font-medium text-amber-800">
+            <p className="text-xs font-medium text-amber-800">
               {t("inbox.duplicate.title", { count: lead.duplicates.length })}
             </p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800/70">
+            <p className="mt-0.5 text-xs leading-relaxed text-amber-800/70">
               {t("inbox.duplicate.hint")}
             </p>
           </div>
@@ -274,12 +274,12 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
       }
     >
       {lead.message && (
-        <p className="whitespace-pre-line text-[13px] leading-relaxed text-ink/80">
+        <p className="whitespace-pre-line text-sm leading-relaxed text-ink/80">
           {translated && !showOriginal ? translated : lead.message}
         </p>
       )}
       {translated && !showOriginal && (
-        <p className="mt-1.5 text-[10.5px] text-ink/35">{t("inbox.enquiry.machine")}</p>
+        <p className="mt-1.5 text-xs text-ink/35">{t("inbox.enquiry.machine")}</p>
       )}
       {lead.profileBullets.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-1.5 border-t border-ink/8 pt-3">
@@ -339,11 +339,11 @@ function PropertyContext({
           <div className="min-w-0 flex-1">
             <Link
               href={`${config.prefix}/propiedades/${p.slug}`}
-              className="block truncate text-[13px] font-medium text-ink hover:underline"
+              className="block truncate text-sm font-medium text-ink hover:underline"
             >
               {p.title ?? "—"}
             </Link>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-ink/50">
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink/50">
               {p.reference && <span>{p.reference}</span>}
               {p.price !== null && (
                 <span>{config.formatPrice(p.price, null, p.operation)}</span>
@@ -358,7 +358,7 @@ function PropertyContext({
             <div className="mt-2 flex flex-wrap gap-2">
               <Link
                 href={`${config.prefix}/propiedades/${p.slug}`}
-                className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1 text-[11px] font-medium text-ink/70 transition hover:border-gold/50"
+                className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1 text-xs font-medium text-ink/70 transition hover:border-gold/50"
               >
                 {t("inbox.property.open")}
                 <ArrowUpRight size={10} strokeWidth={2} />
@@ -389,13 +389,13 @@ function PropertyContext({
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] text-ink/75">
+          <p className="truncate text-sm text-ink/75">
             {lead.propertyTitle ?? t("inbox.row.noProperty")}
           </p>
           {lead.propertyPrice && (
-            <p className="text-[11px] text-ink/45">{lead.propertyPrice}</p>
+            <p className="text-xs text-ink/45">{lead.propertyPrice}</p>
           )}
-          <p className="mt-1 text-[11px] text-amber-700">{t("inbox.property.unmatched")}</p>
+          <p className="mt-1 text-xs text-amber-700">{t("inbox.property.unmatched")}</p>
           {canEdit && (
             <div className="mt-2 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => setMatching((v) => !v)}>
@@ -404,7 +404,7 @@ function PropertyContext({
               </Button>
               <Link
                 href={`${config.prefix}/propiedades/importar`}
-                className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-gold/50"
+                className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/70 transition hover:border-gold/50"
               >
                 {t("inbox.property.import")}
                 <ArrowUpRight size={10} strokeWidth={2} />
@@ -459,7 +459,7 @@ function PropertyPicker({
         placeholder={t("inbox.property.searchPlaceholder")}
         autoFocus
       />
-      {searching && <p className="mt-1.5 text-[11px] text-ink/40">{t("inbox.searching")}</p>}
+      {searching && <p className="mt-1.5 text-xs text-ink/40">{t("inbox.searching")}</p>}
       {results.length > 0 && (
         <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto">
           {results.map((p) => (
@@ -470,11 +470,11 @@ function PropertyPicker({
                   onRun(() => matchLeadProperty(leadId, p.id));
                   onDone();
                 }}
-                className="flex w-full items-center justify-between gap-2 rounded border border-ink/8 px-2.5 py-1.5 text-left text-[12px] transition hover:border-gold/45"
+                className="flex w-full items-center justify-between gap-2 rounded border border-ink/8 px-2.5 py-1.5 text-left text-xs transition hover:border-gold/45"
               >
                 <span className="min-w-0 truncate text-ink">{p.title}</span>
                 {p.reference && (
-                  <span className="shrink-0 text-[10.5px] text-ink/40">{p.reference}</span>
+                  <span className="shrink-0 text-xs text-ink/40">{p.reference}</span>
                 )}
               </button>
             </li>
@@ -512,12 +512,12 @@ function ClientSection({
       <Panel title={t("inbox.client.title")}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium text-ink">
+            <p className="truncate text-sm font-medium text-ink">
               {lead.linkedClient.fullName}
             </p>
-            <p className="truncate text-[11px] text-ink/45">{lead.linkedClient.email}</p>
+            <p className="truncate text-xs text-ink/45">{lead.linkedClient.email}</p>
             {lead.convertedAt && (
-              <p className="mt-0.5 text-[10.5px] text-ink/35">
+              <p className="mt-0.5 text-xs text-ink/35">
                 {t("inbox.client.convertedOn", {
                   date: formatDate(lead.convertedAt, config.locale),
                 })}
@@ -526,7 +526,7 @@ function ClientSection({
           </div>
           <Link
             href={`${config.prefix}/clientes/${lead.clientId}`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[11.5px] font-medium text-cream-50 transition hover:bg-ink-soft"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
           >
             {t("inbox.client.openCommandCenter")}
             <ArrowUpRight size={11} strokeWidth={2} className="text-gold" />
@@ -554,14 +554,14 @@ function ClientSection({
       }
     >
       {!candidates ? (
-        <p className="text-[12.5px] text-ink/45">{t("inbox.client.notLinked")}</p>
+        <p className="text-xs text-ink/45">{t("inbox.client.notLinked")}</p>
       ) : !candidates.ok ? (
-        <p className="text-[12px] text-rose-600">{candidates.error}</p>
+        <p className="text-xs text-rose-600">{candidates.error}</p>
       ) : (
         <div className="space-y-3">
           {candidates.matches.length > 0 ? (
             <>
-              <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-ink/45">
+              <p className="crm-label-sm text-ink/45">
                 {t("inbox.client.possible")}
               </p>
               <ul className="space-y-1">
@@ -571,8 +571,8 @@ function ClientSection({
                     className="flex items-center justify-between gap-3 rounded border border-ink/10 px-2.5 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[12.5px] font-medium text-ink">{m.fullName}</p>
-                      <p className="truncate text-[10.5px] text-ink/45">
+                      <p className="truncate text-xs font-medium text-ink">{m.fullName}</p>
+                      <p className="truncate text-xs text-ink/45">
                         {t(`inbox.client.matchedBy.${m.matchedBy}`)} · {m.phone ?? m.email}
                       </p>
                     </div>
@@ -598,13 +598,13 @@ function ClientSection({
                 ))}
               </ul>
               {candidates.ambiguous && (
-                <p className="text-[11px] leading-relaxed text-amber-700">
+                <p className="text-xs leading-relaxed text-amber-700">
                   {t("inbox.client.ambiguous")}
                 </p>
               )}
             </>
           ) : (
-            <p className="text-[12.5px] text-ink/45">{t("inbox.client.noMatch")}</p>
+            <p className="text-xs text-ink/45">{t("inbox.client.noMatch")}</p>
           )}
 
           <CreateClientForm
@@ -613,7 +613,7 @@ function ClientSection({
             disabled={saving}
             onError={setError}
           />
-          {error && <p className="text-[11.5px] text-rose-600">{error}</p>}
+          {error && <p className="text-xs text-rose-600">{error}</p>}
         </div>
       )}
     </Panel>
@@ -666,7 +666,7 @@ function CreateClientForm({
         placeholder={t("inbox.client.emailOptional")}
         inputMode="email"
       />
-      <p className="text-[10.5px] leading-relaxed text-ink/40">
+      <p className="text-xs leading-relaxed text-ink/40">
         {t("inbox.client.emailHint")}
       </p>
       <div className="flex justify-end gap-2">
@@ -713,7 +713,7 @@ function ContactLog({
     <Panel title={t("inbox.log.title")}>
       {/* Abrir `tel:` no marca nada: que suene el teléfono no es haber
           hablado, y de esa diferencia depende el estado del lead. */}
-      <p className="text-[11px] text-ink/45">{t("inbox.log.callHint")}</p>
+      <p className="text-xs text-ink/45">{t("inbox.log.callHint")}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {outcomes.map((o) => (
           <Button
@@ -787,7 +787,7 @@ function FollowUp({
             {formatDateTime(lead.nextActionAt, locale)}
           </Pill>
           {lead.nextActionNote && (
-            <span className="text-[12px] text-ink/60">{lead.nextActionNote}</span>
+            <span className="text-xs text-ink/60">{lead.nextActionNote}</span>
           )}
           <div className="ms-auto flex gap-1.5">
             <Button size="sm" disabled={busy} onClick={() => onRun(() => snoozeFollowUp(lead.id, 1))}>
@@ -853,13 +853,13 @@ function Activity({ lead, locale }: { lead: LeadDetail; locale: string }) {
           <li className="flex gap-2.5">
             <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#25D366]" />
             <div className="min-w-0">
-              <p className="text-[12.5px] text-ink/80">
+              <p className="text-xs text-ink/80">
                 {wa.outbound > 0
                   ? t("inbox.activity.waSummary", { sent: wa.outbound, received: wa.inbound })
                   : t("inbox.activity.waOpenedOnly")}
               </p>
               {wa.lastMessageAt && (
-                <p className="text-[10.5px] text-ink/35">
+                <p className="text-xs text-ink/35">
                   <RelativeTime at={wa.lastMessageAt} locale={locale} />
                 </p>
               )}
@@ -871,12 +871,12 @@ function Activity({ lead, locale }: { lead: LeadDetail; locale: string }) {
           <li key={a.id} className="flex gap-2.5">
             <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/20" />
             <div className="min-w-0">
-              <p className="text-[12.5px] text-ink/80">
+              <p className="text-xs text-ink/80">
                 {t(`inbox.activity.kind.${a.kind}`)}
                 {a.outcome && ` · ${t(`inbox.log.call.${a.outcome}`)}`}
                 {a.body && <span className="text-ink/50"> · {a.body}</span>}
               </p>
-              <p className="text-[10.5px] text-ink/35">
+              <p className="text-xs text-ink/35">
                 <RelativeTime at={a.createdAt} locale={locale} />
                 {a.authorName ? ` · ${a.authorName}` : ""}
               </p>
@@ -887,8 +887,8 @@ function Activity({ lead, locale }: { lead: LeadDetail; locale: string }) {
         <li className="flex gap-2.5">
           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-gold/50" />
           <div>
-            <p className="text-[12.5px] text-ink/80">{t("inbox.activity.received")}</p>
-            <p className="text-[10.5px] text-ink/35">
+            <p className="text-xs text-ink/80">{t("inbox.activity.received")}</p>
+            <p className="text-xs text-ink/35">
               {formatDateTime(lead.createdAt, locale)}
             </p>
           </div>

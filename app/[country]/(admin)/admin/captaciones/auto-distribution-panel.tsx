@@ -125,7 +125,7 @@ export function AutoDistributionPanel({
             Reparto automático de captaciones
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                "rounded-full px-2 py-0.5 text-xs font-medium",
                 enabled
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-ink/8 text-ink/50"
@@ -134,7 +134,7 @@ export function AutoDistributionPanel({
               {enabled ? "Activo" : "Apagado"}
             </span>
           </h2>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-ink/50">
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-ink/50">
             <ShieldCheck size={11} />
             Solo visible para administradores · {assignableUsers.length} usuarios · {totalActive} captaciones activas
           </p>
@@ -153,7 +153,7 @@ export function AutoDistributionPanel({
               <span className="block text-sm font-medium text-ink">
                 Repartir las captaciones nuevas automáticamente
               </span>
-              <span className="mt-0.5 block text-[11px] text-ink/50">
+              <span className="mt-0.5 block text-xs text-ink/50">
                 Cada captación nueva se asigna sola al usuario marcado con menos captaciones
                 activas, para equilibrar la carga.
               </span>
@@ -179,13 +179,13 @@ export function AutoDistributionPanel({
           </label>
 
           {enabled && selected.size === 0 && (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Marca al menos un usuario abajo para que el reparto tenga a quién asignar.
             </p>
           )}
 
           {enabled && nextAssignee && (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-ink/55">
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-ink/55">
               <Sparkles size={11} className="text-gold-dark" />
               La próxima captación se asignaría a{" "}
               <span className="font-medium text-ink">
@@ -196,7 +196,7 @@ export function AutoDistributionPanel({
 
           {/* Lista de usuarios con su carga y el check del pool */}
           <div className="mt-3 space-y-1.5">
-            <div className="flex items-center justify-between px-1 text-[10px] font-medium uppercase tracking-wide text-ink/40">
+            <div className="flex items-center justify-between px-1 crm-label-sm text-ink/40">
               <span className="flex items-center gap-1">
                 <Users size={11} />
                 Usuario
@@ -225,7 +225,7 @@ export function AutoDistributionPanel({
                       <p className="truncate text-sm font-medium text-ink">
                         {u.full_name || "Sin nombre"}
                         {ROLE_LABEL[u.role] && (
-                          <span className="ml-1.5 text-[11px] font-normal text-ink/40">
+                          <span className="ml-1.5 text-xs font-normal text-ink/40">
                             {ROLE_LABEL[u.role]}
                           </span>
                         )}

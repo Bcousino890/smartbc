@@ -101,7 +101,7 @@ function CountryPicker({
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+        <label className="mb-1.5 block crm-label-sm text-ink/50">
           Países con acceso
         </label>
         <div className="flex flex-wrap gap-2">
@@ -127,14 +127,14 @@ function CountryPicker({
             );
           })}
         </div>
-        <p className="mt-1 text-[11px] text-ink/40">
+        <p className="mt-1 text-xs text-ink/40">
           Elige uno o ambos países. El acceso multi-país se activa automáticamente al seleccionar dos.
         </p>
       </div>
 
       {selected.length > 1 && (
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+          <label className="mb-1.5 block crm-label-sm text-ink/50">
             País por defecto (landing)
           </label>
           <select
@@ -148,7 +148,7 @@ function CountryPicker({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-[11px] text-ink/40">
+          <p className="mt-1 text-xs text-ink/40">
             Define a qué dashboard (/es/admin o /cl/admin) accede el usuario al iniciar sesión.
           </p>
         </div>
@@ -265,7 +265,7 @@ function CreateUserModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-serif text-xl font-semibold text-ink">{modalTitle}</h2>
+          <h2 className="crm-section-title text-ink">{modalTitle}</h2>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
@@ -288,7 +288,7 @@ function CreateUserModal({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
                   Nombre
                 </label>
                 <input
@@ -301,7 +301,7 @@ function CreateUserModal({
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
                   Apellido
                 </label>
                 <input
@@ -315,7 +315,7 @@ function CreateUserModal({
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Email <span className="text-red-500">*</span>
               </label>
               <input
@@ -330,7 +330,7 @@ function CreateUserModal({
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Teléfono
               </label>
               <input
@@ -346,7 +346,7 @@ function CreateUserModal({
               <>
                 {userRole === "admin" && advisors.length > 0 && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                    <label className="mb-1.5 block crm-label-sm text-ink/50">
                       Asignado a (Asesor)
                     </label>
                     <select
@@ -377,7 +377,7 @@ function CreateUserModal({
 
             {needsPassword && (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
                   Contraseña <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -562,7 +562,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-serif text-xl font-semibold text-ink">Editar usuario</h2>
+          <h2 className="crm-section-title text-ink">Editar usuario</h2>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-ink/40 hover:bg-ink/5 hover:text-ink"
@@ -582,7 +582,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
                   Nombre
                 </label>
                 <input
@@ -594,7 +594,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
                   Apellido
                 </label>
                 <input
@@ -607,7 +607,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Email
               </label>
               <input
@@ -619,14 +619,14 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                 className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
               />
               {email.trim() !== user.email && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-amber-700">
+                <p className="mt-1.5 text-xs leading-relaxed text-amber-700">
                   Cambiar el email cambia también el usuario con el que se
                   inicia sesión. A partir de guardar, hay que entrar con{" "}
                   <span className="font-medium">{email.trim() || "—"}</span>.
                 </p>
               )}
               {!isClient && email.trim() === user.email && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-ink/45">
+                <p className="mt-1.5 text-xs leading-relaxed text-ink/45">
                   Es el correo que ve el cliente en la ficha de asesor de una
                   colección de visitas, y el de inicio de sesión.
                 </p>
@@ -634,7 +634,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Teléfono
               </label>
               <input
@@ -645,7 +645,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
                 className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
               />
               {!isClient && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-ink/45">
+                <p className="mt-1.5 text-xs leading-relaxed text-ink/45">
                   Es el teléfono que ve el cliente cuando este agente firma una
                   colección de visitas (ficha de asesor y botón de WhatsApp).
                 </p>
@@ -654,7 +654,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
 
             {!isClient && (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <label className="mb-1.5 block crm-label-sm text-ink/50">
                   Rol
                 </label>
                 <select
@@ -682,10 +682,10 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
 
             {!isClient && selectedCountries.length > 1 && (
               <div className="space-y-2 rounded-xl border border-ink/10 bg-white/50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+                <p className="crm-label-sm text-ink/50">
                   Rol por país (opcional)
                 </p>
-                <p className="text-[11px] text-ink/40">
+                <p className="text-xs text-ink/40">
                   Por defecto usa el rol de arriba en ambos países. Elige un
                   rol distinto solo si este usuario debe tener más o menos
                   acceso en un país concreto (ej. senior en Chile, junior en
@@ -718,7 +718,7 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
             )}
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Nueva contraseña{" "}
                 <span className="font-normal normal-case text-ink/40">(dejar vacío para no cambiar)</span>
               </label>
@@ -790,21 +790,21 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
     <tr className="bg-white/55 transition hover:bg-white/85">
       <td className="rounded-l-xl px-3 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-[10px] font-medium text-cream-50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-cream-50">
             {user.initials}
           </span>
           <div>
             <p className="font-medium text-ink">
               {user.firstName} {user.lastName}
             </p>
-            <p className="text-[11px] text-ink/55">{user.email}</p>
+            <p className="text-xs text-ink/55">{user.email}</p>
           </div>
         </div>
       </td>
       <td className="px-3 py-3">
         <span
           className={cn(
-            "rounded-md border px-2.5 py-1 text-[11px] font-medium",
+            "rounded-md border px-2.5 py-1 text-xs font-medium",
             ROLE_BADGE[user.roleKey],
           )}
         >
@@ -817,7 +817,7 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
             <span
               key={c}
               title={COUNTRY_NAME[c] ?? c}
-              className="inline-flex items-center rounded-md border border-ink/10 bg-white/70 px-1.5 py-0.5 text-[13px] leading-none"
+              className="inline-flex items-center rounded-md border border-ink/10 bg-white/70 px-1.5 py-0.5 text-sm leading-none"
             >
               {COUNTRY_FLAG[c] ?? c}
             </span>
@@ -825,7 +825,7 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
         </div>
       </td>
       <td className="px-3 py-3">
-        <span className="flex items-center gap-1.5 text-[12px] text-ink/75">
+        <span className="flex items-center gap-1.5 text-xs text-ink/75">
           <span className={cn("h-2 w-2 rounded-full", STATUS_BADGE[user.status])} />
           {user.status === "active"
             ? "Activo"
@@ -834,13 +834,13 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
               : "Suspendido"}
         </span>
       </td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">{user.lastLoginText ?? "—"}</td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">{user.joinedLabel}</td>
+      <td className="px-3 py-3 text-xs text-ink/65">{user.lastLoginText ?? "—"}</td>
+      <td className="px-3 py-3 text-xs text-ink/65">{user.joinedLabel}</td>
       <td className="rounded-r-xl px-3 py-3 text-right">
         {isInvited ? (
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
           >
             <Mail size={12} strokeWidth={1.75} />
             <span>Reenviar invitación</span>
@@ -851,7 +851,7 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
               <button
                 type="button"
                 onClick={() => onPermissions?.(user)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-700 transition hover:bg-blue-100"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
               >
                 <ShieldCheck size={12} strokeWidth={1.75} />
                 <span>Permisos</span>
@@ -860,7 +860,7 @@ function UserRow({ user, onEdit, onPermissions }: UserRowProps) {
             <button
               type="button"
               onClick={() => onEdit?.(user)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:bg-white hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-ink/70 transition hover:bg-white hover:text-ink"
             >
               <UserCog size={12} strokeWidth={1.75} />
               <span>Editar</span>
@@ -903,7 +903,7 @@ function UsersTable({
     <div className="mt-5 overflow-x-auto">
       <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
         <thead>
-          <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+          <tr className="crm-table-header text-ink/50">
             <th className="px-3 pb-2">Usuario</th>
             <th className="px-3 pb-2">Rol</th>
             <th className="px-3 pb-2">País(es)</th>
@@ -1043,7 +1043,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
       {/* Sección 1: Administradores (solo admin) */}
       {isAdmin && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
+          <h2 className="mb-5 crm-section-title text-ink">
             Administradores
           </h2>
 
@@ -1082,7 +1082,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
       {/* Sección 2: Asesores (solo admin) */}
       {isAdmin && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">Asesores</h2>
+          <h2 className="mb-5 crm-section-title text-ink">Asesores</h2>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
@@ -1119,7 +1119,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
       {/* Sección 3: Agentes inmobiliarios (solo admin) */}
       {isAdmin && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
+          <h2 className="mb-5 crm-section-title text-ink">
             Agentes Inmobiliarios
           </h2>
 
@@ -1176,7 +1176,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
 
       {/* Sección 3: Clientes */}
       <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-        <h2 className="mb-5 font-serif text-lg font-semibold text-ink">Clientes</h2>
+        <h2 className="mb-5 crm-section-title text-ink">Clientes</h2>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label className="flex w-full max-w-md items-center gap-2 rounded-xl border border-ink/10 bg-white/85 px-3 py-2 text-sm transition focus-within:border-gold/55">
@@ -1212,7 +1212,7 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
       {/* Sección 4: Otros usuarios (viewer / roles no contemplados arriba) */}
       {others.length > 0 && (
         <section className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-          <h2 className="mb-5 font-serif text-lg font-semibold text-ink">
+          <h2 className="mb-5 crm-section-title text-ink">
             Otros usuarios
           </h2>
 

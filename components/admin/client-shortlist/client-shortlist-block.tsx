@@ -95,7 +95,7 @@ export function ClientShortlistBlock({
         count={visible.length}
       >
         {visible.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-[12px] text-ink/55">
+          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-xs text-ink/55">
             Manda al cliente su selección para que elija y ordene lo que quiere
             visitar, antes de montar el día.
           </p>
@@ -117,7 +117,7 @@ export function ClientShortlistBlock({
             type="button"
             onClick={() => setCreateOpen(true)}
             disabled={selections.length === 0 && portalLinks.length === 0}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-ink transition hover:border-gold/60 disabled:opacity-40"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-gold/60 disabled:opacity-40"
             title={
               selections.length === 0 && portalLinks.length === 0
                 ? "Primero añade propiedades a su selección o enlaces de portales"
@@ -185,34 +185,34 @@ function ShortlistRow({
       {/* Estado: el del TRABAJO y el del ENLACE, separados a propósito. */}
       <div className="flex flex-wrap items-center gap-2">
         {s.status === "submitted" ? (
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
             Enviada · {when(s.submitted_at)}
           </span>
         ) : (
-          <span className="rounded-full border border-ink/15 bg-white px-2 py-0.5 text-[10px] font-medium text-ink/60">
+          <span className="rounded-full border border-ink/15 bg-white px-2 py-0.5 text-xs font-medium text-ink/60">
             {s.first_opened_at ? "Revisando" : "Sin abrir"}
           </span>
         )}
 
         {s.linkState !== "active" && (
-          <span className="rounded-full border border-ink/15 bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink/50">
+          <span className="rounded-full border border-ink/15 bg-ink/5 px-2 py-0.5 text-xs font-medium text-ink/50">
             Enlace {s.linkState === "revoked" ? "revocado" : "caducado"}
           </span>
         )}
 
         {s.updatedAfterSubmit && (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
             Cambió cosas después de enviar
           </span>
         )}
 
-        <span className="ms-auto text-[10.5px] text-ink/40">
+        <span className="ms-auto text-xs text-ink/40">
           {LANGUAGE_LABELS[s.language]}
         </span>
       </div>
 
       {/* Progreso */}
-      <p className="mt-2 text-[12px] text-ink/70">
+      <p className="mt-2 text-xs text-ink/70">
         <span className="font-medium text-ink">
           {s.counts.decided} de {s.counts.total}
         </span>{" "}
@@ -235,7 +235,7 @@ function ShortlistRow({
       )}
 
       {error && (
-        <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11.5px] text-rose-700">
+        <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
           {error}
         </p>
       )}
@@ -246,7 +246,7 @@ function ShortlistRow({
           href={`/s/preview/${s.id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-gold/55"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/70 transition hover:border-gold/55"
         >
           <Eye size={11} strokeWidth={1.75} />
           Previsualizar
@@ -261,7 +261,7 @@ function ShortlistRow({
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1800);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-gold/55"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/70 transition hover:border-gold/55"
             >
               {copied ? (
                 <Check size={11} strokeWidth={2} className="text-emerald-600" />
@@ -274,7 +274,7 @@ function ShortlistRow({
               href={`https://wa.me/?text=${encodeURIComponent(url)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-gold/55"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/70 transition hover:border-gold/55"
             >
               <Send size={11} strokeWidth={1.75} className="text-gold-dark" />
               WhatsApp
@@ -312,7 +312,7 @@ function ShortlistRow({
                 return res;
               })
             }
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {pending ? (
               <Loader2 size={11} className="animate-spin" />
@@ -330,7 +330,7 @@ function ShortlistRow({
                 type="button"
                 disabled={pending}
                 onClick={() => run(() => renewClientShortlist(s.id))}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/60 transition hover:border-gold/55"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/60 transition hover:border-gold/55"
               >
                 <RefreshCw size={11} strokeWidth={1.75} />
                 Reactivar
@@ -343,7 +343,7 @@ function ShortlistRow({
                   if (!confirm("¿Cortar el acceso del cliente a esta selección?")) return;
                   run(() => revokeClientShortlist(s.id));
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/50 transition hover:border-rose-300 hover:text-rose-600"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/50 transition hover:border-rose-300 hover:text-rose-600"
               >
                 <Ban size={11} strokeWidth={1.75} />
                 Revocar
@@ -353,7 +353,7 @@ function ShortlistRow({
               type="button"
               disabled={pending}
               onClick={() => run(() => archiveClientShortlist(s.id))}
-              className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-ink/40 transition hover:text-ink"
+              className="rounded-lg px-2 py-1.5 text-xs font-medium text-ink/40 transition hover:text-ink"
             >
               Archivar
             </button>
@@ -378,30 +378,30 @@ function Group({
   if (items.length === 0) return null;
   return (
     <div className={cn(dim && "opacity-60")}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink/45">
+      <p className="crm-label-sm text-ink/45">
         {label} · {items.length}
       </p>
       <ul className="mt-1 space-y-1">
         {items.map((i, idx) => (
-          <li key={i.id} className="text-[12px] leading-snug text-ink/80">
+          <li key={i.id} className="text-xs leading-snug text-ink/80">
             <span className="inline-flex items-baseline gap-1.5">
               {numbered && (
-                <span className="font-mono text-[10.5px] tabular-nums text-gold-dark">
+                <span className="font-mono text-xs tabular-nums text-gold-dark">
                   {String(idx + 1).padStart(2, "0")}
                 </span>
               )}
               <span>{i.property.displayTitle}</span>
               {i.origin === "client_added" && (
-                <span className="rounded-full border border-gold/35 bg-gold/10 px-1.5 py-px text-[9px] font-medium text-gold-dark">
+                <span className="rounded-full border border-gold/35 bg-gold/10 px-1.5 py-px text-xs font-medium text-gold-dark">
                   la añadió él
                 </span>
               )}
               {i.property.isArchived && (
-                <span className="text-[9.5px] text-rose-600">ya no disponible</span>
+                <span className="text-xs text-rose-600">ya no disponible</span>
               )}
             </span>
             {i.client_comment && (
-              <span className="mt-0.5 block ps-1 text-[11.5px] italic text-ink/50">
+              <span className="mt-0.5 block ps-1 text-xs italic text-ink/50">
                 “{i.client_comment}”
               </span>
             )}

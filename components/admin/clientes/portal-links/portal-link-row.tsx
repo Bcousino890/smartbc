@@ -191,7 +191,7 @@ export function PortalLinkRow({
               <ChevronUp size={13} strokeWidth={2} />
             </button>
             <span
-              className="cursor-grab font-serif text-[11px] leading-none vc-nums text-ink/35 active:cursor-grabbing"
+              className="cursor-grab crm-number text-xs leading-none text-ink/35 active:cursor-grabbing"
               title="Arrastra para cambiar la prioridad"
             >
               {String(order).padStart(2, "0")}
@@ -246,20 +246,20 @@ export function PortalLinkRow({
                 href={link.url}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="mt-1 block truncate font-serif text-[15px] leading-snug text-ink transition-colors hover:text-gold-dark"
+                className="mt-1 block truncate text-base leading-snug text-ink transition-colors hover:text-gold-dark"
                 title={link.title ?? link.url}
               >
                 {link.title ?? link.url.replace(/^https?:\/\//, "")}
               </a>
               {specs.length > 0 && (
-                <p className="mt-0.5 truncate font-sans text-[11.5px] text-ink/45">
+                <p className="mt-0.5 truncate crm-meta text-ink/45">
                   {specs.join(" · ")}
                 </p>
               )}
             </div>
 
             <div className="shrink-0 text-right">
-              {priceText && <Figure className="text-[17px]">{priceText}</Figure>}
+              {priceText && <Figure className="text-lg">{priceText}</Figure>}
               <div className="mt-1.5 flex items-center justify-end gap-2">
                 <RatingStars
                   value={link.rating}
@@ -280,7 +280,7 @@ export function PortalLinkRow({
             {link.contact_phone && (
               <a
                 href={telHref(link.contact_phone)}
-                className="inline-flex items-center gap-1.5 font-sans text-[12px] font-medium text-ink/75 transition hover:text-gold-dark"
+                className="inline-flex items-center gap-1.5 text-xs text-ink/75 transition hover:text-gold-dark"
               >
                 <Phone size={12} strokeWidth={1.75} className="text-gold-dark" />
                 {link.contact_phone}
@@ -292,10 +292,10 @@ export function PortalLinkRow({
 
             {link.assignedTo && (
               <span
-                className="inline-flex items-center gap-1.5 font-sans text-[11.5px] text-ink/50"
+                className="inline-flex items-center gap-1.5 crm-meta text-ink/50"
                 title={`Asignado a ${link.assignedTo.name}`}
               >
-                <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-ink text-[8.5px] font-semibold text-cream-50">
+                <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-ink text-xs font-bold text-cream-50">
                   {initialsOf(link.assignedTo.name)}
                 </span>
                 {link.assignedTo.name}
@@ -303,13 +303,13 @@ export function PortalLinkRow({
             )}
 
             {link.proposed_visit_at && (
-              <span className="font-sans text-[11.5px] text-gold-dark">
+              <span className="crm-meta text-gold-dark">
                 Visita: {formatVisitMoment(link.proposed_visit_at)}
               </span>
             )}
 
             {link.notes_thread.length > 0 && (
-              <span className="font-sans text-[11.5px] text-ink/40">
+              <span className="crm-meta text-ink/40">
                 {link.notes_thread.length} nota
                 {link.notes_thread.length > 1 ? "s" : ""} ·{" "}
                 {formatAgo(link.notes_thread[0].created_at)}
@@ -320,7 +320,7 @@ export function PortalLinkRow({
               type="button"
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
-              className="ml-auto inline-flex items-center gap-1 font-display text-[9.5px] font-medium uppercase vc-tracked-sm text-ink/45 transition hover:text-ink"
+              className="ml-auto inline-flex items-center gap-1 crm-label-sm text-ink/45 transition hover:text-ink"
             >
               {open ? "Cerrar" : "Llamada"}
               <ChevronDown
@@ -395,17 +395,17 @@ function LinkDetail({
       {/* Hilo de llamadas */}
       <Label tone="gold">Registro de llamadas</Label>
       {link.notes_thread.length === 0 ? (
-        <p className="mt-2 font-sans text-[12px] text-ink/45">
+        <p className="mt-2 crm-meta text-ink/45">
           Todavía no ha llamado nadie. {LINK_STATUS_HINT[link.status]}.
         </p>
       ) : (
         <ol className="mt-2 space-y-2">
           {link.notes_thread.map((n) => (
             <li key={n.id} className="border-l-2 border-gold/25 pl-2.5">
-              <p className="font-sans text-[12.5px] leading-snug text-ink/80">
+              <p className="crm-meta leading-snug text-ink/80">
                 {n.body}
               </p>
-              <p className="mt-0.5 font-sans text-[10.5px] text-ink/40">
+              <p className="mt-0.5 crm-meta text-ink/40">
                 {n.authorName ?? "—"} · {formatAgo(n.created_at)}
                 {n.status_after
                   ? ` · ${LINK_STATUS_LABEL[n.status_after]}`
@@ -430,7 +430,7 @@ function LinkDetail({
                   setNote(q.text);
                   setSuggested(q.status);
                 }}
-                className="rounded-full border border-ink/10 bg-white px-2.5 py-1 font-sans text-[11px] text-ink/60 transition hover:border-gold/50 hover:text-ink"
+                className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-xs text-ink/60 transition hover:border-gold/50 hover:text-ink"
               >
                 {q.text}
               </button>
@@ -445,7 +445,7 @@ function LinkDetail({
             }}
             rows={2}
             placeholder="Qué han dicho: condiciones, disponibilidad, con quién has hablado…"
-            className="mt-2 w-full resize-y rounded-lg border border-ink/15 bg-white px-3 py-2 font-sans text-[12.5px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+            className="mt-2 w-full resize-y rounded-lg border border-ink/15 bg-white px-3 py-2 crm-input text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
           />
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -459,7 +459,7 @@ function LinkDetail({
                   onApplyStatus(s);
                 }}
                 className={cn(
-                  "rounded-lg border px-2.5 py-1.5 font-display text-[9.5px] font-medium uppercase vc-tracked-sm transition disabled:opacity-50",
+                  "rounded-lg border px-2.5 py-1.5 crm-label-sm transition disabled:opacity-50",
                   link.status === s
                     ? "border-gold/55 bg-gold/15 text-ink"
                     : "border-ink/12 bg-white text-ink/60 hover:border-gold/45 hover:text-ink",
@@ -482,7 +482,7 @@ function LinkDetail({
                   return res;
                 })
               }
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 font-sans text-[11.5px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-40"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 crm-button text-cream-50 transition hover:bg-ink-soft disabled:opacity-40"
             >
               {pending ? (
                 <Loader2 size={11} className="animate-spin" />
@@ -552,7 +552,7 @@ function LinkDetail({
           href={link.url}
           target="_blank"
           rel="noreferrer noopener"
-          className="inline-flex items-center gap-1.5 font-sans text-[11.5px] font-medium text-ink/65 transition hover:text-ink"
+          className="inline-flex items-center gap-1.5 text-xs text-ink/65 transition hover:text-ink"
         >
           <ExternalLink size={12} strokeWidth={1.75} className="text-gold-dark" />
           Ver anuncio
@@ -562,13 +562,13 @@ function LinkDetail({
           <>
             <Link
               href={`${config.prefix}/propiedades/${link.property.slug}`}
-              className="inline-flex items-center gap-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:text-gold"
+              className="inline-flex items-center gap-1.5 text-xs text-gold-dark transition hover:text-gold"
             >
               <Building2 size={12} strokeWidth={1.75} />
               Ver ficha creada
             </Link>
             {link.property.inSelection ? (
-              <span className="inline-flex items-center gap-1 font-sans text-[11.5px] text-emerald-700">
+              <span className="inline-flex items-center gap-1 crm-meta text-emerald-700">
                 <Check size={11} strokeWidth={2.5} />
                 En la selección del cliente
               </span>
@@ -586,7 +586,7 @@ function LinkDetail({
                       ),
                     )
                   }
-                  className="font-sans text-[11.5px] font-medium text-gold-dark transition hover:text-gold disabled:opacity-50"
+                  className="text-xs text-gold-dark transition hover:text-gold disabled:opacity-50"
                 >
                   Añadir a la selección
                 </button>
@@ -597,7 +597,7 @@ function LinkDetail({
           canEdit && (
             <Link
               href={importHref}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-[11.5px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 crm-button text-ink/75 transition hover:border-gold/55 hover:text-ink"
             >
               <Building2 size={12} strokeWidth={1.75} className="text-gold-dark" />
               Crear ficha desde el anuncio
@@ -613,7 +613,7 @@ function LinkDetail({
               if (!confirm("¿Quitar este enlace de la ficha del cliente?")) return;
               onRun(() => deletePortalLink(link.id));
             }}
-            className="ml-auto inline-flex items-center gap-1 font-sans text-[11.5px] text-ink/40 transition hover:text-rose-600 disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-1 crm-meta text-ink/40 transition hover:text-rose-600 disabled:opacity-50"
           >
             <Trash2 size={11} strokeWidth={1.75} />
             Quitar
@@ -625,7 +625,7 @@ function LinkDetail({
 }
 
 const fieldClass =
-  "w-full rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-[12px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none";
+  "w-full rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 crm-input text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none";
 
 function Field({
   label,

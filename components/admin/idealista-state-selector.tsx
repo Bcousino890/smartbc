@@ -61,7 +61,7 @@ export function IdealistaStateSelector({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${currentStateInfo.bg} ${currentStateInfo.color}`}>
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${currentStateInfo.bg} ${currentStateInfo.color}`}>
           {currentStateInfo.label}
         </span>
         {isLoading && <Loader2 size={12} className="animate-spin text-ink/50" />}

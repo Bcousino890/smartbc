@@ -195,7 +195,7 @@ export default async function AdminIdealistaPage({
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Sparkles size={20} className="text-gold" />
-            <h2 className="font-serif text-lg font-semibold text-ink">
+            <h2 className="crm-section-title text-ink">
               Publicar en Idealista
             </h2>
           </div>

@@ -31,7 +31,7 @@ export default async function AdminDiagnosticoPage({
       <DiagnosticoClient />
 
       <div className="mt-10">
-        <h2 className="mb-3 font-serif text-lg font-medium text-ink">
+        <h2 className="mb-3 crm-section-title text-ink">
           Extracción de teléfono (Idealista)
         </h2>
         <TestPhoneExtractor />

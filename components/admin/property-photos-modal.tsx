@@ -213,13 +213,13 @@ export function PropertyPhotosModal({
                 : t("adminProps.photos.uploadAction")}
             </span>
           </button>
-          <p className="mt-2 text-[11px] text-ink/45">
+          <p className="mt-2 text-xs text-ink/45">
             {t("adminProps.photos.uploadHint")}
           </p>
         </div>
 
         {error && (
-          <p className="mt-3 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+          <p className="mt-3 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
             {error}
           </p>
         )}
@@ -238,7 +238,7 @@ export function PropertyPhotosModal({
             </div>
           ) : (
             <>
-              <p className="mb-3 text-[12px] text-ink/55">
+              <p className="mb-3 text-xs text-ink/55">
                 {t("adminProps.photos.reorderHint")}
               </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -321,7 +321,7 @@ function PhotoCard({
       </span>
 
       {isPrincipal && (
-        <span className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+        <span className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 crm-label-sm text-ink">
           <Star size={10} strokeWidth={2} fill="currentColor" />
           {t("adminProps.photos.principal")}
         </span>
@@ -344,7 +344,7 @@ function PhotoCard({
           type="button"
           onClick={onMakePrincipal}
           disabled={isPending}
-          className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1 rounded-md bg-cream-50/95 px-2 py-1 text-[10px] font-semibold text-ink opacity-0 transition group-hover:opacity-100 hover:bg-white disabled:opacity-40"
+          className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1 rounded-md bg-cream-50/95 px-2 py-1 text-xs font-semibold text-ink opacity-0 transition group-hover:opacity-100 hover:bg-white disabled:opacity-40"
         >
           <Star size={11} strokeWidth={2} className="text-gold" />
           {t("adminProps.photos.makePrincipal")}

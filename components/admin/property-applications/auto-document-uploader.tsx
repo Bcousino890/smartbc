@@ -180,10 +180,10 @@ export function AutoDocumentUploader({ applicationId, operation, onUploaded }: P
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-gold" />
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+            <p className="crm-label-sm text-ink/50">
               Subir y detectar automáticamente
             </p>
-            <p className="text-[11px] text-ink/40">
+            <p className="text-xs text-ink/40">
               Arrastra los archivos aquí o selecciónalos — la IA identifica de qué documento se trata (y de qué país)
             </p>
           </div>
@@ -234,7 +234,7 @@ export function AutoDocumentUploader({ applicationId, operation, onUploaded }: P
                   <select
                     value={it.selectedTypeId ?? ""}
                     onChange={(e) => updateItem(it.key, { selectedTypeId: e.target.value })}
-                    className="rounded-md border border-ink/15 bg-white px-2 py-1 text-[11px] text-ink"
+                    className="rounded-md border border-ink/15 bg-white px-2 py-1 text-xs text-ink"
                   >
                     <option value="">Elige el tipo...</option>
                     {(allTypes ?? []).map((t) => (
@@ -246,7 +246,7 @@ export function AutoDocumentUploader({ applicationId, operation, onUploaded }: P
                   <button
                     onClick={() => void assignManualType(it.key)}
                     disabled={!it.selectedTypeId}
-                    className="rounded-md bg-ink px-2 py-1 text-[11px] font-medium text-cream-50 transition disabled:opacity-40"
+                    className="rounded-md bg-ink px-2 py-1 text-xs font-medium text-cream-50 transition disabled:opacity-40"
                   >
                     Asignar
                   </button>

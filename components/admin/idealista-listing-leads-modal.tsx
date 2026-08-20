@@ -157,7 +157,7 @@ function LeadCard({ lead: initialLead }: { lead: LeadRow }) {
           value={lead.contact_status}
           onChange={(e) => handleContactStatusChange(e.target.value as ContactStatus)}
           disabled={isPending}
-          className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-medium focus:outline-none disabled:opacity-60 ${CONTACT_STATUS_BADGE[lead.contact_status]}`}
+          className={`shrink-0 rounded-full border px-2 py-1 text-xs font-medium focus:outline-none disabled:opacity-60 ${CONTACT_STATUS_BADGE[lead.contact_status]}`}
         >
           {(Object.keys(CONTACT_STATUS_LABEL) as ContactStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -167,7 +167,7 @@ function LeadCard({ lead: initialLead }: { lead: LeadRow }) {
         </select>
       </div>
       {lead.message && <p className="mt-1.5 line-clamp-2 text-xs text-ink/55">{lead.message}</p>}
-      <p className="mt-1.5 text-[11px] text-ink/35">
+      <p className="mt-1.5 text-xs text-ink/35">
         {new Date(lead.message_date || lead.created_at).toLocaleDateString("es-ES", {
           day: "2-digit",
           month: "2-digit",

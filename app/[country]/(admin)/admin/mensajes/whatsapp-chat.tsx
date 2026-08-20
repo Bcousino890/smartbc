@@ -221,14 +221,14 @@ export function WhatsAppChat({
             <header className="border-b border-gold/15 bg-cream-50/85 px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 font-serif text-xs font-medium text-[#128C7E]">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 text-xs font-bold text-[#128C7E]">
                     {active.initials}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate font-serif text-base font-semibold text-ink">
+                    <p className="truncate text-base font-bold text-ink">
                       {active.displayName}
                     </p>
-                    <div className="flex items-center gap-2 text-[11px] text-ink/55">
+                    <div className="flex items-center gap-2 text-xs text-ink/55">
                       <span>+{active.phoneNumber}</span>
                       <span className="inline-block rounded-full bg-gold/20 px-1.5 py-0.5 font-medium">
                         {active.country === 'cl' ? '🇨🇱 Chile' : '🇪🇸 España'}
@@ -299,7 +299,7 @@ export function WhatsAppChat({
             </div>
 
             {error && (
-              <p className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+              <p className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                 {translateError(error)}
               </p>
             )}
@@ -319,7 +319,7 @@ export function WhatsAppChat({
               <button
                 type="submit"
                 disabled={draft.trim().length === 0 || isPending}
-                className="flex items-center gap-2 rounded-lg bg-[#128C7E] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#0e6f64] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-[#128C7E] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0e6f64] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isPending ? (
                   <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
@@ -367,12 +367,12 @@ function WhatsAppList({
 
   const header = (
     <li className="flex items-center justify-between border-b border-gold/15 px-4 py-3">
-      <p className="font-serif text-sm font-semibold text-ink">WhatsApp</p>
+      <p className="text-sm font-bold text-ink">WhatsApp</p>
       <button
         type="button"
         onClick={onNew}
         title="Nueva conversación"
-        className="flex items-center gap-1 rounded-lg bg-[#128C7E] px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-[#0e6f64]"
+        className="flex items-center gap-1 rounded-lg bg-[#128C7E] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[#0e6f64]"
       >
         <Plus size={13} strokeWidth={2} />
         Nueva
@@ -387,7 +387,7 @@ function WhatsAppList({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Buscar por nombre o número…"
-        className="w-full rounded-lg border border-gold/20 bg-white/70 px-3 py-1.5 text-[12px] text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none"
+        className="w-full rounded-lg border border-gold/20 bg-white/70 px-3 py-1.5 text-xs text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none"
       />
     </li>
   );
@@ -423,28 +423,28 @@ function WhatsAppList({
                 active && "bg-white/75",
               )}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25D366]/15 font-serif text-xs font-medium text-[#128C7E]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25D366]/15 text-xs font-bold text-[#128C7E]">
                 {c.initials}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate text-[13px] font-semibold text-ink">
+                  <p className="truncate text-sm font-semibold text-ink">
                     {c.displayName}
                   </p>
                   {c.lastTimestamp && (
-                    <p className="shrink-0 text-[10px] text-ink/55">
+                    <p className="shrink-0 text-xs text-ink/55">
                       {formatRelative(c.lastTimestamp)}
                     </p>
                   )}
                 </div>
                 {c.lastMessage && (
-                  <p className="truncate text-[11px] text-ink/50">
+                  <p className="truncate text-xs text-ink/50">
                     {c.lastMessage}
                   </p>
                 )}
               </div>
               {c.unreadCount > 0 && (
-                <span className="mt-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#25D366] px-1.5 text-[10px] font-semibold text-white">
+                <span className="mt-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#25D366] px-1.5 text-xs font-semibold text-white">
                   {c.unreadCount}
                 </span>
               )}
@@ -498,7 +498,7 @@ function NewConversationModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base font-semibold text-ink">
+          <h3 className="text-base font-bold text-ink">
             Nueva conversación
           </h3>
           <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
@@ -507,7 +507,7 @@ function NewConversationModal({
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               Número de WhatsApp (prefijo internacional)
             </span>
             <input
@@ -520,7 +520,7 @@ function NewConversationModal({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               Nombre (opcional)
             </span>
             <input
@@ -532,7 +532,7 @@ function NewConversationModal({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               País
             </span>
             <select
@@ -545,7 +545,7 @@ function NewConversationModal({
             </select>
           </label>
           {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
               {error}
             </p>
           )}
@@ -600,7 +600,7 @@ function Bubble({
       {showMeta && (
         <span
           className={cn(
-            "mt-0.5 flex items-center gap-1 text-[10px] text-ink/45",
+            "mt-0.5 flex items-center gap-1 text-xs text-ink/45",
             fromClient ? "pl-2" : "pr-2",
           )}
         >
@@ -713,7 +713,7 @@ function EditNameModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base font-semibold text-ink">
+          <h3 className="text-base font-bold text-ink">
             Editar nombre
           </h3>
           <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
@@ -722,7 +722,7 @@ function EditNameModal({
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               Nombre del contacto
             </span>
             <input
@@ -735,7 +735,7 @@ function EditNameModal({
             />
           </label>
           {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
               {error}
             </p>
           )}
@@ -798,7 +798,7 @@ function DeleteConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base font-semibold text-red-600">
+          <h3 className="text-base font-bold text-red-600">
             Borrar conversación
           </h3>
           <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
@@ -810,7 +810,7 @@ function DeleteConfirmModal({
           <strong>{contactName}</strong>? Se eliminarán todos los mensajes y esta acción no se puede deshacer.
         </p>
         {error && (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
             {error}
           </p>
         )}

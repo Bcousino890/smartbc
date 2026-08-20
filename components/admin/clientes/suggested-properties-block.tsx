@@ -70,11 +70,11 @@ export function SuggestedPropertiesBlock({
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+        <h2 className="crm-label-sm text-ink/50">
           Propiedades sugeridas
         </h2>
         {count > 0 && (
-          <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[11px] font-semibold text-gold-dark">
+          <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold-dark">
             {count}
           </span>
         )}
@@ -83,12 +83,12 @@ export function SuggestedPropertiesBlock({
       {state.kind === "loading" && (
         <div className="mt-4 flex h-20 items-center justify-center text-ink/45">
           <Loader2 size={15} className="mr-2 animate-spin" />
-          <span className="text-[12px]">Buscando propiedades…</span>
+          <span className="text-xs">Buscando propiedades…</span>
         </div>
       )}
 
       {state.kind === "no_preferences" && (
-        <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-[12px] text-ink/55">
+        <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-xs text-ink/55">
           {clientName} no tiene preferencias configuradas todavía. Añádelas para
           recibir sugerencias automáticas.
         </p>
@@ -97,12 +97,12 @@ export function SuggestedPropertiesBlock({
       {state.kind === "error" && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
           <AlertCircle size={14} className="mt-0.5 shrink-0 text-rose-600" />
-          <p className="text-[12px] text-rose-700">{state.message}</p>
+          <p className="text-xs text-rose-700">{state.message}</p>
         </div>
       )}
 
       {state.kind === "ready" && state.suggestions.length === 0 && (
-        <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-[12px] text-ink/55">
+        <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-xs text-ink/55">
           No hay propiedades disponibles que coincidan con las preferencias de{" "}
           <strong>{clientName}</strong>.
         </p>
@@ -162,18 +162,18 @@ function SuggestionCard({
             <div className="min-w-0">
               <Link
                 href={`${config.prefix}/propiedades/${property.slug}`}
-                className="block truncate text-[12px] font-semibold text-ink transition hover:text-gold-dark"
+                className="block truncate text-xs font-semibold text-ink transition hover:text-gold-dark"
               >
                 {property.title}
               </Link>
-              <p className="mt-0.5 truncate text-[10px] text-ink/55">
+              <p className="mt-0.5 truncate text-xs text-ink/55">
                 {property.bcReference ? `${property.bcReference} · ` : ""}
                 {property.zone}
                 {property.subzone ? ` · ${property.subzone}` : ""}
               </p>
             </div>
             <span className="flex shrink-0 items-center gap-1">
-              <span className="text-[10px] font-semibold text-amber-700">
+              <span className="text-xs font-semibold text-amber-700">
                 {property.matchScore}%
               </span>
               <Star
@@ -184,7 +184,7 @@ function SuggestionCard({
             </span>
           </div>
 
-          <div className="mt-1.5 flex items-center gap-3 text-[10px] text-ink/60">
+          <div className="mt-1.5 flex items-center gap-3 text-xs text-ink/60">
             <span className="flex items-center gap-1">
               <Home size={10} />
               {property.bedrooms}h
@@ -202,7 +202,7 @@ function SuggestionCard({
           </div>
 
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="text-[12px] font-semibold text-ink">
+            <span className="text-xs font-semibold text-ink">
               {config.formatPrice(
                 property.price,
                 property.currency,
@@ -224,7 +224,7 @@ function SuggestionCard({
               />
             ) : (
               property.matchReasons.length > 0 && (
-                <span className="truncate text-[9px] text-ink/55">
+                <span className="truncate text-xs text-ink/55">
                   {property.matchReasons[0]}
                 </span>
               )

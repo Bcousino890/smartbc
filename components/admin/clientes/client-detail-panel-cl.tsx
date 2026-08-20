@@ -123,7 +123,7 @@ export function ClientDetailPanelCL({
   if (!client) {
     return (
       <aside className="flex flex-col items-center justify-center rounded-2xl border border-gold/15 bg-cream-50/85 p-8 text-center shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
-        <p className="font-serif text-lg text-ink">Selecciona un cliente</p>
+        <p className="crm-section-title text-ink">Selecciona un cliente</p>
         <p className="mt-2 max-w-xs text-sm text-ink/60">
           Haz clic en un cliente para ver y editar sus preferencias de búsqueda.
         </p>
@@ -198,11 +198,11 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
             {client.avatarInitials}
           </span>
           <div className="min-w-0">
-            <h2 className="truncate font-serif text-xl font-semibold text-ink">
+            <h2 className="truncate crm-section-title text-ink">
               {client.firstName} {client.lastName}
             </h2>
             <span className={cn(
-              "mt-1 inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+              "mt-1 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium",
               isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-ink/15 bg-ink/5 text-ink/55",
             )}>
               {isActive ? "Activo" : "Inactivo"}
@@ -215,7 +215,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
       </div>
 
       {/* Contacto */}
-      <ul className="flex flex-col gap-2 border-t border-gold/15 px-5 py-3 text-[12px] text-ink/70">
+      <ul className="flex flex-col gap-2 border-t border-gold/15 px-5 py-3 text-xs text-ink/70">
         <li className="flex items-center gap-1.5 truncate">
           <Mail size={13} strokeWidth={1.75} className="text-gold" />
           <span className="truncate">{client.email}</span>
@@ -236,7 +236,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 
       {/* Actividad */}
       <div className="border-t border-gold/15 px-5 py-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">Actividad</p>
+        <p className="crm-label-sm text-ink/55">Actividad</p>
         <ul className="mt-3 grid grid-cols-4 gap-2">
           {[
             { icon: <Eye size={14} strokeWidth={1.75} />, value: client.activity.propertiesViewed, label: "Vistas" },
@@ -246,8 +246,8 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
           ].map(({ icon, value, label }) => (
             <li key={label} className="flex flex-col items-center gap-1 rounded-xl border border-gold/10 bg-white/55 py-2.5 text-center">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/15 text-gold">{icon}</span>
-              <span className="font-serif text-base font-semibold text-ink">{value}</span>
-              <span className="text-[10px] leading-tight text-ink/55">{label}</span>
+              <span className="text-base font-bold text-ink">{value}</span>
+              <span className="text-xs leading-tight text-ink/55">{label}</span>
             </li>
           ))}
         </ul>
@@ -255,14 +255,14 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 
       {/* Preferencias de búsqueda Chile */}
       <div className="flex flex-col gap-4 border-t border-gold/15 p-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">Preferencias de búsqueda</p>
+        <p className="crm-label-sm text-ink/55">Preferencias de búsqueda</p>
 
         {/* Operación */}
         <FilterRow label="Operación">
           <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
             {(["alquiler", "venta"] as const).map((op) => (
               <button key={op} type="button" onClick={() => patch("operation", op)}
-                className={cn("flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium capitalize transition",
+                className={cn("flex-1 rounded-md px-3 py-1.5 text-xs font-medium capitalize transition",
                   state.operation === op ? "bg-ink text-cream-50 shadow-sm" : "text-ink/65 hover:text-ink")}>
                 {op === "alquiler" ? "Arriendo" : "Venta"}
               </button>
@@ -275,7 +275,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
           <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
             {(["CLP", "UF"] as const).map((cur) => (
               <button key={cur} type="button" onClick={() => patch("currencyPreference", cur)}
-                className={cn("flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                className={cn("flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
                   state.currencyPreference === cur ? "bg-ink text-cream-50 shadow-sm" : "text-ink/65 hover:text-ink")}>
                 {cur}
               </button>
@@ -301,7 +301,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 
         {/* Ubicación en cascada */}
         <div className="rounded-xl border border-gold/15 bg-white/40 p-3">
-          <p className="mb-3 text-[11px] font-medium text-ink/55">Ubicación preferida (Chile)</p>
+          <p className="mb-3 text-xs font-medium text-ink/55">Ubicación preferida (Chile)</p>
 
           <div className="space-y-3">
             {/* Regiones */}
@@ -387,7 +387,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 
         {/* Especificaciones arquitectónicas */}
         <div className="rounded-xl border border-gold/15 bg-white/40 p-3">
-          <p className="mb-3 text-[11px] font-medium text-ink/55">Características arquitectónicas</p>
+          <p className="mb-3 text-xs font-medium text-ink/55">Características arquitectónicas</p>
 
           <div className="space-y-3">
             {/* Dormitorio de servicio */}
@@ -432,7 +432,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 
         {/* Tipos arquitectónicos */}
         <div>
-          <p className="mb-2 text-[11px] font-medium text-ink/55">Tipo de propiedad</p>
+          <p className="mb-2 text-xs font-medium text-ink/55">Tipo de propiedad</p>
           <div className="flex flex-wrap gap-1.5">
             {ARCHITECTURAL_TYPES.map(({ value, label }) => {
               const active = state.preferredArchitecturalTypes.includes(value);
@@ -448,7 +448,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
                     )
                   }
                   className={cn(
-                    "rounded-full border px-3 py-1 text-[11px] font-medium transition",
+                    "rounded-full border px-3 py-1 text-xs font-medium transition",
                     active
                       ? "border-gold/40 bg-gold/15 text-gold-dark"
                       : "border-ink/10 bg-white/70 text-ink/65 hover:border-gold/20 hover:text-ink",
@@ -463,7 +463,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 
         {/* Orientación */}
         <div>
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-ink/55">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink/55">
             <Compass size={13} strokeWidth={1.75} className="text-gold" />
             Orientación preferida
           </p>
@@ -482,7 +482,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
                     )
                   }
                   className={cn(
-                    "rounded-full border px-3 py-1 text-[11px] font-medium transition",
+                    "rounded-full border px-3 py-1 text-xs font-medium transition",
                     active
                       ? "border-gold/40 bg-gold/15 text-gold-dark"
                       : "border-ink/10 bg-white/70 text-ink/65 hover:border-gold/20 hover:text-ink",
@@ -496,7 +496,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
         </div>
 
         {/* Nota */}
-        <p className="flex items-start gap-2 rounded-lg border border-gold/30 bg-cream-100/60 p-2.5 text-[11px] leading-snug text-ink/70">
+        <p className="flex items-start gap-2 rounded-lg border border-gold/30 bg-cream-100/60 p-2.5 text-xs leading-snug text-ink/70">
           <Info size={13} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold" />
           <span>Los filtros configurados determinan qué propiedades se sugieren a este cliente en su portal.</span>
         </p>
@@ -505,22 +505,22 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
       {/* Notas internas */}
       <div className="border-t border-gold/15 p-5 pt-4">
         <header className="flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">Notas internas</p>
+          <p className="crm-label-sm text-ink/55">Notas internas</p>
           <button type="button" aria-label="Editar notas" className="flex h-7 w-7 items-center justify-center rounded-md text-ink/45 transition hover:bg-white/60 hover:text-ink">
             <Pencil size={13} strokeWidth={1.75} />
           </button>
         </header>
         <div className="mt-3 rounded-xl border border-gold/15 bg-white/55 p-3">
           {client.internalNotes.length === 0 ? (
-            <p className="text-[12px] text-ink/55">Sin notas aún.</p>
+            <p className="text-xs text-ink/55">Sin notas aún.</p>
           ) : (
-            <ul className="list-disc space-y-1.5 pl-5 text-[13px] text-ink/75">
+            <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink/75">
               {client.internalNotes.map((note, i) => (
                 <li key={i}>{note}</li>
               ))}
             </ul>
           )}
-          <p className={cn("mt-3 flex items-center gap-1.5 text-[12px] font-semibold",
+          <p className={cn("mt-3 flex items-center gap-1.5 text-xs font-semibold",
             client.priority === "high" ? "text-amber-700" : "text-ink/55")}>
             <Star size={13} strokeWidth={1.75} className={cn(client.priority === "high" ? "fill-amber-500 text-amber-500" : "text-ink/40")} />
             {client.priority === "high" ? "Prioridad alta" : "Prioridad normal"}
@@ -532,23 +532,23 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
       <div className="border-t border-gold/15 p-5 pt-4">
         <div className="grid grid-cols-2 gap-3">
           <button type="button" onClick={handleReset} disabled={isPending}
-            className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-[13px] font-medium text-ink transition hover:border-gold/55 hover:bg-white disabled:opacity-50">
+            className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-sm font-medium text-ink transition hover:border-gold/55 hover:bg-white disabled:opacity-50">
             <RotateCcw size={14} strokeWidth={1.75} className="text-gold" />
             <span>Restablecer</span>
           </button>
           <button type="button" onClick={handleSave} disabled={isPending}
-            className="flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[13px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50">
+            className="flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50">
             <Save size={14} strokeWidth={1.75} className="text-gold" />
             <span>{isPending ? "Guardando…" : "Guardar filtros"}</span>
           </button>
         </div>
         {feedback === "saved" && (
-          <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[12px] font-medium text-emerald-700">
+          <p className="mt-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700">
             <Check size={13} strokeWidth={2} /> Preferencias guardadas
           </p>
         )}
         {feedback === "error" && (
-          <p className="mt-2.5 text-center text-[12px] font-medium text-red-600">
+          <p className="mt-2.5 text-center text-xs font-medium text-red-600">
             Error al guardar{errorMsg ? ` · ${errorMsg}` : ""}
           </p>
         )}
@@ -562,7 +562,7 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[90px_1fr] items-center gap-2">
-      <span className="text-[11px] font-medium text-ink/60">{label}</span>
+      <span className="text-xs font-medium text-ink/60">{label}</span>
       {children}
     </div>
   );
@@ -582,7 +582,7 @@ function PriceField({
   step?: number;
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus-within:border-gold/55">
+    <div className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus-within:border-gold/55">
       <span className="shrink-0 text-ink/45">{prefix}</span>
       <input
         type="number"
@@ -612,8 +612,8 @@ function NumberInputField({
 }) {
   return (
     <div className={compact ? "" : "flex flex-col gap-1"}>
-      {label && <span className="text-[11px] font-medium text-ink/55">{label}</span>}
-      <div className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus-within:border-gold/55">
+      {label && <span className="text-xs font-medium text-ink/55">{label}</span>}
+      <div className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus-within:border-gold/55">
         {icon && <span className="text-gold">{icon}</span>}
         <input
           type="number"
@@ -647,7 +647,7 @@ function ThreeToggle({
           type="button"
           onClick={() => onChange(v)}
           className={cn(
-            "flex-1 rounded-md py-1.5 text-[12px] font-medium transition",
+            "flex-1 rounded-md py-1.5 text-xs font-medium transition",
             value === v ? "bg-ink text-cream-50 shadow-sm" : "text-ink/65 hover:text-ink",
           )}
         >

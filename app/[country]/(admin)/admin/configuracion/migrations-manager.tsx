@@ -76,7 +76,7 @@ export function MigrationsManager() {
           <div>
             <p className="font-medium text-emerald-800">{message}</p>
             {output && (
-              <pre className="mt-2 text-[11px] bg-white p-2 rounded border border-emerald-100 overflow-auto max-h-48 text-emerald-700">
+              <pre className="mt-2 text-xs bg-white p-2 rounded border border-emerald-100 overflow-auto max-h-48 text-emerald-700">
                 {output}
               </pre>
             )}
@@ -90,7 +90,7 @@ export function MigrationsManager() {
           <div>
             <p className="font-medium text-red-800">{message}</p>
             {output && (
-              <pre className="mt-2 text-[11px] bg-white p-2 rounded border border-red-100 overflow-auto max-h-48 text-red-700">
+              <pre className="mt-2 text-xs bg-white p-2 rounded border border-red-100 overflow-auto max-h-48 text-red-700">
                 {output}
               </pre>
             )}
@@ -111,7 +111,7 @@ export function MigrationsManager() {
         </span>
       </button>
 
-      <p className="mt-4 text-[11px] text-ink/55">
+      <p className="mt-4 text-xs text-ink/55">
         ⚠️ Esta acción aplicará todas las migraciones SQL pendientes en la base de datos.
         Se puede ejecutar múltiples veces sin problemas.
       </p>

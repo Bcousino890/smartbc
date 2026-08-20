@@ -49,12 +49,12 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; cl
 };
 
 function MlStatusBadge({ status }: { status: string | null }) {
-  if (!status) return <span className="text-[11px] text-ink/35">—</span>;
+  if (!status) return <span className="text-xs text-ink/35">—</span>;
   const cfg = STATUS_CONFIG[status];
   if (!cfg) return null;
   const Icon = cfg.icon;
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium", cfg.cls)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium", cfg.cls)}>
       <Icon size={11} strokeWidth={2} />
       {cfg.label}
     </span>
@@ -151,7 +151,7 @@ export function PublicacionClClient({
           <Globe2 size={15} strokeWidth={1.75} />
           PortalInmobiliario.com
           <span className={cn(
-            "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+            "ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold",
             tab === "portal" ? "bg-cream-50/20 text-cream-50" : "bg-ink/10 text-ink/60"
           )}>
             {publishedCount}/{totalCount}
@@ -179,7 +179,7 @@ export function PublicacionClClient({
           <div className="mb-5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Globe2 size={18} className="text-gold" />
-              <h2 className="font-serif text-lg font-semibold text-ink">PortalInmobiliario.com</h2>
+              <h2 className="crm-section-title text-ink">PortalInmobiliario.com</h2>
             </div>
             <Link
               href="/cl/admin/configuracion"
@@ -227,7 +227,7 @@ export function PublicacionClClient({
             ].map((s) => (
               <div key={s.label} className="rounded-xl border border-gold/10 bg-white/70 p-3 text-center">
                 <p className="text-xl font-semibold text-ink">{s.value}</p>
-                <p className="mt-0.5 text-[11px] text-ink/50">{s.label}</p>
+                <p className="mt-0.5 text-xs text-ink/50">{s.label}</p>
               </div>
             ))}
           </div>
@@ -250,7 +250,7 @@ export function PublicacionClClient({
                 <thead>
                   <tr className="border-b border-gold/10 bg-white/50">
                     {["Propiedad", "Precio", "Ubicación", "Estado", "Acciones"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-ink/45">{h}</th>
+                      <th key={h} className="px-4 py-3 crm-table-header text-ink/45">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -274,21 +274,21 @@ export function PublicacionClClient({
                             <div className="min-w-0">
                               <Link
                                 href={`/cl/admin/propiedades/${p.slug}`}
-                                className="line-clamp-1 text-[13px] font-medium text-ink hover:text-gold"
+                                className="line-clamp-1 text-sm font-medium text-ink hover:text-gold"
                               >
                                 {p.title}
                               </Link>
                               {p.bc_reference && (
-                                <p className="text-[10px] text-ink/40">{p.bc_reference}</p>
+                                <p className="text-xs text-ink/40">{p.bc_reference}</p>
                               )}
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-[13px] font-semibold text-ink">
+                          <p className="text-sm font-semibold text-ink">
                             {p.price ? `${formatPrice(p.price)} ${formatCurrency(p.currency)}` : "—"}
                           </p>
-                          <p className="text-[11px] text-ink/50">
+                          <p className="text-xs text-ink/50">
                             {p.operation === "rent" ? "Arriendo" : "Venta"}
                             {" · "}{p.bedrooms ?? 0}d {p.bathrooms ?? 0}b
                             {p.square_meters ? ` · ${p.square_meters}m²` : ""}
@@ -297,17 +297,17 @@ export function PublicacionClClient({
                         <td className="px-4 py-3">
                           {p.commune ? (
                             <>
-                              <p className="text-[12px] text-ink/70">{p.commune}</p>
-                              <p className="text-[11px] text-ink/40">{p.region ?? ""}</p>
+                              <p className="text-xs text-ink/70">{p.commune}</p>
+                              <p className="text-xs text-ink/40">{p.region ?? ""}</p>
                             </>
                           ) : (
-                            <span className="text-[11px] text-amber-600">Sin comuna ★</span>
+                            <span className="text-xs text-amber-600">Sin comuna ★</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           <MlStatusBadge status={p.portalinmobiliario_sync_status} />
                           {p.portalinmobiliario_published_at && (
-                            <p className="mt-1 text-[10px] text-ink/35">
+                            <p className="mt-1 text-xs text-ink/35">
                               {new Date(p.portalinmobiliario_published_at).toLocaleDateString("es-CL")}
                             </p>
                           )}
@@ -321,7 +321,7 @@ export function PublicacionClClient({
                                     type="button"
                                     onClick={() => handlePublish(p.id)}
                                     disabled={isLoading || isPending}
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-50"
                                   >
                                     {isLoading ? <Loader2 size={11} className="animate-spin" /> : <Globe2 size={11} />}
                                     {p.portalinmobiliario_sync_status === "archived" ? "Re-publicar"
@@ -334,7 +334,7 @@ export function PublicacionClClient({
                                     type="button"
                                     onClick={() => handleUnpublish(p.id)}
                                     disabled={isLoading || isPending}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
                                   >
                                     {isLoading ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
                                     Bajar
@@ -347,14 +347,14 @@ export function PublicacionClClient({
                                 href={mlListingUrl(p.portalinmobiliario_id)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-gold hover:text-gold-dark"
+                                className="inline-flex items-center gap-1 text-xs text-gold hover:text-gold-dark"
                               >
                                 <ExternalLink size={10} />
                                 Ver anuncio
                               </a>
                             )}
                             {errorMsg && (
-                              <p className="max-w-[160px] text-[10px] text-red-600">{errorMsg}</p>
+                              <p className="max-w-[160px] text-xs text-red-600">{errorMsg}</p>
                             )}
                           </div>
                         </td>
@@ -369,10 +369,10 @@ export function PublicacionClClient({
           {/* Warning: missing fields */}
           {properties.some((p) => !p.commune || !p.region || !p.property_type) && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[12px] font-semibold text-amber-800">
+              <p className="text-xs font-semibold text-amber-800">
                 Algunas propiedades les faltan datos requeridos por PortalInmobiliario (★)
               </p>
-              <p className="mt-1 text-[11px] text-amber-700">
+              <p className="mt-1 text-xs text-amber-700">
                 Edita cada propiedad para completar: comuna, región y tipo. Sin esos datos no se puede publicar.
               </p>
             </div>
@@ -385,7 +385,7 @@ export function PublicacionClClient({
         <div className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
           <div className="mb-5 flex items-center gap-2">
             <LinkIcon size={18} className="text-gold" />
-            <h2 className="font-serif text-lg font-semibold text-ink">Publicación Web</h2>
+            <h2 className="crm-section-title text-ink">Publicación Web</h2>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -421,7 +421,7 @@ export function PublicacionClClient({
           </div>
 
           <div className="mt-4 rounded-xl border border-gold/15 bg-gold/5 px-4 py-3">
-            <p className="text-[12px] text-ink/60">
+            <p className="text-xs text-ink/60">
               Las propiedades en estado <strong>Disponible</strong> aparecen en el portal web automáticamente.
               Para gestionar fotos, vídeos y planos, entra a la ficha de cada propiedad.
             </p>

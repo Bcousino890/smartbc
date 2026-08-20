@@ -349,7 +349,7 @@ export default function ConfiguracionClient() {
               onChange={setMlClientSecret}
               placeholder="ej: f36c1f2a7d8b9e4c..."
             />
-            <p className="text-[11px] text-ink/45">
+            <p className="text-xs text-ink/45">
               Redirect URI a configurar en ML Developer: <code className="bg-ink/8 px-1 py-0.5 rounded font-mono">https://portal.bcousinoprop.com/api/cl/ml-callback</code>
             </p>
           </div>
@@ -424,7 +424,7 @@ function SettingsSection({
   const t = useT();
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+      <header className="flex items-center gap-2 crm-label-sm text-ink/55">
         <span className="text-gold">{icon}</span>
         <span>{t(titleKey)}</span>
       </header>
@@ -447,7 +447,7 @@ function Field({
   const t = useT();
   return (
     <label className={cn("flex flex-col gap-1.5", fullWidth && "md:col-span-2")}>
-      <span className="text-[11px] font-medium text-ink/65">
+      <span className="text-xs font-medium text-ink/65">
         {t(labelKey)}
       </span>
       <input
@@ -472,7 +472,7 @@ function ColorField({
   const t = useT();
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium text-ink/65">
+      <span className="text-xs font-medium text-ink/65">
         {t(labelKey)}
       </span>
       <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
@@ -513,7 +513,7 @@ function NumberField({
   const t = useT();
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium text-ink/65">
+      <span className="text-xs font-medium text-ink/65">
         {t(labelKey)}
       </span>
       <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3">
@@ -550,7 +550,7 @@ function SelectField({
   const t = useT();
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium text-ink/65">
+      <span className="text-xs font-medium text-ink/65">
         {t(labelKey)}
       </span>
       <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3">
@@ -585,7 +585,7 @@ function PasswordField({
   const [show, setShow] = useState(false);
   return (
     <label className="flex flex-col gap-1.5 md:col-span-2">
-      <span className="text-[11px] font-medium text-ink/65">{label}</span>
+      <span className="text-xs font-medium text-ink/65">{label}</span>
       <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
         <input
           type={show ? "text" : "password"}

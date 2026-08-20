@@ -66,7 +66,7 @@ export function CommandHeader({
         <div className="flex items-center justify-between gap-3">
           <Link
             href={`${config.prefix}/clientes`}
-            className="inline-flex items-center gap-1.5 text-[12px] text-ink/55 transition hover:text-ink"
+            className="inline-flex items-center gap-1.5 text-xs text-ink/55 transition hover:text-ink"
           >
             <ArrowLeft size={14} strokeWidth={1.75} />
             {t("clientes.ficha.back")}
@@ -90,11 +90,11 @@ export function CommandHeader({
         {/* ── Identidad ── */}
         <div className="mt-3 flex flex-wrap items-start gap-x-5 gap-y-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-[15px] text-cream-50">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-base font-bold text-cream-50">
               {client.avatarInitials}
             </span>
             <div className="min-w-0">
-              <h1 className="truncate font-serif text-[22px] leading-tight text-ink">
+              <h1 className="truncate text-[22px] font-bold leading-tight text-ink">
                 {fullName || client.email}
               </h1>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -112,7 +112,7 @@ export function CommandHeader({
           </div>
 
           {/* ── Contacto: enlaces que se pulsan, no texto decorativo ── */}
-          <ul className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink/60">
+          <ul className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink/60">
             <li className="flex min-w-0 items-center gap-1.5">
               <Mail size={12} strokeWidth={1.75} className="shrink-0 text-gold" />
               <a href={`mailto:${client.email}`} className="truncate hover:text-ink hover:underline">
@@ -135,7 +135,7 @@ export function CommandHeader({
 
           {/* ── De quién es este cliente ── */}
           <div className="ms-auto flex items-center gap-2">
-            <span className="text-[10.5px] uppercase tracking-[0.07em] text-ink/40">
+            <span className="crm-label-sm text-ink/40">
               {t("cc.advisor.label")}
             </span>
             {canEdit ? (
@@ -150,7 +150,7 @@ export function CommandHeader({
                   });
                 }}
                 className={cn(
-                  "max-w-[190px] truncate rounded-md border px-2 py-1 text-[12px] outline-none transition",
+                  "crm-input max-w-[190px] truncate rounded-md border px-2 py-1 outline-none transition",
                   advisor
                     ? "border-ink/15 bg-white text-ink"
                     : "border-amber-300 bg-amber-50 text-amber-800",
@@ -164,7 +164,7 @@ export function CommandHeader({
                 ))}
               </select>
             ) : (
-              <span className="text-[12px] font-medium text-ink">
+              <span className="text-xs font-medium text-ink">
                 {advisor?.name ?? t("cc.advisor.unassigned")}
               </span>
             )}
@@ -176,7 +176,7 @@ export function CommandHeader({
           <div className="min-w-0 flex-1 sm:max-w-xl">
             <StageRail stage={stage} />
           </div>
-          <p className="text-[11px] text-ink/45">
+          <p className="text-xs text-ink/45">
             {lastActivity ? (
               <>
                 {t("cc.lastActivity.label")}{" "}

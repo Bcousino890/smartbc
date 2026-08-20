@@ -134,10 +134,10 @@ export function ItineraryBuilder({
           {/* Cabecera */}
           <div className="flex items-start justify-between gap-3 border-b border-gold/15 px-5 py-4">
             <div className="min-w-0">
-              <h3 className="font-serif text-lg font-semibold text-ink">
+              <h3 className="crm-section-title text-ink">
                 {itinerary.title || "Itinerario"}
               </h3>
-              <p className="mt-0.5 text-[11px] text-ink/55">
+              <p className="mt-0.5 text-xs text-ink/55">
                 {clientName} · {stops.length}{" "}
                 {stops.length === 1 ? "parada" : "paradas"}
               </p>
@@ -154,14 +154,14 @@ export function ItineraryBuilder({
 
           <div className="max-h-[72vh] overflow-y-auto px-5 py-4">
             {isPublished && (
-              <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-800">
+              <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
                 Este itinerario está publicado: cualquier cambio es visible al
                 instante para el cliente.
               </p>
             )}
 
             {error && (
-              <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+              <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 {error}
               </p>
             )}
@@ -171,57 +171,57 @@ export function ItineraryBuilder({
               <div className="rounded-xl border border-gold/15 bg-white/60 p-3">
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
                   <label className="col-span-2 sm:col-span-1">
-                    <span className="text-[10px] font-medium text-ink/55">
+                    <span className="text-xs font-medium text-ink/55">
                       Título
                     </span>
                     <input
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       maxLength={80}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                     />
                   </label>
                   <label>
-                    <span className="text-[10px] font-medium text-ink/55">
+                    <span className="text-xs font-medium text-ink/55">
                       Fecha
                     </span>
                     <input
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                     />
                   </label>
                   <label>
-                    <span className="text-[10px] font-medium text-ink/55">
+                    <span className="text-xs font-medium text-ink/55">
                       Desde
                     </span>
                     <input
                       type="time"
                       value={from}
                       onChange={(e) => setFrom(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                     />
                   </label>
                   <label>
-                    <span className="text-[10px] font-medium text-ink/55">
+                    <span className="text-xs font-medium text-ink/55">
                       Hasta
                     </span>
                     <input
                       type="time"
                       value={to}
                       onChange={(e) => setTo(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                     />
                   </label>
                   <label className="col-span-2 sm:col-span-1">
-                    <span className="text-[10px] font-medium text-ink/55">
+                    <span className="text-xs font-medium text-ink/55">
                       Idioma de la colección
                     </span>
                     <select
                       value={language}
                       onChange={(e) => setLanguage(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink focus:border-gold/55 focus:outline-none"
                     >
                       {COLLECTION_LANGUAGES.map((l) => (
                         <option key={l} value={l}>
@@ -236,7 +236,7 @@ export function ItineraryBuilder({
                   type="button"
                   onClick={saveHeader}
                   disabled={pending}
-                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
                 >
                   {pending && <Loader2 size={11} className="animate-spin" />}
                   Guardar datos del día
@@ -293,13 +293,13 @@ export function ItineraryBuilder({
             </ul>
 
             {stops.length === 0 && (
-              <p className="mt-4 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-[12px] text-ink/55">
+              <p className="mt-4 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-xs text-ink/55">
                 Sin paradas todavía. Añade la primera con el botón de abajo.
               </p>
             )}
 
             {!readOnly && stops.length > 1 && (
-              <p className="mt-2.5 text-[10.5px] leading-relaxed text-ink/45">
+              <p className="mt-2.5 text-xs leading-relaxed text-ink/45">
                 El orden lo marca la hora: primero las más tempranas y, al
                 final, las que aún no la tienen. Las flechas solo aparecen en
                 esas.
@@ -310,7 +310,7 @@ export function ItineraryBuilder({
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
-                className="mt-3 mr-2 inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-ink transition hover:border-gold/60"
+                className="mt-3 mr-2 inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-gold/60"
               >
                 <Plus size={11} strokeWidth={2} className="text-gold-dark" />
                 Añadir propiedad
@@ -322,7 +322,7 @@ export function ItineraryBuilder({
                 type="button"
                 onClick={() => run(() => revealAddressesForConfirmedStops(itinerary.id))}
                 disabled={pending}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
               >
                 <MapPin size={11} strokeWidth={1.75} className="text-gold-dark" />
                 Mostrar dirección en todas las confirmadas
@@ -347,7 +347,7 @@ export function ItineraryBuilder({
                       }
                     });
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/60 transition hover:border-rose-300 hover:text-rose-600"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/60 transition hover:border-rose-300 hover:text-rose-600"
                 >
                   <Trash2 size={11} strokeWidth={1.75} />
                   Eliminar
@@ -361,7 +361,7 @@ export function ItineraryBuilder({
                       return;
                     run(() => cancelItinerary(itinerary.id));
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/60 transition hover:border-rose-300 hover:text-rose-600"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/60 transition hover:border-rose-300 hover:text-rose-600"
                 >
                   Cancelar itinerario
                 </button>
@@ -370,7 +370,7 @@ export function ItineraryBuilder({
                 <button
                   type="button"
                   onClick={() => run(() => archiveItinerary(itinerary.id))}
-                  className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/60 transition hover:border-ink/30"
+                  className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/60 transition hover:border-ink/30"
                 >
                   Archivar
                 </button>
@@ -382,7 +382,7 @@ export function ItineraryBuilder({
                 href={`/v/preview/${itinerary.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
               >
                 <Eye size={11} strokeWidth={1.75} className="text-gold-dark" />
                 Previsualizar
@@ -405,7 +405,7 @@ export function ItineraryBuilder({
                       return;
                     run(() => unpublishItinerary(itinerary.id));
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-[11px] font-medium text-ink/70 transition hover:border-gold/55"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-medium text-ink/70 transition hover:border-gold/55"
                 >
                   <Undo2 size={11} strokeWidth={1.75} />
                   Despublicar
@@ -421,7 +421,7 @@ export function ItineraryBuilder({
                       ? undefined
                       : "Faltan datos para publicar"
                   }
-                  className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-40"
                 >
                   <Send size={12} strokeWidth={1.75} className="text-gold" />
                   {isPublished ? "Republicar" : "Publicar"}
@@ -474,7 +474,7 @@ function ReadinessPanel({ itinerary }: { itinerary: ItineraryWithStops }) {
       {blockers.map((b, i) => (
         <p
           key={`b${i}`}
-          className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2 text-[11px] text-rose-700"
+          className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs text-rose-700"
         >
           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
           {b.kind === "no_date" && "Falta la fecha del itinerario."}
@@ -488,7 +488,7 @@ function ReadinessPanel({ itinerary }: { itinerary: ItineraryWithStops }) {
       {warnings.map((w, i) => (
         <p
           key={`w${i}`}
-          className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-800"
+          className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800"
         >
           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
           {w.kind === "overlaps" && `${w.count} solape(s) de horario.`}
@@ -544,7 +544,7 @@ function StopRow({
     >
       <div className="flex items-start gap-2.5">
         <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
-          <span className="font-mono text-[11px] font-semibold text-ink/45">
+          <span className="font-mono text-xs font-semibold text-ink/45">
             {index + 1}
           </span>
           {/* Las flechas solo aparecen SIN hora. Con hora, el orden lo decide
@@ -576,7 +576,7 @@ function StopRow({
             <span
               title="El orden lo marca la hora"
               aria-hidden
-              className="text-[9px] leading-none text-ink/20"
+              className="text-xs leading-none text-ink/20"
             >
               ⏱
             </span>
@@ -598,17 +598,17 @@ function StopRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate text-[12.5px] font-medium text-ink">
+              <p className="truncate text-xs font-medium text-ink">
                 {prop.title}
               </p>
-              <p className="mt-0.5 truncate text-[11px] text-ink/50">
+              <p className="mt-0.5 truncate text-xs text-ink/50">
                 {prop.bcReference ? `${prop.bcReference} · ` : ""}
                 {priceLabel}
               </p>
             </div>
             <span
               className={cn(
-                "shrink-0 font-mono text-[11px] font-medium tabular-nums",
+                "shrink-0 font-mono text-xs font-medium tabular-nums",
                 stop.time_pending && !time ? "text-gold-dark" : "text-ink/70",
               )}
             >
@@ -620,7 +620,7 @@ function StopRow({
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span
               className={cn(
-                "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                "rounded-full border px-1.5 py-0.5 text-xs font-medium",
                 CONFIRM_STYLE[stop.confirmation_status],
               )}
             >
@@ -628,7 +628,7 @@ function StopRow({
             </span>
             <span
               className={cn(
-                "inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                "inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-xs font-medium",
                 stop.address_visibility === "exact"
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-ink/10 bg-ink/5 text-ink/50",
@@ -638,27 +638,27 @@ function StopRow({
               {stop.address_visibility === "exact" ? "Dirección" : "Zona"}
             </span>
             {stop.smartLink ? (
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
                 SmartLink · {stop.smartLink.opensCount}
               </span>
             ) : (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
                 Sin SmartLink
               </span>
             )}
             {stop.visitRequest && (
-              <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                 En el CRM
               </span>
             )}
             {stop.hidden_from_client && (
-              <span className="inline-flex items-center gap-0.5 rounded-full border border-ink/15 bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink/55">
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-ink/15 bg-ink/5 px-1.5 py-0.5 text-xs font-medium text-ink/55">
                 <EyeOff size={8} strokeWidth={2} />
                 Oculta
               </span>
             )}
             {prop.isArchived && (
-              <span className="rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-xs font-medium text-rose-700">
                 Archivada
               </span>
             )}

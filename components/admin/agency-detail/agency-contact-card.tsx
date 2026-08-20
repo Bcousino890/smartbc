@@ -8,20 +8,20 @@ export function AgencyContactCard({ contact }: { contact: AgencyContact }) {
   const t = useT();
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+      <header className="flex items-center gap-2 crm-label-sm text-ink/55">
         <User size={13} strokeWidth={1.75} className="text-gold" />
         <span>{t("agency.contact.title")}</span>
       </header>
 
       <div className="mt-4 flex items-center gap-3">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cream-100 font-serif text-xs font-medium text-ink">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cream-100 text-xs font-bold text-ink">
           {contact.initials}
         </span>
         <div className="min-w-0">
-          <p className="font-serif text-base font-semibold text-ink">
+          <p className="text-base font-bold text-ink">
             {contact.name}
           </p>
-          <p className="text-[12px] text-ink/60">{t(contact.roleKey)}</p>
+          <p className="text-xs text-ink/60">{t(contact.roleKey)}</p>
         </div>
       </div>
 

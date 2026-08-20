@@ -76,7 +76,7 @@ export function ShortlistStatusCard({
 
           {/* Progreso: decidido sobre total, sin porcentajes ni gráficos. */}
           <div className="mt-3">
-            <div className="flex items-baseline justify-between text-[12px]">
+            <div className="flex items-baseline justify-between text-xs">
               <span className="text-ink/55">{t("cc.shortlist.decided")}</span>
               <span className="font-medium tabular-nums text-ink">
                 {sl.counts.decided}/{sl.counts.total}
@@ -100,7 +100,7 @@ export function ShortlistStatusCard({
             <Cell label={t("cc.shortlist.notForMe")} value={sl.counts.notForMe} />
           </dl>
 
-          <p className="mt-3 text-[10.5px] text-ink/40">
+          <p className="mt-3 text-xs text-ink/40">
             {sl.submitted_at
               ? t("cc.shortlist.submittedOn", {
                   date: formatDate(sl.submitted_at, locale),
@@ -162,7 +162,7 @@ export function ViewingDayCard({
             )}
           </div>
 
-          <p className="mt-2.5 font-serif text-[17px] text-ink">
+          <p className="mt-2.5 text-lg text-ink">
             {live.scheduled_date
               ? formatDate(live.scheduled_date, locale, {
                   weekday: "long",
@@ -172,7 +172,7 @@ export function ViewingDayCard({
               : t("cc.itinerary.noDate")}
           </p>
           {live.scheduled_date && (
-            <p className="text-[11px] text-ink/45">
+            <p className="text-xs text-ink/45">
               {relativeDayLabel(live.scheduled_date, t, tn)}
             </p>
           )}
@@ -184,7 +184,7 @@ export function ViewingDayCard({
               .map((stop) => (
                 <li
                   key={stop.id}
-                  className="flex items-center justify-between gap-2 text-[12px]"
+                  className="flex items-center justify-between gap-2 text-xs"
                 >
                   <span className="min-w-0 truncate text-ink/75">
                     {stop.selection.property.title}
@@ -207,14 +207,14 @@ export function ViewingDayCard({
                 </li>
               ))}
             {live.stops.length > 4 && (
-              <li className="text-[11px] text-ink/35">
+              <li className="text-xs text-ink/35">
                 {t("clientes.ficha.moreCount", { count: live.stops.length - 4 })}
               </li>
             )}
           </ul>
 
           {live.activeShare && (
-            <p className="mt-3 flex items-center gap-1.5 text-[10.5px] text-ink/45">
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-ink/45">
               <Eye size={11} strokeWidth={1.75} className="text-emerald-600" />
               {tn("cc.itinerary.opens", live.activeShare.opensCount)}
             </p>
@@ -251,13 +251,13 @@ function Cell({
     <div>
       <dd
         className={cn(
-          "font-serif text-[19px] leading-none tabular-nums",
+          "crm-number text-[22px] leading-none",
           emphasis ? "text-gold-dark" : "text-ink",
         )}
       >
         {value}
       </dd>
-      <dt className="mt-1 text-[10px] uppercase tracking-[0.06em] text-ink/40">
+      <dt className="crm-label-sm mt-1 text-ink/40">
         {label}
       </dt>
     </div>
@@ -269,7 +269,7 @@ function GoButton({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/55 transition hover:text-ink"
+      className="inline-flex items-center gap-1 text-xs font-medium text-ink/55 transition hover:text-ink"
     >
       {label}
       <ArrowRight size={11} strokeWidth={2} />

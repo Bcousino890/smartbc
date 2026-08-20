@@ -47,7 +47,7 @@ export default async function IdealistaConfigPage({
       <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
         <div className="mb-4 flex items-center gap-2">
           <Settings size={20} className="text-gold" />
-          <h2 className="font-serif text-lg font-semibold text-ink">
+          <h2 className="crm-section-title text-ink">
             Acceso a Idealista
           </h2>
         </div>

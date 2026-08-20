@@ -213,7 +213,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
           </div>
         )}
 
-        <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
+        <p className="crm-label-sm mt-7 px-6 text-gold/85">
           {t("admin.section.label")}
         </p>
 
@@ -233,7 +233,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                     href={href}
                     onClick={closeMobile}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                      "crm-nav flex items-center gap-3 rounded-lg px-3 py-2.5 transition",
                       active
                         ? "bg-cream-50/8 text-gold"
                         : "text-cream-50/70 hover:bg-cream-50/5 hover:text-cream-50",
@@ -243,17 +243,17 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                     <Icon size={17} strokeWidth={1.75} />
                     <span className="flex-1">{t(labelKey)}</span>
                     {isCalendario && pendingVisits > 0 && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
+                      <span className="crm-number flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-xs text-ink">
                         {pendingVisits}
                       </span>
                     )}
                     {isMensajes && unreadMessages > 0 && (
-                      <span className="ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                      <span className="crm-number ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-xs text-white min-w-[18px] text-center">
                         {unreadMessages > 99 ? "99+" : unreadMessages}
                       </span>
                     )}
                     {isCaptaciones && unreadNotifications > 0 && (
-                      <span className="ml-auto rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                      <span className="crm-number ml-auto rounded-full bg-emerald-600 px-1.5 py-0.5 text-xs text-white min-w-[18px] text-center">
                         {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </span>
                     )}
@@ -266,14 +266,14 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
         <div className="m-3 rounded-xl border border-cream-50/10 p-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 font-serif text-[11px] font-medium text-cream-50">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 text-xs font-bold text-cream-50">
               {user.initials}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold leading-tight">
+              <p className="truncate text-sm font-bold leading-tight">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="mt-0.5 truncate text-[10px] text-cream-50/55">
+              <p className="crm-meta mt-0.5 truncate text-cream-50/55">
                 {t(user.roleKey)}
               </p>
             </div>
@@ -281,7 +281,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
           <form action={signOutAction} className="mt-3">
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
+              className="crm-meta flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
             >
               <LogOut size={13} strokeWidth={1.75} />
               <span>{t("sidebar.logout")}</span>

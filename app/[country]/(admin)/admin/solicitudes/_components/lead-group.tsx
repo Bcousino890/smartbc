@@ -97,15 +97,15 @@ export function LeadGroupBlock({
 
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline gap-2">
-              <span className="min-w-0 truncate text-[13px] font-semibold text-ink">
+              <span className="min-w-0 truncate text-sm font-semibold text-ink">
                 {group.title ?? t("inbox.group.noProperty")}
               </span>
-              <span className="ms-auto shrink-0 text-[10.5px] text-ink/35">
+              <span className="ms-auto shrink-0 text-xs text-ink/35">
                 <RelativeTime at={group.lastLeadAt} locale={config.locale} />
               </span>
             </span>
 
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px] text-ink/45">
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/45">
               <span className="font-medium text-ink/60">
                 {tn("inbox.group.count", group.count)}
               </span>

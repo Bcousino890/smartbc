@@ -40,11 +40,11 @@ export function CollapsibleBlock({
               !open && "-rotate-90",
             )}
           />
-          <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+          <h2 className="crm-label-sm text-ink/50">
             {title}
           </h2>
           {count != null && count > 0 && (
-            <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[11px] font-semibold text-gold-dark">
+            <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold-dark">
               {count}
             </span>
           )}

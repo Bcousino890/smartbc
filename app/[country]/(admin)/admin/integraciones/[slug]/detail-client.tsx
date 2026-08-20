@@ -145,7 +145,7 @@ export function IntegracionDetailClient({
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h2 className="font-serif text-2xl text-ink">{config.name}</h2>
+            <h2 className="crm-section-title text-ink">{config.name}</h2>
             <p className="font-mono text-xs text-ink/45">{config.slug}</p>
           </div>
         </div>
@@ -244,7 +244,7 @@ export function IntegracionDetailClient({
                       <KeyRound className="h-3.5 w-3.5 text-ink/40" />
                       {key.key_prefix}_…{key.last_four}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-ink/45">
+                    <p className="mt-0.5 text-xs text-ink/45">
                       {key.label ? `${key.label} · ` : ""}
                       {key.scopes.join(", ")} · {key.rate_limit_per_minute}/min
                       {key.last_used_at
@@ -253,7 +253,7 @@ export function IntegracionDetailClient({
                     </p>
                   </div>
                   {key.revoked_at ? (
-                    <span className="rounded-full bg-ink/5 px-2.5 py-1 text-[11px] text-ink/50">
+                    <span className="rounded-full bg-ink/5 px-2.5 py-1 text-xs text-ink/50">
                       Revocada
                     </span>
                   ) : (
@@ -307,7 +307,7 @@ export function IntegracionDetailClient({
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/50">
+              <span className="mb-1 block crm-label-sm text-ink/50">
                 Usuario que firma las captaciones
               </span>
               <select
@@ -326,7 +326,7 @@ export function IntegracionDetailClient({
 
             {pipelines.length > 0 && (
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/50">
+                <span className="mb-1 block crm-label-sm text-ink/50">
                   Pipeline por defecto
                 </span>
                 <select
@@ -393,17 +393,17 @@ export function IntegracionDetailClient({
                     <span className="font-mono text-xs text-ink/70">
                       {entry.method} {entry.path}
                     </span>
-                    <span className="text-[11px] text-ink/45">
+                    <span className="text-xs text-ink/45">
                       {new Date(entry.created_at).toLocaleString("es-CL")}
                     </span>
-                    <span className="text-[11px] text-ink/45">{entry.duration_ms ?? 0} ms</span>
+                    <span className="text-xs text-ink/45">{entry.duration_ms ?? 0} ms</span>
                     {entry.dry_run && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700">
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
                         simulación
                       </span>
                     )}
                     {entry.items_total > 0 && (
-                      <span className="ml-auto text-[11px] text-ink/55">
+                      <span className="ml-auto text-xs text-ink/55">
                         {entry.items_created} nuevas · {entry.items_updated} actualizadas ·{" "}
                         {entry.items_unchanged} sin cambios
                         {entry.items_failed > 0 && ` · ${entry.items_failed} con error`}
@@ -423,7 +423,7 @@ export function IntegracionDetailClient({
                           <strong>{entry.error_code}</strong>: {entry.error_message}
                         </p>
                       )}
-                      <p className="mb-1 text-[11px] text-ink/45">
+                      <p className="mb-1 text-xs text-ink/45">
                         request_id: <code className="font-mono">{entry.request_id}</code>
                         {entry.idempotency_key && (
                           <>
@@ -432,7 +432,7 @@ export function IntegracionDetailClient({
                           </>
                         )}
                       </p>
-                      <pre className="max-h-80 overflow-auto rounded-lg bg-ink/5 p-3 text-[11px] leading-relaxed text-ink/80">
+                      <pre className="max-h-80 overflow-auto rounded-lg bg-ink/5 p-3 text-xs leading-relaxed text-ink/80">
                         {JSON.stringify(entry.request_body, null, 2)}
                       </pre>
                     </div>
@@ -457,7 +457,7 @@ function StatusPill({ status }: { status: number | null }) {
     : code >= 200 ? "bg-emerald-100 text-emerald-700"
     : "bg-ink/5 text-ink/50";
   return (
-    <span className={cn("rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold", tone)}>
+    <span className={cn("rounded-md px-2 py-0.5 font-mono text-xs font-semibold", tone)}>
       {code || "—"}
     </span>
   );
@@ -499,7 +499,7 @@ function Toggle({
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-medium text-ink">{label}</span>
-        <span className="mt-0.5 block text-[12px] leading-relaxed text-ink/50">{hint}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-ink/50">{hint}</span>
       </span>
     </button>
   );
@@ -607,9 +607,9 @@ function Step({
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-ink">{title}</p>
-        <p className="mt-0.5 text-[13px] leading-relaxed text-ink/55">{body}</p>
+        <p className="mt-0.5 text-sm leading-relaxed text-ink/55">{body}</p>
         <div className="mt-2 flex items-start gap-2">
-          <pre className="flex-1 overflow-x-auto rounded-lg bg-ink/5 p-3 text-[11px] leading-relaxed text-ink/80">
+          <pre className="flex-1 overflow-x-auto rounded-lg bg-ink/5 p-3 text-xs leading-relaxed text-ink/80">
             {code}
           </pre>
           <button

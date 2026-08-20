@@ -18,11 +18,11 @@ export function AdminPageHeader({
     <header className="flex items-start justify-between gap-6 pt-7 md:pt-9">
       <div className="min-w-0">
         {welcome && (
-          <p className="text-[12px] font-medium tracking-wide text-gold">
+          <p className="crm-label-sm text-gold">
             {t("admin.welcome")}
           </p>
         )}
-        <h1 className="mt-1 font-serif text-3xl font-medium leading-tight tracking-tight text-ink md:text-[2.5rem]">
+        <h1 className="crm-page-title mt-1 text-ink">
           {t(titleKey)}
         </h1>
         {subtitleKey && (

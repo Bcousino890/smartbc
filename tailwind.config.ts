@@ -33,9 +33,24 @@ const config: Config = {
         },
       },
       fontFamily: {
+        // Cinzel/Playfair/Inter siguen siendo los tokens de las superficies
+        // públicas protegidas (/web, /v, /s, /compartir, /c). NO redefinirlos:
+        // el CRM interno usa los tokens crm-* de abajo (sistema EMAAR).
         display: ["var(--font-cinzel)", "serif"],
         serif: ["var(--font-playfair)", "serif"],
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        // Sistema EMAAR del CRM interno. Los stacks viven como variables CSS en
+        // app/globals.css para que el swap de Optima licenciada sea un cambio
+        // de una línea (ver OPTIMA_LICENSE_REQUIRED en app/layout.tsx).
+        "crm-sans": ["var(--crm-font-sans)"],
+        "crm-display": ["var(--crm-font-display)"],
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          "monospace",
+        ],
       },
       backgroundImage: {
         "luxury-gradient":

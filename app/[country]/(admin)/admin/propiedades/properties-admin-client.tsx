@@ -402,7 +402,7 @@ export function PropertiesAdminClient({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por título, ref. BC, ref. portal o zona…"
-            className="w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
+            className="crm-input w-full bg-transparent text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </label>
         <div className="relative" ref={menuRef}>
@@ -411,7 +411,7 @@ export function PropertiesAdminClient({
             onClick={() => setMenuOpen((o) => !o)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
+            className="crm-button flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-cream-50 transition hover:bg-ink-soft"
           >
             <Plus size={14} strokeWidth={1.75} className="text-gold" />
             <span>{t("adminProps.add")}</span>
@@ -445,7 +445,7 @@ export function PropertiesAdminClient({
                 />
                 <div>
                   <p className="font-medium">{t("adminProps.add.manual")}</p>
-                  <p className="text-[11px] text-ink/55">
+                  <p className="text-xs text-ink/55">
                     {t("adminProps.add.manual.help")}
                   </p>
                 </div>
@@ -465,7 +465,7 @@ export function PropertiesAdminClient({
                 />
                 <div>
                   <p className="font-medium">{t("adminProps.add.byLink")}</p>
-                  <p className="text-[11px] text-ink/55">
+                  <p className="text-xs text-ink/55">
                     {t("adminProps.add.byLink.help")}
                   </p>
                 </div>
@@ -478,7 +478,7 @@ export function PropertiesAdminClient({
       {/* Filtros: operación, estado, zona, agencia. Aparecen siempre — el
           listado puede tener cientos de propiedades y el buscador de texto
           no basta para acotar por categoría. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
         <FilterSelect
           label="Operación"
           value={operationFilter}
@@ -603,14 +603,14 @@ export function PropertiesAdminClient({
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-md border border-ink/15 bg-white px-2.5 py-1 text-[11px] font-medium text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
+            className="crm-button rounded-md border border-ink/15 bg-white px-2.5 py-1 text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
           >
             Limpiar filtros
           </button>
         )}
         <span
           className={cn(
-            "ml-auto rounded-md border px-2.5 py-1 text-[11px] font-semibold",
+            "ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold",
             hasActiveFilters
               ? "border-gold/40 bg-gold/10 text-gold-dark"
               : "border-ink/10 bg-white/70 text-ink/60",
@@ -625,13 +625,13 @@ export function PropertiesAdminClient({
       {/* Barra de selección: copiar URLs para enviar a clientes */}
       {selected.size > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-gold/35 bg-gold/10 px-3 py-2">
-          <span className="text-[12px] font-semibold text-gold-dark">
+          <span className="text-xs font-semibold text-gold-dark">
             {selected.size} seleccionada{selected.size === 1 ? "" : "s"}
           </span>
           <button
             type="button"
             onClick={copyUrls}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+            className="crm-button inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-cream-50 transition hover:bg-ink-soft"
           >
             <Copy size={12} strokeWidth={1.75} className="text-gold" />
             <span>Copiar URLs</span>
@@ -639,7 +639,7 @@ export function PropertiesAdminClient({
           <button
             type="button"
             onClick={copyForClients}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 transition hover:bg-emerald-100"
+            className="crm-button inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-emerald-700 transition hover:bg-emerald-100"
           >
             <MessageCircle size={12} strokeWidth={1.75} />
             <span>Copiar para WhatsApp</span>
@@ -647,7 +647,7 @@ export function PropertiesAdminClient({
           <button
             type="button"
             onClick={() => setSelected(new Set())}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
+            className="crm-button inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/65 transition hover:border-rose-300 hover:text-rose-700"
           >
             <X size={12} strokeWidth={1.75} />
             <span>Limpiar selección</span>
@@ -665,7 +665,7 @@ export function PropertiesAdminClient({
       <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[1200px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <tr className="crm-table-header text-ink/50">
               <th className="w-10 px-3 pb-2">
                 <SelectCheckbox
                   checked={allFilteredSelected}
@@ -786,14 +786,14 @@ function PropertyRow({
             <p className="flex items-center gap-2 font-medium text-ink">
               {property.title}
               {property.featured && (
-                <span className="rounded-md border border-gold/35 bg-gold/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gold-dark">
+                <span className="crm-badge rounded-md border border-gold/35 bg-gold/15 px-1.5 py-0.5 text-gold-dark">
                   {t("adminProps.featured.badge")}
                 </span>
               )}
             </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/55">
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink/55">
               {property.bcReference && (
-                <span className="rounded-md border border-gold/30 bg-gold/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold-dark">
+                <span className="rounded-md border border-gold/30 bg-gold/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wider text-gold-dark">
                   {property.bcReference}
                 </span>
               )}
@@ -812,7 +812,7 @@ function PropertyRow({
         />
       </td>
       <td className="px-3 py-3">
-        <span className="inline-block rounded-md border border-ink/10 bg-ink/5 px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-ink/80">
+        <span className="inline-block rounded-md border border-ink/10 bg-ink/5 px-2 py-1 font-mono text-xs font-semibold tracking-wider text-ink/80">
           {property.propertyReference ?? "—"}
         </span>
       </td>
@@ -820,13 +820,13 @@ function PropertyRow({
       <td className="px-3 py-3 text-ink/75">{property.zone}</td>
       <td className="px-3 py-3">
         {property.isDualOperation ? (
-          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+          <span className="crm-badge rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">
             {t("filters.operation.sale")} + {t("filters.operation.rent")}
           </span>
         ) : (
           <span
             className={cn(
-              "rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
+              "crm-badge rounded-md border px-2.5 py-1",
               isRent
                 ? "border-blue-200 bg-blue-50 text-blue-700"
                 : "border-amber-200 bg-amber-50 text-amber-700",
@@ -838,23 +838,23 @@ function PropertyRow({
           </span>
         )}
       </td>
-      <td className="px-3 py-3 text-center text-[12px] text-ink/75">
+      <td className="px-3 py-3 text-center text-xs text-ink/75">
         {property.bedrooms} / {property.bathrooms} / {property.squareMeters}
       </td>
-      <td className="px-3 py-3 font-semibold text-ink">
+      <td className="crm-price px-3 py-3 text-ink">
         {formatted}{isRent ? " /mes" : ""}
       </td>
       <td className="px-3 py-3">
         <span
           className={cn(
-            "rounded-md border px-2.5 py-1 text-[11px] font-medium",
+            "crm-badge rounded-md border px-2.5 py-1",
             STATUS_STYLES[property.status],
           )}
         >
           {t(`adminProps.status.${property.status}`)}
         </span>
       </td>
-      <td className="px-3 py-3 text-[12px] text-ink/65">
+      <td className="crm-badge px-3 py-3 text-ink/65">
         {property.publishedLabel}
       </td>
       <td className="rounded-r-xl px-3 py-3 text-right">
@@ -863,7 +863,7 @@ function PropertyRow({
             href={`/compartir/${property.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+            className="crm-button inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/75 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
           >
             <Eye size={12} strokeWidth={1.75} />
             <span>{t("adminProps.view")}</span>
@@ -871,7 +871,7 @@ function PropertyRow({
           {canEdit ? (
             <Link
               href={`${config.prefix}/propiedades/${property.id}`}
-              className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft"
+              className="crm-button inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-cream-50 transition hover:bg-ink-soft"
             >
               <Pencil size={12} strokeWidth={1.75} className="text-gold" />
               <span>{t("adminProps.edit")}</span>
@@ -879,7 +879,7 @@ function PropertyRow({
           ) : (
             <span
               aria-disabled="true"
-              className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-ink/20 px-3 py-1.5 text-[11px] font-medium text-ink/40"
+              className="crm-button inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-ink/20 px-3 py-1.5 text-ink/40"
               title="Sin permiso para editar"
             >
               <Pencil size={12} strokeWidth={1.75} />
@@ -889,7 +889,7 @@ function PropertyRow({
           <button
             type="button"
             onClick={() => setPhotosOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+            className="crm-button inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/75 transition hover:border-gold/55 hover:text-ink"
           >
             <ImageIcon size={12} strokeWidth={1.75} className="text-gold" />
             <span>
@@ -932,7 +932,7 @@ function ArchiveButton({ slug }: { slug: string }) {
       type="button"
       onClick={handleArchive}
       disabled={isPending}
-      className="inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/70 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+      className="crm-button inline-flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-ink/70 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {isPending ? (
         <Loader2 size={12} strokeWidth={1.75} className="animate-spin" />
@@ -990,7 +990,7 @@ function RangeChip({
   const sanitize = (v: string) => v.replace(/[^\d]/g, "");
   return (
     <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+      <span className="crm-label-sm text-ink/45">
         {label}
       </span>
       <input
@@ -999,7 +999,7 @@ function RangeChip({
         value={min}
         onChange={(e) => onMin(sanitize(e.target.value))}
         placeholder="mín"
-        className="w-12 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+        className="w-12 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
       />
       <span className="text-ink/35">–</span>
       <input
@@ -1008,7 +1008,7 @@ function RangeChip({
         value={max}
         onChange={(e) => onMax(sanitize(e.target.value))}
         placeholder="máx"
-        className="w-14 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+        className="w-14 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
       />
     </div>
   );
@@ -1030,7 +1030,7 @@ function PriceRange({
   const sanitize = (v: string) => v.replace(/[^\d]/g, "");
   return (
     <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+      <span className="crm-label-sm text-ink/45">
         Precio
       </span>
       <input
@@ -1039,7 +1039,7 @@ function PriceRange({
         value={min}
         onChange={(e) => onMin(sanitize(e.target.value))}
         placeholder="mín"
-        className="w-12 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+        className="w-12 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
       />
       <span className="text-ink/35">–</span>
       <input
@@ -1048,7 +1048,7 @@ function PriceRange({
         value={max}
         onChange={(e) => onMax(sanitize(e.target.value))}
         placeholder="máx"
-        className="w-14 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+        className="w-14 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
       />
     </div>
   );
@@ -1067,13 +1067,13 @@ function FilterSelect({
 }) {
   return (
     <label className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+      <span className="crm-label-sm text-ink/45">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-transparent text-[12px] text-ink focus:outline-none"
+        className="appearance-none bg-transparent text-xs text-ink focus:outline-none"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

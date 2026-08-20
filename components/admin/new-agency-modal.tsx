@@ -133,7 +133,7 @@ export function NewAgencyModal({
               type="date"
               value={agreementSignedAt}
               onChange={(e) => setAgreementSignedAt(e.target.value)}
-              className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             />
           </Field>
         </Section>
@@ -167,7 +167,7 @@ export function NewAgencyModal({
             <select
               value={rentMinPrice}
               onChange={(e) => setRentMinPrice(Number(e.target.value))}
-              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             >
               {RENT_THRESHOLDS.map((v) => (
                 <option key={v} value={v}>
@@ -183,7 +183,7 @@ export function NewAgencyModal({
             <select
               value={saleAgreedPct}
               onChange={(e) => setSaleAgreedPct(Number(e.target.value))}
-              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             >
               {SALE_AGREED_OPTIONS.map((v) =>
                 v <= 0 ? (
@@ -201,7 +201,7 @@ export function NewAgencyModal({
         </Section>
 
         {feedback.kind === "error" && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
             {feedback.msg}
           </p>
         )}
@@ -211,7 +211,7 @@ export function NewAgencyModal({
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[13px] font-medium text-ink/70 transition hover:border-ink/30 hover:text-ink disabled:opacity-50"
+            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink/70 transition hover:border-ink/30 hover:text-ink disabled:opacity-50"
           >
             {t("common.cancel")}
           </button>
@@ -219,7 +219,7 @@ export function NewAgencyModal({
             type="submit"
             disabled={!canSubmit}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-cream-50 transition",
+              "inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition",
               "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
@@ -270,7 +270,7 @@ function Section({
 }) {
   return (
     <section className="mt-5 space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+      <p className="crm-label-sm text-ink/45">
         {title}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
@@ -291,7 +291,7 @@ function Field({
 }) {
   const id = useId();
   return (
-    <label htmlFor={id} className="block text-[12px] font-medium text-ink/65">
+    <label htmlFor={id} className="block text-xs font-medium text-ink/65">
       <span>
         {label}
         {required && <span className="ml-1 text-gold-dark">*</span>}
@@ -300,7 +300,7 @@ function Field({
         {/* Inputs son textareas/inputs propios; el id real lo lleva el input nativo si lo usásemos */}
         {children}
       </div>
-      {help && <p className="mt-1 text-[11px] text-ink/45">{help}</p>}
+      {help && <p className="mt-1 text-xs text-ink/45">{help}</p>}
     </label>
   );
 }
@@ -326,7 +326,7 @@ function TextInput({
       placeholder={placeholder}
       // biome-ignore lint/a11y/noAutofocus: campo principal del modal
       autoFocus={autoFocus}
-      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
     />
   );
 }

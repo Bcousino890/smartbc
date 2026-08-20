@@ -49,7 +49,7 @@ type Calibration = Partial<
 const inputCls =
   "w-full rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/30 focus:border-gold/55 focus:outline-none";
 const labelCls =
-  "mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50";
+  "mb-1.5 block crm-label-sm text-ink/50";
 
 function formatSeconds(seconds: number | null): string {
   if (seconds === null) return "—";
@@ -205,7 +205,7 @@ export function VideoMusicSection() {
     <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <div className="mb-2 flex items-center gap-2">
         <Clapperboard size={20} className="text-gold" />
-        <h2 className="font-serif text-lg font-semibold text-ink">
+        <h2 className="crm-section-title text-ink">
           Vídeos automáticos de propiedad
         </h2>
       </div>
@@ -230,7 +230,7 @@ export function VideoMusicSection() {
                   Sin él no se puede generar ningún vídeo. Instálalo en el VPS
                   con <code className="rounded bg-amber-100 px-1">apt install ffmpeg</code>.
                 </p>
-                <p className="mt-1 text-[11px] text-amber-700/70">{ffmpeg.error}</p>
+                <p className="mt-1 text-xs text-amber-700/70">{ffmpeg.error}</p>
               </div>
             </div>
           )}
@@ -286,12 +286,12 @@ export function VideoMusicSection() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-ink">{track.name}</span>
                           {track.isDefault && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-semibold text-gold-dark">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-xs font-semibold text-gold-dark">
                               <Star size={9} /> Por defecto
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-[11px] text-ink/45">
+                        <p className="mt-0.5 text-xs text-ink/45">
                           {formatSeconds(track.durationSeconds)} · {formatSize(track.sizeBytes)} ·{" "}
                           {track.fileName}
                         </p>
@@ -327,7 +327,7 @@ export function VideoMusicSection() {
                                 ? "Desactivar"
                                 : "Activar"
                           }
-                          className="rounded-lg border border-ink/15 px-2.5 py-2 text-[11px] font-medium text-ink/70 transition hover:bg-ink/5 disabled:opacity-40"
+                          className="rounded-lg border border-ink/15 px-2.5 py-2 text-xs font-medium text-ink/70 transition hover:bg-ink/5 disabled:opacity-40"
                         >
                           {track.active ? "Activa" : "Inactiva"}
                         </button>
@@ -430,7 +430,7 @@ export function VideoMusicSection() {
                     onChange={(e) => set("maxDurationSeconds", Number(e.target.value))}
                     className={inputCls}
                   />
-                  <p className="mt-1 text-[11px] text-ink/45">
+                  <p className="mt-1 text-xs text-ink/45">
                     {formatSeconds(settings.maxDurationSeconds)} — se descartan las
                     fotos que no quepan.
                   </p>
@@ -480,7 +480,7 @@ export function VideoMusicSection() {
                     <option value="bottom-right">Abajo a la derecha</option>
                     <option value="bottom-left">Abajo a la izquierda</option>
                   </select>
-                  <p className="mt-1 text-[11px] text-ink/45">
+                  <p className="mt-1 text-xs text-ink/45">
                     Arriba se ve mejor: abajo suele caer el suelo o el mobiliario, y
                     los reproductores tapan esa zona con sus controles.
                   </p>
@@ -497,7 +497,7 @@ export function VideoMusicSection() {
                   />
                   <span>
                     Generar vídeos automáticamente para las propiedades de Idealista
-                    <span className="block text-[11px] text-ink/45">
+                    <span className="block text-xs text-ink/45">
                       Se encolan y se renderizan de uno en uno para no saturar el
                       servidor.
                     </span>
@@ -513,7 +513,7 @@ export function VideoMusicSection() {
                   />
                   <span>
                     Rehacer el vídeo cuando cambien las fotos
-                    <span className="block text-[11px] text-ink/45">
+                    <span className="block text-xs text-ink/45">
                       Solo se regenera si las fotos han cambiado de verdad, no en
                       cada sincronización.
                     </span>
@@ -522,7 +522,7 @@ export function VideoMusicSection() {
               </div>
 
               {(calibration.fullhd || calibration["4k"]) && (
-                <div className="mt-4 rounded-xl bg-ink/[0.03] p-3 text-[11px] text-ink/55">
+                <div className="mt-4 rounded-xl bg-ink/[0.03] p-3 text-xs text-ink/55">
                   <p className="font-semibold text-ink/70">
                     Precisión del peso estimado
                   </p>

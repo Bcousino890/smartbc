@@ -82,10 +82,10 @@ export function DocumentosPanel({
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-gold">
+                  <p className="crm-label-sm text-gold">
                     {CATEGORY_LABEL[t.category]}
                   </p>
-                  <h3 className="truncate font-serif text-lg font-medium text-ink">
+                  <h3 className="truncate crm-section-title text-ink">
                     {t.name}
                   </h3>
                 </div>
@@ -95,7 +95,7 @@ export function DocumentosPanel({
                 {t.roles.map((r) => (
                   <span
                     key={r}
-                    className="rounded-full border border-gold/30 bg-gold/5 px-2 py-0.5 text-[11px] text-ink/70"
+                    className="rounded-full border border-gold/30 bg-gold/5 px-2 py-0.5 text-xs text-ink/70"
                   >
                     {ROLE_LABELS[r]}
                   </span>
@@ -191,13 +191,13 @@ function DocumentEditor({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <Card as="section" className="p-6">
-          <h2 className="font-serif text-2xl font-medium text-ink">
+          <h2 className="crm-section-title text-ink">
             {template.name}
           </h2>
           <p className="mt-1 text-sm text-ink/55">{template.subtitle}</p>
 
           {template.reviewNote ? (
-            <p className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+            <p className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               ⚠️ {template.reviewNote}
             </p>
           ) : null}
@@ -208,7 +208,7 @@ function DocumentEditor({
                 key={field.key}
                 className={cn(field.full && "sm:col-span-2")}
               >
-                <label className="mb-1 block text-[13px] font-medium text-ink/70">
+                <label className="mb-1 block text-sm font-medium text-ink/70">
                   {field.label}
                 </label>
                 {field.type === "select" ? (
@@ -246,10 +246,10 @@ function DocumentEditor({
         </Card>
 
         <Card as="aside" className="h-fit p-6 lg:sticky lg:top-6">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-gold">
+          <p className="crm-label-sm text-gold">
             Generar documento
           </p>
-          <p className="mt-2 text-[13px] text-ink/60">
+          <p className="mt-2 text-sm text-ink/60">
             Los campos vacíos se imprimen como líneas para completar y firmar a
             mano. Puedes previsualizar / imprimir o descargar el PDF.
           </p>
@@ -279,14 +279,14 @@ function DocumentEditor({
           </div>
 
           {error ? (
-            <p className="mt-3 text-[13px] text-red-600">{error}</p>
+            <p className="mt-3 text-sm text-red-600">{error}</p>
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-1.5">
             {template.roles.map((r) => (
               <span
                 key={r}
-                className="rounded-full border border-gold/30 bg-gold/5 px-2 py-0.5 text-[11px] text-ink/70"
+                className="rounded-full border border-gold/30 bg-gold/5 px-2 py-0.5 text-xs text-ink/70"
               >
                 {ROLE_LABELS[r]}
               </span>

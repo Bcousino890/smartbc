@@ -87,13 +87,13 @@ export function IdealistaStatusTimeline({ history }: { history: StatusHistoryEnt
                   <span className="text-ink/60">{reasonLabel}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${oldStateInfo.bg} ${oldStateInfo.color}`}>
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${oldStateInfo.bg} ${oldStateInfo.color}`}>
                     {oldStateInfo.label}
                   </span>
                   <svg className="h-3 w-3 flex-shrink-0 text-ink/30" fill="none" viewBox="0 0 20 20" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${newStateInfo.bg} ${newStateInfo.color}`}>
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${newStateInfo.bg} ${newStateInfo.color}`}>
                     {newStateInfo.label}
                   </span>
                 </div>

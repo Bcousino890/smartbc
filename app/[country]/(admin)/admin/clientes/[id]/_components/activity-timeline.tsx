@@ -145,7 +145,7 @@ export function ActivityTimeline({
                 type="button"
                 onClick={() => setActor(f)}
                 className={cn(
-                  "rounded px-2 py-1 text-[10.5px] font-medium transition",
+                  "rounded px-2 py-1 text-xs font-medium transition",
                   actor === f ? "bg-ink text-cream-50" : "text-ink/50 hover:text-ink",
                 )}
               >
@@ -163,7 +163,7 @@ export function ActivityTimeline({
           <div className="space-y-4">
             {groups.map(([day, items]) => (
               <section key={day}>
-                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink/35">
+                <h3 className="mb-2 crm-label-sm text-ink/35">
                   {formatDate(items[0].at, locale, {
                     weekday: "short",
                     day: "2-digit",
@@ -188,12 +188,12 @@ export function ActivityTimeline({
                           <Icon size={11} strokeWidth={1.9} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[12.5px] leading-snug text-ink/80">
+                          <p className="text-xs leading-snug text-ink/80">
                             {typeof e.vars?.count === "number"
                               ? tn(e.titleKey, e.vars.count, e.vars)
                               : t(e.titleKey, e.vars)}
                             {(e.count ?? 1) > 1 && e.source !== "analytics" && (
-                              <span className="ms-1.5 rounded bg-ink/[0.06] px-1 py-px text-[10.5px] font-semibold tabular-nums text-ink/50">
+                              <span className="ms-1.5 rounded bg-ink/[0.06] px-1 py-px text-xs font-semibold tabular-nums text-ink/50">
                                 ×{e.count}
                               </span>
                             )}
@@ -201,7 +201,7 @@ export function ActivityTimeline({
                               <span className="text-ink/45"> · {detailOf(e, tn)}</span>
                             )}
                           </p>
-                          <p className="mt-px text-[10.5px] text-ink/35">
+                          <p className="mt-px text-xs text-ink/35">
                             <RelativeTime at={e.at} locale={locale} />
                             {e.actorName ? ` · ${e.actorName}` : ""}
                           </p>
@@ -218,7 +218,7 @@ export function ActivityTimeline({
             <button
               type="button"
               onClick={() => setLimit((n) => n + 60)}
-              className="mt-4 w-full rounded-md border border-ink/12 py-2 text-[11.5px] font-medium text-ink/60 transition hover:border-gold/45 hover:text-ink"
+              className="mt-4 w-full rounded-md border border-ink/12 py-2 text-xs font-medium text-ink/60 transition hover:border-gold/45 hover:text-ink"
             >
               {tn("cc.timeline.more", filtered.length - shown.length)}
             </button>

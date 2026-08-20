@@ -33,7 +33,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
+      <div className="crm-root fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
         {toasts.map(t => {
           const Icon = ICONS[t.type];
           return (

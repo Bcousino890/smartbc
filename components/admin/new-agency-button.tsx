@@ -13,7 +13,7 @@ export function NewAgencyButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-[13px] font-medium text-cream-50 transition hover:bg-ink-soft"
+        className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft"
       >
         <Plus size={15} strokeWidth={1.75} className="text-gold" />
         <span>{t("agencias.new.button")}</span>

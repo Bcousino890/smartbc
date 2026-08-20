@@ -47,7 +47,7 @@ export function AgenciesTable({ agencies }: { agencies: Agency[] }) {
           />
         </label>
 
-        <p className="flex items-center gap-1.5 text-[12px] text-ink/55">
+        <p className="flex items-center gap-1.5 text-xs text-ink/55">
           <RefreshCw size={13} strokeWidth={1.75} className="text-gold" />
           <span>{t("admin.lastUpdate.label")}</span>
           <span>
@@ -60,7 +60,7 @@ export function AgenciesTable({ agencies }: { agencies: Agency[] }) {
       <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[820px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <tr className="crm-table-header text-ink/50">
               <th className="px-4 pb-2">{t("agencias.table.agency")}</th>
               <th className="px-4 pb-2 text-center">
                 {t("agencias.table.rent")}
@@ -106,12 +106,12 @@ function AgencyRow({ agency }: { agency: Agency }) {
     <tr className="bg-white/55 transition hover:bg-white/85">
       <td className="rounded-l-xl px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink font-serif text-[11px] font-medium text-cream-50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-cream-50">
             {agency.initials}
           </span>
           <div>
             <p className="font-medium text-ink">{agency.name}</p>
-            <p className="text-[11px] text-ink/55">{agency.city}</p>
+            <p className="text-xs text-ink/55">{agency.city}</p>
           </div>
         </div>
       </td>
@@ -122,14 +122,14 @@ function AgencyRow({ agency }: { agency: Agency }) {
         <Inline icon={<Tag size={13} strokeWidth={1.75} />} value={agency.saleCount} />
       </td>
       <td className="px-4 py-3 text-center font-semibold text-ink">{total}</td>
-      <td className="px-4 py-3 text-[12px] text-ink/65">
+      <td className="px-4 py-3 text-xs text-ink/65">
         {t("admin.relativeTime.minutesAgo", { n: agency.lastUpdateMinutes })}
       </td>
       <td className="rounded-r-xl px-4 py-3 text-right">
         <Link
           href={`/admin/agencias/${agency.id}`}
           className={cn(
-            "inline-flex items-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-[12px] font-medium text-cream-50 transition",
+            "inline-flex items-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-xs font-medium text-cream-50 transition",
             "hover:bg-ink-soft",
           )}
         >

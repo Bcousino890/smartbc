@@ -66,7 +66,7 @@ export default async function SalesInboxPage({
         <div className="pt-6">
           <Link
             href={`${config.prefix}/solicitudes`}
-            className="text-[12px] text-ink/55 transition hover:text-ink"
+            className="text-xs text-ink/55 transition hover:text-ink"
           >
             ← Sales Inbox
           </Link>

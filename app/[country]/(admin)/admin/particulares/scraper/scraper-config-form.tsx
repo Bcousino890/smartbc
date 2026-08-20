@@ -175,7 +175,7 @@ export function ScraperConfigForm({ initial }: { initial: IdealistaScraperConfig
       {/* Interruptor general */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-ink/10 bg-cream-50/70 p-5">
         <div>
-          <div className="font-serif text-base font-semibold text-ink">Scraping activo</div>
+          <div className="text-base font-bold text-ink">Scraping activo</div>
           <p className="mt-0.5 text-sm text-ink/60">
             Al desactivarlo, el scraper para en su siguiente consulta. No se pierde nada de lo ya
             capturado.
@@ -200,7 +200,7 @@ export function ScraperConfigForm({ initial }: { initial: IdealistaScraperConfig
 
       {GROUPS.map((group) => (
         <div key={group.title} className="rounded-2xl border border-ink/10 bg-cream-50/70 p-5">
-          <h3 className="font-serif text-base font-semibold text-ink">{group.title}</h3>
+          <h3 className="text-base font-bold text-ink">{group.title}</h3>
           <p className="mt-0.5 mb-4 text-sm text-ink/60">{group.description}</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {group.fields.map((field) => {
@@ -219,7 +219,7 @@ export function ScraperConfigForm({ initial }: { initial: IdealistaScraperConfig
                       <span className="shrink-0 text-xs text-ink/50">{field.unit}</span>
                     </div>
                     {field.hint ? (
-                      <span className="mt-1 block text-[11px] text-ink/45">{field.hint}</span>
+                      <span className="mt-1 block text-xs text-ink/45">{field.hint}</span>
                     ) : null}
                   </label>
                 );
@@ -268,7 +268,7 @@ export function ScraperConfigForm({ initial }: { initial: IdealistaScraperConfig
                     </select>
                   </div>
                   {field.hint ? (
-                    <span className="mt-1 block text-[11px] text-ink/45">{field.hint}</span>
+                    <span className="mt-1 block text-xs text-ink/45">{field.hint}</span>
                   ) : null}
                 </label>
               );

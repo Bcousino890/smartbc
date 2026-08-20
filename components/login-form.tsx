@@ -48,10 +48,10 @@ export function LoginForm() {
           aria-hidden="true"
         />
         <span className="mt-1.5 h-px w-8 bg-gold/60" />
-        <h2 className="mt-2 font-serif text-2xl font-medium leading-tight tracking-tight text-ink md:text-[1.75rem]">
+        <h2 className="mt-2 crm-section-title text-ink">
           {t("login.title")}
         </h2>
-        <p className="mt-1 text-[13px] text-ink/60">{t("login.subtitle")}</p>
+        <p className="mt-1 text-sm text-ink/60">{t("login.subtitle")}</p>
       </div>
 
       <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl border border-gold/20 bg-white/40 p-1.5">
@@ -90,7 +90,7 @@ export function LoginForm() {
             // Un email nunca lleva espacios: se quitan al escribir (también los
             // que cuela el pegado desde un gestor de contraseñas).
             onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))}
-            className="w-full bg-transparent py-2.5 pr-3 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
+            className="w-full bg-transparent py-2.5 pr-3 crm-input text-ink placeholder:text-ink/40 focus:outline-none"
           />
         </Field>
 
@@ -107,7 +107,7 @@ export function LoginForm() {
             placeholder={t("login.password.placeholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-transparent py-2.5 pr-2 text-sm text-ink placeholder:text-ink/40 focus:outline-none"
+            className="w-full bg-transparent py-2.5 pr-2 crm-input text-ink placeholder:text-ink/40 focus:outline-none"
           />
           <button
             type="button"
@@ -133,17 +133,17 @@ export function LoginForm() {
               <ShoppingBag size={14} strokeWidth={1.75} />
             </span>
             <div className="min-w-0">
-              <p className="font-serif text-sm font-semibold text-ink">
+              <p className="text-sm font-bold text-ink">
                 {t("login.shopper.title")}
               </p>
-              <p className="mt-0.5 text-[11px] leading-snug text-ink/70">
+              <p className="mt-0.5 text-xs leading-snug text-ink/70">
                 {t("login.shopper.text")}
               </p>
             </div>
           </div>
 
           <div className="mt-2.5 border-t border-gold/20 pt-2.5">
-            <label className="flex cursor-pointer items-start gap-2 text-[11px] text-ink/80">
+            <label className="flex cursor-pointer items-start gap-2 text-xs text-ink/80">
               <input
                 type="checkbox"
                 checked={accepted}
@@ -159,7 +159,7 @@ export function LoginForm() {
       {state.error && (
         <p
           role="alert"
-          className="mt-3 rounded-lg border border-red-300/60 bg-red-50/80 px-3 py-2 text-[12px] text-red-700"
+          className="mt-3 rounded-lg border border-red-300/60 bg-red-50/80 px-3 py-2 text-xs text-red-700"
         >
           {t(state.error)}
         </p>
@@ -169,7 +169,7 @@ export function LoginForm() {
         type="submit"
         disabled={!canSubmit}
         className={cn(
-          "mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-ink px-5 py-3 text-sm font-medium tracking-wide text-cream-50 transition",
+          "mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-ink px-5 py-3 crm-button text-cream-50 transition",
           "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
@@ -180,7 +180,7 @@ export function LoginForm() {
       <div className="mt-2.5 text-center">
         <a
           href="/auth/forgot-password"
-          className="text-[13px] text-gold-dark underline-offset-4 transition hover:underline"
+          className="text-sm text-gold-dark underline-offset-4 transition hover:underline"
         >
           {t("login.forgot")}
         </a>
@@ -193,7 +193,7 @@ export function LoginForm() {
           className="text-gold"
           aria-hidden="true"
         />
-        <p className="mt-1 text-center text-[11px] text-ink/55">
+        <p className="mt-1 text-center text-xs text-ink/55">
           {t("login.footer")}
         </p>
       </div>

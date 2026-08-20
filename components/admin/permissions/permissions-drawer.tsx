@@ -418,7 +418,7 @@ export function PermissionsDrawer({
               <ShieldCheck size={20} strokeWidth={1.75} className="text-blue-500" />
             </span>
             <div className="min-w-0">
-              <h2 className="font-serif text-lg font-semibold leading-tight text-ink">
+              <h2 className="crm-section-title leading-tight text-ink">
                 Permisos
               </h2>
               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -427,7 +427,7 @@ export function PermissionsDrawer({
                 </span>
                 <span
                   className={cn(
-                    "inline-block rounded-md border px-2 py-0.5 text-[10px] font-medium",
+                    "inline-block rounded-md border px-2 py-0.5 text-xs font-medium",
                     ROLE_BADGE[user.roleKey],
                   )}
                 >
@@ -450,7 +450,7 @@ export function PermissionsDrawer({
         {/* Conmutador de país (solo si el usuario tiene más de un país) */}
         {isMultiCountry && (
           <div className="flex items-center gap-2 border-b border-ink/10 bg-cream-50/60 px-5 py-2.5 sm:px-6">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink/50">
+            <span className="crm-label-sm text-ink/50">
               Permisos por país
             </span>
             <div className="ml-auto inline-flex rounded-xl border border-ink/10 bg-white/70 p-0.5">
@@ -468,7 +468,7 @@ export function PermissionsDrawer({
                     }}
                     aria-pressed={active}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition",
+                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
                       active
                         ? "bg-ink text-cream-50"
                         : "text-ink/60 hover:text-ink",
@@ -512,7 +512,7 @@ export function PermissionsDrawer({
           <>
             <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
               {/* Intro note */}
-              <p className="rounded-xl border border-gold/20 bg-gold/5 px-3.5 py-3 text-[13px] leading-relaxed text-ink/70">
+              <p className="rounded-xl border border-gold/20 bg-gold/5 px-3.5 py-3 text-sm leading-relaxed text-ink/70">
                 El rol{" "}
                 <span className="font-medium text-ink">
                   {ROLE_LABEL[user.roleKey] ?? user.roleKey}
@@ -520,7 +520,7 @@ export function PermissionsDrawer({
                 concede unos permisos base. Los interruptores de abajo son{" "}
                 <span className="font-medium text-ink">excepciones por usuario</span>{" "}
                 que se aplican sobre ese rol. Las celdas que difieren del rol se marcan como{" "}
-                <span className="rounded bg-gold/20 px-1 py-px text-[11px] font-medium text-ink">
+                <span className="rounded bg-gold/20 px-1 py-px text-xs font-medium text-ink">
                   modificado
                 </span>
                 .
@@ -532,7 +532,7 @@ export function PermissionsDrawer({
                   <p className="text-sm font-semibold text-ink">
                     Seleccionar todos los permisos
                   </p>
-                  <p className="text-[12px] text-ink/55">
+                  <p className="text-xs text-ink/55">
                     Activa o desactiva cada permiso de cada sección.
                   </p>
                 </div>
@@ -558,15 +558,15 @@ export function PermissionsDrawer({
                       {/* Group header / master toggle */}
                       <div className="flex items-center justify-between gap-3 border-b border-ink/8 bg-cream-50/60 px-4 py-3">
                         <div className="min-w-0">
-                          <h3 className="font-serif text-[15px] font-semibold text-ink">
+                          <h3 className="text-base font-bold text-ink">
                             {RESOURCE_LABELS[resource]}
                           </h3>
-                          <p className="text-[12px] text-ink/55">
+                          <p className="text-xs text-ink/55">
                             {RESOURCE_DESCRIPTIONS[resource]}
                           </p>
                         </div>
                         <label className="flex shrink-0 items-center gap-2">
-                          <span className="hidden text-[11px] font-medium text-ink/55 sm:inline">
+                          <span className="hidden text-xs font-medium text-ink/55 sm:inline">
                             Seleccionar todo
                           </span>
                           <Toggle
@@ -591,18 +591,18 @@ export function PermissionsDrawer({
                             >
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[13px] font-medium text-ink">
+                                  <span className="text-sm font-medium text-ink">
                                     {ACTION_LABELS[action]}
                                   </span>
                                   {modified && (
-                                    <span className="rounded bg-gold/20 px-1.5 py-px text-[10px] font-medium text-ink/80">
+                                    <span className="rounded bg-gold/20 px-1.5 py-px text-xs font-medium text-ink/80">
                                       modificado
                                     </span>
                                   )}
                                   {!modified && (
                                     <span
                                       className={cn(
-                                        "rounded px-1.5 py-px text-[10px] font-medium",
+                                        "rounded px-1.5 py-px text-xs font-medium",
                                         def
                                           ? "bg-emerald-50 text-emerald-600"
                                           : "bg-ink/5 text-ink/45",
@@ -612,7 +612,7 @@ export function PermissionsDrawer({
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-0.5 text-[12px] text-ink/55">
+                                <p className="mt-0.5 text-xs text-ink/55">
                                   {ACTION_DESCRIPTIONS[action]}
                                 </p>
                               </div>
@@ -645,10 +645,10 @@ export function PermissionsDrawer({
                       <History size={16} strokeWidth={1.75} className="text-ink/55" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="font-serif text-[15px] font-semibold text-ink">
+                      <h3 className="text-base font-bold text-ink">
                         Historial
                       </h3>
-                      <p className="text-[12px] text-ink/55">
+                      <p className="text-xs text-ink/55">
                         Cambios de permisos, rol y país de este usuario.
                       </p>
                     </div>
@@ -666,20 +666,20 @@ export function PermissionsDrawer({
                 {historyOpen && (
                   <div className="border-t border-ink/8 px-4 py-3">
                     {auditState === "loading" && (
-                      <div className="flex items-center gap-2 py-3 text-[13px] text-ink/55">
+                      <div className="flex items-center gap-2 py-3 text-sm text-ink/55">
                         <Loader2 size={15} className="animate-spin text-gold" />
                         Cargando historial…
                       </div>
                     )}
 
                     {auditState === "error" && (
-                      <p className="py-3 text-[13px] text-ink/55">
+                      <p className="py-3 text-sm text-ink/55">
                         No se pudo cargar el historial.
                       </p>
                     )}
 
                     {auditState === "ready" && auditEntries.length === 0 && (
-                      <p className="py-3 text-[13px] text-ink/55">
+                      <p className="py-3 text-sm text-ink/55">
                         Sin cambios registrados todavía.
                       </p>
                     )}
@@ -695,20 +695,20 @@ export function PermissionsDrawer({
                             >
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                  <span className="text-[13px] font-medium text-ink">
+                                  <span className="text-sm font-medium text-ink">
                                     {EVENT_LABEL[entry.eventType] ?? entry.eventType}
                                   </span>
                                   {detail && (
-                                    <span className="rounded bg-ink/5 px-1.5 py-px text-[10px] font-medium text-ink/60">
+                                    <span className="rounded bg-ink/5 px-1.5 py-px text-xs font-medium text-ink/60">
                                       {detail}
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-0.5 text-[12px] text-ink/55">
+                                <p className="mt-0.5 text-xs text-ink/55">
                                   {actorName(entry.actor)}
                                 </p>
                               </div>
-                              <span className="shrink-0 whitespace-nowrap text-[11px] text-ink/45">
+                              <span className="shrink-0 whitespace-nowrap text-xs text-ink/45">
                                 {formatRelative(entry.createdAt)}
                               </span>
                             </li>
@@ -724,12 +724,12 @@ export function PermissionsDrawer({
             {/* Footer */}
             <div className="border-t border-ink/10 bg-cream-50 px-5 py-3.5 sm:px-6">
               {saveState === "error" && (
-                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
                   <AlertCircle size={14} /> {saveError}
                 </p>
               )}
               {saveState === "success" && (
-                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] text-emerald-700">
+                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   <Check size={14} /> Permisos guardados correctamente.
                 </p>
               )}
@@ -738,14 +738,14 @@ export function PermissionsDrawer({
                   type="button"
                   onClick={resetToRole}
                   disabled={!canEdit || overrideCount === 0 || saveState === "saving"}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-ink/10 px-3.5 py-2.5 text-[13px] font-medium text-ink/65 transition hover:border-ink/20 hover:text-ink disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-ink/10 px-3.5 py-2.5 text-sm font-medium text-ink/65 transition hover:border-ink/20 hover:text-ink disabled:opacity-40"
                 >
                   <RotateCcw size={14} strokeWidth={1.75} />
                   <span className="hidden sm:inline">Restablecer a valores del rol</span>
                   <span className="sm:hidden">Restablecer</span>
                 </button>
                 <div className="flex items-center gap-2">
-                  <span className="hidden text-[12px] text-ink/55 sm:inline">
+                  <span className="hidden text-xs text-ink/55 sm:inline">
                     {overrideCount === 0
                       ? "Sin excepciones"
                       : `${overrideCount} ${overrideCount === 1 ? "excepción" : "excepciones"}`}
@@ -754,7 +754,7 @@ export function PermissionsDrawer({
                     type="button"
                     onClick={handleSave}
                     disabled={!canEdit || saveState === "saving"}
-                    className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-[13px] font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
+                    className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
                   >
                     {saveState === "saving" ? (
                       <Loader2 size={15} className="animate-spin" />

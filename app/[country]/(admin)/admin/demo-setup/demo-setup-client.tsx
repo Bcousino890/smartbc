@@ -159,7 +159,7 @@ export function DemoSetupClient() {
                     </p>
                     <p className="text-sm text-ink/65">{cred.email}</p>
                   </div>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-gold/65">
+                  <span className="crm-label-sm text-gold/65">
                     Cliente {idx + 1}
                   </span>
                 </div>

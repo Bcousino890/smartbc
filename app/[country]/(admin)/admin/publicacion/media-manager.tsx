@@ -188,7 +188,7 @@ export function MediaManager({
         {/* Header */}
         <div className="sticky top-0 flex items-center justify-between border-b border-ink/10 bg-cream-50 px-6 py-4">
           <div>
-            <h2 className="font-serif text-xl font-semibold text-ink">
+            <h2 className="crm-section-title text-ink">
               Medios · {propertyTitle}
             </h2>
             <p className="mt-1 text-sm text-ink/55">
@@ -238,7 +238,7 @@ export function MediaManager({
                   <span className="text-sm font-medium text-ink">
                     Haz clic para subir fotos
                   </span>
-                  <span className="text-[12px] text-ink/50">
+                  <span className="text-xs text-ink/50">
                     JPG, PNG (máx 10MB cada una)
                   </span>
                 </div>
@@ -266,7 +266,7 @@ export function MediaManager({
                   <span className="text-sm font-medium text-ink">
                     Haz clic para subir videos
                   </span>
-                  <span className="text-[12px] text-ink/50">
+                  <span className="text-xs text-ink/50">
                     MP4, WebM (máx 100MB)
                   </span>
                 </div>
@@ -294,7 +294,7 @@ export function MediaManager({
                   <span className="text-sm font-medium text-ink">
                     Haz clic para subir planos (PDF)
                   </span>
-                  <span className="text-[12px] text-ink/50">
+                  <span className="text-xs text-ink/50">
                     PDF (máx 20MB)
                   </span>
                 </div>
@@ -335,7 +335,7 @@ export function MediaManager({
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {media.type === "photo" && (
                         <div className="h-10 w-10 shrink-0 rounded bg-blue-100 flex items-center justify-center">
-                          <span className="text-[11px] font-bold text-blue-600">
+                          <span className="text-xs font-bold text-blue-600">
                             IMG
                           </span>
                         </div>
@@ -357,7 +357,7 @@ export function MediaManager({
                           {media.fileName}
                         </p>
                         {media.hasWatermark && (
-                          <p className="text-[11px] text-emerald-600">
+                          <p className="text-xs text-emerald-600">
                             Con marca de agua
                           </p>
                         )}
@@ -367,13 +367,13 @@ export function MediaManager({
                       <a
                         href={media.url}
                         download
-                        className="flex items-center gap-1 rounded px-2 py-1.5 text-[12px] text-ink/65 hover:bg-ink/5 transition"
+                        className="flex items-center gap-1 rounded px-2 py-1.5 text-xs text-ink/65 hover:bg-ink/5 transition"
                       >
                         <Download size={12} />
                       </a>
                       <button
                         onClick={() => deleteMedia(media.id)}
-                        className="flex items-center gap-1 rounded px-2 py-1.5 text-[12px] text-red-600 hover:bg-red-50 transition"
+                        className="flex items-center gap-1 rounded px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 transition"
                       >
                         <Trash2 size={12} />
                       </button>

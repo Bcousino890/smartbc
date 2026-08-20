@@ -150,9 +150,9 @@ export function FotocasaZonesPanel() {
               className="h-3.5 w-3.5 rounded border-ink/25 accent-ink disabled:opacity-40"
             />
             <span className={selected.has(d.path) ? "font-medium text-ink" : ""}>{d.label}</span>
-            <span className="text-[11px] text-ink/40">{d.approxListings}</span>
+            <span className="text-xs text-ink/40">{d.approxListings}</span>
             {subSelected > 0 && !selected.has(d.path) && !coveredByLocation && (
-              <span className="rounded-full bg-ink/5 px-1.5 text-[10px] text-ink/55">
+              <span className="rounded-full bg-ink/5 px-1.5 text-xs text-ink/55">
                 {subSelected}
               </span>
             )}
@@ -164,7 +164,7 @@ export function FotocasaZonesPanel() {
             {d.subZones.map((s) => (
               <label
                 key={s.path}
-                className="flex cursor-pointer items-center gap-2 py-0.5 text-[13px] text-ink/70"
+                className="flex cursor-pointer items-center gap-2 py-0.5 text-sm text-ink/70"
               >
                 <input
                   type="checkbox"
@@ -174,7 +174,7 @@ export function FotocasaZonesPanel() {
                   className="h-3 w-3 rounded border-ink/25 accent-ink disabled:opacity-40"
                 />
                 <span>{s.label}</span>
-                <span className="text-[11px] text-ink/35">{s.approxListings}</span>
+                <span className="text-xs text-ink/35">{s.approxListings}</span>
               </label>
             ))}
           </div>
@@ -187,9 +187,9 @@ export function FotocasaZonesPanel() {
     <div>
       <div className="flex items-center gap-2">
         <MapPin size={15} className="text-ink/45" />
-        <h4 className="font-serif text-sm font-semibold text-ink">Zonas a scrapear</h4>
+        <h4 className="text-sm font-bold text-ink">Zonas a scrapear</h4>
         {data && (
-          <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[11px] text-ink/55">
+          <span className="rounded-full bg-ink/5 px-2 py-0.5 text-xs text-ink/55">
             {selected.size} seleccionadas
           </span>
         )}
@@ -230,8 +230,8 @@ export function FotocasaZonesPanel() {
                         onChange={() => toggle(locWhole, childPaths)}
                         className="h-3.5 w-3.5 rounded border-ink/25 accent-ink"
                       />
-                      <span className="font-serif text-sm font-semibold text-ink">{loc.label}</span>
-                      <span className="text-[11px] text-ink/40">
+                      <span className="text-sm font-bold text-ink">{loc.label}</span>
+                      <span className="text-xs text-ink/40">
                         {loc.approxListings} · entera
                       </span>
                     </label>

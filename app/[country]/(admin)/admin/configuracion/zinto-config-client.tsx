@@ -132,7 +132,7 @@ export function ZintoConfigClient() {
   if (loading) {
     return (
       <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-        <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+        <header className="flex items-center gap-2 crm-label-sm text-ink/55">
           <span className="text-gold">
             <MessageCircle size={16} strokeWidth={1.75} />
           </span>
@@ -150,7 +150,7 @@ export function ZintoConfigClient() {
 
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <header className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+      <header className="flex items-center gap-2 crm-label-sm text-ink/55">
         <span className="text-[#128C7E]">
           <MessageCircle size={16} strokeWidth={1.75} />
         </span>
@@ -173,7 +173,7 @@ export function ZintoConfigClient() {
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-1.5 md:col-span-2">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               API Key {flags.hasApiKey && <span className="text-green-700">· guardada</span>}
             </span>
             <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
@@ -195,7 +195,7 @@ export function ZintoConfigClient() {
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">URL base</span>
+            <span className="text-xs font-medium text-ink/65">URL base</span>
             <input
               type="text"
               value={config.baseUrl}
@@ -206,7 +206,7 @@ export function ZintoConfigClient() {
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">Channel ID (WhatsApp)</span>
+            <span className="text-xs font-medium text-ink/65">Channel ID (WhatsApp)</span>
             <input
               type="number"
               value={config.channelId}
@@ -217,7 +217,7 @@ export function ZintoConfigClient() {
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               Webhook Secret (estado){" "}
               {flags.hasWebhookSecret && <span className="text-green-700">· guardado</span>}
             </span>
@@ -231,7 +231,7 @@ export function ZintoConfigClient() {
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-ink/65">
+            <span className="text-xs font-medium text-ink/65">
               Inbound Token (X-Zinto-Token){" "}
               {flags.hasInboundToken && <span className="text-green-700">· guardado</span>}
             </span>
@@ -266,7 +266,7 @@ export function ZintoConfigClient() {
 
         {channels && (
           <div className="border-t border-ink/8 pt-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/45">
+            <p className="mb-2 crm-label-sm text-ink/45">
               Canales de Zinto
             </p>
             <div className="space-y-2">
@@ -291,7 +291,7 @@ export function ZintoConfigClient() {
           </div>
         )}
 
-        <p className="pt-2 text-[11px] text-ink/55">
+        <p className="pt-2 text-xs text-ink/55">
           Las claves se guardan <strong>cifradas</strong> en la base de datos (nunca en git).
           El <em>Inbound Token</em> debe coincidir con el header <code>X-Zinto-Token</code> del
           Flujo de Zinto. Guía completa en <code>docs/ZINTO_SETUP.md</code>.

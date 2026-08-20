@@ -126,7 +126,7 @@ export default function LeafletMap({ lat, lng, onMove, readonly }: LeafletMapPro
         </MapContainer>
       </div>
       {!readonly && (
-        <p className="mt-1.5 text-[11px] text-ink/50">
+        <p className="mt-1.5 text-xs text-ink/50">
           Haz clic o arrastra el pin para ajustar la ubicación
         </p>
       )}

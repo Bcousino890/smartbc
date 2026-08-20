@@ -65,7 +65,7 @@ export function ViewingItinerariesBlock({
     <>
       <CollapsibleBlock title="Itinerarios de visitas" count={itineraries.length}>
         {itineraries.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-[12px] text-ink/55">
+          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-xs text-ink/55">
             Sin itinerarios. Marca propiedades en la selección y pulsa «Crear
             itinerario».
           </p>
@@ -126,10 +126,10 @@ function ItineraryCard({
     <li className="rounded-xl border border-gold/10 bg-white/65 px-4 py-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-ink">
+          <p className="truncate text-sm font-medium text-ink">
             {itinerary.title || "Itinerario sin título"}
           </p>
-          <p className="mt-0.5 text-[11px] text-ink/55">
+          <p className="mt-0.5 text-xs text-ink/55">
             {itinerary.scheduled_date ?? "Sin fecha"}
             {itinerary.window_start
               ? ` · ${itinerary.window_start.slice(0, 5)}–${(itinerary.window_end ?? "").slice(0, 5)}`
@@ -140,7 +140,7 @@ function ItineraryCard({
         </div>
         <span
           className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+            "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
             STATUS_STYLE[itinerary.status],
           )}
         >
@@ -148,7 +148,7 @@ function ItineraryCard({
         </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink/60">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/60">
         {confirmed > 0 && (
           <span className="inline-flex items-center gap-1">
             <CheckCircle2 size={11} className="text-emerald-600" />
@@ -171,7 +171,7 @@ function ItineraryCard({
 
       {share && (
         <div className="mt-2.5 rounded-lg border border-emerald-200/60 bg-emerald-50/50 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink/70">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/70">
             <span className="inline-flex items-center gap-1">
               <Eye size={11} className="text-emerald-700" />
               {share.opensCount} apertura{share.opensCount === 1 ? "" : "s"}
@@ -200,7 +200,7 @@ function ItineraryCard({
 
       {itinerary.status === "draft" &&
         itinerary.readiness.blockers.length > 0 && (
-          <p className="mt-2 text-[11px] text-amber-700">
+          <p className="mt-2 text-xs text-amber-700">
             ⚠ Para publicar falta:{" "}
             {itinerary.readiness.blockers
               .map((b) =>
@@ -220,7 +220,7 @@ function ItineraryCard({
         <button
           type="button"
           onClick={onOpen}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
         >
           {canEdit ? (
             <Pencil size={11} strokeWidth={1.75} className="text-gold-dark" />
@@ -237,7 +237,7 @@ function ItineraryCard({
             href={share.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
           >
             <BarChart3 size={11} strokeWidth={1.75} className="text-gold-dark" />
             Abrir

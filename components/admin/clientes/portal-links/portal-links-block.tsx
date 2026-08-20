@@ -282,10 +282,10 @@ export function PortalLinksBlock({
             <div>
               <Label tone="gold">Enlaces de portales</Label>
               <p className="mt-2 flex items-baseline gap-2">
-                <span className="font-serif text-[26px] leading-none vc-nums text-ink">
+                <span className="crm-number text-2xl leading-none text-ink">
                   {String(counts.all).padStart(2, "0")}
                 </span>
-                <span className="font-sans text-[12px] text-ink/50">
+                <span className="font-sans text-xs text-ink/50">
                   {counts.all === 1 ? "anuncio" : "anuncios"} fuera del CRM
                 </span>
               </p>
@@ -296,7 +296,7 @@ export function PortalLinksBlock({
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-2 font-sans text-[11.5px] font-medium text-cream-50 transition hover:bg-ink-soft"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-2 font-sans text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
               >
                 <Plus size={12} strokeWidth={2} className="text-gold" />
                 Añadir enlaces
@@ -305,7 +305,7 @@ export function PortalLinksBlock({
           </div>
 
           {counts.all > 0 && (
-            <p className="mt-3 font-sans text-[12px] text-ink/55">
+            <p className="mt-3 font-sans text-xs text-ink/55">
               {counts.toCall > 0 ? (
                 <>
                   <strong className="font-medium text-ink">
@@ -339,7 +339,7 @@ export function PortalLinksBlock({
                     type="button"
                     onClick={() => setFilter(key)}
                     className={cn(
-                      "rounded-full border px-2.5 py-1 font-sans text-[11px] font-medium transition",
+                      "rounded-full border px-2.5 py-1 font-sans text-xs font-medium transition",
                       filter === key
                         ? "border-gold/50 bg-gold/15 text-ink"
                         : "border-ink/10 bg-white/60 text-ink/60 hover:border-gold/30",
@@ -356,7 +356,7 @@ export function PortalLinksBlock({
                   disabled={pending}
                   onClick={() => commitOrder(orderByRating(ordered))}
                   title="Reordena la lista poniendo arriba lo que más le gusta al cliente. Después puedes afinar arrastrando."
-                  className="mt-2.5 inline-flex items-center gap-1.5 font-sans text-[11.5px] font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
+                  className="mt-2.5 inline-flex items-center gap-1.5 font-sans text-xs font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
                 >
                   <ArrowDownWideNarrow size={12} strokeWidth={1.75} className="text-gold-dark" />
                   Ordenar por valoración
@@ -364,7 +364,7 @@ export function PortalLinksBlock({
               )}
 
               {error && (
-                <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 font-sans text-[12px] text-rose-700">
+                <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 font-sans text-xs text-rose-700">
                   {error}
                 </p>
               )}
@@ -409,14 +409,14 @@ export function PortalLinksBlock({
                     e.preventDefault();
                     dropBefore(dragId, null);
                   }}
-                  className="mt-1 rounded-lg border border-dashed border-gold/40 bg-gold/5 py-2 text-center font-display text-[9.5px] uppercase vc-tracked-sm text-gold-dark"
+                  className="mt-1 rounded-lg border border-dashed border-gold/40 bg-gold/5 py-2 text-center crm-label-sm text-gold-dark"
                 >
                   Soltar al final
                 </div>
               )}
 
               {visible.length === 0 && (
-                <p className="py-6 text-center font-sans text-[12px] text-ink/45">
+                <p className="py-6 text-center font-sans text-xs text-ink/45">
                   Ningún anuncio en este filtro.
                 </p>
               )}
@@ -424,13 +424,13 @@ export function PortalLinksBlock({
               {/* Repartir el trabajo: "estos se los mando a Fabricio". */}
               {canEdit && checked.size > 0 && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-gold/25 bg-gold/5 px-4 py-3">
-                  <span className="font-sans text-[12px] font-medium text-ink/75">
+                  <span className="font-sans text-xs font-medium text-ink/75">
                     {checked.size} marcado{checked.size > 1 ? "s" : ""}
                   </span>
                   <select
                     value={assignee}
                     onChange={(e) => setAssignee(e.target.value)}
-                    className="rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-[11.5px] text-ink focus:border-gold/55 focus:outline-none"
+                    className="rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-xs text-ink focus:border-gold/55 focus:outline-none"
                   >
                     <option value="">Sin asignar</option>
                     {staff.map((s) => (
@@ -443,7 +443,7 @@ export function PortalLinksBlock({
                     type="button"
                     disabled={pending}
                     onClick={assign}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 font-sans text-[11.5px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 font-sans text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
                   >
                     {pending && <Loader2 size={11} className="animate-spin" />}
                     Pasar para llamar
@@ -454,7 +454,7 @@ export function PortalLinksBlock({
                       disabled={bulkCreating}
                       onClick={bulkImport}
                       title="Crea la ficha de cada anuncio marcado leyendo su página completa en el portal (título, precio, todas las fotos) y lo vincula a la selección del cliente. Uno detrás de otro; con muchos puede tardar."
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                     >
                       {bulkCreating ? (
                         <Loader2 size={11} className="animate-spin" />
@@ -472,7 +472,7 @@ export function PortalLinksBlock({
                         value={sendLanguage}
                         onChange={(e) => setSendLanguage(e.target.value)}
                         title="Idioma de la selección privada que se le manda al cliente."
-                        className="rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-[11.5px] text-ink focus:border-gold/55 focus:outline-none"
+                        className="rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 font-sans text-xs text-ink focus:border-gold/55 focus:outline-none"
                       >
                         {COLLECTION_LANGUAGES.map((l) => (
                           <option key={l} value={l}>
@@ -485,7 +485,7 @@ export function PortalLinksBlock({
                         disabled={pending}
                         onClick={sendToClient}
                         title="Crea una selección privada NUEVA con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-[11.5px] font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                       >
                         {pending ? (
                           <Loader2 size={11} className="animate-spin" />
@@ -499,7 +499,7 @@ export function PortalLinksBlock({
                   <button
                     type="button"
                     onClick={() => setChecked(new Set())}
-                    className="ml-auto font-sans text-[11.5px] text-ink/50 transition hover:text-ink"
+                    className="ml-auto font-sans text-xs text-ink/50 transition hover:text-ink"
                   >
                     Quitar marcas
                   </button>
@@ -508,7 +508,7 @@ export function PortalLinksBlock({
 
               {bulkResults && (
                 <div className="mt-3 rounded-xl border border-gold/25 bg-gold/5 px-4 py-3">
-                  <p className="font-sans text-[12px] font-medium text-ink/75">
+                  <p className="font-sans text-xs font-medium text-ink/75">
                     {bulkResults.filter((r) => r.ok).length} ficha
                     {bulkResults.filter((r) => r.ok).length === 1 ? "" : "s"} creada
                     {bulkResults.filter((r) => r.ok).length === 1 ? "" : "s"}
@@ -523,7 +523,7 @@ export function PortalLinksBlock({
                       <li
                         key={r.linkId}
                         className={cn(
-                          "font-sans text-[11.5px]",
+                          "font-sans text-xs",
                           r.ok ? "text-emerald-700" : "text-rose-700",
                         )}
                       >
@@ -534,7 +534,7 @@ export function PortalLinksBlock({
                   <button
                     type="button"
                     onClick={() => setBulkResults(null)}
-                    className="mt-2 font-sans text-[11px] text-ink/45 transition hover:text-ink"
+                    className="mt-2 font-sans text-xs text-ink/45 transition hover:text-ink"
                   >
                     Cerrar
                   </button>
@@ -561,11 +561,11 @@ export function PortalLinksBlock({
 function EmptyState({ clientName }: { clientName: string }) {
   return (
     <div className="mt-4 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-7 text-center">
-      <p className="font-sans text-[12.5px] text-ink/60">
+      <p className="font-sans text-xs text-ink/60">
         Aquí van los pisos que ves con {clientName} en Idealista, Fotocasa o en
         la web de otra inmobiliaria, antes de que sean fichas nuestras.
       </p>
-      <div className="mt-4 flex flex-col items-center gap-2 font-sans text-[11.5px] text-ink/45">
+      <div className="mt-4 flex flex-col items-center gap-2 font-sans text-xs text-ink/45">
         <span className="inline-flex items-center gap-1.5">
           <Link2 size={12} strokeWidth={1.75} className="text-gold-dark" />
           Pega los enlaces con «Añadir enlaces» — vale una lista entera de golpe

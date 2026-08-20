@@ -66,14 +66,14 @@ export function StatCard({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+          <p className="crm-label-sm text-ink/50">
             {t(labelKey)}
           </p>
-          <p className="mt-0.5 font-serif text-3xl font-medium leading-none text-ink">
+          <p className="crm-number mt-0.5 text-3xl leading-none text-ink">
             {value}
           </p>
           {helpKey && (
-            <p className="mt-1 text-[11px] text-ink/55">{t(helpKey)}</p>
+            <p className="crm-meta mt-1 text-ink/55">{t(helpKey)}</p>
           )}
         </div>
         {rightSlot}
@@ -84,7 +84,7 @@ export function StatCard({
       {action && (
         <Link
           href={action.href}
-          className="mt-3 flex items-center gap-1.5 text-[12px] font-medium text-gold-dark transition hover:text-gold"
+          className="mt-3 flex items-center gap-1.5 text-xs font-bold text-gold-dark transition hover:text-gold"
         >
           <span>{t(action.labelKey)}</span>
           <ArrowRight size={13} strokeWidth={1.75} />

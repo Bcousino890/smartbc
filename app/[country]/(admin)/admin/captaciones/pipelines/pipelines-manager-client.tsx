@@ -382,7 +382,7 @@ export function PipelinesManagerClient({ initialPipelines }: { initialPipelines:
                       )}
                     </button>
                   </div>
-                  <p className="mt-1.5 pl-[68px] text-[11px] text-ink/40">
+                  <p className="mt-1.5 pl-[68px] text-xs text-ink/40">
                     {STAGE_TYPE_DESCRIPTION[stage.stage_type]}
                   </p>
                 </div>

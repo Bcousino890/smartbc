@@ -100,7 +100,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="relative min-h-screen bg-cream-50">
+    <div className="crm-root relative min-h-screen bg-cream-50">
       {/* Soft warm background */}
       <div
         aria-hidden="true"

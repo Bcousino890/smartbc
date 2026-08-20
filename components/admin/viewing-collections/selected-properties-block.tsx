@@ -180,7 +180,7 @@ export function SelectedPropertiesBlock({
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
             >
               <Search size={12} strokeWidth={1.75} className="text-gold-dark" />
               Buscar
@@ -189,7 +189,7 @@ export function SelectedPropertiesBlock({
         }
       >
         {selections.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-[12px] text-ink/55">
+          <p className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-xs text-ink/55">
             Aún no has seleccionado propiedades para {clientName}. Añádelas
             desde sus favoritos, las sugerencias o buscándolas.
           </p>
@@ -209,7 +209,7 @@ export function SelectedPropertiesBlock({
                   type="button"
                   onClick={() => setFilter(key)}
                   className={cn(
-                    "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition",
                     filter === key
                       ? "border-gold/50 bg-gold/15 text-ink"
                       : "border-ink/10 bg-white/60 text-ink/60 hover:border-gold/30",
@@ -227,7 +227,7 @@ export function SelectedPropertiesBlock({
                   disabled={pending}
                   onClick={() => commitOrder(orderByRating(ordered))}
                   title="Pone arriba lo que TÚ has valorado mejor. Después puedes afinar arrastrando."
-                  className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
                 >
                   <ArrowDownWideNarrow size={12} strokeWidth={1.75} className="text-gold-dark" />
                   Ordenar por mi valoración
@@ -244,7 +244,7 @@ export function SelectedPropertiesBlock({
                       )
                     }
                     title="Pone arriba lo que más le ha gustado AL CLIENTE en su enlace privado."
-                    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-ink/55 transition hover:text-gold-dark disabled:opacity-50"
                   >
                     <ArrowDownWideNarrow size={12} strokeWidth={1.75} className="text-gold-dark" />
                     Ordenar por lo que dice el cliente
@@ -254,7 +254,7 @@ export function SelectedPropertiesBlock({
             )}
 
             {error && (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-[12px] text-rose-700">
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-xs text-rose-700">
                 {error}
               </p>
             )}
@@ -301,27 +301,27 @@ export function SelectedPropertiesBlock({
                   e.preventDefault();
                   dropBefore(dragId, null);
                 }}
-                className="mt-2 rounded-lg border border-dashed border-gold/40 bg-gold/5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-dark"
+                className="mt-2 rounded-lg border border-dashed border-gold/40 bg-gold/5 py-2 text-center crm-label-sm text-gold-dark"
               >
                 Soltar al final
               </div>
             )}
 
             {visible.length === 0 && (
-              <p className="mt-3 text-center text-[12px] text-ink/45">
+              <p className="mt-3 text-center text-xs text-ink/45">
                 Ninguna propiedad en este filtro.
               </p>
             )}
 
             {canCreateItinerary && checked.size > 0 && (
               <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gold/25 bg-gold/5 px-4 py-3">
-                <span className="text-[12px] font-medium text-ink/75">
+                <span className="text-xs font-medium text-ink/75">
                   {checked.size} seleccionada{checked.size > 1 ? "s" : ""}
                 </span>
                 <button
                   type="button"
                   onClick={() => setCreateOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft"
+                  className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
                 >
                   <CalendarPlus size={13} strokeWidth={1.75} className="text-gold" />
                   Crear itinerario
@@ -455,7 +455,7 @@ function SelectionRow({
               <ChevronUp size={13} strokeWidth={2} />
             </button>
             <span
-              className="cursor-grab font-serif text-[11px] leading-none text-ink/35 active:cursor-grabbing"
+              className="cursor-grab text-xs leading-none text-ink/35 active:cursor-grabbing"
               title="Arrastra para cambiar la prioridad"
             >
               {String(order).padStart(2, "0")}
@@ -500,10 +500,10 @@ function SelectionRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-medium text-ink">
+              <p className="truncate text-sm font-medium text-ink">
                 {prop.title}
               </p>
-              <p className="mt-0.5 truncate text-[11px] text-ink/55">
+              <p className="mt-0.5 truncate text-xs text-ink/55">
                 {prop.bcReference ? `${prop.bcReference} · ` : ""}
                 {prop.zone}
                 {prop.subzone ? ` · ${prop.subzone}` : ""} · {prop.bedrooms}h{" "}
@@ -512,9 +512,9 @@ function SelectionRow({
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[12px] font-semibold text-ink">{priceLabel}</p>
+              <p className="text-xs font-semibold text-ink">{priceLabel}</p>
               <div className="mt-1 flex items-center justify-end gap-1.5">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-ink/35">
+                <span className="crm-label-sm text-ink/35">
                   Yo
                 </span>
                 <RatingStars
@@ -538,7 +538,7 @@ function SelectionRow({
                   className="mt-1 flex items-center justify-end gap-1.5"
                   title="Lo que ha valorado el cliente desde su enlace privado"
                 >
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gold-dark">
+                  <span className="crm-label-sm text-gold-dark">
                     Cliente
                   </span>
                   <RatingStars value={selection.client_rating} />
@@ -550,7 +550,7 @@ function SelectionRow({
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span
               className={cn(
-                "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                "rounded-full border px-2 py-0.5 text-xs font-medium",
                 STATUS_STYLE[selection.status],
               )}
             >
@@ -558,28 +558,28 @@ function SelectionRow({
             </span>
 
             {selection.badges.isClientFavorite && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-600">
+              <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-600">
                 <Heart size={9} className="fill-rose-500 text-rose-500" />
                 Favorita
               </span>
             )}
             {selection.badges.inItinerary && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
                 <Calendar size={9} strokeWidth={2} />
                 {selection.badges.itineraryTitles.join(", ")}
               </span>
             )}
             {selection.badges.visited && (
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                 Visitada
               </span>
             )}
             {prop.isArchived ? (
-              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
                 Archivada
               </span>
             ) : prop.status !== "available" ? (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                 {prop.status === "reserved" ? "Reservada" : "Vendida"}
               </span>
             ) : null}
@@ -591,7 +591,7 @@ function SelectionRow({
                 value={selection.status}
                 onChange={(e) => changeStatus(e.target.value as SelectionStatus)}
                 disabled={pending}
-                className="rounded-lg border border-ink/15 bg-white px-2 py-1 text-[11px] text-ink/75 focus:border-gold/55 focus:outline-none"
+                className="rounded-lg border border-ink/15 bg-white px-2 py-1 text-xs text-ink/75 focus:border-gold/55 focus:outline-none"
               >
                 <option value="selected">Seleccionada</option>
                 <option value="interested">Le interesa</option>
@@ -601,7 +601,7 @@ function SelectionRow({
 
             <Link
               href={`${config.prefix}/propiedades/${prop.slug}`}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-gold-dark transition hover:text-gold hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-gold-dark transition hover:text-gold hover:underline"
             >
               <ExternalLink size={11} strokeWidth={1.75} />
               Ficha
@@ -612,7 +612,7 @@ function SelectionRow({
                 type="button"
                 onClick={remove}
                 disabled={pending}
-                className="ml-auto inline-flex items-center gap-1 text-[11px] text-ink/45 transition hover:text-rose-600 disabled:opacity-50"
+                className="ml-auto inline-flex items-center gap-1 text-xs text-ink/45 transition hover:text-rose-600 disabled:opacity-50"
               >
                 {pending ? (
                   <Loader2 size={11} className="animate-spin" />
@@ -646,7 +646,7 @@ export function AddToSelectionButton({
   if (done) {
     return (
       <span
-        className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-emerald-700"
+        className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700"
         title="Ya está en la selección"
       >
         <Check size={11} strokeWidth={2.5} />
@@ -669,7 +669,7 @@ export function AddToSelectionButton({
       }
       disabled={pending}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition disabled:opacity-50",
+        "inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition disabled:opacity-50",
         error
           ? "border-rose-300 bg-rose-50 text-rose-700"
           : "border-ink/15 bg-white text-ink/70 hover:border-gold/55 hover:text-ink",

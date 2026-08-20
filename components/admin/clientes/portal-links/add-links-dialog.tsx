@@ -101,7 +101,7 @@ export function AddLinksDialog({
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
           <div>
             <Label tone="gold">Enlaces de portales</Label>
-            <h3 className="mt-1 font-serif text-lg font-semibold text-ink">
+            <h3 className="crm-number mt-1 text-[22px] text-ink">
               Añadir anuncios para {clientName}
             </h3>
           </div>
@@ -127,14 +127,14 @@ export function AddLinksDialog({
               "https://www.fotocasa.es/es/alquiler/vivienda/madrid/…\n\n" +
               "Vale también pegar un correo o un WhatsApp entero: se sacan los enlaces que haya."
             }
-            className="mt-1.5 w-full resize-y rounded-xl border border-ink/15 bg-white px-3 py-2.5 font-sans text-[12.5px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+            className="mt-1.5 w-full resize-y rounded-xl border border-ink/15 bg-white px-3 py-2.5 font-sans text-xs text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
           />
 
           {(parsed.items.length > 0 || parsed.invalid > 0) && (
             <>
               <Rule className="my-3" />
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="font-serif text-[22px] leading-none vc-nums text-ink">
+                <span className="crm-number text-[22px] leading-none text-ink">
                   {parsed.items.length}
                 </span>
                 <Label className="text-ink/50">
@@ -143,7 +143,7 @@ export function AddLinksDialog({
                     : "anuncios reconocidos"}
                 </Label>
                 {parsed.invalid > 0 && (
-                  <span className="font-sans text-[11.5px] text-amber-700">
+                  <span className="font-sans text-xs text-amber-700">
                     {parsed.invalid} descartado{parsed.invalid > 1 ? "s" : ""}{" "}
                     (solo http:// o https://)
                   </span>
@@ -151,7 +151,7 @@ export function AddLinksDialog({
               </div>
 
               {byPortal.length > 0 && (
-                <p className="mt-1.5 font-sans text-[11.5px] text-ink/50">
+                <p className="mt-1.5 font-sans text-xs text-ink/50">
                   {byPortal
                     .map(([portal, n]) => `${portalLabel(portal)} ${n}`)
                     .join(" · ")}
@@ -163,14 +163,14 @@ export function AddLinksDialog({
                   {parsed.items.slice(0, 20).map((i) => (
                     <li
                       key={i.url}
-                      className="truncate font-sans text-[11px] text-ink/55"
+                      className="truncate font-sans text-xs text-ink/55"
                     >
                       {portalLabel(i.portal)}
                       {i.ref ? ` · ${i.ref}` : ""} — {i.url}
                     </li>
                   ))}
                   {parsed.items.length > 20 && (
-                    <li className="font-sans text-[11px] text-ink/40">
+                    <li className="font-sans text-xs text-ink/40">
                       y {parsed.items.length - 20} más…
                     </li>
                   )}
@@ -187,7 +187,7 @@ export function AddLinksDialog({
               <select
                 value={assignedTo}
                 onChange={(e) => setAssignedTo(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-2 font-sans text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+                className="mt-1.5 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-2 font-sans text-xs text-ink focus:border-gold/55 focus:outline-none"
               >
                 <option value="">Sin asignar</option>
                 {staff.map((s) => (
@@ -203,13 +203,13 @@ export function AddLinksDialog({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Vistos con el cliente el lunes…"
-                className="mt-1.5 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-2 font-sans text-[12px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                className="mt-1.5 w-full rounded-lg border border-ink/15 bg-white px-2.5 py-2 font-sans text-xs text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
               />
             </div>
           </div>
 
           {error && (
-            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 font-sans text-[12px] text-rose-700">
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 font-sans text-xs text-rose-700">
               {error}
             </p>
           )}
@@ -219,7 +219,7 @@ export function AddLinksDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-ink/15 bg-white px-3.5 py-2 font-sans text-[12px] font-medium text-ink/70 transition hover:border-ink/30"
+            className="rounded-lg border border-ink/15 bg-white px-3.5 py-2 font-sans text-xs font-medium text-ink/70 transition hover:border-ink/30"
           >
             Cancelar
           </button>
@@ -227,7 +227,7 @@ export function AddLinksDialog({
             type="button"
             disabled={pending || parsed.items.length === 0}
             onClick={submit}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 font-sans text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 font-sans text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-40"
           >
             {pending && <Loader2 size={12} className="animate-spin" />}
             Añadir {parsed.items.length > 0 ? parsed.items.length : ""}

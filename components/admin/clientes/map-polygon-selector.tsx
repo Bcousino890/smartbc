@@ -60,7 +60,7 @@ export function MapPolygonSelector({
 
   return (
     <div className={cn("space-y-3", className)}>
-      <p className="text-[10px] font-medium text-ink/60">
+      <p className="text-xs font-medium text-ink/60">
         Zonas de interés (Polígonos)
       </p>
 
@@ -68,13 +68,13 @@ export function MapPolygonSelector({
       {showMap ? (
         <div className="rounded-xl border border-gold/15 bg-white/40 p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-ink/70">
+            <span className="text-xs font-medium text-ink/70">
               Dibuja polígonos en el mapa (haz clic en el ícono de dibujo)
             </span>
             <button
               type="button"
               onClick={() => setShowMap(false)}
-              className="text-[11px] text-ink/45 hover:text-ink/70 transition"
+              className="text-xs text-ink/45 hover:text-ink/70 transition"
             >
               Cerrar mapa
             </button>
@@ -89,7 +89,7 @@ export function MapPolygonSelector({
         <button
           type="button"
           onClick={() => setShowMap(true)}
-          className="flex items-center gap-2 w-full rounded-lg border border-gold/30 bg-white/70 px-3 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 hover:bg-white"
+          className="flex items-center gap-2 w-full rounded-lg border border-gold/30 bg-white/70 px-3 py-2 text-xs font-medium text-ink transition hover:border-gold/55 hover:bg-white"
         >
           <MapPin size={14} strokeWidth={2} />
           <span>Abrir mapa para dibujar zonas</span>
@@ -102,7 +102,7 @@ export function MapPolygonSelector({
           {selectedPolygons.map((polygon) => (
             <div
               key={polygon.id}
-              className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5 text-[11px]"
+              className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5 text-xs"
             >
               <input
                 type="text"
@@ -130,7 +130,7 @@ export function MapPolygonSelector({
               </div>
             </div>
           ))}
-          <p className="text-[10px] text-ink/45 px-2 py-1">
+          <p className="text-xs text-ink/45 px-2 py-1">
             {selectedPolygons.length} zona{selectedPolygons.length !== 1 ? "s" : ""} de interés
           </p>
         </div>

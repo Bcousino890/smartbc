@@ -48,7 +48,7 @@ function Toggle({
           disabled={disabled}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
             value === opt.value ? "bg-ink text-cream-50 shadow-sm" : "text-ink/65 hover:text-ink",
             disabled && "cursor-not-allowed"
           )}
@@ -153,7 +153,7 @@ export function EditApplicationModal({
     >
       <div className="relative w-full max-w-lg rounded-2xl bg-cream-50 shadow-2xl">
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4">
-          <h2 className="font-serif text-lg text-ink">Editar solicitud</h2>
+          <h2 className="crm-section-title text-ink">Editar solicitud</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-ink/40 transition hover:bg-ink/5 hover:text-ink">
             <X size={18} />
           </button>
@@ -172,7 +172,7 @@ export function EditApplicationModal({
           )}
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-medium text-ink/60">País</label>
+            <label className="mb-1.5 block text-xs font-medium text-ink/60">País</label>
             <Toggle
               value={country}
               onChange={(v) => setCountry(v as ApplicationCountry)}
@@ -185,7 +185,7 @@ export function EditApplicationModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Tipo de operación</label>
+            <label className="mb-1.5 block text-xs font-medium text-ink/60">Tipo de operación</label>
             <Toggle
               value={operation}
               onChange={(v) => setOperation(v as ApplicationOperation)}
@@ -198,7 +198,7 @@ export function EditApplicationModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Propiedad</label>
+            <label className="mb-1.5 block text-xs font-medium text-ink/60">Propiedad</label>
             {selectedProperty ? (
               <div className="flex items-center gap-2 rounded-xl border border-ink/10 bg-white/60 px-4 py-2.5">
                 <Home size={14} className="shrink-0 text-ink/40" />
@@ -206,7 +206,7 @@ export function EditApplicationModal({
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm text-ink">{selectedProperty.title}</p>
                     {selectedProperty.bc_reference && (
-                      <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">
+                      <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-xs text-ink/60">
                         {selectedProperty.bc_reference}
                       </span>
                     )}
@@ -244,7 +244,7 @@ export function EditApplicationModal({
                           <div className="flex items-center gap-2">
                             <p className="truncate text-sm text-ink">{p.title}</p>
                             {p.bc_reference && (
-                              <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">
+                              <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-xs text-ink/60">
                                 {p.bc_reference}
                               </span>
                             )}
@@ -260,7 +260,7 @@ export function EditApplicationModal({
 
           {operation === "rent" ? (
             <div>
-              <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Fecha de mudanza</label>
+              <label className="mb-1.5 block text-xs font-medium text-ink/60">Fecha de mudanza</label>
               <input
                 type="date"
                 value={moveIn}
@@ -270,7 +270,7 @@ export function EditApplicationModal({
             </div>
           ) : (
             <div>
-              <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Fecha de compra</label>
+              <label className="mb-1.5 block text-xs font-medium text-ink/60">Fecha de compra</label>
               <input
                 type="date"
                 value={purchase}

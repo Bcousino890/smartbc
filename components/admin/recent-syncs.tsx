@@ -59,16 +59,16 @@ export function RecentSyncsPanel({ logs }: { logs: RecentSyncVM[] }) {
   const t = useT();
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/80 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.25)] backdrop-blur-sm md:p-6">
-      <h2 className="font-serif text-xl font-medium text-ink">
+      <h2 className="crm-section-title text-ink">
         {t("sindicacion.recent.title")}
       </h2>
-      <p className="mt-0.5 text-[12px] text-ink/55">
+      <p className="mt-0.5 text-xs text-ink/55">
         {t("sindicacion.recent.subtitle")}
       </p>
 
       <ul className="mt-4 space-y-2">
         {logs.length === 0 ? (
-          <li className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-[12px] text-ink/55">
+          <li className="rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-xs text-ink/55">
             {t("sindicacion.recent.empty")}
           </li>
         ) : (
@@ -90,7 +90,7 @@ export function RecentSyncsPanel({ logs }: { logs: RecentSyncVM[] }) {
                     <p className="truncate text-sm font-medium text-ink">
                       {log.agencyName}
                     </p>
-                    <p className="text-[11px] text-ink/55">
+                    <p className="text-xs text-ink/55">
                       {t(tone.labelKey)} ·{" "}
                       {t(`sindicacion.trigger.${log.triggeredBy}`)}
                       {" · "}
@@ -101,7 +101,7 @@ export function RecentSyncsPanel({ logs }: { logs: RecentSyncVM[] }) {
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3 text-[11px] text-ink/70">
+                <div className="flex shrink-0 items-center gap-3 text-xs text-ink/70">
                   <Counter
                     labelKey="sindicacion.counters.inserted"
                     value={log.inserted}
@@ -129,7 +129,7 @@ function Counter({ labelKey, value }: { labelKey: string; value: number }) {
   return (
     <span className="inline-flex flex-col items-end leading-none">
       <span className="font-mono text-sm text-ink">{value}</span>
-      <span className="text-[9px] uppercase tracking-[0.14em] text-ink/45">
+      <span className="crm-label-sm text-ink/45">
         {t(labelKey)}
       </span>
     </span>

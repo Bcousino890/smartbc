@@ -71,7 +71,7 @@ export function SmartLinksPanel({
 
   return (
     <div>
-      <p className="mt-1 text-[12px] text-ink/55">
+      <p className="mt-1 text-xs text-ink/55">
         {t("adminProps.smartLinks.help")}
       </p>
 
@@ -88,7 +88,7 @@ export function SmartLinksPanel({
         <button
           type="submit"
           disabled={creating}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
         >
           {creating ? (
             <Loader2 size={13} className="animate-spin" />
@@ -99,14 +99,14 @@ export function SmartLinksPanel({
         </button>
       </form>
       {error && (
-        <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-[12px] text-rose-700">
+        <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-xs text-rose-700">
           {t("adminProps.smartLinks.error", { error })}
         </p>
       )}
 
       {/* Tabla de links */}
       {initialLinks.length === 0 ? (
-        <div className="mt-5 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-[12px] text-ink/55">
+        <div className="mt-5 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-8 text-center text-xs text-ink/55">
           {t("adminProps.smartLinks.empty")}
         </div>
       ) : (
@@ -160,11 +160,11 @@ function LinkRow({ link, slug }: { link: SmartLinkRow; slug: string }) {
           <p className="truncate text-sm font-medium text-ink">
             {link.label || t("adminProps.smartLinks.unlabeled")}
           </p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-ink/55">
+          <p className="mt-0.5 truncate font-mono text-xs text-ink/55">
             /c/{link.token}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2 text-[11px]">
+        <div className="flex shrink-0 items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1 rounded-md border border-gold/15 bg-gold/5 px-2 py-1 text-ink/75">
             <BarChart3 size={11} strokeWidth={2} className="text-gold-dark" />
             <span>
@@ -183,7 +183,7 @@ function LinkRow({ link, slug }: { link: SmartLinkRow; slug: string }) {
           type="button"
           onClick={handleCopy}
           className={cn(
-            "inline-flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition",
+            "inline-flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition",
             copied
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-ink/15 bg-white text-ink/75 hover:border-gold/55 hover:text-ink",
@@ -204,7 +204,7 @@ function LinkRow({ link, slug }: { link: SmartLinkRow; slug: string }) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-9 items-center justify-center rounded-lg border border-ink/15 bg-white px-3 text-[12px] font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
+          className="inline-flex h-9 items-center justify-center rounded-lg border border-ink/15 bg-white px-3 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink"
           title={t("adminProps.smartLinks.open")}
         >
           <Link2 size={13} strokeWidth={1.75} className="text-gold-dark" />

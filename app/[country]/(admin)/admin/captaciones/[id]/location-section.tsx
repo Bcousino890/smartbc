@@ -138,7 +138,7 @@ export function LocationSection({
       <div className="rounded-2xl border border-gold/15 bg-white/70 p-6">
         <div className="space-y-4">
           <div>
-            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Tipo de Propiedad</p>
+            <p className="text-xs text-ink/50 uppercase tracking-wide">Tipo de Propiedad</p>
             <p className="mt-0.5 text-sm font-medium text-ink">
               {captacion.property_type
                 ? CAPTACION_PROPERTY_TYPE_LABELS[captacion.property_type]
@@ -147,7 +147,7 @@ export function LocationSection({
           </div>
 
           <div>
-            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Rol de la Propiedad (SII)</p>
+            <p className="text-xs text-ink/50 uppercase tracking-wide">Rol de la Propiedad (SII)</p>
             <p className="mt-0.5 text-sm font-medium text-ink">
               {captacion.rol_propiedad
                 ? captacion.rol_propiedad
@@ -156,7 +156,7 @@ export function LocationSection({
           </div>
 
           <div>
-            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Comuna</p>
+            <p className="text-xs text-ink/50 uppercase tracking-wide">Comuna</p>
             <p className="mt-0.5 text-sm font-medium text-ink">
               {captacion.commune
                 ? captacion.commune
@@ -165,7 +165,7 @@ export function LocationSection({
           </div>
 
           <div>
-            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Dirección Real</p>
+            <p className="text-xs text-ink/50 uppercase tracking-wide">Dirección Real</p>
             <p className="mt-0.5 text-sm font-medium text-ink">
               {captacion.address_real
                 ? captacion.address_real
@@ -174,7 +174,7 @@ export function LocationSection({
           </div>
 
           <div>
-            <p className="text-[11px] text-ink/50 uppercase tracking-wide">Dirección Verificada</p>
+            <p className="text-xs text-ink/50 uppercase tracking-wide">Dirección Verificada</p>
             <div className="mt-0.5 flex items-center gap-2">
               {captacion.address_verified ? (
                 <>
@@ -189,7 +189,7 @@ export function LocationSection({
 
           {captacion.latitude && captacion.longitude && (
             <div>
-              <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-2">Ubicación</p>
+              <p className="text-xs text-ink/50 uppercase tracking-wide mb-2">Ubicación</p>
               <LeafletMap
                 lat={captacion.latitude}
                 lng={captacion.longitude}
@@ -338,7 +338,7 @@ export function LocationSection({
           </div>
 
           {locationData.latitude && locationData.longitude && (
-            <div className="text-[10px] text-amber-800">
+            <div className="text-xs text-amber-800">
               <p>Lat: {locationData.latitude.toFixed(4)}</p>
               <p>Lng: {locationData.longitude.toFixed(4)}</p>
               <button

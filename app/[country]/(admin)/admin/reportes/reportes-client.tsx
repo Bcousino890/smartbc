@@ -67,10 +67,10 @@ function ZoneChart({ byZone }: { byZone: Array<[string, number]> }) {
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <header>
-        <h2 className="font-serif text-xl font-semibold text-ink">
+        <h2 className="crm-section-title text-ink">
           {t("reportes.zone.title")}
         </h2>
-        <p className="text-[12px] text-ink/55">
+        <p className="text-xs text-ink/55">
           {t("reportes.zone.subtitle")}
         </p>
       </header>
@@ -83,7 +83,7 @@ function ZoneChart({ byZone }: { byZone: Array<[string, number]> }) {
             const pct = Math.round((count / max) * 100);
             return (
               <div key={zone} className="flex items-center gap-3">
-                <span className="w-28 truncate text-right text-[12px] text-ink/70 shrink-0">
+                <span className="w-28 truncate text-right text-xs text-ink/70 shrink-0">
                   {zone}
                 </span>
                 <div className="flex flex-1 items-center gap-2">
@@ -93,7 +93,7 @@ function ZoneChart({ byZone }: { byZone: Array<[string, number]> }) {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="w-6 text-right font-serif text-[13px] font-semibold text-ink">
+                  <span className="crm-number w-6 text-right text-sm text-ink">
                     {count}
                   </span>
                 </div>
@@ -141,10 +141,10 @@ function OperationChart({
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <header>
-        <h2 className="font-serif text-xl font-semibold text-ink">
+        <h2 className="crm-section-title text-ink">
           {t("reportes.operation.title")}
         </h2>
-        <p className="text-[12px] text-ink/55">
+        <p className="text-xs text-ink/55">
           {t("reportes.operation.subtitle")}
         </p>
       </header>
@@ -182,9 +182,9 @@ function OperationChart({
                     <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
                     {t(labelKey)}
                   </span>
-                  <span className="font-serif text-base font-semibold text-ink">
+                  <span className="text-base font-bold text-ink">
                     {count}
-                    <span className="ml-1.5 text-[11px] font-normal text-ink/50">
+                    <span className="ml-1.5 text-xs font-normal text-ink/50">
                       {pct}%
                     </span>
                   </span>

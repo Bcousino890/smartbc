@@ -93,7 +93,7 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-2 text-left text-[11px] font-medium text-ink/60 transition hover:text-ink"
+        className="flex w-full items-center justify-between px-4 py-2 text-left text-xs font-medium text-ink/60 transition hover:text-ink"
       >
         <span className="flex items-center gap-1.5">
           <StickyNote size={13} strokeWidth={1.75} />
@@ -130,9 +130,9 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
           {!loading && !error && data?.contact && (
             <div className="space-y-2.5 rounded-lg border border-gold/15 bg-white/60 px-3 py-2.5">
               <div>
-                <p className="text-[13px] font-semibold text-ink">{data.contact.name}</p>
+                <p className="text-sm font-semibold text-ink">{data.contact.name}</p>
                 {data.contact.email && (
-                  <p className="text-[11px] text-ink/55">{data.contact.email}</p>
+                  <p className="text-xs text-ink/55">{data.contact.email}</p>
                 )}
               </div>
 
@@ -141,7 +141,7 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
                   {data.contact.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-medium text-ink/70"
+                      className="flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-xs font-medium text-ink/70"
                     >
                       <Tag size={9} strokeWidth={2} />
                       {tag}
@@ -155,11 +155,11 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
                   {data.notes.map((note) => (
                     <li
                       key={note.zintoNoteId}
-                      className="rounded-md bg-cream-50/80 px-2.5 py-1.5 text-[11px] text-ink/70"
+                      className="rounded-md bg-cream-50/80 px-2.5 py-1.5 text-xs text-ink/70"
                     >
                       <p className="whitespace-pre-wrap">{note.content}</p>
                       {note.zintoCreatedAt && (
-                        <p className="mt-0.5 text-[10px] text-ink/40">
+                        <p className="mt-0.5 text-xs text-ink/40">
                           {formatNoteDate(note.zintoCreatedAt)}
                         </p>
                       )}
@@ -167,7 +167,7 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
                   ))}
                 </ul>
               ) : (
-                <p className="text-[11px] italic text-ink/45">Sin notas en el CRM.</p>
+                <p className="text-xs italic text-ink/45">Sin notas en el CRM.</p>
               )}
 
               <div className="space-y-1.5 border-t border-gold/10 pt-2.5">
@@ -179,13 +179,13 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
                     onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
                     placeholder="Agregar tag…"
                     disabled={isPending}
-                    className="min-w-0 flex-1 rounded-md border border-gold/20 bg-white/70 px-2 py-1 text-[11px] text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none disabled:opacity-50"
+                    className="min-w-0 flex-1 rounded-md border border-gold/20 bg-white/70 px-2 py-1 text-xs text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none disabled:opacity-50"
                   />
                   <button
                     type="button"
                     onClick={handleAddTag}
                     disabled={isPending || !tagDraft.trim()}
-                    className="flex items-center gap-1 rounded-md bg-gold/20 px-2 py-1 text-[10px] font-medium text-ink/70 transition hover:bg-gold/30 disabled:opacity-40"
+                    className="flex items-center gap-1 rounded-md bg-gold/20 px-2 py-1 text-xs font-medium text-ink/70 transition hover:bg-gold/30 disabled:opacity-40"
                   >
                     <Plus size={11} strokeWidth={2} />
                     Tag
@@ -199,30 +199,30 @@ export function ZintoCrmPanel({ phone }: { phone: string }) {
                     onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
                     placeholder="Agregar nota…"
                     disabled={isPending}
-                    className="min-w-0 flex-1 rounded-md border border-gold/20 bg-white/70 px-2 py-1 text-[11px] text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none disabled:opacity-50"
+                    className="min-w-0 flex-1 rounded-md border border-gold/20 bg-white/70 px-2 py-1 text-xs text-ink placeholder:text-ink/40 focus:border-gold/40 focus:outline-none disabled:opacity-50"
                   />
                   <button
                     type="button"
                     onClick={handleAddNote}
                     disabled={isPending || !noteDraft.trim()}
-                    className="flex items-center gap-1 rounded-md bg-gold/20 px-2 py-1 text-[10px] font-medium text-ink/70 transition hover:bg-gold/30 disabled:opacity-40"
+                    className="flex items-center gap-1 rounded-md bg-gold/20 px-2 py-1 text-xs font-medium text-ink/70 transition hover:bg-gold/30 disabled:opacity-40"
                   >
                     <Plus size={11} strokeWidth={2} />
                     Nota
                   </button>
                 </div>
                 {isPending && (
-                  <p className="flex items-center gap-1.5 text-[10px] text-ink/45">
+                  <p className="flex items-center gap-1.5 text-xs text-ink/45">
                     <Loader2 size={10} strokeWidth={1.75} className="animate-spin" />
                     Guardando en Zinto…
                   </p>
                 )}
                 {writeError && (
-                  <p className="text-[10px] text-red-600/80">{writeError}</p>
+                  <p className="text-xs text-red-600/80">{writeError}</p>
                 )}
               </div>
 
-              <p className="text-[9px] text-ink/35">
+              <p className="text-xs text-ink/35">
                 Sincronizado {formatNoteDate(data.contact.syncedAt)}
               </p>
             </div>

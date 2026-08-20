@@ -233,7 +233,7 @@ export function SolicitudesAdminClient({
             type="button"
             onClick={() => setActiveTab(tab)}
             className={cn(
-              "relative flex items-center gap-2 rounded-t-xl border border-b-0 px-4 py-2.5 text-[13px] font-medium transition",
+              "relative flex items-center gap-2 rounded-t-xl border border-b-0 px-4 py-2.5 text-sm font-medium transition",
               activeTab === tab
                 ? "border-gold/20 bg-cream-50/90 text-ink shadow-[0_-4px_12px_-6px_rgba(40,28,10,0.10)]"
                 : "border-transparent text-ink/50 hover:text-ink/75",
@@ -243,7 +243,7 @@ export function SolicitudesAdminClient({
             {counts[tab] > 0 && (
               <span
                 className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
+                  "rounded-full px-1.5 py-0.5 text-xs font-bold leading-none",
                   activeTab === tab
                     ? TAB_BADGE_CLASS[tab]
                     : "bg-ink/8 text-ink/50",
@@ -407,11 +407,11 @@ function ContactCard({ contact }: { contact: ContactRequestRow }) {
           </div>
           <div className="min-w-0">
             <p className="truncate font-medium text-ink text-sm leading-tight">{contact.name}</p>
-            <p className="truncate text-[11px] text-ink/50 leading-tight mt-0.5">{contact.email}</p>
+            <p className="truncate text-xs text-ink/50 leading-tight mt-0.5">{contact.email}</p>
           </div>
         </div>
         <span className={cn(
-          "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold",
+          "shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold",
           isNew ? "border-blue-200 bg-blue-50 text-blue-700" : "border-stone-200 bg-stone-50 text-stone-500",
         )}>
           {isNew ? "Nuevo" : "Leído"}
@@ -420,22 +420,22 @@ function ContactCard({ contact }: { contact: ContactRequestRow }) {
 
       {contact.subject && (
         <div className="mt-3 rounded-lg border border-ink/5 bg-ink/[0.03] px-3 py-2">
-          <p className="text-[12px] font-medium text-ink/75 truncate">📋 {contact.subject}</p>
+          <p className="text-xs font-medium text-ink/75 truncate">📋 {contact.subject}</p>
           {contact.country_interest && (
-            <p className="text-[11px] text-ink/40 mt-0.5">🌍 {contact.country_interest}</p>
+            <p className="text-xs text-ink/40 mt-0.5">🌍 {contact.country_interest}</p>
           )}
         </div>
       )}
 
-      <p className="mt-3 text-[12px] text-ink/70 line-clamp-3 leading-relaxed">{contact.message}</p>
+      <p className="mt-3 text-xs text-ink/70 line-clamp-3 leading-relaxed">{contact.message}</p>
 
       {contact.phone && (
-        <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-2 block text-[11px] text-ink/50 hover:text-amber-800 transition-colors">
+        <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-2 block text-xs text-ink/50 hover:text-amber-800 transition-colors">
           📞 {contact.phone}
         </a>
       )}
 
-      <div className="mt-2.5 text-[11px] text-ink/40">
+      <div className="mt-2.5 text-xs text-ink/40">
         {new Date(contact.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
       </div>
 
@@ -447,7 +447,7 @@ function ContactCard({ contact }: { contact: ContactRequestRow }) {
         <div className="mt-3 flex gap-2">
           <a
             href={`mailto:${contact.email}`}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-gold hover:text-navy"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-gold hover:text-navy"
           >
             <Mail size={13} strokeWidth={2} />
             Responder
@@ -456,7 +456,7 @@ function ContactCard({ contact }: { contact: ContactRequestRow }) {
             type="button"
             onClick={handleRead}
             disabled={isTransitioning}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[12px] font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
           >
             <CheckCircle2 size={13} strokeWidth={2} />
             Marcar leído
@@ -475,7 +475,7 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-3 py-1 text-[11px] font-semibold transition",
+        "rounded-full border px-3 py-1 text-xs font-semibold transition",
         active
           ? "border-teal-300 bg-teal-50 text-teal-800"
           : "border-gold/15 bg-cream-50/60 text-ink/50 hover:text-ink/75",
@@ -506,7 +506,7 @@ function PriceRange({
   const sanitize = (v: string) => v.replace(/[^\d]/g, "");
   return (
     <div className="inline-flex items-center gap-1.5 rounded-md border border-ink/10 bg-white/85 px-2 py-1 text-ink/75 transition focus-within:border-gold/55">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink/45">
+      <span className="crm-label-sm text-ink/45">
         Precio
       </span>
       <input
@@ -515,7 +515,7 @@ function PriceRange({
         value={min}
         onChange={(e) => onMin(sanitize(e.target.value))}
         placeholder="mín"
-        className="w-14 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+        className="w-14 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
       />
       <span className="text-ink/35">–</span>
       <input
@@ -524,7 +524,7 @@ function PriceRange({
         value={max}
         onChange={(e) => onMax(sanitize(e.target.value))}
         placeholder="máx"
-        className="w-16 bg-transparent text-[12px] text-ink placeholder:text-ink/35 focus:outline-none"
+        className="w-16 bg-transparent text-xs text-ink placeholder:text-ink/35 focus:outline-none"
       />
     </div>
   );
@@ -570,7 +570,7 @@ function CopyButton({
         title={title}
         aria-label={title}
         className={cn(
-          "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold transition",
+          "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
           copied
             ? "border-emerald-300 bg-emerald-50 text-emerald-700"
             : "border-ink/15 bg-white text-ink/70 hover:border-teal-300 hover:text-teal-700",
@@ -620,7 +620,7 @@ function LangBadge({ text, className }: { text: string | null | undefined; class
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border border-ink/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-ink/60",
+        "inline-flex shrink-0 items-center gap-1 rounded-full border border-ink/10 bg-white/70 px-2 py-0.5 text-xs font-semibold text-ink/60",
         className,
       )}
       title={`Idioma del mensaje: ${lang.label}`}
@@ -670,13 +670,13 @@ function LeadMessage({ text }: { text: string }) {
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Mensaje</p>
+        <p className="crm-label-sm text-ink/40">Mensaje</p>
         {!isSpanish && (
           <button
             type="button"
             onClick={handleTranslate}
             disabled={isPending}
-            className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+            className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
           >
             {isPending ? (
               <Loader2 size={11} className="animate-spin" />
@@ -687,15 +687,15 @@ function LeadMessage({ text }: { text: string }) {
           </button>
         )}
       </div>
-      <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-ink/75">
+      <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink/75">
         {showingTranslation ? translation : text}
       </p>
       {showingTranslation && (
-        <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-teal-700/70">
+        <p className="mt-1 crm-label-sm text-teal-700/70">
           Traducido al español
         </p>
       )}
-      {error && <p className="mt-1.5 text-[11px] text-rose-600">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-rose-600">{error}</p>}
     </div>
   );
 }
@@ -795,7 +795,7 @@ function IdealistaLeadCard({
                   <a
                     href={`tel:${lead.phone.replace(/\s/g, "")}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="block truncate text-[11px] text-ink/50 leading-tight mt-0.5 hover:text-amber-800 transition-colors"
+                    className="block truncate text-xs text-ink/50 leading-tight mt-0.5 hover:text-amber-800 transition-colors"
                   >
                     📞 {lead.phone}
                     {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
@@ -815,7 +815,7 @@ function IdealistaLeadCard({
           </div>
           <span
             className={cn(
-              "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold",
+              "shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold",
               LEAD_STATUS_BADGE[optimisticStatus],
             )}
           >
@@ -826,19 +826,19 @@ function IdealistaLeadCard({
         {/* Tipo: confirmado o sugerido */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {optimisticType ? (
-            <span className="rounded-full border border-teal-300 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800">
+            <span className="rounded-full border border-teal-300 bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
               {LEAD_TYPE_LABEL[optimisticType]}
             </span>
           ) : lead.suggested_type ? (
             <span
-              className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700"
+              className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700"
               title={lead.suggestion_keywords.length > 0 ? `Detectado por: ${lead.suggestion_keywords.join(", ")}` : undefined}
             >
               Sugerido: {LEAD_TYPE_LABEL[lead.suggested_type]}
             </span>
           ) : null}
           {lead.detail_captured && (
-            <span className="rounded-full border border-ink/10 bg-ink/[0.04] px-2.5 py-0.5 text-[11px] text-ink/45" title="Perfil y mensaje completo capturados">
+            <span className="rounded-full border border-ink/10 bg-ink/[0.04] px-2.5 py-0.5 text-xs text-ink/45" title="Perfil y mensaje completo capturados">
               ● Detalle
             </span>
           )}
@@ -858,11 +858,11 @@ function IdealistaLeadCard({
               />
             )}
             <div className="min-w-0">
-              <p className="text-[12px] font-medium text-ink/75 truncate">
+              <p className="text-xs font-medium text-ink/75 truncate">
                 📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
               </p>
               {(lead.property_ref || lead.idealista_code) && (
-                <p className="text-[11px] text-ink/40 mt-0.5">
+                <p className="text-xs text-ink/40 mt-0.5">
                   {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
                     .filter(Boolean)
                     .join(" · ")}
@@ -872,7 +872,7 @@ function IdealistaLeadCard({
                 <a
                   href={`/es/admin/propiedades/${lead.matched_property_slug}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900 transition-colors"
                 >
                   <ExternalLink size={11} />
                   Ver ficha en el sistema
@@ -880,11 +880,11 @@ function IdealistaLeadCard({
                 </a>
               ) : (
                 (lead.property_ref || lead.idealista_code) && (
-                  <p className="mt-1 text-[11px] text-ink/35">Sin ficha vinculada en el sistema</p>
+                  <p className="mt-1 text-xs text-ink/35">Sin ficha vinculada en el sistema</p>
                 )
               )}
               {lead.properties.length > 1 && (
-                <p className="text-[11px] font-semibold text-teal-700 mt-0.5">
+                <p className="text-xs font-semibold text-teal-700 mt-0.5">
                   Consultó por {lead.properties.length} propiedades
                 </p>
               )}
@@ -895,7 +895,7 @@ function IdealistaLeadCard({
         {/* Mensaje */}
         {lead.message && (
           <>
-            <p className={cn("mt-3 text-[12px] text-ink/70 leading-relaxed whitespace-pre-line", !expanded && "line-clamp-3")}>
+            <p className={cn("mt-3 text-xs text-ink/70 leading-relaxed whitespace-pre-line", !expanded && "line-clamp-3")}>
               {lead.message}
             </p>
             {lead.message.length > 180 && (
@@ -905,7 +905,7 @@ function IdealistaLeadCard({
                   e.stopPropagation();
                   setExpanded((v) => !v);
                 }}
-                className="mt-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+                className="mt-1 text-xs font-semibold text-teal-700 hover:text-teal-900 transition-colors"
               >
                 {expanded ? "Ver menos" : "Ver más"}
               </button>
@@ -916,22 +916,22 @@ function IdealistaLeadCard({
         {/* Perfil de búsqueda */}
         {(bullets.length > 0 || presentacion) && (
           <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2">
-            <p className="text-[11px] font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
+            <p className="text-xs font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
             {bullets.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {bullets.slice(0, 5).map((b) => (
-                  <li key={b} className="text-[11px] text-ink/60">
+                  <li key={b} className="text-xs text-ink/60">
                     • {b}
                   </li>
                 ))}
               </ul>
             )}
-            {presentacion && <p className="mt-1.5 text-[11px] italic text-ink/55 line-clamp-4">“{presentacion}”</p>}
+            {presentacion && <p className="mt-1.5 text-xs italic text-ink/55 line-clamp-4">“{presentacion}”</p>}
           </div>
         )}
 
         {/* Fechas */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/40">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/40">
           {lead.message_date && (
             <>
               <span>🗓 {lead.message_date}</span>
@@ -954,7 +954,7 @@ function IdealistaLeadCard({
           value={optimisticAssignedTo ?? ""}
           onChange={(e) => handleAssign(e.target.value)}
           disabled={isTransitioning}
-          className="rounded-lg border border-ink/10 bg-white px-2 py-1.5 text-[11px] text-ink/75 focus:border-gold/55 focus:outline-none disabled:opacity-60"
+          className="rounded-lg border border-ink/10 bg-white px-2 py-1.5 text-xs text-ink/75 focus:border-gold/55 focus:outline-none disabled:opacity-60"
         >
           <option value="">Sin asignar</option>
           {staffOptions.map((s) => (
@@ -970,7 +970,7 @@ function IdealistaLeadCard({
           }
           disabled={isTransitioning}
           className={cn(
-            "rounded-lg border px-2 py-1.5 text-[11px] font-medium focus:outline-none disabled:opacity-60",
+            "rounded-lg border px-2 py-1.5 text-xs font-medium focus:outline-none disabled:opacity-60",
             CONTACT_STATUS_BADGE[optimisticContactStatus],
           )}
         >
@@ -995,7 +995,7 @@ function IdealistaLeadCard({
                 onClick={() => handleType(type)}
                 disabled={isTransitioning}
                 className={cn(
-                  "flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition disabled:opacity-60",
+                  "flex-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition disabled:opacity-60",
                   (optimisticType ?? lead.suggested_type) === type
                     ? "border-teal-300 bg-teal-50 text-teal-800"
                     : "border-gold/15 bg-cream-50/60 text-ink/45 hover:text-ink/75",
@@ -1013,7 +1013,7 @@ function IdealistaLeadCard({
               type="button"
               onClick={() => handleStatus("fichado")}
               disabled={isTransitioning}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
             >
               <CheckCircle2 size={13} strokeWidth={2} />
               Fichar
@@ -1022,7 +1022,7 @@ function IdealistaLeadCard({
               type="button"
               onClick={() => handleStatus("descartado")}
               disabled={isTransitioning}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
             >
               <XCircle size={13} strokeWidth={2} />
               Descartar
@@ -1035,7 +1035,7 @@ function IdealistaLeadCard({
             type="button"
             onClick={() => handleStatus("nuevo")}
             disabled={isTransitioning}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[12px] font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
           >
             <RotateCcw size={13} strokeWidth={2} />
             Reabrir
@@ -1108,7 +1108,7 @@ function IdealistaLeadModal({
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <a
                     href={`tel:${lead.phone.replace(/\s/g, "")}`}
-                    className="block text-[13px] text-ink/60 hover:text-amber-800 transition-colors"
+                    className="block text-sm text-ink/60 hover:text-amber-800 transition-colors"
                   >
                     📞 {lead.phone}
                     {lead.is_international && lead.phone_country ? ` · ${lead.phone_country} Internacional` : ""}
@@ -1138,14 +1138,14 @@ function IdealistaLeadModal({
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+            <p className="mb-1 crm-label-sm text-ink/40">
               Asignado a
             </p>
             <select
               value={optimisticAssignedTo ?? ""}
               onChange={(e) => handleAssign(e.target.value)}
               disabled={isTransitioning}
-              className="w-full rounded-lg border border-ink/10 bg-white px-2.5 py-2 text-[13px] text-ink/80 focus:border-gold/55 focus:outline-none disabled:opacity-60"
+              className="w-full rounded-lg border border-ink/10 bg-white px-2.5 py-2 text-sm text-ink/80 focus:border-gold/55 focus:outline-none disabled:opacity-60"
             >
               <option value="">Sin asignar</option>
               {staffOptions.map((s) => (
@@ -1156,7 +1156,7 @@ function IdealistaLeadModal({
             </select>
           </div>
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+            <p className="mb-1 crm-label-sm text-ink/40">
               Estado de contacto
             </p>
             <select
@@ -1166,7 +1166,7 @@ function IdealistaLeadModal({
               }
               disabled={isTransitioning}
               className={cn(
-                "w-full rounded-lg border px-2.5 py-2 text-[13px] font-medium focus:outline-none disabled:opacity-60",
+                "w-full rounded-lg border px-2.5 py-2 text-sm font-medium focus:outline-none disabled:opacity-60",
                 CONTACT_STATUS_BADGE[optimisticContactStatus],
               )}
             >
@@ -1183,7 +1183,7 @@ function IdealistaLeadModal({
 
         {lead.properties.length > 1 ? (
           <div className="mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">
+            <p className="crm-label-sm text-ink/40">
               Consultó por {lead.properties.length} propiedades
             </p>
             <div className="mt-1.5 space-y-1.5">
@@ -1199,10 +1199,10 @@ function IdealistaLeadModal({
                     />
                   )}
                   <div className="min-w-0 self-center">
-                    <p className="text-[13px] font-medium text-ink/80">
+                    <p className="text-sm font-medium text-ink/80">
                       📍 {[p.title, p.price, p.type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
                     </p>
-                    {p.date && <p className="mt-0.5 text-[11px] text-ink/40">🗓 {p.date}</p>}
+                    {p.date && <p className="mt-0.5 text-xs text-ink/40">🗓 {p.date}</p>}
                   </div>
                 </div>
               ))}
@@ -1221,11 +1221,11 @@ function IdealistaLeadModal({
                 />
               )}
               <div className="min-w-0">
-                <p className="text-[13px] font-medium text-ink/80">
+                <p className="text-sm font-medium text-ink/80">
                   📍 {[lead.property_title, lead.property_price, lead.property_type].filter(Boolean).join(" · ") || "Propiedad sin identificar"}
                 </p>
                 {(lead.property_ref || lead.idealista_code) && (
-                  <p className="text-[11px] text-ink/40 mt-0.5">
+                  <p className="text-xs text-ink/40 mt-0.5">
                     {[lead.property_ref && `Ref. ${lead.property_ref}`, lead.idealista_code && `Cod. ${lead.idealista_code}`]
                       .filter(Boolean)
                       .join(" · ")}
@@ -1242,21 +1242,21 @@ function IdealistaLeadModal({
 
         {(bullets.length > 0 || presentacion) && (
           <div className="mt-4 rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2.5">
-            <p className="text-[12px] font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
+            <p className="text-xs font-semibold text-teal-800">Perfil para búsqueda de vivienda</p>
             {bullets.length > 0 && (
               <ul className="mt-1.5 space-y-1">
                 {bullets.map((b) => (
-                  <li key={b} className="text-[12px] text-ink/65">
+                  <li key={b} className="text-xs text-ink/65">
                     • {b}
                   </li>
                 ))}
               </ul>
             )}
-            {presentacion && <p className="mt-2 text-[12px] italic text-ink/60">“{presentacion}”</p>}
+            {presentacion && <p className="mt-2 text-xs italic text-ink/60">“{presentacion}”</p>}
           </div>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/40">
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/40">
           {lead.message_date && (
             <>
               <span>🗓 {lead.message_date}</span>
@@ -1273,7 +1273,7 @@ function IdealistaLeadModal({
           href={idealistaUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-gold hover:text-navy"
+          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gold hover:text-navy"
         >
           <ExternalLink size={14} strokeWidth={2} />
           Abrir en Idealista
@@ -1357,7 +1357,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
             <div className="flex items-center justify-between gap-2">
               <a
                 href={`/es/admin/propiedades/${lead.matched_property_slug}`}
-                className="inline-flex min-w-0 items-center gap-1 text-[12px] font-semibold text-teal-700 hover:text-teal-900 transition-colors"
+                className="inline-flex min-w-0 items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900 transition-colors"
               >
                 <ExternalLink size={12} className="shrink-0" />
                 <span className="truncate">
@@ -1369,7 +1369,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
                 type="button"
                 onClick={() => setEditing(true)}
                 disabled={isTransitioning}
-                className="shrink-0 text-[11px] text-ink/40 underline transition hover:text-ink/70 disabled:opacity-50"
+                className="shrink-0 text-xs text-ink/40 underline transition hover:text-ink/70 disabled:opacity-50"
               >
                 Cambiar
               </button>
@@ -1378,11 +1378,11 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
             {/* Enlace público / SmartLink para compartir */}
             {relativeShareUrl && (
               <>
-                <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-wide text-teal-800/70">
+                <p className="mt-2.5 crm-label-sm text-teal-800/70">
                   Enlace público
                 </p>
                 <div className="mt-1 flex items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate rounded-md border border-ink/10 bg-white px-2 py-1.5 font-mono text-[11px] text-ink/55">
+                  <span className="min-w-0 flex-1 truncate rounded-md border border-ink/10 bg-white px-2 py-1.5 font-mono text-xs text-ink/55">
                     {relativeShareUrl}
                   </span>
                   {absoluteShareUrl && (
@@ -1409,7 +1409,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink/50 underline transition hover:text-teal-800"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-ink/50 underline transition hover:text-teal-800"
           >
             <Link2 size={12} />
             Vincular a una ficha del sistema
@@ -1422,7 +1422,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
   return (
     <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-800">
+        <p className="crm-label-sm text-teal-800">
           Vincular a una ficha del sistema
         </p>
         <button
@@ -1437,7 +1437,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
           <X size={14} />
         </button>
       </div>
-      <p className="mt-1 text-[11px] text-ink/45">
+      <p className="mt-1 text-xs text-ink/45">
         Elige una de tus fichas guardadas o busca por título, dirección o referencia.
       </p>
       <div className="relative mt-2">
@@ -1448,7 +1448,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar por título, dirección o referencia..."
-          className="w-full rounded-lg border border-ink/10 bg-white py-2 pl-8 pr-3 text-[13px] focus:border-teal-400 focus:outline-none"
+          className="w-full rounded-lg border border-ink/10 bg-white py-2 pl-8 pr-3 text-sm focus:border-teal-400 focus:outline-none"
         />
         {searching && (
           <Loader2 size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-ink/35" />
@@ -1475,17 +1475,17 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium text-ink/80">
+                  <p className="truncate text-xs font-medium text-ink/80">
                     {p.title || p.address || "Sin título"}
                   </p>
                   {(price || p.address) && (
-                    <p className="truncate text-[11px] text-ink/45">
+                    <p className="truncate text-xs text-ink/45">
                       {[price, p.title ? p.address : null].filter(Boolean).join(" · ")}
                     </p>
                   )}
                 </div>
                 {p.bc_reference && (
-                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/55">
+                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-xs text-ink/55">
                     {p.bc_reference}
                   </span>
                 )}
@@ -1495,13 +1495,13 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
         </div>
       )}
       {searching && results.length === 0 && (
-        <div className="mt-3 flex items-center justify-center gap-2 py-2 text-[11px] text-ink/40">
+        <div className="mt-3 flex items-center justify-center gap-2 py-2 text-xs text-ink/40">
           <Loader2 size={13} className="animate-spin" />
           Cargando fichas…
         </div>
       )}
       {!searching && results.length === 0 && (
-        <p className="mt-2 text-[11px] text-ink/40">
+        <p className="mt-2 text-xs text-ink/40">
           {query.trim() ? "Sin resultados" : "No hay fichas guardadas todavía"}
         </p>
       )}
@@ -1510,7 +1510,7 @@ function PropertyMatchPicker({ lead }: { lead: IdealistaLeadRow }) {
           type="button"
           onClick={handleUnlink}
           disabled={isTransitioning}
-          className="mt-2 text-[11px] text-rose-600 underline transition hover:text-rose-800 disabled:opacity-50"
+          className="mt-2 text-xs text-rose-600 underline transition hover:text-rose-800 disabled:opacity-50"
         >
           Quitar vínculo actual
         </button>
@@ -1565,7 +1565,7 @@ function RequestCard({ request }: { request: VisitRequest }) {
               {request.clientName}
             </p>
             {request.clientEmail && (
-              <p className="truncate text-[11px] text-ink/50 leading-tight mt-0.5">
+              <p className="truncate text-xs text-ink/50 leading-tight mt-0.5">
                 {request.clientEmail}
               </p>
             )}
@@ -1581,22 +1581,22 @@ function RequestCard({ request }: { request: VisitRequest }) {
             href={`${config.prefix}/propiedades/${request.propertySlug}`}
             className="block group"
           >
-            <p className="text-[12px] font-medium text-ink/75 group-hover:text-amber-800 transition-colors truncate">
+            <p className="text-xs font-medium text-ink/75 group-hover:text-amber-800 transition-colors truncate">
               📍 {request.propertyTitle}
             </p>
             {request.propertyReference && (
-              <p className="text-[11px] text-ink/40 mt-0.5">
+              <p className="text-xs text-ink/40 mt-0.5">
                 {request.propertyReference}
               </p>
             )}
           </a>
         ) : (
           <>
-            <p className="text-[12px] text-ink/70 truncate">
+            <p className="text-xs text-ink/70 truncate">
               📍 {request.propertyTitle}
             </p>
             {request.propertyReference && (
-              <p className="text-[11px] text-ink/40 mt-0.5">
+              <p className="text-xs text-ink/40 mt-0.5">
                 {request.propertyReference}
               </p>
             )}
@@ -1605,7 +1605,7 @@ function RequestCard({ request }: { request: VisitRequest }) {
       </div>
 
       {/* Fechas */}
-      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink/50">
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink/50">
         <span>🗓 {request.requestedDateLabel}</span>
         <span className="text-ink/30">·</span>
         <span>
@@ -1622,7 +1622,7 @@ function RequestCard({ request }: { request: VisitRequest }) {
             type="button"
             onClick={handleConfirm}
             disabled={isTransitioning}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
           >
             <CheckCircle2 size={13} strokeWidth={2} />
             {t("solicitudes.action.confirm")}
@@ -1631,7 +1631,7 @@ function RequestCard({ request }: { request: VisitRequest }) {
             type="button"
             onClick={handleCancel}
             disabled={isTransitioning}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
           >
             <XCircle size={13} strokeWidth={2} />
             {t("solicitudes.action.cancel")}
@@ -1649,7 +1649,7 @@ function StatusBadge({ status }: { status: VisitRequestStatus }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold",
+        "shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold",
         STATUS_BADGE[status],
       )}
     >

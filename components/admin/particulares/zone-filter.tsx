@@ -80,7 +80,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex max-w-[220px] items-center gap-1.5 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink transition focus:border-gold/55 focus:outline-none"
+        className="flex max-w-[220px] items-center gap-1.5 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink transition focus:border-gold/55 focus:outline-none"
       >
         <MapPin size={13} strokeWidth={1.75} className="shrink-0 text-ink/45" />
         <span className="truncate">{label}</span>
@@ -96,7 +96,7 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar distrito o barrio…"
-              className="w-full bg-transparent text-[13px] text-ink placeholder:text-ink/40 focus:outline-none"
+              className="w-full bg-transparent text-sm text-ink placeholder:text-ink/40 focus:outline-none"
             />
             {value && (
               <button
@@ -112,19 +112,19 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
 
           <div className="mt-2 max-h-72 overflow-y-auto">
             {filteredGroups.length === 0 && (
-              <p className="px-2 py-3 text-center text-[13px] text-ink/45">Sin resultados</p>
+              <p className="px-2 py-3 text-center text-sm text-ink/45">Sin resultados</p>
             )}
             {filteredGroups.map((g) => (
               <div key={g.district} className="mb-1">
                 <button
                   type="button"
                   onClick={() => select(`d:${g.district}`)}
-                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition hover:bg-gold/10 ${
+                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm font-medium transition hover:bg-gold/10 ${
                     value === `d:${g.district}` ? "bg-gold/15 text-ink" : "text-ink/85"
                   }`}
                 >
                   <span className="truncate">{g.district}</span>
-                  <span className="ml-2 flex shrink-0 items-center gap-1 text-[11px] font-normal text-ink/45">
+                  <span className="ml-2 flex shrink-0 items-center gap-1 text-xs font-normal text-ink/45">
                     {g.total}
                     {g.missingPhone > 0 && (
                       <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
@@ -139,12 +139,12 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
                       key={z.name}
                       type="button"
                       onClick={() => select(`z:${z.name}`)}
-                      className={`flex w-full items-center justify-between rounded-md py-1 pl-6 pr-2 text-left text-[12.5px] transition hover:bg-gold/10 ${
+                      className={`flex w-full items-center justify-between rounded-md py-1 pl-6 pr-2 text-left text-xs transition hover:bg-gold/10 ${
                         value === `z:${z.name}` ? "bg-gold/15 text-ink" : "text-ink/65"
                       }`}
                     >
                       <span className="truncate">{z.name}</span>
-                      <span className="ml-2 flex shrink-0 items-center gap-1 text-[11px] text-ink/40">
+                      <span className="ml-2 flex shrink-0 items-center gap-1 text-xs text-ink/40">
                         {z.total}
                         {z.missingPhone > 0 && (
                           <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">

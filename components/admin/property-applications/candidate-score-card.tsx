@@ -28,7 +28,7 @@ function ScoreBar({ label, value, max = 40 }: { label: string; value: number; ma
   const pct = Math.round((value / max) * 100);
   return (
     <div>
-      <div className="mb-1 flex justify-between text-[11px] text-ink/60">
+      <div className="mb-1 flex justify-between text-xs text-ink/60">
         <span>{label}</span>
         <span className="font-medium">{value}/{max}</span>
       </div>
@@ -50,7 +50,7 @@ export function CandidateScoreCard({ score, country }: Props) {
     <div className="rounded-xl border border-ink/10 bg-ink/[0.02] p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">Score del candidato</p>
+          <p className="crm-label-sm text-ink/40">Score del candidato</p>
           {score.ai_summary && (
             <p className="mt-1 text-sm text-ink/70">{score.ai_summary}</p>
           )}
@@ -60,7 +60,7 @@ export function CandidateScoreCard({ score, country }: Props) {
             <span className="text-xl font-bold">{score.total_score}</span>
             <span className="text-xs">/100</span>
           </div>
-          <p className="mt-1 text-[11px] font-medium text-ink/60">{recLabel}</p>
+          <p className="mt-1 text-xs font-medium text-ink/60">{recLabel}</p>
         </div>
       </div>
 
@@ -91,7 +91,7 @@ export function CandidateScoreCard({ score, country }: Props) {
             )}
           </div>
           {score.currency_context && (
-            <p className="mt-1.5 text-[11px] text-ink/40">{score.currency_context}</p>
+            <p className="mt-1.5 text-xs text-ink/40">{score.currency_context}</p>
           )}
         </div>
       )}

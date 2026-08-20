@@ -124,7 +124,7 @@ export default function MapPicker({
       </MapContainer>
 
       {(hasBlue || hasGreen) && (
-        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-ink/50">
+        <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink/50">
           {hasBlue && (
             <span className="flex items-center gap-1">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />

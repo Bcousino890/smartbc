@@ -47,10 +47,10 @@ export function Panel({
     >
       {(title || action) && (
         <header className="flex items-center justify-between gap-3 border-b border-ink/8 px-4 py-2.5">
-          <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.09em] text-ink/60">
+          <h2 className="crm-label-sm flex items-center gap-2 text-ink/60">
             {title}
             {typeof count === "number" && count > 0 && (
-              <span className="rounded bg-ink/[0.06] px-1.5 py-px text-[10px] font-semibold tabular-nums text-ink/50">
+              <span className="crm-number rounded bg-ink/[0.06] px-1.5 py-px text-xs text-ink/50">
                 {count}
               </span>
             )}
@@ -90,7 +90,7 @@ export function Pill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10.5px] font-medium leading-4",
+        "crm-badge inline-flex items-center gap-1 rounded border px-1.5 py-0.5",
         TONES[tone],
         className,
       )}
@@ -126,19 +126,19 @@ export function Field({
     value === "—";
   return (
     <div className={cn("min-w-0", className)}>
-      <dt className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink/40">
+      <dt className="crm-label-sm text-ink/40">
         {label}
       </dt>
       <dd
         className={cn(
-          "mt-0.5 truncate text-[13px]",
-          empty ? "text-ink/25" : "font-medium text-ink",
+          "mt-0.5 truncate text-sm",
+          empty ? "text-ink/25" : "text-ink",
         )}
         title={typeof value === "string" ? value : undefined}
       >
         {empty ? "—" : value}
       </dd>
-      {hint && <p className="mt-0.5 text-[10.5px] text-ink/40">{hint}</p>}
+      {hint && <p className="crm-meta mt-0.5 text-ink/40">{hint}</p>}
     </div>
   );
 }
@@ -169,16 +169,16 @@ export function Metric({
     <>
       <p
         className={cn(
-          "font-serif text-[22px] leading-none tabular-nums",
+          "crm-number text-[22px] leading-none",
           value === null ? "text-ink/20" : emphasis ? "text-gold-dark" : "text-ink",
         )}
       >
         {value === null ? "—" : value}
       </p>
-      <p className="mt-1.5 text-[10.5px] uppercase tracking-[0.07em] text-ink/45">
+      <p className="crm-label-sm mt-1.5 text-ink/45">
         {label}
       </p>
-      {hint && <p className="mt-0.5 truncate text-[10.5px] text-ink/35">{hint}</p>}
+      {hint && <p className="crm-meta mt-0.5 truncate text-ink/35">{hint}</p>}
     </>
   );
 
@@ -213,7 +213,7 @@ export function Empty({
 }) {
   return (
     <div className="rounded border border-dashed border-ink/12 px-4 py-6 text-center">
-      <p className="text-[12.5px] text-ink/45">{children}</p>
+      <p className="text-sm text-ink/45">{children}</p>
       {action && <div className="mt-3 flex justify-center">{action}</div>}
     </div>
   );
@@ -234,8 +234,8 @@ export function Button({
     <button
       {...props}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-45",
-        size === "sm" ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-2 text-[12px]",
+        "crm-button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md transition disabled:cursor-not-allowed disabled:opacity-45",
+        size === "sm" ? "px-2.5 py-1.5" : "px-3 py-2",
         variant === "primary" &&
           "bg-ink text-cream-50 hover:bg-ink-soft",
         variant === "secondary" &&
@@ -288,7 +288,7 @@ export function Modal({
         )}
       >
         <header className="flex items-center justify-between gap-3 border-b border-ink/8 px-4 py-3">
-          <h2 className="font-serif text-[16px] text-ink">{title}</h2>
+          <h2 className="crm-section-title text-ink">{title}</h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Cerrar">
             ✕
           </Button>
@@ -307,7 +307,7 @@ export function Modal({
 // ─── Campos de formulario ────────────────────────────────────────────────────
 
 const INPUT =
-  "w-full rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-[13px] text-ink outline-none transition focus:border-gold/60";
+  "crm-input w-full rounded-md border border-ink/15 bg-white px-2.5 py-1.5 text-ink outline-none transition focus:border-gold/60";
 
 export function Labeled({
   label,
@@ -320,7 +320,7 @@ export function Labeled({
 }) {
   return (
     <label className={cn("block min-w-0", className)}>
-      <span className="mb-1 block text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink/45">
+      <span className="crm-label-sm mb-1 block text-ink/45">
         {label}
       </span>
       {children}
@@ -354,7 +354,7 @@ export function Toggle({
   label: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink/75">
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-ink/75">
       <input
         type="checkbox"
         checked={checked}

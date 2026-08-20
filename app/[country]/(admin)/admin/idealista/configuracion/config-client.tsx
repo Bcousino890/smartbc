@@ -236,7 +236,7 @@ export function IdealistaConfigClient({
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield size={18} className="text-gold" />
-            <h3 className="font-serif text-base font-semibold text-ink">
+            <h3 className="text-base font-bold text-ink">
               Conexión con Idealista
             </h3>
           </div>
@@ -279,7 +279,7 @@ export function IdealistaConfigClient({
               >
                 <ClipboardPaste size={13} />
                 Importar cookies
-                <span className="rounded-full bg-gold/20 px-1.5 py-0.5 text-[10px] font-bold text-gold">
+                <span className="rounded-full bg-gold/20 px-1.5 py-0.5 text-xs font-bold text-gold">
                   Recomendado
                 </span>
               </button>
@@ -324,7 +324,7 @@ export function IdealistaConfigClient({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  <label className="mb-1.5 block crm-label-sm text-ink/50">
                     Pega el JSON de cookies aquí
                   </label>
                   <textarea
@@ -364,7 +364,7 @@ export function IdealistaConfigClient({
             {method === "auto" && (
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  <label className="mb-1.5 block crm-label-sm text-ink/50">
                     Email de Idealista
                   </label>
                   <input
@@ -377,7 +377,7 @@ export function IdealistaConfigClient({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+                  <label className="mb-1.5 block crm-label-sm text-ink/50">
                     Contraseña
                   </label>
                   <input
@@ -433,7 +433,7 @@ export function IdealistaConfigClient({
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Código SMS
               </label>
               <input
@@ -511,7 +511,7 @@ export function IdealistaConfigClient({
 
       {/* Información */}
       <div className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] md:p-6">
-        <h3 className="mb-3 font-serif text-base font-semibold text-ink">
+        <h3 className="mb-3 text-base font-bold text-ink">
           Cómo funciona
         </h3>
         <ul className="space-y-2 text-sm text-ink/65">

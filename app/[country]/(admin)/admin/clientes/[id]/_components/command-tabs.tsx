@@ -53,7 +53,7 @@ export function CommandTabs({
               aria-selected={on}
               onClick={() => onChange(tab)}
               className={cn(
-                "relative shrink-0 px-2 py-2.5 text-[12px] font-medium transition-colors sm:px-3",
+                "relative shrink-0 px-2 py-2.5 text-xs font-medium transition-colors sm:px-3",
                 on ? "text-ink" : "text-ink/45 hover:text-ink/75",
               )}
             >
@@ -61,7 +61,7 @@ export function CommandTabs({
               {typeof count === "number" && count > 0 && (
                 <span
                   className={cn(
-                    "ms-1.5 rounded px-1 py-px text-[10px] font-semibold tabular-nums",
+                    "ms-1.5 rounded px-1 py-px text-xs font-semibold tabular-nums",
                     on ? "bg-gold/15 text-gold-dark" : "bg-ink/[0.06] text-ink/45",
                   )}
                 >

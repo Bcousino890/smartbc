@@ -616,7 +616,7 @@ export function CaptacionDetailClient({
                 <button
                   onClick={handleRescrape}
                   disabled={rescrapingAttempt}
-                  className="flex items-center gap-1 rounded-full bg-blue-600/80 px-2.5 py-1 text-[11px] text-white transition hover:bg-blue-700 disabled:opacity-50"
+                  className="flex items-center gap-1 rounded-full bg-blue-600/80 px-2.5 py-1 text-xs text-white transition hover:bg-blue-700 disabled:opacity-50"
                   title="Obtener datos nuevamente del link"
                 >
                   {rescrapingAttempt ? (
@@ -636,7 +636,7 @@ export function CaptacionDetailClient({
                 href={captacion.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] text-white hover:bg-black/70"
+                className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white hover:bg-black/70"
               >
                 <ExternalLink size={11} />
                 Ver original
@@ -648,7 +648,7 @@ export function CaptacionDetailClient({
         <div className="p-5">
           <div className="flex items-start justify-between gap-4 mb-3">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-ink leading-snug">{captacion.title || "Sin título"}</h1>
+              <h1 className="text-[22px] font-bold leading-snug text-ink">{captacion.title || "Sin título"}</h1>
               {!captacion.cover_photo_url && (
                 <a
                   href={captacion.source_url}
@@ -669,7 +669,7 @@ export function CaptacionDetailClient({
                 {currentStage?.label || "Sin etapa"}
               </span>
               {currentStage && (
-                <p className="text-[10px] text-ink/40">
+                <p className="text-xs text-ink/40">
                   {STAGE_TYPE_HINT[currentStage.stage_type] || ""}
                 </p>
               )}
@@ -680,7 +680,7 @@ export function CaptacionDetailClient({
               que quien la mire sabe que los datos del anuncio se actualizan
               solos y no hace falta refrescarlos a mano. */}
           {captacion.origin === "api" && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-gold/8 px-3 py-2 text-[11px]">
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-gold/8 px-3 py-2 text-xs">
               <span className="inline-flex items-center gap-1 font-medium text-gold-dark">
                 <Plug size={12} />
                 Origen: API · {captacion.external_source || "integración"}
@@ -698,7 +698,7 @@ export function CaptacionDetailClient({
           )}
 
           {/* Scrape status and meta */}
-          <div className="mb-3 flex items-center gap-2 text-[11px] text-ink/50">
+          <div className="mb-3 flex items-center gap-2 text-xs text-ink/50">
             {captacion.scrape_status === "scraped" && (
               <span className="flex items-center gap-1 text-emerald-600">
                 <Check size={12} />
@@ -719,7 +719,7 @@ export function CaptacionDetailClient({
               <button
                 onClick={handleRescrape}
                 disabled={rescrapingAttempt}
-                className="flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-1 text-[11px] text-white transition hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-1 text-xs text-white transition hover:bg-blue-700 disabled:opacity-50"
                 title="Obtener datos nuevamente del link"
               >
                 {rescrapingAttempt ? (
@@ -741,7 +741,7 @@ export function CaptacionDetailClient({
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {captacion.price && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
-                <p className="text-[10px] text-ink/50 uppercase tracking-wide">
+                <p className="crm-label-sm text-ink/50">
                   Precio {mainOperation === "arriendo" ? "Arriendo" : "Venta"}
                 </p>
                 <p className="mt-0.5 text-base font-bold text-ink">
@@ -753,7 +753,7 @@ export function CaptacionDetailClient({
                 (aviso registrado en Corredoras) */}
             {otherOperations.map(([op, info]) => (
               <div key={op} className="rounded-lg bg-sky-50 px-3 py-2">
-                <p className="text-[10px] text-sky-700 uppercase tracking-wide">
+                <p className="crm-label-sm text-sky-700">
                   También en {op}
                 </p>
                 <p className="mt-0.5 text-base font-bold text-sky-800">
@@ -763,19 +763,19 @@ export function CaptacionDetailClient({
             ))}
             {captacion.bedrooms && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
-                <p className="text-[10px] text-ink/50 uppercase tracking-wide">Dormitorios</p>
+                <p className="crm-label-sm text-ink/50">Dormitorios</p>
                 <p className="mt-0.5 text-base font-bold text-ink">{captacion.bedrooms}</p>
               </div>
             )}
             {captacion.bathrooms && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
-                <p className="text-[10px] text-ink/50 uppercase tracking-wide">Baños</p>
+                <p className="crm-label-sm text-ink/50">Baños</p>
                 <p className="mt-0.5 text-base font-bold text-ink">{captacion.bathrooms}</p>
               </div>
             )}
             {captacion.square_meters && (
               <div className="rounded-lg bg-ink/4 px-3 py-2">
-                <p className="text-[10px] text-ink/50 uppercase tracking-wide">Superficie total</p>
+                <p className="crm-label-sm text-ink/50">Superficie total</p>
                 <p className="mt-0.5 text-base font-bold text-ink">{captacion.square_meters} m²</p>
               </div>
             )}
@@ -835,7 +835,7 @@ export function CaptacionDetailClient({
           {captacion.assigned_to && !showReassignForm ? (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] text-ink/50 uppercase tracking-wide mb-0.5">Asignada a</p>
+                <p className="crm-label-sm text-ink/50 mb-0.5">Asignada a</p>
                 <p className="text-sm font-semibold text-ink">
                   {captadoras.find(c => c.id === captacion.assigned_to)?.full_name || "Usuario"}
                 </p>
@@ -1441,7 +1441,7 @@ export function CaptacionDetailClient({
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-xs font-medium uppercase text-ink/50">
+                            <span className="crm-label-sm text-ink/50">
                               {contact.contact_type === "owner" && "Dueño"}
                               {contact.contact_type === "spouse" && "Cónyuge"}
                               {contact.contact_type === "family" && "Familiar"}
@@ -1716,7 +1716,7 @@ export function CaptacionDetailClient({
           {/* Próximo paso agendado del seguimiento */}
           {captacion.next_action_at && (
             <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <p className="crm-label-sm flex items-center gap-1.5 text-blue-700">
                 <Clock size={12} />
                 Próximo paso
               </p>
@@ -1879,7 +1879,7 @@ export function CaptacionDetailClient({
                         </span>
                       )}
                     </div>
-                    <span className="flex items-center gap-1 text-[11px] text-ink/40 flex-shrink-0">
+                    <span className="flex items-center gap-1 text-xs text-ink/40 flex-shrink-0">
                       <Clock size={10} />
                       {new Date(log.created_at).toLocaleDateString("es-CL", {
                         day: "numeric",
@@ -1893,7 +1893,7 @@ export function CaptacionDetailClient({
                     <p className="mt-2 text-sm text-ink/65 whitespace-pre-wrap">{log.notes}</p>
                   )}
                   {log.profiles?.full_name && (
-                    <p className="mt-1.5 text-[11px] text-ink/40">{log.profiles.full_name}</p>
+                    <p className="mt-1.5 text-xs text-ink/40">{log.profiles.full_name}</p>
                   )}
                 </div>
               ))}
@@ -1945,7 +1945,7 @@ function ContactAvatar({ photoUrl, name }: { photoUrl: string | null; name: stri
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] text-ink/50 uppercase tracking-wide">{label}</p>
+      <p className="crm-label-sm text-ink/50">{label}</p>
       <p className="mt-0.5 text-sm font-medium text-ink">{children}</p>
     </div>
   );

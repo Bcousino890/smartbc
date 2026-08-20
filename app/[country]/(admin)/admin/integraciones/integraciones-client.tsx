@@ -143,7 +143,7 @@ export function IntegracionesClient({
           <div className="mt-5 overflow-x-auto">
             <table className="w-full min-w-[900px] border-separate border-spacing-y-1.5 text-left text-sm">
               <thead>
-                <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+                <tr className="crm-table-header text-ink/50">
                   <th className="px-3 pb-2">Integración</th>
                   <th className="px-3 pb-2">Estado</th>
                   <th className="px-3 pb-2">Claves</th>
@@ -165,7 +165,7 @@ export function IntegracionesClient({
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate font-medium text-ink">{client.name}</span>
-                          <span className="block truncate font-mono text-[11px] text-ink/45">
+                          <span className="block truncate font-mono text-xs text-ink/45">
                             {client.slug}
                           </span>
                         </span>
@@ -231,10 +231,10 @@ function StatTile({
 }) {
   return (
     <Card className="p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">{label}</p>
+      <p className="crm-label-sm text-ink/45">{label}</p>
       <p
         className={cn(
-          "mt-1 font-serif text-2xl text-ink",
+          "crm-number mt-1 text-2xl text-ink",
           tone === "danger" && value > 0 && "text-rose-600"
         )}
       >
@@ -248,7 +248,7 @@ function Badge({ tone, children }: { tone: "ok" | "muted"; children: React.React
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium",
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
         tone === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-ink/5 text-ink/50"
       )}
     >
@@ -300,7 +300,7 @@ function CreateModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-lg p-6">
-        <h2 className="font-serif text-xl text-ink">Nueva integración</h2>
+        <h2 className="crm-section-title text-ink">Nueva integración</h2>
         <p className="mt-1 text-sm text-ink/55">
           Al guardarla podrás generar su clave de API y entregarla al proveedor.
         </p>
@@ -404,11 +404,11 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/50">
+      <span className="mb-1 block crm-label-sm text-ink/50">
         {label}
       </span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-ink/40">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-ink/40">{hint}</span>}
     </label>
   );
 }

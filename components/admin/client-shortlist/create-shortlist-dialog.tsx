@@ -98,7 +98,7 @@ export function CreateShortlistDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
-          <h3 className="font-serif text-lg font-semibold text-ink">
+          <h3 className="crm-section-title text-ink">
             Selección privada para el cliente
           </h3>
           <button
@@ -112,13 +112,13 @@ export function CreateShortlistDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <p className="text-[12px] leading-relaxed text-ink/60">
+          <p className="text-xs leading-relaxed text-ink/60">
             El cliente podrá elegir cuáles quiere visitar, ordenarlas, descartar
             y comentar. Tu selección no se toca: lo que decida queda aparte.
           </p>
 
           <label className="mt-4 block">
-            <span className="text-[11px] font-medium text-ink/55">
+            <span className="text-xs font-medium text-ink/55">
               Idioma de la selección
             </span>
             <select
@@ -135,7 +135,7 @@ export function CreateShortlistDialog({
             </select>
           </label>
 
-          <p className="mt-4 text-[11px] font-medium text-ink/55">
+          <p className="mt-4 text-xs font-medium text-ink/55">
             Propiedades seleccionadas ({chosen.size} de {available.length})
           </p>
           <ul className="mt-2 space-y-1.5">
@@ -156,10 +156,10 @@ export function CreateShortlistDialog({
                     className="h-3.5 w-3.5 accent-[#a8814a]"
                   />
                   <span className="min-w-0">
-                    <span className="block truncate text-[12.5px] text-ink">
+                    <span className="block truncate text-xs text-ink">
                       {s.property.title}
                     </span>
-                    <span className="text-[11px] text-ink/45">
+                    <span className="text-xs text-ink/45">
                       {s.property.bcReference ?? "—"} · {s.property.zone}
                     </span>
                   </span>
@@ -171,7 +171,7 @@ export function CreateShortlistDialog({
           {availableLinks.length > 0 && (
             <>
               <div className="mt-5 flex items-baseline justify-between gap-3">
-                <p className="text-[11px] font-medium text-ink/55">
+                <p className="text-xs font-medium text-ink/55">
                   Enlaces de portales ({chosenLinks.size} de{" "}
                   {availableLinks.length})
                 </p>
@@ -184,14 +184,14 @@ export function CreateShortlistDialog({
                         : new Set(availableLinks.map((l) => l.id)),
                     )
                   }
-                  className="text-[11px] font-medium text-gold-dark transition hover:text-gold"
+                  className="text-xs font-medium text-gold-dark transition hover:text-gold"
                 >
                   {chosenLinks.size === availableLinks.length
                     ? "Ninguno"
                     : "Todos"}
                 </button>
               </div>
-              <p className="mt-1 text-[11px] text-ink/45">
+              <p className="mt-1 text-xs text-ink/45">
                 Anuncios que todavía no son ficha. El cliente los verá con la
                 foto del portal y sin galería, hasta que les crees ficha.
               </p>
@@ -213,10 +213,10 @@ export function CreateShortlistDialog({
                         className="h-3.5 w-3.5 accent-[#a8814a]"
                       />
                       <span className="min-w-0">
-                        <span className="block truncate text-[12.5px] text-ink">
+                        <span className="block truncate text-xs text-ink">
                           {l.title ?? l.url.replace(/^https?:\/\//, "")}
                         </span>
-                        <span className="text-[11px] text-ink/45">
+                        <span className="text-xs text-ink/45">
                           {LINK_STATUS_LABEL[l.status]}
                           {l.zone ? ` · ${l.zone}` : ""}
                           {l.price_label ? ` · ${l.price_label}` : ""}
@@ -230,7 +230,7 @@ export function CreateShortlistDialog({
           )}
 
           {error && (
-            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {error}
             </p>
           )}
@@ -240,7 +240,7 @@ export function CreateShortlistDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-2 text-[12px] font-medium text-ink/55 transition hover:text-ink"
+            className="rounded-lg px-3 py-2 text-xs font-medium text-ink/55 transition hover:text-ink"
           >
             Cancelar
           </button>
@@ -248,7 +248,7 @@ export function CreateShortlistDialog({
             type="button"
             onClick={create}
             disabled={pending || total === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
           >
             {pending && <Loader2 size={12} className="animate-spin" />}
             Crear y obtener enlace

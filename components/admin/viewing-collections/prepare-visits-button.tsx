@@ -51,7 +51,7 @@ export function PrepareVisitsLink({
       href={`${prefix}/clientes/${clientId}#viewing-collections`}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink",
-        compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-2 text-[12px]",
+        compact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-xs",
       )}
       title="Selección de propiedades e itinerarios de este cliente"
     >
@@ -89,7 +89,7 @@ export function PrepareVisitsButton({
         onClick={openDialog}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink",
-          compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-2 text-[12px]",
+          compact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-xs",
         )}
       >
         <CalendarPlus size={12} strokeWidth={1.75} className="text-gold-dark" />
@@ -163,7 +163,7 @@ function PrepareVisitsDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
-          <h3 className="font-serif text-lg font-semibold text-ink">
+          <h3 className="crm-section-title text-ink">
             Preparar visitas
           </h3>
           <button
@@ -180,12 +180,12 @@ function PrepareVisitsDialog({
           {loading && (
             <div className="flex h-24 items-center justify-center text-ink/45">
               <Loader2 size={16} className="mr-2 animate-spin" />
-              <span className="text-[12px]">Buscando cliente…</span>
+              <span className="text-xs">Buscando cliente…</span>
             </div>
           )}
 
           {lookup && !lookup.ok && (
-            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {lookup.error}
             </p>
           )}
@@ -197,14 +197,14 @@ function PrepareVisitsDialog({
                   coincidencia; ninguno se vincula solo. */}
               {ok.matches.length > 0 && (
                 <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3.5">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-800/70">
+                  <p className="crm-label-sm text-emerald-800/70">
                     {ok.matches.length > 1
                       ? `${ok.matches.length} posibles clientes existentes`
                       : "Posible cliente existente"}
                   </p>
 
                   {ok.ambiguous && (
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-emerald-900/60">
+                    <p className="mt-1.5 text-xs leading-relaxed text-emerald-900/60">
                       {ok.matches.length > 1
                         ? "Más de una ficha encaja. Comprueba cuál es antes de vincular."
                         : "Solo coinciden los últimos 9 dígitos del teléfono: confirma que es la misma persona."}
@@ -217,21 +217,21 @@ function PrepareVisitsDialog({
                         key={m.id}
                         className="rounded-lg border border-emerald-200/60 bg-white/70 p-2.5"
                       >
-                        <p className="text-[13px] font-medium text-ink">
+                        <p className="text-sm font-medium text-ink">
                           {m.fullName}
                         </p>
-                        <p className="text-[11px] text-ink/55">
+                        <p className="text-xs text-ink/55">
                           {m.email}
                           {m.phone ? ` · ${m.phone}` : ""}
                         </p>
-                        <p className="mt-0.5 text-[10.5px] text-ink/45">
+                        <p className="mt-0.5 text-xs text-ink/45">
                           {MATCH_REASON[m.matchedBy]}
                         </p>
                         <button
                           type="button"
                           disabled={pending}
                           onClick={() => finish({ existingClientId: m.id })}
-                          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
                         >
                           <Link2 size={13} strokeWidth={1.75} className="text-gold" />
                           Vincular y preparar visitas
@@ -249,7 +249,7 @@ function PrepareVisitsDialog({
                   ok.matches.length > 0 && "opacity-90",
                 )}
               >
-                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink/50">
+                <p className="crm-label-sm text-ink/50">
                   {ok.matches.length > 0 ? "O crear un cliente nuevo" : "Crear cliente"}
                 </p>
                 <div className="mt-2.5 space-y-2">
@@ -257,24 +257,24 @@ function PrepareVisitsDialog({
                     value={effName}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Nombre *"
-                    className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[12.5px] text-ink focus:border-gold/55 focus:outline-none"
+                    className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
                   />
                   <input
                     value={effEmail}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Email (opcional)"
                     type="email"
-                    className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[12.5px] text-ink focus:border-gold/55 focus:outline-none"
+                    className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
                   />
                   <input
                     value={effPhone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="Teléfono (opcional)"
-                    className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-[12.5px] text-ink focus:border-gold/55 focus:outline-none"
+                    className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
                   />
                 </div>
                 {!effEmail.trim() && (
-                  <p className="mt-2 text-[10.5px] leading-relaxed text-ink/45">
+                  <p className="mt-2 text-xs leading-relaxed text-ink/45">
                     Sin email se creará una dirección interna provisional; se
                     puede corregir después desde la ficha.
                   </p>
@@ -291,7 +291,7 @@ function PrepareVisitsDialog({
                       },
                     })
                   }
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ink/20 bg-white px-3 py-2 text-[12px] font-medium text-ink transition hover:border-gold/55 disabled:opacity-40"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ink/20 bg-white px-3 py-2 text-xs font-medium text-ink transition hover:border-gold/55 disabled:opacity-40"
                 >
                   {pending ? (
                     <Loader2 size={13} className="animate-spin" />
@@ -311,7 +311,7 @@ function PrepareVisitsDialog({
                     onChange={(e) => setAddProperty(e.target.checked)}
                     className="mt-0.5 h-3.5 w-3.5 accent-[#a8814a]"
                   />
-                  <span className="text-[12px] leading-snug text-ink/80">
+                  <span className="text-xs leading-snug text-ink/80">
                     Añadir a su selección la propiedad del anuncio:
                     <span className="mt-0.5 block font-medium text-ink">
                       {ok.property.title}
@@ -321,7 +321,7 @@ function PrepareVisitsDialog({
               )}
 
               {error && (
-                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                   {error}
                 </p>
               )}

@@ -83,7 +83,7 @@ export function AIConfigSection() {
     <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <div className="mb-2 flex items-center gap-2">
         <Sparkles size={20} className="text-gold" />
-        <h2 className="font-serif text-lg font-semibold text-ink">
+        <h2 className="crm-section-title text-ink">
           Inteligencia Artificial (descripciones y análisis de fotos)
         </h2>
       </div>
@@ -101,7 +101,7 @@ export function AIConfigSection() {
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+            <label className="mb-1.5 block crm-label-sm text-ink/50">
               Proveedor
             </label>
             <select
@@ -118,10 +118,10 @@ export function AIConfigSection() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+            <label className="mb-1.5 block crm-label-sm text-ink/50">
               Clave (API key)
               {hasKey && (
-                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                   <Check size={10} /> Guardada
                 </span>
               )}
@@ -144,7 +144,7 @@ export function AIConfigSection() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Modelo de texto
               </label>
               <input
@@ -156,7 +156,7 @@ export function AIConfigSection() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+              <label className="mb-1.5 block crm-label-sm text-ink/50">
                 Modelo de visión (fotos)
               </label>
               <input
@@ -170,7 +170,7 @@ export function AIConfigSection() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink/50">
+            <label className="mb-1.5 block crm-label-sm text-ink/50">
               Zonas / barrios (una por línea)
             </label>
             <textarea
@@ -180,7 +180,7 @@ export function AIConfigSection() {
               placeholder={"Barrio de Salamanca\nChamberí\nRetiro\nCentro"}
               className={`${inputCls} resize-y`}
             />
-            <p className="mt-1 text-[11px] text-ink/45">
+            <p className="mt-1 text-xs text-ink/45">
               Estas zonas aparecen como sugerencia en la ficha (campo Ciudad/Zona) y ayudan a la IA a
               redactar el título y la descripción con el barrio correcto.
             </p>

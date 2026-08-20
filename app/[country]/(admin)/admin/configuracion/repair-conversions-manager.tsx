@@ -68,7 +68,7 @@ export function RepairConversionsManager() {
           <CheckCircle2 size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-emerald-800">
             <p className="font-medium">{message}</p>
-            <ul className="mt-1 text-[13px] text-emerald-700">
+            <ul className="mt-1 text-sm text-emerald-700">
               <li>Propiedades revisadas: {result.propertiesScanned}</li>
               <li>Con datos del dueño completados: {result.ownerUpdated}</li>
               <li>Fotos descargadas y re-alojadas: {result.photosRehosted}</li>
@@ -93,7 +93,7 @@ export function RepairConversionsManager() {
         <span>{loading ? "Reparando..." : "Reparar conversiones ahora"}</span>
       </button>
 
-      <p className="mt-4 text-[11px] text-ink/55">
+      <p className="mt-4 text-xs text-ink/55">
         ⚠️ Puede tardar según cuántas propiedades y fotos haya. Descarga las fotos
         una a una desde el portal.
       </p>

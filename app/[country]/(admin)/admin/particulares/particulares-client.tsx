@@ -430,7 +430,7 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
 
   return (
     <div>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+      <p className="mb-3 crm-label-sm text-ink/40">
         Historial de cambios
       </p>
       {loading ? (
@@ -453,8 +453,8 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
                 {e.icon}
               </span>
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-ink">{e.title}</p>
-                <p className="mt-0.5 text-[10px] text-ink/40">
+                <p className="text-xs font-semibold text-ink">{e.title}</p>
+                <p className="mt-0.5 text-xs text-ink/40">
                   {HISTORY_DATE_FMT.format(new Date(e.date))}
                 </p>
               </div>
@@ -466,7 +466,7 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
       {/* Evolución del precio (alta → cambios → precio actual) */}
       {!loading && showChart && (
         <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+          <p className="mb-2 crm-label-sm text-ink/40">
             Cambio de precio
           </p>
           <div className="rounded-lg border border-ink/10 bg-white p-3">
@@ -611,17 +611,17 @@ function ContactLog({ particularId }: { particularId: string }) {
     <div>
       {/* Header + toggle button */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink/40">
+        <p className="crm-label-sm text-ink/40">
           Registro de contactos
           {contacts && contacts.length > 0 && (
-            <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] text-gold-dark">
+            <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-xs text-gold-dark">
               {contacts.length}
             </span>
           )}
         </p>
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-[12px] font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
+          className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
         >
           <ClipboardList size={13} strokeWidth={1.75} />
           Registrar contacto
@@ -634,7 +634,7 @@ function ContactLog({ particularId }: { particularId: string }) {
         <div className="mb-4 rounded-xl border border-gold/20 bg-gold/3 p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-ink/50 mb-1">
+              <label className="block text-xs font-semibold text-ink/50 mb-1">
                 Tipo de contacto
               </label>
               <select
@@ -650,7 +650,7 @@ function ContactLog({ particularId }: { particularId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-ink/50 mb-1">
+              <label className="block text-xs font-semibold text-ink/50 mb-1">
                 Resultado
               </label>
               <select
@@ -670,7 +670,7 @@ function ContactLog({ particularId }: { particularId: string }) {
             </div>
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-ink/50 mb-1">
+            <label className="block text-xs font-semibold text-ink/50 mb-1">
               Notas (opcional)
             </label>
             <textarea
@@ -720,22 +720,22 @@ function ContactLog({ particularId }: { particularId: string }) {
                 <span className="absolute -left-1.5 mt-0.5 h-3 w-3 rounded-full border-2 border-white bg-gold/50" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-semibold text-ink/70">
+                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-semibold text-ink/70">
                       {CONTACT_TYPE_LABELS[c.contact_type] ?? c.contact_type}
                     </span>
                     {outcomeMeta && (
-                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", outcomeMeta.color)}>
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", outcomeMeta.color)}>
                         {outcomeMeta.label}
                       </span>
                     )}
                     {advisorName && (
-                      <span className="text-[10px] text-ink/45">{advisorName}</span>
+                      <span className="text-xs text-ink/45">{advisorName}</span>
                     )}
                   </div>
                   {c.notes && (
-                    <p className="mt-1 text-[11px] text-ink/65 leading-relaxed">{c.notes}</p>
+                    <p className="mt-1 text-xs text-ink/65 leading-relaxed">{c.notes}</p>
                   )}
-                  <p className="mt-0.5 text-[10px] text-ink/40">{fmt.format(new Date(c.contacted_at))}</p>
+                  <p className="mt-0.5 text-xs text-ink/40">{fmt.format(new Date(c.contacted_at))}</p>
                 </div>
               </li>
             );
@@ -992,10 +992,10 @@ function ParticularModal({
           )}
 
           {/* Badges */}
-          <span className="absolute left-3 top-3 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
+          <span className="absolute left-3 top-3 rounded-md bg-ink/85 px-2 py-0.5 crm-label-sm text-cream-50">
             {currentRow.operation === "rent" ? "Alquiler" : "Venta"}
           </span>
-          <span className="absolute right-10 top-3 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+          <span className="absolute right-10 top-3 rounded-md bg-gold/90 px-2 py-0.5 crm-label-sm text-ink">
             {portalLabel}
           </span>
 
@@ -1014,11 +1014,11 @@ function ParticularModal({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               {currentRow.particular_reference && (
-                <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-gold-dark">
+                <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-xs font-semibold tracking-wider text-gold-dark">
                   {currentRow.particular_reference}
                 </span>
               )}
-              <span className="rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 font-mono text-[11px] text-ink/60">
+              <span className="rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 font-mono text-xs text-ink/60">
                 {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
             </div>
@@ -1047,7 +1047,7 @@ function ParticularModal({
                 </button>
               </div>
             )}
-            <p className="font-serif text-2xl font-semibold text-ink">
+            <p className="crm-number text-2xl text-ink">
               {currentRow.price != null
                 ? `${formatPrice(currentRow.price)}${currentRow.operation === "rent" ? "/mes" : ""}`
                 : "Precio no disponible"}
@@ -1082,7 +1082,7 @@ function ParticularModal({
 
           {/* Datos de contacto */}
           <div className="rounded-xl border border-gold/20 bg-white p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <p className="mb-3 crm-label-sm text-ink/40">
               Contacto · Particular
             </p>
 
@@ -1101,12 +1101,12 @@ function ParticularModal({
                   {/* Confianza de la extracción automática del teléfono (migración 0035).
                       Sin confianza (añadido a mano) no se muestra badge. */}
                   {currentRow.phone_confidence === "high" && (
-                    <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                       Verificado
                     </span>
                   )}
                   {currentRow.phone_confidence === "medium" && (
-                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
                       Detectado
                     </span>
                   )}
@@ -1129,7 +1129,7 @@ function ParticularModal({
                   <MessageSquare size={16} strokeWidth={1.75} />
                   Contactar por chat
                   {currentRow.chat_only && (
-                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
                       Solo disponible
                     </span>
                   )}
@@ -1153,7 +1153,7 @@ function ParticularModal({
                   )}
                 </button>
                 {verifyThisResult && (
-                  <p className="text-center text-[11px] text-ink/55">{verifyThisResult}</p>
+                  <p className="text-center text-xs text-ink/55">{verifyThisResult}</p>
                 )}
               </div>
             )}
@@ -1161,7 +1161,7 @@ function ParticularModal({
 
           {/* Asignación — quién gestiona este anuncio (evita doble trabajo) */}
           <div className="rounded-xl border border-blue-200/60 bg-blue-50/40 p-4">
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <p className="mb-2 flex items-center gap-1.5 crm-label-sm text-ink/40">
               <UserCheck size={13} strokeWidth={2} className="text-blue-600" />
               Asignado a
             </p>
@@ -1185,7 +1185,7 @@ function ParticularModal({
               <p className="mt-1.5 text-xs text-red-600">{assignError}</p>
             )}
             {currentRow.last_contact_by && (
-              <p className="mt-2 text-[12px] text-ink/55">
+              <p className="mt-2 text-xs text-ink/55">
                 Último contacto: <span className="font-medium text-ink/75">{currentRow.last_contact_by}</span>
                 {currentRow.last_contact_at &&
                   ` · ${DATE_FMT.format(new Date(currentRow.last_contact_at))}`}
@@ -1215,7 +1215,7 @@ function ParticularModal({
             }
             return (
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+                <p className="mb-2 crm-label-sm text-ink/40">
                   Ubicación
                 </p>
                 <div className="overflow-hidden rounded-lg border border-ink/10">
@@ -1243,7 +1243,7 @@ function ParticularModal({
                       loading="lazy"
                     />
                   </div>
-                  <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-[11px] text-ink/50">
+                  <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-xs text-ink/50">
                     <MapPin size={11} strokeWidth={1.75} className="text-gold" />
                     {hasExact ? (
                       <>Dirección exacta · {currentRow.address}</>
@@ -1261,7 +1261,7 @@ function ParticularModal({
           {/* Vídeo del anuncio (migración 0036) */}
           {currentRow.video_url && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+              <p className="mb-2 crm-label-sm text-ink/40">
                 Vídeo
               </p>
               {(() => {
@@ -1305,7 +1305,7 @@ function ParticularModal({
           {/* Plano de la vivienda (migración 0036) */}
           {currentRow.floor_plan_url && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+              <p className="mb-2 crm-label-sm text-ink/40">
                 Plano
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1321,14 +1321,14 @@ function ParticularModal({
           {/* Características */}
           {currentRow.features && currentRow.features.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+              <p className="mb-2 crm-label-sm text-ink/40">
                 Características
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {currentRow.features.map((f, i) => (
                   <span
                     key={i}
-                    className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-[12px] text-ink/70"
+                    className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-xs text-ink/70"
                   >
                     {f}
                   </span>
@@ -1340,7 +1340,7 @@ function ParticularModal({
           {/* Descripción */}
           {currentRow.description && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink/40">
+              <p className="mb-2 crm-label-sm text-ink/40">
                 Descripción
               </p>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/75">
@@ -1724,7 +1724,7 @@ export function ParticularesClient({
           <select
             value={operation}
             onChange={(e) => setOperation(e.target.value as typeof operation)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Operación: todas</option>
             <option value="rent">Alquiler</option>
@@ -1734,7 +1734,7 @@ export function ParticularesClient({
           <select
             value={gestion}
             onChange={(e) => setGestion(e.target.value as typeof gestion)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Gestión: todos</option>
             <option value="unmanaged">Sin gestionar</option>
@@ -1745,7 +1745,7 @@ export function ParticularesClient({
           <select
             value={advertiser}
             onChange={(e) => setAdvertiser(e.target.value as typeof advertiser)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Anunciante: todos</option>
             <option value="particular">Particular</option>
@@ -1758,7 +1758,7 @@ export function ParticularesClient({
             value={priceMin}
             onChange={(e) => setPriceMin(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder="€ mín"
-            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
           />
           <input
             type="number"
@@ -1766,12 +1766,12 @@ export function ParticularesClient({
             value={priceMax}
             onChange={(e) => setPriceMax(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder="€ máx"
-            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
           />
           <select
             value={bedrooms}
             onChange={(e) => setBedrooms(e.target.value)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Hab: todas</option>
             <option value="1">1+</option>
@@ -1782,7 +1782,7 @@ export function ParticularesClient({
           <select
             value={floorMin}
             onChange={(e) => setFloorMin(e.target.value)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Planta: todas</option>
             <option value="1">1ª o más</option>
@@ -1798,15 +1798,15 @@ export function ParticularesClient({
             value={areaMin}
             onChange={(e) => setAreaMin(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder="m² mín"
-            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+            className="w-24 rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
           />
           <button
             type="button"
             onClick={() => setLast24h((v) => !v)}
             className={
               last24h
-                ? "rounded-lg border border-gold bg-gold/15 px-3 py-2 text-[13px] font-medium text-gold-dark"
-                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink/70 transition hover:border-gold/40"
+                ? "rounded-lg border border-gold bg-gold/15 px-3 py-2 text-sm font-medium text-gold-dark"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink/70 transition hover:border-gold/40"
             }
           >
             Últimas 24h
@@ -1814,7 +1814,7 @@ export function ParticularesClient({
           <select
             value={phoneFilter}
             onChange={(e) => setPhoneFilter(e.target.value as typeof phoneFilter)}
-            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
           >
             <option value="">Teléfono: todos</option>
             <option value="with_phone">Con teléfono</option>
@@ -1825,7 +1825,7 @@ export function ParticularesClient({
             onClick={handleRefreshPhones}
             disabled={refreshState === "loading"}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium transition",
+              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition",
               refreshState === "loading"
                 ? "border border-gold/40 bg-gold/10 text-gold-dark opacity-80 cursor-wait"
                 : refreshState === "done"
@@ -1850,7 +1850,7 @@ export function ParticularesClient({
             onClick={handleVerifyPhones}
             disabled={verifying}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium transition",
+              "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition",
               verifying
                 ? "border border-emerald-300 bg-emerald-50 text-emerald-700 opacity-80 cursor-wait"
                 : "border border-ink/10 bg-white/85 text-ink/70 hover:border-emerald-300 hover:bg-emerald-50",
@@ -1862,7 +1862,7 @@ export function ParticularesClient({
               <><Phone size={13} strokeWidth={1.75} /> Verificar teléfonos</>
             )}
           </button>
-          <span className="ml-auto text-[11px] text-ink/55">
+          <span className="ml-auto text-xs text-ink/55">
             {filtered.length} de {allRows.length} anuncios · {allRows.filter(r => r.phone).length} con teléfono
           </span>
         </div>
@@ -1875,7 +1875,7 @@ export function ParticularesClient({
             type="button"
             onClick={() => setShowRetired(false)}
             className={cn(
-              "rounded-lg px-4 py-1.5 text-[13px] font-medium transition",
+              "rounded-lg px-4 py-1.5 text-sm font-medium transition",
               !showRetired
                 ? "bg-ink text-cream-50 shadow-sm"
                 : "text-ink/60 hover:text-ink",
@@ -1887,7 +1887,7 @@ export function ParticularesClient({
             type="button"
             onClick={() => setShowRetired(true)}
             className={cn(
-              "rounded-lg px-4 py-1.5 text-[13px] font-medium transition",
+              "rounded-lg px-4 py-1.5 text-sm font-medium transition",
               showRetired
                 ? "bg-red-600 text-white shadow-sm"
                 : "text-ink/60 hover:text-red-700",
@@ -1930,10 +1930,10 @@ export function ParticularesClient({
                         sin foto
                       </div>
                     )}
-                    <span className="absolute left-2 top-2 rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream-50">
+                    <span className="absolute left-2 top-2 rounded-md bg-ink/85 px-2 py-0.5 crm-label-sm text-cream-50">
                       {r.operation === "rent" ? "Alquiler" : "Venta"}
                     </span>
-                    <span className="absolute right-2 top-2 rounded-md bg-gold/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
+                    <span className="absolute right-2 top-2 rounded-md bg-gold/90 px-2 py-0.5 crm-label-sm text-ink">
                       {r.portal}
                     </span>
                     {/* Badge de retirado */}
@@ -1953,7 +1953,7 @@ export function ParticularesClient({
                           e.stopPropagation();
                           handleCopyPhone(r.phone!, r.id);
                         }}
-                        className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-700"
+                        className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
                       >
                         {copiedPhoneId === r.id ? (
                           <>
@@ -1972,19 +1972,19 @@ export function ParticularesClient({
                         )}
                       </button>
                     ) : r.chat_only ? (
-                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-xs font-semibold text-white">
                         <MessageSquare size={10} strokeWidth={1.75} />
                         Solo chat
                       </span>
                     ) : (
-                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-ink/55 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-ink/55 px-2 py-0.5 text-xs font-semibold text-white">
                         <PhoneOff size={10} strokeWidth={1.75} />
                         Sin teléfono
                       </span>
                     )}
                   </div>
                   <div className="flex flex-1 flex-col p-3.5">
-                    <div className="flex items-center gap-1.5 text-[12px] text-ink/60">
+                    <div className="flex items-center gap-1.5 text-xs text-ink/60">
                       <MapPin size={12} strokeWidth={1.75} className="text-gold" />
                       <span>{r.zone ?? "Madrid"}</span>
                     </div>
@@ -1994,12 +1994,12 @@ export function ParticularesClient({
                         {r.address}
                       </p>
                     )}
-                    <p className="mt-1 font-serif text-lg font-medium text-ink">
+                    <p className="mt-1 crm-section-title text-ink">
                       {r.price != null
                         ? `${formatPrice(r.price)}${r.operation === "rent" ? "/mes" : ""}`
                         : "Precio n/d"}
                     </p>
-                    <p className="mt-1 text-[12px] text-ink/60">
+                    <p className="mt-1 text-xs text-ink/60">
                       {[
                         r.bedrooms != null ? `${r.bedrooms} hab` : null,
                         r.bathrooms != null ? `${r.bathrooms} baños` : null,
@@ -2014,25 +2014,25 @@ export function ParticularesClient({
                     {(r.assigned_name || r.last_contact_by || (!r.is_active && r.taken_down_at) || r.has_video || r.video_url || r.has_floor_plan || r.floor_plan_url) && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {(r.has_video || r.video_url) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink/60">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink/60">
                             <Video size={10} strokeWidth={2} />
                             Vídeo
                           </span>
                         )}
                         {(r.has_floor_plan || r.floor_plan_url) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink/60">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink/60">
                             <Ruler size={10} strokeWidth={2} />
                             Plano
                           </span>
                         )}
                         {r.assigned_name && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
                             <UserCheck size={10} strokeWidth={2} />
                             {r.assigned_name}
                           </span>
                         )}
                         {r.last_contact_by && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700">
                             <ClipboardList size={10} strokeWidth={2} />
                             Contactado · {r.last_contact_by}
                             {r.last_contact_at &&
@@ -2040,7 +2040,7 @@ export function ParticularesClient({
                           </span>
                         )}
                         {!r.is_active && r.taken_down_at && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
                             Retirado · {DATE_FMT.format(new Date(r.taken_down_at))}
                           </span>
                         )}
@@ -2052,7 +2052,7 @@ export function ParticularesClient({
                           e.stopPropagation();
                           handleCopyPhone(r.phone!, r.id);
                         }}
-                        className="mt-2 flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                        className="mt-2 flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
                       >
                         {copiedPhoneId === r.id ? (
                           <>
@@ -2067,7 +2067,7 @@ export function ParticularesClient({
                         )}
                       </button>
                     )}
-                    <div className="mt-auto flex items-center justify-between pt-3 text-[11px] text-ink/45">
+                    <div className="mt-auto flex items-center justify-between pt-3 text-xs text-ink/45">
                       <span className="flex items-center gap-1.5">
                         {r.particular_reference ? (
                           <span className="font-mono font-semibold text-gold-dark/70">{r.particular_reference}</span>
@@ -2112,7 +2112,7 @@ export function ParticularesClient({
                   <ChevronRight size={14} strokeWidth={2} />
                 </button>
               </div>
-              <p className="text-[11px] text-ink/50">
+              <p className="text-xs text-ink/50">
                 Mostrando {showingFrom}–{showingTo} de {filtered.length} anuncios
               </p>
             </div>

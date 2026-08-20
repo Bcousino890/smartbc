@@ -94,7 +94,7 @@ function ApplicationCard({
       action={
         <Link
           href={`${prefix}/solicitudes-documentacion`}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/55 transition hover:text-ink"
+          className="inline-flex items-center gap-1 text-xs font-medium text-ink/55 transition hover:text-ink"
         >
           {t("cc.applications.review")}
           <ExternalLink size={11} strokeWidth={1.75} />
@@ -103,10 +103,10 @@ function ApplicationCard({
     >
       <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
         <div className="col-span-2 min-w-0">
-          <dt className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink/40">
+          <dt className="crm-label-sm text-ink/40">
             {t("cc.applications.property")}
           </dt>
-          <dd className="mt-0.5 truncate text-[13px] font-medium text-ink">
+          <dd className="mt-0.5 truncate text-sm font-medium text-ink">
             {app.property?.slug && app.property.title ? (
               <Link
                 href={`${prefix}/propiedades/${app.property.slug}`}
@@ -120,25 +120,25 @@ function ApplicationCard({
           </dd>
         </div>
         <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink/40">
+          <dt className="crm-label-sm text-ink/40">
             {t("cc.applications.submitted")}
           </dt>
-          <dd className="mt-0.5 text-[13px] text-ink">
+          <dd className="mt-0.5 text-sm text-ink">
             {app.submittedAt ? formatDate(app.submittedAt, locale) : "—"}
           </dd>
         </div>
         <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink/40">
+          <dt className="crm-label-sm text-ink/40">
             {t("cc.applications.moveIn")}
           </dt>
-          <dd className="mt-0.5 text-[13px] text-ink">
+          <dd className="mt-0.5 text-sm text-ink">
             {app.moveInDate ? formatDate(app.moveInDate, locale) : "—"}
           </dd>
         </div>
       </dl>
 
       {app.reviewNotes && (
-        <p className="mt-3 border-s-2 border-gold/30 ps-2.5 text-[12.5px] italic leading-relaxed text-ink/60">
+        <p className="mt-3 border-s-2 border-gold/30 ps-2.5 text-xs italic leading-relaxed text-ink/60">
           {app.reviewNotes}
         </p>
       )}
@@ -150,7 +150,7 @@ function ApplicationCard({
           onClick={() => setOpen((v) => !v)}
           className="flex w-full items-center justify-between gap-2 text-left"
         >
-          <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/55">
+          <span className="flex items-center gap-2 crm-label-sm text-ink/55">
             <FileText size={12} strokeWidth={1.75} className="text-gold" />
             {t("cc.applications.documents")}
             <span className="tabular-nums text-ink/40">
@@ -171,7 +171,7 @@ function ApplicationCard({
 
         {open &&
           (app.documents.length === 0 ? (
-            <p className="mt-2.5 text-[12px] text-ink/40">
+            <p className="mt-2.5 text-xs text-ink/40">
               {t("cc.applications.noDocuments")}
             </p>
           ) : (
@@ -182,10 +182,10 @@ function ApplicationCard({
                   className="flex items-center justify-between gap-3 rounded border border-ink/8 px-2.5 py-1.5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-[12.5px] text-ink">
+                    <p className="truncate text-xs text-ink">
                       {d.documentTypeName ?? d.fileName}
                     </p>
-                    <p className="truncate text-[10.5px] text-ink/40">
+                    <p className="truncate text-xs text-ink/40">
                       {formatDate(d.createdAt, locale)}
                       {d.documentTypeName ? ` · ${d.fileName}` : ""}
                     </p>

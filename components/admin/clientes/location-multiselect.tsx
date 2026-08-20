@@ -121,14 +121,14 @@ export function LocationMultiselect({
 
   return (
     <div ref={ref} className="relative">
-      <p className="mb-1 text-[10px] font-medium text-ink/45">{label}</p>
+      <p className="mb-1 text-xs font-medium text-ink/45">{label}</p>
 
       {/* Trigger */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex min-h-[38px] w-full flex-wrap items-center gap-1 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-1.5 text-left text-[12px] transition focus:outline-none",
+          "flex min-h-[38px] w-full flex-wrap items-center gap-1 rounded-lg border border-ink/10 bg-white/70 px-2.5 py-1.5 text-left text-xs transition focus:outline-none",
           open ? "border-gold/55" : "hover:border-ink/20",
         )}
       >
@@ -138,7 +138,7 @@ export function LocationMultiselect({
           selected.map((val) => (
             <span
               key={val}
-              className="inline-flex items-center gap-1 rounded-md border border-gold/25 bg-gold/12 px-2 py-0.5 text-[11px] font-medium text-gold-dark"
+              className="inline-flex items-center gap-1 rounded-md border border-gold/25 bg-gold/12 px-2 py-0.5 text-xs font-medium text-gold-dark"
             >
               {val}
               <button
@@ -170,14 +170,14 @@ export function LocationMultiselect({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar…"
               autoFocus
-              className="flex-1 bg-transparent text-[12px] text-ink outline-none placeholder:text-ink/35"
+              className="flex-1 bg-transparent text-xs text-ink outline-none placeholder:text-ink/35"
             />
           </div>
 
           {/* Opciones */}
           <ul className="max-h-52 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-[12px] text-ink/45">Sin resultados</li>
+              <li className="px-3 py-2 text-xs text-ink/45">Sin resultados</li>
             ) : (
               filtered.map((option) => {
                 const active = selected.includes(option);
@@ -187,7 +187,7 @@ export function LocationMultiselect({
                       type="button"
                       onClick={() => toggle(option)}
                       className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12px] transition",
+                        "flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition",
                         active ? "bg-gold/8 text-ink" : "text-ink/75 hover:bg-cream-100/70 hover:text-ink",
                       )}
                     >
@@ -215,7 +215,7 @@ export function LocationMultiselect({
               <button
                 type="button"
                 onClick={() => { onChange([]); setOpen(false); }}
-                className="text-[11px] text-ink/45 hover:text-ink"
+                className="text-xs text-ink/45 hover:text-ink"
               >
                 Limpiar selección ({selected.length})
               </button>

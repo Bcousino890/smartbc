@@ -246,10 +246,10 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
     <div className="flex items-center gap-3 pb-3 border-b border-ink/8">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/15 text-[11px] font-bold text-gold">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xs font-bold text-gold">
         {step}
       </span>
-      <h3 className="font-serif text-base font-semibold text-ink">{title}</h3>
+      <h3 className="text-base font-bold text-ink">{title}</h3>
     </div>
   );
 }
@@ -477,13 +477,13 @@ function GeocodingMapSection({
       <div className="flex items-center gap-2 mb-2">
         <Label>Ubicación en el mapa</Label>
         {geocoding && (
-          <span className="flex items-center gap-1 text-[10px] text-ink/50">
+          <span className="flex items-center gap-1 text-xs text-ink/50">
             <Loader2 size={10} className="animate-spin" />
             Geocodificando...
           </span>
         )}
         {latitude !== 0 && longitude !== 0 && !geocoding && (
-          <span className="text-[10px] text-ink/40 font-mono">
+          <span className="text-xs text-ink/40 font-mono">
             {latitude.toFixed(6)}, {longitude.toFixed(6)}
           </span>
         )}
@@ -505,7 +505,7 @@ function GeocodingMapSection({
           realLng={realLng || undefined}
         />
       </div>
-      <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink/40">
+      <p className="mt-1.5 flex items-center gap-1 text-xs text-ink/40">
         <MapPin size={11} />
         {geocoding
           ? "Detectando dirección real..."
@@ -614,7 +614,7 @@ function MediaUploadZone({
       ) : (
         <>
         {isImage && items.length > 1 && (
-          <p className="mb-2 text-[11px] text-ink/45">
+          <p className="mb-2 text-xs text-ink/45">
             Arrastra las fotos para reordenarlas (o usa las flechas al pasar el ratón). La primera es la portada.
           </p>
         )}
@@ -648,7 +648,7 @@ function MediaUploadZone({
                   />
                   {/* Insignia de portada en la primera foto. */}
                   {i === 0 && (
-                    <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-[9px] font-semibold text-ink shadow">
+                    <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-xs font-semibold text-ink shadow">
                       Portada
                     </span>
                   )}
@@ -972,7 +972,7 @@ export function IdealistaForm({
       <div className="mb-2">
         <div className="flex items-center gap-2">
           {isInspo && (
-            <span className="rounded-full bg-gold/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
+            <span className="rounded-full bg-gold/15 px-2.5 py-0.5 crm-label-sm text-gold">
               Inspo
             </span>
           )}
@@ -986,10 +986,10 @@ export function IdealistaForm({
             value={form.inspoTitle ?? ""}
             onChange={(e) => set("inspoTitle", e.target.value)}
             placeholder="Título de la propiedad..."
-            className="mt-1 w-full border-0 border-b border-ink/15 bg-transparent pb-1 font-serif text-xl font-semibold text-ink placeholder:text-ink/25 focus:border-gold/60 focus:outline-none"
+            className="mt-1 w-full border-0 border-b border-ink/15 bg-transparent pb-1 crm-section-title text-ink placeholder:text-ink/25 focus:border-gold/60 focus:outline-none"
           />
         ) : (
-          <h2 className="mt-0.5 font-serif text-xl font-semibold text-ink">
+          <h2 className="mt-0.5 crm-section-title text-ink">
             {propertyTitle}
           </h2>
         )}
@@ -1055,7 +1055,7 @@ export function IdealistaForm({
             )}
           </div>
           {form.referenceCode && (
-            <p className="mt-1 text-[11px] text-ink/40 font-mono">
+            <p className="mt-1 text-xs text-ink/40 font-mono">
               Código inmutable: {form.referenceCode}
             </p>
           )}
@@ -1129,7 +1129,7 @@ export function IdealistaForm({
               ))}
             </datalist>
             {zoneOptions.length > 0 && (
-              <p className="mt-1 text-[11px] text-ink/40">
+              <p className="mt-1 text-xs text-ink/40">
                 La zona ayuda a la IA a redactar el título y la descripción con el barrio correcto. Edita la
                 lista en Configuración → IA.
               </p>
@@ -1522,7 +1522,7 @@ export function IdealistaForm({
                 type="button"
                 onClick={handleCompleteFromPhotos}
                 disabled={analyzingPhotos}
-                className="flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline disabled:opacity-50"
+                className="flex items-center gap-1 text-xs font-semibold text-gold hover:underline disabled:opacity-50"
                 title="Lee las fotos y completa la ficha: título, descripción, tipo, estado, amueblado, extras y estimación de dormitorios/baños"
               >
                 {analyzingPhotos ? <Loader2 size={11} className="animate-spin" /> : <ImageIcon size={11} />}
@@ -1532,7 +1532,7 @@ export function IdealistaForm({
                 type="button"
                 onClick={handleGenerateDescription}
                 disabled={generatingDesc}
-                className="flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline disabled:opacity-50"
+                className="flex items-center gap-1 text-xs font-semibold text-gold hover:underline disabled:opacity-50"
                 title="Redacta la descripción con IA a partir de los datos y las fotos de la ficha"
               >
                 {generatingDesc ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
@@ -1541,7 +1541,7 @@ export function IdealistaForm({
               <button
                 type="button"
                 onClick={() => setShowDescPreview((v) => !v)}
-                className="text-[11px] text-gold hover:underline"
+                className="text-xs text-gold hover:underline"
               >
                 {showDescPreview ? "Ocultar vista previa" : "Ver con footer"}
               </button>
@@ -1555,15 +1555,15 @@ export function IdealistaForm({
             className={cn(inputCls, "resize-y")}
           />
           {generatingDesc && (
-            <p className="mt-1 text-[11px] text-ink/45">Redactando con IA...</p>
+            <p className="mt-1 text-xs text-ink/45">Redactando con IA...</p>
           )}
           {analyzingPhotos && (
-            <p className="mt-1 text-[11px] text-ink/45">Leyendo las fotos y completando la ficha...</p>
+            <p className="mt-1 text-xs text-ink/45">Leyendo las fotos y completando la ficha...</p>
           )}
-          {descError && <p className="mt-1 text-[11px] text-red-600">{descError}</p>}
-          {photoError && <p className="mt-1 text-[11px] text-red-600">{photoError}</p>}
+          {descError && <p className="mt-1 text-xs text-red-600">{descError}</p>}
+          {photoError && <p className="mt-1 text-xs text-red-600">{photoError}</p>}
           {detectedFromPhotos && (
-            <p className="mt-1 text-[11px] text-emerald-700">
+            <p className="mt-1 text-xs text-emerald-700">
               Ficha completada desde las fotos (título, descripción, tipo, estado, extras y estimación de hab./baños).
               {detectedFromPhotos.length ? ` Detectado: ${detectedFromPhotos.join(", ")}.` : ""} Revisa los datos —
               m², precio, dirección y año NO salen de las fotos, ponlos tú.
@@ -1573,7 +1573,7 @@ export function IdealistaForm({
 
         {showDescPreview && (
           <div className="rounded-xl border border-ink/10 bg-white/60 p-4">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink/40">
+            <p className="mb-1 crm-label-sm text-ink/40">
               Vista previa completa del texto
             </p>
             <pre className="whitespace-pre-wrap text-sm text-ink/80 font-sans leading-relaxed">

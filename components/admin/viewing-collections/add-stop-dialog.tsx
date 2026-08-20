@@ -119,7 +119,7 @@ export function AddStopDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-gold/15 px-5 py-4">
-          <h3 className="font-serif text-lg font-semibold text-ink">
+          <h3 className="crm-section-title text-ink">
             Añadir propiedad al itinerario
           </h3>
           <button
@@ -134,17 +134,17 @@ export function AddStopDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {error && (
-            <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+            <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {error}
             </p>
           )}
 
           {/* ── De su selección ── */}
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink/45">
+          <p className="crm-label-sm text-ink/45">
             De su selección
           </p>
           {available.length === 0 ? (
-            <p className="mt-2 rounded-lg border border-dashed border-ink/15 px-3 py-3 text-[12px] text-ink/45">
+            <p className="mt-2 rounded-lg border border-dashed border-ink/15 px-3 py-3 text-xs text-ink/45">
               Todas las propiedades de su selección ya están en este itinerario.
             </p>
           ) : (
@@ -155,10 +155,10 @@ export function AddStopDialog({
                   className="flex items-center justify-between gap-3 rounded-lg border border-ink/10 bg-white px-3 py-2"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-[12.5px] font-medium text-ink">
+                    <span className="block truncate text-xs font-medium text-ink">
                       {s.property.title}
                     </span>
-                    <span className="text-[11px] text-ink/50">
+                    <span className="text-xs text-ink/50">
                       {s.property.bcReference ?? "—"} ·{" "}
                       {priceLabel(
                         config,
@@ -172,7 +172,7 @@ export function AddStopDialog({
                     type="button"
                     disabled={pending}
                     onClick={() => add({ selectionId: s.id }, s.property_id)}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                    className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
                   >
                     <Plus size={11} strokeWidth={2} className="text-gold-dark" />
                     Añadir
@@ -183,7 +183,7 @@ export function AddStopDialog({
           )}
 
           {/* ── Del catálogo ── */}
-          <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-ink/45">
+          <p className="mt-5 crm-label-sm text-ink/45">
             O buscar en el catálogo
           </p>
           <div className="relative mt-2">
@@ -196,12 +196,12 @@ export function AddStopDialog({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Referencia, calle, zona…"
-              className="w-full rounded-lg border border-ink/15 bg-white py-2 pl-8 pr-3 text-[12.5px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              className="w-full rounded-lg border border-ink/15 bg-white py-2 pl-8 pr-3 text-xs text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
             />
           </div>
 
           {loading && (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-ink/45">
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-ink/45">
               <Loader2 size={11} className="animate-spin" />
               Buscando…
             </p>
@@ -221,10 +221,10 @@ export function AddStopDialog({
                     )}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-[12.5px] font-medium text-ink">
+                      <span className="block truncate text-xs font-medium text-ink">
                         {r.title}
                       </span>
-                      <span className="text-[11px] text-ink/50">
+                      <span className="text-xs text-ink/50">
                         {r.reference ?? "—"} ·{" "}
                         {priceLabel(config, r.price, null, r.operation)}
                         {r.city ? ` · ${r.city}` : ""}
@@ -234,7 +234,7 @@ export function AddStopDialog({
                       type="button"
                       disabled={pending || inItinerary}
                       onClick={() => add({ propertyId: r.id }, r.id)}
-                      className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
+                      className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-medium text-ink/75 transition hover:border-gold/55 disabled:opacity-50"
                     >
                       <Plus size={11} strokeWidth={2} className="text-gold-dark" />
                       {inItinerary ? "Ya está" : "Añadir"}
@@ -247,7 +247,7 @@ export function AddStopDialog({
         </div>
 
         <div className="border-t border-gold/15 px-5 py-3">
-          <p className="text-[11px] leading-relaxed text-ink/45">
+          <p className="text-xs leading-relaxed text-ink/45">
             La parada entra al final y sin hora. Ponle hora y, si el itinerario
             ya estaba publicado, vuelve a publicar para que el cliente la vea.
           </p>
