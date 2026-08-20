@@ -187,13 +187,15 @@ export function ShortlistView({
     for (const m of musts) m.rank = ++n;
     setItems(next);
 
+    // `pt` es la identidad opaca de la propiedad (migración 0143): antes solo
+    // viajaba la decisión, y "qué piso" se perdía en cuanto alguien reordenaba.
     track(
       decision === "not_for_me"
         ? "property_discarded"
         : decision === "undecided"
           ? "property_restored"
           : "decision_change",
-      { decision },
+      { decision, ...(item.analyticsRef ? { pt: item.analyticsRef } : {}) },
     );
     void commit(before, () =>
       setShortlistDecision(token, item.itemId, decision),
@@ -379,7 +381,10 @@ export function ShortlistView({
     if (mode !== "review" || !current) return;
     if (seen.current.has(current.itemId)) return;
     seen.current.add(current.itemId);
-    track("property_view", { origin: current.origin });
+    track("property_view", {
+      origin: current.origin,
+      ...(current.analyticsRef ? { pt: current.analyticsRef } : {}),
+    });
   }, [mode, current, track]);
 
   /** La siguiente sin decidir a partir de una posición. */

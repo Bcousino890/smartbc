@@ -13,7 +13,8 @@ for lang in ("es", "en", "fr", "de"):
 
 FILES = []
 for root in ("app/[country]/(admin)/admin/clientes/[id]", "lib/client-command-center",
-             "app/[country]/(admin)/admin/solicitudes", "lib/sales-inbox"):
+             "app/[country]/(admin)/admin/solicitudes", "lib/sales-inbox",
+             "app/[country]/(admin)/admin/propiedades/_components", "lib/properties-workspace"):
     for dp, _, fns in os.walk(root):
         for fn in fns:
             if fn.endswith((".ts", ".tsx")):
@@ -47,6 +48,23 @@ TEMPLATES = {
                "stop_view","time_on_page"],
  "clientes.profile.": ["student","worker","company","family","investor"],
  "inbox.group.by.": ["none","property"],
+ "pw.view.": ["all","available","needs-attention","client-interest","upcoming-viewings","archived"],
+ "pw.empty.": ["all","available","needs-attention","client-interest","upcoming-viewings","archived"],
+ "pw.tab.": ["overview","clients","viewings","media","publication","details"],
+ "pw.status.": ["available","reserved","sold","rented","archived","draft"],
+ "pw.health.": ["excellent","good","needs_attention","incomplete","unknown"],
+ "pw.dim.": ["core","media","location","freshness","publication","demand"],
+ "pw.attention.": ["stale_sync","missing_core","no_photos","publication_inconsistency"],
+ "pw.enhance.": ["no_video","no_plan","incomplete_location","amenities_unmapped"],
+ "pw.blocker.": ["invalid_status","no_photos","no_title","no_description","no_price"],
+ "pw.type.": ["flat","penthouse","duplex","triplex","studio","house","townhouse","office","commercial","garage","unknown"],
+ "pw.amenity.": ["terrace","balcony","furnished","equipped_kitchen","air_conditioning","heating",
+                 "wardrobes","ensuite","security_door","renovated","parking","storage","pets_allowed",
+                 "smart_tv","wifi","lift","concierge","pool","garden","gym","security"],
+ "pw.confirmation.": ["pending","proposed","confirmed","declined","cancelled","completed"],
+ "pw.sort.": ["default","updated","price-desc","price-asc","synced","interest","viewing"],
+ "pw.source.": ["manual","scrape"],
+ "pw.history.": ["title","empty","price","status","published_web","since"],
  "inbox.view.": ["needs-attention","new","follow-up","my-leads","unassigned","all"],
  "inbox.empty.": ["needs-attention","new","follow-up","my-leads","unassigned","all"],
  "inbox.state.": ["new","contacted","engaged","converted","discarded"],
@@ -82,7 +100,7 @@ if problems:
     sys.exit(1)
 # Paridad total de las claves cc.* : si una forma singular solo existe en
 # español, `useTn` la elige y el resto de idiomas ve la cadena equivocada.
-cc = {lang: {k for k in ks if k.startswith("cc.") or k.startswith("inbox.")} for lang, ks in blocks.items()}
+cc = {lang: {k for k in ks if k.startswith("cc.") or k.startswith("inbox.") or k.startswith("pw.")} for lang, ks in blocks.items()}
 desync = []
 for lang in ("en","fr","de"):
     for k in sorted(cc["es"] ^ cc[lang]):
@@ -93,5 +111,5 @@ if desync:
         print("  %-50s %s" % (k, lang))
     sys.exit(1)
 
-print("OK — %d claves usadas presentes en es/en/fr/de; %d claves cc.*/inbox.* en paridad"
+print("OK — %d claves usadas presentes en es/en/fr/de; %d claves cc.*/inbox.*/pw.* en paridad"
       % (len(used), len(cc["es"])))

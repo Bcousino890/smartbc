@@ -76,6 +76,14 @@ export type PublicViewingStop = {
   priceLabel: string;
   /** Referencia neutra BC-XXXX: no delata el portal de origen. */
   bcReference: string | null;
+  /**
+   * Identidad ANALÍTICA de la propiedad: token aleatorio (migración 0143),
+   * sin relación matemática con ningún id interno. Viaja en los eventos como
+   * `pt` para que "qué propiedad se vio" sobreviva a las reordenaciones —
+   * el `order` con el que se guardaban antes deja de significar nada en
+   * cuanto el agente mueve una parada.
+   */
+  analyticsRef: string | null;
   availability: PublicAvailability;
 
   // — Ubicación · exactamente una de las dos ramas, nunca ambas —

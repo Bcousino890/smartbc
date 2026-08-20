@@ -132,6 +132,10 @@ export const ACTION_DESCRIPTIONS: Record<PermissionAction, string> = {
 
 // ─── Matrices por rol ─────────────────────────────────────────────────────────
 
+// `properties.publish` controla el interruptor de la web pública (contrato de
+// la migración 0143). Hasta entonces era false para TODOS los roles: el
+// permiso existía y no lo tenía nadie, y de todos modos la web ignoraba el
+// campo. Ahora lo tienen agent_admin, admin/owner y advisor.
 const AGENT_JUNIOR_PERMISSIONS: PermissionMatrix = {
   properties:    { view: true,  create: false, edit: false, delete: false, export: false, publish: false },
   agencias:      { view: false, create: false, edit: false, delete: false, export: false, publish: false },
@@ -171,7 +175,7 @@ const AGENT_SENIOR_PERMISSIONS: PermissionMatrix = {
 };
 
 const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
+  properties:    { view: true, create: true,  edit: true, delete: true,  export: true, publish: true  },
   agencias:      { view: true, create: true,  edit: true, delete: false, export: false, publish: false },
   particulares:  { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
   publicacion:   { view: true, create: true,  edit: true, delete: true,  export: true, publish: false },
@@ -191,7 +195,7 @@ const AGENT_ADMIN_PERMISSIONS: PermissionMatrix = {
 
 // Roles con acceso total (owner, admin) — todo permitido
 const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true, create: true, edit: true, delete: true, export: true, publish: false },
+  properties:    { view: true, create: true, edit: true, delete: true, export: true, publish: true  },
   agencias:      { view: true, create: true, edit: true, delete: true, export: true, publish: false },
   particulares:  { view: true, create: true, edit: true, delete: true, export: true, publish: false },
   publicacion:   { view: true, create: true, edit: true, delete: true, export: true, publish: false },
@@ -211,7 +215,7 @@ const FULL_ACCESS_PERMISSIONS: PermissionMatrix = {
 
 // Advisor: similar a full access pero sin gestión total de usuarios/config
 const ADVISOR_PERMISSIONS: PermissionMatrix = {
-  properties:    { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
+  properties:    { view: true, create: true,  edit: true,  delete: true,  export: true, publish: true  },
   agencias:      { view: true, create: false, edit: false, delete: false, export: false, publish: false },
   particulares:  { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },
   publicacion:   { view: true, create: true,  edit: true,  delete: true,  export: true, publish: false },

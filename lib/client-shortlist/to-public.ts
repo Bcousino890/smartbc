@@ -171,6 +171,8 @@ export function toPublicClientShortlist(
         pendingProperty: Boolean(item.externalPhotoUrls),
         origin: item.origin,
         decision: item.decision,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        analyticsRef: (prop as any).analytics_token ?? null,
         rank: item.rank,
         position: item.position,
         comment: item.client_comment,

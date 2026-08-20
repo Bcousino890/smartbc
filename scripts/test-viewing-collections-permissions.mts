@@ -75,17 +75,38 @@ for (const [role, matrix] of Object.entries(PERMISSIONS_BY_ROLE)) {
 }
 
 // ============================================================================
-section("publish solo aplica a viewing_collections");
+section("publish solo aplica a los recursos que publican de verdad");
 // ============================================================================
+// Desde Properties Workspace 2.0 hay DOS: viewing_collections (el enlace de la
+// colección) y properties (el interruptor de la web pública, que hasta la
+// migración 0143 no lo leía nadie y no lo tenía nadie). Cualquier otro recurso
+// que gane publish sigue siendo una fuga.
+
+const PUBLISHABLE = new Set(["viewing_collections", "properties"]);
 
 for (const [role, matrix] of Object.entries(PERMISSIONS_BY_ROLE)) {
   const leaked = PERMISSION_RESOURCES.filter(
-    (r) => r !== "viewing_collections" && matrix[r]?.publish === true,
+    (r) => !PUBLISHABLE.has(r) && matrix[r]?.publish === true,
   );
   check(
     `${role}: ningún recurso antiguo gana publish`,
     leaked.length === 0,
     leaked.join(", "),
+  );
+}
+
+// Y la asignación de properties.publish es la decidida en el sprint: quien
+// dirige (owner/admin/advisor) y agent_admin. Ni junior ni senior.
+const PROPS_PUBLISH: Record<string, boolean> = {
+  owner: true, admin: true, advisor: true, agent_admin: true,
+  agent_senior: false, agent_junior: false, captadora: false, client: false,
+};
+for (const [role, expected] of Object.entries(PROPS_PUBLISH)) {
+  const actual = PERMISSIONS_BY_ROLE[role as keyof typeof PERMISSIONS_BY_ROLE]?.properties?.publish ?? false;
+  check(
+    `${role}: properties.publish = ${expected}`,
+    actual === expected,
+    String(actual),
   );
 }
 

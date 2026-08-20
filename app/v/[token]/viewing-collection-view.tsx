@@ -89,13 +89,21 @@ export function ViewingCollectionView({
    * guarda en el navegador del cliente, NO en la URL de la propiedad: reenviar
    * "mira este piso" no debe entregar la colección privada entera.
    */
+  /** El token analítico de la parada `order`. La posición sigue viajando por
+   *  compatibilidad con los paneles viejos, pero la identidad es el `pt`. */
+  const ptOf = useCallback(
+    (order: number) =>
+      collection.stops.find((s) => s.order === order)?.analyticsRef ?? undefined,
+    [collection.stops],
+  );
+
   const onLeaveToProperty = useCallback(
     (order: number) => {
-      track("share_click", { order });
+      track("share_click", { order, pt: ptOf(order) });
       if (isPreview || !collectionToken) return;
       rememberCollectionReturn(`/v/${collectionToken}`, dict.backToCollection);
     },
-    [track, isPreview, collectionToken, dict.backToCollection],
+    [track, isPreview, collectionToken, dict.backToCollection, ptOf],
   );
 
   // Una residencia se cuenta como vista UNA vez por sesión. El registro vive
@@ -107,9 +115,9 @@ export function ViewingCollectionView({
     (order: number) => {
       if (viewedStops.current.has(order)) return;
       viewedStops.current.add(order);
-      track("stop_view", { order });
+      track("stop_view", { order, pt: ptOf(order) });
     },
-    [track],
+    [track, ptOf],
   );
 
   // ── Detección de modo ──────────────────────────────────────────────────────
@@ -188,7 +196,7 @@ export function ViewingCollectionView({
         collection={collection}
         dict={dict}
         onStopView={trackStopView}
-        onStopExpand={(order) => track("stop_expand", { order })}
+        onStopExpand={(order) => track("stop_expand", { order, pt: ptOf(order) })}
         onSmartLinkClick={onLeaveToProperty}
         collectionToken={collectionToken}
       />
@@ -248,7 +256,7 @@ export function ViewingCollectionView({
                 dict={dict}
                 rtl={rtl}
                 onView={() => trackStopView(stop.order)}
-                onExpand={() => track("stop_expand", { order: stop.order })}
+                onExpand={() => track("stop_expand", { order: stop.order, pt: ptOf(stop.order) })}
                 onSmartLinkClick={() => onLeaveToProperty(stop.order)}
                 collectionToken={collectionToken}
               />

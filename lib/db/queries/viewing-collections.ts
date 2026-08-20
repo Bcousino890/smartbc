@@ -99,7 +99,7 @@ const PUBLIC_COLLECTION_SELECT = `
           price, rent_price, currency, operation, operations,
           status, archived_at, bc_reference,
           latitude, longitude, country,
-          last_synced_at, updated_at,
+          last_synced_at, updated_at, analytics_token,
           property_photos ( url, position, is_cover )
         )
       )

@@ -29,6 +29,7 @@
     "test:portal-links": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-portal-links.mts",
     "test:command-center": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-client-command-center.mts",
     "test:sales-inbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-sales-inbox.mts",
+    "test:properties-workspace": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-properties-workspace.mts",
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
     "fotocasa:zones": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/fotocasa-zones-dump.mts"
   },

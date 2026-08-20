@@ -26,6 +26,9 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
     .eq("slug", slug)
     .in("status", ["available", "reserved"])
     .is("archived_at", null)
+    // Mismo contrato que el catálogo: despublicada = 404 en la web pública.
+    // El SmartLink de la propiedad (/compartir, /c) NO pasa por aquí.
+    .eq("published_web", true)
     .maybeSingle();
 
   if (!data) return null;

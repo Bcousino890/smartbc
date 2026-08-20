@@ -441,6 +441,8 @@ export function toPublicViewingCollection(
         .formatPrice(effectivePrice(prop), prop.currency, prop.operation)
         .replace(/\/mes$/, dict.perMonthSuffix),
       bcReference: prop.bc_reference,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      analyticsRef: (prop as any).analytics_token ?? null,
       availability: deriveAvailability(prop),
 
       // Dirección y coordenadas se deciden JUNTAS: ocultar la dirección y

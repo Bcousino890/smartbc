@@ -46,6 +46,15 @@ export type PublicShortlistProperty = {
   photoUrls: string[];
   origin: ShortlistItemOrigin;
   decision: ShortlistDecision;
+  /**
+   * Identidad ANALÍTICA de la propiedad: un token aleatorio de la migración
+   * 0143, sin relación matemática con ningún id interno (el test de la
+   * proyección vigila que no salga un UUID). Viaja en los eventos como `pt`
+   * para que "qué propiedad se vio" sobreviva a cualquier reordenación —
+   * antes solo se guardaba la posición, que reordenar invalidaba.
+   * null en anuncios de portal que todavía no son ficha.
+   */
+  analyticsRef: string | null;
   rank: number | null;
   /**
    * Orden dentro de "Por revisar", ANTES de decidir nada. Hermano de `rank`
