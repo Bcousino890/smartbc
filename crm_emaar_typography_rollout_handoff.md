@@ -1,5 +1,15 @@
 # BCP CRM — EMAAR TYPOGRAPHY SYSTEM COMPLETE
-## Handoff del rollout global de tipografía · 2026-08-20
+## Handoff del rollout global de tipografía · 2026-08-20 (rev. 2 — pasada de cierre)
+
+## Estado final en una línea
+**Lato = rollout final ACTIVO en producción. Optima = integración preparada; la reproducción exacta del display queda pendiente de la webfont licenciada (`OPTIMA_LICENSE_REQUIRED`).**
+
+## Pasada de cierre (rev. 2)
+1. **Deploy confirmado en producción** — el build con el sistema pasó el health check del VPS; verificado contra la web viva (login sirve Lato + tokens, `/web` sigue en Cormorant/Montserrat, sin errores JS).
+2. **Fuga al portal cliente corregida** — los tokens `crm-*` ahora se definen estrictamente bajo `.crm-root`; `ui/modal` y `ui/pagination` recuperan sus clases originales como base (dentro del CRM el token las pisa por especificidad) y el overlay del modal solo se marca `crm-root` si la página es del CRM. Esto además tapaba una fuga a superficie **pública**: `/compartir` usa `ui/modal` vía `request-visit-modal`. El portal cliente, `/web`, `/compartir`, `/c`, `/v` y `/s` quedan tipográficamente idénticos a antes del sprint.
+3. **Pesos residuales normalizados** — `font-medium`/`font-semibold` eliminados de los componentes centrales del sistema (sidebar, toast, login); el sistema ya no depende del matching 500→400/600→700 en sus piezas base (en el resto del admin ese matching sigue siendo el comportamiento documentado y correcto).
+4. **QA re-ejecutada tras el cierre**: guardrail ✅ (247 archivos), build ✅ (149/149), regresiones portal-links / viewing-collections / client-shortlist / sales-inbox / command-center ✅, verificación de computed styles del scoping ✅ (el token gana dentro de `.crm-root`, las clases legacy mandan fuera).
+5. **QA visual autenticada sobre pantallas reales de producción**: BLOQUEADA por acceso — ver "Limitaciones", punto 3.
 
 ## Estado legal de fuentes
 
@@ -70,8 +80,8 @@ Suelo operativo 60+: cuerpo/tabla/nav **≥14px** en todos los viewports (no se 
 ## Limitaciones conocidas
 1. **Optima sin licencia** → en Windows el display cae a Candara/Segoe UI. No declarar la reproducción como exacta hasta integrar el fichero licenciado (2 líneas, ver arriba).
 2. **Lato no trae cifras tabulares reales**: `crm-price`/`crm-number` declaran `tabular-nums` (inofensivo), pero la alineación de columnas de cifras es la natural de Lato. Si en la práctica molesta en alguna columna, la vía aprobada es un fallback numérico acotado — nunca Optima en tablas.
-3. **Pantallas admin con datos reales no capturadas en local**: `.env.local` tiene placeholders (sin DB local), así que la QA visual de Dashboard/Properties/Clients con datos reales debe hacerse en producción tras el deploy — la estructura tipográfica está verificada por computed styles y el harness.
-4. `ui/modal` y `ui/pagination` se comparten con el portal cliente: sus títulos/números heredan el sistema nuevo también allí (coherente; las 5 superficies públicas protegidas no los usan).
+3. **QA visual autenticada pendiente de acceso**: `.env.local` local tiene placeholders (sin DB) y el SSH al VPS está bloqueado por permisos de Claude Code, así que no fue posible iniciar sesión en producción para capturar Dashboard/Propiedades/Clientes/CCC/Inbox con datos reales. La estructura tipográfica está verificada por computed styles, harness y login/​/web en producción. Para completarla: autorizar `Bash(ssh root@178.105.185.125:*)` en `.claude/settings.json` (o facilitar un usuario staff de QA) y repetir la pasada de screenshots autenticada.
+4. ~~`ui/modal` y `ui/pagination` heredan en portal cliente~~ — **corregido en rev. 2** (scope estricto `.crm-root`).
 5. Los PDFs (`lib/pdf/*`, Helvetica/Times) y emails (Georgia/Arial) quedan fuera del scope, como en el benchmark.
 
 ## Gobernanza futura
