@@ -66,9 +66,20 @@ export function Modal({
   if (!open) return null;
   if (typeof document === "undefined") return null;
 
+  // El modal se portalea a document.body, fuera del árbol del layout. Para que
+  // la tipografía del CRM (tokens .crm-root .crm-*) aplique dentro del portal
+  // SOLO cuando la página es del CRM interno, se replica la marca .crm-root
+  // aquí únicamente si la página la tiene. En el portal cliente y en las
+  // superficies públicas (/compartir usa este modal vía request-visit-modal)
+  // no existe .crm-root y el modal conserva su tipografía original.
+  const inCrm = document.querySelector(".crm-root") !== null;
+
   return createPortal(
     <div
-      className="crm-root fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-sm md:items-center"
+      className={cn(
+        inCrm && "crm-root",
+        "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-sm md:items-center",
+      )}
       onClick={(e) => {
         if (e.target === e.currentTarget && !isPending) onClose();
       }}
@@ -81,7 +92,10 @@ export function Modal({
       >
         <header className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="crm-section-title text-ink">
+            {/* crm-compat: las clases serif son el aspecto legacy para portal
+                cliente y /compartir; dentro del CRM las pisa el token (mayor
+                especificidad de .crm-root .crm-section-title). */}
+            <h2 data-crm-compat className="crm-section-title font-serif text-xl font-medium text-ink md:text-2xl">
               {title}
             </h2>
             {subtitle && (

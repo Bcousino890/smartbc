@@ -33,7 +33,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="crm-root fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
         {toasts.map(t => {
           const Icon = ICONS[t.type];
           return (
@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               key={t.id}
               style={{ animation: "toast-slide-in 0.3s ease forwards" }}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg text-sm font-medium",
+                "flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg text-sm",
                 COLORS[t.type]
               )}
             >

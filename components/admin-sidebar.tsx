@@ -188,7 +188,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
               href="/es/admin"
               title="España"
               className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
                 country === "es"
                   ? "border-gold/60 bg-gold/15 text-gold"
                   : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
@@ -201,7 +201,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
               href="/cl/admin"
               title="Chile"
               className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
                 country === "cl"
                   ? "border-gold/60 bg-gold/15 text-gold"
                   : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"

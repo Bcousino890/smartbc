@@ -217,7 +217,7 @@ function RoleTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
+        "flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition",
         active
           ? "bg-ink text-gold shadow-sm"
           : "text-ink/60 hover:bg-white/60 hover:text-ink",

@@ -64,6 +64,10 @@ for (const file of files) {
   const lines = fs.readFileSync(file, "utf8").split("\n");
   lines.forEach((line, i) => {
     const at = `${rel}:${i + 1}`;
+    // Escape deliberado: componentes compartidos con el portal cliente llevan
+    // sus clases legacy como base (marcadas con data-crm-compat) y el token
+    // crm-* las pisa solo dentro de .crm-root.
+    if (line.includes("data-crm-compat")) return;
     if (/\bfont-serif\b/.test(line)) {
       violations.push(`${at}  font-serif (Playfair) prohibido en admin`);
     }
