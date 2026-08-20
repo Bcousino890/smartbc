@@ -75,7 +75,9 @@ const CHAPTER_PHOTO_CLASSES: Record<StoryChapter, string[]> = {
   kitchen: ["kitchen"],
   private: ["bedroom", "bathroom"],
   outdoor: ["terrace_outdoor", "garden", "pool", "view"],
-  finishes: ["living_room", "bedroom"],
+  // Sin clase de foto propia para acabados: mejor bloque solo-texto que
+  // reutilizar un salón que no aporta información (decisión del piloto).
+  finishes: [],
   building: ["facade_building"],
   barrio: ["facade_building", "view"],
 };
