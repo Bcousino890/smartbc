@@ -131,8 +131,10 @@ console.log("Estilo BCP Luxury Madrid:");
     ["park", "water", "building"].every((l) => ids.includes(l)));
   check("NO es escala de grises: parques verdes y agua azulada",
     /#dde5d0/i.test(JSON.stringify(style)) && /#cdd9de/i.test(JSON.stringify(style)));
-  check("los POIs solo aparecen desde z15 (densidad contenida)",
+  check("los puntos de POI no aparecen antes de z15 (densidad contenida)",
     style.layers.filter((l: any) => l["source-layer"] === "poi").every((l: any) => l.minzoom >= 15));
+  check("los RÓTULOS de POI esperan a z16: la vista de entrada no se llena de texto",
+    style.layers.find((l: any) => l.id === "poi-label")?.minzoom >= 16);
   check("atribución de OpenFreeMap, OpenMapTiles y OSM presente",
     /OpenFreeMap/.test(MAP_ATTRIBUTION) && /OpenMapTiles/.test(MAP_ATTRIBUTION) && /OpenStreetMap/.test(MAP_ATTRIBUTION));
   check("la lista blanca de lo pulsable no está vacía",

@@ -236,16 +236,22 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "poi",
-        minzoom: 15,
-        filter: ["all", ["<=", ["get", "rank"], 12], ["has", "name"]],
+        // Solo al ACERCARSE, y solo lo relevante. En la vista de entrada
+        // mandan la vivienda y los destinos curados; llenarla de rótulos de
+        // clínicas y tiendas es justo lo que hace que un mapa parezca
+        // técnico. Al hacer zoom para explorar, aparecen.
+        minzoom: 16,
+        filter: ["all", ["<=", ["get", "rank"], 6], ["has", "name"]],
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 15, 10, 18, 12],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10, 18, 11.5],
           "text-anchor": "top",
-          "text-offset": [0, 0.6],
-          "text-max-width": 9,
-          "text-padding": 6,
+          "text-offset": [0, 0.7],
+          "text-max-width": 7,
+          "text-padding": 10,
+          // Los de menor rank (más relevantes) ganan sitio si hay colisión.
+          "symbol-sort-key": ["get", "rank"],
         },
         paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.4 },
       },
@@ -254,10 +260,12 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "circle",
         source: "openmaptiles",
         "source-layer": "poi",
+        // Los puntos aparecen antes que los rótulos: insinúan que ahí hay
+        // algo que pulsar sin llenar la escena de texto.
         minzoom: 15,
-        filter: ["all", ["<=", ["get", "rank"], 12], ["has", "name"]],
+        filter: ["all", ["<=", ["get", "rank"], 8], ["has", "name"]],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.2, 18, 3.4],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.4, 18, 3.6],
           "circle-color": "#b9ac96",
           "circle-stroke-color": C.labelHalo,
           "circle-stroke-width": 1,
