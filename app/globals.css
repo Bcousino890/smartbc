@@ -679,10 +679,10 @@
   /* saturate: apaga el rosa de autovías y el amarillo de secundarias, y baja
      el verde a salvia sin matarlo.  sepia: empuja la tierra a perla cálida.
      hue-rotate leve: verdes hacia oliva, azules hacia mineral. */
-  --bcp-map-treatment: saturate(0.58) sepia(0.18) brightness(1.05)
-    contrast(0.93) hue-rotate(-8deg);
+  --bcp-map-treatment: saturate(0.78) sepia(0.12) brightness(1.02)
+    contrast(0.97) hue-rotate(-5deg);
   /* Velo cálido por encima: une la composición con el crema del SmartLink. */
-  --bcp-map-wash: rgba(196, 162, 106, 0.1);
+  --bcp-map-wash: rgba(196, 162, 106, 0.07);
   /* Lienzo bajo las teselas. Con loading="lazy" el mosaico entra al
      acercarse; hasta entonces se ve ESTE papel, no un hueco blanco. */
   --bcp-map-canvas: #efe9dd;

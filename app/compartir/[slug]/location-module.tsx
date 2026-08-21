@@ -27,8 +27,26 @@ import { Compass, Lock, MapPin, Plus, Minus } from "lucide-react";
 import { buildMosaic, contextZoomForWidth, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 
-const OSM_TILE = (z: number, x: number, y: number) =>
-  `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+// Basemap: CARTO Voyager sobre datos de OpenStreetMap.
+//
+// ⚠️ POR QUÉ NO LOS SERVIDORES DE OSM DIRECTAMENTE (2026-08-21): enlazar sus
+// teselas desde el navegador incumple su política de uso y sus servidores
+// voluntarios acabaron devolviendo un 418 "Access blocked". El detalle
+// venenoso es que ese aviso ES UN PNG VÁLIDO: se pinta como una tesela más y
+// ninguna comprobación de "¿cargó la imagen?" lo detecta. Además el estilo
+// estándar lleva incrustados iconos de comercios, bancos e iglesias que
+// ningún filtro de color puede quitar y que le roban el protagonismo al
+// marcador de la vivienda.
+//
+// CARTO sirve los MISMOS datos OSM en un basemap pensado para ser fondo:
+// sin ese ruido de iconos, con parques y agua conservados, sin API key y con
+// @2x para pantallas retina. Cambia la URL, nada más — y la atribución suma
+// a CARTO junto a OpenStreetMap, como exige su licencia.
+const TILE_URL = (z: number, x: number, y: number) =>
+  `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
+const TILE_TEMPLATE = "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png";
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /** Etiqueta corta de categoría. Solo se pinta si aporta; nunca "otro". */
 const CATEGORY_LABEL: Record<string, string> = {
@@ -162,10 +180,7 @@ export function LocationModule({
       // Ya estamos en modo explorar: aquí SÍ queremos los gestos.
       scrollWheelZoom: true,
     });
-    L.tileLayer(OSM_TILE(0, 0, 0).replace("/0/0/0.png", "/{z}/{x}/{y}.png"), {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
+    L.tileLayer(TILE_TEMPLATE, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(map);
 
     const bcpIcon = L.divIcon({
       className: "",
@@ -333,12 +348,13 @@ export function LocationModule({
           <>
             {/* Mosaico de teselas: son <img>, así que el scroll de la página
                 NUNCA se ve interceptado por pasar el ratón por encima. */}
-            <div className="bcp-map-tiles absolute inset-0" aria-hidden>
+            <div className="absolute inset-0" style={{ isolation: "isolate" }} aria-hidden>
+            <div className="bcp-map-tiles absolute inset-0">
               {mosaic?.tiles.map((t) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`${t.z}/${t.x}/${t.y}`}
-                  src={OSM_TILE(t.z, t.x, t.y)}
+                  src={TILE_URL(t.z, t.x, t.y)}
                   alt=""
                   width={256}
                   height={256}
@@ -350,7 +366,8 @@ export function LocationModule({
                 />
               ))}
             </div>
-            <div className="bcp-map-wash absolute inset-0" aria-hidden />
+              <div className="bcp-map-wash absolute inset-0" />
+            </div>
 
             {/* Destinos discretos sobre el mapa: contexto, no chinchetas. */}
             {mosaic && hasPreciseCoords &&
@@ -363,7 +380,7 @@ export function LocationModule({
                   <span
                     key={p.name}
                     aria-hidden
-                    className="absolute z-[2] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold-dark bg-white/95"
+                    className="absolute z-[2] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold-dark bg-white shadow-[0_2px_8px_-2px_rgba(40,28,10,0.6)]"
                     style={{ left: pt.left, top: pt.top }}
                   />
                 );
@@ -376,9 +393,9 @@ export function LocationModule({
                 style={{ left: (size?.w ?? 0) / 2, top: (size?.h ?? 0) / 2 }}
                 aria-hidden
               >
-                <span className="bcp-marker-halo absolute left-0 top-0 block h-10 w-10 rounded-full bg-gold/45" />
+                <span className="bcp-marker-halo absolute left-0 top-0 block h-14 w-14 rounded-full bg-gold/50" />
                 <span className="bcp-marker absolute left-0 top-0 block">
-                  <span className="block h-4 w-4 -translate-x-1/2 translate-y-1/2 rounded-full border-[3px] border-gold bg-ink shadow-[0_8px_22px_-8px_rgba(40,28,10,0.85)]" />
+                  <span className="block h-[22px] w-[22px] -translate-x-1/2 translate-y-1/2 rounded-full bg-ink shadow-[0_10px_26px_-8px_rgba(40,28,10,0.95)] ring-[3px] ring-gold ring-offset-[3px] ring-offset-white/95" />
                 </span>
               </span>
             )}
@@ -403,13 +420,12 @@ export function LocationModule({
             {/* Atribución obligatoria también en estado bloqueado. */}
             <span className="absolute bottom-1 right-1.5 z-[4] rounded bg-white/78 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
               ©{" "}
-              <a
-                href="https://www.openstreetmap.org/copyright"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline-offset-2 hover:underline"
-              >
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
                 OpenStreetMap
+              </a>{" "}
+              ©{" "}
+              <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
+                CARTO
               </a>
             </span>
           </>
