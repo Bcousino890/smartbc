@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Building2, Home, Sparkles, Tag } from "lucide-react";
+import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
@@ -57,6 +58,16 @@ export default async function AdminPropiedadesPage({
         titleKey="adminProps.title"
         subtitleKey="adminProps.subtitle"
       />
+
+      {/* Acceso a la cola de enriquecimiento de Property Stories. */}
+      <div className="mt-4">
+        <Link
+          href={`/${country}/admin/propiedades/story-review`}
+          className="crm-button inline-flex items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-4 py-2.5 text-gold-dark transition hover:bg-gold/20"
+        >
+          Enriquecimiento de stories
+        </Link>
+      </div>
 
       <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

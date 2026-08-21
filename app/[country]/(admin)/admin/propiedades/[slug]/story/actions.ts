@@ -13,6 +13,48 @@ import { generateStoryForProperty } from "@/lib/services/story/engine";
 import { classifyPropertyPhotos } from "@/lib/services/photos/classify";
 import { probePropertyVideos } from "@/lib/services/video/probe";
 import { copyWordCount } from "@/lib/services/story/validate";
+import { evaluateGate } from "@/lib/services/story/gate";
+
+/** Re-evalúa el quality gate compartido para una versión concreta. */
+async function evaluateGateForVersion(db: any, propertyId: string, versionId: string) {
+  const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }] = await Promise.all([
+    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at").eq("id", propertyId).maybeSingle(),
+    db.from("property_story_blocks").select("id, chapter, copy, status, claim_ids").eq("version_id", versionId).neq("status", "rejected").order("position"),
+    db.from("property_story_claims").select("id, source_text, fact, category").eq("version_id", versionId),
+    db.from("property_photos").select("position, ai_class, ai_confidence, class_override").eq("property_id", propertyId).order("position"),
+  ]);
+  if (!property) return null;
+  const key = (property.subzone || property.zone || "")
+    .toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const { data: hood } = await db.from("neighborhoods").select("display_name").eq("zone_key", key).maybeSingle();
+  return evaluateGate({
+    property,
+    blocks: blocks ?? [],
+    claims: claims ?? [],
+    photos: photos ?? [],
+    neighborhoodDisplayName: hood?.display_name ?? null,
+  });
+}
+
+/** Siguiente propiedad de la cola con el mismo filtro (acción SIGUIENTE). */
+export async function nextInQueueAction(
+  country: string,
+  bucket: string,
+  currentSlug: string,
+): Promise<string | null> {
+  await requireStaff();
+  const { getEnrichmentQueue } = await import("@/lib/db/queries/story-review");
+  const { rows } = await getEnrichmentQueue();
+  const pool = rows.filter(
+    (r) => r.available && (bucket === "all" || r.buckets.includes(bucket as any)),
+  );
+  const idx = pool.findIndex((r) => r.slug === currentSlug);
+  const next = idx >= 0 ? pool[idx + 1] : pool[0];
+  return next
+    ? `/${country}/admin/propiedades/${next.slug}/story?from=queue&bucket=${bucket}`
+    : null;
+}
 
 async function requireStaff() {
   const profile = await getCurrentProfile();
@@ -114,6 +156,18 @@ export async function approveVersionAction(versionId: string, path: string) {
     return {
       ok: false as const,
       error: `Quedan ${conflicts} bloque(s) en conflicto: resuélvelos o recházalos antes de publicar.`,
+    };
+  }
+
+  // QUALITY GATE REAL (mismo módulo que el batch): se re-evalúa en el momento
+  // de publicar, con el estado actual de los bloques tras las ediciones.
+  const gate = await evaluateGateForVersion(db, version.property_id, versionId);
+  if (gate && !gate.pass) {
+    return {
+      ok: false as const,
+      error:
+        "El quality gate sigue bloqueando: " +
+        gate.failures.map((f) => f.label + (f.detail ? ` (${f.detail})` : "")).join(" · "),
     };
   }
 

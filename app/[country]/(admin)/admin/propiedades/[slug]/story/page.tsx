@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getPropertyBySlugForAdmin } from "@/lib/db/queries/properties";
 import { getStoryForAdmin } from "@/lib/db/queries/story";
+import { getStoryReviewDetail } from "@/lib/db/queries/story-review";
 import { createAdminClient } from "@/lib/db/admin";
 import { StoryClient } from "./story-client";
 
@@ -11,10 +12,13 @@ export const dynamic = "force-dynamic";
 
 export default async function StoryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ country: string; slug: string }>;
+  searchParams: Promise<{ from?: string; bucket?: string }>;
 }) {
   const { country, slug } = await params;
+  const { from, bucket } = await searchParams;
   const row = (await getPropertyBySlugForAdmin(slug)) as
     | { id: string; title: string; description: string | null }
     | null;
@@ -36,6 +40,10 @@ export default async function StoryPage({
       .eq("type", "video"),
   ]);
 
+  // Quality gate en vivo (mismo módulo que el batch y la cola): muestra qué
+  // bloquea la publicación AHORA, con el estado actual de los bloques.
+  const detail = await getStoryReviewDetail(slug);
+
   return (
     <StoryClient
       country={country}
@@ -48,6 +56,9 @@ export default async function StoryPage({
       claims={story.claims}
       photos={photosRes.data ?? []}
       videos={videosRes.data ?? []}
+      gate={detail?.gate ?? null}
+      fromQueue={from === "queue"}
+      bucket={bucket ?? "short"}
     />
   );
 }

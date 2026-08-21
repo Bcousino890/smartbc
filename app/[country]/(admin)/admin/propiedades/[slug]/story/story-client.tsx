@@ -13,6 +13,7 @@ import {
   classifyPhotosAction,
   disableStoryAction,
   generateStoryAction,
+  nextInQueueAction,
   probeVideosAction,
   setBlockStatusAction,
   updateBlockCopyAction,
@@ -56,6 +57,9 @@ export function StoryClient({
   claims,
   photos,
   videos,
+  gate,
+  fromQueue,
+  bucket,
 }: {
   country: string;
   slug: string;
@@ -67,11 +71,31 @@ export function StoryClient({
   claims: Claim[];
   photos: Array<{ id: string; ai_class: string | null; class_override: string | null }>;
   videos: Array<{ id: string; source: string | null; format: string | null; width: number | null; probed_at: string | null }>;
+  gate?: { pass: boolean; failures: Array<{ code: string; label: string; blockIds: string[]; detail?: string }> } | null;
+  fromQueue?: boolean;
+  bucket?: string;
 }) {
   const path = `/${country}/admin/propiedades/${slug}/story`;
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
+  // Bloques señalados por el quality gate: se resaltan para que el agente sepa
+  // exactamente cuál resolver sin leerse la story entera.
+  const flaggedBlocks = new Map<string, string[]>();
+  for (const f of gate?.failures ?? []) {
+    for (const id of f.blockIds) {
+      flaggedBlocks.set(id, [...(flaggedBlocks.get(id) ?? []), f.label + (f.detail ? ` (${f.detail})` : "")]);
+    }
+  }
+
+  const goNext = () => {
+    setMessage(null);
+    startTransition(async () => {
+      const url = await nextInQueueAction(country, bucket ?? "short", slug);
+      if (url) window.location.href = url;
+      else setMessage("No quedan más propiedades en este filtro de la cola.");
+    });
+  };
 
   const latest = versions[0] ?? null;
   const approvedVersion = versions.find((v) => v.status === "approved") ?? null;
@@ -92,12 +116,60 @@ export function StoryClient({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
-      <Link
-        href={`/${country}/admin/propiedades/${slug}`}
-        className="inline-flex items-center gap-1.5 text-sm text-ink/55 hover:text-ink"
-      >
-        <ArrowLeft size={14} /> Volver a la propiedad
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href={
+            fromQueue
+              ? `/${country}/admin/propiedades/story-review?bucket=${bucket ?? "short"}`
+              : `/${country}/admin/propiedades/${slug}`
+          }
+          className="inline-flex items-center gap-1.5 text-sm text-ink/55 hover:text-ink"
+        >
+          <ArrowLeft size={14} /> {fromQueue ? "Volver a la cola" : "Volver a la propiedad"}
+        </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/compartir/${slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="crm-button inline-flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-3 py-2 text-ink/75 transition hover:border-gold/50"
+          >
+            Ver SmartLink
+          </a>
+          {fromQueue && (
+            <Button variant="secondary" disabled={pending} onClick={goNext}>
+              Siguiente →
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Veredicto del quality gate — mismo módulo que el batch publisher. */}
+      {gate && (
+        <div
+          className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
+            gate.pass
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-amber-200 bg-amber-50 text-amber-900"
+          }`}
+        >
+          {gate.pass ? (
+            <span>✓ Supera el quality gate: se puede publicar.</span>
+          ) : (
+            <div>
+              <p className="font-bold">Bloqueado por el quality gate:</p>
+              <ul className="mt-1 space-y-0.5">
+                {gate.failures.map((f) => (
+                  <li key={f.code}>
+                    · {f.label}
+                    {f.detail ? ` — ${f.detail}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="crm-section-title text-ink">Story del SmartLink</h1>
@@ -241,6 +313,11 @@ export function StoryClient({
                   <div className="flex items-center justify-between gap-3">
                     <p className="crm-label-sm text-ink/60">
                       {CHAPTER_HEADINGS[b.chapter]}
+                      {flaggedBlocks.has(b.id) && (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">
+                          ⚠ {flaggedBlocks.get(b.id)!.join(" · ")}
+                        </span>
+                      )}
                     </p>
                     <div className="flex items-center gap-1.5">
                       <Pill
