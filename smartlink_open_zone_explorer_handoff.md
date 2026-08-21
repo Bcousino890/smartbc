@@ -133,10 +133,8 @@ sin dato utilizable, estilo de marca sin clave, y analítica por lista blanca.
 `test:smartlink`, `test:tracking`, `test:neighborhoods`, typecheck y build en
 verde.
 
-⚠️ **Pendiente de completar:** la matriz visual de las 10 capturas del §19
-sobre Goya, Almagro, El Viso, propiedad de estudiante y móvil. Se han validado
-Recoletos en escritorio (overview, exploración y lugar seleccionado). **No
-doy por cerrada la QA visual completa.**
+La matriz visual completa se cerró después — ver **FINAL VISUAL QA** al final
+de este documento.
 
 ---
 
@@ -156,4 +154,95 @@ doy por cerrada la QA visual completa.**
 
 ---
 
-# BCP ZONE EXPLORER — OPEN MAP PREMIUM BASELINE
+
+---
+
+# FINAL VISUAL QA · 2026-08-22
+
+Matriz completa ejecutada contra producción, con revisión visual de las
+capturas una a una — los tests no la sustituyen.
+
+## Resultado
+
+```
+VISUAL QA:            29 / 29 PASS
+DESKTOP (1440):       PASS   · Recoletos, Goya, Almagro, El Viso
+DESKTOP @125%:        PASS
+MOBILE (390):         PASS
+STUDENT:              PASS   · sección presente · universidad enfocada (TAI)
+OSM DISCOVERY:        PASS   · POI real pulsado en los 4 barrios
+BCP CURATED:          PASS   · ficha, foco y encuadre en los 4 barrios
+
+SCROLL HIJACK:        0      (rueda sobre el mapa: la página baja, el mapa no)
+JS ERRORS:            0
+MAP LOAD FAILURES:    0      (0 respuestas de OpenFreeMap ≥400)
+DOBLE INSTANCIA:      0      (1 mapa por escena en todos los casos)
+```
+
+Capturas en `~/Desktop/zone-explorer-qa/` — overview, curado, explore y
+descubierto por barrio, más 125%, móvil (overview / explore / ficha) y
+universidad.
+
+## Lo que se comprobó en cada estado
+
+| Criterio | Resultado |
+|---|---|
+| LA VIVIENDA visible y dentro del lienzo | en los 29 casos |
+| La ficha NUNCA tapa a la vivienda | verificado por intersección de rectángulos |
+| La ficha cabe entera en el escenario | sí, incluido móvil |
+| Ficha en móvil ocupa poco del mapa | **22%** del escenario |
+| Rótulos del rail sin cortes feos | 0 truncamientos en 1440, 125% y 390 |
+| Atribución presente | en los 29 casos |
+| Overflow horizontal | ninguno |
+
+## Lugares descubiertos, reales, en cada barrio
+
+Recoletos → *Instituto de Educación Secundaria Beatriz Galindo* (Educación) ·
+Goya → *Príncipe de Vergara* (Transporte) · Almagro → *AGE Ginecología y
+Obstetricia* (Salud) · El Viso → *Lima-Santiago Bernabéu* (Transporte).
+
+Todos con marcador **neutro**, ficha propia y *"En la zona de la vivienda"* —
+ningún minuto inventado. La distinción con lo curado (champán, con su `≈ N min`
+verificado) se lee de un vistazo sin ser dos sistemas visuales distintos.
+
+**Un POI educativo descubierto no se confunde con una universidad curada:**
+el de Recoletos es un instituto de secundaria con marcador neutro y sin ETA;
+las universidades salen en su sección, en champán y con tiempo verificado.
+
+## Incidencia encontrada y corregida en esta pasada
+
+**La atribución se comía el control de salida en móvil.** A 390 px ocupa dos
+líneas y el pill *Salir de la zona* quedaba encima, difícil de pulsar. El
+control sube por encima de ella en móvil y mantiene su sitio en escritorio.
+
+## MapLibre congelado
+
+```
+maplibre-gl@5.24.0 — NO SUBIR A V6
+```
+
+La v6 se distribuye solo como ESM y su web worker se construye con la URL de
+la *página* bajo el bundling de Next: el mapa se monta, pinta controles y **no
+carga una sola tesela**. Hay un **guardarraíl en `npm run test:zone`** que
+falla si la versión instalada deja de ser 5.x, para que no se cuele en una
+actualización distraída.
+
+## Línea base visual
+
+Overview y exploración se distinguen deliberadamente: el overview es la
+composición curada y calmada (área de foco, cápsulas, rail), y solo al entrar
+en *Explorar la zona* aparece el mapa vectorial con sus POIs pulsables y sus
+controles. Densidad equilibrada por tramos de `rank` reales, no por un umbral
+arbitrario: puntos desde z15, rótulos desde z16, cola `rank ≥ 20` descartada.
+
+## Limitaciones que siguen
+
+1. OpenFreeMap sin SLA — la abstracción existe para poder pasar a PMTiles
+   autoalojado sin tocar producto.
+2. Sin routing: curados con `≈` geométrico, descubiertos sin tiempo.
+3. Sin búsqueda, deliberado.
+4. La matriz se ejecutó sobre cuatro barrios de Madrid centro-norte; zonas con
+   cartografía muy distinta (Pozuelo, Torrelodones) no se han revisado
+   visualmente una a una.
+
+# BCP ZONE EXPLORER — COMPLETE & FROZEN
