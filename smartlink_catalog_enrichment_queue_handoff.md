@@ -549,8 +549,99 @@ QA ejecutada: `test:smartlink` (66 checks), `test:tracking`, `test:neighborhoods
 publicadas en 390 y 1440 @125% (story visible, sin "Descripción" residual, sin
 key fact Planta en BC-0002, tracking 200, sin overflow, sin errores JS).
 
+## FACTS-LED EXPERIENCE — FULL CATALOG COVERAGE
+
+Property Story y SmartLink 2.0 dejan de ser la misma métrica. Las 84
+propiedades sin story aprobada ya NO vuelven al patrón visual antiguo: entran
+en el estado de experiencia **FACTS-LED** — estructura 2.0 completa (hero,
+identity, key facts, details, barrio, ubicación+POIs, condiciones, BCP, CTA)
+sin narrativa editorial aprobada. Engine v4.1 intacto; ningún gate de Story
+relajado; ninguna story cambió de status.
+
+### Cómo se deriva (dinámico, sin migración por propiedad)
+
+`getStoryExperiencePublic()` decide EN CADA RENDER:
+- story aprobada → `complete` (sin bloques pendientes) / `partial` (con
+  bloques en conflicto pendientes) / `sparse` (nota del publicador);
+- sin story aprobada → **`facts_led`**. Si mañana una facts-led obtiene story
+  aprobada, pasa sola a su estado real. Cero backfill.
+
+### Narrativa dentro de FACTS-LED (regla A/B/C)
+
+**A · Capítulos limpios del último borrador**, proyectados con el MISMO
+contrato de seguridad que la publicación (`planPublication`): fuera los
+bloques en conflicto, los apoyados en claims conflictivos, los cortos y
+cualquier bloque señalado por un fallo del gate (entidad sin respaldo,
+duplicado, boilerplate, >70 palabras…). Solo se ignoran los fallos a nivel de
+PROPIEDAD (pocos capítulos, pocas fotos): exactamente lo que facts-led no
+exige. La proyección se descarta entera si no sobrevive al menos un capítulo
+NARRATIVO — un overview/barrio suelto no sustituye a la descripción (borde
+real encontrado en la QA: 8 propiedades quedaban sin prosa alguna).
+
+**B · Sin capítulos limpios pero descripción útil** → módulo **"Información
+de la vivienda"**: el splitter determinista de siempre (≤70 palabras, sin
+headings temáticos, sin IA), ahora excluyendo frases enteras del boilerplate
+conocido (la misma `BOILERPLATE_RE` del gate — una sola definición).
+
+**C · Descripción extremadamente pobre** (<15 palabras tras limpiar) → el
+módulo se omite entero. Facts > relleno. El muro `<h2>Descripción</h2>`
+ha desaparecido del renderer.
+
+### Media proporcional
+
+El hero ya era una sola imagen (sin mosaico) y la galería es lightbox bajo
+demanda: con 1-3 fotos no se duplica ni se finge media-rich. Con 0 fotos el
+hero se omite y el resto de la estructura funciona (verificado con BC-0916).
+
+### Admin y analytics
+
+- Cola de enriquecimiento: fallback/blocked se presentan como
+  **"FACTS-LED · SmartLink 2.0 activo · pendiente de enriquecimiento
+  editorial"** — un estado, no un error. Los buckets internos no cambian.
+- `page_views.experience_state` (migración **0147**): complete | partial |
+  sparse | facts_led, con lista blanca en cliente, servidor y CHECK de BD
+  (jamás texto libre del navegador). Contrato de tracking intacto
+  (`test:tracking` ampliado). Verificado en producción: las visitas llegan
+  con `facts_led` y `sparse` correctos.
+
+### QA — 32 FACTS-LED reales (matriz completa)
+
+Cobertura: 0/1/2+ capítulos limpios, 0-3 y 4+ fotos, descripción larga y
+corta, con y sin features, barrio curado, vídeo, tipos y operaciones
+distintas. **32/32 en verde** tras el fix del borde A/B. Reparto real: 28
+renderizan capítulos limpios, 3 "Información de la vivienda", 1 solo-facts
+(BC-1401, descripción de 80 caracteres correctamente omitida).
+Pasada visual Playwright (390 y 1440 @125%) sobre 6 casos de la matriz —
+incluido 0 fotos y 1 foto: sin overflow, sin errores JS, tracking 200.
+Ningún muro "Descripción", ningún conflicto visible, ningún heading vacío.
+
+⚠️ Nota de QA: dos falsas alarmas del harness durante la pasada (headings
+reales de capítulo son "La finca" / "Vida al aire libre" / "Acabados y
+confort", no los nombres cortos), corregidas en el harness — la capa era
+correcta.
+
+### Cifras finales
+
+```
+ACTIVE PROPERTIES:            683
+
+SMARTLINK 2.0 EXPERIENCE:     683 / 683 = 100%
+
+PROPERTY STORY STRUCTURED:    599   (87,7%)
+  COMPLETE: 264
+  PARTIAL:  228
+  SPARSE:   107
+
+FACTS-LED:                     84   (12,3%)
+
+NO SMARTLINK 2.0 EXPERIENCE:    0
+
+PUBLIC CONFLICT CLAIMS: 0
+PUBLIC CONFLICT BLOCKS: 0
+```
+
 # CATALOG PROPERTY STORY ENRICHMENT QUEUE — COMPLETE
-**SmartLink 2.0 estructurado: 599/683 (87,7%)** · 264 completas · 228 parciales · 107 sparse · 84 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
+**SmartLink 2.0 EXPERIENCE: 683/683 (100%)** · Property Story 599 (264 completas · 228 parciales · 107 sparse) · 84 FACTS-LED · 0 conflictos en público · Engine v4.1 FROZEN
 **Capa de barrio: 29 barrios curados** · 143 POIs verificados contra OSM · 0 coordenadas escritas a mano
 **Tracking público reparado**: los page views de /compartir y /c vuelven a contarse, con attribution por token verificada
 **Fallback restante**: 84 = 52 necesitan media · ~26 conflictos abiertos · ~6 descripción pobre
