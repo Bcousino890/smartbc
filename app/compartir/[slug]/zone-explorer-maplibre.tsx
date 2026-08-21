@@ -64,14 +64,17 @@ export function ZoneExplorerMapLibre({
     (async () => {
       let maplibre: any;
       try {
-        // maplibre-gl v6 exporta con nombre, no por defecto.
-        maplibre = await import("maplibre-gl");
+        // ⚠️ v5, no v6: la v6 se distribuye SOLO como ESM y su web worker se
+        // construye con la URL de la propia página bajo el bundling de Next.
+        // El resultado era un mapa que se monta, pinta controles… y no carga
+        // una sola tesela, porque el worker que las parsea nunca arranca.
+        maplibre = (await import("maplibre-gl")).default;
         // El CSS también bajo demanda: no lastra a quien nunca explora.
         if (!document.getElementById("maplibre-css")) {
           const link = document.createElement("link");
           link.id = "maplibre-css";
           link.rel = "stylesheet";
-          link.href = "https://unpkg.com/maplibre-gl@6.5.0/dist/maplibre-gl.css";
+          link.href = "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css";
           document.head.appendChild(link);
         }
       } catch {

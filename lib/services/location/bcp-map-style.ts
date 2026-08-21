@@ -45,7 +45,9 @@ const C = {
 };
 
 const FONT = ["Noto Sans Regular"];
-const FONT_MEDIUM = ["Noto Sans Medium"];
+// OpenFreeMap solo sirve "Noto Sans Regular" (Medium da 404): pedir una
+// fuente inexistente deja las etiquetas sin dibujar.
+const FONT_MEDIUM = ["Noto Sans Regular"];
 
 /** El estilo completo. Puro: se puede inspeccionar y testear sin navegador. */
 export function bcpLuxuryMadridStyle(): Record<string, unknown> {
