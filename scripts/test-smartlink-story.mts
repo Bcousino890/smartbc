@@ -364,6 +364,48 @@ console.log("Override de planta:");
   check("BC-0002 con override 'none' → null, el key fact Planta no se pinta", resolveFloor("none", [], null, desc) === null);
 }
 
+// ── 6b) Geometría del mosaico de teselas (Luxury Location Module) ──
+console.log("Mosaico del mapa:");
+{
+  const { buildMosaic, latLngToTile, contextZoomForWidth } = await import("../lib/geo/tile-math");
+  // Se contrasta contra la MISMA proyección calculada por otro camino
+  // (Web Mercator con ln·tan en vez de asinh: equivalentes matemáticamente,
+  // implementaciones distintas). Comprobación real, no una constante copiada.
+  const t = latLngToTile(40.4168, -3.7038, 15);
+  const n = 2 ** 15;
+  const expX = ((-3.7038 + 180) / 360) * n;
+  const phi = (40.4168 * Math.PI) / 180;
+  const expY = ((1 - Math.log(Math.tan(Math.PI / 4 + phi / 2)) / Math.PI) / 2) * n;
+  check("proyección coincide con Web Mercator por otra vía",
+    Math.abs(t.x - expX) < 1e-6 && Math.abs(t.y - expY) < 1e-6,
+    JSON.stringify({ got: t, expX, expY }));
+
+  const W = 900, H = 520;
+  const m = buildMosaic({ lat: 40.4168, lng: -3.7038, zoom: 15, width: W, height: H });
+  check("cubre todo el contenedor sin huecos", m.tiles.length >= Math.ceil(W / 256) * Math.ceil(H / 256), `${m.tiles.length} teselas`);
+  const covered = m.tiles.every((x) => x.left > -256 && x.top > -256 && x.left < W && x.top < H);
+  check("ninguna tesela fuera del lienzo", covered);
+  check("todas las teselas dentro del rango del zoom",
+    m.tiles.every((x) => x.x >= 0 && x.x < 2 ** 15 && x.y >= 0 && x.y < 2 ** 15));
+
+  // El centro proyecta exactamente al centro: el marcador cae sobre la casa.
+  const c = m.project(40.4168, -3.7038);
+  check("el centro proyecta al centro del contenedor",
+    Math.abs(c.left - W / 2) < 0.01 && Math.abs(c.top - H / 2) < 0.01, JSON.stringify(c));
+  // Un punto al norte proyecta ARRIBA (y crece hacia el sur).
+  const north = m.project(40.4268, -3.7038);
+  check("un POI al norte se dibuja por encima del centro", north.top < c.top);
+  const east = m.project(40.4168, -3.6938);
+  check("un POI al este se dibuja a la derecha", east.left > c.left);
+
+  // El zoom se adapta al ancho para enseñar una porción comparable de ciudad.
+  const zMobile = contextZoomForWidth(358, 40.42);
+  const zDesktop = contextZoomForWidth(1100, 40.42);
+  check("móvil usa menos zoom que escritorio para el mismo barrio", zMobile < zDesktop, `${zMobile} vs ${zDesktop}`);
+  check("zoom siempre en rango de contexto de barrio (13-17)",
+    [zMobile, zDesktop].every((z) => z >= 13 && z <= 17), `${zMobile}/${zDesktop}`);
+}
+
 // ── 7) Promoción dinámica del estado de experiencia (baseline) ──
 console.log("Experience state (promoción automática facts_led → story):");
 {

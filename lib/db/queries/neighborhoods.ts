@@ -16,6 +16,10 @@ export type PublicNeighborhood = {
   displayName: string;
   intro: string;
   pois: PoiTravel[];
+  /** Distrito administrativo (Madrid capital) — null en municipios propios. */
+  district: string | null;
+  /** Municipio. 'Madrid' salvo Pozuelo, Torrelodones… */
+  municipality: string | null;
 };
 
 export function normalizeZoneKey(value: string | null | undefined): string | null {
@@ -81,11 +85,17 @@ export async function getNeighborhoodPublic(params: {
     // Prioridad: subzone antes que zone, y dentro de cada una el zone_key
     // canónico antes que un alias. Así una subzona buena nunca la desplaza
     // un alias del distrito, que es más genérico.
-    let hood: { id: string; display_name: string; intro: string } | null = null;
+    let hood: {
+      id: string;
+      display_name: string;
+      intro: string;
+      district: string | null;
+      municipality: string | null;
+    } | null = null;
     for (const key of keys) {
       const { data: exact } = await db
         .from("neighborhoods")
-        .select("id, display_name, intro")
+        .select("id, display_name, intro, district, municipality")
         .eq("zone_key", key)
         .eq("active", true)
         .maybeSingle();
@@ -95,7 +105,7 @@ export async function getNeighborhoodPublic(params: {
       }
       const { data: byAlias } = await db
         .from("neighborhoods")
-        .select("id, display_name, intro")
+        .select("id, display_name, intro, district, municipality")
         .contains("aliases", [key])
         .eq("active", true)
         .maybeSingle();
@@ -141,7 +151,13 @@ export async function getNeighborhoodPublic(params: {
         .slice(0, 6) as PoiTravel[];
     }
 
-    return { displayName: hood.display_name, intro: hood.intro, pois };
+    return {
+      displayName: hood.display_name,
+      intro: hood.intro,
+      pois,
+      district: hood.district ?? null,
+      municipality: hood.municipality ?? null,
+    };
   } catch {
     // Migración sin aplicar → el SmartLink simplemente no muestra el módulo.
     return null;

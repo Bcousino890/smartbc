@@ -660,3 +660,94 @@
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   SMARTLINK 2.0 · Luxury Location Module — cartografía y motion.
+
+   El mapa en estado bloqueado es un mosaico de teselas OSM compuesto por
+   nosotros (lib/geo/tile-math.ts). Su paleta se consigue con UN tratamiento
+   de color declarado aquí como token, no con valores sueltos por el
+   componente: así "el color del mapa" se ajusta en un sitio.
+
+   Objetivo del tratamiento (§6 del brief): tierra en perla cálida, parques
+   en salvia desaturado PERO visibles, agua en azul mineral apagado, viales
+   principales en champán en vez del rosa/amarillo chillón del estilo OSM
+   estándar. Ni escala de grises (frío, parece un mapa desactivado) ni beige
+   plano (los parques desaparecen).
+   ========================================================================== */
+.smartlink-root {
+  /* saturate: apaga el rosa de autovías y el amarillo de secundarias, y baja
+     el verde a salvia sin matarlo.  sepia: empuja la tierra a perla cálida.
+     hue-rotate leve: verdes hacia oliva, azules hacia mineral. */
+  --bcp-map-treatment: saturate(0.58) sepia(0.18) brightness(1.05)
+    contrast(0.93) hue-rotate(-8deg);
+  /* Velo cálido por encima: une la composición con el crema del SmartLink. */
+  --bcp-map-wash: rgba(196, 162, 106, 0.1);
+}
+
+.bcp-map-tiles {
+  filter: var(--bcp-map-treatment);
+  /* Las teselas son imágenes: JAMÁS capturan rueda, arrastre ni gesto táctil.
+     Esta línea es la que garantiza que pasar el ratón por encima del mapa no
+     secuestre el scroll de la página (§D del brief). */
+  pointer-events: none;
+  user-select: none;
+}
+
+.bcp-map-wash {
+  background: var(--bcp-map-wash);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* Marcador BCP: aparece una vez, sin pulso infinito. */
+@keyframes bcpMarkerIn {
+  from { opacity: 0; transform: translate(-50%, -100%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+}
+@keyframes bcpHaloOnce {
+  0%   { opacity: 0.5; transform: translate(-50%, -50%) scale(0.7); }
+  70%  { opacity: 0;   transform: translate(-50%, -50%) scale(2.1); }
+  100% { opacity: 0;   transform: translate(-50%, -50%) scale(2.1); }
+}
+.bcp-marker { animation: bcpMarkerIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bcp-marker-halo { animation: bcpHaloOnce 1600ms ease-out 320ms both; }
+
+/* Entrada escalonada muy contenida de los nodos de conectividad y destinos. */
+@keyframes bcpRise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bcp-rise { animation: bcpRise 460ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bcp-marker,
+  .bcp-marker-halo,
+  .bcp-rise {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* El marcador se posiciona con transform: sin animación necesita su
+     desplazamiento base o se dibujaría descolocado. */
+  .bcp-marker { transform: translate(-50%, -100%) !important; }
+  .bcp-marker-halo { display: none !important; }
+}
+
+/* Leaflet solo existe en modo explorar; sus controles se integran en la
+   composición en vez de dominarla. La atribución se mantiene SIEMPRE
+   (obligación de licencia), solo se hace discreta. */
+.bcp-map-live .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 10px;
+  color: rgba(40, 28, 10, 0.62);
+  padding: 1px 6px;
+}
+.bcp-map-live .leaflet-control-attribution a { color: rgba(40, 28, 10, 0.75); }
+.bcp-map-live .leaflet-control-zoom a {
+  border: 0;
+  color: #2c2113;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 6px 18px -10px rgba(40, 28, 10, 0.5);
+}
+.bcp-map-live .leaflet-tile-pane { filter: var(--bcp-map-treatment); }

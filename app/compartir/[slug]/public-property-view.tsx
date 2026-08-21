@@ -29,6 +29,7 @@ import { ATICO_FLOOR } from "@/lib/floor";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { Property } from "@/lib/types";
 import { useAnalytics } from "@/hooks/use-analytics";
+import { LocationModule } from "./location-module";
 
 // ============================================================================
 // SMARTLINK 2.0 · Adaptive Property Renderer
@@ -67,6 +68,8 @@ export type NeighborhoodData = {
   displayName: string;
   intro: string;
   pois: PoiTravel[];
+  district?: string | null;
+  municipality?: string | null;
 };
 
 // Qué clases de foto alimentan cada capítulo (regla foto→capítulo del sprint:
@@ -486,14 +489,19 @@ export function PublicPropertyView({
           </section>
         )}
 
-        {/* 15 · UBICACIÓN + NEARBY */}
-        <LocationSection
+        {/* 15 · UBICACIÓN — Luxury Location Module */}
+        <LocationModule
           zone={property.zone}
           lat={property.latitude ?? null}
           lng={property.longitude ?? null}
           pois={neighborhood?.pois ?? []}
-          onLocationView={() => trackerRef.current?.trackEvent("location_view")}
-          onPoiClick={(name) => trackerRef.current?.trackEvent("poi_click", { name })}
+          neighborhood={neighborhood ?? null}
+          fallbackCoords={
+            ZONE_COORDS[property.zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 }
+          }
+          onView={() => trackerRef.current?.trackEvent("location_module_view")}
+          onExplore={() => trackerRef.current?.trackEvent("map_explore")}
+          onPoiClick={(name) => trackerRef.current?.trackEvent("poi_select", { name })}
         />
 
         {/* 16 · CONDICIONES + 17 · SERVICIO PRIVADO BCP */}
@@ -1129,121 +1137,6 @@ const ZONE_COORDS: Record<string, { lat: number; lng: number; zoom: number }> = 
   Centro: { lat: 40.4168, lng: -3.7038, zoom: 15 },
   "La Moraleja": { lat: 40.5197, lng: -3.6332, zoom: 14 },
 };
-
-function LocationSection({
-  zone,
-  lat,
-  lng,
-  pois,
-  onLocationView,
-  onPoiClick,
-}: {
-  zone: string;
-  lat: number | null;
-  lng: number | null;
-  pois: PoiTravel[];
-  onLocationView: () => void;
-  onPoiClick: (name: string) => void;
-}) {
-  const ref = useRef<HTMLElement | null>(null);
-  const seen = useRef(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting) && !seen.current) {
-          seen.current = true;
-          onLocationView();
-          obs.disconnect();
-        }
-      },
-      { threshold: 0.3 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [onLocationView]);
-
-  const hasPreciseCoords = lat != null && lng != null;
-  const fallback = ZONE_COORDS[zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 };
-  const coords = hasPreciseCoords ? { lat: lat!, lng: lng!, zoom: 16 } : fallback;
-  const delta = hasPreciseCoords ? 0.0025 : 0.012;
-  const bbox = [
-    coords.lng - delta,
-    coords.lat - delta * 0.6,
-    coords.lng + delta,
-    coords.lat + delta * 0.6,
-  ].join(",");
-  const src = hasPreciseCoords
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lng}`
-    : `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
-  const externalLink = `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=${coords.zoom}/${coords.lat}/${coords.lng}`;
-
-  return (
-    <section
-      ref={ref}
-      className="mt-5 overflow-hidden rounded-2xl border border-gold/20 bg-white/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm"
-    >
-      <div className="px-6 pt-6 md:px-8 md:pt-8">
-        <h2 className="crm-section-title text-ink">Ubicación · {zone}</h2>
-        <p className="mt-1 text-xs text-ink/55">
-          {hasPreciseCoords
-            ? "Ubicación exacta de la propiedad."
-            : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
-        </p>
-      </div>
-      <div className="relative mt-4 aspect-[4/3] w-full md:aspect-[16/10]">
-        <iframe
-          title={`Mapa de ${zone}`}
-          src={src}
-          className={`h-full w-full border-0 ${hasPreciseCoords ? "" : "pointer-events-none"}`}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-        {!hasPreciseCoords && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="h-32 w-32 rounded-full border-2 border-gold/80 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.18)] md:h-40 md:w-40" />
-          </div>
-        )}
-      </div>
-
-      {/* NEARBY: solo con coords reales + POIs curados. Tiempos calculados
-          por geometría, presentados como aproximados — jamás inventados. */}
-      {pois.length > 0 && (
-        <div className="px-6 pb-2 pt-5 md:px-8">
-          <p className="crm-label-sm text-gold-dark">Cerca de la vivienda</p>
-          <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
-            {pois.map((p) => (
-              <li key={p.name} className="flex items-baseline justify-between gap-3 text-sm">
-                <button
-                  type="button"
-                  onClick={() => onPoiClick(p.name)}
-                  className="truncate text-left text-ink/80 hover:text-ink"
-                >
-                  {p.name}
-                </button>
-                <span className="shrink-0 whitespace-nowrap crm-meta text-ink/55">
-                  ≈ {p.minutes} min {p.mode === "walk" ? "a pie" : "en coche"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="px-6 py-3 md:px-8">
-        <a
-          href={externalLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-gold-dark hover:underline"
-        >
-          Ver mapa en pantalla completa ↗
-        </a>
-      </div>
-    </section>
-  );
-}
 
 // ─── 03 · KEY FACTS helpers ─────────────────────────────────────────────────
 

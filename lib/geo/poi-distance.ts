@@ -11,6 +11,11 @@ export type PoiTravel = {
   category: string;
   minutes: number;
   mode: "walk" | "drive";
+  /** Coordenadas del PUNTO DE INTERÉS (Retiro, Serrano, metro…), necesarias
+   *  para situarlo en el mapa. Son landmarks públicos: no revelan nada de la
+   *  vivienda ni amplían el contrato público sobre ella. */
+  latitude: number;
+  longitude: number;
 };
 
 const EARTH_RADIUS_KM = 6371;
@@ -78,7 +83,13 @@ export function computePoiTravel(
 
   const canWalk = poi.travel_modes.includes("walk") && walkMin <= MAX_WALK_MINUTES;
   const canDrive = poi.travel_modes.includes("drive");
-  if (canWalk) return { name: poi.name, category: poi.category, minutes: walkMin, mode: "walk" };
-  if (canDrive) return { name: poi.name, category: poi.category, minutes: driveMin, mode: "drive" };
+  const base = {
+    name: poi.name,
+    category: poi.category,
+    latitude: poi.latitude,
+    longitude: poi.longitude,
+  };
+  if (canWalk) return { ...base, minutes: walkMin, mode: "walk" };
+  if (canDrive) return { ...base, minutes: driveMin, mode: "drive" };
   return null;
 }
