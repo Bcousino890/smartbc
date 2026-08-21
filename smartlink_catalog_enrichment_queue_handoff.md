@@ -645,3 +645,151 @@ PUBLIC CONFLICT BLOCKS: 0
 **Capa de barrio: 29 barrios curados** · 143 POIs verificados contra OSM · 0 coordenadas escritas a mano
 **Tracking público reparado**: los page views de /compartir y /c vuelven a contarse, con attribution por token verificada
 **Fallback restante**: 84 = 52 necesitan media · ~26 conflictos abiertos · ~6 descripción pobre
+
+
+# SMARTLINK 2.0 — PRODUCTION BASELINE
+
+Auditoría final de cierre (2026-08-21), ejecutada contra producción. Sin
+features nuevas; los únicos cambios son limpieza de temporales, un guardrail
+y una extracción pura para testear la promoción de estado.
+
+## 1 · Routing / Renderer
+
+`/compartir/[slug]` y `/c/[token]` montan el MISMO Adaptive Property Renderer
+(`app/compartir/[slug]/public-property-view.tsx`); son sus dos únicos
+consumidores en el repo (verificado por grep). Superficies con detalle de
+propiedad que NO son SmartLink y siguen su propio camino a propósito:
+- `app/(cliente)/propiedades/[id]` — portal cliente autenticado;
+- `app/web/propiedades/[id]` — web corporativa `/web` (superficie protegida
+  desde el sprint tipográfico);
+- `app/p/**` — proxy de imágenes, no renderiza páginas.
+
+**LEGACY SMARTLINK RENDERERS ACTIVE: 0**
+
+## 2 · Promoción dinámica FACTS-LED
+
+`deriveExperienceState()` (lib/db/queries/story.ts) es una función PURA: la
+promoción `facts_led → complete/partial/sparse` depende solo de tres datos
+leídos de BD en cada render (existe versión aprobada, su nota, bloques en
+conflicto pendientes). Sin migración, sin flag manual, sin backfill, sin
+estado por propiedad. Cubierta por 4 tests en `test:smartlink`, y demostrada
+en producción: las 5 propiedades publicadas en la tanda anterior pasaron de
+facts_led a su estado real sin ninguna acción adicional.
+
+## 3 · Contrato de seguridad público (DB → query → DTO → renderer)
+
+- Proyección pública del story: SOLO `chapter` + `copy` de bloques
+  `approved` de la versión `approved` (o capítulos limpios del borrador en
+  facts-led, filtrados por el MISMO `planPublication`). Grep de las
+  superficies públicas: cero referencias a `source_text`, `claim_ids`,
+  `reviewed_by`, `ai_confidence`. El DTO expone `id = slug`, nunca UUID.
+- SQL en producción: **PUBLIC CONFLICT CLAIMS: 0 · PUBLIC CONFLICT BLOCKS: 0**
+  (ningún bloque aprobado apoyado en claim conflictivo; ningún bloque en
+  conflicto con status aprobado).
+
+## 4 · Migraciones — sin drift
+
+| Migración | Objetos verificados en producción | Estado |
+|---|---|---|
+| 0144 | 5 tablas de story + neighborhoods + neighborhood_pois | ✓ |
+| 0145 | aliases/district/municipality + 4 columnas bbox + 143 POIs activos | ✓ |
+| 0146 | properties.floor_override · BC-0002='none' | ✓ |
+| 0147 | page_views.experience_state con CHECK | ✓ |
+
+Las cuatro son idempotentes y se reaplican en cada deploy (post-deploy.sh).
+**SCHEMA DRIFT: 0**
+
+## 5 · Scripts del rollout — clasificación
+
+**KEEP (operativos/auditoría):** `run-story-batch.mts` (generación masiva,
+solo borradores), `publish-story-batch.mts`, `generate-one-story.mts`
+(pipeline normal de UNA propiedad, solo borradores), `analyze-fallback.mts`
+(solo lectura), `qa-neighborhood-layer.mjs` (=`test:neighborhoods`),
+`qa-enrichment-queue.mts`, `test-smartlink-story.mts`, `test-tracking.mts`,
+y el pipeline regenerable de la capa de barrios (`neighborhood-poi-catalog` /
+`neighborhood-intros` / `geocode-neighborhood-pois` / `fetch-poi-bounds` /
+`build-neighborhood-migration`).
+
+**REMOVED (temporales inequívocos):** `regen-area-fix.mts` y
+`dry-run-catalog.mts` (one-offs ya ejecutados), y los 4 bundles esbuild del
+repo — un bundle viejo podía ejecutar lógica de gate obsoleta contra
+producción; ahora están gitignorados y se regeneran desde su `.mts`:
+```
+npx esbuild scripts/<x>.mts --bundle --platform=node --format=esm \
+  --outfile=scripts/<x>.bundle.mjs \
+  --alias:server-only=./scripts/shims/server-only.mjs \
+  --alias:@supabase/realtime-js=./scripts/shims/realtime-js.mjs \
+  --external:sharp
+# copiar a /opt/smartbc-app/scripts/ del VPS y ejecutar desde ahí (sharp)
+```
+
+**Guardrail añadido:** `publish-story-batch` sin `--confirm` explícito se
+fuerza a dry-run SIEMPRE — una invocación accidental no puede aprobar
+stories. **DANGEROUS TEMP SCRIPTS: 0** tras la limpieza.
+
+## 6 · Tracking baseline
+
+Verificado en vivo durante esta auditoría:
+- `/compartir` → page_view 200 con `property_id` correcto;
+- `/c/[token]` → page_view 200 con `property_id` + `share_id` del token
+  (4 filas con attribution completa en la última hora);
+- `experience_state` registra los CUATRO estados (complete, partial, sparse,
+  facts_led — todos observados en filas reales de la última hora);
+- slug falso → 200 controlado y **0 filas** insertadas.
+
+**TRACKING HEALTH: OK**
+
+## 7 · Matriz final de tests
+
+`test:smartlink` (74 checks, incl. promoción de estado) · `test:tracking` ·
+`test:neighborhoods` (28/28) · typecheck · build — todo en verde. Smoke
+Playwright de 7 casos × 3 viewports (390, 1440, 1440@125%): COMPLETE,
+PARTIAL, SPARSE, FACTS-LED con capítulos, FACTS-LED sin capítulos, FACTS-LED
+con 1 foto y `/c/[token]` — 21/21 sin overflow, sin errores JS, sin headings
+vacíos, sin muro "Descripción", sin conflictos visibles, tracking 200.
+
+## 8 · Métricas de producción (recalculadas en el momento del cierre)
+
+```
+ACTIVE PROPERTIES:            683
+
+SMARTLINK 2.0 EXPERIENCE:     683 / 683 = 100%
+
+PROPERTY STORY:               599  (87,7%)
+  COMPLETE: 265
+  PARTIAL:  227
+  SPARSE:   107
+
+FACTS-LED:                     84
+
+NO SMARTLINK 2.0 EXPERIENCE:    0
+
+PUBLIC CONFLICT CLAIMS:         0
+PUBLIC CONFLICT BLOCKS:         0
+
+UNRESOLVED NEIGHBORHOODS:       2   (Colina, Chile — deliberado)
+
+TRACKING HEALTH:               OK
+```
+
+(COMPLETE/PARTIAL varían ±1 respecto a la tanda anterior porque el catálogo
+y la revisión humana se mueven: cifras recalculadas, no copiadas.)
+
+## 9 · Operating rules — FREEZE
+
+- **Engine v4.1 FROZEN.** extract / validate / structure / compress / claim
+  ownership / entity preservation / area validation / floor parser / photo
+  classifier no se tocan sin decisión explícita.
+- **No perseguir el 100% de Property Story artificialmente.** FACTS-LED es
+  un estado VÁLIDO, no un error: solo se enriquece cuando llegan mejores
+  datos/media o revisión humana.
+- **Los conflictos siguen visibles en admin** aunque la partial esté
+  pública; **ningún conflicto puede cruzar a público** (claims ni bloques).
+- **Colina (Chile) permanece deliberadamente sin mapping de Madrid**; los
+  casos negativos están protegidos por `test:neighborhoods`.
+- **Optima exacta sigue dependiendo de licencia** (`OPTIMA_LICENSE_REQUIRED`
+  en app/layout.tsx); no declarar reproducción exacta hasta tenerla.
+- Publicación en lote solo con `--confirm`; bundles siempre regenerados
+  desde el fuente.
+
+# SMARTLINK 2.0 — COMPLETE & FROZEN
