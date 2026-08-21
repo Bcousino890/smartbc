@@ -9,6 +9,51 @@
 
 import type { StoryClaim } from "./types";
 
+// ── Superficie vs distancia (Engine v4.1) ────────────────────────────────────
+// El detector antiguo casaba cualquier "N metros", así que "a 200 metros del
+// Retiro" se comparaba contra square_meters y generaba un conflicto falso.
+// Ahora se exige EVIDENCIA POSITIVA DE ÁREA: unidad inequívoca (m², m2,
+// metros cuadrados) o "metros" cualificado como superficie (construidos,
+// útiles, habitables) o precedido de un sustantivo de superficie.
+// Cualquier "N metros" ambiguo NO se valida como área: preferimos no validar
+// a bloquear una story por una inferencia dudosa.
+const AREA_PATTERNS: RegExp[] = [
+  // Unidad inequívoca: 200 m², 200m2, 200 metros cuadrados
+  /(\d{2,4})\s*(?:m²|m2\b|metros?\s+cuadrados?)/i,
+  // "metros" cualificado como superficie
+  /(\d{2,4})\s*metros?\s+(?:construidos?|[úu]tiles?|habitables?|edificados?)/i,
+  // Sustantivo de superficie delante: "superficie de 200 metros",
+  // "vivienda de 200 metros", "distribuidos en 200 metros"
+  /(?:superficie|[áa]rea|vivienda|piso|[áa]tico|d[úu]plex|casa|chalet|apartamento|estudio|local|distribuidos?)\s+(?:\w+\s+){0,3}?(?:de\s+)?(\d{2,4})\s*metros?\b/i,
+];
+
+// Señales de DISTANCIA: si la cifra viene de una de estas construcciones, no
+// es superficie aunque otra regla la capturase.
+const DISTANCE_RE =
+  /(?:a|hasta|apenas|escasos?|menos\s+de|m[áa]s\s+de|situad[oa]s?\s+a|ubicad[oa]s?\s+a|dista|distancia\s+de)\s+(?:unos\s+|apenas\s+|escasos\s+|menos\s+de\s+)?\d{1,4}\s*metros?\b|\d{1,4}\s*metros?\s+(?:de|del|de\s+la|hasta|andando|caminando|a\s+pie)\b/i;
+
+/**
+ * Extrae la superficie en m² de un texto, SOLO si hay evidencia semántica de
+ * área. Devuelve null ante "N metros" ambiguo o de distancia.
+ * Exportada para test.
+ */
+export function extractArea(text: string): number | null {
+  if (!text) return null;
+  for (const re of AREA_PATTERNS) {
+    const m = text.match(re);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n < 20) continue;
+    // Si ese mismo número aparece en una construcción de distancia, se descarta.
+    const distanceMatch = text.match(DISTANCE_RE);
+    if (distanceMatch && new RegExp(`\\b${n}\\s*metros?\\b`, "i").test(distanceMatch[0])) {
+      continue;
+    }
+    return n;
+  }
+  return null;
+}
+
 export type StructuredFacts = {
   bedrooms: number | null;
   bathrooms: number | null;
@@ -109,7 +154,7 @@ export function validateClaims(
     // viaja en la misma frase (ese conflicto ya bloquea a SU claim).
     const factOwnBeds = extractCount(factText, "dormitorios?|habitaciones?");
     const factOwnBaths = extractCount(factText, "baños?|aseos? y baños?");
-    const factOwnSqm = /(\d{2,4})\s*(m²|m2\b|metros)/i.test(factText);
+    const factOwnSqm = extractArea(factText) != null;
     const factHasOwnNumber =
       factOwnBeds != null || factOwnBaths != null || factOwnSqm;
     const checkDim = (
@@ -137,18 +182,16 @@ export function validateClaims(
     };
     const beds = checkDim("dormitorios?|habitaciones?", facts.bedrooms, "dormitorios", ["private", "overview"]);
     const baths = checkDim("baños?|aseos? y baños?", facts.bathrooms, "baños", ["private", "overview"]);
-    const sqmOf = (t: string) => t.match(/(\d{2,4})\s*m²|(\d{2,4})\s*m2\b|(\d{2,4})\s*metros/i);
-    const sqmFact = sqmOf(factText);
-    const sqmFull = sqmOf(fullText);
+    // Superficie: solo con evidencia positiva de área (v4.1). Un "N metros"
+    // de distancia ya no llega hasta aquí.
+    const areaFact = extractArea(factText);
+    const areaSource = extractArea(claim.source_text);
     if (facts.squareMeters) {
       // Tolerancia ±5%: útil vs construida es una diferencia legítima.
-      const bad = (m: RegExpMatchArray | null) => {
-        if (!m) return null;
-        const n = Number(m[1] ?? m[2] ?? m[3]);
-        return n > 20 && Math.abs(n - facts.squareMeters!) / facts.squareMeters! > 0.05 ? n : null;
-      };
-      const nFact = bad(sqmFact);
-      const nSource = bad(sqmFull);
+      const bad = (n: number | null) =>
+        n != null && Math.abs(n - facts.squareMeters!) / facts.squareMeters! > 0.05 ? n : null;
+      const nFact = bad(areaFact);
+      const nSource = bad(areaSource);
       if (nFact != null) flagConflict(`El texto dice ${nFact} m²; la ficha tiene ${facts.squareMeters} m².`);
       else if (nSource != null && ["overview"].includes(claim.category)) {
         flagConflict(`La frase origen dice ${nSource} m²; la ficha tiene ${facts.squareMeters} m².`);
@@ -162,8 +205,8 @@ export function validateClaims(
       const factBaths = extractCount(factText, "baños?|aseos? y baños?");
       const dupBeds = factBeds != null && facts.bedrooms != null && factBeds === facts.bedrooms;
       const dupBaths = factBaths != null && facts.bathrooms != null && factBaths === facts.bathrooms;
-      const dupSqm = !!sqmFact && !!facts.squareMeters &&
-        Math.abs(Number(sqmFact[1] ?? sqmFact[2] ?? sqmFact[3]) - facts.squareMeters) / facts.squareMeters <= 0.05;
+      const dupSqm = areaFact != null && !!facts.squareMeters &&
+        Math.abs(areaFact - facts.squareMeters) / facts.squareMeters <= 0.05;
       const dupFeature = FEATURE_DUP_KEYS.some(
         (f) => featureKeys.has(f.key) && f.re.test(factText),
       );

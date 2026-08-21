@@ -109,7 +109,11 @@ function sha256(s: string): string {
 //     un bloque por capítulo, ownership de claims por categoría, preservación
 //     de entidades (violación → bloque en 'conflict', editable pero no
 //     aprobable tal cual).
-const ENGINE_VERSION = 4;
+// v4.1: area-distance false positive validation fix — la validación de
+//     superficie exige evidencia positiva de área (m²/m2/metros cuadrados/
+//     construidos/útiles o sustantivo de superficie); "a 200 metros del
+//     Retiro" ya no se compara contra square_meters.
+const ENGINE_VERSION = 4.1;
 
 export type GenerateResult =
   | { ok: true; versionId: string; blocks: number; conflicts: number; reused: boolean }

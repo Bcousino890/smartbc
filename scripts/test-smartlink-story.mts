@@ -7,7 +7,7 @@
 // a POIs por geometría y selección de hero-vídeo.
 
 import { splitDescriptionForFallback } from "../lib/services/story/fallback";
-import { validateClaims } from "../lib/services/story/validate";
+import { validateClaims, extractArea } from "../lib/services/story/validate";
 import type { StoryClaim } from "../lib/services/story/types";
 import { groupFeatures } from "../lib/property-features-taxonomy";
 import { computePoiTravel } from "../lib/geo/poi-distance";
@@ -120,6 +120,56 @@ console.log("Dedupe por hecho (frase multi-hecho):");
   check("mismo origen: '4 baños' → duplicate", c3[0].is_duplicate === true);
   check("mismo origen: '5 dormitorios' → CONFLICT (specs=3)", c3[1].conflict === true);
   check("respaldo por frase acotado a la dimensión (private)", c3[2].conflict === true);
+}
+
+// ── 2b-bis) Engine v4.1: superficie vs distancia ──
+console.log("Superficie vs distancia (v4.1):");
+{
+  // DEBE detectar superficie
+  const areaCases: Array<[string, number]> = [
+    ["La vivienda cuenta con 200 m².", 200],
+    ["200 m2 construidos.", 200],
+    ["200 metros cuadrados.", 200],
+    ["Cuenta con 180 metros útiles.", 180],
+    ["Superficie construida de 220 m².", 220],
+  ];
+  for (const [text, expected] of areaCases) {
+    check(`área: "${text.slice(0, 32)}…" → ${expected}`, extractArea(text) === expected, String(extractArea(text)));
+  }
+  // NO debe detectar superficie
+  const distanceCases = [
+    "A 200 metros del Parque del Retiro.",
+    "Parking a menos de 50 metros.",
+    "A escasos 300 metros de la Castellana.",
+    "La estación está a 150 metros.",
+    "A 100 metros andando.",
+  ];
+  for (const text of distanceCases) {
+    check(`distancia: "${text.slice(0, 32)}…" → null`, extractArea(text) === null, String(extractArea(text)));
+  }
+  // Mixtos: área correcta, distancia ignorada
+  check('mixto: "Vivienda de 180 m² situada a 200 metros del Retiro." → 180',
+    extractArea("Vivienda de 180 m² situada a 200 metros del Retiro.") === 180,
+    String(extractArea("Vivienda de 180 m² situada a 200 metros del Retiro.")));
+  check('mixto: "Piso de 150 metros cuadrados, a 50 metros del metro." → 150',
+    extractArea("Piso de 150 metros cuadrados, a 50 metros del metro.") === 150,
+    String(extractArea("Piso de 150 metros cuadrados, a 50 metros del metro.")));
+
+  // Caso real del catálogo: distancia NO debe generar conflicto de superficie
+  const mkc = (source: string, fact: string, category: StoryClaim["category"]): StoryClaim => ({
+    source_text: source, source_field: "description", category,
+    fact, confidence: 0.9, is_duplicate: false, conflict: false,
+  });
+  const realFacts = { bedrooms: 3, bathrooms: 2, squareMeters: 427, floor: null, features: [] };
+  const realClaims = [mkc("Con parking a menos de 50 metros.", "Parking a menos de 50 metros.", "building")];
+  validateClaims(realClaims, realFacts);
+  check("BC-1419: 'parking a 50 metros' vs 427 m² → SIN conflicto", realClaims[0].conflict === false,
+    realClaims[0].conflict_reason ?? "");
+
+  // Y un conflicto de superficie REAL sigue detectándose
+  const realArea = [mkc("La vivienda tiene 200 m² construidos.", "Superficie de 200 m².", "overview")];
+  validateClaims(realArea, { bedrooms: 3, bathrooms: 2, squareMeters: 88, floor: null, features: [] });
+  check("conflicto real de superficie (200 m² vs 88) SÍ se detecta", realArea[0].conflict === true);
 }
 
 // ── 2c) Planta: regresión BC-1416 (contexto de elemento secundario) ──

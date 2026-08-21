@@ -54,6 +54,33 @@ El validador interpreta `"a escasos 200 metros del Parque"` o `"parking a menos 
 - **Naturaleza**: sistémico y repetible, no editorial. Es un defecto de la regex de `validate.ts`, que no distingue superficie de distancia.
 - **Estado**: **no lo he corregido.** Engine v4 está congelado y la instrucción es detener y reportar antes de tocar código. El arreglo sería acotado (exigir `m²`/`m2`/`metros cuadrados` o descartar cuando la frase lleva preposición de distancia) y obligaría a regenerar solo las ~18 afectadas. **Pendiente de tu decisión.**
 
+## AREA VS DISTANCE VALIDATION FIX — ENGINE V4.1
+*(Aplicado 2026-08-21 tras autorización expresa. Único cambio del motor; el resto de v4 sigue congelado.)*
+
+**Bug.** El validador marcaba conflicto de superficie comparando contra `square_meters` cifras que no eran superficie: `"a escasos 200 metros del Parque"`, `"parking a menos de 50 metros"` y también alturas de techo (`"techos de 2,73 metros"` → leído como 73 m²).
+
+**Causa.** La detección usaba `(\d{2,4})\s*metros`, que casa cualquier "N metros" sin distinguir área, distancia ni altura.
+
+**Fix (evidencia positiva de área, no lista de excepciones).** Nueva función exportada `extractArea()` en `validate.ts`: solo devuelve superficie con unidad inequívoca (`m²`, `m2`, `metros cuadrados`), con "metros" cualificado (`construidos`, `útiles`, `habitables`, `edificados`) o precedido de sustantivo de superficie (`superficie/vivienda/piso/ático… de N metros`). Además descarta la cifra si aparece en construcción de distancia (`a/hasta/escasos/menos de N metros`, `N metros de/del/andando`). **Ante un "N metros" ambiguo no se valida como área** — se prefiere no validar antes que bloquear por inferencia dudosa. Se usa en las tres rutas (conflicto por hecho, respaldo por frase y dedupe). Sin tocar extractor, compresor, structure, ownership, renderer ni SmartLinks.
+
+**Versión.** `ENGINE_VERSION = 4.1`, incluida en la huella de caché → las stories afectadas no reutilizan la validación antigua.
+
+**Tests (14 nuevos, suite total 52/52).** Detecta área: `200 m²`, `200 m2 construidos`, `200 metros cuadrados`, `180 metros útiles`, `superficie construida de 220 m²`. No detecta: `a 200 metros del Parque`, `parking a menos de 50 metros`, `a escasos 300 metros`, `la estación está a 150 metros`, `a 100 metros andando`. Mixtos: `"Vivienda de 180 m² situada a 200 metros del Retiro"` → 180; `"Piso de 150 metros cuadrados, a 50 metros del metro"` → 150. Más el caso real BC-1419 (sin conflicto) y la garantía de que un conflicto de superficie **real** (200 m² vs 88) se sigue detectando.
+
+**Propiedades afectadas: 16** (el recuento previo de "18" contaba *claims*; varias propiedades tenían dos). Regeneradas **solo esas**, sin publicar ninguna:
+
+| Resultado | Propiedades | |
+|---|---:|---|
+| **Sin conflicto tras el fix** | **10** | BC-0958, BC-1373, BC-1372, BC-1316, BC-1082, BC-0809, BC-0877, BC-0520, BC-1037, BC-1419 — todas con **gate verde**, listas para revisión y publicación manual |
+| **Siguen bloqueadas por conflictos reales** | **6** | BC-1399, BC-0528, BC-0521, BC-0505, BC-0502 (dormitorios/baños que no cuadran) y BC-1376 (conflicto de superficie **legítimo**: 38 m² vs 46 m²) |
+| Errores | 0 | |
+
+**Verificación manual** (4 casos): BC-1419, BC-0877, BC-1316 y BC-1373 pasan de tener el falso positivo a **0 conflictos** en su versión vigente.
+
+**Higiene de datos:** al regenerar, la versión anterior quedaba también en `generated`. Se marcaron 18 versiones antiguas como `rejected` con nota `[superseded por regeneración v4.1]` para que la cola muestre siempre la vigente.
+
+**Sin efectos colaterales:** las 168 stories publicadas siguen intactas y las otras ~325 conflictivas no se han tocado ni regenerado. **Ninguna de las 10 recuperadas ha sido publicada** — pendiente de tu revisión.
+
 ## Limitaciones conocidas
 1. **Bug corregido durante la implementación** (no en el engine): las consultas `.in()` con más de ~500 UUIDs superaban el límite de URL de PostgREST y devolvían vacío en silencio — la cola mostraba 0. Resuelto con troceado + paginación en `story-review.ts`.
 2. La QA se ejecutó contra producción mediante las **mismas funciones que usa la UI** (`getEnrichmentQueue`, `evaluateGate`, acciones de bloque). La verificación visual del panel con sesión de agente sigue pendiente de credenciales, como en QA anteriores.
