@@ -136,6 +136,51 @@ Muestra auto-seleccionada por diversidad: completas, parciales con 1 bloque excl
 **27/31 sin defectos** en 1440 / 390 / zoom 125%: 0 "Descripción" residual, 0 capítulos duplicados, 0 bloques >70 palabras, 0 boilerplate, 0 secciones vacías, 0 overflow, 0 errores JS; key facts, detalles y CTA correctos en todas; **la alternancia imagen/copy se recalcula bien al omitir capítulos** y no deja huecos.
 Las **4 incidencias son el mismo hueco de datos, no un defecto**: propiedades cuyo barrio (Castellana, Goya, Colina) no está en la capa curada de 9 y cuyo bloque de barrio quedó excluido → no se renderiza el módulo (correcto: mejor omitirlo que mostrarlo vacío). Afecta a **10 publicadas**. Zonas sin curar con más volumen: Castellana (13), Lista (11), Goya (8), El Viso (8), Malasaña-Universidad (3). Se resuelve con un INSERT por barrio, sin migración.
 
+## SAFE SPARSE + LOW-MEDIA ROLLOUT
+*(2026-08-21 · segundo ajuste de POLÍTICA editorial. Engine v4.1 congelado.)*
+
+**Policy añadida a `planPublication()`** (mismo gate compartido, sin segundo motor):
+
+1. **STRUCTURED — SPARSE**: una story puede publicarse con **exactamente 2 capítulos narrativos limpios** si tiene **≥4 fotos** y al menos **2 elementos estructurales de apoyo** entre: barrio curado · Residence Details poblado (≥3 features) · vídeo · plano · localización válida · ≥8 fotos. Nunca se inventa un tercer capítulo para cumplir densidad.
+2. **Gate fotográfico por tramos**: 0–3 fotos → fallback · **4–7 fotos + ≥3 capítulos limpios → admisible** (los capítulos sin foto de su clase quedan solo-texto; jamás se reutiliza una foto incorrecta) · 8+ → normal.
+
+Ambos son umbrales **editoriales**. Los 14 invariantes de seguridad factual se evalúan igual que antes, sobre el subconjunto publicable.
+
+**Rollout ejecutado: 114 nuevas** (103 SPARSE + 6 parciales + 5 completas). Ninguna propiedad fuera de esos criterios se publicó.
+
+### Verificación SQL en producción
+
+```text
+ACTIVE PROPERTIES: 684        (eran 686: 2 archivadas durante el proceso)
+
+SMARTLINK 2.0 STRUCTURED: 593  (86,7%)
+  COMPLETE:      184
+  PARTIAL SAFE:  308
+  SPARSE:        103
+
+FALLBACK: 91  (13,3%)
+  - 0–3 fotos (media real insuficiente):     50
+  - 1 capítulo limpio:                       29
+  - 2 capítulos sin estructura de apoyo:      4
+  - 0 capítulos limpios:                      2
+  - sin story (descripción <25 palabras):     3
+  - invariante estructural roto:              3
+
+PUBLIC CONFLICT CLAIMS: 0
+PUBLIC CONFLICT BLOCKS: 0
+```
+
+**Cobertura: 24,5% → 70,1% → 86,7%.** El fallback residual es irreducible por política: en 50 casos no hay fotos, en 31 no hay material narrativo y en 3 la descripción es demasiado pobre. Forzarlos exigiría inventar.
+
+### QA post-rollout (30 SmartLinks × 3 escenarios)
+Muestra: 10 SPARSE, 10 con 4–7 fotos, 10 mezcla de partial/complete; alquiler y venta, 9 barrios, con y sin vídeo, descripciones cortas y largas.
+**30/30 correctos.** La primera pasada marcó 14 "fallos" que resultaron ser **el propio script arrastrando la regla vieja de 3 capítulos**; re-verificados con las reglas nuevas, los 14 son comportamiento correcto:
+- 10 son publicaciones SPARSE legítimas (2 capítulos verificados, confirmado en `notes`);
+- 3 no muestran "Detalles de la vivienda" porque la propiedad tiene **0 features** en BD → el módulo se omite en lugar de pintar un heading vacío (invariante funcionando);
+- 1 muestra 2 key facts porque `square_meters` es NULL → no se inventa la superficie.
+
+Sin "Descripción" residual, sin capítulos duplicados, sin bloques >70 palabras (máx. real 63), sin boilerplate, sin secciones vacías, sin overflow ni errores JS en 1440 / 390 / zoom 125%. La alternancia imagen/copy se recalcula correctamente con 2 capítulos y los text-only componen limpio.
+
 ## Limitaciones conocidas
 1. **Bug corregido durante la implementación** (no en el engine): las consultas `.in()` con más de ~500 UUIDs superaban el límite de URL de PostgREST y devolvían vacío en silencio — la cola mostraba 0. Resuelto con troceado + paginación en `story-review.ts`.
 2. La QA se ejecutó contra producción mediante las **mismas funciones que usa la UI** (`getEnrichmentQueue`, `evaluateGate`, acciones de bloque). La verificación visual del panel con sesión de agente sigue pendiente de credenciales, como en QA anteriores.
@@ -143,4 +188,4 @@ Las **4 incidencias son el mismo hueco de datos, no un defecto**: propiedades cu
 4. El botón "Siguiente" recalcula la cola completa en cada salto (~1-2 s con 517 filas). Aceptable hoy; si el backlog creciera mucho, convendría cachear la lista por sesión.
 
 # CATALOG PROPERTY STORY ENRICHMENT QUEUE — COMPLETE
-**SmartLink 2.0 estructurado: 481/686 (70,1%)** · 177 completas · 304 parciales seguras · 205 en fallback · 343 conflictos abiertos para revisión humana · Engine v4.1 FROZEN
+**SmartLink 2.0 estructurado: 593/684 (86,7%)** · 184 completas · 308 parciales · 103 sparse · 91 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
