@@ -364,6 +364,22 @@ console.log("Override de planta:");
   check("BC-0002 con override 'none' → null, el key fact Planta no se pinta", resolveFloor("none", [], null, desc) === null);
 }
 
+// ── 7) Promoción dinámica del estado de experiencia (baseline) ──
+console.log("Experience state (promoción automática facts_led → story):");
+{
+  const { deriveExperienceState } = await import("../lib/db/queries/story");
+  check("sin story aprobada → facts_led",
+    deriveExperienceState({ hasApprovedVersion: false }) === "facts_led");
+  // El MISMO input, con la story ya aprobada: se promociona solo — sin
+  // migración, sin flag manual, sin backfill, sin estado por propiedad.
+  check("al aprobar (nota SPARSE) → sparse, automático",
+    deriveExperienceState({ hasApprovedVersion: true, approvedNotes: "Publicación SPARSE segura" }) === "sparse");
+  check("al aprobar con conflictos pendientes → partial",
+    deriveExperienceState({ hasApprovedVersion: true, approvedNotes: "Publicación parcial", hasPendingConflictBlocks: true }) === "partial");
+  check("al aprobar sin pendientes → complete",
+    deriveExperienceState({ hasApprovedVersion: true, approvedNotes: null, hasPendingConflictBlocks: false }) === "complete");
+}
+
 console.log("");
 if (failures > 0) {
   console.error(`✗ ${failures} comprobaciones fallidas`);

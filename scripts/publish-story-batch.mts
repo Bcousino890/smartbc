@@ -10,14 +10,21 @@
 //   · el resto de gates se re-evalúa sobre el subconjunto publicable
 //   · ≥3 capítulos narrativos tras exclusiones
 //
-// Uso: node scripts/publish-batch.bundle.mjs <N> [--dry-run]
+// Uso: node scripts/publish-batch.bundle.mjs <N> [--dry-run|--confirm]
+//
+// GUARDRAIL (baseline 2026-08-21): este script APRUEBA stories en producción.
+// Sin `--confirm` explícito se ejecuta SIEMPRE como dry-run, aunque no se
+// pase `--dry-run`: una invocación accidental no puede publicar nada.
 
 import { createAdminClient } from "../lib/db/admin";
 import { planPublication, GATE_LABELS } from "../lib/services/story/gate";
 import { loadNeighborhoodIndex, lookupNeighborhood } from "../lib/db/queries/neighborhoods";
 
 const TARGET = Number(process.argv[2] ?? 50);
-const DRY_RUN = process.argv.includes("--dry-run");
+const DRY_RUN = process.argv.includes("--dry-run") || !process.argv.includes("--confirm");
+if (DRY_RUN && !process.argv.includes("--dry-run")) {
+  console.log("[publish] sin --confirm → forzado a DRY-RUN (guardrail de producción)");
+}
 
 const db = createAdminClient() as any;
 

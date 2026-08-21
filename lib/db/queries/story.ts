@@ -27,6 +27,23 @@ export type PublicStoryExperience = {
   blocks: PublicStoryBlock[] | null;
 };
 
+/**
+ * Derivación PURA del estado de experiencia — testeable sin BD.
+ * La promoción facts_led → complete/partial/sparse depende SOLO de estos
+ * tres datos, que salen de la BD en cada render: no hay migración, flag
+ * manual, backfill ni estado por propiedad. Aprobar una story cambia
+ * `hasApprovedVersion` y el estado se promociona solo.
+ */
+export function deriveExperienceState(input: {
+  hasApprovedVersion: boolean;
+  approvedNotes?: string | null;
+  hasPendingConflictBlocks?: boolean;
+}): PublicExperienceState {
+  if (!input.hasApprovedVersion) return "facts_led";
+  if (/SPARSE/i.test(input.approvedNotes ?? "")) return "sparse";
+  return input.hasPendingConflictBlocks ? "partial" : "complete";
+}
+
 function project(
   blocks: Array<{ chapter: StoryChapter; copy: string }>,
 ): PublicStoryBlock[] | null {
@@ -56,11 +73,11 @@ export async function getStoryExperiencePublic(
         .order("position");
       const rows = (blocks ?? []) as Array<{ chapter: StoryChapter; copy: string; status: string }>;
       const approved = rows.filter((b) => b.status === "approved");
-      const state: PublicExperienceState = /SPARSE/i.test(version.notes ?? "")
-        ? "sparse"
-        : rows.some((b) => b.status === "conflict")
-          ? "partial"
-          : "complete";
+      const state = deriveExperienceState({
+        hasApprovedVersion: true,
+        approvedNotes: version.notes,
+        hasPendingConflictBlocks: rows.some((b) => b.status === "conflict"),
+      });
       return { state, blocks: project(approved) };
     }
 

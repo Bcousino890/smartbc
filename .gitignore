@@ -49,3 +49,8 @@ next-env.d.ts
 
 # Claude Code local settings
 .claude/
+
+# Bundles esbuild para ejecutar en el VPS: artefactos derivados, se
+# regeneran desde su .mts (ver handoff). Un bundle viejo en el repo puede
+# ejecutar logica de gate obsoleta contra produccion: nunca se versionan.
+scripts/*.bundle.mjs
