@@ -148,8 +148,9 @@ export function LocationModule({
   const view = useMemo(() => {
     if (!size) return { lat: center.lat, lng: center.lng, zoom: 15 };
     if (focus && hasPreciseCoords) {
-      // Margen mayor en el eje vertical: abajo viven el CTA y la etiqueta.
-      const padding = Math.round(Math.min(size.w, size.h) * 0.22) + 28;
+      // Margen suficiente para que la etiqueta del destino y el CTA respiren,
+      // sin echar el encuadre tan atrás que se pierda el barrio.
+      const padding = Math.max(56, Math.round(Math.min(size.w, size.h) * 0.13));
       return fitTwoPoints({
         a: { lat: center.lat, lng: center.lng },
         b: { lat: focus.latitude, lng: focus.longitude },

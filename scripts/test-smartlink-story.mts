@@ -417,11 +417,20 @@ console.log("Destination focus:");
   const m = buildMosaic({ lat: v.lat, lng: v.lng, zoom: v.zoom, width: W, height: H });
   const pc = m.project(casa.lat, casa.lng);
   const pd = m.project(retiro.lat, retiro.lng);
+  // El padding que se pide es una PREFERENCIA; la garantía del encuadre es el
+  // margen mínimo (10% del lado menor), porque el zoom solo puede ser entero y
+  // ceñirse al nivel bueno vale más que respetar un padding holgado.
+  const MARGEN = Math.max(24, Math.min(W, H) * 0.1);
   const dentro = (p: { left: number; top: number }) =>
-    p.left >= PAD - 1 && p.left <= W - PAD + 1 && p.top >= PAD - 1 && p.top <= H - PAD + 1;
-  check("vivienda y destino caben los DOS con margen", dentro(pc) && dentro(pd), JSON.stringify({ pc, pd, v }));
+    p.left >= MARGEN && p.left <= W - MARGEN && p.top >= MARGEN && p.top <= H - MARGEN;
+  check("vivienda y destino caben los DOS con margen digno", dentro(pc) && dentro(pd), JSON.stringify({ pc, pd, v, MARGEN }));
   check("ninguno queda pegado a un borde", pc.left > 8 && pd.left > 8 && pc.top > 8 && pd.top > 8);
   check("no se acerca más de lo que permite el contexto", v.zoom <= 16);
+  // Regresión: floor() perdía un nivel entero de zoom y se veía media ciudad
+  // para dos puntos a poco más de un kilómetro.
+  const spanM = (900 * 156543.03392 * Math.cos((casa.lat * Math.PI) / 180)) / 2 ** v.zoom;
+  check("el encuadre es ajustado, no media ciudad (<3,5 km de ancho)",
+    spanM < 3500, `${Math.round(spanM)} m de ancho a z${v.zoom}`);
 
   // Dos puntos casi encima: el encuadre no debe dispararse a zoom absurdo.
   const casi = { lat: 40.4266, lng: -3.6867 };

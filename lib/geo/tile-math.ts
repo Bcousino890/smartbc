@@ -130,7 +130,18 @@ export function fitTwoPoints(params: {
   // restringe (Infinity), y el clamp final acota los dos casos extremos.
   const zx = dx > 0.0001 ? Math.log2(usableW / dx) : Infinity;
   const zy = dy > 0.0001 ? Math.log2(usableH / dy) : Infinity;
-  const zoom = Math.max(minZoom, Math.min(maxZoom, Math.floor(Math.min(zx, zy))));
+  const raw = Math.min(zx, zy);
+
+  // La pirámide de teselas solo admite zoom entero, y redondear hacia abajo
+  // pierde un nivel COMPLETO: el doble de escala, con dos puntos diminutos en
+  // medio de media ciudad. Se prueba primero el nivel más ajustado y solo se
+  // baja si de verdad no caben con un margen mínimo digno.
+  const MIN_MARGIN = Math.max(24, Math.min(width, height) * 0.1);
+  const tight = Math.ceil(raw);
+  const fitsAt = (z: number) =>
+    dx * 2 ** z <= width - MIN_MARGIN * 2 && dy * 2 ** z <= height - MIN_MARGIN * 2;
+  const chosen = fitsAt(tight) ? tight : Math.floor(raw);
+  const zoom = Math.max(minZoom, Math.min(maxZoom, chosen));
 
   const mid = worldPixelToLatLng((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, 0);
   return { lat: mid.lat, lng: mid.lng, zoom };
