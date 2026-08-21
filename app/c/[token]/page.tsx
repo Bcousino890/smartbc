@@ -202,6 +202,8 @@ export default async function TokenSharePage({
           lng: property.longitude ?? null,
         })}
         mapProvider={currentMapProvider().provider}
+        googleApiKey={currentMapProvider().googleApiKey}
+        googleMapId={currentMapProvider().googleMapId}
         experienceState={experience.state}
         neighborhood={neighborhood}
       />
