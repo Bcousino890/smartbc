@@ -425,6 +425,9 @@ export async function insertPageView(
     .from("page_views")
     .insert({
       property_id: data.property_id,
+      // Estado de experiencia del SmartLink (0147). Nullable: los llamadores
+      // que no lo mandan siguen funcionando igual.
+      experience_state: extra["experience_state"] ?? null,
       share_id: data.share_id,
       collection_share_id: data.collection_share_id ?? null,
       shortlist_id: data.shortlist_id ?? null,

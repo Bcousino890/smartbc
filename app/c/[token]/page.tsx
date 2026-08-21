@@ -10,7 +10,7 @@ import {
   recordShareOpen,
 } from "@/lib/db/queries/shares";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
-import { getApprovedStoryPublic } from "@/lib/db/queries/story";
+import { getStoryExperiencePublic } from "@/lib/db/queries/story";
 import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 
 export const dynamic = "force-dynamic";
@@ -167,8 +167,8 @@ export default async function TokenSharePage({
     .filter((m) => m.type === "plan" && m.url)
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
 
-  const [story, neighborhood] = await Promise.all([
-    getApprovedStoryPublic(row.id),
+  const [experience, neighborhood] = await Promise.all([
+    getStoryExperiencePublic(row.id),
     getNeighborhoodPublic({
       zone: row.zone,
       subzone: (row as { subzone?: string | null }).subzone ?? null,
@@ -192,7 +192,8 @@ export default async function TokenSharePage({
         plans={plans}
         shareId={resolved.shareId}
         publicUrl={publicUrl}
-        story={story}
+        story={experience.blocks}
+        experienceState={experience.state}
         neighborhood={neighborhood}
       />
     </>

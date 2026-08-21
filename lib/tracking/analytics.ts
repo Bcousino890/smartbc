@@ -40,6 +40,8 @@ export class AnalyticsTracker {
     shareId?: string
     collectionToken?: string
     shortlistToken?: string
+    /** Estado de experiencia del SmartLink (complete|partial|sparse|facts_led). */
+    experienceState?: string
   }): void {
     const key = `${params.pageType}|${window.location.pathname}`
     if (this.lastInitKey === key) return
@@ -56,6 +58,7 @@ export class AnalyticsTracker {
     shareId?: string
     collectionToken?: string
     shortlistToken?: string
+    experienceState?: string
   }): Promise<void> {
     try {
       const res = await fetch("/api/tracking/page-view", {
@@ -66,6 +69,7 @@ export class AnalyticsTracker {
           propertyId: params.propertyId ?? null,
           propertySlug: params.propertySlug ?? null,
           shareId: params.shareId ?? null,
+          experienceState: params.experienceState ?? null,
           collectionToken: params.collectionToken ?? null,
           shortlistToken: params.shortlistToken ?? null,
           sessionId: this.sessionId,

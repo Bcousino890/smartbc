@@ -6,6 +6,7 @@ import {
 import {
   classifyPropertyRef,
   resolvePageViewProperty,
+  normalizeExperienceState,
 } from "@/lib/tracking/page-view-contract";
 import { createAdminClient } from "@/lib/db/admin";
 
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest) {
        *  property_id ocurre aquí, con service role — igual que los tokens. */
       propertySlug?: string | null;
       shareId?: string | null;
+      /** Estado de experiencia del SmartLink; lista blanca en servidor. */
+      experienceState?: string | null;
       collectionToken?: string | null;
       shortlistToken?: string | null;
       sessionId?: string;
@@ -114,6 +117,7 @@ export async function POST(req: NextRequest) {
       collection_share_id: collectionShareId,
       shortlist_id: shortlistId,
       property_id: target.propertyId,
+      experience_state: normalizeExperienceState(body.experienceState),
       share_id: body.shareId ?? body.share_id ?? null,
       page_type: pageType,
       page_path: pagePath,

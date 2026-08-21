@@ -100,6 +100,15 @@ console.log("Tracker del navegador (entorno simulado):");
 // el evento se inserta sin attribution, comportamiento de seguridad previo).
 // Se verifica aquí que la clasificación NO interfiere: un body de colección
 // sin propiedad sigue siendo 'none'.
+console.log("experience_state (lista blanca):");
+{
+  const { normalizeExperienceState } = await import("../lib/tracking/page-view-contract");
+  check("'facts_led' pasa", normalizeExperienceState("facts_led") === "facts_led");
+  check("'complete' pasa", normalizeExperienceState("complete") === "complete");
+  check("texto libre → null (nunca entra en la tabla)", normalizeExperienceState("<script>") === null);
+  check("vacío → null", normalizeExperienceState(null) === null);
+}
+
 console.log("Tokens:");
 {
   check("D · body de colección (solo collectionToken) → none, sin skip",

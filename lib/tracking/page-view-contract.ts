@@ -63,3 +63,17 @@ export function resolvePageViewProperty(
   }
   return { propertyId: null, skip: false };
 }
+
+const EXPERIENCE_STATES = new Set(["complete", "partial", "sparse", "facts_led"]);
+
+/**
+ * experience_state del SmartLink para analytics (comparar engagement por
+ * estado). Lista blanca estricta: cualquier otro valor → null, jamás texto
+ * libre del navegador en la tabla.
+ */
+export function normalizeExperienceState(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+  return EXPERIENCE_STATES.has(value) ? value : null;
+}

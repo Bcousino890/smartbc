@@ -6,7 +6,7 @@ import {
   resolveLegacySlug,
 } from "@/lib/db/queries/properties";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
-import { getApprovedStoryPublic } from "@/lib/db/queries/story";
+import { getStoryExperiencePublic } from "@/lib/db/queries/story";
 import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 import { PublicPropertyView } from "./public-property-view";
 import { CollectionReturnBar } from "@/components/public/collection-return-bar";
@@ -210,8 +210,8 @@ export default async function PublicSharePage({
 
   // Story aprobado (o null → fallback determinista) y capa curada de barrio.
   // Ambos tolerantes a fallos: sin migración 0144 el SmartLink no se cae.
-  const [story, neighborhood] = await Promise.all([
-    getApprovedStoryPublic(row.id),
+  const [experience, neighborhood] = await Promise.all([
+    getStoryExperiencePublic(row.id),
     getNeighborhoodPublic({
       zone: row.zone,
       subzone: (row as { subzone?: string | null }).subzone ?? null,
@@ -227,7 +227,8 @@ export default async function PublicSharePage({
         property={property}
         videos={videos}
         plans={plans}
-        story={story}
+        story={experience.blocks}
+        experienceState={experience.state}
         neighborhood={neighborhood}
       />
     </>

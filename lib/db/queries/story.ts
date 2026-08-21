@@ -7,33 +7,117 @@
 import { createAdminClient } from "@/lib/db/admin";
 import type { PublicStoryBlock, StoryChapter } from "@/lib/services/story/types";
 import { STORY_CHAPTERS } from "@/lib/services/story/types";
+import { planPublication } from "@/lib/services/story/gate";
+import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neighborhoods";
 
-export async function getApprovedStoryPublic(
+/**
+ * Estado de EXPERIENCIA del SmartLink — no confundir con el estado de la
+ * Property Story. Toda propiedad activa renderiza la estructura 2.0; lo que
+ * cambia es la procedencia de la narrativa:
+ *   complete | partial | sparse → story APROBADA (métrica PROPERTY STORY);
+ *   facts_led → sin story aprobada: hero + key facts + details + barrio +
+ *               location (+ capítulos limpios si existen, ver abajo).
+ * Se deriva SIEMPRE de los datos en el momento del render: si mañana una
+ * facts-led obtiene story aprobada, pasa sola a complete/partial/sparse.
+ */
+export type PublicExperienceState = "complete" | "partial" | "sparse" | "facts_led";
+
+export type PublicStoryExperience = {
+  state: PublicExperienceState;
+  blocks: PublicStoryBlock[] | null;
+};
+
+function project(
+  blocks: Array<{ chapter: StoryChapter; copy: string }>,
+): PublicStoryBlock[] | null {
+  const out = blocks
+    .filter((b) => b.copy && STORY_CHAPTERS.includes(b.chapter))
+    .map((b) => ({ chapter: b.chapter, copy: b.copy }));
+  return out.length > 0 ? out : null;
+}
+
+export async function getStoryExperiencePublic(
   propertyId: string,
-): Promise<PublicStoryBlock[] | null> {
+): Promise<PublicStoryExperience> {
   try {
     const db = createAdminClient() as any;
     const { data: version } = await db
       .from("property_story_versions")
-      .select("id")
+      .select("id, notes")
       .eq("property_id", propertyId)
       .eq("status", "approved")
       .maybeSingle();
-    if (!version) return null;
-    const { data: blocks } = await db
-      .from("property_story_blocks")
-      .select("chapter, copy, position, status")
-      .eq("version_id", version.id)
-      .eq("status", "approved")
-      .order("position");
-    if (!blocks || blocks.length === 0) return null;
-    return (blocks as Array<{ chapter: StoryChapter; copy: string }>)
-      .filter((b) => b.copy && STORY_CHAPTERS.includes(b.chapter))
-      .map((b) => ({ chapter: b.chapter, copy: b.copy }));
+
+    if (version) {
+      const { data: blocks } = await db
+        .from("property_story_blocks")
+        .select("chapter, copy, position, status")
+        .eq("version_id", version.id)
+        .order("position");
+      const rows = (blocks ?? []) as Array<{ chapter: StoryChapter; copy: string; status: string }>;
+      const approved = rows.filter((b) => b.status === "approved");
+      const state: PublicExperienceState = /SPARSE/i.test(version.notes ?? "")
+        ? "sparse"
+        : rows.some((b) => b.status === "conflict")
+          ? "partial"
+          : "complete";
+      return { state, blocks: project(approved) };
+    }
+
+    // ── FACTS-LED ──
+    // Sin story aprobada. Si el último borrador tiene capítulos LIMPIOS, se
+    // proyectan — la story NO cambia de status y las métricas de Property
+    // Story no se tocan. La selección reutiliza el MISMO contrato de
+    // seguridad que la publicación (planPublication): fuera los bloques en
+    // conflicto, los apoyados en claims conflictivos, los cortos, y además
+    // cualquier bloque señalado por un fallo restante del gate (entidad sin
+    // respaldo, duplicado, boilerplate, >70 palabras…). Solo los fallos a
+    // nivel de PROPIEDAD (pocos capítulos, pocas fotos) se ignoran: son
+    // exactamente lo que facts-led no exige.
+    const { data: draft } = await db
+      .from("property_story_versions")
+      .select("id")
+      .eq("property_id", propertyId)
+      .eq("status", "generated")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!draft) return { state: "facts_led", blocks: null };
+
+    const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }, hoodIndex] =
+      await Promise.all([
+        db.from("properties")
+          .select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, floor_override")
+          .eq("id", propertyId).maybeSingle(),
+        db.from("property_story_blocks")
+          .select("id, chapter, copy, position, status, claim_ids")
+          .eq("version_id", draft.id).order("position"),
+        db.from("property_story_claims")
+          .select("id, source_text, fact, category, conflict")
+          .eq("version_id", draft.id),
+        db.from("property_photos")
+          .select("position, ai_class, ai_confidence, class_override")
+          .eq("property_id", propertyId).order("position"),
+        loadNeighborhoodIndex(db),
+      ]);
+    if (!property || !blocks?.length) return { state: "facts_led", blocks: null };
+
+    const plan = planPublication({
+      property,
+      blocks,
+      claims: claims ?? [],
+      photos: photos ?? [],
+      neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
+    });
+    const safeIds = new Set(plan.publishBlockIds);
+    for (const f of plan.storyFailures) for (const id of f.blockIds) safeIds.delete(id);
+    const safe = (blocks as Array<{ id: string; chapter: StoryChapter; copy: string }>)
+      .filter((b) => safeIds.has(b.id));
+    return { state: "facts_led", blocks: project(safe) };
   } catch {
-    // Migración 0144 sin aplicar u otra causa: el SmartLink cae al fallback
-    // determinista, nunca se rompe (patrón property_media).
-    return null;
+    // Migración sin aplicar u otra causa: estructura 2.0 sin narrativa,
+    // nunca una página rota (patrón property_media).
+    return { state: "facts_led", blocks: null };
   }
 }
 

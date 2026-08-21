@@ -77,7 +77,9 @@ export const CHAPTER_PHOTO_CLASSES: Record<string, string[]> = {
   overview: [],
 };
 
-const BOILERPLATE_RE =
+// Exportado: también lo usa el splitter FACTS-LED (fallback.ts) para excluir
+// frases de agencia de "Información de la vivienda". Una sola definición.
+export const BOILERPLATE_RE =
   /(nuestra p[áa]gina web|call center|off[- ]market|24 horas|365 d[íi]as|no dude en contactar|cont[áa]ctenos|s[íi]guenos|gestionaremos para ti|oportunidad(es)? de inversi[óo]n)/i;
 
 const MIN_PHOTOS = 8;

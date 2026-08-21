@@ -1,3 +1,5 @@
+import { BOILERPLATE_RE } from "./gate";
+
 // SmartLink 2.0 · fallback del día 1, SIN IA.
 //
 // Mientras una propiedad no tiene story aprobado, la descripción cruda no
@@ -44,6 +46,24 @@ function splitSentences(text: string): string[] {
  * Nunca corta una frase por la mitad; una frase de >70 palabras (raro pero
  * real en fichas de portal) se respeta entera en su propio bloque.
  */
+/**
+ * Variante FACTS-LED: mismo splitter determinista, con dos reglas más.
+ *  · Se excluyen las FRASES que casan con el boilerplate conocido de agencia
+ *    (BOILERPLATE_RE, la misma definición que usa el quality gate) — solo
+ *    frases enteras: nunca se recorta dentro de una frase.
+ *  · Si lo que queda es extremadamente pobre (<15 palabras), se devuelve []
+ *    y el módulo "Información de la vivienda" se omite entero: facts antes
+ *    que prosa de relleno. Sin headings vacíos, sin placeholders.
+ */
+export function splitDescriptionForFactsLed(description: string): string[] {
+  const text = description.replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  const sentences = splitSentences(text).filter((s) => !BOILERPLATE_RE.test(s));
+  const clean = sentences.join(" ");
+  if (countWords(clean) < 15) return [];
+  return splitDescriptionForFallback(clean);
+}
+
 export function splitDescriptionForFallback(description: string): string[] {
   const text = description.replace(/\s+/g, " ").trim();
   if (!text) return [];

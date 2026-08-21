@@ -190,8 +190,14 @@ export function QueueClient({
                     {r.state === "published_complete" && (
                       <span className="text-emerald-700">PUBLICADA — COMPLETA</span>
                     )}
-                    {r.state === "fallback" && <span className="text-ink/45">FALLBACK</span>}
-                    {r.state === "blocked" && <span className="text-amber-700">BLOQUEADA</span>}
+                    {/* FACTS-LED no es un error: el SmartLink 2.0 está activo
+                        (hero, key facts, detalles, barrio, mapa) y solo falta
+                        el enriquecimiento editorial de la Property Story. */}
+                    {(r.state === "fallback" || r.state === "blocked") && (
+                      <span className="text-sky-700">
+                        FACTS-LED · SmartLink 2.0 activo · pendiente de enriquecimiento editorial
+                      </span>
+                    )}
                     {!r.available && <span className="text-rose-600">· No disponible</span>}
                   </span>
                 </td>

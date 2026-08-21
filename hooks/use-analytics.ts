@@ -23,6 +23,8 @@ interface UseAnalyticsOptions {
   /** Token del Shortlist. El servidor lo cambia por su id: el token no se
    *  guarda jamás en la tabla de métricas. */
   shortlistToken?: string;
+  /** Estado de experiencia del SmartLink (complete|partial|sparse|facts_led). */
+  experienceState?: string;
   /** Desactiva la instrumentación (previsualizaciones internas). */
   disabled?: boolean;
 }
@@ -49,6 +51,7 @@ export function useAnalytics(options: UseAnalyticsOptions) {
         shareId: options.shareId,
         collectionToken: options.collectionToken,
         shortlistToken: options.shortlistToken,
+        experienceState: options.experienceState,
       });
     }
     // Solo inicializar una vez al montar — no re-inicializar si cambian las opciones

@@ -22,7 +22,7 @@ import { PropertyGallery } from "@/components/property-detail/property-gallery";
 import { formatPrice } from "@/lib/format";
 import { shareSlug } from "@/lib/share-slug";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
-import { splitDescriptionForFallback } from "@/lib/services/story/fallback";
+import { splitDescriptionForFactsLed } from "@/lib/services/story/fallback";
 import { CHAPTER_HEADINGS, type PublicStoryBlock, type StoryChapter } from "@/lib/services/story/types";
 import { groupFeatures } from "@/lib/property-features-taxonomy";
 import { ATICO_FLOOR } from "@/lib/floor";
@@ -124,6 +124,7 @@ export function PublicPropertyView({
   publicUrl,
   story,
   neighborhood,
+  experienceState,
 }: {
   property: Property;
   videos?: VideoMedia[];
@@ -134,6 +135,11 @@ export function PublicPropertyView({
   publicUrl?: string;
   story?: PublicStoryBlock[] | null;
   neighborhood?: NeighborhoodData | null;
+  /** Estado de EXPERIENCIA (no de Property Story): complete | partial |
+   *  sparse llegan de una story aprobada; facts_led = estructura 2.0 sin
+   *  narrativa aprobada. Solo alimenta analytics — el render se decide por
+   *  los datos que llegan. */
+  experienceState?: "complete" | "partial" | "sparse" | "facts_led";
 }) {
   // property.id en el DTO público ES el slug (nunca se expone el UUID):
   // se manda como propertySlug y el servidor lo resuelve a property_id.
@@ -142,6 +148,7 @@ export function PublicPropertyView({
     pageType: "public_property",
     propertySlug: property.id,
     shareId: shareId,
+    experienceState,
   });
 
   const isRent = property.operation === "alquiler";
@@ -205,12 +212,14 @@ export function PublicPropertyView({
   const firstChapters = chapterBlocks.slice(0, 2);
   const restChapters = chapterBlocks.slice(2);
 
-  // Fallback del día 1 (sin story aprobado): bloques deterministas ≤70
-  // palabras bajo el heading genérico "Descripción". Nada inventado.
+  // FACTS-LED sin capítulos limpios: descripción legible bajo "Información
+  // de la vivienda" — splitter determinista ≤70 palabras, frases de agencia
+  // conocidas excluidas, y si el texto es extremadamente pobre el módulo se
+  // omite entero. Nada inventado, ningún heading temático.
   const fallbackBlocks = useMemo(
     () =>
       !blocks && property.longDescription
-        ? splitDescriptionForFallback(property.longDescription)
+        ? splitDescriptionForFactsLed(property.longDescription)
         : [],
     [blocks, property.longDescription],
   );
@@ -416,11 +425,12 @@ export function PublicPropertyView({
           />
         )}
 
-        {/* Fallback día 1: sin story aprobado, descripción legible SIN muro.
-            Heading genérico — los temáticos solo existen con evidencia. */}
+        {/* FACTS-LED · 04 NARRATIVE CONTENT (variante sin capítulos): la
+            descripción como lectura cómoda, nunca como muro. Heading genérico
+            — los temáticos solo existen con evidencia del story. */}
         {!blocks && fallbackBlocks.length > 0 && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
-            <h2 className="crm-section-title text-ink">Descripción</h2>
+            <h2 className="crm-section-title text-ink">Información de la vivienda</h2>
             <div className="mt-4 max-w-3xl space-y-4 text-base leading-relaxed text-ink/75">
               {fallbackBlocks.map((p, i) => (
                 <p key={i}>{p}</p>
