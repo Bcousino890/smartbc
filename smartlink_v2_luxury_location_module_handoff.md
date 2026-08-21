@@ -113,7 +113,8 @@ un `overlay` que intercepta — es que **debajo no hay mapa que interceptar**.
 
 - activar: **`Explorar mapa`** (nunca por hover);
 - salir: **`Volver al recorrido`**, que destruye la instancia de Leaflet y
-  devuelve el mosaico inerte;
+  devuelve el mosaico inerte (con un destino enfocado, ese mismo sitio ofrece
+  **`Ver zona completa`**);
 - en modo explorar: pan, zoom, rueda y dos controles (`+` / `−`).
 
 Verificado en los 66 casos moviendo el ratón al centro del mapa y girando la
@@ -142,8 +143,10 @@ disponible**.
   modo, misma `≈`, y **la corrección por `bbox` de POIs de gran superficie
   sigue intacta** (BC-1390 mantiene "Parque del Retiro ≈ 14 min a pie", no la
   medida contra el centroide).
-- **Nunca se dibuja una línea entre vivienda y destino.** No tenemos geometría
-  de ruta real y fingirla sería mentir.
+- **Nunca se finge una ruta por calles.** No tenemos geometría de routing real
+  y dibujar un trazado callejero inventado sería mentir. (La pasada de
+  Destination Focus sí une vivienda y destino con una **recta** discontinua,
+  que representa proximidad y no un recorrido — ver más abajo.)
 - Los destinos se representan sobre el mapa como puntos discretos, siempre por
   debajo del marcador de la vivienda en jerarquía visual.
 - Categorías (`Naturaleza`, `Cultura`, `Compras`, `Gastronomía`…) solo si
