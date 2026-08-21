@@ -1,4 +1,4 @@
-# SMARTLINK 2.0 — BCP LUXURY PROPERTY EXPERIENCE COMPLETE
+# SMARTLINK 2.0 — PRODUCTION STANDARD
 ## Handoff de implementación · 2026-08-21 · desplegado en producción (`760038a`)
 
 > **FIRST APPROVED PRODUCTION PROPERTY STORY** · BC-1416 ("Vivienda única de diseño en el corazón de Almagro") · **Engine v4** (baseline cerrado: dedupe por hecho, planta contextual, un bloque por capítulo, claim ownership, preservación de entidades) · **6 approved chapters** (Salón y luz · Cocina y comedor · Zona privada · Acabados y confort [solo-texto] · La finca [fachada #45] · Vivir en Almagro) · **1 intentionally rejected weak intro** · **0 conflicts** · 43 claims con cita literal (25 usados, 11 duplicados retirados, 2 boilerplate descartados) · fotos 47/47 clasificadas (caché, 0 re-llamadas) · floor=null (inferencia errónea de "planta baja del trastero" corregida con regla contextual) · subzone=Almagro verificada · smoke QA en producción: 1440/390/zoom 125 — 0 overflow, 0 errores JS, sin Key Fact PLANTA, alternancia imagen/copy correcta.
@@ -77,14 +77,21 @@ Lazy bajo el fold, poster en todo vídeo, un autoplay máximo, pausa offscreen, 
 `SELECT *` + adapter siguen filtrando igual; lo ÚNICO nuevo que cruza al cliente: metadata técnica de vídeo (source/format/medidas/poster), nombre de clase de foto, bloques aprobados del story (capítulo+copy, sin claims/evidencia/UUIDs), y barrio curado con POIs. Expiry/revocación/noindex/`/p/`/aislamiento de país intactos; nada de Supabase en el navegador.
 
 ## QA
-- **Tests** (`npm run test:smartlink`, 20/20): fallback splitter (límite 70, sin pérdida de texto, abreviaturas), validación (conflicto "tres dormitorios" vs specs=2, duplicados, boilerplate), taxonomía, POIs por geometría (incluido "sin dato → no se muestra").
-- **Suites** ✅: typography guardrail (250 archivos), portal-links, viewing-collections, client-shortlist, sales-inbox, command-center, idealista 100/100. Build 149/149.
-- **Producción** (post-deploy, 2 SmartLinks reales × 390/430/834/1024/1440/1920 × zoom 100/125): auditoría automática **sin hallazgos** (0 overflow, 0 serif, 0 microtexto, 0 errores JS) + revisión visual: hero, key facts con planta, fallback en bloques, detalles agrupados, Vivir en Chamberí, POIs con tiempos, panel de visita — todo correcto; CTA mid correctamente omitido sin media/story (adaptividad verificada).
+- **Tests deterministas** (`npm run test:smartlink`): **38/38** en el estado final de Engine v4 — fallback splitter (techo 70, sin pérdida de texto, abreviaturas), validación de claims (conflicto "tres dormitorios" vs specs, duplicados, boilerplate), **dedupe por hecho** en frases multi-hecho (1 dup + 2 únicos / 2 dups + 1 único / dup y conflicto coexistiendo), **planta contextual** (BC-1416 → null; "tercera planta de finca clásica" → 3; feature corta → 3; garaje en −1 → null), **invariantes v4** (un bloque por capítulo, ownership de claims, preservación de entidades Almagro→Madrid → conflict), taxonomía de features y POIs por geometría (incluido "sin dato fiable → sin minutos").
+- **Suites de regresión** ✅: typography guardrail (250 archivos), portal-links, viewing-collections, client-shortlist, sales-inbox, command-center, idealista 100/100. Build de producción 149/149.
+- **QA de despliegue** (2 SmartLinks reales × 390/430/834/1024/1440/1920 × zoom 100/125): sin hallazgos automáticos ni visuales.
+- **QA de la tanda controlada: 12/12** (50 primeras publicadas; mucha/poca media, 9 barrios, venta y alquiler).
+- **QA final del catálogo: 20/20** — muestra auto-seleccionada por diversidad (venta/alquiler, 8–62 fotos, 3–7 capítulos, descripciones de 73 a 545 palabras, 9 barrios, **2 casos con vídeo**) × 3 escenarios (1440, 390, zoom 125%): 0 "Descripción" residual, 0 capítulos duplicados, 0 bloques >70 palabras (máx. real 68), 0 boilerplate, 0 overflow, 0 errores JS; barrio, detalles y CTA presentes en todas.
 
 ## Limitaciones conocidas
-1. **Story/clasificación de fotos requieren la API key de IA** configurada en el panel (ai.config); sin ella, el botón devuelve error claro y el SmartLink sigue en fallback. Aún no se ha generado ningún story real — el primer uso del workflow lo hará el equipo (revisión humana obligatoria).
-2. De las 9 propiedades-tipo del plan de pruebas, en producción hoy solo existen casos sin vídeo/plano (fallback + adaptividad verificados); hero-vídeo, vertical y plano quedan verificados por lógica+tests y pendientes de la primera propiedad real con esa media (el botón "Analizar vídeos" deja la metadata lista).
-3. Los tiempos a POIs son estimaciones geométricas honestas (≈, modo explícito); si se quiere precisión de rutas reales, habría que integrar un router externo (decisión futura, no v1).
-4. `neighborhoods.facts` (jsonb) queda reservado para la capa de conocimiento ampliada (D3 v2).
+1. **Story/clasificación de fotos requieren la API key de IA** configurada en el panel (ai.config); sin ella, el botón devuelve error claro y el SmartLink sigue en fallback. El flujo está validado end-to-end en producción: **BC-1416 fue la primera Property Story aprobada** y el rollout del catálogo cerró con **167 publicadas** (ver sección CATALOG PROPERTY STORY ROLLOUT).
+2. **Media validada con datos reales**: capítulos con foto clasificada (16.383 fotos), módulo de vídeo (**14 propiedades publicadas con vídeo**, 2 de ellas dentro de la muestra QA 20/20) y **módulo de plano renderizando en producción** (BC-1008, único plano del catálogo hoy).
+3. **Pendientes de validar end-to-end por no existir aún el caso real en producción** (verificado en BD, no por falta de implementación):
+   - **hero-vídeo manual**: 0 vídeos `source='manual'` horizontales con metadata ffprobe → ninguna propiedad es hoy elegible para hero-vídeo; la ruta queda cubierta por lógica y tests, pendiente del primer vídeo profesional subido.
+   - **vídeo vertical**: 0 vídeos con `format='vertical'` en el catálogo → el contenedor 9:16 (nunca recortado) queda sin caso real.
+   - **plano en una propiedad con story publicada**: el único plano existente está en una propiedad que hoy sirve fallback; el módulo se ha visto funcionando, pero no combinado con capítulos.
+4. Los tiempos a POIs son estimaciones geométricas honestas (≈, modo explícito); si se quiere precisión de rutas reales, habría que integrar un router externo (decisión futura, no v1).
+5. `neighborhoods.facts` (jsonb) queda reservado para la capa de conocimiento ampliada (D3 v2).
 
-# SMARTLINK 2.0 — BCP LUXURY PROPERTY EXPERIENCE COMPLETE
+# SMARTLINK 2.0 — PRODUCTION STANDARD
+**Engine v4 — FROZEN** · 167 Property Stories publicadas · 519 en fallback · 343 conflictos pendientes de revisión humana · QA catálogo final 20/20
