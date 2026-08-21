@@ -104,18 +104,34 @@ end $$;`);
 lines.push(`
 -- 5) POIs curados. Mismo patrón idempotente que 0144: se borra el lote y se
 --    reinserta, porque la tabla no tiene clave natural.
+--
+--    bbox_*: envolvente del polígono en OSM, sólo para los POIs que ocupan
+--    superficie apreciable (parques, recintos, campus). Sin ella, un parque
+--    se mide contra el centro de su polígono y una vivienda pegada a la verja
+--    del Retiro salía a "18 min a pie". Los POIs puntuales la dejan a null.
+alter table neighborhood_pois add column if not exists bbox_min_lat double precision;
+alter table neighborhood_pois add column if not exists bbox_min_lng double precision;
+alter table neighborhood_pois add column if not exists bbox_max_lat double precision;
+alter table neighborhood_pois add column if not exists bbox_max_lng double precision;
+
 delete from neighborhood_pois where verified_source like 'osm-2026-08%';
 with n as (select id, zone_key from neighborhoods)
-insert into neighborhood_pois (neighborhood_id, name, category, latitude, longitude, priority, travel_modes, verified_source)
-select n.id, p.name, p.category, p.lat, p.lng, p.priority, p.modes::text[], p.src
+insert into neighborhood_pois (neighborhood_id, name, category, latitude, longitude, priority, travel_modes, verified_source,
+                               bbox_min_lat, bbox_min_lng, bbox_max_lat, bbox_max_lng)
+select n.id, p.name, p.category, p.lat, p.lng, p.priority, p.modes::text[], p.src,
+       p.bmin_lat, p.bmin_lng, p.bmax_lat, p.bmax_lng
 from n
 join (values`);
 lines.push(
-  resolved.map((r) =>
-    `  (${q(r.hood)}, ${q(r.name)}, ${q(r.category)}, ${r.lat}, ${r.lng}, ${r.priority}, ${arr(r.modes)}, ${q(`osm-2026-08 ${r.osm}`)})`,
-  ).join(",\n"),
+  resolved.map((r) => {
+    const b = r.bounds;
+    const box = b
+      ? `${b.minLat}, ${b.minLng}, ${b.maxLat}, ${b.maxLng}`
+      : `null::double precision, null::double precision, null::double precision, null::double precision`;
+    return `  (${q(r.hood)}, ${q(r.name)}, ${q(r.category)}, ${r.lat}, ${r.lng}, ${r.priority}, ${arr(r.modes)}, ${q(`osm-2026-08 ${r.osm}`)}, ${box})`;
+  }).join(",\n"),
 );
-lines.push(`) as p(zone_key, name, category, lat, lng, priority, modes, src)
+lines.push(`) as p(zone_key, name, category, lat, lng, priority, modes, src, bmin_lat, bmin_lng, bmax_lat, bmax_lng)
   on p.zone_key = n.zone_key;`);
 
 // Corrección de las 4 propiedades con zona genérica.

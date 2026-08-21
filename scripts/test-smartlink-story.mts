@@ -278,6 +278,39 @@ console.log("Tiempos a POIs:");
     { name: "Muy lejos", category: "otro", latitude: 40.52, longitude: -3.56, travel_modes: ["walk"] },
   );
   check("walk-only fuera de rango → sin dato (no se inventa)", t3 === null);
+
+  // POI con superficie: el Retiro real ocupa ~1,5 km. Una vivienda pegada a
+  // su verja sur (Conde de Cartagena, caso real de BC-1390) debe medirse
+  // contra el borde del parque, no contra el centroide del polígono, que
+  // queda kilómetro y medio hacia dentro y daba "≈ 18 min a pie".
+  const RETIRO_BOUNDS = { minLat: 40.4083, minLng: -3.6900, maxLat: 40.4216, maxLng: -3.6746 };
+  const enLaVerja = { lat: 40.4087, lng: -3.6735 };
+  const sinBbox = computePoiTravel(enLaVerja, {
+    name: "Parque del Retiro", category: "parque",
+    latitude: 40.4153, longitude: -3.6845, travel_modes: ["walk"],
+  });
+  const conBbox = computePoiTravel(enLaVerja, {
+    name: "Parque del Retiro", category: "parque",
+    latitude: 40.4153, longitude: -3.6845, travel_modes: ["walk"],
+    bounds: RETIRO_BOUNDS,
+  });
+  check(
+    "parque con envolvente → se mide al borde, no al centro",
+    conBbox != null && sinBbox != null && conBbox.minutes < sinBbox.minutes / 2,
+    JSON.stringify({ sinBbox, conBbox }),
+  );
+  check("vivienda en la verja del Retiro ≤ 5 min a pie", conBbox != null && conBbox.minutes <= 5, JSON.stringify(conBbox));
+
+  // Dentro del recinto → distancia cero, nunca negativa ni NaN.
+  const dentro = computePoiTravel(
+    { lat: 40.4150, lng: -3.6820 },
+    {
+      name: "Parque del Retiro", category: "parque",
+      latitude: 40.4153, longitude: -3.6845, travel_modes: ["walk"],
+      bounds: RETIRO_BOUNDS,
+    },
+  );
+  check("punto dentro del recinto → 1 min (mínimo), no negativo", dentro != null && dentro.minutes === 1, JSON.stringify(dentro));
 }
 
 console.log("");

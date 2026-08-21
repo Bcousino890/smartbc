@@ -112,13 +112,31 @@ export async function getNeighborhoodPublic(params: {
     if (params.lat != null && params.lng != null) {
       const { data: rows } = await db
         .from("neighborhood_pois")
-        .select("name, category, latitude, longitude, priority, travel_modes")
+        .select(
+          "name, category, latitude, longitude, priority, travel_modes, bbox_min_lat, bbox_min_lng, bbox_max_lat, bbox_max_lng",
+        )
         .eq("neighborhood_id", hood.id)
         .eq("active", true)
         .order("priority")
         .limit(8);
       pois = (rows ?? [])
-        .map((p: any) => computePoiTravel({ lat: params.lat!, lng: params.lng! }, p))
+        .map((p: any) =>
+          computePoiTravel(
+            { lat: params.lat!, lng: params.lng! },
+            {
+              ...p,
+              bounds:
+                p.bbox_min_lat != null
+                  ? {
+                      minLat: p.bbox_min_lat,
+                      minLng: p.bbox_min_lng,
+                      maxLat: p.bbox_max_lat,
+                      maxLng: p.bbox_max_lng,
+                    }
+                  : null,
+            },
+          ),
+        )
         .filter(Boolean)
         .slice(0, 6) as PoiTravel[];
     }

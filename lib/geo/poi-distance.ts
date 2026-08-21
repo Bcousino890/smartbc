@@ -32,6 +32,32 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
 }
 
+/**
+ * Distancia a un POI que ocupa superficie (parques, recintos, campus).
+ *
+ * Un parque grande se geocodifica al CENTRO de su polígono, así que medir
+ * contra ese punto miente: una vivienda pegada a la verja sur del Retiro daba
+ * "≈ 18 min a pie" porque el centroide queda kilómetro y medio hacia dentro.
+ * Cuando el POI trae envolvente se mide contra el RECTÁNGULO —cero si el punto
+ * cae dentro—, que es lo que responde a "cuánto tardo en llegar al parque".
+ */
+function distanceToBoundsKm(
+  lat: number,
+  lng: number,
+  b: PoiBounds,
+): number {
+  const nearLat = Math.min(Math.max(lat, b.minLat), b.maxLat);
+  const nearLng = Math.min(Math.max(lng, b.minLng), b.maxLng);
+  return haversineKm(lat, lng, nearLat, nearLng);
+}
+
+export type PoiBounds = {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+};
+
 export function computePoiTravel(
   property: { lat: number; lng: number },
   poi: {
@@ -40,9 +66,13 @@ export function computePoiTravel(
     latitude: number;
     longitude: number;
     travel_modes: string[];
+    bounds?: PoiBounds | null;
   },
 ): PoiTravel | null {
-  const km = haversineKm(property.lat, property.lng, poi.latitude, poi.longitude) * STREET_FACTOR;
+  const straightKm = poi.bounds
+    ? distanceToBoundsKm(property.lat, property.lng, poi.bounds)
+    : haversineKm(property.lat, property.lng, poi.latitude, poi.longitude);
+  const km = straightKm * STREET_FACTOR;
   const walkMin = Math.max(1, Math.round((km / WALK_KMH) * 60));
   const driveMin = Math.max(2, Math.round((km / DRIVE_KMH) * 60) + DRIVE_OVERHEAD_MIN);
 

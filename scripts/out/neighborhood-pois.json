@@ -40,7 +40,14 @@
       "lng": -3.687378,
       "km": 1.03,
       "osm": "way/43405582",
-      "query": "Calle de Serrano, Madrid"
+      "query": "Calle de Serrano, Madrid",
+      "bounds": {
+        "minLat": 40.4253904,
+        "minLng": -3.6878644,
+        "maxLat": 40.430462,
+        "maxLng": -3.6869094
+      },
+      "extentKm": 0.56
     },
     {
       "hood": "castellana",
@@ -83,7 +90,14 @@
       "lng": -3.683285,
       "km": 2.51,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "lista",
@@ -125,7 +139,14 @@
       "lng": -3.687378,
       "km": 0.82,
       "osm": "way/43405582",
-      "query": "Calle de Serrano, Madrid"
+      "query": "Calle de Serrano, Madrid",
+      "bounds": {
+        "minLat": 40.4253904,
+        "minLng": -3.6878644,
+        "maxLat": 40.430462,
+        "maxLng": -3.6869094
+      },
+      "extentKm": 0.56
     },
     {
       "hood": "lista",
@@ -168,7 +189,14 @@
       "lng": -3.683285,
       "km": 1.96,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "goya",
@@ -182,7 +210,14 @@
       "lng": -3.683285,
       "km": 1.3,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "goya",
@@ -210,7 +245,14 @@
       "lng": -3.671788,
       "km": 0.45,
       "osm": "way/15808330",
-      "query": "Movistar Arena, Madrid"
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
     },
     {
       "hood": "goya",
@@ -252,7 +294,14 @@
       "lng": -3.672149,
       "km": 0.49,
       "osm": "relation/13971053",
-      "query": "Fábrica Nacional de Moneda y Timbre, Madrid"
+      "query": "Fábrica Nacional de Moneda y Timbre, Madrid",
+      "bounds": {
+        "minLat": 40.4222192,
+        "minLng": -3.6726747,
+        "maxLat": 40.423154,
+        "maxLng": -3.6690805
+      },
+      "extentKm": 0.3
     },
     {
       "hood": "fuente-del-berro",
@@ -266,7 +315,14 @@
       "lng": -3.660724,
       "km": 0.47,
       "osm": "way/210814085",
-      "query": "Parque de la Quinta de la Fuente del Berro, Madrid"
+      "query": "Parque de la Quinta de la Fuente del Berro, Madrid",
+      "bounds": {
+        "minLat": 40.4213684,
+        "minLng": -3.6630129,
+        "maxLat": 40.4295508,
+        "maxLng": -3.659651
+      },
+      "extentKm": 0.91
     },
     {
       "hood": "fuente-del-berro",
@@ -294,7 +350,14 @@
       "lng": -3.663344,
       "km": 0.78,
       "osm": "way/23321768",
-      "query": "Plaza de toros de Las Ventas, Madrid"
+      "query": "Plaza de toros de Las Ventas, Madrid",
+      "bounds": {
+        "minLat": 40.4314797,
+        "minLng": -3.6644091,
+        "maxLat": 40.4331606,
+        "maxLng": -3.6624659
+      },
+      "extentKm": 0.19
     },
     {
       "hood": "fuente-del-berro",
@@ -308,7 +371,14 @@
       "lng": -3.671788,
       "km": 0.51,
       "osm": "way/15808330",
-      "query": "Movistar Arena, Madrid"
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
     },
     {
       "hood": "fuente-del-berro",
@@ -323,7 +393,14 @@
       "lng": -3.683285,
       "km": 1.87,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "guindalera",
@@ -337,7 +414,14 @@
       "lng": -3.663344,
       "km": 0.78,
       "osm": "way/23321768",
-      "query": "Plaza de toros de Las Ventas, Madrid"
+      "query": "Plaza de toros de Las Ventas, Madrid",
+      "bounds": {
+        "minLat": 40.4314797,
+        "minLng": -3.6644091,
+        "maxLat": 40.4331606,
+        "maxLng": -3.6624659
+      },
+      "extentKm": 0.19
     },
     {
       "hood": "guindalera",
@@ -365,7 +449,14 @@
       "lng": -3.660724,
       "km": 1.55,
       "osm": "way/210814085",
-      "query": "Parque de la Quinta de la Fuente del Berro, Madrid"
+      "query": "Parque de la Quinta de la Fuente del Berro, Madrid",
+      "bounds": {
+        "minLat": 40.4213684,
+        "minLng": -3.6630129,
+        "maxLat": 40.4295508,
+        "maxLng": -3.659651
+      },
+      "extentKm": 0.91
     },
     {
       "hood": "guindalera",
@@ -394,7 +485,14 @@
       "lng": -3.671136,
       "km": 2.05,
       "osm": "way/262480721",
-      "query": "Hospital General Universitario Gregorio Marañón, Madrid"
+      "query": "Hospital General Universitario Gregorio Marañón, Madrid",
+      "bounds": {
+        "minLat": 40.4180817,
+        "minLng": -3.6730115,
+        "maxLat": 40.4212394,
+        "maxLng": -3.6693353
+      },
+      "extentKm": 0.35
     },
     {
       "hood": "el-viso",
@@ -422,7 +520,14 @@
       "lng": -3.677678,
       "km": 0.61,
       "osm": "way/27125344",
-      "query": "Auditorio Nacional de Música, Madrid"
+      "query": "Auditorio Nacional de Música, Madrid",
+      "bounds": {
+        "minLat": 40.4454678,
+        "minLng": -3.6780185,
+        "maxLat": 40.4466055,
+        "maxLng": -3.6773238
+      },
+      "extentKm": 0.13
     },
     {
       "hood": "el-viso",
@@ -464,7 +569,14 @@
       "lng": -3.688197,
       "km": 1.03,
       "osm": "way/1507411898",
-      "query": "Estadio Santiago Bernabéu, Madrid"
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
     },
     {
       "hood": "el-viso",
@@ -479,7 +591,14 @@
       "lng": -3.67563,
       "km": 1.03,
       "osm": "way/11476987",
-      "query": "Parque de Berlín, Madrid"
+      "query": "Parque de Berlín, Madrid",
+      "bounds": {
+        "minLat": 40.4493174,
+        "minLng": -3.6773738,
+        "maxLat": 40.4515201,
+        "maxLng": -3.674146
+      },
+      "extentKm": 0.27
     },
     {
       "hood": "hispanoamerica",
@@ -493,7 +612,14 @@
       "lng": -3.688197,
       "km": 0.97,
       "osm": "way/1507411898",
-      "query": "Estadio Santiago Bernabéu, Madrid"
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
     },
     {
       "hood": "hispanoamerica",
@@ -507,7 +633,14 @@
       "lng": -3.677678,
       "km": 1.08,
       "osm": "way/27125344",
-      "query": "Auditorio Nacional de Música, Madrid"
+      "query": "Auditorio Nacional de Música, Madrid",
+      "bounds": {
+        "minLat": 40.4454678,
+        "minLng": -3.6780185,
+        "maxLat": 40.4466055,
+        "maxLng": -3.6773238
+      },
+      "extentKm": 0.13
     },
     {
       "hood": "hispanoamerica",
@@ -521,7 +654,14 @@
       "lng": -3.67563,
       "km": 0.6,
       "osm": "way/11476987",
-      "query": "Parque de Berlín, Madrid"
+      "query": "Parque de Berlín, Madrid",
+      "bounds": {
+        "minLat": 40.4493174,
+        "minLng": -3.6773738,
+        "maxLat": 40.4515201,
+        "maxLng": -3.674146
+      },
+      "extentKm": 0.27
     },
     {
       "hood": "hispanoamerica",
@@ -578,7 +718,14 @@
       "lng": -3.67563,
       "km": 1.37,
       "osm": "way/11476987",
-      "query": "Parque de Berlín, Madrid"
+      "query": "Parque de Berlín, Madrid",
+      "bounds": {
+        "minLat": 40.4493174,
+        "minLng": -3.6773738,
+        "maxLat": 40.4515201,
+        "maxLng": -3.674146
+      },
+      "extentKm": 0.27
     },
     {
       "hood": "nueva-espana",
@@ -620,7 +767,14 @@
       "lng": -3.677678,
       "km": 1.85,
       "osm": "way/27125344",
-      "query": "Auditorio Nacional de Música, Madrid"
+      "query": "Auditorio Nacional de Música, Madrid",
+      "bounds": {
+        "minLat": 40.4454678,
+        "minLng": -3.6780185,
+        "maxLat": 40.4466055,
+        "maxLng": -3.6773238
+      },
+      "extentKm": 0.13
     },
     {
       "hood": "nueva-espana",
@@ -635,7 +789,14 @@
       "lng": -3.688197,
       "km": 1.32,
       "osm": "way/1507411898",
-      "query": "Estadio Santiago Bernabéu, Madrid"
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
     },
     {
       "hood": "nueva-espana",
@@ -678,7 +839,14 @@
       "lng": -3.688197,
       "km": 0.96,
       "osm": "way/1507411898",
-      "query": "Estadio Santiago Bernabéu, Madrid"
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
     },
     {
       "hood": "castillejos",
@@ -692,7 +860,14 @@
       "lng": -3.702888,
       "km": 1.58,
       "osm": "way/30625862",
-      "query": "Mercado Maravillas Bravo Murillo"
+      "query": "Mercado Maravillas Bravo Murillo",
+      "bounds": {
+        "minLat": 40.4485102,
+        "minLng": -3.7035007,
+        "maxLat": 40.4498519,
+        "maxLng": -3.7022273
+      },
+      "extentKm": 0.15
     },
     {
       "hood": "castillejos",
@@ -1100,7 +1275,14 @@
       "lng": -3.694422,
       "km": 0.55,
       "osm": "way/991444051",
-      "query": "Museo Reina Sofía, Madrid"
+      "query": "Museo Reina Sofía, Madrid",
+      "bounds": {
+        "minLat": 40.4071605,
+        "minLng": -3.696041,
+        "maxLat": 40.4089286,
+        "maxLng": -3.693149
+      },
+      "extentKm": 0.25
     },
     {
       "hood": "lavapies",
@@ -1128,7 +1310,14 @@
       "lng": -3.703056,
       "km": 0.34,
       "osm": "relation/3421762",
-      "query": "Tabacalera, Madrid"
+      "query": "Tabacalera, Madrid",
+      "bounds": {
+        "minLat": 40.4057005,
+        "minLng": -3.7034316,
+        "maxLat": 40.4069352,
+        "maxLng": -3.7021129
+      },
+      "extentKm": 0.14
     },
     {
       "hood": "lavapies",
@@ -1157,7 +1346,14 @@
       "lng": -3.683285,
       "km": 0.81,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "ibiza",
@@ -1199,7 +1395,14 @@
       "lng": -3.671788,
       "km": 0.59,
       "osm": "way/15808330",
-      "query": "Movistar Arena, Madrid"
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
     },
     {
       "hood": "ibiza",
@@ -1214,7 +1417,14 @@
       "lng": -3.692041,
       "km": 1.51,
       "osm": "relation/7726080",
-      "query": "Museo del Prado, Madrid"
+      "query": "Museo del Prado, Madrid",
+      "bounds": {
+        "minLat": 40.4128535,
+        "minLng": -3.6927472,
+        "maxLat": 40.4147856,
+        "maxLng": -3.6904926
+      },
+      "extentKm": 0.22
     },
     {
       "hood": "nino-jesus",
@@ -1228,7 +1438,14 @@
       "lng": -3.683285,
       "km": 0.91,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "nino-jesus",
@@ -1299,7 +1516,14 @@
       "lng": -3.683285,
       "km": 1.44,
       "osm": "relation/13616929",
-      "query": "Parque del Retiro, Madrid"
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
     },
     {
       "hood": "estrella",
@@ -1327,7 +1551,14 @@
       "lng": -3.671136,
       "km": 0.59,
       "osm": "way/262480721",
-      "query": "Hospital General Universitario Gregorio Marañón, Madrid"
+      "query": "Hospital General Universitario Gregorio Marañón, Madrid",
+      "bounds": {
+        "minLat": 40.4180817,
+        "minLng": -3.6730115,
+        "maxLat": 40.4212394,
+        "maxLng": -3.6693353
+      },
+      "extentKm": 0.35
     },
     {
       "hood": "estrella",
@@ -1341,7 +1572,14 @@
       "lng": -3.671788,
       "km": 1,
       "osm": "way/15808330",
-      "query": "Movistar Arena, Madrid"
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
     },
     {
       "hood": "estrella",
@@ -1384,7 +1622,14 @@
       "lng": -3.755858,
       "km": 3.19,
       "osm": "relation/1946885",
-      "query": "Casa de Campo, Madrid"
+      "query": "Casa de Campo, Madrid",
+      "bounds": {
+        "minLat": 40.3992357,
+        "minLng": -3.7813887,
+        "maxLat": 40.449071,
+        "maxLng": -3.7227618
+      },
+      "extentKm": 5.55
     },
     {
       "hood": "somosaguas",
@@ -1398,7 +1643,14 @@
       "lng": -3.745398,
       "km": 5.72,
       "osm": "relation/14612",
-      "query": "Club de Campo Villa de Madrid"
+      "query": "Club de Campo Villa de Madrid",
+      "bounds": {
+        "minLat": 40.4454132,
+        "minLng": -3.7477803,
+        "maxLat": 40.4505663,
+        "maxLng": -3.7430987
+      },
+      "extentKm": 0.57
     },
     {
       "hood": "somosaguas",
@@ -1426,7 +1678,14 @@
       "lng": -3.797476,
       "km": 1.92,
       "osm": "way/28327068",
-      "query": "Zoco de Pozuelo"
+      "query": "Zoco de Pozuelo",
+      "bounds": {
+        "minLat": 40.4192191,
+        "minLng": -3.7981957,
+        "maxLat": 40.4200564,
+        "maxLng": -3.7967555
+      },
+      "extentKm": 0.12
     },
     {
       "hood": "prado-de-somosaguas",
@@ -1454,7 +1713,14 @@
       "lng": -3.797476,
       "km": 1.49,
       "osm": "way/28327068",
-      "query": "Zoco de Pozuelo"
+      "query": "Zoco de Pozuelo",
+      "bounds": {
+        "minLat": 40.4192191,
+        "minLng": -3.7981957,
+        "maxLat": 40.4200564,
+        "maxLng": -3.7967555
+      },
+      "extentKm": 0.12
     },
     {
       "hood": "prado-de-somosaguas",
@@ -1482,7 +1748,14 @@
       "lng": -3.755858,
       "km": 4,
       "osm": "relation/1946885",
-      "query": "Casa de Campo, Madrid"
+      "query": "Casa de Campo, Madrid",
+      "bounds": {
+        "minLat": 40.3992357,
+        "minLng": -3.7813887,
+        "maxLat": 40.449071,
+        "maxLng": -3.7227618
+      },
+      "extentKm": 5.55
     }
   ],
   "rejected": [
