@@ -683,7 +683,12 @@
     contrast(0.93) hue-rotate(-8deg);
   /* Velo cálido por encima: une la composición con el crema del SmartLink. */
   --bcp-map-wash: rgba(196, 162, 106, 0.1);
+  /* Lienzo bajo las teselas. Con loading="lazy" el mosaico entra al
+     acercarse; hasta entonces se ve ESTE papel, no un hueco blanco. */
+  --bcp-map-canvas: #efe9dd;
 }
+
+.bcp-map-stage { background-color: var(--bcp-map-canvas); }
 
 .bcp-map-tiles {
   filter: var(--bcp-map-treatment);

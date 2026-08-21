@@ -2,6 +2,7 @@ import "server-only";
 import sharp from "sharp";
 import { createAdminClient } from "@/lib/db/admin";
 import { removeKnownWatermark } from "./watermark-removal";
+import { isMobiliaImageUrl, toMobiliaOriginal } from "./scrapers/mobilia";
 
 const BUCKET = "properties-photos";
 const MAX_WIDTH = 1920;
@@ -28,9 +29,18 @@ export async function downloadAndWatermark(params: {
     // "crear propiedad" tardase muchísimo y acabara reventando el cliente).
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20_000);
+    // Mobilia (media.mobiliagestion.es — backend de Level y de otras agencias)
+    // sirve la foto CON marca de agua en la variante por defecto; `-original.jpg`
+    // es la MISMA foto SIN marca. El scraper antiguo normalizaba la URL antes de
+    // llegar aquí, pero el import por link (extractGeneric) pasa la `.jpg` cruda,
+    // así que la normalizamos también en este punto — el ÚNICO por el que pasan
+    // todas las descargas. Sin esto, la marca queda horneada en nuestro storage.
+    const fetchUrl = isMobiliaImageUrl(params.sourceUrl)
+      ? toMobiliaOriginal(params.sourceUrl)
+      : params.sourceUrl;
     let res: Response;
     try {
-      res = await fetch(params.sourceUrl, {
+      res = await fetch(fetchUrl, {
         headers: {
           "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)",
         },
@@ -47,7 +57,7 @@ export async function downloadAndWatermark(params: {
     const rawBuf = Buffer.from(await res.arrayBuffer());
     // Si la fuente tiene marca de agua constante (ej. Clikalia), la quitamos
     // antes de procesar. Si no, devuelve el buffer igual.
-    const buf = await removeKnownWatermark(params.sourceUrl, rawBuf);
+    const buf = await removeKnownWatermark(fetchUrl, rawBuf);
     const image = sharp(buf, { failOn: "none" }).rotate();
     const meta = await image.metadata();
     const targetWidth = Math.min(meta.width ?? MAX_WIDTH, MAX_WIDTH);

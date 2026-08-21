@@ -294,7 +294,7 @@ export function LocationModule({
       {/* ── C · ESCENARIO DEL MAPA ─────────────────────────────────────── */}
       <div
         ref={stageRef}
-        className={`relative mt-5 w-full overflow-hidden ${
+        className={`bcp-map-stage relative mt-5 w-full overflow-hidden ${
           live ? "bcp-map-live h-[62vh] min-h-[380px]" : "h-[46vh] min-h-[280px] md:h-[520px]"
         }`}
       >

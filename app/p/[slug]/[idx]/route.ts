@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { isMobiliaImageUrl, toMobiliaOriginal } from "@/lib/sync/scrapers/mobilia";
 
 // Proxy de fotos de propiedad. Sirve la foto en posición `idx` para la
 // propiedad con `slug`, leyéndola desde Supabase Storage en streaming. El
@@ -69,24 +70,38 @@ export async function GET(
     return new NextResponse("not_found", { status: 404 });
   }
 
-  try {
-    const upstream = await fetch(photo.url, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!upstream.ok || !upstream.body) {
+  // Si la foto todavía se sirve desde el CDN de Mobilia (aún no se re-alojó en
+  // nuestro storage, o la descarga en segundo plano falló), pedimos primero la
+  // variante `-original.jpg` (misma foto SIN marca) y caemos a la original si
+  // el origen no la tuviera. Para fotos ya re-alojadas esto es un no-op.
+  const candidates = isMobiliaImageUrl(photo.url)
+    ? [toMobiliaOriginal(photo.url), photo.url]
+    : [photo.url];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const isLast = i === candidates.length - 1;
+    try {
+      const upstream = await fetch(candidates[i], {
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!upstream.ok || !upstream.body) {
+        if (!isLast) continue;
+        return new NextResponse("upstream_error", { status: 502 });
+      }
+      const contentType = upstream.headers.get("content-type") ?? "image/webp";
+      return new NextResponse(upstream.body, {
+        headers: {
+          "Content-Type": contentType,
+          // Cache largo: las fotos no cambian salvo que se vuelva a subir, y
+          // en ese caso el endpoint sirve la nueva en el mismo path.
+          "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        },
+      });
+    } catch {
+      if (!isLast) continue;
       return new NextResponse("upstream_error", { status: 502 });
     }
-    const contentType = upstream.headers.get("content-type") ?? "image/webp";
-    return new NextResponse(upstream.body, {
-      headers: {
-        "Content-Type": contentType,
-        // Cache largo: las fotos no cambian salvo que se vuelva a subir, y
-        // en ese caso el endpoint sirve la nueva en el mismo path.
-        "Cache-Control": "public, max-age=86400, s-maxage=86400",
-      },
-    });
-  } catch {
-    return new NextResponse("upstream_error", { status: 502 });
   }
+  return new NextResponse("upstream_error", { status: 502 });
 }
