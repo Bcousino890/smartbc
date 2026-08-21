@@ -3,6 +3,30 @@
 
 > **FIRST APPROVED PRODUCTION PROPERTY STORY** · BC-1416 ("Vivienda única de diseño en el corazón de Almagro") · **Engine v4** (baseline cerrado: dedupe por hecho, planta contextual, un bloque por capítulo, claim ownership, preservación de entidades) · **6 approved chapters** (Salón y luz · Cocina y comedor · Zona privada · Acabados y confort [solo-texto] · La finca [fachada #45] · Vivir en Almagro) · **1 intentionally rejected weak intro** · **0 conflicts** · 43 claims con cita literal (25 usados, 11 duplicados retirados, 2 boilerplate descartados) · fotos 47/47 clasificadas (caché, 0 re-llamadas) · floor=null (inferencia errónea de "planta baja del trastero" corregida con regla contextual) · subzone=Almagro verificada · smoke QA en producción: 1440/390/zoom 125 — 0 overflow, 0 errores JS, sin Key Fact PLANTA, alternancia imagen/copy correcta.
 
+## CATALOG PROPERTY STORY ROLLOUT
+*(2026-08-21 · Engine v4 congelado · rollout en dos tandas: 50 controladas + resto)*
+
+| Estado del catálogo | Propiedades |
+|---|---:|
+| Activas en producción | 686 |
+| **Con Property Story PUBLICADA** | **167** |
+| En fallback determinista (sin story aprobable) | 519 |
+| — de ellas, bloqueadas por conflicto factual | 343 |
+| — descartadas por quality gate (recuperables editando) | 173 |
+| — sin story (descripción demasiado corta) | 3 |
+
+**Quality gate de publicación (16 criterios, `scripts/publish-story-batch.mts`)** — ninguna story se publica sin superarlos todos: 0 conflictos · engine v4 · evidencia trazable · 1 bloque por capítulo · claim no reutilizado · ≤70 palabras · ≥5 palabras salvo hecho factual · entidades respaldadas · planta no inferida de zona secundaria · foto semánticamente coherente · barrio coherente con zone/subzone · ≥3 capítulos narrativos · ≥8 fotos · propiedad disponible · sin heading vacío · sin boilerplate de agencia.
+
+**Rechazos acumulados por gate:** 343 conflicto factual · 137 bloque demasiado corto · 18 <3 capítulos narrativos · 18 cobertura fotográfica <8 · 1 claim reutilizado · 1 propiedad no disponible. Los gates 2/4/6/7/8/9/15/16 no rechazaron ninguna: las invariantes v4 lo impiden en origen.
+
+**QA post-publicación:** 12/12 en la tanda controlada y **20/20 en la muestra diversa final** (venta/alquiler, 8–62 fotos, 3–7 capítulos, descripciones de 73 a 545 palabras, 9 barrios, con y sin vídeo) × 3 escenarios (1440, 390, zoom 125%): 0 "Descripción" residual, 0 capítulos duplicados, 0 bloques >70 palabras, 0 boilerplate, 0 overflow, 0 errores JS, barrio/detalles/CTA presentes en todas.
+
+**Contenido generado (inventario completo):** 684 stories · 16.383 fotos clasificadas por IA · 3.676 bloques editoriales con evidencia literal · 424 conflictos factuales detectados y bloqueados.
+
+**Nota editorial (no es bug, decisión de producto):** los capítulos LA FINCA y COCINA tienden a ser breves (11–13 palabras de media) y hay arranques repetidos ("La vivienda…", "Ubicado/a en…"). Es consecuencia directa de la regla evidence > variedad literaria. Se corrige editando en el panel, nunca tocando el motor.
+
+---
+
 ## Arquitectura implementada
 Un único **Adaptive Property Renderer** (`app/compartir/[slug]/public-property-view.tsx`) compartido por `/compartir/[slug]` y `/c/[token]`, con la biblioteca canónica de 18 módulos y estados RICH / MEDIA-RICH / STANDARD / SPARSE emergentes de los datos (sin plantillas separadas, sin headings vacíos, sin placeholders). Naming visible en español sobrio (D6). Tipografía EMAAR intacta; `OPTIMA_LICENSE_REQUIRED` sin cambios.
 
