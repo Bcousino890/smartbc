@@ -1,19 +1,24 @@
-# SMARTLINK 2.0 — PRODUCTION STANDARD
+# SMARTLINK 2.0
 ## Handoff de implementación · 2026-08-21 · desplegado en producción (`760038a`)
+
+> **SMARTLINK 2.0 PLATFORM — COMPLETE**
+> **ENGINE V4 — FROZEN**
+> **CATALOG PROPERTY STORY ENRICHMENT — IN PROGRESS** *(167 de 686 propiedades enriquecidas; el resto sirve el fallback determinista sin degradación)*
 
 > **FIRST APPROVED PRODUCTION PROPERTY STORY** · BC-1416 ("Vivienda única de diseño en el corazón de Almagro") · **Engine v4** (baseline cerrado: dedupe por hecho, planta contextual, un bloque por capítulo, claim ownership, preservación de entidades) · **6 approved chapters** (Salón y luz · Cocina y comedor · Zona privada · Acabados y confort [solo-texto] · La finca [fachada #45] · Vivir en Almagro) · **1 intentionally rejected weak intro** · **0 conflicts** · 43 claims con cita literal (25 usados, 11 duplicados retirados, 2 boilerplate descartados) · fotos 47/47 clasificadas (caché, 0 re-llamadas) · floor=null (inferencia errónea de "planta baja del trastero" corregida con regla contextual) · subzone=Almagro verificada · smoke QA en producción: 1440/390/zoom 125 — 0 overflow, 0 errores JS, sin Key Fact PLANTA, alternancia imagen/copy correcta.
 
 ## CATALOG PROPERTY STORY ROLLOUT
 *(2026-08-21 · Engine v4 congelado · rollout en dos tandas: 50 controladas + resto)*
 
-| Estado del catálogo | Propiedades |
+| Estado del catálogo (verificado en producción) | Propiedades |
 |---|---:|
-| Activas en producción | 686 |
+| Activas en producción | **686** |
 | **Con Property Story PUBLICADA** | **167** |
-| En fallback determinista (sin story aprobable) | 519 |
-| — de ellas, bloqueadas por conflicto factual | 343 |
-| — descartadas por quality gate (recuperables editando) | 173 |
-| — sin story (descripción demasiado corta) | 3 |
+| En fallback determinista | **519** |
+| — con story en borrador pendiente de enriquecimiento | 516 |
+| — sin story (descripción <25 palabras: no da para capítulos) | 3 |
+
+*(167 + 516 + 3 = 686. El fallback no es una degradación: esas fichas siguen mostrando la descripción troceada en bloques legibles ≤70 palabras, más todos los módulos del 2.0 — hero, key facts, detalles agrupados, plano, barrio, POIs, conversión.)*
 
 **Quality gate de publicación (16 criterios, `scripts/publish-story-batch.mts`)** — ninguna story se publica sin superarlos todos: 0 conflictos · engine v4 · evidencia trazable · 1 bloque por capítulo · claim no reutilizado · ≤70 palabras · ≥5 palabras salvo hecho factual · entidades respaldadas · planta no inferida de zona secundaria · foto semánticamente coherente · barrio coherente con zone/subzone · ≥3 capítulos narrativos · ≥8 fotos · propiedad disponible · sin heading vacío · sin boilerplate de agencia.
 
@@ -24,6 +29,28 @@
 **Contenido generado (inventario completo):** 684 stories · 16.383 fotos clasificadas por IA · 3.676 bloques editoriales con evidencia literal · 424 conflictos factuales detectados y bloqueados.
 
 **Nota editorial (no es bug, decisión de producto):** los capítulos LA FINCA y COCINA tienden a ser breves (11–13 palabras de media) y hay arranques repetidos ("La vivienda…", "Ubicado/a en…"). Es consecuencia directa de la regla evidence > variedad literaria. Se corrige editando en el panel, nunca tocando el motor.
+
+---
+
+## CATALOG ENRICHMENT BACKLOG — trabajo pendiente
+*(Cifras del dry-run del quality gate sobre las 518 versiones en borrador, 2026-08-21. No requieren código: son revisión humana en `/{country}/admin/propiedades/{slug}/story`.)*
+
+| | Bloqueo | Propiedades | Qué hace falta |
+|---|---|---:|---|
+| **A** | Bloque demasiado corto (<5 palabras sin dato duro) | **137** | Editar o rechazar ese bloque en el panel. **La bolsa recuperable más grande y más barata.** |
+| **B** | Conflicto factual (descripción vs ficha) | **343** | Decidir qué dato es el correcto. Patrón dominante: dormitorios y baños, casi siempre el texto dice *menos* que la ficha → probable causa sistemática (descripciones previas a reforma o criterio distinto al contar estancias). Vale la pena auditar 5-6 antes de ir una a una. |
+| **C** | Menos de 3 capítulos narrativos | **18** | Descripción origen pobre: solo mejora si se reescribe la descripción y se regenera. |
+| **D** | Cobertura fotográfica insuficiente (<8 fotos) | **18** | Requiere reportaje fotográfico, no edición. |
+| **E** | Otros | **2** | 1 claim reutilizado (BC-0755) · 1 propiedad no disponible (BC-0020). |
+
+**E-bis · Validación multimedia pendiente por inexistencia del caso real** (verificado en BD, no por falta de implementación):
+
+| Caso | Estado real en catálogo | Consecuencia |
+|---|---|---|
+| Hero-vídeo manual elegible | **0** vídeos `source='manual'` horizontales con metadata ffprobe | La ruta hero-vídeo no se ha ejercitado con media real; cubierta por lógica y tests. |
+| Vídeo vertical | **0** vídeos con `format='vertical'` | El contenedor 9:16 (nunca recortado) sin caso real. |
+| Floor plan sobre propiedad con story publicada | **1** plano en catálogo (BC-1008), en propiedad que hoy sirve fallback | El módulo de plano **sí renderiza en producción**, pero no se ha visto combinado con capítulos. |
+| Vídeo (signature) | **14** propiedades publicadas con vídeo, 2 dentro de la muestra QA | ✅ Validado end-to-end. |
 
 ---
 
@@ -93,5 +120,13 @@ Lazy bajo el fold, poster en todo vídeo, un autoplay máximo, pausa offscreen, 
 4. Los tiempos a POIs son estimaciones geométricas honestas (≈, modo explícito); si se quiere precisión de rutas reales, habría que integrar un router externo (decisión futura, no v1).
 5. `neighborhoods.facts` (jsonb) queda reservado para la capa de conocimiento ampliada (D3 v2).
 
-# SMARTLINK 2.0 — PRODUCTION STANDARD
-**Engine v4 — FROZEN** · 167 Property Stories publicadas · 519 en fallback · 343 conflictos pendientes de revisión humana · QA catálogo final 20/20
+## Estado final
+
+| | |
+|---|---|
+| **SMARTLINK 2.0 PLATFORM** | **COMPLETE** — arquitectura, renderer adaptativo, Content Engine, quality gates y rollout técnico cerrados y en producción |
+| **ENGINE V4** | **FROZEN** — no se admiten cambios de extractor, validador, structure ni compresor |
+| **CATALOG PROPERTY STORY ENRICHMENT** | **IN PROGRESS** — 167 de 686 enriquecidas · 519 en fallback (sin degradación) · 343 bloqueadas por conflicto factual · 175 recuperables vía revisión humana (137 bloque corto + 18 <3 capítulos + 18 fotos + 2 otros) |
+| QA | 38/38 tests · 12/12 tanda controlada · **20/20 catálogo final** |
+
+La plataforma está terminada; el enriquecimiento del catálogo es trabajo editorial y de calidad de datos en curso, sin dependencia de más desarrollo.
