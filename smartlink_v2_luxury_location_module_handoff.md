@@ -255,4 +255,132 @@ build de producción. Todo en verde. Engine v4.1 sin tocar.
 
 ---
 
-# SMARTLINK 2.0 — LUXURY LOCATION MODULE COMPLETE
+
+---
+
+# DESTINATION FOCUS POLISH · 2026-08-21
+
+Última pasada de UX sobre el módulo ya aprobado. La paleta (ivory / warm stone
+/ champagne / sage / charcoal) y la arquitectura del mapa **no se tocan**.
+
+## El problema que se resuelve
+
+Al pulsar un POI la tarjeta se activaba y el mapa cambiaba, pero la relación
+**vivienda → destino** había que deducirla: el destino no tenía presencia
+propia y nada unía los dos puntos.
+
+## Cómo queda
+
+Al seleccionar cualquier destino —tarjeta del rail, lista inferior o
+universidad— se entra en **DESTINATION FOCUS**:
+
+| Pieza | Tratamiento |
+|---|---|
+| **Vivienda** | marcador charcoal con anillo dorado, estable, origen inequívoco |
+| **Destino** | marcador champán por encima de los secundarios, con **nombre + tiempo + modo** en etiqueta |
+| **Encuadre** | los dos puntos con margen; ninguno pegado a un borde; sin perder el contexto de ciudad |
+| **Conexión** | línea champán fina y discontinua, dibujada una sola vez |
+| **Secundarios** | se apagan mientras hay foco: no compiten seis marcadores |
+| **Reset** | **`VER ZONA COMPLETA`** restaura la vista general y limpia el foco |
+
+## Decisiones que conviene conocer
+
+**El foco funciona con el mapa BLOQUEADO.** El encuadre es matemática pura
+(`fitTwoPoints` en `lib/geo/tile-math.ts`) sobre el mismo mosaico de teselas,
+así que seleccionar un destino **nunca** desbloquea la rueda ni los gestos. La
+decisión de interacción pasiva por defecto se mantiene intacta: solo
+`Explorar mapa` activa la cartografía. Verificado con rueda de ratón sobre el
+mapa en los 21 casos: la página baja, la tesela no cambia.
+
+**La conexión es una recta, deliberadamente.** Representa **proximidad**, no
+una ruta por calles. No hay proveedor de routing en el proyecto y **no se ha
+añadido uno solo para esto**: dibujar un trazado callejero inventado sería
+mentirle al cliente. Se mantiene la semántica `≈` de siempre.
+
+**Una implementación, no tres.** Rail, lista "Cerca de la vivienda" y
+universidades llaman al mismo `selectPoi` y comparten un único `focus`. La QA
+comprueba que al pulsar arriba se activa también la fila de abajo.
+
+**Orden de las tarjetas:** de más cerca a más lejos **dentro de cada modo**, a
+pie primero. Una escala ascendente única mezclando modos se leería como una
+línea de tiempo, y 12 min a pie no son comparables con 12 en coche.
+
+**Contraste en foco:** el mapa base cede un punto de saturación
+(`saturate(0.88) contrast(0.96)` encima del tratamiento aprobado) para que
+destaquen vivienda, conexión y destino. Sigue siendo el mapa de color: ni
+gris, ni oscurecido.
+
+## Universidades cercanas
+
+**Reutiliza lo que ya existía, no crea nada:**
+- el catálogo `lib/data/universities.ts` — la misma fuente que "Distancia al
+  campus" del portal de cliente, con sus sedes, direcciones y coordenadas;
+- el `computePoiTravel` del propio módulo, así que **ni un minuto nuevo ni
+  otra fórmula**: mismos tiempos, mismos modos, misma `≈` que cualquier otro
+  destino.
+
+Una entrada por universidad, con **su sede más cercana** (mostrar dos campus
+de la misma escuela ocuparía sitio sin añadir información), máximo 5, ordenadas
+por cercanía, y ninguna por encima de 45 minutos — más allá deja de ser un
+argumento de la ubicación. Al pulsarlas ejecutan **el mismo Destination
+Focus**: no existe ningún `UniversityMap`.
+
+### Sobre el "contexto estudiante"
+
+Se buscó la condición existente y **no la hay en esta superficie**: el perfil
+`Estudiante` vive en la ficha del **cliente** dentro del CRM
+(`ClientProfileType`), y un SmartLink público es **anónimo** — no sabemos
+quién lo abre. La única señal a nivel de propiedad sería `stay = 'short'`, que
+no es lo mismo que un estudiante.
+
+Por decisión de producto (2026-08-21), la sección **no se condiciona a un
+segmento adivinado**: se muestra cuando aporta —hay coordenadas y hay campus a
+distancia razonable— y **no existe** cuando no, sin heading vacío ni "no hay
+universidades". Es la opción honesta: preferimos dar el dato a todo el mundo
+que inventarnos quién está mirando.
+
+## Analítica
+
+`location_poi_select` y `location_university_select` (con nombre, categoría y
+`experience_state`) y `location_overview_restore`, sobre el `trackEvent`
+existente. Sin PII, sin migración.
+
+## QA real — 21/21
+
+7 SmartLinks × 3 viewports (1440, 390, 1440 @125%): 5 POIs de estilo de vida
+reales enfocados (Retiro, Mercado de la Paz, Lázaro Galdiano, Movistar Arena,
+Dos de Mayo), universidad enfocada en cada uno de esos 5, y 2 SmartLinks sin
+coordenadas que **no** deben mostrar la sección.
+
+Verificado en cada caso: destino y vivienda inequívocos, conexión visible y
+con longitud real, etiqueta dentro del lienzo, active state sincronizado
+arriba y abajo, secundarios apagados, universidad usando el mismo focus,
+`VER ZONA COMPLETA` restaurando (sin conexión, sin activos, con el rail
+intacto), **la página no salta al seleccionar**, **la rueda sobre el mapa no
+hace zoom**, sin overflow, sin errores JS, atribución presente.
+
+Regresiones: `test:smartlink` (+12 comprobaciones nuevas de encuadre y
+universidades) · `test:tracking` · `test:neighborhoods` 28/28 · QA del módulo
+de ubicación 66/66 · typecheck · build.
+
+## Defecto encontrado y corregido en esta pasada
+
+`fitTwoPoints` redondeaba el zoom **hacia abajo**, y en una pirámide de teselas
+eso cuesta un nivel completo: el doble de escala. Con la vivienda y el Retiro a
+1,2 km se veía **medio Madrid** —río Manzanares y M-30 incluidos— con los dos
+puntos diminutos en el centro. Ahora se prueba primero el nivel más ceñido y
+solo se baja si de verdad no caben con un margen mínimo digno. El padding
+pedido pasa a ser una preferencia y la garantía es ese margen. Cubierto con una
+regresión que mide el ancho real del encuadre en metros.
+
+## Limitaciones
+
+1. La conexión no es una ruta: si algún día entra un proveedor de routing real
+   y fiable, la geometría puede sustituirla sin tocar el resto del módulo.
+2. Las universidades usan las coordenadas del catálogo existente (precisión
+   ~50-200 m según su propia documentación), suficiente para un `≈` pero no
+   para una ruta puerta a puerta.
+3. El foco muestra un destino cada vez, a propósito: comparar dos destinos a la
+   vez volvería a llenar el mapa de marcadores.
+
+# LUXURY LOCATION MODULE — COMPLETE
