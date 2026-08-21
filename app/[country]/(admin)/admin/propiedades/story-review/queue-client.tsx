@@ -179,9 +179,21 @@ export function QueueClient({
                   <span className="block truncate font-bold text-ink" title={r.title}>
                     {r.title}
                   </span>
-                  {!r.available && (
-                    <span className="crm-meta text-rose-600">No disponible</span>
-                  )}
+                  <span className="crm-meta flex items-center gap-1.5">
+                    {r.state === "published_partial" && (
+                      <span className="text-emerald-700">
+                        PUBLICADA — PARCIAL · {r.pendingBlocks} bloque
+                        {r.pendingBlocks === 1 ? "" : "s"} pendiente
+                        {r.pendingBlocks === 1 ? "" : "s"} de revisión
+                      </span>
+                    )}
+                    {r.state === "published_complete" && (
+                      <span className="text-emerald-700">PUBLICADA — COMPLETA</span>
+                    )}
+                    {r.state === "fallback" && <span className="text-ink/45">FALLBACK</span>}
+                    {r.state === "blocked" && <span className="text-amber-700">BLOQUEADA</span>}
+                    {!r.available && <span className="text-rose-600">· No disponible</span>}
+                  </span>
                 </td>
                 <td className="px-3 py-3 text-ink/70">{r.zone}</td>
                 <td className="px-3 py-3 text-ink/70">

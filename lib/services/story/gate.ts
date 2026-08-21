@@ -103,7 +103,14 @@ export type GateInput = {
     status: string;
     claim_ids: string[] | null;
   }>;
-  claims: Array<{ id: string; source_text: string; fact: string; category: string }>;
+  claims: Array<{
+    id: string;
+    source_text: string;
+    fact: string;
+    category: string;
+    /** Marcado por el validador: su contenido NUNCA puede publicarse. */
+    conflict?: boolean;
+  }>;
   photos: Array<{
     position: number;
     ai_class: string | null;
@@ -138,6 +145,82 @@ function norm(s: string | null | undefined): string {
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+// ── SAFE PARTIAL STORY PUBLISHING ───────────────────────────────────────────
+// Fallos BLOCK-LOCAL: afectan a un bloque y se resuelven excluyéndolo del
+// publish (el conflicto sigue visible en admin). Todo lo demás es
+// STORY-BLOCKING y retiene la propiedad entera en fallback.
+const BLOCK_LOCAL_CODES: GateCode[] = ["conflict", "too_short"];
+
+export type PublishPlan = {
+  /** true si se puede publicar algo con total seguridad factual. */
+  publishable: boolean;
+  mode: "complete" | "partial" | "none";
+  /** Bloques que pueden pasar a 'approved' (y por tanto al SmartLink). */
+  publishBlockIds: string[];
+  /** Bloques excluidos y por qué (conflicto o demasiado corto). */
+  excluded: Array<{ blockId: string; chapter: string; reason: GateCode }>;
+  /** Fallos que retienen la story entera, evaluados YA sobre el subconjunto. */
+  storyFailures: GateFailure[];
+  narrativeChapters: number;
+};
+
+/**
+ * Decide QUÉ bloques pueden publicarse con seguridad factual.
+ *
+ * Garantías (verificadas aquí, no asumidas):
+ *  · ningún bloque marcado en conflicto entra;
+ *  · ningún bloque que se apoye en un claim conflictivo entra (cinturón y
+ *    tirantes: aunque el bloque no estuviera marcado);
+ *  · los bloques demasiado cortos se excluyen en vez de condenar la story;
+ *  · el resto de gates se re-evalúa SOBRE EL SUBCONJUNTO publicable;
+ *  · se exigen ≥3 capítulos narrativos tras las exclusiones.
+ */
+export function planPublication(input: GateInput): PublishPlan {
+  const active = input.blocks.filter((b) => b.status !== "rejected");
+  const conflictClaimIds = new Set(
+    input.claims.filter((c) => c.conflict).map((c) => c.id),
+  );
+
+  const excluded: PublishPlan["excluded"] = [];
+  const keep: typeof active = [];
+  for (const b of active) {
+    // 1 · bloque marcado en conflicto por el motor
+    if (b.status === "conflict") {
+      excluded.push({ blockId: b.id, chapter: b.chapter, reason: "conflict" });
+      continue;
+    }
+    // 2 · cinturón de seguridad: ningún claim conflictivo puede alimentarlo
+    if ((b.claim_ids ?? []).some((id) => conflictClaimIds.has(id))) {
+      excluded.push({ blockId: b.id, chapter: b.chapter, reason: "conflict" });
+      continue;
+    }
+    // 3 · bloque demasiado corto → se excluye, no condena la story
+    const words = copyWordCount(b.copy);
+    const factual = /\d{4}|\bm²\b|\d+/.test(b.copy) && ["building", "overview"].includes(b.chapter);
+    if (words < 5 && !factual) {
+      excluded.push({ blockId: b.id, chapter: b.chapter, reason: "too_short" });
+      continue;
+    }
+    keep.push(b);
+  }
+
+  // Re-evaluación completa del gate SOLO sobre lo que se publicaría.
+  const subsetResult = evaluateGate({ ...input, blocks: keep });
+  const storyFailures = subsetResult.failures.filter(
+    (f) => !BLOCK_LOCAL_CODES.includes(f.code),
+  );
+
+  const publishable = storyFailures.length === 0 && keep.length > 0;
+  return {
+    publishable,
+    mode: !publishable ? "none" : excluded.length === 0 ? "complete" : "partial",
+    publishBlockIds: keep.map((b) => b.id),
+    excluded,
+    storyFailures,
+    narrativeChapters: subsetResult.narrativeChapters,
+  };
 }
 
 /** Evalúa los 16 gates. Devuelve TODOS los fallos (no corta en el primero). */

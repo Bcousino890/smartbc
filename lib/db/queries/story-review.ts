@@ -14,6 +14,9 @@ import {
   type QueueBucket,
 } from "@/lib/services/story/gate";
 
+/** Estado visible de la propiedad en el catálogo (SmartLink 2.0). */
+export type StoryState = "published_complete" | "published_partial" | "fallback" | "blocked";
+
 export type QueueRow = {
   propertyId: string;
   versionId: string;
@@ -31,6 +34,9 @@ export type QueueRow = {
   buckets: QueueBucket[];
   generatedAt: string;
   reviewedAt: string | null;
+  state: StoryState;
+  /** Bloques excluidos del publish que siguen esperando revisión humana. */
+  pendingBlocks: number;
 };
 
 export type QueueCounters = Record<QueueBucket | "total", number>;
@@ -92,8 +98,27 @@ export async function getEnrichmentQueue(): Promise<{
   approved.clear();
   for (const r of approvedList ?? []) approved.add(r.property_id);
 
-  const pending = [...latestByProperty.values()].filter((v: any) => !approved.has(v.property_id));
-  const pendingIds = pending.map((v: any) => v.property_id);
+  // La cola incluye DOS grupos:
+  //  · borradores sin publicar (fallback → trabajo de enriquecimiento);
+  //  · publicadas PARCIALES, que siguen teniendo bloques en conflicto
+  //    pendientes de revisión aunque el cliente ya vea la story.
+  const partials: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from("property_story_versions")
+      .select("id, property_id, created_at, reviewed_at, status")
+      .eq("status", "approved")
+      .range(from, from + 999);
+    if (error || !data?.length) break;
+    partials.push(...data);
+    if (data.length < 1000) break;
+  }
+
+  const pending = [
+    ...[...latestByProperty.values()].filter((v: any) => !approved.has(v.property_id)),
+    ...partials,
+  ];
+  const pendingIds = [...new Set(pending.map((v: any) => v.property_id))];
   const versionIds = pending.map((v: any) => v.id);
 
   // Carga en bloque, PAGINADA: un `.in()` con 500+ UUIDs supera el límite de
@@ -101,7 +126,7 @@ export async function getEnrichmentQueue(): Promise<{
   const [props, blocks, claims, photos, hoodsRes] = await Promise.all([
     fetchIn(db, "properties", "id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation", "id", pendingIds),
     fetchIn(db, "property_story_blocks", "id, version_id, chapter, copy, status, claim_ids", "version_id", versionIds),
-    fetchIn(db, "property_story_claims", "id, version_id, source_text, fact, category", "version_id", versionIds),
+    fetchIn(db, "property_story_claims", "id, version_id, source_text, fact, category, conflict", "version_id", versionIds),
     fetchIn(db, "property_photos", "property_id, position, ai_class, ai_confidence, class_override", "property_id", pendingIds),
     db.from("neighborhoods").select("zone_key, display_name").eq("active", true),
   ]);
@@ -121,6 +146,15 @@ export async function getEnrichmentQueue(): Promise<{
     const photos = (photosByProp.get(v.property_id) ?? []).sort((a: any, b: any) => a.position - b.position);
     const hoodKey = norm(property.subzone) || norm(property.zone);
 
+    const isPublished = v.status === "approved";
+    // Bloques que el cliente NO ve y siguen esperando decisión humana.
+    const pendingBlocks = blocks.filter(
+      (b: any) => b.status === "conflict",
+    ).length;
+
+    // Una publicada-parcial sin bloques pendientes ya está resuelta: fuera.
+    if (isPublished && pendingBlocks === 0) continue;
+
     const result = evaluateGate({
       property,
       blocks,
@@ -128,7 +162,15 @@ export async function getEnrichmentQueue(): Promise<{
       photos,
       neighborhoodDisplayName: hoodByKey.get(hoodKey) ?? null,
     });
-    if (result.pass) continue; // publicable: no es backlog
+    if (!isPublished && result.pass) continue; // publicable limpio: no es backlog
+
+    const state: StoryState = isPublished
+      ? pendingBlocks > 0
+        ? "published_partial"
+        : "published_complete"
+      : result.failures.some((f) => ["few_chapters", "low_photos", "unavailable"].includes(f.code))
+        ? "blocked"
+        : "fallback";
 
     const buckets = [...new Set(
       result.failures
@@ -153,6 +195,8 @@ export async function getEnrichmentQueue(): Promise<{
       buckets,
       generatedAt: v.created_at,
       reviewedAt: v.reviewed_at ?? null,
+      state,
+      pendingBlocks,
     });
   }
 
