@@ -339,6 +339,8 @@ export function LocationModule({
                     <button
                       type="button"
                       onClick={() => selectPoi(p)}
+                      data-rail-poi={p.name}
+                      data-active={isActive ? "true" : "false"}
                       className="group flex w-full flex-col items-center px-1 text-center"
                     >
                       <span
@@ -466,6 +468,7 @@ export function LocationModule({
                     key={p.name}
                     type="button"
                     onClick={() => selectPoi(p)}
+                    data-capsule={p.name}
                     className="bcp-capsule absolute z-[3] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-ink/10 bg-cream-50/95 px-2.5 py-1 text-[11px] text-ink/85 shadow-[0_6px_18px_-10px_rgba(40,28,10,0.55)] transition hover:border-gold hover:bg-white"
                     style={{ left: pt.left, top: pt.top, animationDelay: `${260 + i * 90}ms` }}
                   >
@@ -575,6 +578,8 @@ function DestinationRow({
       <button
         type="button"
         onClick={() => onSelect(poi)}
+        data-row-poi={poi.name}
+        data-active={active ? "true" : "false"}
         className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
           active ? "border-gold bg-gold/10" : "border-transparent hover:border-gold/25 hover:bg-gold/5"
         }`}
