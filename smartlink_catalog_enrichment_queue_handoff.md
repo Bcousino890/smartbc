@@ -81,6 +81,61 @@ El validador interpreta `"a escasos 200 metros del Parque"` o `"parking a menos 
 
 **Sin efectos colaterales:** las 168 stories publicadas siguen intactas y las otras ~325 conflictivas no se han tocado ni regenerado. **Ninguna de las 10 recuperadas ha sido publicada** — pendiente de tu revisión.
 
+## SAFE PARTIAL STORY PUBLISHING — política de publicación
+*(2026-08-21 · cambio de POLÍTICA, no de motor. Engine v4.1 congelado: extract/validate/structure/compress sin tocar.)*
+
+**Auditoría de la regla anterior.** El gate marcaba `conflict` como fallo de *story* (`gate.ts`, GATE 1), así que un solo conflicto retenía la propiedad entera aunque tuviera 5 capítulos limpios. La maquinaria de publicación parcial ya existía a medias: el publisher nunca aprobaba bloques en conflicto y la proyección pública (`getApprovedStoryPublic`) solo deja pasar bloques `approved`. Solo faltaba separar **estado de la versión** de **publicabilidad del bloque**.
+
+**Nueva regla (`planPublication()` en el gate compartido).** Clasifica los fallos:
+- **BLOCK-LOCAL** (excluyen el bloque, no la story): bloque en conflicto · bloque <5 palabras sin dato duro.
+- **STORY-BLOCKING** (retienen la propiedad en fallback): <3 capítulos narrativos tras exclusiones · media insuficiente · propiedad no disponible · entidad sin respaldo · claim reutilizado · capítulo duplicado · >70 palabras · heading vacío · boilerplate · barrio incoherente · planta mal inferida.
+
+Los gates restantes se **re-evalúan sobre el subconjunto publicable**, no sobre la story completa.
+
+**Garantías de seguridad factual, verificadas en producción tras el rollout:**
+
+| Invariante | Resultado |
+|---|---|
+| Bloques apoyados en un claim conflictivo que llegaron a `approved` | **0** |
+| Bloques aprobados >70 palabras | **0** |
+| Bloques aprobados vacíos | **0** |
+| Propiedades publicadas con <3 capítulos narrativos | **0** |
+| Bloques en conflicto que cruzan al DTO público | **0** (conservan `status='conflict'`; la proyección solo lee `approved`) |
+
+Verificado además en el SmartLink real de BC-1356 (overview en conflicto + 2 bloques cortos rechazados): la página pública muestra Cocina, Zona privada y La finca, y **el capítulo conflictivo no aparece**. Los specs de la ficha superior siguen viniendo de datos estructurados.
+
+**Dry-run completo de las 686 antes de ejecutar:** A ya publicadas 168 · B completas 11 · C parciales por conflicto 162 · D recuperables por bloque corto 76 · E ambas 64 · F <3 capítulos 155 · G media insuficiente 46 · H sin story 3.
+
+**Rollout ejecutado: 313 nuevas publicaciones** (11 completas + 302 parciales). Se excluyeron **273 capítulos por conflicto** y **177 por ser demasiado cortos**; los cortos se marcan `rejected` (decisión automática segura) y los conflictivos conservan `conflict` para revisión humana.
+
+### Resultado del catálogo
+
+```text
+ACTIVE PROPERTIES: 686
+
+SMARTLINK 2.0 STRUCTURED: 481  (70,1%)
+  - COMPLETE:      177
+  - PARTIAL SAFE:  304
+
+FALLBACK: 205  (29,9%)
+  - <3 capítulos fiables:      154
+  - media insuficiente (<8):    45
+  - sin story (descripción pobre): 3
+  - otros (invariante/no disponible): 3
+
+HUMAN CONFLICTS STILL OPEN: 343 propiedades · 439 bloques
+  (visibles en la cola, invisibles para el cliente)
+```
+
+**Cobertura estructurada: 70,1%**, frente al 24,5% anterior. Ninguna propiedad quedó en fallback por tener *un* dato en conflicto: solo quedan fuera las que no reúnen 3 capítulos fiables o carecen de media.
+
+**Estados en la cola** (`story-review`): `PUBLICADA — COMPLETA`, `PUBLICADA — PARCIAL · N bloques pendientes de revisión`, `FALLBACK`, `BLOQUEADA`. Las parciales siguen apareciendo para poder enriquecerlas después sin bloquear al cliente.
+
+### QA masiva (31 SmartLinks publicados, 3 escenarios cada uno)
+Muestra auto-seleccionada por diversidad: completas, parciales con 1 bloque excluido, parciales con 3+, recuperadas por bloque corto, venta/alquiler, 8–60+ fotos, con vídeo, descripciones de 73 a 545 palabras, chalets y pisos.
+**27/31 sin defectos** en 1440 / 390 / zoom 125%: 0 "Descripción" residual, 0 capítulos duplicados, 0 bloques >70 palabras, 0 boilerplate, 0 secciones vacías, 0 overflow, 0 errores JS; key facts, detalles y CTA correctos en todas; **la alternancia imagen/copy se recalcula bien al omitir capítulos** y no deja huecos.
+Las **4 incidencias son el mismo hueco de datos, no un defecto**: propiedades cuyo barrio (Castellana, Goya, Colina) no está en la capa curada de 9 y cuyo bloque de barrio quedó excluido → no se renderiza el módulo (correcto: mejor omitirlo que mostrarlo vacío). Afecta a **10 publicadas**. Zonas sin curar con más volumen: Castellana (13), Lista (11), Goya (8), El Viso (8), Malasaña-Universidad (3). Se resuelve con un INSERT por barrio, sin migración.
+
 ## Limitaciones conocidas
 1. **Bug corregido durante la implementación** (no en el engine): las consultas `.in()` con más de ~500 UUIDs superaban el límite de URL de PostgREST y devolvían vacío en silencio — la cola mostraba 0. Resuelto con troceado + paginación en `story-review.ts`.
 2. La QA se ejecutó contra producción mediante las **mismas funciones que usa la UI** (`getEnrichmentQueue`, `evaluateGate`, acciones de bloque). La verificación visual del panel con sesión de agente sigue pendiente de credenciales, como en QA anteriores.
@@ -88,3 +143,4 @@ El validador interpreta `"a escasos 200 metros del Parque"` o `"parking a menos 
 4. El botón "Siguiente" recalcula la cola completa en cada salto (~1-2 s con 517 filas). Aceptable hoy; si el backlog creciera mucho, convendría cachear la lista por sesión.
 
 # CATALOG PROPERTY STORY ENRICHMENT QUEUE — COMPLETE
+**SmartLink 2.0 estructurado: 481/686 (70,1%)** · 177 completas · 304 parciales seguras · 205 en fallback · 343 conflictos abiertos para revisión humana · Engine v4.1 FROZEN
