@@ -24,7 +24,8 @@ const CASES = [
   ["alquiler-de-piso-en-calle-de-jorge-juan-ztko", "BC-1386", "Goya", true],
   ["exclusivo-piso-en-goya-57a9", "BC-1401", "Goya", true],
   ["alquiler-de-piso-en-paseo-de-la-habana-v0z5", "BC-1240", "El Viso", true],
-  ["aversa-1lz1", "BC-1209", "El Viso", true],
+  // BC-1209 se archivó el 2026-08-21 (deja de ser pública, 404 correcto).
+  ["alquiler-de-piso-en-calle-de-rodriguez-marin-el-viso-0gbf", "BC-1391", "El Viso", true],
   ["alquiler-de-piso-en-calle-de-cochabamba-bernabeu-e14i", "BC-1368", "Hispanoamérica", true],
   ["alquiler-de-piso-en-calle-de-domingo-fernandez-nueva-espana-yuvh", "BC-1267", "Nueva España", true],
   ["alquiler-de-piso-en-fuencarral-2mxh", "BC-1100", "Malasaña", true],
