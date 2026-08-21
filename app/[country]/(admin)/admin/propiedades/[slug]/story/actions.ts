@@ -299,7 +299,7 @@ export async function regeneratePreludeAction(versionId: string, path: string) {
   // Hasta 2 intentos: si el modelo incumple el contrato, se reintenta con los
   // fallos como feedback; si vuelve a fallar, NO se guarda nada a medias.
   let feedback = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const raw = await aiComplete({
       system: preludeSystemPrompt(data.ctx),
       userText: preludeUserPrompt(data.evidence) + feedback,

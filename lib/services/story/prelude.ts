@@ -38,7 +38,14 @@ const BANNED_ADJECTIVES =
 const SALE_WORDS = /\b(se\s+vende|venta|en\s+venta|compra\w*|comprador\w*)\b/i;
 const RENT_WORDS = /\b(se\s+alquila|alquiler|arrendamiento|inquilin\w*|mensualidad\w*)\b/i;
 const FURNISHED_WORDS = /\b(amueblad\w*|sin\s+amueblar|mobiliario)\b/i;
-const PRICE_WORDS = /(€|\beuros?\b|\bprecio\b|\brenta\b|\bfianza\b)/i;
+const PRICE_WORDS = /(€|\beuros?\b|\bprecio\b|\brenta\b|\bfianza\b|\bcoste\b|\bgastos\b)/i;
+// Lección del piloto (BC-1376): enumerar electrodomésticos es ficha técnica,
+// no apertura editorial — ese inventario vive en Detalles de la vivienda.
+const APPLIANCE_WORDS =
+  /\b(caldera|vitrocer[áa]mica|nevera|frigor[íi]fico|lavadora|secadora|lavavajillas|microondas|electrodom[ée]stic\w*|climalit)\b/i;
+// Frases de portal detectadas en el piloto (BC-0917).
+const PORTAL_PHRASES =
+  /(list[oa]\s+para\s+(entrar\s+a\s+vivir|habitar)|equipamiento\s+completo|totalmente\s+equipad\w*)/i;
 const ENERGY_WORDS = /\b(consumo\s+energ|kwh|certificad[oa]\s+energ|calificaci[óo]n\s+energ)\w*/i;
 const AVAILABILITY_WORDS = /\b(disponib\w*|entrega\s+inmediata|libre\s+de\s+inquilinos)\b/i;
 
@@ -105,6 +112,8 @@ export function validatePrelude(
   if (PRICE_WORDS.test(t)) failures.push("menciona precio/renta");
   if (ENERGY_WORDS.test(t)) failures.push("menciona certificación/consumo energético");
   if (AVAILABILITY_WORDS.test(t)) failures.push("menciona disponibilidad");
+  if (APPLIANCE_WORDS.test(t)) failures.push(`inventario de equipamiento (es ficha, no apertura): "${t.match(APPLIANCE_WORDS)?.[0]}"`);
+  if (PORTAL_PHRASES.test(t)) failures.push(`frase de portal: "${t.match(PORTAL_PHRASES)?.[0]}"`);
 
   // Entidades nombradas sin respaldo en la evidencia (reutiliza el mismo
   // detector que los capítulos — no se reescribe, se importa).
@@ -168,7 +177,9 @@ REGLAS ABSOLUTAS — COMPONER, no inventar:
 - Usa EXCLUSIVAMENTE la evidencia que se te da. Nada de vistas, materiales, marcas, orientaciones, sensaciones o amenities que no estén en ella.
 - 2 o 3 frases. Entre ${PRELUDE_TARGET.min} y ${PRELUDE_TARGET.sweetMax + 10} palabras. Ideal ${PRELUDE_TARGET.sweetMin}-${PRELUDE_TARGET.sweetMax}.
 - PROHIBIDO cualquier cifra o número (m², plantas, años, precios). La época se expresa con palabras ("de principios del siglo XX").
-- PROHIBIDO mencionar: venta, alquiler, precio, amueblado o sin amueblar, consumo o certificación energética, disponibilidad, dormitorios, baños, superficie.
+- PROHIBIDO mencionar: venta, alquiler, precio, gastos, amueblado o sin amueblar, consumo o certificación energética, disponibilidad, dormitorios, baños, superficie.
+- PROHIBIDO enumerar electrodomésticos o equipamiento (caldera, nevera, lavadora, vitrocerámica…): pertenecen a los detalles, no a la apertura. Prohibidas las frases de portal como "listo para entrar a vivir" o "equipamiento completo".
+- Si la evidencia contiene números, exprésalos con palabras solo si son esenciales ("cuatro plantas") o simplemente omítelos.
 - PROHIBIDOS los adjetivos de portal: exclusiva, espectacular, impresionante, única, lujo, privilegiada, joya, oportunidad, soñada, increíble, inmejorable.
 - Tono editorial, sereno, adulto, concreto. La vivienda parece premium por los hechos.
 - Céntrate en: carácter, arquitectura, distribución, relación entre espacios, uno o dos elementos realmente distintivos.

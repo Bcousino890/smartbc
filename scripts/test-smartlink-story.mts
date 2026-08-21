@@ -548,6 +548,17 @@ console.log("Property Prelude:");
   check("entidad sin respaldo en la evidencia → rechazado",
     !r7.ok && r7.failures.some((f) => f.includes("entidades")), r7.failures.join(" · "));
 
+  // Lecciones del piloto real (2026-08-22):
+  const r9 = validatePrelude(
+    "Este hogar se despliega con una distribución fluida que integra el salón y la cocina en un mismo ambiente. La presencia de una caldera y una vitrocerámica, junto a una nevera combi y lavadora, conforman un espacio funcional y preparado para el día a día.",
+    { operation: "rent" }, EV);
+  check("PILOTO BC-1376: inventario de electrodomésticos → rechazado",
+    !r9.ok && r9.failures.some((f) => f.includes("equipamiento")), r9.failures.join(" · "));
+  const r10 = validatePrelude(BUENO.replace("completan una distribución claramente estructurada", "completan un conjunto cuyo coste de mantenimiento resulta contenido"), { operation: "rent" }, EV);
+  check("PILOTO BC-0056: 'coste de mantenimiento' → rechazado", !r10.ok);
+  const r11 = validatePrelude(BUENO.replace("completan una distribución claramente estructurada", "conforman una propuesta lista para entrar a vivir"), { operation: "rent" }, EV);
+  check("PILOTO BC-0917: frase de portal → rechazado", !r11.ok);
+
   // dual: las dos familias de operación prohibidas
   const r8 = validatePrelude(BUENO + " Ideal para su compra.", { operation: "sale", dualOperation: true }, EV);
   check("dual: lenguaje de venta también rechazado", !r8.ok);

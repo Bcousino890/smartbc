@@ -131,7 +131,7 @@ async function main() {
 
     let saved = false;
     let feedback = "";
-    for (let attempt = 0; attempt < 2 && !saved; attempt++) {
+    for (let attempt = 0; attempt < 3 && !saved; attempt++) {
       let raw: string;
       try {
         raw = await aiComplete({
@@ -148,7 +148,7 @@ async function main() {
       const verdict = validatePrelude(text, ctx, evidence.texts);
       if (!verdict.ok) {
         feedback = `\n\nEL INTENTO ANTERIOR INCUMPLIÓ: ${verdict.failures.join("; ")}. Corrígelo.`;
-        if (attempt === 1) {
+        if (attempt === 2) {
           stats.contractFail++;
           console.log(`  ✗ ${p.bc_reference} [${state}] contrato: ${verdict.failures.join(" · ")}`);
         }
