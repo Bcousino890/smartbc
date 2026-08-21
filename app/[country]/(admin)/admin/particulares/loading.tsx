@@ -1,9 +1,12 @@
 /**
  * Estado de carga de /admin/particulares.
  *
- * La página es `force-dynamic` y consulta miles de anuncios, así que sin esto
- * el navegador se quedaba en la pantalla anterior sin ningún indicio: pulsar
- * "Particulares" en el menú parecía no hacer nada.
+ * La página es `force-dynamic`: sin esto el navegador se quedaba en la
+ * pantalla anterior sin ningún indicio mientras el servidor resolvía, y
+ * pulsar "Particulares" en el menú parecía no hacer nada. Ya no trae los
+ * ~10.7k anuncios enteros (ver lib/db/queries/particulares.ts), pero sigue
+ * habiendo varias idas a la base — la página, las stats y los conteos de
+ * zona — así que el hueco sigue mereciendo un esqueleto.
  */
 export default function Loading() {
   return (

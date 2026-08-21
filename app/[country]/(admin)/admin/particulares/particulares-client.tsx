@@ -27,8 +27,8 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
 import {
   CartesianGrid,
   Line,
@@ -40,11 +40,10 @@ import {
 } from "recharts";
 import { useToast } from "@/components/ui/toast";
 import { Modal } from "@/components/ui/modal";
-import { ZoneFilter } from "@/components/admin/particulares/zone-filter";
+import { ZoneFilter, type ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 import { extractFloor } from "@/lib/floor";
 import { extractFurnished } from "@/lib/furnished";
 import { formatPrice } from "@/lib/format";
-import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { canAccess } from "@/lib/permissions";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { cn } from "@/lib/utils";
@@ -55,6 +54,7 @@ import {
   setParticularActive,
   updateParticularPhone,
 } from "./actions";
+import { ANUNCIOS_POR_PAGINA } from "./constants";
 import { useParticularesFilters } from "./use-particulares-filters";
 
 export type StaffOption = { id: string; name: string };
@@ -1410,16 +1410,29 @@ function ParticularModal({
 
 type RefreshState = "idle" | "loading" | "done" | "error";
 
-// Anuncios por página (paginación client-side sobre el listado filtrado).
-const ANUNCIOS_POR_PAGINA = 60;
-
 export function ParticularesClient({
   rows,
+  total,
+  page,
+  activeTotal,
+  retiredTotal,
+  zoneGroups,
   currentRole,
   currentUserId,
   staffOptions = [],
 }: {
+  /** Página actual YA filtrada y paginada por el servidor (ver page.tsx). */
   rows: ParticularRow[];
+  /** Total exacto para el filtro/pestaña actuales — salvo cuando hay planta,
+   *  amueblado o gestión "contactados"/"sin gestionar" activos: esos se
+   *  resuelven tras traer la página (ver `hasClientOnlyFilter` abajo), así
+   *  que `total` pasa a ser una cota superior, no un conteo exacto. */
+  total: number;
+  /** Página actual (1-based), reflejada en la URL (?page=). */
+  page: number;
+  activeTotal: number;
+  retiredTotal: number;
+  zoneGroups: ZoneFilterGroup[];
   currentRole?: string;
   currentUserId?: string;
   staffOptions?: StaffOption[];
@@ -1456,171 +1469,97 @@ export function ParticularesClient({
     showRetired,
     setShowRetired,
   } = useParticularesFilters();
-  const [allRows, setAllRows] = useState(rows);
+  const [pageRows, setPageRows] = useState(rows);
   const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
   // Verificación de teléfonos contra el portal (endpoint verify-phones).
   const [verifying, setVerifying] = useState(false);
-  // Página actual de la paginación client-side (1-based).
-  const [page, setPage] = useState(1);
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Transición de "ir a otra página": la paginación ya no trocea en memoria,
+  // pide la página al servidor — esto solo pinta un estado de carga breve
+  // mientras esa respuesta llega.
+  const [pageNavPending, startPageNav] = useTransition();
 
-  // Sincronizar con los datos frescos del servidor tras router.refresh().
+  // Sincronizar con los datos frescos del servidor: cambio de filtro/página
+  // (page.tsx vuelve a renderizar con las searchParams nuevas) o
+  // router.refresh() tras una acción en bloque (verificar/actualizar teléfonos).
   useEffect(() => {
-    setAllRows(rows);
+    setPageRows(rows);
   }, [rows]);
 
-  // Zonas agrupadas por distrito canónico de Madrid, con conteos (total y
-  // sin teléfono) para poder priorizar barridos por zona igual que ya se
-  // hace con el workflow de GitHub Actions. El scraper mezcla distritos y
-  // barrios en un solo campo `zone`; cada zona "sucia" se normaliza a su
-  // distrito. Los conteos respetan la pestaña activa/retirados actual, para
-  // que el número mostrado coincida con lo que se ve en pantalla.
-  const zoneGroups = useMemo(() => {
-    const districts = new Map<
-      string,
-      { total: number; missingPhone: number; zones: Map<string, { total: number; missingPhone: number }> }
-    >();
-    for (const r of allRows) {
-      if (showRetired ? r.is_active : !r.is_active) continue;
-      if (!r.zone) continue;
-      const { district } = normalizeZone(r.zone);
-      if (!districts.has(district)) {
-        districts.set(district, { total: 0, missingPhone: 0, zones: new Map() });
-      }
-      const d = districts.get(district)!;
-      d.total++;
-      if (!r.phone) d.missingPhone++;
-      if (!d.zones.has(r.zone)) d.zones.set(r.zone, { total: 0, missingPhone: 0 });
-      const z = d.zones.get(r.zone)!;
-      z.total++;
-      if (!r.phone) z.missingPhone++;
-    }
-    return Array.from(districts.entries())
-      .sort((a, b) => {
-        if (a[0] === OTHER_ZONE_LABEL) return 1;
-        if (b[0] === OTHER_ZONE_LABEL) return -1;
-        return a[0].localeCompare(b[0], "es");
-      })
-      .map(([district, d]) => ({
-        district,
-        total: d.total,
-        missingPhone: d.missingPhone,
-        zones: Array.from(d.zones.entries())
-          .sort((a, b) => a[0].localeCompare(b[0], "es"))
-          .map(([name, c]) => ({ name, total: c.total, missingPhone: c.missingPhone })),
-      }));
-  }, [allRows, showRetired]);
-
-  const activeCount = useMemo(() => allRows.filter((r) => r.is_active).length, [allRows]);
-  const retiredCount = allRows.length - activeCount;
-
-  // Planta por anuncio, deducida de features/descripción (lib/floor.ts).
-  // Memoizada para no re-parsear los textos en cada cambio de filtro.
+  // Planta por anuncio, deducida de features/descripción (lib/floor.ts). Solo
+  // sobre la página actual: filtrar por planta ya no puede recorrer el
+  // listado entero (ver el comentario de ParticularesFilters en
+  // lib/db/queries/particulares.ts — es fuzzy, no una columna).
   const floorById = useMemo(() => {
     const map = new Map<string, number | null>();
-    for (const r of allRows) {
+    for (const r of pageRows) {
       map.set(r.id, extractFloor(r.features, r.description));
     }
     return map;
-  }, [allRows]);
+  }, [pageRows]);
 
-  // Amueblado, deducido de features/descripción igual que la planta (no hay
-  // columna en BD — ver lib/furnished.ts). Memoizado por el mismo motivo.
+  // Amueblado, deducido igual que la planta (no hay columna en BD — ver
+  // lib/furnished.ts). Mismo alcance: solo la página actual.
   const furnishedById = useMemo(() => {
     const map = new Map<string, ReturnType<typeof extractFurnished>>();
-    for (const r of allRows) {
+    for (const r of pageRows) {
       map.set(r.id, extractFurnished(r.features, r.description));
     }
     return map;
-  }, [allRows]);
+  }, [pageRows]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const pMin = priceMin ? Number(priceMin) : null;
-    const pMax = priceMax ? Number(priceMax) : null;
-    const bMin = bedrooms ? Number(bedrooms) : null;
+  // Post-filtro sobre la página que ya llegó filtrada del servidor: texto,
+  // zona, precio, habitaciones, m², teléfono, anunciante, últimas 24h y la
+  // mayor parte de "gestión" ya vinieron resueltos en `rows` (ver
+  // getParticularesPage()/ParticularesFilters). Solo quedan planta y
+  // amueblado (se deducen de texto libre, no son columna) y lo de "gestión"
+  // que SQL no puede resolver sin un JOIN a particulares_contacts
+  // (contact_count). Con cualquiera de estos activo, esta página puede
+  // devolver MENOS de ANUNCIOS_POR_PAGINA resultados aunque queden más
+  // páginas por delante — tradeoff aceptado frente a traer toda la tabla
+  // para filtrar exacto.
+  const visibleRows = useMemo(() => {
     const fMin = floorMin ? Number(floorMin) : null;
-    const aMin = areaMin ? Number(areaMin) : null;
-    const since = Date.now() - 24 * 60 * 60 * 1000;
-    return allRows.filter((r) => {
-      if (!showRetired && !r.is_active) return false;
-      if (showRetired && r.is_active) return false;
-      if (q) {
-        const hay =
-          (r.zone?.toLowerCase().includes(q) ?? false) ||
-          (r.address?.toLowerCase().includes(q) ?? false) ||
-          (r.description?.toLowerCase().includes(q) ?? false) ||
-          r.external_id.toLowerCase().includes(q);
-        if (!hay) return false;
-      }
-      if (operation && r.operation !== operation) return false;
-      // Zona: "d:<distrito>" filtra por distrito normalizado; "z:<zona>"
-      // filtra por la zona exacta tal cual vino del scraper.
-      if (zone) {
-        if (zone.startsWith("d:")) {
-          if (normalizeZone(r.zone).district !== zone.slice(2)) return false;
-        } else if (zone.startsWith("z:")) {
-          if (r.zone !== zone.slice(2)) return false;
-        } else if (r.zone !== zone) {
-          return false;
-        }
-      }
-      if (pMin != null && (r.price ?? 0) < pMin) return false;
-      if (pMax != null && (r.price ?? Infinity) > pMax) return false;
-      if (bMin != null && (r.bedrooms ?? 0) < bMin) return false;
-      // Planta mínima: sin dato de planta no se puede garantizar el mínimo
-      // que exige el cliente, así que esos anuncios quedan fuera.
+    return pageRows.filter((r) => {
       if (fMin != null) {
         const fl = floorById.get(r.id);
         if (fl == null || fl < fMin) return false;
       }
-      if (aMin != null && (r.square_meters ?? 0) < aMin) return false;
-      if (phoneFilter === "no_phone" && r.phone) return false;
-      if (phoneFilter === "with_phone" && !r.phone) return false;
-      // Gestión: evita doble trabajo — quién contactó / quién lo tiene asignado.
-      if (gestion === "unmanaged" && (r.assigned_to || (r.contact_count ?? 0) > 0)) return false;
-      if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
-      if (gestion === "assigned" && !r.assigned_to) return false;
-      if (gestion === "mine" && r.assigned_to !== currentUserId) return false;
-      // Anunciante: sin dato (migración 0035 no aplicada) se trata como "unknown".
-      if (advertiser && (r.advertiser_type ?? "unknown") !== advertiser) return false;
-      // Amueblado: sin dato (no se pudo deducir de features/descripción) no
-      // cumple ni "Amueblado" ni "Sin amueblar" — es distinto de "no".
       if (furnished && furnishedById.get(r.id) !== furnished) return false;
-      if (
-        last24h &&
-        !(r.created_at && new Date(r.created_at).getTime() >= since)
-      ) {
-        return false;
-      }
+      if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
+      if (gestion === "unmanaged" && (r.contact_count ?? 0) > 0) return false;
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, phoneFilter, gestion, advertiser, furnished, furnishedById, currentUserId, showRetired]);
+  }, [pageRows, floorMin, floorById, furnished, furnishedById, gestion]);
 
-  // Al cambiar cualquier filtro o el tab Activos/Retirados, volver a la página 1.
-  useEffect(() => {
-    setPage(1);
-  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, phoneFilter, gestion, advertiser, furnished, showRetired]);
+  const hasClientOnlyFilter =
+    Boolean(floorMin) || Boolean(furnished) || gestion === "contacted" || gestion === "unmanaged";
 
-  // Paginación client-side: el filtrado ya tiene todas las filas, aquí solo
-  // troceamos la página visible. `currentPage` se acota por si el filtrado
-  // reduce el total y la página guardada queda fuera de rango.
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ANUNCIOS_POR_PAGINA));
-  const currentPage = Math.min(page, totalPages);
-  const paginated = useMemo(
-    () =>
-      filtered.slice(
-        (currentPage - 1) * ANUNCIOS_POR_PAGINA,
-        currentPage * ANUNCIOS_POR_PAGINA,
-      ),
-    [filtered, currentPage],
-  );
-  const showingFrom = filtered.length === 0 ? 0 : (currentPage - 1) * ANUNCIOS_POR_PAGINA + 1;
-  const showingTo = Math.min(currentPage * ANUNCIOS_POR_PAGINA, filtered.length);
+  // Paginación: ya no es un slice() en memoria — `page`/`rows` vienen del
+  // servidor (page.tsx lee ?page= y pide esa página con getParticularesPage).
+  const totalPages = Math.max(1, Math.ceil(total / ANUNCIOS_POR_PAGINA));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const showingFrom = visibleRows.length === 0 ? 0 : (currentPage - 1) * ANUNCIOS_POR_PAGINA + 1;
+  const showingTo = showingFrom === 0 ? 0 : showingFrom + visibleRows.length - 1;
+
+  // Ir a otra página: navega vía URL en vez de recortar `filtered` en
+  // memoria. Solo se toca "page" — el resto de parámetros se preserva tal
+  // cual; cambiar cualquier OTRO filtro ya limpia "page" solo, porque
+  // use-particulares-filters.ts reconstruye la querystring desde sus propias
+  // claves cada vez que algo cambia (ver flush() ahí).
+  function goToPage(n: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (n <= 1) params.delete("page");
+    else params.set("page", String(n));
+    const qs = params.toString();
+    startPageNav(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
 
   // Verificar teléfonos contra el portal: revisa hasta 30 anuncios y
   // actualiza teléfono / chat_only según lo que devuelva el endpoint.
@@ -1686,7 +1625,7 @@ export function ParticularesClient({
   function handlePhoneUpdated(newPhone: string | null) {
     setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
     // Reflejar también en el listado sin recargar.
-    setAllRows((prev) =>
+    setPageRows((prev) =>
       prev.map((r) =>
         selected && r.id === selected.id ? { ...r, phone: newPhone } : r,
       ),
@@ -1702,7 +1641,7 @@ export function ParticularesClient({
           onClose={() => setSelected(null)}
           onPhoneUpdated={handlePhoneUpdated}
           onAssigned={(advisorId, advisorName) => {
-            setAllRows((prev) =>
+            setPageRows((prev) =>
               prev.map((r) =>
                 r.id === selected.id
                   ? { ...r, assigned_to: advisorId, assigned_name: advisorName }
@@ -1711,7 +1650,7 @@ export function ParticularesClient({
             );
           }}
           onActiveChanged={(active, takenDownAt) => {
-            setAllRows((prev) =>
+            setPageRows((prev) =>
               prev.map((r) =>
                 r.id === selected.id
                   ? { ...r, is_active: active, taken_down_at: takenDownAt }
@@ -1888,7 +1827,7 @@ export function ParticularesClient({
             )}
           </button>
           <span className="ml-auto text-xs text-ink/55">
-            {filtered.length} de {allRows.length} anuncios · {allRows.filter(r => r.phone).length} con teléfono
+            {total} anuncios · {pageRows.filter((r) => r.phone).length} con teléfono en esta página
           </span>
         </div>
 
@@ -1906,7 +1845,7 @@ export function ParticularesClient({
                 : "text-ink/60 hover:text-ink",
             )}
           >
-            Activos ({activeCount})
+            Activos ({activeTotal})
           </button>
           <button
             type="button"
@@ -1918,12 +1857,12 @@ export function ParticularesClient({
                 : "text-ink/60 hover:text-red-700",
             )}
           >
-            Retirados ({retiredCount})
+            Retirados ({retiredTotal})
           </button>
         </div>
 
         {/* Grid */}
-        {filtered.length === 0 ? (
+        {visibleRows.length === 0 ? (
           <div className="mt-6 rounded-xl border border-gold/15 bg-white/40 px-4 py-12 text-center text-ink/55">
             {showRetired
               ? "No hay anuncios retirados."
@@ -1932,7 +1871,7 @@ export function ParticularesClient({
         ) : (
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {paginated.map((r) => {
+              {visibleRows.map((r) => {
               const cover = r.cover_url ?? r.photos?.[0]?.url;
               return (
                 <button
@@ -2111,26 +2050,27 @@ export function ParticularesClient({
             })}
             </div>
 
-            {/* Paginación client-side: todos los anuncios están cargados,
-                solo se trocea la vista en páginas de 60 */}
+            {/* Paginación server-side: cada página se pide al servidor (ver
+                goToPage) en vez de trocear un array ya cargado entero. */}
             <div className="mt-6 flex flex-col items-center gap-2">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setPage(currentPage - 1)}
-                  disabled={currentPage <= 1}
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage <= 1 || pageNavPending}
                   className="flex items-center gap-1.5 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-gold/60 hover:bg-gold/5 disabled:opacity-40 disabled:hover:border-gold/30 disabled:hover:bg-white"
                 >
                   <ChevronLeft size={14} strokeWidth={2} />
                   Anterior
                 </button>
-                <span className="text-sm font-medium text-ink/70">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-ink/70">
                   Página {currentPage} de {totalPages}
+                  {pageNavPending && <Loader2 size={13} className="animate-spin text-ink/40" />}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPage(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages || pageNavPending}
                   className="flex items-center gap-1.5 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-gold/60 hover:bg-gold/5 disabled:opacity-40 disabled:hover:border-gold/30 disabled:hover:bg-white"
                 >
                   Siguiente
@@ -2138,7 +2078,8 @@ export function ParticularesClient({
                 </button>
               </div>
               <p className="text-xs text-ink/50">
-                Mostrando {showingFrom}–{showingTo} de {filtered.length} anuncios
+                Mostrando {showingFrom}–{showingTo} de {total} anuncios
+                {hasClientOnlyFilter && " (planta/amueblado/gestión pueden dejar menos de una página completa)"}
               </p>
             </div>
 
