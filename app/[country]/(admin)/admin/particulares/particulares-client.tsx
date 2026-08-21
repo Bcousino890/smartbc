@@ -42,6 +42,7 @@ import { useToast } from "@/components/ui/toast";
 import { Modal } from "@/components/ui/modal";
 import { ZoneFilter } from "@/components/admin/particulares/zone-filter";
 import { extractFloor } from "@/lib/floor";
+import { extractFurnished } from "@/lib/furnished";
 import { formatPrice } from "@/lib/format";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { canAccess } from "@/lib/permissions";
@@ -1450,6 +1451,8 @@ export function ParticularesClient({
     setGestion,
     advertiser,
     setAdvertiser,
+    furnished,
+    setFurnished,
     showRetired,
     setShowRetired,
   } = useParticularesFilters();
@@ -1525,6 +1528,16 @@ export function ParticularesClient({
     return map;
   }, [allRows]);
 
+  // Amueblado, deducido de features/descripción igual que la planta (no hay
+  // columna en BD — ver lib/furnished.ts). Memoizado por el mismo motivo.
+  const furnishedById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof extractFurnished>>();
+    for (const r of allRows) {
+      map.set(r.id, extractFurnished(r.features, r.description));
+    }
+    return map;
+  }, [allRows]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const pMin = priceMin ? Number(priceMin) : null;
@@ -1575,6 +1588,9 @@ export function ParticularesClient({
       if (gestion === "mine" && r.assigned_to !== currentUserId) return false;
       // Anunciante: sin dato (migración 0035 no aplicada) se trata como "unknown".
       if (advertiser && (r.advertiser_type ?? "unknown") !== advertiser) return false;
+      // Amueblado: sin dato (no se pudo deducir de features/descripción) no
+      // cumple ni "Amueblado" ni "Sin amueblar" — es distinto de "no".
+      if (furnished && furnishedById.get(r.id) !== furnished) return false;
       if (
         last24h &&
         !(r.created_at && new Date(r.created_at).getTime() >= since)
@@ -1583,12 +1599,12 @@ export function ParticularesClient({
       }
       return true;
     });
-  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, phoneFilter, gestion, advertiser, currentUserId, showRetired]);
+  }, [allRows, query, operation, zone, priceMin, priceMax, bedrooms, floorMin, floorById, areaMin, last24h, phoneFilter, gestion, advertiser, furnished, furnishedById, currentUserId, showRetired]);
 
   // Al cambiar cualquier filtro o el tab Activos/Retirados, volver a la página 1.
   useEffect(() => {
     setPage(1);
-  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, phoneFilter, gestion, advertiser, showRetired]);
+  }, [query, operation, zone, priceMin, priceMax, bedrooms, floorMin, areaMin, last24h, phoneFilter, gestion, advertiser, furnished, showRetired]);
 
   // Paginación client-side: el filtrado ya tiene todas las filas, aquí solo
   // troceamos la página visible. `currentPage` se acota por si el filtrado
@@ -1751,6 +1767,15 @@ export function ParticularesClient({
             <option value="particular">Particular</option>
             <option value="professional">Profesional</option>
             <option value="unknown">Desconocido</option>
+          </select>
+          <select
+            value={furnished}
+            onChange={(e) => setFurnished(e.target.value as typeof furnished)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Amueblado: todos</option>
+            <option value="yes">Amueblado</option>
+            <option value="no">Sin amueblar</option>
           </select>
           <input
             type="number"

@@ -7,11 +7,13 @@ export type OperationFilter = "" | "rent" | "sale";
 export type PhoneFilterValue = "" | "no_phone" | "with_phone";
 export type GestionFilter = "" | "unmanaged" | "contacted" | "assigned" | "mine";
 export type AdvertiserFilter = "" | "particular" | "professional" | "unknown";
+export type FurnishedFilter = "" | "yes" | "no";
 
 const OPERATION_VALUES = new Set(["rent", "sale"]);
 const PHONE_VALUES = new Set(["no_phone", "with_phone"]);
 const GESTION_VALUES = new Set(["unmanaged", "contacted", "assigned", "mine"]);
 const ADVERTISER_VALUES = new Set(["particular", "professional", "unknown"]);
+const FURNISHED_VALUES = new Set(["yes", "no"]);
 
 function readEnum<T extends string>(
   value: string | null,
@@ -39,6 +41,7 @@ type FilterValues = {
   phoneFilter: PhoneFilterValue;
   gestion: GestionFilter;
   advertiser: AdvertiserFilter;
+  furnished: FurnishedFilter;
   showRetired: boolean;
 };
 
@@ -55,6 +58,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   phoneFilter: "phone",
   gestion: "gestion",
   advertiser: "advertiser",
+  furnished: "amueblado",
   showRetired: "retired",
 };
 
@@ -101,6 +105,9 @@ export function useParticularesFilters() {
   const [advertiser, setAdvertiser] = useState<AdvertiserFilter>(() =>
     readEnum<AdvertiserFilter>(searchParams.get(PARAM_KEYS.advertiser), ADVERTISER_VALUES),
   );
+  const [furnished, setFurnished] = useState<FurnishedFilter>(() =>
+    readEnum<FurnishedFilter>(searchParams.get(PARAM_KEYS.furnished), FURNISHED_VALUES),
+  );
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
 
   const values: FilterValues = {
@@ -116,6 +123,7 @@ export function useParticularesFilters() {
     phoneFilter,
     gestion,
     advertiser,
+    furnished,
     showRetired,
   };
 
@@ -163,6 +171,7 @@ export function useParticularesFilters() {
     phoneFilter,
     gestion,
     advertiser,
+    furnished,
     showRetired,
   ]);
 
@@ -197,6 +206,8 @@ export function useParticularesFilters() {
     setGestion,
     advertiser,
     setAdvertiser,
+    furnished,
+    setFurnished,
     showRetired,
     setShowRetired,
   };
