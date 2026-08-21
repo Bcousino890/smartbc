@@ -322,7 +322,7 @@ export function LocationModule({
                 type="button"
                 aria-label="Acercar"
                 onClick={() => leafletRef.current?.map.zoomIn()}
-                className="rounded-lg bg-white/94 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white"
+                className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white"
               >
                 <Plus size={15} strokeWidth={2} />
               </button>
@@ -330,7 +330,7 @@ export function LocationModule({
                 type="button"
                 aria-label="Alejar"
                 onClick={() => leafletRef.current?.map.zoomOut()}
-                className="rounded-lg bg-white/94 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white"
+                className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white"
               >
                 <Minus size={15} strokeWidth={2} />
               </button>
@@ -338,7 +338,7 @@ export function LocationModule({
             <button
               type="button"
               onClick={exitLive}
-              className="crm-button pointer-events-auto absolute bottom-3 left-1/2 z-[500] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/92 px-4 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
+              className="crm-button pointer-events-auto absolute bottom-3 left-1/2 z-[500] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/95 px-4 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
             >
               <Lock size={13} strokeWidth={1.75} />
               Volver al recorrido
@@ -395,7 +395,7 @@ export function LocationModule({
               >
                 <span className="bcp-marker-halo absolute left-0 top-0 block h-14 w-14 rounded-full bg-gold/50" />
                 <span className="bcp-marker absolute left-0 top-0 block">
-                  <span className="block h-[22px] w-[22px] -translate-x-1/2 translate-y-1/2 rounded-full bg-ink shadow-[0_10px_26px_-8px_rgba(40,28,10,0.95)] ring-[3px] ring-gold ring-offset-[3px] ring-offset-white/95" />
+                  <span className="block h-[22px] w-[22px] -translate-x-1/2 translate-y-1/2 rounded-full bg-ink shadow-[0_10px_26px_-8px_rgba(40,28,10,0.95)] ring-[3px] ring-gold ring-offset-[3px] ring-offset-white" />
                 </span>
               </span>
             )}
@@ -411,14 +411,14 @@ export function LocationModule({
             <button
               type="button"
               onClick={enterLive}
-              className="crm-button group absolute bottom-4 left-1/2 z-[4] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/92 px-5 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
+              className="crm-button group absolute bottom-4 left-1/2 z-[4] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/95 px-5 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
             >
               <Compass size={14} strokeWidth={1.75} />
               Explorar mapa
             </button>
 
             {/* Atribución obligatoria también en estado bloqueado. */}
-            <span className="absolute bottom-1 right-1.5 z-[4] rounded bg-white/78 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
+            <span className="absolute bottom-1 right-1.5 z-[4] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
               ©{" "}
               <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
                 OpenStreetMap
