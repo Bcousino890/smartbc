@@ -436,6 +436,25 @@ console.log("Destination focus:");
   const casi = { lat: 40.4266, lng: -3.6867 };
   const vz = fitTwoPoints({ a: casa, b: casi, width: W, height: H, padding: PAD, maxZoom: 16 });
   check("destino pegado a la vivienda → zoom acotado", vz.zoom === 16, String(vz.zoom));
+
+  // La ficha contextual vive en una banda superior reservada: tras encuadrar
+  // en un lienzo más bajo y bajar el contenido, NINGÚN marcador puede caer
+  // dentro de esa banda (en móvil la ficha ocupa casi todo el ancho y no hay
+  // escape horizontal posible).
+  const { shiftViewVertically } = await import("../lib/geo/tile-math");
+  const BAND = 168, MW = 358, MH = 420;
+  const fittedM = fitTwoPoints({
+    a: casa, b: retiro, width: MW, height: MH - BAND,
+    padding: Math.max(48, Math.round(Math.min(MW, MH - BAND) * 0.12)), maxZoom: 16,
+  });
+  const shifted = shiftViewVertically(fittedM, -BAND / 2);
+  const mm = buildMosaic({ lat: shifted.lat, lng: shifted.lng, zoom: shifted.zoom, width: MW, height: MH });
+  const mc = mm.project(casa.lat, casa.lng);
+  const md = mm.project(retiro.lat, retiro.lng);
+  check("móvil: ningún marcador cae en la banda de la ficha",
+    mc.top > BAND - 20 && md.top > BAND - 20, JSON.stringify({ mc, md, BAND }));
+  check("móvil: los dos siguen dentro del lienzo",
+    [mc, md].every((p) => p.top < MH - 8 && p.left > 0 && p.left < MW), JSON.stringify({ mc, md }));
 }
 
 // ── 6d) Universidades: catálogo EXISTENTE, cálculo del propio módulo ──

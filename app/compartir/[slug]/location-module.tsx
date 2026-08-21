@@ -27,7 +27,7 @@ import {
   Compass, Dumbbell, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
   Maximize2, Minus, Plus, ShoppingBag, TrainFront, Trees, UtensilsCrossed, X,
 } from "lucide-react";
-import { buildMosaic, contextZoomForWidth, fitTwoPoints, type Mosaic } from "@/lib/geo/tile-math";
+import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 
@@ -62,6 +62,8 @@ const CATEGORY: Record<string, { label: string; Icon: typeof MapPin }> = {
 };
 const categoryOf = (c: string) => CATEGORY[c] ?? { label: "", Icon: MapPin };
 const modeLabel = (m: PoiTravel["mode"]) => (m === "walk" ? "a pie" : "en coche");
+/** Banda superior reservada a la ficha contextual (alto de la ficha + aire). */
+const CARD_BAND_PX = 168;
 
 export type LocationNeighborhood = {
   displayName: string;
@@ -155,19 +157,34 @@ export function LocationModule({
   const view = useMemo(() => {
     if (!size) return { lat: center.lat, lng: center.lng, zoom: 15 };
     if (focus && hasPreciseCoords) {
-      const padding = Math.max(64, Math.round(Math.min(size.w, size.h) * 0.15));
-      return fitTwoPoints({
+      // Se RESERVA una banda superior para la ficha contextual: se encuadra
+      // en un lienzo más bajo y luego se baja el contenido. En móvil la ficha
+      // ocupa casi todo el ancho, así que ese hueco es la única forma de que
+      // no tape a la vivienda ni al destino.
+      const BAND = CARD_BAND_PX;
+      const padding = Math.max(48, Math.round(Math.min(size.w, size.h - BAND) * 0.12));
+      const fitted = fitTwoPoints({
         a: { lat: center.lat, lng: center.lng },
         b: { lat: focus.latitude, lng: focus.longitude },
-        width: size.w, height: size.h, padding, maxZoom: 16,
+        width: size.w, height: Math.max(140, size.h - BAND), padding, maxZoom: 16,
       });
+      return shiftViewVertically(fitted, -BAND / 2);
     }
     const z = contextZoomForWidth(size.w, center.lat);
-    return {
-      lat: center.lat, lng: center.lng,
-      zoom: hasPreciseCoords ? z : Math.min(z, fallbackCoords.zoom),
-    };
-  }, [size, center.lat, center.lng, hasPreciseCoords, fallbackCoords.zoom, focus]);
+    if (!hasPreciseCoords) return { lat: center.lat, lng: center.lng, zoom: Math.min(z, fallbackCoords.zoom) };
+    // El overview enmarca la vivienda CON sus destinos más cercanos: si el
+    // mapa no los abarca, sus cápsulas no caben y se pierde el contexto de
+    // lifestyle que el módulo promete sin bajar a la lista. El zoom queda
+    // acotado para no acabar enseñando media ciudad por un destino lejano.
+    const anchors = [{ lat: center.lat, lng: center.lng }, ...mapPois.slice(0, 3).map((p) => ({ lat: p.latitude, lng: p.longitude }))];
+    if (anchors.length === 1) return { lat: center.lat, lng: center.lng, zoom: z };
+    const fitted = fitPoints({
+      points: anchors, width: size.w, height: size.h,
+      padding: Math.max(56, Math.round(Math.min(size.w, size.h) * 0.16)),
+      minZoom: Math.max(13, z - 2), maxZoom: z,
+    });
+    return fitted;
+  }, [size, center.lat, center.lng, hasPreciseCoords, fallbackCoords.zoom, focus, mapPois]);
 
   const mosaic: Mosaic | null = useMemo(() => {
     if (!size) return null;
@@ -281,17 +298,9 @@ export function LocationModule({
   // La ficha contextual se coloca en la banda LIBRE del escenario. Anclarla
   // siempre arriba tapaba el pill de "La vivienda" —y en móvil lo tapaba
   // entero—, que es justo el marcador que nunca debe perderse de vista.
-  const cardSide: "top" | "bottom" = useMemo(() => {
-    if (!size || !propertyPt || !focusPt) return "top";
-    const BAND = 150; // alto aproximado de la ficha + margen
-    const ys = [propertyPt.top, focusPt.top];
-    const libreArriba = ys.every((y) => y > BAND);
-    const libreAbajo = ys.every((y) => y < size.h - BAND);
-    if (libreArriba) return "top";
-    if (libreAbajo) return "bottom";
-    // Ninguna banda está libre: se elige la que deja más aire.
-    return Math.min(...ys) > size.h - Math.max(...ys) ? "top" : "bottom";
-  }, [size, propertyPt, focusPt]);
+  // Con la banda superior reservada por el encuadre, la ficha va arriba y
+  // centrada: es la posición más legible y ya no puede pisar a nadie.
+  const cardPos = { side: "top" as const, align: "center" as const };
 
   // Cápsula de POI: se oculta si su punto cae fuera del lienzo o si pisa al
   // marcador de la vivienda — mejor un destino menos que un amontonamiento.
@@ -339,6 +348,8 @@ export function LocationModule({
                     <button
                       type="button"
                       onClick={() => selectPoi(p)}
+                      data-rail-poi={p.name}
+                      data-active={isActive ? "true" : "false"}
                       className="group flex w-full flex-col items-center px-1 text-center"
                     >
                       <span
@@ -397,7 +408,7 @@ export function LocationModule({
                 <Minus size={15} strokeWidth={2} />
               </button>
             </div>
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardSide} live />}
+            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} live />}
             {/* Control secundario, en esquina: no compite con el mapa. */}
             <button type="button" onClick={focus ? restoreOverview : exitLive}
               className="crm-meta absolute bottom-3 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
@@ -466,6 +477,7 @@ export function LocationModule({
                     key={p.name}
                     type="button"
                     onClick={() => selectPoi(p)}
+                    data-capsule={p.name}
                     className="bcp-capsule absolute z-[3] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-ink/10 bg-cream-50/95 px-2.5 py-1 text-[11px] text-ink/85 shadow-[0_6px_18px_-10px_rgba(40,28,10,0.55)] transition hover:border-gold hover:bg-white"
                     style={{ left: pt.left, top: pt.top, animationDelay: `${260 + i * 90}ms` }}
                   >
@@ -502,7 +514,7 @@ export function LocationModule({
                 className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold/75 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.16)] md:h-40 md:w-40" />
             )}
 
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardSide} />}
+            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} />}
 
             {/* Activación EXPLÍCITA, nunca por hover, y como control
                 secundario en esquina: la escena manda, no el botón. */}
@@ -575,6 +587,8 @@ function DestinationRow({
       <button
         type="button"
         onClick={() => onSelect(poi)}
+        data-row-poi={poi.name}
+        data-active={active ? "true" : "false"}
         className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
           active ? "border-gold bg-gold/10" : "border-transparent hover:border-gold/25 hover:bg-gold/5"
         }`}
@@ -600,14 +614,20 @@ function DestinationRow({
  *  el popup por defecto de Leaflet. Se ancla arriba para no taparse con el
  *  control de la esquina inferior ni salirse en móvil. */
 function ContextCard({
-  poi, onClose, side = "top", live,
-}: { poi: PoiTravel; onClose: () => void; side?: "top" | "bottom"; live?: boolean }) {
+  poi, onClose, side = "top", align = "center", live,
+}: {
+  poi: PoiTravel; onClose: () => void;
+  side?: "top" | "bottom"; align?: "center" | "left" | "right"; live?: boolean;
+}) {
   const { label, Icon } = categoryOf(poi.category);
   return (
     <div
       data-side={side}
-      className={`bcp-context-card absolute left-1/2 z-[600] w-[min(19rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm ${
-        side === "top" ? (live ? "top-3" : "top-4") : live ? "bottom-14" : "bottom-14"
+      data-align={align}
+      className={`bcp-context-card absolute z-[600] w-[min(19rem,calc(100%-1.5rem))] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm ${
+        side === "top" ? "top-3.5" : "bottom-14"
+      } ${
+        align === "center" ? "left-1/2 -translate-x-1/2" : align === "left" ? "left-3.5" : "right-3.5"
       }`}
     >
       <button

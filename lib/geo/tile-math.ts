@@ -115,14 +115,33 @@ export function fitTwoPoints(params: {
   maxZoom?: number;
   minZoom?: number;
 }): { lat: number; lng: number; zoom: number } {
-  const { a, b, width, height, padding } = params;
+  return fitPoints({ ...params, points: [params.a, params.b] });
+}
+
+/**
+ * Encuadre de N puntos. Lo usa el OVERVIEW para enmarcar la vivienda JUNTO A
+ * sus destinos más cercanos: si el mapa no los abarca, las cápsulas de POI no
+ * caben en el lienzo y el cliente pierde el contexto de lifestyle que el
+ * módulo promete sin bajar a la lista.
+ */
+export function fitPoints(params: {
+  points: Array<{ lat: number; lng: number }>;
+  width: number;
+  height: number;
+  padding: number;
+  maxZoom?: number;
+  minZoom?: number;
+}): { lat: number; lng: number; zoom: number } {
+  const { points, width, height, padding } = params;
   const maxZoom = params.maxZoom ?? 17;
   const minZoom = params.minZoom ?? 11;
+  if (points.length === 0) return { lat: 0, lng: 0, zoom: minZoom };
 
-  const pa = latLngToWorldPixel(a.lat, a.lng, 0);
-  const pb = latLngToWorldPixel(b.lat, b.lng, 0);
-  const dx = Math.abs(pa.x - pb.x);
-  const dy = Math.abs(pa.y - pb.y);
+  const px = points.map((p) => latLngToWorldPixel(p.lat, p.lng, 0));
+  const pa = { x: Math.min(...px.map((p) => p.x)), y: Math.min(...px.map((p) => p.y)) };
+  const pb = { x: Math.max(...px.map((p) => p.x)), y: Math.max(...px.map((p) => p.y)) };
+  const dx = pb.x - pa.x;
+  const dy = pb.y - pa.y;
 
   const usableW = Math.max(32, width - padding * 2);
   const usableH = Math.max(32, height - padding * 2);
@@ -145,6 +164,23 @@ export function fitTwoPoints(params: {
 
   const mid = worldPixelToLatLng((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, 0);
   return { lat: mid.lat, lng: mid.lng, zoom };
+}
+
+/**
+ * Desplaza el centro de una vista N píxeles en vertical.
+ *
+ * Lo usa DESTINATION FOCUS para RESERVAR una banda libre arriba donde vive la
+ * ficha contextual: en móvil la ficha ocupa casi todo el ancho, así que no hay
+ * escape horizontal posible y la única forma de que no tape un marcador es que
+ * el encuadre deje ese hueco. Mover el centro al norte baja el contenido.
+ */
+export function shiftViewVertically(
+  view: { lat: number; lng: number; zoom: number },
+  pixels: number,
+): { lat: number; lng: number; zoom: number } {
+  const wp = latLngToWorldPixel(view.lat, view.lng, view.zoom);
+  const moved = worldPixelToLatLng(wp.x, wp.y + pixels, view.zoom);
+  return { lat: moved.lat, lng: moved.lng, zoom: view.zoom };
 }
 
 /**
