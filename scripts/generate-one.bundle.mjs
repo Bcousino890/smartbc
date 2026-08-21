@@ -195,8 +195,8 @@ function __generator(thisArg, body) {
     return this;
   }), g;
   function verb(n) {
-    return function(v) {
-      return step([n, v]);
+    return function(v2) {
+      return step([n, v2]);
     };
   }
   function step(op) {
@@ -307,8 +307,8 @@ function __spreadArray(to, from, pack) {
   }
   return to.concat(ar || Array.prototype.slice.call(from));
 }
-function __await(v) {
-  return this instanceof __await ? (this.v = v, this) : new __await(v);
+function __await(v2) {
+  return this instanceof __await ? (this.v = v2, this) : new __await(v2);
 }
 function __asyncGenerator(thisArg, _arguments, generator) {
   if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
@@ -317,23 +317,23 @@ function __asyncGenerator(thisArg, _arguments, generator) {
     return this;
   }, i;
   function awaitReturn(f) {
-    return function(v) {
-      return Promise.resolve(v).then(f, reject);
+    return function(v2) {
+      return Promise.resolve(v2).then(f, reject);
     };
   }
   function verb(n, f) {
     if (g[n]) {
-      i[n] = function(v) {
+      i[n] = function(v2) {
         return new Promise(function(a, b) {
-          q.push([n, v, a, b]) > 1 || resume(n, v);
+          q.push([n, v2, a, b]) > 1 || resume(n, v2);
         });
       };
       if (f) i[n] = f(i[n]);
     }
   }
-  function resume(n, v) {
+  function resume(n, v2) {
     try {
-      step(g[n](v));
+      step(g[n](v2));
     } catch (e) {
       settle(q[0][3], e);
     }
@@ -347,8 +347,8 @@ function __asyncGenerator(thisArg, _arguments, generator) {
   function reject(value) {
     resume("throw", value);
   }
-  function settle(f, v) {
-    if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]);
+  function settle(f, v2) {
+    if (f(v2), q.shift(), q.length) resume(q[0][0], q[0][1]);
   }
 }
 function __asyncDelegator(o) {
@@ -359,8 +359,8 @@ function __asyncDelegator(o) {
     return this;
   }, i;
   function verb(n, f) {
-    i[n] = o[n] ? function(v) {
-      return (p = !p) ? { value: __await(o[n](v)), done: false } : f ? f(v) : v;
+    i[n] = o[n] ? function(v2) {
+      return (p = !p) ? { value: __await(o[n](v2)), done: false } : f ? f(v2) : v2;
     } : f;
   }
 }
@@ -371,15 +371,15 @@ function __asyncValues(o) {
     return this;
   }, i);
   function verb(n) {
-    i[n] = o[n] && function(v) {
+    i[n] = o[n] && function(v2) {
       return new Promise(function(resolve, reject) {
-        v = o[n](v), settle(resolve, reject, v.done, v.value);
+        v2 = o[n](v2), settle(resolve, reject, v2.done, v2.value);
       });
     };
   }
-  function settle(resolve, reject, d, v) {
-    Promise.resolve(v).then(function(v2) {
-      resolve({ value: v2, done: d });
+  function settle(resolve, reject, d, v2) {
+    Promise.resolve(v2).then(function(v3) {
+      resolve({ value: v3, done: d });
     }, reject);
   }
 }
@@ -513,10 +513,10 @@ var init_tslib_es6 = __esm({
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
     });
-    __setModuleDefault = Object.create ? (function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
-      o["default"] = v;
+    __setModuleDefault = Object.create ? (function(o, v2) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v2 });
+    }) : function(o, v2) {
+      o["default"] = v2;
     };
     ownKeys = function(o) {
       ownKeys = Object.getOwnPropertyNames || function(o2) {
@@ -1522,7 +1522,7 @@ var require_helpers = __commonJS({
       crypto.getRandomValues(array);
       return Array.from(array, dec2hex).join("");
     }
-    async function sha256(randomString) {
+    async function sha2562(randomString) {
       const encoder = new TextEncoder();
       const encodedData = encoder.encode(randomString);
       const hash = await crypto.subtle.digest("SHA-256", encodedData);
@@ -1535,7 +1535,7 @@ var require_helpers = __commonJS({
         console.warn("WebCrypto API is not supported. Code challenge method will default to use plain instead of sha256.");
         return verifier;
       }
-      const hashed = await sha256(verifier);
+      const hashed = await sha2562(verifier);
       return btoa(hashed).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
     async function getCodeChallengeAndMethod(storage, storageKey, isPasswordRecovery = false) {
@@ -3933,7 +3933,7 @@ var require_webauthn = __commonJS({
           if (!factor) {
             await this.client.mfa.listFactors().then((factors) => {
               var _a;
-              return (_a = factors.data) === null || _a === void 0 ? void 0 : _a.all.find((v) => v.factor_type === "webauthn" && v.friendly_name === friendlyName && v.status !== "unverified");
+              return (_a = factors.data) === null || _a === void 0 ? void 0 : _a.all.find((v2) => v2.factor_type === "webauthn" && v2.friendly_name === friendlyName && v2.status !== "unverified");
             }).then((factor2) => factor2 ? this.client.mfa.unenroll({ factorId: factor2 === null || factor2 === void 0 ? void 0 : factor2.id }) : void 0);
             return { data: null, error: enrollError };
           }
@@ -13865,7 +13865,7 @@ var PostgrestClient = class PostgrestClient2 {
     let method;
     const url = new URL(`${this.url}/rpc/${fn}`);
     let body;
-    const _isObject = (v) => v !== null && typeof v === "object" && (!Array.isArray(v) || v.some(_isObject));
+    const _isObject = (v2) => v2 !== null && typeof v2 === "object" && (!Array.isArray(v2) || v2.some(_isObject));
     const _hasObjectArg = head2 && Object.values(args).some(_isObject);
     if (_hasObjectArg) {
       method = "POST";
@@ -17673,7 +17673,404 @@ function createAdminClient() {
   );
 }
 
+// lib/services/photos/classify.ts
+import { createHash } from "node:crypto";
+
+// lib/services/ai/chat.ts
+import sharp from "sharp";
+var AI_SETTINGS_KEY = "ai.config";
+var OPENAI_BASES = {
+  openrouter: "https://openrouter.ai/api/v1",
+  nvidia: "https://integrate.api.nvidia.com/v1"
+};
+var AINotConfiguredError = class extends Error {
+};
+async function loadStoredConfig() {
+  try {
+    const db2 = createAdminClient();
+    const { data } = await db2.from("app_settings").select("value").eq("key", AI_SETTINGS_KEY).maybeSingle();
+    const v2 = data?.value;
+    if (v2 && typeof v2 === "object") return v2;
+  } catch {
+  }
+  return null;
+}
+async function resolveConfig() {
+  const stored = await loadStoredConfig();
+  const provider = (stored?.provider || process.env.AI_PROVIDER || (process.env.ANTHROPIC_API_KEY ? "anthropic" : "")).toLowerCase();
+  if (provider === "anthropic") {
+    const key2 = stored?.apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!key2) throw new AINotConfiguredError("IA no configurada: falta la clave de Anthropic.");
+    const model2 = stored?.model || process.env.AI_MODEL || process.env.IDEALISTA_DESC_MODEL || "claude-opus-4-8";
+    return { kind: "anthropic", key: key2, model: model2, visionModel: stored?.visionModel || process.env.AI_VISION_MODEL || model2 };
+  }
+  if (!provider) {
+    throw new AINotConfiguredError(
+      "IA no configurada. Ve a Configuraci\xF3n \u2192 IA y elige proveedor, clave y modelo."
+    );
+  }
+  const base = OPENAI_BASES[provider] ?? process.env.AI_BASE_URL ?? (provider === "ollama" ? "http://localhost:11434/v1" : void 0) ?? "";
+  if (!base) {
+    throw new AINotConfiguredError(`Falta la URL base para el proveedor "${provider}".`);
+  }
+  const key = stored?.apiKey || process.env.AI_API_KEY || (provider === "ollama" ? "ollama" : "");
+  if (!key) throw new AINotConfiguredError(`Falta la clave (API key) para "${provider}".`);
+  const model = stored?.model || process.env.AI_MODEL;
+  if (!model) throw new AINotConfiguredError(`Falta el modelo para "${provider}".`);
+  return { kind: "openai", base, key, model, visionModel: stored?.visionModel || process.env.AI_VISION_MODEL || model };
+}
+var VISION_MAX_DIMENSION = 1536;
+var VISION_JPEG_QUALITY = 82;
+var IMAGE_FETCH_TIMEOUT_MS = 2e4;
+async function fetchAndDownscaleImage(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), IMAGE_FETCH_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)" },
+      cache: "no-store",
+      signal: ctrl.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error(`fetch_${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const data = (await sharp(buf, { failOn: "none" }).rotate().resize({
+    width: VISION_MAX_DIMENSION,
+    height: VISION_MAX_DIMENSION,
+    fit: "inside",
+    withoutEnlargement: true
+  }).flatten({ background: "#ffffff" }).jpeg({ quality: VISION_JPEG_QUALITY }).toBuffer()).toString("base64");
+  return { kind: "base64", mediaType: "image/jpeg", data };
+}
+async function prepareImages(urls, isDocument) {
+  if (isDocument) return urls.map((url) => ({ kind: "url", url }));
+  const settled = await Promise.all(
+    urls.map(
+      (url) => fetchAndDownscaleImage(url).catch((err) => {
+        console.error("[ai] No se pudo preparar la imagen para la IA:", url, err);
+        return null;
+      })
+    )
+  );
+  return settled.filter((p) => p !== null);
+}
+async function aiComplete(opts) {
+  const cfg = await resolveConfig();
+  const images = opts.images ?? [];
+  const isDocument = opts.fileMediaType === "application/pdf";
+  const prepared = images.length ? await prepareImages(images, isDocument) : [];
+  if (opts.strictImages && images.length > 0 && prepared.length === 0) {
+    throw new Error("No se pudo preparar el archivo para la IA (descarga o formato no soportado)");
+  }
+  const maxTokens = opts.maxTokens ?? 1500;
+  if (cfg.kind === "anthropic") {
+    const content = prepared.length ? [
+      ...prepared.map(
+        (img) => img.kind === "url" ? isDocument ? { type: "document", source: { type: "url", url: img.url } } : { type: "image", source: { type: "url", url: img.url } } : { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } }
+      ),
+      { type: "text", text: opts.userText }
+    ] : opts.userText;
+    const body2 = {
+      model: prepared.length ? cfg.visionModel : cfg.model,
+      max_tokens: maxTokens,
+      system: opts.system,
+      messages: [{ role: "user", content }]
+    };
+    if (opts.jsonSchema) {
+      body2.output_config = { format: { type: "json_schema", schema: opts.jsonSchema } };
+    }
+    const res2 = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": cfg.key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body2)
+    });
+    if (!res2.ok) {
+      throw new Error(`IA ${res2.status}: ${(await res2.text().catch(() => "")).slice(0, 300)}`);
+    }
+    const data2 = await res2.json();
+    if (data2.stop_reason === "refusal") throw new Error("La IA rechaz\xF3 la petici\xF3n");
+    return (data2.content ?? []).filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join("").trim();
+  }
+  const userContent = prepared.length ? [
+    { type: "text", text: opts.userText },
+    ...prepared.map((img) => ({
+      type: "image_url",
+      image_url: {
+        url: img.kind === "url" ? img.url : `data:${img.mediaType};base64,${img.data}`
+      }
+    }))
+  ] : opts.userText;
+  const body = {
+    model: prepared.length ? cfg.visionModel : cfg.model,
+    max_tokens: maxTokens,
+    messages: [
+      { role: "system", content: opts.system },
+      { role: "user", content: userContent }
+    ]
+  };
+  if (opts.jsonSchema) {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: { name: "resultado", schema: opts.jsonSchema, strict: true }
+    };
+  }
+  const res = await fetch(`${cfg.base}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.key}`,
+      "content-type": "application/json",
+      // Recomendados por OpenRouter (opcionales, no rompen en otros proveedores):
+      "HTTP-Referer": "https://portal.bcousinoprop.com",
+      "X-Title": "SmartBC Idealista"
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    throw new Error(`IA ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
+
+// lib/services/photos/classify.ts
+var PHOTO_CLASSES = [
+  "living_room",
+  "kitchen",
+  "bedroom",
+  "bathroom",
+  "terrace_outdoor",
+  "facade_building",
+  "dining",
+  "office",
+  "view",
+  "pool",
+  "garden",
+  "garage",
+  "floor_plan",
+  "other"
+];
+var MODEL_TAG = "photo-classify-v1";
+var BATCH = 10;
+var SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["photos"],
+  properties: {
+    photos: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["index", "class", "confidence"],
+        properties: {
+          index: { type: "integer" },
+          class: { enum: [...PHOTO_CLASSES] },
+          confidence: { type: "number", minimum: 0, maximum: 1 }
+        }
+      }
+    }
+  }
+};
+var SYSTEM = `Clasificas fotos de una vivienda en venta/alquiler en Madrid.
+Para CADA foto devuelve su clase y confianza. Clases: living_room (sal\xF3n),
+kitchen (cocina), bedroom (dormitorio), bathroom (ba\xF1o), terrace_outdoor
+(terraza/balc\xF3n/exterior privado), facade_building (fachada/portal/edificio/calle),
+dining (comedor separado), office (despacho), view (vistas desde la vivienda),
+pool (piscina), garden (jard\xEDn), garage (garaje/trastero), floor_plan (plano), other.
+Si dudas entre dos, elige la dominante y baja la confianza. No inventes.`;
+async function classifyPropertyPhotos(propertyId) {
+  const db2 = createAdminClient();
+  const { data: photos } = await db2.from("property_photos").select("id, url, ai_source_hash, class_override").eq("property_id", propertyId).order("position");
+  const summary = { classified: 0, skipped: 0, failed: 0 };
+  const pending = (photos ?? []).filter((p) => {
+    if (p.class_override) return false;
+    const hash = sha(p.url + MODEL_TAG);
+    return p.ai_source_hash !== hash;
+  });
+  if (pending.length === 0) {
+    summary.skipped = photos?.length ?? 0;
+    return summary;
+  }
+  for (let i = 0; i < pending.length; i += BATCH) {
+    const batch = pending.slice(i, i + BATCH);
+    try {
+      const raw = await aiComplete({
+        system: SYSTEM,
+        userText: `Clasifica estas ${batch.length} fotos (index 0..${batch.length - 1}, en el mismo orden).`,
+        images: batch.map((p) => p.url),
+        maxTokens: 1500,
+        jsonSchema: SCHEMA,
+        strictImages: true
+      });
+      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw);
+      for (const r of parsed.photos ?? []) {
+        const photo = batch[r.index];
+        if (!photo || !PHOTO_CLASSES.includes(r.class)) continue;
+        await db2.from("property_photos").update({
+          ai_class: r.class,
+          ai_confidence: r.confidence,
+          ai_source_hash: sha(photo.url + MODEL_TAG),
+          ai_model: MODEL_TAG,
+          classified_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("id", photo.id);
+        summary.classified++;
+      }
+    } catch {
+      summary.failed += batch.length;
+    }
+  }
+  return summary;
+}
+function sha(s) {
+  return createHash("sha256").update(s).digest("hex");
+}
+
+// lib/services/story/engine.ts
+import { createHash as createHash2 } from "node:crypto";
+
 // lib/services/story/validate.ts
+var AREA_PATTERNS = [
+  // Unidad inequívoca: 200 m², 200m2, 200 metros cuadrados
+  /(\d{2,4})\s*(?:m²|m2\b|metros?\s+cuadrados?)/i,
+  // "metros" cualificado como superficie
+  /(\d{2,4})\s*metros?\s+(?:construidos?|[úu]tiles?|habitables?|edificados?)/i,
+  // Sustantivo de superficie delante: "superficie de 200 metros",
+  // "vivienda de 200 metros", "distribuidos en 200 metros"
+  /(?:superficie|[áa]rea|vivienda|piso|[áa]tico|d[úu]plex|casa|chalet|apartamento|estudio|local|distribuidos?)\s+(?:\w+\s+){0,3}?(?:de\s+)?(\d{2,4})\s*metros?\b/i
+];
+var DISTANCE_RE = /(?:a|hasta|apenas|escasos?|menos\s+de|m[áa]s\s+de|situad[oa]s?\s+a|ubicad[oa]s?\s+a|dista|distancia\s+de)\s+(?:unos\s+|apenas\s+|escasos\s+|menos\s+de\s+)?\d{1,4}\s*metros?\b|\d{1,4}\s*metros?\s+(?:de|del|de\s+la|hasta|andando|caminando|a\s+pie)\b/i;
+function extractArea(text) {
+  if (!text) return null;
+  for (const re of AREA_PATTERNS) {
+    const m = text.match(re);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n < 20) continue;
+    const distanceMatch = text.match(DISTANCE_RE);
+    if (distanceMatch && new RegExp(`\\b${n}\\s*metros?\\b`, "i").test(distanceMatch[0])) {
+      continue;
+    }
+    return n;
+  }
+  return null;
+}
+var NUM_WORDS = {
+  un: 1,
+  una: 1,
+  uno: 1,
+  dos: 2,
+  tres: 3,
+  cuatro: 4,
+  cinco: 5,
+  seis: 6,
+  siete: 7,
+  ocho: 8,
+  nueve: 9,
+  diez: 10
+};
+function parseSpanishNumber(word) {
+  const clean = word.toLowerCase().trim();
+  if (/^\d+$/.test(clean)) return Number(clean);
+  return NUM_WORDS[clean] ?? null;
+}
+function extractCount(text, nounRe) {
+  const re = new RegExp(
+    `(\\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\\s+(?:amplios?\\s+|grandes?\\s+)?(?:${nounRe})`,
+    "i"
+  );
+  const m = text.match(re);
+  return m ? parseSpanishNumber(m[1]) : null;
+}
+var BOILERPLATE_RE = /(nuestra (página )?web|call center|off[- ]market|24 horas|365 días|no dude en contactar|contáctenos|síguenos|primera calidad garantizada por nuestra agencia|gestionaremos para ti|oportunidades de inversión)/i;
+var FEATURE_DUP_KEYS = [
+  { re: /ascensor/i, key: "ascensor" },
+  { re: /portero|conserje/i, key: "portero" },
+  { re: /garaje|parking|plaza de aparcamiento/i, key: "garaje" },
+  { re: /trastero/i, key: "trastero" },
+  { re: /piscina/i, key: "piscina" },
+  { re: /terraza/i, key: "terraza" },
+  { re: /balc[oó]n/i, key: "balc\xF3n" },
+  { re: /aire acondicionado|a\/a|climatizaci[oó]n/i, key: "aire acondicionado" },
+  { re: /calefacci[oó]n/i, key: "calefacci\xF3n" },
+  { re: /amueblad/i, key: "amueblado" },
+  { re: /reformad/i, key: "reformado" },
+  { re: /armarios empotrados/i, key: "armarios empotrados" },
+  { re: /vestidor/i, key: "vestidor" },
+  { re: /(baño|bano) en suite|en suite/i, key: "suite" }
+];
+function validateClaims(claims, facts) {
+  const featureKeys = new Set(
+    FEATURE_DUP_KEYS.filter(
+      (f) => facts.features.some((feat) => f.re.test(feat))
+    ).map((f) => f.key)
+  );
+  for (const claim of claims) {
+    const factText = claim.fact;
+    const fullText = `${claim.source_text} ${claim.fact}`;
+    if (BOILERPLATE_RE.test(fullText)) {
+      claim.category = "boilerplate";
+      claim.is_duplicate = false;
+      claim.conflict = false;
+      continue;
+    }
+    const flagConflict = (reason) => {
+      claim.conflict = true;
+      claim.conflict_reason = reason;
+    };
+    const factOwnBeds = extractCount(factText, "dormitorios?|habitaciones?");
+    const factOwnBaths = extractCount(factText, "ba\xF1os?|aseos? y ba\xF1os?");
+    const factOwnSqm = extractArea(factText) != null;
+    const factHasOwnNumber = factOwnBeds != null || factOwnBaths != null || factOwnSqm;
+    const checkDim = (nounRe, structured, label, categories) => {
+      const inFact = extractCount(factText, nounRe);
+      if (inFact != null && structured != null && inFact !== structured) {
+        flagConflict(`El texto dice ${inFact} ${label}; la ficha tiene ${structured}.`);
+        return inFact;
+      }
+      const inSource = extractCount(claim.source_text, nounRe);
+      if (inSource != null && structured != null && inSource !== structured && !factHasOwnNumber && categories.includes(claim.category)) {
+        flagConflict(`La frase origen dice ${inSource} ${label}; la ficha tiene ${structured}.`);
+      }
+      return inFact ?? inSource;
+    };
+    const beds = checkDim("dormitorios?|habitaciones?", facts.bedrooms, "dormitorios", ["private", "overview"]);
+    const baths = checkDim("ba\xF1os?|aseos? y ba\xF1os?", facts.bathrooms, "ba\xF1os", ["private", "overview"]);
+    const areaFact = extractArea(factText);
+    const areaSource = extractArea(claim.source_text);
+    if (facts.squareMeters) {
+      const bad = (n) => n != null && Math.abs(n - facts.squareMeters) / facts.squareMeters > 0.05 ? n : null;
+      const nFact = bad(areaFact);
+      const nSource = bad(areaSource);
+      if (nFact != null) flagConflict(`El texto dice ${nFact} m\xB2; la ficha tiene ${facts.squareMeters} m\xB2.`);
+      else if (nSource != null && ["overview"].includes(claim.category)) {
+        flagConflict(`La frase origen dice ${nSource} m\xB2; la ficha tiene ${facts.squareMeters} m\xB2.`);
+      }
+    }
+    if (!claim.conflict) {
+      const factBeds = extractCount(factText, "dormitorios?|habitaciones?");
+      const factBaths = extractCount(factText, "ba\xF1os?|aseos? y ba\xF1os?");
+      const dupBeds = factBeds != null && facts.bedrooms != null && factBeds === facts.bedrooms;
+      const dupBaths = factBaths != null && facts.bathrooms != null && factBaths === facts.bathrooms;
+      const dupSqm = areaFact != null && !!facts.squareMeters && Math.abs(areaFact - facts.squareMeters) / facts.squareMeters <= 0.05;
+      const dupFeature = FEATURE_DUP_KEYS.some(
+        (f) => featureKeys.has(f.key) && f.re.test(factText)
+      );
+      if (dupBeds || dupBaths || dupSqm || dupFeature) {
+        claim.is_duplicate = true;
+      }
+    }
+    void beds;
+    void baths;
+  }
+  return claims;
+}
 function copyWordCount(copy) {
   return (copy.trim().match(/\S+/g) ?? []).length;
 }
@@ -17736,365 +18133,294 @@ function unsupportedEntities(copy, supportTexts) {
     (e) => !support.includes(e.toLowerCase())
   );
 }
-
-// lib/floor.ts
-var ATICO_FLOOR = 99;
-var ORDINAL_WORDS = {
-  primera: 1,
-  segunda: 2,
-  tercera: 3,
-  cuarta: 4,
-  quinta: 5,
-  sexta: 6,
-  septima: 7,
-  octava: 8,
-  novena: 9,
-  decima: 10,
-  undecima: 11,
-  duodecima: 12
-};
-var ORDINAL_RE = Object.keys(ORDINAL_WORDS).join("|");
-function fold(s) {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-}
-function parseFloorText(raw, loose) {
-  const s = fold(raw);
-  const m = s.match(/planta\s+(-?\d{1,2})\b/) ?? s.match(/\b(\d{1,2})\s*[ªº]?\s*planta\b/);
-  if (m) return Number(m[1]);
-  const word = s.match(new RegExp(`planta\\s+(${ORDINAL_RE})\\b`)) ?? s.match(new RegExp(`\\b(${ORDINAL_RE})\\s+planta`));
-  if (word) return ORDINAL_WORDS[word[1]] ?? null;
-  if (/\batico\b/.test(s)) return ATICO_FLOOR;
-  if (/planta baja|\bentreplanta\b/.test(s)) return 0;
-  if (/\b(semisotano|sotano)\b/.test(s)) return -1;
-  if (loose) {
-    if (/^bajo\b/.test(s)) return 0;
-    const lm = s.match(/^(\d{1,2})\s*[ªº]/);
-    if (lm) return Number(lm[1]);
-  }
-  return null;
-}
-var SECONDARY_CONTEXT_RE = /\b(trastero|garaje|gimnasio|almacen|almacén|bodega|portal|zonas? comunes|piscina|parking|plaza de aparcamiento|local)\b/;
-function extractFloor(features, ...texts) {
-  for (const f of features ?? []) {
-    const n = parseFloorText(f, true);
-    if (n != null) return n;
-  }
-  for (const t of texts) {
-    if (!t) continue;
-    for (const sentence of t.split(/(?<=[.!?])\s+/)) {
-      if (SECONDARY_CONTEXT_RE.test(fold(sentence))) continue;
-      const n = parseFloorText(sentence, false);
-      if (n != null) return n;
+function enforceStoryInvariants(drafts, claims) {
+  const candidates = drafts.map((d) => ({
+    ...d,
+    owned: d.claim_indexes.filter(
+      (i) => claims[i] && claims[i].category === d.chapter
+    )
+  })).filter((d) => d.owned.length > 0 && copyWordCount(d.copy) <= 70);
+  const byChapter = /* @__PURE__ */ new Map();
+  for (const c of candidates) {
+    const existing = byChapter.get(c.chapter);
+    if (!existing || c.owned.length > existing.owned.length) {
+      byChapter.set(c.chapter, c);
     }
   }
-  return null;
-}
-function parseFloorOverride(value) {
-  if (value == null || value === "") return void 0;
-  const s = fold(value.trim());
-  if (s === "none") return null;
-  if (s === "atico") return ATICO_FLOOR;
-  const n = Number(s);
-  return Number.isInteger(n) && n >= -2 && n <= 40 ? n : void 0;
+  const usedClaims = /* @__PURE__ */ new Set();
+  const blocks = [];
+  const chapters = [...byChapter.keys()].sort();
+  for (const chapter of chapters) {
+    const winner = byChapter.get(chapter);
+    const owned = winner.owned.filter((i) => !usedClaims.has(i));
+    if (owned.length === 0) continue;
+    for (const i of owned) usedClaims.add(i);
+    const support = owned.flatMap((i) => [claims[i].fact, claims[i].source_text]);
+    const bad = unsupportedEntities(winner.copy, support);
+    blocks.push({
+      chapter,
+      copy: winner.copy,
+      claim_indexes: owned,
+      status: bad.length > 0 ? "conflict" : "generated",
+      conflictNote: bad.length > 0 ? `Entidades sin respaldo en la evidencia: ${bad.join(", ")}. Edita el texto para corregirlas.` : void 0
+    });
+  }
+  const unusedValid = claims.map((_, i) => i).filter(
+    (i) => !usedClaims.has(i) && !claims[i].conflict && !claims[i].is_duplicate && claims[i].category !== "boilerplate" && claims[i].category !== "other"
+  );
+  return { blocks, unusedValid };
 }
 
-// lib/services/story/gate.ts
-var GATE_LABELS = {
-  conflict: "Conflicto factual con la ficha",
-  duplicate_chapter: "Cap\xEDtulo duplicado",
-  claim_reused: "Claim usado en m\xE1s de un cap\xEDtulo",
-  too_long: "Bloque de m\xE1s de 70 palabras",
-  too_short: "Bloque demasiado corto",
-  entity: "Entidad sin respaldo en la evidencia",
-  floor: "Planta inferida de una zona secundaria",
-  photo_mismatch: "Foto incoherente con el cap\xEDtulo",
-  neighborhood: "Barrio incoherente con zona/subzona",
-  few_chapters: "Menos de 3 cap\xEDtulos narrativos",
-  empty_heading: "Bloque sin texto (heading vac\xEDo)",
-  boilerplate: "Texto de agencia en el copy",
-  low_photos: "Cobertura fotogr\xE1fica insuficiente (<8 fotos)",
-  unavailable: "Propiedad no disponible"
+// lib/services/story/types.ts
+var STORY_CHAPTERS = [
+  "overview",
+  "living",
+  "kitchen",
+  "private",
+  "outdoor",
+  "finishes",
+  "building",
+  "barrio"
+];
+
+// lib/services/story/engine.ts
+var EXTRACT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["claims"],
+  properties: {
+    claims: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["source_text", "category", "fact", "confidence"],
+        properties: {
+          source_text: { type: "string", description: "Frase LITERAL de la descripci\xF3n de la que sale el hecho" },
+          category: { enum: [...STORY_CHAPTERS, "boilerplate", "other"] },
+          fact: { type: "string", description: "El hecho, reformulado corto y neutro" },
+          confidence: { type: "number", minimum: 0, maximum: 1 }
+        }
+      }
+    }
+  }
 };
-var NARRATIVE_CHAPTERS = ["living", "kitchen", "private", "outdoor", "finishes", "building"];
-var CHAPTER_PHOTO_CLASSES = {
-  living: ["living_room", "dining"],
-  kitchen: ["kitchen"],
-  private: ["bedroom", "bathroom"],
-  outdoor: ["terrace_outdoor", "garden", "pool", "view"],
-  finishes: [],
-  building: ["facade_building"],
-  barrio: [],
-  overview: []
+var COMPRESS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["blocks"],
+  properties: {
+    blocks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["chapter", "copy", "claim_indexes"],
+        properties: {
+          chapter: { enum: [...STORY_CHAPTERS] },
+          copy: { type: "string" },
+          claim_indexes: { type: "array", items: { type: "integer" } }
+        }
+      }
+    }
+  }
 };
-var BOILERPLATE_RE = /(nuestra p[áa]gina web|call center|off[- ]market|24 horas|365 d[íi]as|no dude en contactar|cont[áa]ctenos|s[íi]guenos|gestionaremos para ti|oportunidad(es)? de inversi[óo]n)/i;
-var MIN_PHOTOS = 8;
-function norm(s) {
-  return (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+var EXTRACT_SYSTEM = `Eres un extractor de hechos para fichas inmobiliarias de lujo en Madrid.
+Recibes la descripci\xF3n cruda de UNA vivienda. Tu \xFAnica tarea: trocearla en claims AT\xD3MICOS.
+Reglas absolutas:
+- Cada claim CITA la frase literal de la que sale (source_text). Nada sin cita.
+- No inventes NADA: ni habitaciones, ni materiales, ni vistas, ni estado, ni cercan\xEDas.
+- category: overview (qu\xE9 es la vivienda), living (sal\xF3n/luz/distribuci\xF3n social), kitchen (cocina/comedor), private (dormitorios/ba\xF1os/vestidores), outdoor (terraza/balc\xF3n/jard\xEDn), finishes (materiales/suelos/techos/clima/reforma), building (finca/\xE9poca/ascensor/portero/zonas comunes), barrio (ubicaci\xF3n/entorno/servicios de la zona), boilerplate (marketing de la agencia: web, call center, off-market\u2026), other (no encaja).
+- ATOMICIDAD ESTRICTA: un claim = UN solo hecho. PROHIBIDO combinar dos hechos en
+  un fact. "Edificio de 1945 con ascensor y trastero" son TRES claims (\xE9poca /
+  ascensor / trastero) con la misma cita. Las enumeraciones se separan SIEMPRE.
+- Si te doy una lista de ATRIBUTOS YA ESTRUCTURADOS, cada menci\xF3n de uno de
+  ellos va en su PROPIO claim, nunca mezclada con hechos nuevos de la frase.
+- confidence baja (<0.6) si la frase es ambigua.`;
+var COMPRESS_SYSTEM = `Eres el editor de los SmartLinks de BCP (inmobiliaria de lujo, Madrid). Tono sobrio y factual, espa\xF1ol.
+Recibes claims VALIDADOS agrupados por cap\xEDtulo. Redacta EXACTAMENTE UN bloque por cap\xEDtulo que tenga claims (o ninguno si el cap\xEDtulo no los tiene).
+Reglas absolutas:
+- UN solo bloque por cap\xEDtulo. JAM\xC1S dos bloques del mismo cap\xEDtulo.
+- Cada bloque usa EXCLUSIVAMENTE claims de SU cap\xEDtulo. Prohibido tomar un
+  claim de otro cap\xEDtulo aunque comparta frase origen (p. ej. una lavander\xEDa
+  de "private" nunca entra en el bloque de cocina).
+- Usa SOLO los claims recibidos. Prohibido a\xF1adir cualquier dato que no est\xE9 en ellos.
+- ENTIDADES EXACTAS: los nombres propios de los claims (barrios, calles,
+  marcas, estudios, materiales, sistemas) se conservan TAL CUAL. Prohibido
+  sustituirlos por gen\xE9ricos o por otra entidad ("Almagro" nunca se convierte
+  en "Madrid").
+- PROHIBIDO amplificar: nada de intensificadores temporales, cuantitativos o
+  sensoriales que no est\xE9n en el claim ("durante todo el d\xEDa", "abundante",
+  "espectacular"\u2026). Parafrasear \u2260 embellecer.
+- Techo duro: 70 palabras por bloque. Si no caben todos los claims del
+  cap\xEDtulo, prioriza los de mayor valor y deja fuera el resto (target 20\u201360,
+  pero un bloque corto es mejor que relleno: no alargues sin evidencia).
+- Una idea central por bloque. Sin listas, sin superlativos vac\xEDos, sin may\xFAsculas gritadas.
+- No repitas cifras de dormitorios/ba\xF1os/m\xB2 (ya se muestran aparte).
+- Devuelve claim_indexes con los \xEDndices de los claims usados en cada bloque.`;
+function sha256(s) {
+  return createHash2("sha256").update(s).digest("hex");
 }
-var BLOCK_LOCAL_CODES = ["conflict", "too_short"];
-function planPublication(input) {
-  const active = input.blocks.filter((b) => b.status !== "rejected");
-  const conflictClaimIds = new Set(
-    input.claims.filter((c) => c.conflict).map((c) => c.id)
+var ENGINE_VERSION = 4.1;
+async function generateStoryForProperty(propertyId) {
+  const db2 = createAdminClient();
+  const { data: row, error } = await db2.from("properties").select("id, description, bedrooms, bathrooms, square_meters, zone, subzone, features, features_manual, title").eq("id", propertyId).maybeSingle();
+  if (error || !row) return { ok: false, error: "Propiedad no encontrada" };
+  const description = (row.description ?? "").trim();
+  if (countWords(description) < 25) {
+    return { ok: false, error: "La descripci\xF3n es demasiado corta para generar story (se usar\xE1 el fallback)." };
+  }
+  const facts = {
+    bedrooms: row.bedrooms ?? null,
+    bathrooms: row.bathrooms ?? null,
+    squareMeters: row.square_meters ?? null,
+    floor: null,
+    features: [...row.features ?? [], ...row.features_manual ?? []]
+  };
+  const sourceHash = sha256(
+    JSON.stringify([ENGINE_VERSION, description, facts.bedrooms, facts.bathrooms, facts.squareMeters, facts.features])
   );
-  const excluded = [];
-  const keep = [];
-  for (const b of active) {
-    if (b.status === "conflict") {
-      excluded.push({ blockId: b.id, chapter: b.chapter, reason: "conflict" });
-      continue;
-    }
-    if ((b.claim_ids ?? []).some((id) => conflictClaimIds.has(id))) {
-      excluded.push({ blockId: b.id, chapter: b.chapter, reason: "conflict" });
-      continue;
-    }
-    const words = copyWordCount(b.copy);
-    const factual = /\d{4}|\bm²\b|\d+/.test(b.copy) && ["building", "overview"].includes(b.chapter);
-    if (words < 5 && !factual) {
-      excluded.push({ blockId: b.id, chapter: b.chapter, reason: "too_short" });
-      continue;
-    }
-    keep.push(b);
+  const { data: existing } = await db2.from("property_story_versions").select("id, status").eq("property_id", propertyId).eq("source_hash", sourceHash).in("status", ["generated", "approved"]).limit(1).maybeSingle();
+  if (existing) return { ok: true, versionId: existing.id, blocks: 0, conflicts: 0, reused: true };
+  let claims;
+  try {
+    const raw = await aiComplete({
+      system: EXTRACT_SYSTEM,
+      userText: `Descripci\xF3n de la vivienda "${row.title}" (zona ${row.subzone ?? row.zone}):
+
+${description}` + (facts.features.length ? `
+
+ATRIBUTOS YA ESTRUCTURADOS (cada menci\xF3n \u2192 claim propio, separado): ${facts.features.join(", ")}.` : ""),
+      maxTokens: 6e3,
+      jsonSchema: EXTRACT_SCHEMA
+    });
+    const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw);
+    claims = (parsed.claims ?? []).map((c) => ({
+      source_text: String(c.source_text ?? ""),
+      source_field: "description",
+      category: c.category ?? "other",
+      fact: String(c.fact ?? ""),
+      confidence: Number(c.confidence ?? 0),
+      is_duplicate: false,
+      conflict: false
+    })).filter((c) => c.source_text && c.fact);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Fallo en la extracci\xF3n IA" };
   }
-  const subsetResult = evaluateGate({ ...input, blocks: keep });
-  let storyFailures = subsetResult.failures.filter(
-    (f) => !BLOCK_LOCAL_CODES.includes(f.code)
+  if (claims.length === 0) return { ok: false, error: "La IA no extrajo ning\xFAn claim con evidencia." };
+  validateClaims(claims, facts);
+  const usable = claims.map((c, i) => ({ ...c, index: i })).filter((c) => !c.conflict && !c.is_duplicate && c.category !== "boilerplate" && c.category !== "other" && c.confidence >= 0.5);
+  const conflictChapters = new Set(
+    claims.filter((c) => c.conflict && STORY_CHAPTERS.includes(c.category)).map((c) => c.category)
   );
-  const nPhotos = input.photos.length;
-  const nNarrative = subsetResult.narrativeChapters;
-  let sparse = false;
-  if (nNarrative === 2 && nPhotos >= 4) {
-    const featureCount = [
-      ...input.property.features ?? [],
-      ...input.property.features_manual ?? []
-    ].length;
-    const supporting = [
-      !!input.neighborhoodDisplayName,
-      // barrio curado
-      featureCount >= 3,
-      // Residence Details poblado
-      input.hasVideo === true,
-      input.hasPlan === true,
-      input.hasValidLocation === true,
-      nPhotos >= 8
-    ].filter(Boolean).length;
-    if (supporting >= 2) {
-      sparse = true;
-      storyFailures = storyFailures.filter((f) => f.code !== "few_chapters");
+  let blocks = [];
+  if (usable.length > 0) {
+    try {
+      const raw = await aiComplete({
+        system: COMPRESS_SYSTEM,
+        userText: "Claims validados (index \xB7 cap\xEDtulo \xB7 hecho):\n" + usable.map((c) => `${c.index} \xB7 ${c.category} \xB7 ${c.fact}`).join("\n"),
+        maxTokens: 3e3,
+        jsonSchema: COMPRESS_SCHEMA
+      });
+      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw);
+      blocks = (parsed.blocks ?? []).filter(
+        (b) => STORY_CHAPTERS.includes(b.chapter) && b.copy && copyWordCount(b.copy) <= 70
+      );
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Fallo en la compresi\xF3n IA" };
     }
   }
-  if (nPhotos >= 4 && nPhotos < 8 && (nNarrative >= 3 || sparse)) {
-    storyFailures = storyFailures.filter((f) => f.code !== "low_photos");
+  const enforced = enforceStoryInvariants(blocks, claims);
+  const cfg = await db2.from("app_settings").select("value").eq("key", AI_SETTINGS_KEY).maybeSingle().then((r) => r.data?.value ?? null).catch(() => null);
+  const { data: version3, error: vErr } = await db2.from("property_story_versions").insert({
+    property_id: propertyId,
+    source_hash: sourceHash,
+    status: "generated",
+    model: cfg?.model ?? null,
+    provider: cfg?.provider ?? null
+  }).select("id").single();
+  if (vErr || !version3) return { ok: false, error: vErr?.message ?? "No se pudo crear la versi\xF3n" };
+  const { data: savedClaims, error: cErr } = await db2.from("property_story_claims").insert(claims.map((c) => ({
+    version_id: version3.id,
+    source_text: c.source_text,
+    source_field: c.source_field,
+    category: c.category,
+    fact: c.fact,
+    confidence: c.confidence,
+    is_duplicate: c.is_duplicate,
+    conflict: c.conflict,
+    conflict_reason: c.conflict_reason ?? null
+  }))).select("id");
+  if (cErr) return { ok: false, error: cErr.message };
+  const claimIdByIndex = (i) => savedClaims?.[i]?.id;
+  const chapterOrder = (ch) => STORY_CHAPTERS.indexOf(ch);
+  const rowsToInsert = [
+    ...enforced.blocks.map((b) => ({
+      version_id: version3.id,
+      chapter: b.chapter,
+      copy: b.copy,
+      position: chapterOrder(b.chapter) * 10,
+      status: conflictChapters.has(b.chapter) ? "conflict" : b.status,
+      confidence: Math.min(...b.claim_indexes.map((idx) => claims[idx]?.confidence ?? 0.5), 1),
+      claim_ids: b.claim_indexes.map(claimIdByIndex).filter(Boolean)
+    })),
+    // Capítulos SOLO en conflicto (sin bloque publicable): fila 'conflict'
+    // vacía de copy publicable para que el revisor la vea con su motivo.
+    ...[...conflictChapters].filter((ch) => !enforced.blocks.some((b) => b.chapter === ch)).map((ch) => ({
+      version_id: version3.id,
+      chapter: ch,
+      copy: "",
+      position: chapterOrder(ch) * 10 + 9,
+      status: "conflict",
+      confidence: 0,
+      claim_ids: claims.map((c, i) => c.conflict && c.category === ch ? claimIdByIndex(i) : null).filter(Boolean)
+    }))
+  ];
+  if (rowsToInsert.length > 0) {
+    const { error: bErr } = await db2.from("property_story_blocks").insert(rowsToInsert);
+    if (bErr) return { ok: false, error: bErr.message };
   }
-  const publishable = storyFailures.length === 0 && keep.length > 0;
+  const entityNotes = enforced.blocks.filter((b) => b.conflictNote).map((b) => `${b.chapter}: ${b.conflictNote}`);
+  if (entityNotes.length > 0) {
+    await db2.from("property_story_versions").update({ notes: entityNotes.join(" \xB7 ") }).eq("id", version3.id);
+  }
   return {
-    publishable,
-    mode: !publishable ? "none" : sparse ? "sparse" : excluded.length === 0 ? "complete" : "partial",
-    publishBlockIds: keep.map((b) => b.id),
-    excluded,
-    storyFailures,
-    narrativeChapters: nNarrative
+    ok: true,
+    versionId: version3.id,
+    blocks: enforced.blocks.length,
+    conflicts: conflictChapters.size + enforced.blocks.filter((b) => b.status === "conflict").length,
+    reused: false
   };
 }
-function evaluateGate(input) {
-  const { property, blocks, claims, photos } = input;
-  const failures = [];
-  const add = (code, blockIds = [], detail) => failures.push({ code, label: GATE_LABELS[code], blockIds, detail });
-  if (property.archived_at || property.status === "archived") add("unavailable");
-  const conflictBlocks = blocks.filter((b) => b.status === "conflict");
-  if (conflictBlocks.length > 0) add("conflict", conflictBlocks.map((b) => b.id));
-  const chapters = blocks.map((b) => b.chapter);
-  if (new Set(chapters).size !== chapters.length) {
-    const dupes = chapters.filter((c, i) => chapters.indexOf(c) !== i);
-    add("duplicate_chapter", blocks.filter((b) => dupes.includes(b.chapter)).map((b) => b.id));
-  }
-  const allClaimIds = blocks.flatMap((b) => b.claim_ids ?? []);
-  if (new Set(allClaimIds).size !== allClaimIds.length) {
-    const seen = /* @__PURE__ */ new Set();
-    const repeated = /* @__PURE__ */ new Set();
-    for (const id of allClaimIds) {
-      if (seen.has(id)) repeated.add(id);
-      seen.add(id);
-    }
-    add("claim_reused", blocks.filter((b) => (b.claim_ids ?? []).some((c) => repeated.has(c))).map((b) => b.id));
-  }
-  const tooLong = blocks.filter((b) => copyWordCount(b.copy) > 70);
-  if (tooLong.length > 0) add("too_long", tooLong.map((b) => b.id));
-  const tooShort = blocks.filter((b) => {
-    const w = copyWordCount(b.copy);
-    if (w >= 5) return false;
-    const factual = /\d{4}|\bm²\b|\d+/.test(b.copy) && ["building", "overview"].includes(b.chapter);
-    return !factual;
-  });
-  if (tooShort.length > 0) {
-    add(
-      "too_short",
-      tooShort.map((b) => b.id),
-      tooShort.map((b) => `${b.chapter}: ${copyWordCount(b.copy)} palabras`).join(" \xB7 ")
-    );
-  }
-  const claimById = new Map(claims.map((c) => [c.id, c]));
-  const entityBad = [];
-  const entityDetail = [];
-  for (const b of blocks) {
-    const support = (b.claim_ids ?? []).map((id) => claimById.get(id)).filter(Boolean).flatMap((c) => [c.fact, c.source_text]);
-    if (support.length === 0) {
-      entityBad.push(b.id);
-      entityDetail.push(`${b.chapter}: sin evidencia asociada`);
-      continue;
-    }
-    const bad = unsupportedEntities(b.copy, support);
-    if (bad.length > 0) {
-      entityBad.push(b.id);
-      entityDetail.push(`${b.chapter}: ${bad.join(", ")}`);
-    }
-  }
-  if (entityBad.length > 0) add("entity", entityBad, entityDetail.join(" \xB7 "));
-  if (parseFloorOverride(property.floor_override) === void 0) {
-    const floor = extractFloor(
-      [...property.features ?? [], ...property.features_manual ?? []],
-      property.title,
-      property.description
-    );
-    if (floor === 0 && /planta baja[^.]*\b(trastero|garaje|gimnasio|almacen|zonas? comunes)\b/i.test(property.description ?? "")) {
-      add("floor");
-    }
-  }
-  const classes = photos.map(
-    (p) => p.class_override ?? ((p.ai_confidence ?? 0) >= 0.75 ? p.ai_class : null)
-  );
-  const used = /* @__PURE__ */ new Set([0]);
-  const photoBad = [];
-  for (const b of blocks) {
-    const wanted = CHAPTER_PHOTO_CLASSES[b.chapter] ?? [];
-    if (wanted.length === 0) continue;
-    const idx = classes.findIndex((c, i) => !used.has(i) && c != null && wanted.includes(c));
-    if (idx >= 0) {
-      used.add(idx);
-      if (!wanted.includes(classes[idx])) photoBad.push(b.id);
-    }
-  }
-  if (photoBad.length > 0) add("photo_mismatch", photoBad);
-  const barrioBlock = blocks.find((b) => b.chapter === "barrio");
-  if (barrioBlock && input.neighborhoodDisplayName) {
-    const copyNorm = norm(barrioBlock.copy);
-    const ok = copyNorm.includes(norm(input.neighborhoodDisplayName)) || copyNorm.includes(norm(property.zone)) || copyNorm.includes(norm(property.subzone));
-    if (!ok) add("neighborhood", [barrioBlock.id]);
-  }
-  const empty = blocks.filter((b) => !b.copy || !b.copy.trim());
-  if (empty.length > 0) add("empty_heading", empty.map((b) => b.id));
-  const boiler = blocks.filter((b) => BOILERPLATE_RE.test(b.copy));
-  if (boiler.length > 0) add("boilerplate", boiler.map((b) => b.id));
-  const narrative = blocks.filter(
-    (b) => NARRATIVE_CHAPTERS.includes(b.chapter) && b.status !== "rejected"
-  );
-  if (narrative.length < 3) add("few_chapters", [], `${narrative.length} de 3`);
-  if (photos.length < MIN_PHOTOS) add("low_photos", [], `${photos.length} fotos`);
-  let bucket = null;
-  const codes = failures.map((f) => f.code);
-  if (codes.includes("conflict")) bucket = "conflict";
-  else if (codes.includes("too_short")) bucket = "short";
-  else if (codes.includes("few_chapters")) bucket = "chapters";
-  else if (codes.includes("low_photos")) bucket = "photos";
-  else if (codes.length > 0) bucket = "other";
-  return {
-    pass: failures.length === 0,
-    failures,
-    bucket,
-    narrativeChapters: narrative.length,
-    photoCount: photos.length
-  };
+function countWords(text) {
+  return (text.trim().match(/\S+/g) ?? []).length;
 }
 
-// lib/db/queries/neighborhoods.ts
-function normalizeZoneKey(value) {
-  if (!value) return null;
-  return value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// scripts/generate-one-story.mts
+var ref = process.argv[2];
+if (!ref) {
+  console.error("uso: generate-one.bundle.mjs <bc_reference>");
+  process.exit(1);
 }
-async function loadNeighborhoodIndex(db2) {
-  const { data } = await db2.from("neighborhoods").select("zone_key, display_name, aliases").eq("active", true);
-  const index = /* @__PURE__ */ new Map();
-  for (const row of data ?? []) {
-    const entry = { zoneKey: row.zone_key, displayName: row.display_name };
-    index.set(row.zone_key, entry);
-    for (const alias of row.aliases ?? []) index.set(alias, entry);
-  }
-  return index;
-}
-function lookupNeighborhood(index, zone, subzone) {
-  for (const key of [normalizeZoneKey(subzone), normalizeZoneKey(zone)]) {
-    if (key && index.has(key)) return index.get(key).displayName;
-  }
-  return null;
-}
-
-// scripts/publish-story-batch.mts
-var TARGET = Number(process.argv[2] ?? 50);
-var DRY_RUN = process.argv.includes("--dry-run");
 var db = createAdminClient();
-var hoodIndex = await loadNeighborhoodIndex(db);
-var versions = [];
-for (let from = 0; ; from += 1e3) {
-  const { data, error } = await db.from("property_story_versions").select("id, property_id, created_at").eq("status", "generated").order("created_at", { ascending: false }).range(from, from + 999);
-  if (error || !data?.length) break;
-  versions.push(...data);
-  if (data.length < 1e3) break;
+var { data: property } = await db.from("properties").select("id, bc_reference, slug").eq("bc_reference", ref).maybeSingle();
+if (!property) {
+  console.error(`[generate-one] ${ref} no existe`);
+  process.exit(1);
 }
-var latest = /* @__PURE__ */ new Map();
-for (const v of versions) if (!latest.has(v.property_id)) latest.set(v.property_id, v);
-var { data: approvedList } = await db.from("property_story_versions").select("property_id").eq("status", "approved");
-var alreadyApproved = new Set((approvedList ?? []).map((r) => r.property_id));
-var pending = [...latest.values()].filter((v) => !alreadyApproved.has(v.property_id));
-console.log(`[publish] ${pending.length} versiones candidatas (engine v4.1)`);
-var stats = { complete: 0, partial: 0, sparse: 0, blocked: 0 };
-var blockedBy = {};
-var published = [];
-for (const v of pending) {
-  if (published.length >= TARGET) break;
-  const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }, { data: media }] = await Promise.all([
-    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, latitude, longitude, floor_override").eq("id", v.property_id).maybeSingle(),
-    db.from("property_story_blocks").select("id, chapter, copy, status, claim_ids").eq("version_id", v.id).order("position"),
-    db.from("property_story_claims").select("id, source_text, fact, category, conflict").eq("version_id", v.id),
-    db.from("property_photos").select("position, ai_class, ai_confidence, class_override").eq("property_id", v.property_id).order("position"),
-    db.from("property_media").select("type").eq("property_id", v.property_id)
+console.log(`[generate-one] ${ref} (${property.slug})`);
+var cls = await classifyPropertyPhotos(property.id);
+console.log(`[generate-one] fotos clasificadas:`, JSON.stringify(cls));
+var gen = await generateStoryForProperty(property.id);
+console.log(`[generate-one] story:`, JSON.stringify(gen));
+var { data: v } = await db.from("property_story_versions").select("id, status, created_at").eq("property_id", property.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+if (v) {
+  const [{ data: blocks }, { data: claims }] = await Promise.all([
+    db.from("property_story_blocks").select("chapter, status").eq("version_id", v.id),
+    db.from("property_story_claims").select("id, conflict").eq("version_id", v.id)
   ]);
-  if (!property || !blocks) continue;
-  const ref = property.bc_reference ?? property.slug;
-  const plan = planPublication({
-    property,
-    blocks: blocks ?? [],
-    claims: claims ?? [],
-    photos: photos ?? [],
-    neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
-    hasVideo: (media ?? []).some((m) => m.type === "video"),
-    hasPlan: (media ?? []).some((m) => m.type === "plan"),
-    hasValidLocation: property.latitude != null && property.longitude != null
-  });
-  if (!plan.publishable) {
-    stats.blocked++;
-    const first = plan.storyFailures[0];
-    const label = first ? GATE_LABELS[first.code] : "sin bloques publicables";
-    blockedBy[label] = (blockedBy[label] ?? 0) + 1;
-    continue;
-  }
-  if (!DRY_RUN) {
-    const shortIds = plan.excluded.filter((e) => e.reason === "too_short").map((e) => e.blockId);
-    if (shortIds.length) {
-      await db.from("property_story_blocks").update({ status: "rejected" }).in("id", shortIds);
-    }
-    await db.from("property_story_blocks").update({ status: "approved" }).in("id", plan.publishBlockIds);
-    await db.from("property_story_versions").update({
-      status: "approved",
-      reviewed_at: (/* @__PURE__ */ new Date()).toISOString(),
-      notes: plan.mode === "sparse" ? `Publicaci\xF3n SPARSE segura \xB7 2 cap\xEDtulos verificados + estructura de apoyo` : plan.mode === "partial" ? `Publicaci\xF3n parcial segura \xB7 ${plan.excluded.length} cap\xEDtulo(s) excluido(s): ${plan.excluded.map((e) => `${e.chapter}(${e.reason})`).join(", ")}` : "Publicaci\xF3n completa \xB7 quality gate superado."
-    }).eq("id", v.id);
-  }
-  stats[plan.mode]++;
-  published.push({ ref, mode: plan.mode, caps: plan.publishBlockIds.length, excl: plan.excluded.length });
+  console.log(`[generate-one] versi\xF3n ${v.id} status=${v.status}`);
+  console.log(`[generate-one] bloques: ${(blocks ?? []).map((b) => `${b.chapter}:${b.status}`).join(", ")}`);
+  console.log(`[generate-one] claims: ${(claims ?? []).length} \xB7 en conflicto: ${(claims ?? []).filter((c) => c.conflict).length}`);
 }
-console.log(`
-[publish] ${DRY_RUN ? "DRY-RUN " : ""}publicables: ${published.length} \xB7 completas: ${stats.complete} \xB7 parciales: ${stats.partial} \xB7 sparse: ${stats.sparse}`);
-console.log(`[publish] retenidas en fallback: ${stats.blocked}`);
-for (const [label, n] of Object.entries(blockedBy).sort((a, b) => b[1] - a[1])) {
-  console.log(`   ${String(n).padStart(4)} \xB7 ${label}`);
-}
+process.exit(0);

@@ -452,7 +452,105 @@ es su bloqueador.
 - Con esto el fallback restante queda explicado al 100%: 89 = 5 decisión
   + 52 media + 26 conflictos + 6 descripción.
 
+## FOUR-ACTION EXECUTION — sparse alignment · BC-1420 · BC-0002 · tracking fix
+
+Cuatro acciones acotadas aprobadas tras el FINAL FALLBACK RECOVERY. Engine
+v4.1 intacto; ningún invariante factual relajado.
+
+### A-C · Alineación del gate SPARSE (BC-1374, BC-0644, BC-0030)
+
+La política aprobada ("2 capítulos limpios + ≥4 fotos + ≥2 apoyos") y la
+implementación divergían: el tramo fotográfico solo perdonaba 4-7 fotos con
+≥3 capítulos, así que el suelo efectivo del sparse era 8. Corregido en
+`gate.ts` (una condición: el tramo 4-7 también aplica en modo sparse). El
+suelo de 4 fotos, los 2 apoyos y todos los invariantes factuales quedan como
+estaban — cubierto por 4 tests nuevos de `planPublication` en
+`npm run test:smartlink` (2+4 y 2+7 publican; 2+3 y 1-apoyo siguen fuera).
+
+| Ref | Resultado | Modo |
+|---|---|---|
+| BC-1374 | **PUBLICADA** | SPARSE (2 caps · 4 fotos · hood+video) |
+| BC-0644 | **PUBLICADA** | SPARSE (2 caps · 7 fotos · hood+features) |
+| BC-0030 | **PUBLICADA** | SPARSE (2 caps · 7 fotos · hood+features+video) |
+
+### D · BC-1420 — workflow normal, sin tratamiento especial
+
+Clasificación de fotos (39/39) + generación Engine v4.1 + validación + gate +
+publication planning, con el mismo bundle que el lote. Resultado: 7 bloques,
+46 claims (5 en conflicto), 1 bloque en conflicto (`private`).
+**PUBLICADA — PARCIAL**: `private` excluido por conflicto (queda en la cola
+humana), `barrio` excluido por corto; 4 capítulos narrativos limpios visibles.
+
+### E · BC-0002 — resolución humana con evidencia (planta)
+
+Las DOS menciones de "planta baja" en la descripción nombran un **nivel
+interno del chalet** (905 m², tres alturas), no la planta del inmueble:
+
+1. «La vivienda se distribuye en tres plantas: **planta baja o sótano**,
+   planta principal y planta alta.»
+2. «**La planta baja o sótano** alberga … trastero, cuarto de calderas,
+   vestuario … y bodega de vinos.»
+
+No existe evidencia de un floor comparable al key fact PLANTA → floor debe
+ser null. Resolución: `properties.floor_override` (migración **0146**, mismo
+patrón que `class_override` de fotos: la decisión humana manda, por
+propiedad). `extractFloor` NO se ha tocado y la regla contextual del gate
+sigue intacta para toda propiedad sin override. BC-0002 = `'none'`, con la
+evidencia citada dentro de la propia migración.
+**PUBLICADA — PARCIAL**: overview y private excluidos por conflicto; 4
+capítulos limpios (living, kitchen, outdoor, finishes) + barrio. El key fact
+"Planta" no se pinta (verificado en el smoke).
+
+### F · Tracking de page-views — causa raíz y fix
+
+**Causa raíz:** el DTO público pone deliberadamente `id = slug` (nunca expone
+el UUID en el HTML). El tracker reenviaba ese `property.id` como `propertyId`
+y Postgres lo rechazaba contra la columna uuid → **500 en TODOS los page
+views de `/compartir` y `/c`**. La analítica pública llevaba perdiéndose
+desde que existe la superficie.
+
+**Fix (contrato, no catch silencioso):** el navegador manda `propertySlug` y
+el servidor lo resuelve a `property_id` con service role — el mismo patrón
+que ya seguían `collectionToken` y `shortlistToken`. Además:
+- un `propertyId` SIN forma de UUID se trata como slug → los bundles antiguos
+  cacheados en navegadores de clientes quedan arreglados sin esperar refresh;
+- slug inexistente → 200 con `id:null` y **sin fila basura**;
+- `init()` deduplica el page_view si el árbol remonta en la misma página
+  (una navegación real sí cuenta);
+- `/s` y `/v` no mandaban propertyId: sin cambios.
+
+**Verificado en producción (E2E + SQL):**
+- `/compartir` × 5 propiedades × 2 viewports → page-view **200**, y las filas
+  de `page_views` resuelven al `bc_reference` correcto;
+- `/c/[token]` → **200** con `property_id` correcto **y `share_id` del token
+  preservado** (attribution intacta);
+- slug falso vía POST directo → 200 y **0 filas** insertadas;
+- tests del contrato: `npm run test:tracking` (clasificación slug/uuid/none,
+  skip sin fila basura, tokens sin cambio, no-duplicación por remontaje).
+
+### G · Cifras finales (recalculadas de producción; el catálogo se movió: 683 activas)
+
+```
+ACTIVE:      683   (684 → 683: altas/bajas del catálogo, p.ej. BC-1405 archivada)
+STRUCTURED:  599   → COMPLETE 264 · PARTIAL 228 · SPARSE 107
+FALLBACK:     84
+COVERAGE:    87,7%
+
+PUBLIC CONFLICT CLAIMS: 0
+PUBLIC CONFLICT BLOCKS: 0
+```
+
+(El desglose COMPLETE/PARTIAL se calcula ahora por estado real de bloques —
+una publicada es PARTIAL si conserva bloques en conflicto pendientes de
+revisión humana — no por el texto de las notas.)
+
+QA ejecutada: `test:smartlink` (66 checks), `test:tracking`, `test:neighborhoods`
+(28/28), typecheck, build del deploy en verde, smoke Playwright de las 5
+publicadas en 390 y 1440 @125% (story visible, sin "Descripción" residual, sin
+key fact Planta en BC-0002, tracking 200, sin overflow, sin errores JS).
+
 # CATALOG PROPERTY STORY ENRICHMENT QUEUE — COMPLETE
-**SmartLink 2.0 estructurado: 595/684 (86,9%)** · 185 completas · 308 parciales · 104 sparse · 89 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
-**Capa de barrio: 682/684 (99,7%)** · 29 barrios curados · 143 POIs verificados contra OSM · 0 coordenadas escritas a mano
-**Fallback restante explicado al 100%**: 5 pendientes de decisión · 52 necesitan media · 26 conflictos abiertos · 6 descripción pobre
+**SmartLink 2.0 estructurado: 599/683 (87,7%)** · 264 completas · 228 parciales · 107 sparse · 84 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
+**Capa de barrio: 29 barrios curados** · 143 POIs verificados contra OSM · 0 coordenadas escritas a mano
+**Tracking público reparado**: los page views de /compartir y /c vuelven a contarse, con attribution por token verificada
+**Fallback restante**: 84 = 52 necesitan media · ~26 conflictos abiertos · ~6 descripción pobre
