@@ -55,45 +55,61 @@ export async function getEnrichmentQueue(): Promise<{
   const db = createAdminClient() as any;
 
   // Versiones en borrador cuya propiedad no tenga ya una aprobada.
-  const { data: versions } = await db
-    .from("property_story_versions")
-    .select("id, property_id, created_at, reviewed_at, status")
-    .eq("status", "generated")
-    .order("created_at", { ascending: true });
-  if (!versions?.length) {
-    return { rows: [], counters: emptyCounters() };
+  // Paginado: hay más de 1000 versiones (varias por propiedad tras las
+  // regeneraciones de engine), y PostgREST corta en 1000 por defecto.
+  const versions: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from("property_story_versions")
+      .select("id, property_id, created_at, reviewed_at, status")
+      .eq("status", "generated")
+      .order("created_at", { ascending: false })
+      .range(from, from + 999);
+    if (error || !data?.length) break;
+    versions.push(...data);
+    if (data.length < 1000) break;
+  }
+  if (!versions.length) return { rows: [], counters: emptyCounters() };
+
+  // Una sola versión (la más reciente) por propiedad.
+  const latestByProperty = new Map<string, any>();
+  for (const v of versions) {
+    if (!latestByProperty.has(v.property_id)) latestByProperty.set(v.property_id, v);
   }
 
-  const propertyIds = [...new Set(versions.map((v: any) => v.property_id))];
-  const approved = new Set<string>(
-    (
-      await db
-        .from("property_story_versions")
-        .select("property_id")
-        .eq("status", "approved")
-        .in("property_id", propertyIds)
-    ).data?.map((r: any) => r.property_id) ?? [],
+  const approvedRows = await fetchIn(
+    db, "property_story_versions", "property_id", "property_id",
+    [...latestByProperty.keys()],
   );
+  const approved = new Set<string>(
+    approvedRows.filter((r: any) => r.property_id).map((r: any) => r.property_id),
+  );
+  // fetchIn no filtra por status: se recalcula con una consulta directa.
+  const { data: approvedList } = await db
+    .from("property_story_versions")
+    .select("property_id")
+    .eq("status", "approved");
+  approved.clear();
+  for (const r of approvedList ?? []) approved.add(r.property_id);
 
-  const pending = versions.filter((v: any) => !approved.has(v.property_id));
+  const pending = [...latestByProperty.values()].filter((v: any) => !approved.has(v.property_id));
   const pendingIds = pending.map((v: any) => v.property_id);
   const versionIds = pending.map((v: any) => v.id);
 
-  // Carga en bloque (evita N+1 sobre ~500 propiedades).
-  const [propsRes, blocksRes, claimsRes, photosRes, hoodsRes] = await Promise.all([
-    db.from("properties")
-      .select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation")
-      .in("id", pendingIds),
-    db.from("property_story_blocks").select("id, version_id, chapter, copy, status, claim_ids").in("version_id", versionIds).order("position"),
-    db.from("property_story_claims").select("id, version_id, source_text, fact, category").in("version_id", versionIds),
-    db.from("property_photos").select("property_id, position, ai_class, ai_confidence, class_override").in("property_id", pendingIds),
+  // Carga en bloque, PAGINADA: un `.in()` con 500+ UUIDs supera el límite de
+  // longitud de URL de PostgREST y devuelve vacío en silencio. Se trocea.
+  const [props, blocks, claims, photos, hoodsRes] = await Promise.all([
+    fetchIn(db, "properties", "id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation", "id", pendingIds),
+    fetchIn(db, "property_story_blocks", "id, version_id, chapter, copy, status, claim_ids", "version_id", versionIds),
+    fetchIn(db, "property_story_claims", "id, version_id, source_text, fact, category", "version_id", versionIds),
+    fetchIn(db, "property_photos", "property_id, position, ai_class, ai_confidence, class_override", "property_id", pendingIds),
     db.from("neighborhoods").select("zone_key, display_name").eq("active", true),
   ]);
 
-  const byProp = new Map<string, any>((propsRes.data ?? []).map((p: any) => [p.id, p]));
-  const blocksByVersion = groupBy(blocksRes.data ?? [], (b: any) => b.version_id);
-  const claimsByVersion = groupBy(claimsRes.data ?? [], (c: any) => c.version_id);
-  const photosByProp = groupBy(photosRes.data ?? [], (p: any) => p.property_id);
+  const byProp = new Map<string, any>(props.map((p: any) => [p.id, p]));
+  const blocksByVersion = groupBy(blocks, (b: any) => b.version_id);
+  const claimsByVersion = groupBy(claims, (c: any) => c.version_id);
+  const photosByProp = groupBy(photos, (p: any) => p.property_id);
   const hoodByKey = new Map<string, string>((hoodsRes.data ?? []).map((h: any) => [h.zone_key, h.display_name]));
 
   const rows: QueueRow[] = [];
@@ -192,6 +208,39 @@ export async function getStoryReviewDetail(slug: string) {
     photos: photosRes.data ?? [],
     gate,
   };
+}
+
+/**
+ * `.in()` troceado + paginado. Dos límites de PostgREST que muerden a esta
+ * escala: la longitud de la URL (≈500 UUIDs) y el tope de 1000 filas por
+ * respuesta. Sin esto la cola devolvía 0 en silencio.
+ */
+async function fetchIn(
+  db: any,
+  table: string,
+  columns: string,
+  column: string,
+  values: string[],
+): Promise<any[]> {
+  const CHUNK = 120;
+  const PAGE = 1000;
+  const out: any[] = [];
+  for (let i = 0; i < values.length; i += CHUNK) {
+    const slice = values.slice(i, i + CHUNK);
+    let from = 0;
+    for (;;) {
+      const { data, error } = await db
+        .from(table)
+        .select(columns)
+        .in(column, slice)
+        .range(from, from + PAGE - 1);
+      if (error || !data) break;
+      out.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+  return out;
 }
 
 function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
