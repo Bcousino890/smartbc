@@ -278,6 +278,21 @@ export function LocationModule({
   const externalLink = `https://www.openstreetmap.org/?mlat=${center.lat}&mlon=${center.lng}#map=${view.zoom}/${center.lat}/${center.lng}`;
   const focusAreaPx = size ? Math.round(Math.min(size.w, size.h) * 0.46) : 0;
 
+  // La ficha contextual se coloca en la banda LIBRE del escenario. Anclarla
+  // siempre arriba tapaba el pill de "La vivienda" —y en móvil lo tapaba
+  // entero—, que es justo el marcador que nunca debe perderse de vista.
+  const cardSide: "top" | "bottom" = useMemo(() => {
+    if (!size || !propertyPt || !focusPt) return "top";
+    const BAND = 150; // alto aproximado de la ficha + margen
+    const ys = [propertyPt.top, focusPt.top];
+    const libreArriba = ys.every((y) => y > BAND);
+    const libreAbajo = ys.every((y) => y < size.h - BAND);
+    if (libreArriba) return "top";
+    if (libreAbajo) return "bottom";
+    // Ninguna banda está libre: se elige la que deja más aire.
+    return Math.min(...ys) > size.h - Math.max(...ys) ? "top" : "bottom";
+  }, [size, propertyPt, focusPt]);
+
   // Cápsula de POI: se oculta si su punto cae fuera del lienzo o si pisa al
   // marcador de la vivienda — mejor un destino menos que un amontonamiento.
   const capsuleVisible = (pt: { left: number; top: number }) => {
@@ -382,7 +397,7 @@ export function LocationModule({
                 <Minus size={15} strokeWidth={2} />
               </button>
             </div>
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} live />}
+            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardSide} live />}
             {/* Control secundario, en esquina: no compite con el mapa. */}
             <button type="button" onClick={focus ? restoreOverview : exitLive}
               className="crm-meta absolute bottom-3 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
@@ -487,7 +502,7 @@ export function LocationModule({
                 className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold/75 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.16)] md:h-40 md:w-40" />
             )}
 
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} />}
+            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardSide} />}
 
             {/* Activación EXPLÍCITA, nunca por hover, y como control
                 secundario en esquina: la escena manda, no el botón. */}
@@ -584,12 +599,15 @@ function DestinationRow({
 /** Ficha contextual del destino (principio EMAAR): componente NUESTRO, nunca
  *  el popup por defecto de Leaflet. Se ancla arriba para no taparse con el
  *  control de la esquina inferior ni salirse en móvil. */
-function ContextCard({ poi, onClose, live }: { poi: PoiTravel; onClose: () => void; live?: boolean }) {
+function ContextCard({
+  poi, onClose, side = "top", live,
+}: { poi: PoiTravel; onClose: () => void; side?: "top" | "bottom"; live?: boolean }) {
   const { label, Icon } = categoryOf(poi.category);
   return (
     <div
+      data-side={side}
       className={`bcp-context-card absolute left-1/2 z-[600] w-[min(19rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm ${
-        live ? "top-3" : "top-4"
+        side === "top" ? (live ? "top-3" : "top-4") : live ? "bottom-14" : "bottom-14"
       }`}
     >
       <button
