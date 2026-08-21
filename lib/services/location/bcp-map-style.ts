@@ -236,12 +236,17 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "poi",
-        // Solo al ACERCARSE, y solo lo relevante. En la vista de entrada
-        // mandan la vivienda y los destinos curados; llenarla de rótulos de
-        // clínicas y tiendas es justo lo que hace que un mapa parezca
-        // técnico. Al hacer zoom para explorar, aparecen.
+        // Tramos de `rank` según la semántica real de OpenMapTiles: rank BAJO
+        // = más importante. Se replican los cortes que usa el estilo oficial
+        // (comprobados contra sus propias capas) pero subidos un nivel de
+        // zoom y descartando la cola rank>=20, que es la que llenaba la
+        // escena de clínicas y tiendas de barrio.
         minzoom: 16,
-        filter: ["all", ["<=", ["get", "rank"], 6], ["has", "name"]],
+        filter: ["all",
+          ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
+          ["<", ["get", "rank"], 20],
+          ["has", "name"],
+        ],
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
@@ -250,7 +255,6 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "text-offset": [0, 0.7],
           "text-max-width": 7,
           "text-padding": 10,
-          // Los de menor rank (más relevantes) ganan sitio si hay colisión.
           "symbol-sort-key": ["get", "rank"],
         },
         paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.4 },
@@ -260,12 +264,16 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "circle",
         source: "openmaptiles",
         "source-layer": "poi",
-        // Los puntos aparecen antes que los rótulos: insinúan que ahí hay
-        // algo que pulsar sin llenar la escena de texto.
+        // Los puntos entran antes que los rótulos: insinúan que ahí hay algo
+        // que pulsar sin llenar la escena de texto.
         minzoom: 15,
-        filter: ["all", ["<=", ["get", "rank"], 8], ["has", "name"]],
+        filter: ["all",
+          ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
+          ["<", ["get", "rank"], 20],
+          ["has", "name"],
+        ],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.4, 18, 3.6],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.4, 18, 3.8],
           "circle-color": "#b9ac96",
           "circle-stroke-color": C.labelHalo,
           "circle-stroke-width": 1,
