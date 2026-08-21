@@ -836,6 +836,10 @@
 /* Vivienda y POIs dentro del mapa VIVO (Leaflet), con el mismo lenguaje que
    el overview: la marca no cambia al explorar. */
 .bcp-live-home {
+  /* Leaflet da al icono un contenedor de 0×0: sin `position:absolute` y
+     `width:max-content` el pill se queda sin ancho y el texto colapsa — se
+     veía como una mancha oscura en vez del marcador de marca. */
+  position: absolute; left: 0; top: 0; width: max-content;
   display: flex; align-items: center; gap: 8px;
   transform: translate(-50%, -50%);
   background: #0a0a0a; color: #fbf8f3;
