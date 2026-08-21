@@ -167,6 +167,23 @@ export function fitPoints(params: {
 }
 
 /**
+ * Desplaza el centro de una vista N píxeles en vertical.
+ *
+ * Lo usa DESTINATION FOCUS para RESERVAR una banda libre arriba donde vive la
+ * ficha contextual: en móvil la ficha ocupa casi todo el ancho, así que no hay
+ * escape horizontal posible y la única forma de que no tape un marcador es que
+ * el encuadre deje ese hueco. Mover el centro al norte baja el contenido.
+ */
+export function shiftViewVertically(
+  view: { lat: number; lng: number; zoom: number },
+  pixels: number,
+): { lat: number; lng: number; zoom: number } {
+  const wp = latLngToWorldPixel(view.lat, view.lng, view.zoom);
+  const moved = worldPixelToLatLng(wp.x, wp.y + pixels, view.zoom);
+  return { lat: moved.lat, lng: moved.lng, zoom: view.zoom };
+}
+
+/**
  * Zoom que encuadra al inmueble CON su barrio alrededor, no solo su portal.
  * Se ajusta al ancho disponible para que móvil y escritorio muestren una
  * extensión comparable de ciudad (§7C del brief: contexto de barrio, no

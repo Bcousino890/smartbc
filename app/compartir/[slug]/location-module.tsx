@@ -27,7 +27,7 @@ import {
   Compass, Dumbbell, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
   Maximize2, Minus, Plus, ShoppingBag, TrainFront, Trees, UtensilsCrossed, X,
 } from "lucide-react";
-import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, type Mosaic } from "@/lib/geo/tile-math";
+import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 
@@ -62,6 +62,8 @@ const CATEGORY: Record<string, { label: string; Icon: typeof MapPin }> = {
 };
 const categoryOf = (c: string) => CATEGORY[c] ?? { label: "", Icon: MapPin };
 const modeLabel = (m: PoiTravel["mode"]) => (m === "walk" ? "a pie" : "en coche");
+/** Banda superior reservada a la ficha contextual (alto de la ficha + aire). */
+const CARD_BAND_PX = 168;
 
 export type LocationNeighborhood = {
   displayName: string;
@@ -155,12 +157,18 @@ export function LocationModule({
   const view = useMemo(() => {
     if (!size) return { lat: center.lat, lng: center.lng, zoom: 15 };
     if (focus && hasPreciseCoords) {
-      const padding = Math.max(64, Math.round(Math.min(size.w, size.h) * 0.15));
-      return fitTwoPoints({
+      // Se RESERVA una banda superior para la ficha contextual: se encuadra
+      // en un lienzo más bajo y luego se baja el contenido. En móvil la ficha
+      // ocupa casi todo el ancho, así que ese hueco es la única forma de que
+      // no tape a la vivienda ni al destino.
+      const BAND = CARD_BAND_PX;
+      const padding = Math.max(48, Math.round(Math.min(size.w, size.h - BAND) * 0.12));
+      const fitted = fitTwoPoints({
         a: { lat: center.lat, lng: center.lng },
         b: { lat: focus.latitude, lng: focus.longitude },
-        width: size.w, height: size.h, padding, maxZoom: 16,
+        width: size.w, height: Math.max(140, size.h - BAND), padding, maxZoom: 16,
       });
+      return shiftViewVertically(fitted, -BAND / 2);
     }
     const z = contextZoomForWidth(size.w, center.lat);
     if (!hasPreciseCoords) return { lat: center.lat, lng: center.lng, zoom: Math.min(z, fallbackCoords.zoom) };
@@ -290,26 +298,9 @@ export function LocationModule({
   // La ficha contextual se coloca en la banda LIBRE del escenario. Anclarla
   // siempre arriba tapaba el pill de "La vivienda" —y en móvil lo tapaba
   // entero—, que es justo el marcador que nunca debe perderse de vista.
-  const cardPos = useMemo(() => {
-    const W = 304, H = 150, M = 14;
-    if (!size || !propertyPt || !focusPt) return { side: "top" as const, align: "center" as const };
-    // Cuatro posiciones candidatas. Se elige la primera que NO pise ni a la
-    // vivienda ni al destino: anclar siempre al centro escondía el pill de
-    // "La vivienda", que es el marcador que nunca debe perderse de vista.
-    const marks = [propertyPt, focusPt];
-    const hits = (x: number, y: number) =>
-      marks.some((m) => m.left > x - 60 && m.left < x + W + 60 && m.top > y - 46 && m.top < y + H + 46);
-    const candidates: Array<{ side: "top" | "bottom"; align: "center" | "left" | "right"; x: number; y: number }> = [
-      { side: "top", align: "center", x: (size.w - W) / 2, y: M },
-      { side: "bottom", align: "center", x: (size.w - W) / 2, y: size.h - H - 54 },
-      { side: "top", align: "left", x: M, y: M },
-      { side: "top", align: "right", x: size.w - W - M, y: M },
-      { side: "bottom", align: "right", x: size.w - W - M, y: size.h - H - 54 },
-      { side: "bottom", align: "left", x: M, y: size.h - H - 54 },
-    ];
-    const free = candidates.find((c) => c.x >= 0 && !hits(c.x, c.y));
-    return free ?? { side: "top" as const, align: "center" as const };
-  }, [size, propertyPt, focusPt]);
+  // Con la banda superior reservada por el encuadre, la ficha va arriba y
+  // centrada: es la posición más legible y ya no puede pisar a nadie.
+  const cardPos = { side: "top" as const, align: "center" as const };
 
   // Cápsula de POI: se oculta si su punto cae fuera del lienzo o si pisa al
   // marcador de la vivienda — mejor un destino menos que un amontonamiento.
