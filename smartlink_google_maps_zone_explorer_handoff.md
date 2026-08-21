@@ -140,6 +140,44 @@ la tecnología.
 tu versión** en vez de cambiar copy ya aprobado por un documento que puede ser
 anterior. Dilo si prefieres la del brief.
 
+## 2.7 · `ZoneExplorerGoogle` — el renderer, ya escrito
+
+`app/compartir/[slug]/zone-explorer-google.tsx` es la **única** pieza de la
+interfaz que conoce el SDK. Implementa el MVP del §41:
+
+- `Map` con el **Map ID** (el estilo de marca vive en Cloud Console, no en el
+  código: se puede ajustar el color sin desplegar);
+- **`gestureHandling: "cooperative"`** (§20) — la rueda sola hace scroll de
+  **página**; para hacer zoom hay que usar ⌘/Ctrl. El problema histórico del
+  secuestro de scroll no vuelve por la puerta de atrás;
+- **LA VIVIENDA** con `AdvancedMarkerElement` y el mismo pill de marca que el
+  overview: la residencia nunca se pierde de vista (§8);
+- POIs curados de BCP con su marcador champán, distintos de los de Google;
+- **clic en un sitio real del basemap** → `placeId` → se suprime la tarjeta
+  genérica de Google (`e.stop()`, la nuestra es la experiencia) → Place
+  Details con la lista blanca → `fromGooglePlace()` → ficha contextual;
+- **clic en geometría vacía** → no pasa nada: ni sitio inventado ni marcador
+  fantasma (§9);
+- si Google no carga, `onUnavailable()` devuelve el módulo al renderer
+  actual: nunca un rectángulo roto (§34);
+- `role="application"` con etiqueta y atajos de teclado activos (§31).
+
+### La ficha contextual es una sola
+
+`ContextCard` sirve por igual a un POI curado y a un sitio de Google, con dos
+diferencias **deliberadas**: el de Google añade dirección y *Ver en Google
+Maps*, y **nunca se presenta como recomendación de BCP**. Si un destino no
+trae tiempo verificado, la ficha dice *"En la zona de la vivienda"* en vez de
+inventar minutos.
+
+### Estado pasivo: sigue siendo nuestro
+
+Decisión de arquitectura y de coste: el estado pasivo **no** monta Google.
+Sigue con el mosaico de teselas propio, que es gratis, ya está validado y no
+captura el scroll. Google se monta **solo** al pulsar *Explorar la zona*. Así
+una visita que nunca explora cuesta **cero** en Maps Platform, que es el
+patrón que hace la migración asumible.
+
 ---
 
 # 3 · Tests de contrato — 40, todos en verde
@@ -161,6 +199,20 @@ Regresiones: `test:smartlink`, `test:tracking`, `test:neighborhoods` 28/28,
 typecheck y build — todo en verde.
 
 ---
+
+# 3-bis · Verificado en producción tras el despliegue
+
+| Comprobación | Resultado |
+|---|---|
+| `data-map-provider` | `osm` |
+| Peticiones a `googleapis` / `google.com/maps` | **ninguna** |
+| Pulsar *Explorar la zona* | monta el renderer actual, pill de marca correcto |
+| Errores JS | ninguno |
+| `test:neighborhoods` | 28/28 |
+| `test:tracking` · `test:smartlink` · `test:zone` · build | verde |
+
+El código de Google está desplegado pero **inerte**: sin credenciales el
+proveedor resuelve a `osm` y el componente no se monta jamás.
 
 # 4 · Arquitectura resultante
 
@@ -193,11 +245,11 @@ curada. Engine v4.1, stories, publication policy y FACTS-LED intactos.
 
 # 5 · Lo que queda para el día que haya credenciales
 
-1. Componente `ZoneExplorerGoogle` montando `Map` con el Map ID, marcador
-   avanzado de LA VIVIENDA, `gestureHandling: "cooperative"` (§20) y clic en
-   POI del basemap → `placeId` → Place Details con la lista blanca →
-   `fromGooglePlace()` → ficha contextual **ya existente**.
-2. Estilo `BCP LUXURY LIGHT` en Cloud Console con la paleta aprobada.
+1. ~~Componente `ZoneExplorerGoogle`~~ **ya escrito** — pendiente de ejecutarse
+   por primera vez.
+2. Estilo `BCP LUXURY LIGHT` en Cloud Console con la paleta aprobada (§15) y
+   densidad de POIs reducida sin vaciar el mapa: *calma curada, no mapa
+   vacío* (§16).
 3. Fase C: activar en Recoletos, Goya, Almagro, El Viso y una propiedad de
    estudiante; QA visual de los 10 estados del §35.
 4. Fase D: cutover global manteniendo el rollback una ventana de release.
