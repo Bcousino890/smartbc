@@ -187,5 +187,167 @@ Sin "Descripción" residual, sin capítulos duplicados, sin bloques >70 palabras
 3. Los buckets "Pocos capítulos" y "Pocas fotos" son informativos: la cola explica que requieren mejor descripción o reportaje fotográfico, sin workflow avanzado (como se pidió).
 4. El botón "Siguiente" recalcula la cola completa en cada salto (~1-2 s con 517 filas). Aceptable hoy; si el backlog creciera mucho, convendría cachear la lista por sesión.
 
+## NEIGHBORHOOD KNOWLEDGE LAYER EXPANSION
+
+Las zonas del catálogo que no casaban con ninguna fila de `neighborhoods`
+dejaban el SmartLink sin bloque "Vivir en…": ni intro ni tiempos a puntos de
+interés. Esta tanda cierra ese hueco. **Engine v4.1 no se ha tocado.**
+
+### A · Universo recalculado desde producción
+
+No se reutilizaron los conteos anteriores. Consulta directa sobre propiedades
+activas agrupando `coalesce(subzone, zone)`: **25 valores distintos, 68
+propiedades**. Clasificación uno a uno:
+
+| Cat. | Qué es | Valores | Props |
+|---|---|---|---|
+| **A** | Barrio/subzona canónica válida | 17 | 55 |
+| **B** | Alias o valor sucio normalizable | 4 | 6 |
+| **C** | Distrito demasiado genérico (`zone = "Madrid"`) | 1 | 4 |
+| **D** | Municipio fuera de la capital | 2 | 4 |
+| **E** | No resoluble sin revisión humana | 1 | 2 |
+
+**Dos hallazgos que cambiaron la clasificación de partida:**
+
+1. **"Colina" NO es el barrio de Ciudad Lineal.** Las dos propiedades están en
+   Ayres de Chicureo, comuna de **Colina, CHILE** (BC-1232: `-33.249, -70.623`).
+   Seedear el barrio madrileño les habría puesto POIs de Madrid con minutos
+   calculados sobre un continente equivocado. **Se deja sin resolver a
+   propósito**, y hay un caso negativo en la QA que lo vigila.
+2. **"Centro Comercial - Hospital" no era ambiguo:** es como el catálogo nombra
+   el núcleo de **Los Bomberos, en Torrelodones** (salida 29 de la A-6, donde
+   están Espacio Torrelodones y el hospital). Pasó de categoría E a D y entró
+   como capa municipal.
+
+### B · Normalización sin reescribir el catálogo
+
+`neighborhoods.aliases text[]`: las variantes sucias resuelven al barrio bueno
+**sin tocar una sola ficha de propiedad**. 12 barrios llevan alias hoy
+(`lista-barrio-de-salamanca` → Lista, `bernabeu-hispanoamerica` →
+Hispanoamérica, `barrio-de-salamanca` → Barrio de Salamanca,
+`centro-comercial-hospital` → Torrelodones…).
+
+La migración **aborta** si un alias apunta a dos barrios o pisa un `zone_key`
+existente: un alias ambiguo mostraría al cliente el barrio equivocado, y eso
+tiene que reventar en el despliegue, no en la ficha.
+
+**Única excepción — 4 propiedades con `zone = "Madrid"`:** su barrio se obtuvo
+por **geocodificación inversa de sus propias coordenadas** contra los límites
+administrativos de OSM, y se escribió sólo en `subzone` (`zone` intacto). El
+texto libre del anuncio no era fiable: BC-1209 decía "Bernabéu-Hispanoamérica"
+y su punto cae en **El Viso**.
+
+### C · 20 barrios nuevos (29 en total)
+
+Priorizados por volumen de propiedades activas. Adscripción barrio→distrito
+verificada contra el **Ayuntamiento de Madrid** (madrid.es); corrigió una
+suposición de partida: **Castellana es barrio del distrito Salamanca**, no de
+Chamartín.
+
+- **Salamanca:** Castellana (14), Lista (12), Goya (9), Fuente del Berro (2), Guindalera (1)
+- **Chamartín:** El Viso (9), Hispanoamérica (1), Nueva España (1)
+- **Centro:** Malasaña (3), Chueca (2), Lavapiés (1)
+- **Chamberí:** Trafalgar (1), Ríos Rosas (1)
+- **Tetuán:** Castillejos (1)
+- **Retiro:** Ibiza (1), Niño Jesús (1), Estrella (1)
+- **Pozuelo de Alarcón:** Somosaguas (1), Prado de Somosaguas (2)
+- **Torrelodones:** Torrelodones (1)
+
+Intros de **35-70 palabras** (media 57), hechos urbanos y administrativos
+comprobables — trama, época de edificación, equipamientos que existen. **Sin
+minutos escritos**: el generador rechaza la migración si una intro los lleva,
+porque los tiempos se calculan con las coordenadas reales de cada propiedad.
+
+### D · 110 POIs, ninguna coordenada escrita a mano
+
+El catálogo (`scripts/neighborhood-poi-catalog.mjs`) sólo declara nombre,
+categoría, prioridad y modos. Las coordenadas las resuelve
+`scripts/geocode-neighborhood-pois.mjs`:
+
+- **Nominatim** para equipamientos, y **Overpass por nombre exacto de nodo OSM**
+  para estaciones. La búsqueda difusa no las encuentra ("Lista, Metro de
+  Madrid" → 0 resultados) y, cuando las encuentra, devuelve la calle homónima
+  en vez del andén.
+- Cada POI se **valida por radio** contra el centro de su barrio. Los que no
+  pasan quedan fuera: se descartaron 2 (Club de Campo a 6,32 km de Prado de
+  Somosaguas; estación de Torrelodones, ver más abajo).
+- Un POI compartido por varios barrios debe resolver a las mismas coordenadas
+  o el script aborta.
+- 4 a 8 POIs por barrio (media 5,5), verificado por el generador.
+
+`verified_source` guarda el id OSM concreto de cada POI, así que cualquier dato
+es trazable hasta su origen.
+
+**Dos correcciones factuales que salieron del proceso:** el WiZink Center es
+hoy **Movistar Arena** (renombrado en 2024) y "Canal de Isabel II" resuelve al
+**Depósito**, que es cultura y no deporte.
+
+**La estación de Torrelodones se quedó fuera a propósito.** OSM no tiene un
+nodo suyo etiquetado como estación y el único candidato de Nominatim es el
+centroide del barrio de La Colonia, no el andén. Antes que publicar un tiempo
+aproximado, no se publica.
+
+### E · Defecto encontrado y corregido: parques medidos desde su centro
+
+**BC-1390 está pegada a la verja sur del Retiro y el SmartLink decía "Parque
+del Retiro ≈ 18 min a pie".** Un parque se geocodifica al *centroide* de su
+polígono, y el del Retiro queda kilómetro y medio hacia dentro. Mismo problema
+en la Casa de Campo, cuya envolvente mide 5,55 km.
+
+Los POIs que ocupan superficie apreciable (>120 m) guardan ahora su bounding
+box de OSM (`bbox_*`, 41 filas) y la distancia se mide contra el **rectángulo**,
+cero si el punto cae dentro. Los puntuales — estaciones, museos pequeños — la
+dejan a `null` y no cambia ni un minuto.
+
+| Caso real | Antes | Después |
+|---|---|---|
+| BC-1390 → Parque del Retiro | 18 min a pie | **4 min a pie** |
+| BC-1277 → Casa de Campo | 20 min en coche | **8 min en coche** |
+
+Cubierto por 3 tests nuevos en `npm run test:smartlink` (56 en verde), incluido
+el borde de "punto dentro del recinto → 1 min, nunca negativo".
+
+### F · QA sobre 28 SmartLinks reales de producción — 28/28
+
+`npm run test:neighborhoods` (`scripts/qa-neighborhood-layer.mjs`) pide los
+SmartLinks públicos de verdad y comprueba sobre el HTML servido: el barrio
+canónico esperado, la intro presente y sin minutos escritos, POIs con tiempo
+sólo si la propiedad tiene coordenadas, y minutos plausibles (1-40, tope de 22
+a pie). Cubre los 20 barrios nuevos, las 3 rutas de alias, 5 propiedades sin
+coordenadas y **2 casos negativos** (las de Chile) que deben seguir sin
+resolver.
+
+⚠️ Al escribir el harness dio 0/28: React parte cada interpolación con un
+comentario vacío (`Vivir en <!-- -->Castellana`) y el regex no casaba. **Era el
+harness, no la capa** — se documenta porque el mismo error espera a quien
+escriba la siguiente QA sobre HTML servido.
+
+### G · Cobertura
+
+| | Antes | Ahora |
+|---|---|---|
+| Propiedades activas que resuelven barrio | 616 / 684 (90,1%) | **682 / 684 (99,7%)** |
+| Barrios curados | 9 | **29** |
+| POIs | 33 | **143** (41 con envolvente) |
+
+Las 2 que faltan son las de Chile, y es el comportamiento correcto.
+
+### Limitaciones de esta capa
+1. **BC-1017 muestra "Vivir en Centro Comercial - Hospital" como título** hasta
+   el próximo redespliegue del caché de página; el contenido curado ya es el de
+   Torrelodones. El título cae al valor crudo de `zone` sólo cuando el Engine
+   generó capítulo de barrio pero no hay barrio resuelto — con 682/684 esto ya
+   sólo afecta a las 2 de Chile.
+2. **Casa de Campo y Club de Campo se miden contra su bounding box**, que para
+   un polígono muy irregular sigue siendo una aproximación por exceso de
+   cercanía en las esquinas. Aceptable con `≈` y modo coche; si algún día hay
+   volumen real en Pozuelo, conviene sustituirlos por accesos concretos.
+3. Los barrios nuevos **no tienen `facts`** (el jsonb sigue vacío, como los 9
+   originales). No se usa hoy en el render.
+4. Regenerar la capa es `node scripts/geocode-neighborhood-pois.mjs && node
+   scripts/fetch-poi-bounds.mjs && node scripts/build-neighborhood-migration.mjs`.
+   La migración 0145 es idempotente y se reaplica en cada despliegue.
+
 # CATALOG PROPERTY STORY ENRICHMENT QUEUE — COMPLETE
 **SmartLink 2.0 estructurado: 593/684 (86,7%)** · 184 completas · 308 parciales · 103 sparse · 91 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
+**Capa de barrio: 682/684 (99,7%)** · 29 barrios curados · 143 POIs verificados contra OSM · 0 coordenadas escritas a mano
