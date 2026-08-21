@@ -1,0 +1,2893 @@
+{
+  "total": 684,
+  "structured": 593,
+  "rows": [
+    {
+      "ref": "BC-1281",
+      "slug": "piso-en-venta-en-calle-lagasca-7747",
+      "propertyId": "fee65869-77b1-4963-8a8b-85baf56ca9b2",
+      "versionId": "d41d524d-624b-4013-8063-33ba75817ca2",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1771,
+      "sqm": 66,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-1385",
+      "slug": "salamanca-fuente-del-berro-apartamento-exterior-kmct",
+      "propertyId": "e8706133-d3b4-4365-a415-3b01764a00f6",
+      "versionId": "ed7421d5-5894-4bc8-acb0-630dfa2e8ff1",
+      "zone": "Fuente del Berro, Barrio de Salamanca",
+      "hood": "Fuente del Berro",
+      "photos": 40,
+      "narrative": 2,
+      "featureCount": 0,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1158,
+      "sqm": 55,
+      "publishableNow": true,
+      "mode": "sparse",
+      "storyFailures": [],
+      "gateFailures": [
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": []
+    },
+    {
+      "ref": "BC-1256",
+      "slug": "piso-en-venta-en-calle-o-donnell-7728",
+      "propertyId": "20ef55d1-687d-4df5-a638-0d38ece0558b",
+      "versionId": "3e660915-a343-408f-b738-2468630399b4",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2157,
+      "sqm": 187,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0641",
+      "slug": "piso-en-venta-en-calle-alcala-7045",
+      "propertyId": "17feba64-34c0-4d3f-ac0d-120dd9b5422d",
+      "versionId": "219d57e8-8fcc-431b-af57-74cd8d0b86db",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 2056,
+      "sqm": 140,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-1362",
+      "slug": "atico-en-venta-en-calle-zurbaran-7772",
+      "propertyId": "4e7b045a-4fc1-407c-8251-ed4817363584",
+      "versionId": "1cad4998-c294-4997-bd5e-1d58ebe7884b",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 30,
+      "narrative": 1,
+      "featureCount": 3,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1563,
+      "sqm": 320,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0002",
+      "slug": "chalet-independiente-en-humera-6985",
+      "propertyId": "3550c3e1-2c90-4cb7-984e-963e7580d9f5",
+      "versionId": "24dc9c33-c333-415c-a753-509113796fb0",
+      "zone": "Pozuelo",
+      "hood": "Pozuelo de Alarcón",
+      "photos": 39,
+      "narrative": 4,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 2252,
+      "sqm": 905,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "floor"
+      ],
+      "gateFailures": [
+        "conflict",
+        "floor"
+      ],
+      "invariantFails": [
+        "floor:"
+      ],
+      "excluded": 2,
+      "cats": [
+        "F_invariant"
+      ]
+    },
+    {
+      "ref": "BC-1246",
+      "slug": "piso-en-venta-en-calle-don-ramon-de-la-cruz-7716",
+      "propertyId": "0ba2dea2-7e99-4840-af5a-0fe93bb34ae8",
+      "versionId": "837a4dd7-9575-43be-9e7b-a709fb02fabb",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1868,
+      "sqm": 117,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-1420",
+      "slug": "alquiler-de-piso-en-calle-de-ayala-4yaw",
+      "propertyId": "4627b6ba-6ffc-45d1-8e8d-dfd252bc9894",
+      "versionId": null,
+      "zone": "Recoletos",
+      "hood": "Recoletos",
+      "photos": 39,
+      "narrative": 0,
+      "featureCount": 15,
+      "hasVideo": true,
+      "videoSources": [
+        "manual"
+      ],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 1626,
+      "sqm": 338,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [],
+      "gateFailures": [],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "E_no_story"
+      ]
+    },
+    {
+      "ref": "BC-1058",
+      "slug": "chalet-independiente-en-venta-en-jeronimos-7634",
+      "propertyId": "646f826f-12ff-4039-b1e5-7f8f575dac9a",
+      "versionId": "3efa351e-3e45-416e-8228-49cb7f33d8f5",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 44,
+      "narrative": 1,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2319,
+      "sqm": 306,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0914",
+      "slug": "piso-en-velazquez-velazquez-120-vivienda",
+      "propertyId": "b3a274e5-32a2-4dee-8380-b0736c4288ca",
+      "versionId": "471ef086-257f-48eb-9554-da5d158953d9",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 0,
+      "narrative": 5,
+      "featureCount": 8,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2572,
+      "sqm": 50,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(0 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0915",
+      "slug": "piso-en-nunez-de-balboa-nunez-de-balboa-105-vivienda",
+      "propertyId": "aec526eb-d847-4c00-b3fe-f62d55db3f61",
+      "versionId": "d7e4bc54-80b7-476c-932f-dfcd30f2b14e",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 0,
+      "narrative": 4,
+      "featureCount": 8,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1809,
+      "sqm": 35,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(0 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-1327",
+      "slug": "exclusivo-piso-en-goya-barrio-de-salamanca-u3kt",
+      "propertyId": "d727cb93-48ac-4acf-bcaa-56514a319b8c",
+      "versionId": "882a9bae-b791-443b-9140-7ff04e34fceb",
+      "zone": "Fuente del Berro",
+      "hood": "Fuente del Berro",
+      "photos": 19,
+      "narrative": 1,
+      "featureCount": 0,
+      "hasVideo": true,
+      "videoSources": [
+        "manual"
+      ],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 347,
+      "sqm": 70,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1325",
+      "slug": "alquiler-de-piso-en-calle-de-lopez-de-hoyos-60-eyyx",
+      "propertyId": "e730fbb0-1615-47a5-92ce-288d2e1f90b4",
+      "versionId": "5e223eb2-7c39-43a0-9b26-f76507dbfc1e",
+      "zone": "El Viso",
+      "hood": "El Viso",
+      "photos": 14,
+      "narrative": 1,
+      "featureCount": 16,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 472,
+      "sqm": 85,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "entity"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1347",
+      "slug": "exclusivo-piso-en-lista-barrio-de-salamanca-f6ei",
+      "propertyId": "15b1e2be-f2d6-4053-85f2-f0e1a158b93e",
+      "versionId": "4a9fa05a-2d50-4021-9aa9-54020f6ed070",
+      "zone": "Lista",
+      "hood": "Lista",
+      "photos": 16,
+      "narrative": 1,
+      "featureCount": 0,
+      "hasVideo": true,
+      "videoSources": [
+        "manual"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 231,
+      "sqm": 60,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1409",
+      "slug": "alquiler-de-piso-en-calle-villanueva-d6ul",
+      "propertyId": "d5b067c0-7005-4cdd-af0a-56f4383045fd",
+      "versionId": "b7aa11c2-6581-4748-9add-20f2c964a66b",
+      "zone": "Recoletos",
+      "hood": "Recoletos",
+      "photos": 32,
+      "narrative": 1,
+      "featureCount": 14,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 297,
+      "sqm": 225,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1374",
+      "slug": "apartamento-en-venta-en-calle-general-oraa-7779",
+      "propertyId": "254077ca-e0b1-44aa-8694-d05a435e6a3d",
+      "versionId": "5439404c-603a-441b-b544-9f4600dc4bdc",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 4,
+      "narrative": 2,
+      "featureCount": 2,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1837,
+      "sqm": 47,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(4 fotos)"
+      ],
+      "gateFailures": [
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-1247",
+      "slug": "piso-en-venta-en-calle-santa-engracia-7718",
+      "propertyId": "de5f9a01-538d-429b-8b00-49867eb3a308",
+      "versionId": "a4a707cf-8411-4aa4-918d-22b75703b910",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2020,
+      "sqm": 89,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0071",
+      "slug": "piso-reformado-en-zona-lista-barrio-de-salamanca-6432",
+      "propertyId": "fe373bb7-3e2b-45d0-b5a3-3f1ba8b83a70",
+      "versionId": "6c9a82fe-10e0-4a90-84a4-971062b4d558",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 25,
+      "narrative": 1,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 288,
+      "sqm": 90,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1311",
+      "slug": "atico-en-venta-en-calle-ibiza-7758",
+      "propertyId": "3706a2d5-31fd-4400-8dc2-fabb1d904790",
+      "versionId": "de28726b-d790-4086-8149-e1b3b527fd2c",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2148,
+      "sqm": 59,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0589",
+      "slug": "piso-en-venta-en-calle-conde-de-penalver-6881",
+      "propertyId": "b333fecd-6441-4c24-86c5-fa0a936ec80a",
+      "versionId": "09f06113-7127-4768-b5d6-008ca77df9b9",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 24,
+      "narrative": 1,
+      "featureCount": 4,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1921,
+      "sqm": 58,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0064",
+      "slug": "piso-reformado-en-lista-en-el-barrio-de-salamanca-5540",
+      "propertyId": "12c4ab92-6eaf-4238-b5bf-e2986a204d39",
+      "versionId": "1de88b91-9a2a-4f69-bbfb-5d826fba853a",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 1,
+      "narrative": 3,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 441,
+      "sqm": 304,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(1 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-1251",
+      "slug": "atico-en-venta-en-calle-lopez-de-rueda-7722",
+      "propertyId": "0dcd98c1-c086-4ef0-94e3-c46ccef56fb6",
+      "versionId": "affd1291-d9e3-4163-8485-4b6094734ffd",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2061,
+      "sqm": 111,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "entity",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0796",
+      "slug": "piso-en-venta-en-calle-diego-de-leon-7546",
+      "propertyId": "a77091d7-dc29-4d3d-93ca-8ce9f2996376",
+      "versionId": "0541964b-ee95-4e47-91f2-76bea4cfa49c",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 8,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2305,
+      "sqm": 225,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0704",
+      "slug": "piso-en-venta-en-calle-castello-7269",
+      "propertyId": "bfba4352-bc5f-4e3f-9040-ffcc6f208d2c",
+      "versionId": "998e590b-ecda-49b9-99f2-dd5d36a2481b",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 31,
+      "narrative": 1,
+      "featureCount": 9,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2121,
+      "sqm": 178,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 5,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1353",
+      "slug": "piso-en-venta-en-calle-duque-de-sesto-7766",
+      "propertyId": "d589e2d7-2ca1-426f-95ab-6883a5eacfc0",
+      "versionId": "268782ff-1586-48c4-bc71-7deb35ba890b",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 28,
+      "narrative": 1,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2055,
+      "sqm": 88,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1368",
+      "slug": "alquiler-de-piso-en-calle-de-cochabamba-bernabeu-e14i",
+      "propertyId": "50ad92b4-39fd-42be-b304-35d8fe6d1b7c",
+      "versionId": "ad42a3bf-a8ff-4a7b-ac6c-fb15e7d6c438",
+      "zone": "Bernabéu-Hispanoamérica",
+      "hood": "Hispanoamérica",
+      "photos": 15,
+      "narrative": 1,
+      "featureCount": 9,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 697,
+      "sqm": 75,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "entity"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1375",
+      "slug": "piso-en-alquiler-en-calle-nunez-de-balboa-7774",
+      "propertyId": "4c317c41-25b0-45fe-bb71-5ad0af4ab9db",
+      "versionId": "d10d6282-f200-42bb-a5a8-2281983e7ffb",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 32,
+      "narrative": 1,
+      "featureCount": 4,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 1840,
+      "sqm": 125,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0644",
+      "slug": "piso-en-venta-en-calle-alcalde-sainz-de-baranda-7057",
+      "propertyId": "a3ade2df-45ec-4c31-bf0e-cfb38997af11",
+      "versionId": "baacf37c-9921-4c9f-ae49-32b6bc0d38f4",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 7,
+      "narrative": 2,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2149,
+      "sqm": 53,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(7 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0987",
+      "slug": "maravilloso-piso-a-estrenar-de-4-habitaciones-con-vistas-al-retiro-7308",
+      "propertyId": "5709d31d-1ec6-46ec-8f4f-ed04e6b96222",
+      "versionId": "665b2c04-fd0d-417f-b9c1-f1c614cbadd4",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 20,
+      "narrative": 1,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 768,
+      "sqm": 185,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0755",
+      "slug": "piso-en-venta-en-calle-santa-engracia-7432",
+      "propertyId": "0a409a17-cba4-43a4-98dd-69b8458c8a08",
+      "versionId": "5e15944c-d2db-4ef5-8cbd-17b98f105c65",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 4,
+      "narrative": 3,
+      "featureCount": 5,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2097,
+      "sqm": 234,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "claim_reused"
+      ],
+      "gateFailures": [
+        "claim_reused",
+        "low_photos"
+      ],
+      "invariantFails": [
+        "claim_reused:"
+      ],
+      "excluded": 0,
+      "cats": [
+        "F_invariant"
+      ]
+    },
+    {
+      "ref": "BC-0988",
+      "slug": "piso-con-garaje-en-proceso-de-reforma-en-odonnell-7310",
+      "propertyId": "1deee150-77f9-414c-9201-8eee24c01d66",
+      "versionId": "b25b3fcf-d6d1-410e-920a-01dc680ff1b1",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 1,
+      "narrative": 3,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 616,
+      "sqm": 153,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(1 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0708",
+      "slug": "piso-en-venta-en-paseo-general-martinez-campos-7274",
+      "propertyId": "424fa9cc-2dd9-46f7-a0a3-177d2e2fe3e3",
+      "versionId": "e9a1419f-2cbe-49ed-8271-e7d74d4b5f8a",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 10,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1833,
+      "sqm": 218,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0016",
+      "slug": "oficina-en-edificio-de-alta-representatividad-6200",
+      "propertyId": "abe82a19-e8b1-4661-a528-f2e185b2486f",
+      "versionId": "0b9b898b-1863-4202-880d-19b5bfa0b274",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 1,
+      "narrative": 2,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 314,
+      "sqm": 199,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(1 fotos)"
+      ],
+      "gateFailures": [
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0720",
+      "slug": "piso-en-venta-en-calle-claudio-coello-7320",
+      "propertyId": "e6876e12-4f7b-4056-9daa-f3a6cccbed69",
+      "versionId": "5a2afbd0-9ae4-4195-abd7-008c1e5a42f2",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 1,
+      "narrative": 1,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1647,
+      "sqm": 34,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "boilerplate",
+        "few_chapters(1 de 3)",
+        "low_photos(1 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "boilerplate",
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [
+        "boilerplate:"
+      ],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "B_1chapter",
+        "F_invariant"
+      ]
+    },
+    {
+      "ref": "BC-0081",
+      "slug": "oficina-en-barrio-de-salamanca-3486",
+      "propertyId": "8e823154-a373-4ae1-9698-d3c3244c40f1",
+      "versionId": "bc74278d-f40d-413f-b6d1-e79dbbdbffb0",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 11,
+      "narrative": 1,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 716,
+      "sqm": 752,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0821",
+      "slug": "piso-en-venta-en-calle-o-donnell-7598",
+      "propertyId": "19a6383d-6d22-405f-8acf-047177083150",
+      "versionId": "47ce5c5c-cbea-47a1-a574-85a29f0acb94",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 5,
+      "featureCount": 8,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2464,
+      "sqm": 350,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-1073",
+      "slug": "piso-para-actualizar-en-retiro-7355",
+      "propertyId": "d29f15bf-4d27-47e6-b536-24a44497966d",
+      "versionId": "dcf39816-a372-40c0-b6e0-61353b73e9a3",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 25,
+      "narrative": 1,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 939,
+      "sqm": 155,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0654",
+      "slug": "piso-en-venta-en-calle-fortuny-7114",
+      "propertyId": "7abd6ab7-db68-45e6-abae-32cfce88ee6e",
+      "versionId": "db24d0a6-f180-4771-8458-eac25c8c79bc",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1785,
+      "sqm": 334,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0667",
+      "slug": "piso-en-venta-en-calle-jorge-juan-7152",
+      "propertyId": "4705b69f-e79d-44d0-9614-a9113d5426dc",
+      "versionId": "63eefbcf-0746-4ab9-9b87-766697ee559b",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1912,
+      "sqm": 129,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0144",
+      "slug": "piso-reformado-con-terraza-y-garaje-en-trafalgar-5909",
+      "propertyId": "4493309a-533d-47dc-89f0-b3854989ee5b",
+      "versionId": "62a00d77-95cd-40e0-806f-968a556f33be",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 5,
+      "narrative": 1,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 933,
+      "sqm": 144,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)",
+        "low_photos(5 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0673",
+      "slug": "piso-en-venta-en-calle-almagro-7168",
+      "propertyId": "f5cc8b02-a21d-4abd-b5e7-4e952d795d54",
+      "versionId": "b9b02246-ad5b-4319-98d0-872f07f8bc63",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1842,
+      "sqm": 251,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-1280",
+      "slug": "piso-en-venta-en-calle-general-pardinas-7746",
+      "propertyId": "1c01c702-093a-48ab-acc6-30b01da23fb9",
+      "versionId": "b0b9ca66-4128-48b2-9468-5f11cac01576",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1954,
+      "sqm": 130,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0645",
+      "slug": "piso-en-venta-en-calle-lombia-7058",
+      "propertyId": "6042b4b0-1ba5-4ba9-9110-dba52d319172",
+      "versionId": "a9ee73a8-7d4c-47d2-8f26-f152eee4d71c",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 13,
+      "narrative": 1,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 2269,
+      "sqm": 44,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0079",
+      "slug": "oportunidad-de-reforma-muy-proxima-a-la-plaza-del-marques-de-salamanca-5408",
+      "propertyId": "a1805be3-482e-40fb-89d6-89559ed3f843",
+      "versionId": "e89e1e14-06e3-4b9a-944b-01aa0af80ae4",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 1,
+      "narrative": 1,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 425,
+      "sqm": 156,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)",
+        "low_photos(1 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0916",
+      "slug": "piso-en-lopez-de-hoyos-lopez-de-hoyos-10-vivienda",
+      "propertyId": "cf70016f-f9b1-4fc7-90f5-28833c67b106",
+      "versionId": null,
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 0,
+      "narrative": 0,
+      "featureCount": 8,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 117,
+      "sqm": 35,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [],
+      "gateFailures": [],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03",
+        "E_no_story"
+      ]
+    },
+    {
+      "ref": "BC-0724",
+      "slug": "atico-en-venta-en-calle-nunez-de-balboa-7334",
+      "propertyId": "610087a0-0c08-442e-9a05-3e578124c882",
+      "versionId": "1914ab23-38da-45c3-8cc0-c9003149cc49",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2074,
+      "sqm": 125,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0715",
+      "slug": "piso-en-venta-en-calle-doctor-castelo-7297",
+      "propertyId": "6668b231-006d-4221-a3af-21f0b0b5c416",
+      "versionId": "9d4eaa63-2d42-4016-9942-9fe62419484d",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1837,
+      "sqm": 190,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "entity",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0723",
+      "slug": "piso-en-venta-en-calle-rodriguez-san-pedro-7332",
+      "propertyId": "0ac8b25f-b07d-4db2-b5a8-90d450e75da4",
+      "versionId": "96fa51b6-88eb-44a4-8855-8741943a10c6",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 26,
+      "narrative": 1,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1782,
+      "sqm": 136,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0725",
+      "slug": "atico-en-venta-en-calle-nunez-de-balboa-7335",
+      "propertyId": "f9799bc5-0d1f-437d-953f-a0b4385ea003",
+      "versionId": "8fe5cb06-eb91-448a-936f-e738e879ad20",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2263,
+      "sqm": 145,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0769",
+      "slug": "dos-fincas-segregables-en-venta-en-calle-alfonso-xii-7484",
+      "propertyId": "6558f7f0-5151-4773-b64e-9a450c968ab5",
+      "versionId": "f24b51ad-9df0-45f9-a703-551d5d779184",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 9,
+      "narrative": 1,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2472,
+      "sqm": 586,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "boilerplate",
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0741",
+      "slug": "piso-en-venta-en-calle-alberto-bosch-7390",
+      "propertyId": "6dcbbd35-6f39-41bb-ac4c-304bdfed2eec",
+      "versionId": "33a7053b-1bff-4248-92fa-c226693cd677",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 10,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2718,
+      "sqm": 137,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0742",
+      "slug": "piso-en-venta-en-calle-columela-7395",
+      "propertyId": "3a67e6e8-5206-46ce-9a4d-d949fc40fac0",
+      "versionId": "219b315b-fa54-479b-906f-98fcd60183e5",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2430,
+      "sqm": 266,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0761",
+      "slug": "atico-en-venta-en-calle-nunez-de-balboa-7471",
+      "propertyId": "6468dcaa-29ec-4a48-abbf-19b9ab6c938a",
+      "versionId": "48d9a9e9-ed3c-47bf-a4a5-b30ea604c856",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 5,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2239,
+      "sqm": 145,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0768",
+      "slug": "piso-en-venta-en-calle-alfonso-xii-7482",
+      "propertyId": "1e578c1b-bb32-44ea-b89f-54a587da633e",
+      "versionId": "75a8e00d-a424-46c8-960f-7d9619b0626b",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 2,
+      "narrative": 1,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2348,
+      "sqm": 469,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03",
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0770",
+      "slug": "tres-fincas-segregables-en-venta-en-calle-alfonso-xii-7485",
+      "propertyId": "926e88e4-54d7-4500-b095-b35caa567448",
+      "versionId": "361b8233-6fd0-468b-981e-4ee1ea5185d9",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 11,
+      "narrative": 1,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2682,
+      "sqm": 1,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0800",
+      "slug": "piso-en-venta-en-avenida-felipe-ii-7552",
+      "propertyId": "7f952253-0712-49e4-aab9-0f0edf59f624",
+      "versionId": "3215af80-9384-46a4-aa35-d75602016f11",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2045,
+      "sqm": 170,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0797",
+      "slug": "piso-en-venta-en-diego-de-leon-7547",
+      "propertyId": "2ed84a57-a487-4571-87c2-95746cd49499",
+      "versionId": "71a0e29b-274d-4826-afcd-e42e03ef72e9",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2107,
+      "sqm": 227,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0808",
+      "slug": "piso-en-venta-en-calle-velazquez-7569",
+      "propertyId": "e2e2f622-9c6f-41ea-a8ed-1bcafd2ffe04",
+      "versionId": "1912f479-644b-46cf-accc-6c074edac0fd",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2148,
+      "sqm": 200,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0700",
+      "slug": "piso-en-venta-en-calle-nunez-de-balboa-7258",
+      "propertyId": "6d045149-9ea5-47e3-a476-622801ec58b5",
+      "versionId": "c2fb049d-edef-4f0b-9765-d17616c58396",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2033,
+      "sqm": 86,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0819",
+      "slug": "piso-en-venta-en-calle-de-o-donnell-7596",
+      "propertyId": "4c72764f-29d1-4a8f-be28-9407a1ec9b45",
+      "versionId": "db3e311a-00d0-4244-bab3-baa63fd7ab03",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2367,
+      "sqm": 284,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0820",
+      "slug": "piso-en-venta-en-la-calle-o-donnell-7597",
+      "propertyId": "59c61599-acf7-45af-b65f-74519f023bc1",
+      "versionId": "e99ca917-260a-4247-bc29-689eef68de99",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 7,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2505,
+      "sqm": 153,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0829",
+      "slug": "piso-en-venta-en-calle-del-marques-de-vasto-7610",
+      "propertyId": "485553ae-5ee4-46e4-9d30-b6491c56b310",
+      "versionId": "26fb0344-e875-4ebf-af2c-02fa9133257f",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 7,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2457,
+      "sqm": 133,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0795",
+      "slug": "piso-en-venta-en-calle-maiquez-7544",
+      "propertyId": "1e0ef0fc-0b66-48b1-bdff-1d23bef0e839",
+      "versionId": "74d19cc3-97a8-4b31-8fce-3039a635a1ba",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2115,
+      "sqm": 55,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "entity",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0885",
+      "slug": "atico-duplex-en-venta-en-calle-ayala-7265",
+      "propertyId": "8001fc12-4ff9-4132-bc4b-4fb82d666ede",
+      "versionId": "823095de-8d48-404d-bb52-2e42b3737ace",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 3,
+      "narrative": 4,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2094,
+      "sqm": 187,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(3 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0538",
+      "slug": "piso-en-venta-en-calle-goya-6632",
+      "propertyId": "fbdf1650-188c-44f3-bc60-164582fc2350",
+      "versionId": "e15cbaa0-0224-4234-9898-02e5d20445df",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 48,
+      "narrative": 1,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1975,
+      "sqm": 280,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "entity"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0543",
+      "slug": "piso-en-venta-en-calle-zurbano-6690",
+      "propertyId": "4a4ce794-5000-4440-9bb3-bd9a61ef1f79",
+      "versionId": "df4299eb-074a-45b0-8282-f95821e249ee",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 852,
+      "sqm": 165,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-1272",
+      "slug": "piso-en-venta-en-castellana-7733",
+      "propertyId": "bedba98c-13b3-49b0-99c3-820a29b7632f",
+      "versionId": "e61bb960-632e-4702-980e-f925336e7187",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 23,
+      "narrative": 0,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1865,
+      "sqm": 156,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(0 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "D_0chapters"
+      ]
+    },
+    {
+      "ref": "BC-1367",
+      "slug": "magnifico-piso-de-3-habitaciones-en-el-corazon-de-recoletos-4002",
+      "propertyId": "4262402e-5641-4557-b43a-a852630286a9",
+      "versionId": "ebc8c12d-6ae0-4cf0-9760-da3376443da8",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 20,
+      "narrative": 0,
+      "featureCount": 5,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 599,
+      "sqm": 120,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(0 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "entity"
+      ],
+      "invariantFails": [],
+      "excluded": 4,
+      "cats": [
+        "D_0chapters"
+      ]
+    },
+    {
+      "ref": "BC-0895",
+      "slug": "piso-a-reformar-en-ibiza-7254",
+      "propertyId": "358ad925-5052-4ef8-a6f4-047a42bace1b",
+      "versionId": "c6d660f0-7d25-4b06-a1cd-7ec71d9bd5a6",
+      "zone": "Retiro",
+      "hood": "Retiro",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2035,
+      "sqm": 171,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0918",
+      "slug": "piso-en-nunez-de-balboa-nunez-de-balboa-105-vivienda-2",
+      "propertyId": "432e1b68-68a0-44eb-9f7e-9a8a87e31cff",
+      "versionId": "1d578fce-1242-4764-a90b-10d03d2dfea6",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 0,
+      "narrative": 4,
+      "featureCount": 9,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1875,
+      "sqm": 35,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(0 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-1401",
+      "slug": "exclusivo-piso-en-goya-57a9",
+      "propertyId": "faf8d454-3b7e-42fa-aedd-db86e08bcd4b",
+      "versionId": null,
+      "zone": "Goya",
+      "hood": "Goya",
+      "photos": 33,
+      "narrative": 0,
+      "featureCount": 0,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 80,
+      "sqm": 112,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [],
+      "gateFailures": [],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "E_no_story"
+      ]
+    },
+    {
+      "ref": "BC-1069",
+      "slug": "impresionante-chalet-de-diseno-en-la-finca-4881",
+      "propertyId": "eb2f11d3-658d-4871-93de-0b9ab8b9e86d",
+      "versionId": "e90627c9-0ded-4ce7-803f-725a13196af0",
+      "zone": "Pozuelo",
+      "hood": "Pozuelo de Alarcón",
+      "photos": 11,
+      "narrative": 1,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1259,
+      "sqm": 631,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 5,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0119",
+      "slug": "titulo-7228",
+      "propertyId": "85fd2a7a-6920-4011-9126-0cee20aab2b2",
+      "versionId": "e80cc08a-9e75-4d07-985d-c9fd8824459b",
+      "zone": "Pozuelo",
+      "hood": "Pozuelo de Alarcón",
+      "photos": 49,
+      "narrative": 1,
+      "featureCount": 9,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1443,
+      "sqm": 297,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0750",
+      "slug": "piso-en-venta-en-calle-jose-ortega-y-gasset-7416",
+      "propertyId": "d4a41c39-2b24-438f-8520-8763ba6bc818",
+      "versionId": "f0750099-0829-4355-bfd8-bfbd5ec67efd",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 1,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1743,
+      "sqm": 78,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03",
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0111",
+      "slug": "piso-unico-recien-reformado-en-el-corazon-de-almagro-5236",
+      "propertyId": "7111b383-f083-4ef3-b164-23afa588c5d4",
+      "versionId": "2fa73152-a91c-47aa-84c0-24d34cf52c3d",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 9,
+      "narrative": 1,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": true,
+      "descLen": 349,
+      "sqm": 165,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0030",
+      "slug": "piso-de-obra-nueva-en-almagro-con-amenities-y-mucha-luz-4168",
+      "propertyId": "d8a28529-0a8c-4918-a8ab-ee5402d3f79d",
+      "versionId": "d18658cf-1913-4713-8873-cbf0ed2448e4",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 7,
+      "narrative": 2,
+      "featureCount": 3,
+      "hasVideo": true,
+      "videoSources": [
+        "auto"
+      ],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 944,
+      "sqm": 75,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(7 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0001",
+      "slug": "piso-en-venta-en-principe-de-vergara-7131",
+      "propertyId": "2b10292f-19e2-4028-b2b2-1eb3ca564134",
+      "versionId": "a2f22243-d4b1-4f46-889e-67d9d3619c1b",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 896,
+      "sqm": 239,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0917",
+      "slug": "piso-en-nunez-de-balboa-nunez-de-balboa-105-vivienda-1",
+      "propertyId": "cade562b-88f5-455f-9498-ca72ce514cba",
+      "versionId": "b9fe791d-3924-4570-92dd-704e4ffe367e",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 0,
+      "narrative": 4,
+      "featureCount": 7,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1656,
+      "sqm": 35,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(0 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-1169",
+      "slug": "piso-de-56-m-en-lista-barrio-de-salamanca-7411",
+      "propertyId": "36718e41-c3ed-4fa1-a4bf-07745cff95d6",
+      "versionId": "bd16c59d-0f06-41b9-bbdd-d6ec0d117a8b",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 16,
+      "narrative": 1,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1109,
+      "sqm": 56,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "few_chapters"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0066",
+      "slug": "piso-reformado-en-barrio-de-salamanca-zona-goya-6253",
+      "propertyId": "9f002131-e0c0-49dc-be6e-1e99bd11ddc7",
+      "versionId": "327e68eb-d6a4-4beb-a3a0-a1faf2b4d8ff",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 283,
+      "sqm": 95,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0103",
+      "slug": "oportunidad-de-reforma-en-el-barrio-de-salamanca-6284",
+      "propertyId": "764e4fec-1689-4f90-ad94-8900cfc63086",
+      "versionId": "45439700-f0d4-4fcd-bd19-26c9f2171d5b",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 1,
+      "narrative": 3,
+      "featureCount": 3,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 628,
+      "sqm": 149,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(1 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0056",
+      "slug": "plaza-de-garaje-en-calle-de-las-virtudes-en-el-barrio-de-chamberi-5289",
+      "propertyId": "0d1310f0-61f2-43a7-bbe4-b5d06fee58c6",
+      "versionId": "25949958-fe90-4e8f-b772-2b1912d597e3",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 7,
+      "narrative": 1,
+      "featureCount": 1,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 325,
+      "sqm": 17,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)",
+        "low_photos(7 fotos)"
+      ],
+      "gateFailures": [
+        "few_chapters",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0105",
+      "slug": "bonito-y-luminoso-atico-reformado-en-almagro-5386",
+      "propertyId": "9828b61d-a773-4d21-896c-fca0b4ee8afe",
+      "versionId": "9bc2bceb-c176-4de2-8399-e992ed716a4e",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 12,
+      "narrative": 1,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 525,
+      "sqm": 194,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0619",
+      "slug": "piso-en-venta-en-calle-nunez-de-balboa-6952",
+      "propertyId": "a06fa2a6-83f0-48fe-988a-7e72df3535a4",
+      "versionId": "ecc641f7-9fb9-4850-b560-feb01f120f78",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 17,
+      "narrative": 1,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2258,
+      "sqm": 72,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "empty_heading"
+      ],
+      "invariantFails": [],
+      "excluded": 5,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-0662",
+      "slug": "piso-en-venta-en-calle-fortuny-7139",
+      "propertyId": "2ba2a818-9aba-4bbc-bcc4-dc15188fcfc3",
+      "versionId": "cbb8016c-9562-443c-8a2a-72a764165431",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2227,
+      "sqm": 241,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0668",
+      "slug": "piso-en-venta-en-calle-de-marti-7156",
+      "propertyId": "6d45516f-42b0-485f-b53c-88cadbb3a05a",
+      "versionId": "e3bdf6ba-ac26-444f-9f04-ee7a7d8327b5",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 3,
+      "narrative": 3,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1799,
+      "sqm": 161,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(3 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 2,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0730",
+      "slug": "piso-en-venta-en-guindalera-7341",
+      "propertyId": "316c69fc-e2af-422e-8a15-b15c3d97f46e",
+      "versionId": "5bc4e11e-b960-467d-82e3-31a077f05b6d",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 31,
+      "narrative": 1,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2400,
+      "sqm": 186,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(1 de 3)"
+      ],
+      "gateFailures": [
+        "too_short"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "B_1chapter"
+      ]
+    },
+    {
+      "ref": "BC-1083",
+      "slug": "piso-en-venta-en-calle-caracas-7648",
+      "propertyId": "28e98417-e450-43bc-8bd8-7cff5e7912db",
+      "versionId": "8ca4763f-9f02-4741-a027-d045bfed6fb3",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 4,
+      "featureCount": 6,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2766,
+      "sqm": 159,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03"
+      ]
+    },
+    {
+      "ref": "BC-0729",
+      "slug": "piso-en-venta-en-calle-raimundo-fernandez-villaverde-7340",
+      "propertyId": "12fd9b5a-d65d-4091-a8be-4279c8cc6381",
+      "versionId": "850f5026-fd95-4b93-b1ba-fd137aa9125c",
+      "zone": "Chamberí",
+      "hood": "Chamberí",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 5,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1955,
+      "sqm": 175,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "too_short",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 3,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0627",
+      "slug": "piso-en-venta-en-calle-alcala-6997",
+      "propertyId": "e30a36f2-ff17-48a1-aa7f-543648796b19",
+      "versionId": "29d29d90-49f5-4286-87ad-ba8e870c6d07",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 2,
+      "featureCount": 2,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 2229,
+      "sqm": 250,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "few_chapters(2 de 3)",
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "conflict",
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 1,
+      "cats": [
+        "A_photos03",
+        "C_2chapters_no_support"
+      ]
+    },
+    {
+      "ref": "BC-0716",
+      "slug": "atico-en-venta-en-calle-padilla-7298",
+      "propertyId": "47e9c90c-5822-4e2d-bf86-98e7ef98bd58",
+      "versionId": "116017fb-ff97-4407-91ef-4b2289afff47",
+      "zone": "Salamanca",
+      "hood": "Barrio de Salamanca",
+      "photos": 2,
+      "narrative": 3,
+      "featureCount": 4,
+      "hasVideo": false,
+      "videoSources": [],
+      "hasPlan": false,
+      "hasLocation": false,
+      "descLen": 1913,
+      "sqm": 200,
+      "publishableNow": false,
+      "mode": "none",
+      "storyFailures": [
+        "low_photos(2 fotos)"
+      ],
+      "gateFailures": [
+        "low_photos"
+      ],
+      "invariantFails": [],
+      "excluded": 0,
+      "cats": [
+        "A_photos03"
+      ]
+    }
+  ]
+}

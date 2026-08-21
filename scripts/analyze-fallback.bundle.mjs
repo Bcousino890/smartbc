@@ -1794,7 +1794,7 @@ var require_fetch = __commonJS({
     }
     function _generateLinkResponse(data) {
       const { action_link, email_otp, hashed_token, redirect_to, verification_type } = data, rest = tslib_1.__rest(data, ["action_link", "email_otp", "hashed_token", "redirect_to", "verification_type"]);
-      const properties = {
+      const properties2 = {
         action_link,
         email_otp,
         hashed_token,
@@ -1804,7 +1804,7 @@ var require_fetch = __commonJS({
       const user = Object.assign({}, rest);
       return {
         data: {
-          properties,
+          properties: properties2,
           user
         },
         error: null
@@ -8943,6 +8943,9 @@ var require_main2 = __commonJS({
   }
 });
 
+// scripts/analyze-fallback.mts
+import { writeFileSync, mkdirSync } from "node:fs";
+
 // node_modules/@supabase/supabase-js/dist/index.mjs
 var dist_exports = {};
 __export(dist_exports, {
@@ -9270,7 +9273,7 @@ ${cause.stack}`;
     var _this2 = this;
     let error = null;
     let data = null;
-    let count = null;
+    let count2 = null;
     let status = res.status;
     let statusText = res.statusText;
     if (res.ok) {
@@ -9285,7 +9288,7 @@ ${cause.stack}`;
       }
       const countHeader = (_this$headers$get2 = _this2.headers.get("Prefer")) === null || _this$headers$get2 === void 0 ? void 0 : _this$headers$get2.match(/count=(exact|planned|estimated)/);
       const contentRange = (_res$headers$get2 = res.headers.get("content-range")) === null || _res$headers$get2 === void 0 ? void 0 : _res$headers$get2.split("/");
-      if (countHeader && contentRange && contentRange.length > 1) count = parseInt(contentRange[1]);
+      if (countHeader && contentRange && contentRange.length > 1) count2 = parseInt(contentRange[1]);
       if (_this2.isMaybeSingle && Array.isArray(data)) if (data.length > 1) {
         error = {
           code: "PGRST116",
@@ -9294,7 +9297,7 @@ ${cause.stack}`;
           message: "JSON object requested, multiple (or no) rows returned"
         };
         data = null;
-        count = null;
+        count2 = null;
         status = 406;
         statusText = "Not Acceptable";
       } else if (data.length === 1) data = data[0];
@@ -9321,7 +9324,7 @@ ${cause.stack}`;
       success: error === null,
       error,
       data,
-      count,
+      count: count2,
       status,
       statusText
     };
@@ -9787,9 +9790,9 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * }
   * ```
   */
-  limit(count, { foreignTable, referencedTable = foreignTable } = {}) {
+  limit(count2, { foreignTable, referencedTable = foreignTable } = {}) {
     const key = typeof referencedTable === "undefined" ? "limit" : `${referencedTable}.limit`;
-    this.url.searchParams.set(key, `${count}`);
+    this.url.searchParams.set(key, `${count2}`);
     return this;
   }
   /**
@@ -12860,7 +12863,7 @@ var PostgrestQueryBuilder = class {
   * ```
   */
   select(columns, options) {
-    const { head: head2 = false, count } = options !== null && options !== void 0 ? options : {};
+    const { head: head2 = false, count: count2 } = options !== null && options !== void 0 ? options : {};
     const method = head2 ? "HEAD" : "GET";
     let quoted = false;
     const cleanedColumns = (columns !== null && columns !== void 0 ? columns : "*").split("").map((c) => {
@@ -12870,7 +12873,7 @@ var PostgrestQueryBuilder = class {
     }).join("");
     const { url, headers } = this.cloneRequestState();
     url.searchParams.set("select", cleanedColumns);
-    if (count) headers.append("Prefer", `count=${count}`);
+    if (count2) headers.append("Prefer", `count=${count2}`);
     return new PostgrestFilterBuilder({
       method,
       url,
@@ -12992,11 +12995,11 @@ var PostgrestQueryBuilder = class {
   * }
   * ```
   */
-  insert(values, { count, defaultToNull = true } = {}) {
+  insert(values, { count: count2, defaultToNull = true } = {}) {
     var _this$fetch;
     const method = "POST";
     const { url, headers } = this.cloneRequestState();
-    if (count) headers.append("Prefer", `count=${count}`);
+    if (count2) headers.append("Prefer", `count=${count2}`);
     if (!defaultToNull) headers.append("Prefer", `missing=default`);
     if (Array.isArray(values)) {
       const columns = values.reduce((acc, x) => acc.concat(Object.keys(x)), []);
@@ -13224,13 +13227,13 @@ var PostgrestQueryBuilder = class {
   * }
   * ```
   */
-  upsert(values, { onConflict, ignoreDuplicates = false, count, defaultToNull = true } = {}) {
+  upsert(values, { onConflict, ignoreDuplicates = false, count: count2, defaultToNull = true } = {}) {
     var _this$fetch2;
     const method = "POST";
     const { url, headers } = this.cloneRequestState();
     headers.append("Prefer", `resolution=${ignoreDuplicates ? "ignore" : "merge"}-duplicates`);
     if (onConflict !== void 0) url.searchParams.set("on_conflict", onConflict);
-    if (count) headers.append("Prefer", `count=${count}`);
+    if (count2) headers.append("Prefer", `count=${count2}`);
     if (!defaultToNull) headers.append("Prefer", "missing=default");
     if (Array.isArray(values)) {
       const columns = values.reduce((acc, x) => acc.concat(Object.keys(x)), []);
@@ -13389,11 +13392,11 @@ var PostgrestQueryBuilder = class {
   * }
   * ```
   */
-  update(values, { count } = {}) {
+  update(values, { count: count2 } = {}) {
     var _this$fetch3;
     const method = "PATCH";
     const { url, headers } = this.cloneRequestState();
-    if (count) headers.append("Prefer", `count=${count}`);
+    if (count2) headers.append("Prefer", `count=${count2}`);
     return new PostgrestFilterBuilder({
       method,
       url,
@@ -13523,11 +13526,11 @@ var PostgrestQueryBuilder = class {
   * }
   * ```
   */
-  delete({ count } = {}) {
+  delete({ count: count2 } = {}) {
     var _this$fetch4;
     const method = "DELETE";
     const { url, headers } = this.cloneRequestState();
-    if (count) headers.append("Prefer", `count=${count}`);
+    if (count2) headers.append("Prefer", `count=${count2}`);
     return new PostgrestFilterBuilder({
       method,
       url,
@@ -13860,7 +13863,7 @@ var PostgrestClient = class PostgrestClient2 {
   * }
   * ```
   */
-  rpc(fn, args = {}, { head: head2 = false, get: get2 = false, count } = {}) {
+  rpc(fn, args = {}, { head: head2 = false, get: get2 = false, count: count2 } = {}) {
     var _this$fetch;
     let method;
     const url = new URL(`${this.url}/rpc/${fn}`);
@@ -13880,8 +13883,8 @@ var PostgrestClient = class PostgrestClient2 {
       body = args;
     }
     const headers = new Headers(this.headers);
-    if (_hasObjectArg) headers.set("Prefer", count ? `count=${count},return=minimal` : "return=minimal");
-    else if (count) headers.set("Prefer", `count=${count}`);
+    if (_hasObjectArg) headers.set("Prefer", count2 ? `count=${count2},return=minimal` : "return=minimal");
+    else if (count2) headers.set("Prefer", `count=${count2}`);
     return new PostgrestFilterBuilder({
       method,
       url,
@@ -17889,18 +17892,18 @@ function planPublication(input) {
   };
 }
 function evaluateGate(input) {
-  const { property, blocks, claims, photos } = input;
+  const { property, blocks: blocks2, claims: claims2, photos: photos2 } = input;
   const failures = [];
   const add = (code, blockIds = [], detail) => failures.push({ code, label: GATE_LABELS[code], blockIds, detail });
   if (property.archived_at || property.status === "archived") add("unavailable");
-  const conflictBlocks = blocks.filter((b) => b.status === "conflict");
+  const conflictBlocks = blocks2.filter((b) => b.status === "conflict");
   if (conflictBlocks.length > 0) add("conflict", conflictBlocks.map((b) => b.id));
-  const chapters = blocks.map((b) => b.chapter);
+  const chapters = blocks2.map((b) => b.chapter);
   if (new Set(chapters).size !== chapters.length) {
     const dupes = chapters.filter((c, i) => chapters.indexOf(c) !== i);
-    add("duplicate_chapter", blocks.filter((b) => dupes.includes(b.chapter)).map((b) => b.id));
+    add("duplicate_chapter", blocks2.filter((b) => dupes.includes(b.chapter)).map((b) => b.id));
   }
-  const allClaimIds = blocks.flatMap((b) => b.claim_ids ?? []);
+  const allClaimIds = blocks2.flatMap((b) => b.claim_ids ?? []);
   if (new Set(allClaimIds).size !== allClaimIds.length) {
     const seen = /* @__PURE__ */ new Set();
     const repeated = /* @__PURE__ */ new Set();
@@ -17908,11 +17911,11 @@ function evaluateGate(input) {
       if (seen.has(id)) repeated.add(id);
       seen.add(id);
     }
-    add("claim_reused", blocks.filter((b) => (b.claim_ids ?? []).some((c) => repeated.has(c))).map((b) => b.id));
+    add("claim_reused", blocks2.filter((b) => (b.claim_ids ?? []).some((c) => repeated.has(c))).map((b) => b.id));
   }
-  const tooLong = blocks.filter((b) => copyWordCount(b.copy) > 70);
+  const tooLong = blocks2.filter((b) => copyWordCount(b.copy) > 70);
   if (tooLong.length > 0) add("too_long", tooLong.map((b) => b.id));
-  const tooShort = blocks.filter((b) => {
+  const tooShort = blocks2.filter((b) => {
     const w = copyWordCount(b.copy);
     if (w >= 5) return false;
     const factual = /\d{4}|\bm²\b|\d+/.test(b.copy) && ["building", "overview"].includes(b.chapter);
@@ -17925,10 +17928,10 @@ function evaluateGate(input) {
       tooShort.map((b) => `${b.chapter}: ${copyWordCount(b.copy)} palabras`).join(" \xB7 ")
     );
   }
-  const claimById = new Map(claims.map((c) => [c.id, c]));
+  const claimById = new Map(claims2.map((c) => [c.id, c]));
   const entityBad = [];
   const entityDetail = [];
-  for (const b of blocks) {
+  for (const b of blocks2) {
     const support = (b.claim_ids ?? []).map((id) => claimById.get(id)).filter(Boolean).flatMap((c) => [c.fact, c.source_text]);
     if (support.length === 0) {
       entityBad.push(b.id);
@@ -17950,12 +17953,12 @@ function evaluateGate(input) {
   if (floor === 0 && /planta baja[^.]*\b(trastero|garaje|gimnasio|almacen|zonas? comunes)\b/i.test(property.description ?? "")) {
     add("floor");
   }
-  const classes = photos.map(
+  const classes = photos2.map(
     (p) => p.class_override ?? ((p.ai_confidence ?? 0) >= 0.75 ? p.ai_class : null)
   );
   const used = /* @__PURE__ */ new Set([0]);
   const photoBad = [];
-  for (const b of blocks) {
+  for (const b of blocks2) {
     const wanted = CHAPTER_PHOTO_CLASSES[b.chapter] ?? [];
     if (wanted.length === 0) continue;
     const idx = classes.findIndex((c, i) => !used.has(i) && c != null && wanted.includes(c));
@@ -17965,21 +17968,21 @@ function evaluateGate(input) {
     }
   }
   if (photoBad.length > 0) add("photo_mismatch", photoBad);
-  const barrioBlock = blocks.find((b) => b.chapter === "barrio");
+  const barrioBlock = blocks2.find((b) => b.chapter === "barrio");
   if (barrioBlock && input.neighborhoodDisplayName) {
     const copyNorm = norm(barrioBlock.copy);
     const ok = copyNorm.includes(norm(input.neighborhoodDisplayName)) || copyNorm.includes(norm(property.zone)) || copyNorm.includes(norm(property.subzone));
     if (!ok) add("neighborhood", [barrioBlock.id]);
   }
-  const empty = blocks.filter((b) => !b.copy || !b.copy.trim());
+  const empty = blocks2.filter((b) => !b.copy || !b.copy.trim());
   if (empty.length > 0) add("empty_heading", empty.map((b) => b.id));
-  const boiler = blocks.filter((b) => BOILERPLATE_RE.test(b.copy));
+  const boiler = blocks2.filter((b) => BOILERPLATE_RE.test(b.copy));
   if (boiler.length > 0) add("boilerplate", boiler.map((b) => b.id));
-  const narrative = blocks.filter(
+  const narrative = blocks2.filter(
     (b) => NARRATIVE_CHAPTERS.includes(b.chapter) && b.status !== "rejected"
   );
   if (narrative.length < 3) add("few_chapters", [], `${narrative.length} de 3`);
-  if (photos.length < MIN_PHOTOS) add("low_photos", [], `${photos.length} fotos`);
+  if (photos2.length < MIN_PHOTOS) add("low_photos", [], `${photos2.length} fotos`);
   let bucket = null;
   const codes = failures.map((f) => f.code);
   if (codes.includes("conflict")) bucket = "conflict";
@@ -17992,7 +17995,7 @@ function evaluateGate(input) {
     failures,
     bucket,
     narrativeChapters: narrative.length,
-    photoCount: photos.length
+    photoCount: photos2.length
   };
 }
 
@@ -18018,73 +18021,159 @@ function lookupNeighborhood(index, zone, subzone) {
   return null;
 }
 
-// scripts/publish-story-batch.mts
-var TARGET = Number(process.argv[2] ?? 50);
-var DRY_RUN = process.argv.includes("--dry-run");
+// scripts/analyze-fallback.mts
 var db = createAdminClient();
-var hoodIndex = await loadNeighborhoodIndex(db);
-var versions = [];
-for (let from = 0; ; from += 1e3) {
-  const { data, error } = await db.from("property_story_versions").select("id, property_id, created_at").eq("status", "generated").order("created_at", { ascending: false }).range(from, from + 999);
-  if (error || !data?.length) break;
-  versions.push(...data);
-  if (data.length < 1e3) break;
+async function fetchAll(table, columns, filter) {
+  const out = [];
+  for (let from = 0; ; from += 1e3) {
+    let q = db.from(table).select(columns).range(from, from + 999);
+    if (filter) q = filter(q);
+    const { data, error } = await q;
+    if (error) throw new Error(`${table}: ${error.message}`);
+    if (!data?.length) break;
+    out.push(...data);
+    if (data.length < 1e3) break;
+  }
+  return out;
 }
-var latest = /* @__PURE__ */ new Map();
-for (const v of versions) if (!latest.has(v.property_id)) latest.set(v.property_id, v);
-var { data: approvedList } = await db.from("property_story_versions").select("property_id").eq("status", "approved");
-var alreadyApproved = new Set((approvedList ?? []).map((r) => r.property_id));
-var pending = [...latest.values()].filter((v) => !alreadyApproved.has(v.property_id));
-console.log(`[publish] ${pending.length} versiones candidatas (engine v4.1)`);
-var stats = { complete: 0, partial: 0, sparse: 0, blocked: 0 };
-var blockedBy = {};
-var published = [];
-for (const v of pending) {
-  if (published.length >= TARGET) break;
-  const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }, { data: media }] = await Promise.all([
-    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, latitude, longitude").eq("id", v.property_id).maybeSingle(),
-    db.from("property_story_blocks").select("id, chapter, copy, status, claim_ids").eq("version_id", v.id).order("position"),
-    db.from("property_story_claims").select("id, source_text, fact, category, conflict").eq("version_id", v.id),
-    db.from("property_photos").select("position, ai_class, ai_confidence, class_override").eq("property_id", v.property_id).order("position"),
-    db.from("property_media").select("type").eq("property_id", v.property_id)
+function groupBy(rows2, key) {
+  const m = /* @__PURE__ */ new Map();
+  for (const r of rows2) {
+    const k = key(r);
+    m.get(k)?.push(r) ?? m.set(k, [r]);
+  }
+  return m;
+}
+var hoodIndex = await loadNeighborhoodIndex(db);
+var [properties, versions, mediaAll] = await Promise.all([
+  fetchAll(
+    "properties",
+    "id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation, latitude, longitude, bedrooms, bathrooms, square_meters",
+    (q) => q.is("archived_at", null).neq("status", "archived")
+  ),
+  fetchAll(
+    "property_story_versions",
+    "id, property_id, status, created_at",
+    (q) => q.order("created_at", { ascending: false })
+  ),
+  fetchAll("property_media", "property_id, type, source, duration_seconds")
+]);
+var approved = new Set(versions.filter((v) => v.status === "approved").map((v) => v.property_id));
+var latestDraft = /* @__PURE__ */ new Map();
+for (const v of versions) {
+  if (v.status === "generated" && !latestDraft.has(v.property_id)) latestDraft.set(v.property_id, v);
+}
+var fallback = properties.filter((p) => !approved.has(p.id));
+console.log(`[analyze] activas: ${properties.length} \xB7 structured: ${properties.length - fallback.length} \xB7 fallback: ${fallback.length}`);
+var mediaByProp = groupBy(mediaAll, (m) => m.property_id);
+var draftIds = fallback.map((p) => latestDraft.get(p.id)?.id).filter(Boolean);
+var chunks = (xs, n) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+var blocks = [];
+var claims = [];
+for (const slice of chunks(draftIds, 100)) {
+  const [b, c] = await Promise.all([
+    fetchAll("property_story_blocks", "id, version_id, chapter, copy, status, claim_ids", (q) => q.in("version_id", slice)),
+    fetchAll("property_story_claims", "id, version_id, source_text, fact, category, conflict", (q) => q.in("version_id", slice))
   ]);
-  if (!property || !blocks) continue;
-  const ref = property.bc_reference ?? property.slug;
-  const plan = planPublication({
-    property,
-    blocks: blocks ?? [],
-    claims: claims ?? [],
-    photos: photos ?? [],
-    neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
-    hasVideo: (media ?? []).some((m) => m.type === "video"),
-    hasPlan: (media ?? []).some((m) => m.type === "plan"),
-    hasValidLocation: property.latitude != null && property.longitude != null
+  blocks.push(...b);
+  claims.push(...c);
+}
+var photos = [];
+for (const slice of chunks(fallback.map((p) => p.id), 100)) {
+  photos.push(...await fetchAll("property_photos", "property_id, position, ai_class, ai_confidence, class_override", (q) => q.in("property_id", slice)));
+}
+var blocksByV = groupBy(blocks, (b) => b.version_id);
+var claimsByV = groupBy(claims, (c) => c.version_id);
+var photosByProp = groupBy(photos, (p) => p.property_id);
+var INVARIANT_CODES = [
+  "duplicate_chapter",
+  "claim_reused",
+  "entity",
+  "empty_heading",
+  "too_long",
+  "boilerplate",
+  "photo_mismatch",
+  "neighborhood",
+  "floor"
+];
+var rows = [];
+for (const p of fallback) {
+  const v = latestDraft.get(p.id);
+  const vBlocks = v ? blocksByV.get(v.id) ?? [] : [];
+  const vClaims = v ? claimsByV.get(v.id) ?? [] : [];
+  const pPhotos = (photosByProp.get(p.id) ?? []).sort((a, b) => a.position - b.position);
+  const media = mediaByProp.get(p.id) ?? [];
+  const hood = lookupNeighborhood(hoodIndex, p.zone, p.subzone);
+  const featureCount = [...p.features ?? [], ...p.features_manual ?? []].length;
+  const videos = media.filter((m) => m.type === "video");
+  const input = {
+    property: p,
+    blocks: vBlocks,
+    claims: vClaims,
+    photos: pPhotos,
+    neighborhoodDisplayName: hood,
+    hasVideo: videos.length > 0,
+    hasPlan: media.some((m) => m.type === "plan"),
+    hasValidLocation: p.latitude != null && p.longitude != null
+  };
+  const plan = v ? planPublication(input) : null;
+  const gate = v ? evaluateGate(input) : null;
+  const nNarrative = plan?.narrativeChapters ?? 0;
+  const cats = [];
+  if (pPhotos.length <= 3) cats.push("A_photos03");
+  if (v && nNarrative === 1) cats.push("B_1chapter");
+  if (v && nNarrative === 2 && !plan?.publishable) cats.push("C_2chapters_no_support");
+  if (v && nNarrative === 0) cats.push("D_0chapters");
+  if (!v) cats.push("E_no_story");
+  else if (!p.description || p.description.trim().length < 80) cats.push("E_poor_description");
+  const invariantFails = (plan?.storyFailures ?? []).filter((f) => INVARIANT_CODES.includes(f.code));
+  if (invariantFails.length > 0) cats.push("F_invariant");
+  if (p.archived_at || p.status === "archived") cats.push("G_unavailable");
+  if (cats.length === 0 && !plan?.publishable) cats.push("G_other");
+  rows.push({
+    ref: p.bc_reference ?? p.slug,
+    slug: p.slug,
+    propertyId: p.id,
+    versionId: v?.id ?? null,
+    zone: p.subzone || p.zone || "\u2014",
+    hood,
+    photos: pPhotos.length,
+    narrative: nNarrative,
+    featureCount,
+    hasVideo: videos.length > 0,
+    videoSources: [...new Set(videos.map((m) => m.source))],
+    hasPlan: input.hasPlan,
+    hasLocation: input.hasValidLocation,
+    descLen: (p.description ?? "").trim().length,
+    sqm: p.square_meters,
+    publishableNow: plan?.publishable ?? false,
+    mode: plan?.mode ?? "none",
+    storyFailures: (plan?.storyFailures ?? []).map((f) => `${f.code}${f.detail ? `(${f.detail})` : ""}`),
+    gateFailures: (gate?.failures ?? []).map((f) => f.code),
+    invariantFails: invariantFails.map((f) => `${f.code}: ${f.detail ?? ""}`.trim()),
+    excluded: plan?.excluded.length ?? 0,
+    cats
   });
-  if (!plan.publishable) {
-    stats.blocked++;
-    const first = plan.storyFailures[0];
-    const label = first ? GATE_LABELS[first.code] : "sin bloques publicables";
-    blockedBy[label] = (blockedBy[label] ?? 0) + 1;
-    continue;
-  }
-  if (!DRY_RUN) {
-    const shortIds = plan.excluded.filter((e) => e.reason === "too_short").map((e) => e.blockId);
-    if (shortIds.length) {
-      await db.from("property_story_blocks").update({ status: "rejected" }).in("id", shortIds);
-    }
-    await db.from("property_story_blocks").update({ status: "approved" }).in("id", plan.publishBlockIds);
-    await db.from("property_story_versions").update({
-      status: "approved",
-      reviewed_at: (/* @__PURE__ */ new Date()).toISOString(),
-      notes: plan.mode === "sparse" ? `Publicaci\xF3n SPARSE segura \xB7 2 cap\xEDtulos verificados + estructura de apoyo` : plan.mode === "partial" ? `Publicaci\xF3n parcial segura \xB7 ${plan.excluded.length} cap\xEDtulo(s) excluido(s): ${plan.excluded.map((e) => `${e.chapter}(${e.reason})`).join(", ")}` : "Publicaci\xF3n completa \xB7 quality gate superado."
-    }).eq("id", v.id);
-  }
-  stats[plan.mode]++;
-  published.push({ ref, mode: plan.mode, caps: plan.publishBlockIds.length, excl: plan.excluded.length });
+}
+var count = (fn) => rows.filter(fn).length;
+console.log(`
+\u2500\u2500 Clasificaci\xF3n (una propiedad puede estar en varias) \u2500\u2500`);
+for (const c of ["A_photos03", "B_1chapter", "C_2chapters_no_support", "D_0chapters", "E_no_story", "E_poor_description", "F_invariant", "G_unavailable", "G_other"]) {
+  console.log(`  ${c.padEnd(24)} ${count((r) => r.cats.includes(c))}`);
 }
 console.log(`
-[publish] ${DRY_RUN ? "DRY-RUN " : ""}publicables: ${published.length} \xB7 completas: ${stats.complete} \xB7 parciales: ${stats.partial} \xB7 sparse: ${stats.sparse}`);
-console.log(`[publish] retenidas en fallback: ${stats.blocked}`);
-for (const [label, n] of Object.entries(blockedBy).sort((a, b) => b[1] - a[1])) {
-  console.log(`   ${String(n).padStart(4)} \xB7 ${label}`);
+\u2500\u2500 Recuperables YA con la policy vigente \u2500\u2500`);
+var pub = rows.filter((r) => r.publishableNow);
+console.log(`  publicables ahora: ${pub.length}`);
+for (const r of pub) {
+  console.log(`   ${r.ref.padEnd(9)} ${r.mode.padEnd(8)} caps=${r.narrative} fotos=${r.photos} hood=${r.hood ?? "\u2014"} feats=${r.featureCount} video=${r.hasVideo} plan=${r.hasPlan} loc=${r.hasLocation}`);
 }
+console.log(`
+\u2500\u2500 Invariantes estructurales \u2500\u2500`);
+for (const r of rows.filter((x) => x.cats.includes("F_invariant"))) {
+  console.log(`   ${r.ref.padEnd(9)} v=${r.versionId?.slice(0, 8)} ${r.invariantFails.join(" \xB7 ")}`);
+}
+mkdirSync("scripts/out", { recursive: true });
+writeFileSync("scripts/out/fallback-analysis.json", JSON.stringify({ total: properties.length, structured: properties.length - fallback.length, rows }, null, 2));
+console.log(`
+[analyze] detalle en scripts/out/fallback-analysis.json`);

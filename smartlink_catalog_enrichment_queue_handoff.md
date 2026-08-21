@@ -348,6 +348,111 @@ Las 2 que faltan son las de Chile, y es el comportamiento correcto.
    scripts/fetch-poi-bounds.mjs && node scripts/build-neighborhood-migration.mjs`.
    La migración 0145 es idempotente y se reaplica en cada despliegue.
 
+## FINAL FALLBACK RECOVERY ANALYSIS
+
+Objetivo: recuperar lo honestamente recuperable de los 91 fallback SIN relajar
+invariantes, SIN inventar contenido y SIN tocar Engine v4.1. Todo recalculado
+desde producción con la capa de 29 barrios (`scripts/analyze-fallback.mts`,
+que re-ejecuta el `planPublication` real propiedad a propiedad).
+
+### Cifras
+
+```
+ACTIVE PROPERTIES:                684
+STRUCTURED NOW:                   595  (86,9%)  ← 593 + 2 recuperadas
+FALLBACK NOW:                      89
+
+RECUPERADAS SIN CONTENIDO NUEVO:    2
+  · vía expansión de barrios:       1   (BC-1385)
+  · vía estado inconsistente:       1   (BC-0755)
+  · vía supporting data existente:  0
+
+PENDIENTES DE DECISIÓN EXPLÍCITA:   5   (recuperables, NO ejecutadas — ver abajo)
+NEEDS HUMAN CONTENT WORK:          32   (26 conflictos abiertos + 6 descripción)
+NEEDS NEW MEDIA:                   52   (0-3 fotos, todas solo-fotos)
+MEDIA-EXCEPTION CANDIDATES:         0   (ninguna tiene vídeo manual)
+```
+
+### Clasificación A-G del backlog (solapes permitidos, sobre los 91)
+
+| Cat. | Descripción | N |
+|---|---|---|
+| A | 0-3 fotos | 52 |
+| B | 1 capítulo limpio | 33 |
+| C | 2 capítulos sin apoyo suficiente | 16 |
+| D | 0 capítulos limpios (con story) | 2 |
+| E | Sin story generada | 3 |
+| F | Invariante estructural | 3 |
+| G | Otras | 0 |
+
+### Recuperadas (ejecutado)
+
+| Ref | Modo | Por qué estaba fuera | Por qué entra ahora |
+|---|---|---|---|
+| **BC-1385** | SPARSE (2 caps · 40 fotos) | Su zona "Fuente del Berro, Barrio de Salamanca" no resolvía barrio → 1 solo apoyo | El alias de la capa nueva resuelve a Fuente del Berro → 2 apoyos, sparse legítimo |
+| **BC-0755** | COMPLETA (3 caps · 4 fotos, tramo 4-7) | `claim_reused`: el bloque `building` llevaba el MISMO claim id dos veces dentro de su propio array | Artefacto del modelo al generar (único caso en todo el esquema, verificado por SQL). Sin violación semántica de ownership. Array deduplicado con nota de trazabilidad en la versión |
+
+QA de ambas: HTML servido + Playwright en móvil 390 y 1440 @125% — story
+visible, sin "Descripción" residual, barrio correcto, sin conflictos en
+público, sin overflow, sin errores JS propios. Verificación dura en BD:
+**0 bloques aprobados apoyados en claims conflictivos en todo el esquema.**
+
+### Prioridad 1 · Invariantes estructurales (los 3, diagnosticados)
+
+| Ref | Invariante | Diagnóstico | Veredicto |
+|---|---|---|---|
+| **BC-0755** | `claim_reused` | Id repetido dentro del array de UN bloque; no cruza capítulos | Estado inconsistente puntual → corregido y publicado (arriba) |
+| **BC-0002** | `floor` | Chalet de 905 m² "distribuido en tres plantas: planta baja o sótano, principal y alta". `extractFloor` infiere planta 0 y el gate detecta que esa "planta baja" describe zonas secundarias | **Retención legítima**: publicar dejaría inferir "planta baja" para un chalet de 3 alturas. Las reglas de planta están congeladas con v4.1 → revisión humana. Sin este gate publicaría PARCIAL con 4 capítulos |
+| **BC-0720** | `boilerplate` | El copy del overview dice "Excelente oportunidad de inversión" (viene así de la descripción origen) | **Retención legítima**. Además 1 foto y 1 capítulo: aunque se limpiara, sigue en fallback por media |
+
+Ninguno es bug de código ni versión antigua del engine (las 3 versiones son
+del 20-21/08, era v4.1). **Invariantes estructurales pendientes: 3 → 1
+corregido, 2 retenciones legítimas documentadas.**
+
+### Prioridad 2 · Efecto de la capa de barrios nueva (sección 7)
+
+La capa resuelve barrio a **6 propiedades del fallback que antes no**:
+BC-1385, BC-1327, BC-1325, BC-1347, BC-1368, BC-1401. De ellas, **1 cruza el
+gate** (BC-1385, publicada). Las otras 5 ganan el módulo de ubicación y un
+apoyo sparse, pero siguen retenidas por capítulos/conflictos — el barrio ya no
+es su bloqueador.
+
+### Reportado, NO ejecutado — decisiones que te pertenecen
+
+1. **Incoherencia entre la política SPARSE aprobada y su implementación
+   (3 propiedades).** El texto aprobado dice "2 capítulos + ≥4 fotos + 2
+   apoyos", pero el tramo fotográfico solo perdona 4-7 fotos con ≥3 capítulos,
+   así que el suelo efectivo del sparse siempre fue 8 fotos (las 103 sparse
+   publicadas tienen ≥8). **BC-1374 (4 fotos), BC-0644 (7), BC-0030 (7)**
+   cumplen la letra de la política y las bloquea la implementación. Ajustarlo
+   equivaldría a bajar el gate de fotos para sparse → lo dejo como está y lo
+   reporto.
+2. **BC-1420 no tiene story generada** (39 fotos, descripción de 1.626
+   caracteres, 15 features — material de sobra). Es posterior al último lote
+   de generación. La instrucción de este sprint prohíbe "salvar"
+   automáticamente las sin-story, así que queda señalada: un run estándar del
+   engine congelado la metería en el pipeline normal.
+3. **Bug preexistente ajeno a este sprint: `/api/tracking/page-view` devuelve
+   500 en TODOS los SmartLinks** — recibe el slug donde espera un UUID
+   (`invalid input syntax for type uuid: "<slug>"` en el log de PM2).
+   Verificado también contra una propiedad publicada hace días (control): no
+   lo causa esta recuperación. La analítica de page-views de `/compartir`
+   está perdiéndose. No lo he tocado.
+
+### El resto del backlog, sin adornos
+
+- **52 · NEEDS NEW MEDIA**: 0-3 fotos y ni un vídeo (manual o auto) ni un
+  plano en todo el grupo. Sin reportaje no hay experiencia que montar.
+- **26 · conflictos abiertos reteniendo capítulos**: propiedades ricas
+  (p.ej. BC-0704: 5 capítulos limpios +1 en conflicto; BC-0730: 4 limpios,
+  3 excluidos por claims conflictivos) cuyo camino es la cola de
+  enriquecimiento humana, no un script.
+- **6 · descripción pobre**: BC-1401 (80 caracteres), BC-1327, BC-1353,
+  BC-1375, BC-0987, BC-0056 — texto origen sin material narrativo.
+- Con esto el fallback restante queda explicado al 100%: 89 = 5 decisión
+  + 52 media + 26 conflictos + 6 descripción.
+
 # CATALOG PROPERTY STORY ENRICHMENT QUEUE — COMPLETE
-**SmartLink 2.0 estructurado: 593/684 (86,7%)** · 184 completas · 308 parciales · 103 sparse · 91 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
+**SmartLink 2.0 estructurado: 595/684 (86,9%)** · 185 completas · 308 parciales · 104 sparse · 89 en fallback · 0 conflictos en público · Engine v4.1 FROZEN
 **Capa de barrio: 682/684 (99,7%)** · 29 barrios curados · 143 POIs verificados contra OSM · 0 coordenadas escritas a mano
+**Fallback restante explicado al 100%**: 5 pendientes de decisión · 52 necesitan media · 26 conflictos abiertos · 6 descripción pobre
