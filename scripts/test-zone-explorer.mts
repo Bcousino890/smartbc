@@ -1,10 +1,10 @@
-// BCP ZONE EXPLORER · tests de CONTRATO DE PRODUCTO (sin red, sin credenciales).
+// BCP ZONE EXPLORER · tests de CONTRATO DE PRODUCTO (sin red, sin navegador).
 //
 // Prueban las reglas que deben cumplirse pase lo que pase con el proveedor:
-// que sin credenciales no se puede encender Google, que un sitio descubierto
-// en Google nunca se confunde con un POI curado por BCP, que no se fabrican
-// ETAs, que se falla cerrado sin coordenadas válidas y que la analítica va
-// por lista blanca.
+// que un lugar descubierto en el basemap nunca se confunde con un POI curado
+// por BCP, que no se fabrican ETAs, que no todo el mapa es pulsable, que se
+// falla cerrado sin dato utilizable, que el estilo es de marca y sin clave, y
+// que la analítica va por lista blanca.
 //
 // npm run test:zone
 
@@ -17,11 +17,12 @@ import {
 import {
   fromCuratedPoi,
   fromUniversity,
-  fromGooglePlace,
-  categoryFromGoogleTypes,
+  fromOsmFeature,
+  categoryFromOsmFeature,
   isValidOrigin,
-  PLACE_DETAIL_FIELDS,
+  CLICKABLE_POI_CLASSES,
 } from "../lib/services/location/destination";
+import { bcpLuxuryMadridStyle, CLICKABLE_LAYER_IDS, MAP_ATTRIBUTION } from "../lib/services/location/bcp-map-style";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -32,27 +33,19 @@ function check(name: string, cond: boolean, detail?: string) {
   }
 }
 
-// ── 1) El flag se auto-protege ──
+// ── 1) Proveedor y rollback ──
 console.log("Elección de proveedor:");
 {
-  check("sin credenciales → OSM (no hay forma de encender Google por descuido)",
-    resolveMapProvider({}).provider === "osm");
-  check("solo clave, sin Map ID → OSM (el estilo de marca vive en el Map ID)",
-    resolveMapProvider({ apiKey: "k" }).provider === "osm");
-  check("solo Map ID, sin clave → OSM",
-    resolveMapProvider({ mapId: "m" }).provider === "osm");
-  check("clave + Map ID → Google",
-    resolveMapProvider({ apiKey: "k", mapId: "m" }).provider === "google");
-  check("override 'osm' fuerza OSM aunque haya credenciales (rollback sin desplegar)",
-    resolveMapProvider({ apiKey: "k", mapId: "m", override: "osm" }).provider === "osm");
-  check("override desconocido NO enciende Google",
-    resolveMapProvider({ apiKey: "k", mapId: "m", override: "maplibre" }).provider === "osm");
-  check("cadenas vacías cuentan como ausencia",
-    resolveMapProvider({ apiKey: "  ", mapId: "" }).provider === "osm");
+  check("por defecto → MapLibre (sin clave ni facturación)",
+    resolveMapProvider({}).provider === "maplibre");
+  check("override 'osm-static' fuerza el mosaico anterior (rollback sin desplegar)",
+    resolveMapProvider({ override: "osm-static" }).provider === "osm-static");
+  check("override desconocido NO deja el módulo sin mapa: cae al mosaico",
+    resolveMapProvider({ override: "google" }).provider === "osm-static");
   check("el motivo se explica siempre", resolveMapProvider({}).reason.length > 0);
 }
 
-// ── 2) BCP cura · Google ayuda a explorar: fuentes separadas ──
+// ── 2) BCP cura · el basemap ayuda a EXPLORAR: fuentes separadas ──
 console.log("Fuentes de destino:");
 {
   const curated = fromCuratedPoi({
@@ -71,13 +64,14 @@ console.log("Fuentes de destino:");
     uni.source === "university" && uni.category === "educacion");
   check("la sede viaja como subtítulo", uni.subtitle === "IE Tower");
 
-  const place = fromGooglePlace({
-    id: "ChIJxyz", displayName: "Ten con Ten", formattedAddress: "Calle de Ayala 6, Madrid",
-    location: { lat: 40.4271, lng: -3.6842 }, types: ["restaurant", "food"],
+  const place = fromOsmFeature({
+    id: 1234567,
+    properties: { class: "restaurant", name: "Ten con Ten", rank: 3 },
+    lat: 40.4271, lng: -3.6842,
   });
-  check("sitio de Google → source google_place", place?.source === "google_place");
-  check("un sitio de Google NUNCA llega con ETA inventada", place?.eta === null);
-  check("la dirección de Google se conserva", place?.address === "Calle de Ayala 6, Madrid");
+  check("feature del basemap → source osm_discovered", place?.source === "osm_discovered");
+  check("un lugar descubierto NUNCA llega con ETA inventada", place?.eta === null);
+  check("se clasifica en la categoría BCP correcta", place?.category === "gastronomia");
   check("los tres tipos de fuente son distinguibles",
     new Set([curated.source, uni.source, place!.source]).size === 3);
   check("los ids no colisionan entre fuentes",
@@ -87,65 +81,74 @@ console.log("Fuentes de destino:");
 // ── 3) Fallar cerrado: sin dato utilizable, no se pinta nada ──
 console.log("Se falla cerrado:");
 {
-  check("sitio sin coordenadas → null (ni marcador ni distancia inventada)",
-    fromGooglePlace({ displayName: "X", location: null }) === null);
-  check("sitio con coordenadas no finitas → null",
-    fromGooglePlace({ displayName: "X", location: { lat: NaN, lng: 0 } }) === null);
-  check("sitio sin nombre → null",
-    fromGooglePlace({ displayName: "  ", location: { lat: 40.4, lng: -3.7 } }) === null);
+  check("feature SIN nombre → null (no se abre una ficha vacía)",
+    fromOsmFeature({ properties: { class: "restaurant" }, lat: 40.4, lng: -3.7 }) === null);
+  check("categoría fuera de la lista blanca → null (no todo es pulsable)",
+    fromOsmFeature({ properties: { class: "fire_hydrant", name: "Boca de riego" }, lat: 40.4, lng: -3.7 }) === null);
+  check("feature sin coordenadas → null",
+    fromOsmFeature({ properties: { class: "cafe", name: "X" } }) === null);
+  check("coordenadas no finitas → null",
+    fromOsmFeature({ properties: { class: "cafe", name: "X" }, lat: NaN, lng: -3.7 }) === null);
   check("origen sin coordenadas → inválido", !isValidOrigin(null, null));
   check("origen (0,0) → inválido (isla nula, dato basura)", !isValidOrigin(0, 0));
   check("origen fuera de rango → inválido", !isValidOrigin(91, 0) && !isValidOrigin(40, 181));
   check("origen de Madrid → válido", isValidOrigin(40.4265, -3.6866));
-  // La propiedad chilena sigue siendo un origen VÁLIDO: lo que nunca puede
-  // pasar es que se le asigne un barrio de Madrid, y de eso se encarga la
-  // capa de barrios, no el mapa.
   check("origen de Chile → válido como punto (el guardarraíl de barrio es otro)",
     isValidOrigin(-33.2492, -70.6226));
 }
 
-// ── 4) Categorías de Google → lenguaje visual de BCP ──
-console.log("Categorías:");
+// ── 4) Categorías del basemap → lenguaje visual de BCP ──
+console.log("Categorías del basemap:");
 {
-  const cases: Array<[string[], string]> = [
-    [["restaurant"], "gastronomia"],
-    [["cafe", "food"], "gastronomia"],
-    [["subway_station"], "transporte"],
-    [["park"], "parque"],
-    [["museum"], "cultura"],
-    [["university"], "educacion"],
-    [["hospital"], "salud"],
-    [["gym"], "deporte"],
-    [["shopping_mall"], "compras"],
-    [["locksmith"], "otro"],
-    [[], "otro"],
+  const cases: Array<[string, string | null]> = [
+    ["restaurant", "gastronomia"], ["cafe", "gastronomia"],
+    ["subway", "transporte"], ["railway", "transporte"],
+    ["park", "parque"], ["museum", "cultura"],
+    ["university", "educacion"], ["hospital", "salud"],
+    ["fitness", "deporte"], ["supermarket", "compras"],
+    ["fire_hydrant", null], ["bench", null],
   ];
-  for (const [types, expected] of cases) {
-    check(`${JSON.stringify(types)} → ${expected}`, categoryFromGoogleTypes(types) === expected);
+  for (const [cls, expected] of cases) {
+    check(`${cls} → ${expected ?? "no pulsable"}`, categoryFromOsmFeature({ class: cls }) === expected);
   }
+  check("subclass también resuelve cuando class no basta",
+    categoryFromOsmFeature({ class: "zzz", subclass: "cafe" }) === "gastronomia");
 }
 
-// ── 5) Coste: la lista de campos de Place Details es corta y consciente ──
-console.log("Campos de Place Details:");
+// ── 5) El estilo propio: de marca, sin clave y sin vaciar el mapa ──
+console.log("Estilo BCP Luxury Madrid:");
 {
-  check("lista blanca declarada", PLACE_DETAIL_FIELDS.length > 0);
-  check("no se piden campos caros que la ficha no usa",
-    !PLACE_DETAIL_FIELDS.some((f) => /photo|review|opening|rating|price/i.test(f)),
-    PLACE_DETAIL_FIELDS.join(","));
-  check("se pide lo que la ficha SÍ pinta",
-    ["displayName", "formattedAddress", "location"].every((f) => (PLACE_DETAIL_FIELDS as readonly string[]).includes(f)));
+  const style: any = bcpLuxuryMadridStyle();
+  check("estilo versión 8 válido para MapLibre", style.version === 8);
+  check("usa OpenFreeMap como fuente vectorial",
+    JSON.stringify(style.sources).includes("tiles.openfreemap.org"));
+  check("sin clave de API en ninguna URL del estilo",
+    !/[?&](key|api_?key|access_token)=/i.test(JSON.stringify(style)));
+  const ids: string[] = style.layers.map((l: any) => l.id);
+  check("las capas pulsables existen en el estilo",
+    CLICKABLE_LAYER_IDS.every((l) => ids.includes(l)), ids.join(","));
+  check("hay parques, agua y edificios (no es un mapa vacío)",
+    ["park", "water", "building"].every((l) => ids.includes(l)));
+  check("NO es escala de grises: parques verdes y agua azulada",
+    /#dde5d0/i.test(JSON.stringify(style)) && /#cdd9de/i.test(JSON.stringify(style)));
+  check("los POIs solo aparecen desde z15 (densidad contenida)",
+    style.layers.filter((l: any) => l["source-layer"] === "poi").every((l: any) => l.minzoom >= 15));
+  check("atribución de OpenFreeMap, OpenMapTiles y OSM presente",
+    /OpenFreeMap/.test(MAP_ATTRIBUTION) && /OpenMapTiles/.test(MAP_ATTRIBUTION) && /OpenStreetMap/.test(MAP_ATTRIBUTION));
+  check("la lista blanca de lo pulsable no está vacía",
+    Object.keys(CLICKABLE_POI_CLASSES).length > 20);
 }
 
 // ── 6) Analítica: lista blanca, sin nombres libres ──
 console.log("Analítica:");
 {
-  check("evento conocido pasa", isAllowedLocationEvent("map_place_select"));
-  check("evento inventado NO pasa", !isAllowedLocationEvent("map_place_select_v2"));
+  check("evento conocido pasa", isAllowedLocationEvent("map_discovered_place_select"));
+  check("evento inventado NO pasa", !isAllowedLocationEvent("map_place_select"));
   check("texto libre NO pasa", !isAllowedLocationEvent("<script>"));
   check("cada fuente tiene su evento",
     selectEventFor("bcp_curated") === "map_curated_poi_select" &&
     selectEventFor("university") === "map_university_select" &&
-    selectEventFor("google_place") === "map_place_select");
+    selectEventFor("osm_discovered") === "map_discovered_place_select");
   check("todos los eventos de la lista se validan a sí mismos",
     LOCATION_EVENTS.every((e) => isAllowedLocationEvent(e)));
 }

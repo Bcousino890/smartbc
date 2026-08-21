@@ -30,7 +30,7 @@ import {
 import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
-import { ZoneExplorerGoogle } from "./zone-explorer-google";
+import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
 import { fromCuratedPoi, type LocationDestination } from "@/lib/services/location/destination";
 
 // Basemap: CARTO Voyager sobre datos de OpenStreetMap.
@@ -79,9 +79,7 @@ export function LocationModule({
   lng,
   pois,
   universities = [],
-  mapProvider = "osm",
-  googleApiKey,
-  googleMapId,
+  mapProvider = "maplibre",
   neighborhood,
   fallbackCoords,
   onView,
@@ -94,10 +92,8 @@ export function LocationModule({
   lng: number | null;
   pois: PoiTravel[];
   universities?: NearbyUniversity[];
-  /** Proveedor del explorador de zona. Sin credenciales de Google → "osm". */
-  mapProvider?: "osm" | "google";
-  googleApiKey?: string | null;
-  googleMapId?: string | null;
+  /** Proveedor del explorador de zona. */
+  mapProvider?: "maplibre" | "osm-static";
   neighborhood?: LocationNeighborhood | null;
   /** Centro aproximado del barrio cuando la propiedad no está geocodificada. */
   fallbackCoords: { lat: number; lng: number; zoom: number };
@@ -115,11 +111,12 @@ export function LocationModule({
   // máquina de estados, no cuatro implementaciones.
   const [focus, setFocus] = useState<PoiTravel | null>(null);
   const activePoi = focus?.name ?? null;
-  // Sitio descubierto en Google (nunca se mezcla con los POIs curados).
+  // Lugar DESCUBIERTO por el cliente en el basemap. Se guarda aparte de los
+  // POIs curados: nunca se mezclan ni se presenta como recomendación de BCP.
   const [placeFocus, setPlaceFocus] = useState<LocationDestination | null>(null);
-  // Google no cargó → se vuelve al renderer actual: nunca un hueco roto.
-  const [googleDown, setGoogleDown] = useState(false);
-  const useGoogle = mapProvider === "google" && !googleDown;
+  // El mapa no cargó → se vuelve al mosaico estático: nunca un hueco roto.
+  const [mapDown, setMapDown] = useState(false);
+  const useVectorMap = mapProvider === "maplibre" && !mapDown;
 
   const hasPreciseCoords = lat != null && lng != null;
   const center = hasPreciseCoords
@@ -232,7 +229,7 @@ export function LocationModule({
   const enterLive = useCallback(async () => {
     setLive(true);
     onExplore();
-    if (mapProvider === "google" && !googleDown) return; // lo monta ZoneExplorerGoogle
+    if (mapProvider === "maplibre" && !mapDown) return; // lo monta ZoneExplorerMapLibre
     const L = (await import("leaflet")).default;
     if (!document.getElementById("leaflet-css")) {
       const link = document.createElement("link");
@@ -275,7 +272,7 @@ export function LocationModule({
       mk.on("click", () => selectPoiRef.current?.(p));
     }
     leafletRef.current = { L, map };
-  }, [center.lat, center.lng, view.lat, view.lng, view.zoom, mapPois, universities, onExplore, mapProvider, googleDown]);
+  }, [center.lat, center.lng, view.lat, view.lng, view.zoom, mapPois, universities, onExplore, mapProvider, mapDown]);
 
   const exitLive = useCallback(() => {
     leafletRef.current?.map.remove();
@@ -288,7 +285,7 @@ export function LocationModule({
   useEffect(() => () => leafletRef.current?.map?.remove(), []);
 
   useEffect(() => {
-    onExternalOpenRef.current = (name) => onPoiClick(name, "external_google");
+    onExternalOpenRef.current = (name) => onPoiClick(name, "external_osm");
     return () => { onExternalOpenRef.current = null; };
   }, [onPoiClick]);
 
@@ -420,22 +417,18 @@ export function LocationModule({
       >
         {live ? (
           <>
-            {useGoogle ? (
-              <ZoneExplorerGoogle
-                apiKey={googleApiKey ?? ""}
-                mapId={googleMapId ?? ""}
+            {useVectorMap ? (
+              <ZoneExplorerMapLibre
                 origin={{ lat: center.lat, lng: center.lng }}
                 originLabel="La vivienda"
                 curated={[...mapPois, ...universities.slice(0, 3)].map(fromCuratedPoi)}
                 focus={placeFocus ?? (focus ? fromCuratedPoi(focus) : null)}
                 onSelectPlace={(d) => {
-                  // Un sitio de Google abre la MISMA ficha contextual, pero
-                  // se guarda aparte: no entra en la lista curada de BCP.
                   setPlaceFocus(d);
                   setFocus(null);
                   onPoiClick(d.name, d.category);
                 }}
-                onUnavailable={() => setGoogleDown(true)}
+                onUnavailable={() => setMapDown(true)}
               />
             ) : (
               <div ref={mapElRef} className="absolute inset-0 h-full w-full" />
@@ -678,10 +671,15 @@ function ContextCard({
   const { label, Icon } = categoryOf(categoryKey);
   const subtitle = place?.subtitle ?? null;
   const eta = place?.eta ?? (poi ? { minutes: poi.minutes, mode: poi.mode } : null);
-  const isGoogle = place?.source === "google_place";
-  const mapsUrl = place
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(place.id.replace(/^google:/, ""))}`
-    : null;
+  const isDiscovered = place?.source === "osm_discovered";
+  // Enlace a OSM solo si el id es REAL (no el generado desde coordenadas):
+  // preferimos no ofrecer enlace a ofrecer uno que lleve a ninguna parte.
+  const osmId = place?.id.replace(/^osm:/, "") ?? "";
+  const osmUrl = isDiscovered && /^\d+$/.test(osmId)
+    ? `https://www.openstreetmap.org/node/${osmId}`
+    : isDiscovered
+      ? `https://www.openstreetmap.org/?mlat=${place!.lat}&mlon=${place!.lng}#map=18/${place!.lat}/${place!.lng}`
+      : null;
 
   return (
     <div
@@ -721,13 +719,13 @@ function ContextCard({
         // Sin tiempo verificado NO se inventa uno: se dice lo que se sabe.
         <p className="crm-meta mt-2.5 text-ink/45">En la zona de la vivienda</p>
       )}
-      {isGoogle && mapsUrl && (
+      {osmUrl && (
         <a
-          href={mapsUrl} target="_blank" rel="noopener noreferrer"
+          href={osmUrl} target="_blank" rel="noopener noreferrer"
           onClick={() => onExternalOpenRef.current?.(name)}
           className="crm-meta mt-3 inline-block text-gold-dark underline-offset-2 hover:underline"
         >
-          Ver en Google Maps ↗
+          Ver en OpenStreetMap ↗
         </a>
       )}
     </div>

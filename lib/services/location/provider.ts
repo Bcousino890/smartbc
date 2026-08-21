@@ -1,63 +1,41 @@
 // BCP ZONE EXPLORER · elección de proveedor de mapa.
 //
-// ⚠️ EL FLAG SE AUTO-PROTEGE. El explorador de Google se activa únicamente si
-// existen SUS DOS credenciales (clave de navegador y Map ID). No hay forma de
-// encenderlo sin ellas, ni por descuido ni por una variable mal puesta: sin
-// credenciales el módulo sigue con el renderer actual y el SmartLink no se
-// entera. Es deliberado — es lo que impide que una migración a medias llegue
-// a un cliente.
+// DECISIÓN DE PROVEEDOR (2026-08-21): MapLibre GL JS + OpenFreeMap.
+// Google Maps quedó descartado por producto: exigía facturación y coste
+// variable por vista para una funcionalidad que queremos en TODOS los
+// SmartLinks. MapLibre + OpenFreeMap no necesita clave ni facturación, así
+// que la exploración de zona puede ofrecerse sin coste por uso.
 //
-// `NEXT_PUBLIC_ZONE_EXPLORER_PROVIDER` es el interruptor de emergencia: con
-// "osm" se fuerza el renderer actual aunque las credenciales existan, que es
-// la vía de rollback sin desplegar código.
+// La abstracción se mantiene a propósito: OpenFreeMap no ofrece SLA, y el día
+// que haga falta pasar a PMTiles/Protomaps autoalojado el cambio es de
+// proveedor, no de producto.
 
-export type MapProvider = "osm" | "google";
+export type MapProvider = "maplibre" | "osm-static";
 
 export type ProviderConfig = {
   provider: MapProvider;
-  googleApiKey: string | null;
-  googleMapId: string | null;
   /** Por qué se resolvió así. Para diagnóstico y para el handoff. */
   reason: string;
 };
 
-export function resolveMapProvider(env: {
-  apiKey?: string | null;
-  mapId?: string | null;
-  override?: string | null;
-}): ProviderConfig {
-  const apiKey = (env.apiKey ?? "").trim() || null;
-  const mapId = (env.mapId ?? "").trim() || null;
+/**
+ * `NEXT_PUBLIC_ZONE_EXPLORER_PROVIDER=osm-static` es el interruptor de
+ * emergencia: fuerza el mosaico estático anterior sin desplegar código.
+ */
+export function resolveMapProvider(env: { override?: string | null }): ProviderConfig {
   const override = (env.override ?? "").trim().toLowerCase() || null;
-
-  if (override === "osm") {
-    return { provider: "osm", googleApiKey: null, googleMapId: null, reason: "forzado a osm por override" };
+  if (override === "osm-static") {
+    return { provider: "osm-static", reason: "forzado a mosaico estático por override" };
   }
-  if (!apiKey || !mapId) {
-    return {
-      provider: "osm",
-      googleApiKey: null,
-      googleMapId: null,
-      reason: !apiKey && !mapId
-        ? "sin credenciales de Google (falta clave y Map ID)"
-        : !apiKey
-          ? "sin clave de navegador de Google"
-          : "sin Map ID de Google (el estilo de marca vive en él)",
-    };
+  if (override && override !== "maplibre") {
+    return { provider: "osm-static", reason: `override desconocido: ${override}` };
   }
-  if (override && override !== "google") {
-    return { provider: "osm", googleApiKey: null, googleMapId: null, reason: `override desconocido: ${override}` };
-  }
-  return { provider: "google", googleApiKey: apiKey, googleMapId: mapId, reason: "credenciales presentes" };
+  return { provider: "maplibre", reason: "MapLibre + OpenFreeMap (sin clave ni facturación)" };
 }
 
 /** Configuración efectiva en tiempo de render. */
 export function currentMapProvider(): ProviderConfig {
-  return resolveMapProvider({
-    apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
-    mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
-    override: process.env.NEXT_PUBLIC_ZONE_EXPLORER_PROVIDER,
-  });
+  return resolveMapProvider({ override: process.env.NEXT_PUBLIC_ZONE_EXPLORER_PROVIDER });
 }
 
 /**
@@ -68,12 +46,11 @@ export function currentMapProvider(): ProviderConfig {
 export const LOCATION_EVENTS = [
   "location_module_view",
   "zone_explorer_open",
-  "zone_explorer_close",
+  "zone_explorer_reset",
   "map_curated_poi_select",
   "map_university_select",
-  "map_place_select",
-  "map_place_card_open",
-  "map_external_google_open",
+  "map_discovered_place_select",
+  "map_external_osm_open",
   "location_overview_restore",
 ] as const;
 export type LocationEvent = (typeof LOCATION_EVENTS)[number];
@@ -83,8 +60,10 @@ export function isAllowedLocationEvent(name: string): name is LocationEvent {
 }
 
 /** Evento que corresponde a cada fuente de destino. */
-export function selectEventFor(source: "bcp_curated" | "google_place" | "university"): LocationEvent {
+export function selectEventFor(
+  source: "bcp_curated" | "osm_discovered" | "university",
+): LocationEvent {
   if (source === "university") return "map_university_select";
-  if (source === "google_place") return "map_place_select";
+  if (source === "osm_discovered") return "map_discovered_place_select";
   return "map_curated_poi_select";
 }

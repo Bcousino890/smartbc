@@ -135,8 +135,6 @@ export function PublicPropertyView({
   neighborhood,
   universities,
   mapProvider,
-  googleApiKey,
-  googleMapId,
   experienceState,
 }: {
   property: Property;
@@ -152,8 +150,6 @@ export function PublicPropertyView({
   universities?: NearbyUniversity[];
   /** Proveedor del explorador de zona. Sin credenciales de Google → "osm". */
   mapProvider?: MapProvider;
-  googleApiKey?: string | null;
-  googleMapId?: string | null;
   /** Estado de EXPERIENCIA (no de Property Story): complete | partial |
    *  sparse llegan de una story aprobada; facts_led = estructura 2.0 sin
    *  narrativa aprobada. Solo alimenta analytics — el render se decide por
@@ -512,9 +508,7 @@ export function PublicPropertyView({
             ZONE_COORDS[property.zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 }
           }
           universities={universities ?? []}
-          mapProvider={mapProvider ?? "osm"}
-          googleApiKey={googleApiKey ?? null}
-          googleMapId={googleMapId ?? null}
+          mapProvider={mapProvider ?? "maplibre"}
           onView={() => trackerRef.current?.trackEvent("location_module_view")}
           onExplore={() => trackerRef.current?.trackEvent("map_explore")}
           onRestore={() => trackerRef.current?.trackEvent("location_overview_restore")}

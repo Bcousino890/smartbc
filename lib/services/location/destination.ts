@@ -1,20 +1,19 @@
 // BCP ZONE EXPLORER · modelo de dominio de destinos.
 //
 // El renderer NUNCA maneja objetos del proveedor de mapas. Todo lo que llega
-// a la interfaz —un POI curado, una universidad o un sitio que el cliente ha
+// a la interfaz —un POI curado, una universidad o un lugar que el cliente ha
 // pulsado en el mapa— se normaliza aquí a la MISMA forma. Así el proveedor
-// (OSM hoy, Google mañana) queda encerrado en su adaptador y cambiarlo no
-// obliga a tocar la composición.
+// queda encerrado en su adaptador y cambiarlo no obliga a tocar el producto.
 //
-// Regla de producto que sostiene todo el módulo:
-//   BCP CURA · Google ayuda a EXPLORAR.
-// Un sitio descubierto en Google NUNCA se presenta como recomendación de BCP
+// Regla que sostiene todo el módulo:
+//   BCP CURA · el basemap ayuda a EXPLORAR.
+// Un lugar descubierto en el mapa NUNCA se presenta como recomendación de BCP
 // ni se escribe en la capa curada de barrios.
 
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 
-export type DestinationSource = "bcp_curated" | "google_place" | "university";
+export type DestinationSource = "bcp_curated" | "osm_discovered" | "university";
 
 export type TravelEstimate = {
   minutes: number;
@@ -65,73 +64,115 @@ export function fromUniversity(uni: NearbyUniversity): LocationDestination {
 }
 
 /**
- * CAMPOS DE PLACE DETAILS QUE PEDIMOS. Lista blanca deliberada y corta:
- * la facturación de Places depende de los campos solicitados, así que pedir
- * de más cuesta dinero y expone datos que la ficha no usa. Cualquier campo
- * nuevo debe añadirse aquí a conciencia, no sobre la marcha.
+ * QUÉ SE PUEDE PULSAR EN EL MAPA. Lista blanca explícita de `class` del
+ * source-layer `poi` de OpenMapTiles.
+ *
+ * No se hace clicable cualquier etiqueta: hacerlo llenaría la experiencia de
+ * vallas, bocas de riego y portales sin nombre. Solo entran las categorías
+ * que responden a una pregunta de estilo de vida — que es para lo que el
+ * cliente explora la zona.
  */
-export const PLACE_DETAIL_FIELDS = [
-  "id",
-  "displayName",
-  "formattedAddress",
-  "location",
-  "primaryTypeDisplayName",
-  "types",
-] as const;
-
-/** Forma mínima de un sitio de Google, ya recortada por el adaptador. */
-export type GooglePlaceLike = {
-  id?: string | null;
-  displayName?: string | null;
-  formattedAddress?: string | null;
-  location?: { lat: number; lng: number } | null;
-  primaryTypeDisplayName?: string | null;
-  types?: string[] | null;
+export const CLICKABLE_POI_CLASSES: Record<string, string> = {
+  restaurant: "gastronomia",
+  fast_food: "gastronomia",
+  cafe: "gastronomia",
+  bar: "gastronomia",
+  pub: "gastronomia",
+  ice_cream: "gastronomia",
+  bakery: "gastronomia",
+  grocery: "compras",
+  supermarket: "compras",
+  shop: "compras",
+  clothing_store: "compras",
+  department_store: "compras",
+  marketplace: "compras",
+  park: "parque",
+  garden: "parque",
+  playground: "parque",
+  museum: "cultura",
+  art_gallery: "cultura",
+  attraction: "cultura",
+  theatre: "cultura",
+  cinema: "cultura",
+  library: "cultura",
+  place_of_worship: "cultura",
+  monument: "cultura",
+  castle: "cultura",
+  railway: "transporte",
+  bus: "transporte",
+  subway: "transporte",
+  airport: "transporte",
+  school: "educacion",
+  college: "educacion",
+  university: "educacion",
+  kindergarten: "educacion",
+  hospital: "salud",
+  pharmacy: "salud",
+  doctors: "salud",
+  dentist: "salud",
+  clinic: "salud",
+  stadium: "deporte",
+  swimming_pool: "deporte",
+  fitness: "deporte",
+  sports_centre: "deporte",
+  golf: "deporte",
+  lodging: "otro",
+  hotel: "otro",
 };
 
-/** Tipos de Google → nuestras categorías. Lo que no casa cae en `otro`. */
-const GOOGLE_TYPE_TO_CATEGORY: Array<[RegExp, string]> = [
-  [/^(park|national_park|garden)$/, "parque"],
-  [/^(museum|art_gallery|tourist_attraction|church|synagogue|mosque|library|performing_arts_theater)$/, "cultura"],
-  [/(shopping_mall|store|clothing_store|department_store|supermarket|market)/, "compras"],
-  [/(restaurant|cafe|bar|bakery|food)/, "gastronomia"],
-  [/(subway_station|train_station|transit_station|bus_station|light_rail_station|airport)/, "transporte"],
-  [/(university|school|primary_school|secondary_school)/, "educacion"],
-  [/(hospital|doctor|pharmacy|dentist|clinic)/, "salud"],
-  [/(gym|fitness_center|stadium|sports_complex)/, "deporte"],
-];
-
-export function categoryFromGoogleTypes(types: string[] | null | undefined): string {
-  for (const t of types ?? []) {
-    for (const [re, cat] of GOOGLE_TYPE_TO_CATEGORY) if (re.test(t)) return cat;
-  }
-  return "otro";
+/** Categoría BCP de una feature del basemap, o null si no es pulsable. */
+export function categoryFromOsmFeature(props: {
+  class?: string | null;
+  subclass?: string | null;
+}): string | null {
+  const byClass = props.class ? CLICKABLE_POI_CLASSES[props.class] : undefined;
+  if (byClass) return byClass;
+  const bySub = props.subclass ? CLICKABLE_POI_CLASSES[props.subclass] : undefined;
+  return bySub ?? null;
 }
 
+/** Forma mínima de una feature ya recortada por el proveedor de mapa. */
+export type OsmFeatureLike = {
+  id?: string | number | null;
+  properties?: Record<string, unknown> | null;
+  lat?: number | null;
+  lng?: number | null;
+};
+
 /**
- * Sitio de Google → destino.
+ * Feature del basemap → destino descubierto.
  *
- * Devuelve null si el sitio no trae coordenadas utilizables: sin punto no hay
- * ni marcador ni distancia honesta, y preferimos no enseñar nada a enseñar
- * algo inventado. NUNCA se rellena una ETA aquí: la calcula quien tenga el
- * origen, con la misma lógica verificada que el resto del módulo.
+ * Devuelve null si no es una categoría pulsable, si no tiene NOMBRE o si no
+ * hay coordenadas: sin nombre no hay ficha que enseñar, y preferimos no abrir
+ * nada a abrir una ficha vacía. NUNCA se rellena una ETA aquí — la calcula
+ * quien tiene el origen, con la misma lógica verificada del resto del módulo.
  */
-export function fromGooglePlace(place: GooglePlaceLike): LocationDestination | null {
-  const lat = place.location?.lat;
-  const lng = place.location?.lng;
+export function fromOsmFeature(feature: OsmFeatureLike): LocationDestination | null {
+  const props = feature.properties ?? {};
+  const cls = typeof props.class === "string" ? props.class : null;
+  const subclass = typeof props.subclass === "string" ? props.subclass : null;
+  const category = categoryFromOsmFeature({ class: cls, subclass });
+  if (!category) return null;
+
+  const raw = props.name ?? props["name:es"] ?? props.name_int ?? props.name_en;
+  const name = typeof raw === "string" ? raw.trim() : "";
+  if (!name) return null; // §5: sin nombre, no se abre ficha
+
+  const lat = feature.lat;
+  const lng = feature.lng;
   if (typeof lat !== "number" || typeof lng !== "number") return null;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const name = (place.displayName ?? "").trim();
-  if (!name) return null;
+
   return {
-    source: "google_place",
-    id: `google:${place.id ?? `${lat},${lng}`}`,
+    source: "osm_discovered",
+    id: `osm:${feature.id ?? `${lat.toFixed(6)},${lng.toFixed(6)}`}`,
     name,
-    category: categoryFromGoogleTypes(place.types),
+    category,
     lat,
     lng,
-    address: place.formattedAddress ?? null,
-    subtitle: place.primaryTypeDisplayName ?? null,
+    // El subclass da el matiz ("pizza", "coffee_shop") pero es un valor
+    // técnico en inglés: no se pinta como si fuera copy editorial.
+    subtitle: null,
     eta: null,
   };
 }
