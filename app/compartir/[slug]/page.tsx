@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/queries/properties";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
 import { getStoryExperiencePublic } from "@/lib/db/queries/story";
+import { findNearbyUniversities } from "@/lib/geo/universities-nearby";
 import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 import { PublicPropertyView } from "./public-property-view";
 import { CollectionReturnBar } from "@/components/public/collection-return-bar";
@@ -230,6 +231,10 @@ export default async function PublicSharePage({
         videos={videos}
         plans={plans}
         story={experience.blocks}
+        universities={findNearbyUniversities({
+          lat: property.latitude ?? null,
+          lng: property.longitude ?? null,
+        })}
         experienceState={experience.state}
         neighborhood={neighborhood}
       />

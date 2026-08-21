@@ -23,8 +23,9 @@
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, Lock, MapPin, Plus, Minus } from "lucide-react";
-import { buildMosaic, contextZoomForWidth, type Mosaic } from "@/lib/geo/tile-math";
+import { Compass, GraduationCap, Lock, Maximize2, MapPin, Plus, Minus } from "lucide-react";
+import { buildMosaic, contextZoomForWidth, fitTwoPoints, type Mosaic } from "@/lib/geo/tile-math";
+import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 
 // Basemap: CARTO Voyager sobre datos de OpenStreetMap.
@@ -71,28 +72,35 @@ export function LocationModule({
   lat,
   lng,
   pois,
+  universities = [],
   neighborhood,
   fallbackCoords,
   onView,
   onPoiClick,
   onExplore,
+  onRestore,
 }: {
   zone: string;
   lat: number | null;
   lng: number | null;
   pois: PoiTravel[];
+  universities?: NearbyUniversity[];
   neighborhood?: LocationNeighborhood | null;
   /** Centro aproximado del barrio cuando la propiedad no está geocodificada. */
   fallbackCoords: { lat: number; lng: number; zoom: number };
   onView: () => void;
-  onPoiClick: (name: string) => void;
+  onPoiClick: (name: string, category: string) => void;
   onExplore: () => void;
+  onRestore: () => void;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [live, setLive] = useState(false);
-  const [activePoi, setActivePoi] = useState<string | null>(null);
+  // DESTINATION FOCUS: un ÚNICO estado alimenta el rail, la lista inferior y
+  // las universidades. Una sola implementación, un solo active state.
+  const [focus, setFocus] = useState<PoiTravel | null>(null);
+  const activePoi = focus?.name ?? null;
 
   const hasPreciseCoords = lat != null && lng != null;
   const center = hasPreciseCoords
@@ -133,22 +141,57 @@ export function LocationModule({
     return () => ro.disconnect();
   }, []);
 
-  const zoom = useMemo(() => {
-    if (!size) return 15;
-    // Sin coordenadas exactas mostramos el barrio, no un portal concreto.
+  // Vista del mapa. En DESTINATION FOCUS el encuadre mete vivienda y destino
+  // con margen generoso; en overview, el barrio alrededor de la vivienda.
+  // Es matemática pura, así que el foco funciona con el mapa BLOQUEADO:
+  // seleccionar un destino nunca desbloquea los gestos.
+  const view = useMemo(() => {
+    if (!size) return { lat: center.lat, lng: center.lng, zoom: 15 };
+    if (focus && hasPreciseCoords) {
+      // Margen mayor en el eje vertical: abajo viven el CTA y la etiqueta.
+      const padding = Math.round(Math.min(size.w, size.h) * 0.22) + 28;
+      return fitTwoPoints({
+        a: { lat: center.lat, lng: center.lng },
+        b: { lat: focus.latitude, lng: focus.longitude },
+        width: size.w,
+        height: size.h,
+        padding,
+        maxZoom: 16,
+      });
+    }
     const z = contextZoomForWidth(size.w, center.lat);
-    return hasPreciseCoords ? z : Math.min(z, fallbackCoords.zoom);
-  }, [size, center.lat, hasPreciseCoords, fallbackCoords.zoom]);
+    return {
+      lat: center.lat,
+      lng: center.lng,
+      zoom: hasPreciseCoords ? z : Math.min(z, fallbackCoords.zoom),
+    };
+  }, [size, center.lat, center.lng, hasPreciseCoords, fallbackCoords.zoom, focus]);
+
+  const zoom = view.zoom;
 
   const mosaic: Mosaic | null = useMemo(() => {
     if (!size) return null;
-    return buildMosaic({ lat: center.lat, lng: center.lng, zoom, width: size.w, height: size.h });
-  }, [size, center.lat, center.lng, zoom]);
+    return buildMosaic({ lat: view.lat, lng: view.lng, zoom: view.zoom, width: size.w, height: size.h });
+  }, [size, view]);
+
+  // Píxeles de vivienda y destino dentro del lienzo (marcadores y conexión).
+  const propertyPt = mosaic && hasPreciseCoords ? mosaic.project(center.lat, center.lng) : null;
+  const focusPt = mosaic && focus ? mosaic.project(focus.latitude, focus.longitude) : null;
 
   // ── Destinos: el rail toma los de mayor prioridad (ya vienen ordenados y
   //    calculados con el modelo de distancia vigente, bbox incluido). ──
-  const rail = pois.slice(0, 5);
-  const mapPois = pois.slice(0, 5);
+  // Orden: a pie primero y, dentro de cada modo, de más cerca a más lejos.
+  // Mezclar modos en una sola escala ascendente haría leer las tarjetas como
+  // una línea de tiempo, y 12 min a pie no son comparables con 12 en coche.
+  const ordered = useMemo(
+    () =>
+      [...pois].sort((a, b) =>
+        a.mode === b.mode ? a.minutes - b.minutes : a.mode === "walk" ? -1 : 1,
+      ),
+    [pois],
+  );
+  const rail = ordered.slice(0, 5);
+  const mapPois = ordered.slice(0, 5);
 
   // ── Modo explorar: Leaflet solo aquí, y solo al pulsar. ──
   const leafletRef = useRef<any>(null);
@@ -211,27 +254,40 @@ export function LocationModule({
       poiLayerRef.current.clear();
     }
     setLive(false);
-    setActivePoi(null);
+    setFocus(null);
   }, []);
 
   useEffect(() => () => leafletRef.current?.map?.remove(), []);
 
+  /**
+   * ÚNICO punto de entrada del DESTINATION FOCUS. Lo llaman la tarjeta del
+   * rail, la lista "Cerca de la vivienda" y las universidades: misma
+   * interacción y mismo active state en los tres sitios, no tres
+   * implementaciones.
+   */
   const selectPoi = useCallback(
     (p: PoiTravel) => {
-      setActivePoi(p.name);
-      onPoiClick(p.name);
+      setFocus((prev) => (prev?.name === p.name ? prev : p));
+      onPoiClick(p.name, p.category);
       const inst = leafletRef.current;
-      if (!inst) return;
-      // Encaje suave propiedad + destino. NUNCA se dibuja una línea entre
-      // ambos: no tenemos geometría de ruta real y fingirla sería mentir.
-      const bounds = inst.L.latLngBounds(
-        [center.lat, center.lng],
-        [p.latitude, p.longitude],
-      );
-      inst.map.flyToBounds(bounds, { padding: [56, 56], duration: 0.7, maxZoom: 17 });
+      if (!inst) return; // bloqueado: el encuadre lo resuelve el mosaico
+      const bounds = inst.L.latLngBounds([center.lat, center.lng], [p.latitude, p.longitude]);
+      inst.map.flyToBounds(bounds, { padding: [64, 64], duration: 0.7, maxZoom: 16 });
     },
     [center.lat, center.lng, onPoiClick],
   );
+
+  /** VER ZONA COMPLETA: deshace el foco y vuelve a la vista de barrio. */
+  const restoreOverview = useCallback(() => {
+    setFocus(null);
+    onRestore();
+    const inst = leafletRef.current;
+    if (inst) {
+      inst.map.flyTo([center.lat, center.lng], contextZoomForWidth(size?.w ?? 900, center.lat), {
+        duration: 0.6,
+      });
+    }
+  }, [center.lat, center.lng, size?.w, onRestore]);
 
   // ── Subtítulo editorial: SOLO dato administrativo verificado (columnas
   //    district/municipality de la capa curada). Si no lo hay, no se inventa
@@ -281,7 +337,7 @@ export function LocationModule({
                 >
                   <button
                     type="button"
-                    onClick={() => (live ? selectPoi(p) : onPoiClick(p.name))}
+                    onClick={() => selectPoi(p)}
                     className={`h-full w-full rounded-xl border px-3 py-3 text-left transition ${
                       isActive
                         ? "border-gold bg-gold/10"
@@ -309,6 +365,7 @@ export function LocationModule({
       {/* ── C · ESCENARIO DEL MAPA ─────────────────────────────────────── */}
       <div
         ref={stageRef}
+        data-focus={focus ? "true" : "false"}
         className={`bcp-map-stage relative mt-5 w-full overflow-hidden ${
           live ? "bcp-map-live h-[62vh] min-h-[380px]" : "h-[46vh] min-h-[280px] md:h-[520px]"
         }`}
@@ -337,11 +394,11 @@ export function LocationModule({
             </div>
             <button
               type="button"
-              onClick={exitLive}
+              onClick={focus ? restoreOverview : exitLive}
               className="crm-button pointer-events-auto absolute bottom-3 left-1/2 z-[500] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/95 px-4 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
             >
-              <Lock size={13} strokeWidth={1.75} />
-              Volver al recorrido
+              {focus ? <Maximize2 size={13} strokeWidth={1.75} /> : <Lock size={13} strokeWidth={1.75} />}
+              {focus ? "Ver zona completa" : "Volver al recorrido"}
             </button>
           </>
         ) : (
@@ -370,7 +427,7 @@ export function LocationModule({
             </div>
 
             {/* Destinos discretos sobre el mapa: contexto, no chinchetas. */}
-            {mosaic && hasPreciseCoords &&
+            {mosaic && hasPreciseCoords && !focus &&
               mapPois.map((p) => {
                 const pt = mosaic.project(p.latitude, p.longitude);
                 if (pt.left < 8 || pt.top < 8 || !size || pt.left > size.w - 8 || pt.top > size.h - 8) {
@@ -386,11 +443,68 @@ export function LocationModule({
                 );
               })}
 
-            {/* Marcador BCP: máxima prioridad visual, sin pin de dibujos. */}
-            {mosaic && hasPreciseCoords && (
+            {/* CONEXIÓN vivienda → destino. Es una recta, deliberadamente:
+                representa PROXIMIDAD, no una ruta por calles. No tenemos
+                geometría de routing real y dibujar un trazado callejero
+                falso sería mentirle al cliente. */}
+            {focusPt && propertyPt && size && (
+              <svg
+                className="pointer-events-none absolute inset-0 z-[3]"
+                width={size.w}
+                height={size.h}
+                aria-hidden
+              >
+                <line
+                  className="bcp-connection"
+                  x1={propertyPt.left}
+                  y1={propertyPt.top}
+                  x2={focusPt.left}
+                  y2={focusPt.top}
+                  stroke="#b08b4f"
+                  strokeWidth={1.75}
+                  strokeLinecap="round"
+                  strokeDasharray="5 6"
+                />
+              </svg>
+            )}
+
+            {/* Marcador del DESTINO: champán, por encima de los secundarios,
+                con su nombre y su tiempo — sin obligar a deducir nada. */}
+            {focusPt && size && (
               <span
-                className="absolute z-[3]"
-                style={{ left: (size?.w ?? 0) / 2, top: (size?.h ?? 0) / 2 }}
+                className="absolute z-[5]"
+                style={{ left: focusPt.left, top: focusPt.top }}
+              >
+                <span className="bcp-marker absolute left-0 top-0 block">
+                  <span className="block h-[18px] w-[18px] -translate-x-1/2 translate-y-1/2 rounded-full bg-gold shadow-[0_10px_24px_-8px_rgba(40,28,10,0.9)] ring-[3px] ring-white" />
+                </span>
+                <span
+                  className="bcp-rise absolute bottom-3 left-1/2 block w-max max-w-[13rem] -translate-x-1/2 rounded-lg bg-white/95 px-2.5 py-1.5 text-center shadow-[0_10px_28px_-12px_rgba(40,28,10,0.75)]"
+                  style={{
+                    animationDelay: "220ms",
+                    // La etiqueta nunca se sale del lienzo: si el destino está
+                    // pegado a un borde, se desplaza hacia dentro.
+                    transform: `translateX(${Math.max(
+                      -focusPt.left + 8,
+                      Math.min(size.w - focusPt.left - 8, 0),
+                    )}px) translateX(-50%)`,
+                  }}
+                >
+                  <span className="crm-label-sm block leading-tight text-ink">
+                    {focus?.name}
+                  </span>
+                  <span className="crm-meta block text-ink/55">
+                    ≈ {focus?.minutes} min {focus?.mode === "walk" ? "a pie" : "en coche"}
+                  </span>
+                </span>
+              </span>
+            )}
+
+            {/* Marcador BCP: máxima prioridad visual, sin pin de dibujos. */}
+            {mosaic && hasPreciseCoords && propertyPt && (
+              <span
+                className="absolute z-[4]"
+                style={{ left: propertyPt.left, top: propertyPt.top }}
                 aria-hidden
               >
                 <span className="bcp-marker-halo absolute left-0 top-0 block h-14 w-14 rounded-full bg-gold/50" />
@@ -407,14 +521,15 @@ export function LocationModule({
               />
             )}
 
-            {/* Activación EXPLÍCITA. Nunca por hover. */}
+            {/* Activación EXPLÍCITA. Nunca por hover. Con un destino
+                enfocado, el mismo sitio ofrece volver a la vista general. */}
             <button
               type="button"
-              onClick={enterLive}
-              className="crm-button group absolute bottom-4 left-1/2 z-[4] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/95 px-5 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
+              onClick={focus ? restoreOverview : enterLive}
+              className="crm-button group absolute bottom-4 left-1/2 z-[6] inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink/95 px-5 py-2.5 text-cream-50 shadow-[0_12px_30px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
             >
-              <Compass size={14} strokeWidth={1.75} />
-              Explorar mapa
+              {focus ? <Maximize2 size={14} strokeWidth={1.75} /> : <Compass size={14} strokeWidth={1.75} />}
+              {focus ? "Ver zona completa" : "Explorar mapa"}
             </button>
 
             {/* Atribución obligatoria también en estado bloqueado. */}
@@ -444,7 +559,7 @@ export function LocationModule({
                 <li key={p.name} className="bcp-rise" style={{ animationDelay: `${140 + i * 55}ms` }}>
                   <button
                     type="button"
-                    onClick={() => (live ? selectPoi(p) : onPoiClick(p.name))}
+                    onClick={() => selectPoi(p)}
                     className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition ${
                       isActive
                         ? "border-gold bg-gold/10"
@@ -460,6 +575,47 @@ export function LocationModule({
                     </span>
                     <span className="crm-meta shrink-0 whitespace-nowrap text-ink/55">
                       ≈ {p.minutes} min {p.mode === "walk" ? "a pie" : "en coche"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* UNIVERSIDADES CERCANAS — mismo catálogo que "Distancia al campus"
+          del portal de cliente y mismo cálculo de tiempos que el resto de
+          destinos. Si no hay ninguna a distancia razonable, la sección
+          sencillamente no existe: sin heading vacío ni "no hay". */}
+      {universities.length > 0 && (
+        <div className="px-6 pb-2 pt-5 md:px-8">
+          <p className="crm-label-sm text-gold-dark">Universidades cercanas</p>
+          <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {universities.map((u, i) => {
+              const isActive = activePoi === u.name;
+              return (
+                <li key={u.name} className="bcp-rise" style={{ animationDelay: `${160 + i * 55}ms` }}>
+                  <button
+                    type="button"
+                    onClick={() => selectPoi(u)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition ${
+                      isActive
+                        ? "border-gold bg-gold/10"
+                        : "border-transparent hover:border-gold/30 hover:bg-gold/5"
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <GraduationCap size={13} strokeWidth={1.75} className="shrink-0 translate-y-0.5 text-gold-dark" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm text-ink/85">{u.name}</span>
+                        {u.campusLabel && (
+                          <span className="crm-meta block truncate text-ink/40">{u.campusLabel}</span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="crm-meta shrink-0 whitespace-nowrap text-ink/55">
+                      ≈ {u.minutes} min {u.mode === "walk" ? "a pie" : "en coche"}
                     </span>
                   </button>
                 </li>

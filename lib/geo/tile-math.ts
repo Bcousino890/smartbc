@@ -88,6 +88,54 @@ export function buildMosaic(params: {
   };
 }
 
+/** Inversa de latLngToWorldPixel: píxel del mundo → coordenada. */
+export function worldPixelToLatLng(x: number, y: number, zoom: number): { lat: number; lng: number } {
+  const n = 2 ** zoom;
+  const lng = (x / (TILE_SIZE * n)) * 360 - 180;
+  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / (TILE_SIZE * n)))) * 180) / Math.PI;
+  return { lat, lng };
+}
+
+/**
+ * Encuadre que mete DOS puntos en el lienzo con margen: lo usa DESTINATION
+ * FOCUS para que vivienda y destino se vean los dos, sin que ninguno quede
+ * pegado a un borde.
+ *
+ * Es matemática pura, así que el encuadre funciona TAMBIÉN con el mapa
+ * bloqueado: seleccionar un destino no obliga a desbloquear los gestos.
+ * `maxZoom` evita acercarse tanto que se pierda el contexto de ciudad cuando
+ * los dos puntos están casi encima.
+ */
+export function fitTwoPoints(params: {
+  a: { lat: number; lng: number };
+  b: { lat: number; lng: number };
+  width: number;
+  height: number;
+  padding: number;
+  maxZoom?: number;
+  minZoom?: number;
+}): { lat: number; lng: number; zoom: number } {
+  const { a, b, width, height, padding } = params;
+  const maxZoom = params.maxZoom ?? 17;
+  const minZoom = params.minZoom ?? 11;
+
+  const pa = latLngToWorldPixel(a.lat, a.lng, 0);
+  const pb = latLngToWorldPixel(b.lat, b.lng, 0);
+  const dx = Math.abs(pa.x - pb.x);
+  const dy = Math.abs(pa.y - pb.y);
+
+  const usableW = Math.max(32, width - padding * 2);
+  const usableH = Math.max(32, height - padding * 2);
+  // 2^z · d <= usable  →  z <= log2(usable / d). Un eje sin separación no
+  // restringe (Infinity), y el clamp final acota los dos casos extremos.
+  const zx = dx > 0.0001 ? Math.log2(usableW / dx) : Infinity;
+  const zy = dy > 0.0001 ? Math.log2(usableH / dy) : Infinity;
+  const zoom = Math.max(minZoom, Math.min(maxZoom, Math.floor(Math.min(zx, zy))));
+
+  const mid = worldPixelToLatLng((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, 0);
+  return { lat: mid.lat, lng: mid.lng, zoom };
+}
+
 /**
  * Zoom que encuadra al inmueble CON su barrio alrededor, no solo su portal.
  * Se ajusta al ancho disponible para que móvil y escritorio muestren una

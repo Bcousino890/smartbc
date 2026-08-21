@@ -406,6 +406,49 @@ console.log("Mosaico del mapa:");
     [zMobile, zDesktop].every((z) => z >= 13 && z <= 17), `${zMobile}/${zDesktop}`);
 }
 
+// ── 6c) DESTINATION FOCUS: encuadre de vivienda + destino ──
+console.log("Destination focus:");
+{
+  const { fitTwoPoints, buildMosaic } = await import("../lib/geo/tile-math");
+  const casa = { lat: 40.4265, lng: -3.6866 };   // Recoletos
+  const retiro = { lat: 40.4153, lng: -3.6845 }; // Parque del Retiro
+  const W = 900, H = 520, PAD = 120;
+  const v = fitTwoPoints({ a: casa, b: retiro, width: W, height: H, padding: PAD, maxZoom: 16 });
+  const m = buildMosaic({ lat: v.lat, lng: v.lng, zoom: v.zoom, width: W, height: H });
+  const pc = m.project(casa.lat, casa.lng);
+  const pd = m.project(retiro.lat, retiro.lng);
+  const dentro = (p: { left: number; top: number }) =>
+    p.left >= PAD - 1 && p.left <= W - PAD + 1 && p.top >= PAD - 1 && p.top <= H - PAD + 1;
+  check("vivienda y destino caben los DOS con margen", dentro(pc) && dentro(pd), JSON.stringify({ pc, pd, v }));
+  check("ninguno queda pegado a un borde", pc.left > 8 && pd.left > 8 && pc.top > 8 && pd.top > 8);
+  check("no se acerca más de lo que permite el contexto", v.zoom <= 16);
+
+  // Dos puntos casi encima: el encuadre no debe dispararse a zoom absurdo.
+  const casi = { lat: 40.4266, lng: -3.6867 };
+  const vz = fitTwoPoints({ a: casa, b: casi, width: W, height: H, padding: PAD, maxZoom: 16 });
+  check("destino pegado a la vivienda → zoom acotado", vz.zoom === 16, String(vz.zoom));
+}
+
+// ── 6d) Universidades: catálogo EXISTENTE, cálculo del propio módulo ──
+console.log("Universidades cercanas:");
+{
+  const { findNearbyUniversities } = await import("../lib/geo/universities-nearby");
+  const { UNIVERSITIES } = await import("../lib/data/universities");
+  const cerca = findNearbyUniversities({ lat: 40.4265, lng: -3.6866 });
+  check("devuelve universidades para una propiedad de Madrid", cerca.length > 0, String(cerca.length));
+  check("máximo 5", cerca.length <= 5, String(cerca.length));
+  check("ordenadas de más cerca a más lejos",
+    cerca.every((u, i) => i === 0 || cerca[i - 1].minutes <= u.minutes));
+  check("una entrada por universidad (no dos campus de la misma)",
+    new Set(cerca.map((u) => u.name)).size === cerca.length);
+  check("los nombres salen del catálogo existente",
+    cerca.every((u) => UNIVERSITIES.some((x) => (x.shortName ?? x.name) === u.name)));
+  check("conserva la semántica de modo del módulo",
+    cerca.every((u) => u.mode === "walk" || u.mode === "drive"));
+  check("sin coordenadas → ninguna (no se inventan tiempos)",
+    findNearbyUniversities({ lat: null, lng: null }).length === 0);
+}
+
 // ── 7) Promoción dinámica del estado de experiencia (baseline) ──
 console.log("Experience state (promoción automática facts_led → story):");
 {

@@ -756,3 +756,27 @@
   box-shadow: 0 6px 18px -10px rgba(40, 28, 10, 0.5);
 }
 .bcp-map-live .leaflet-tile-pane { filter: var(--bcp-map-treatment); }
+
+/* DESTINATION FOCUS · la línea vivienda → destino se dibuja sola, una vez.
+   Es una recta a propósito: representa proximidad, NO una ruta por calles. */
+@keyframes bcpDrawConnection {
+  from { stroke-dashoffset: 480; opacity: 0; }
+  to   { stroke-dashoffset: 0;   opacity: 1; }
+}
+.bcp-connection {
+  animation: bcpDrawConnection 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Con un destino enfocado el mapa base cede MUY poco contraste para que
+   destaquen vivienda, conexión y destino. Sigue siendo el mapa de color
+   aprobado: ni gris, ni oscurecido. */
+.bcp-map-stage[data-focus="true"] .bcp-map-tiles {
+  filter: var(--bcp-map-treatment) saturate(0.88) contrast(0.96);
+  transition: filter 420ms ease-out;
+}
+.bcp-map-tiles { transition: filter 420ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bcp-connection { animation: none !important; stroke-dashoffset: 0 !important; opacity: 1 !important; }
+  .bcp-map-stage[data-focus="true"] .bcp-map-tiles,
+  .bcp-map-tiles { transition: none !important; }
+}
