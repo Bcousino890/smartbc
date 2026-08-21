@@ -13,6 +13,7 @@ import {
   type GateFailure,
   type QueueBucket,
 } from "@/lib/services/story/gate";
+import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neighborhoods";
 
 /** Estado visible de la propiedad en el catálogo (SmartLink 2.0). */
 export type StoryState = "published_complete" | "published_partial" | "fallback" | "blocked";
@@ -40,15 +41,6 @@ export type QueueRow = {
 };
 
 export type QueueCounters = Record<QueueBucket | "total", number>;
-
-function norm(s: string | null | undefined): string {
-  return (s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 /**
  * Evalúa TODAS las stories en borrador de propiedades activas y devuelve las
@@ -123,19 +115,18 @@ export async function getEnrichmentQueue(): Promise<{
 
   // Carga en bloque, PAGINADA: un `.in()` con 500+ UUIDs supera el límite de
   // longitud de URL de PostgREST y devuelve vacío en silencio. Se trocea.
-  const [props, blocks, claims, photos, hoodsRes] = await Promise.all([
+  const [props, blocks, claims, photos, hoodIndex] = await Promise.all([
     fetchIn(db, "properties", "id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation", "id", pendingIds),
     fetchIn(db, "property_story_blocks", "id, version_id, chapter, copy, status, claim_ids", "version_id", versionIds),
     fetchIn(db, "property_story_claims", "id, version_id, source_text, fact, category, conflict", "version_id", versionIds),
     fetchIn(db, "property_photos", "property_id, position, ai_class, ai_confidence, class_override", "property_id", pendingIds),
-    db.from("neighborhoods").select("zone_key, display_name").eq("active", true),
+    loadNeighborhoodIndex(db),
   ]);
 
   const byProp = new Map<string, any>(props.map((p: any) => [p.id, p]));
   const blocksByVersion = groupBy(blocks, (b: any) => b.version_id);
   const claimsByVersion = groupBy(claims, (c: any) => c.version_id);
   const photosByProp = groupBy(photos, (p: any) => p.property_id);
-  const hoodByKey = new Map<string, string>((hoodsRes.data ?? []).map((h: any) => [h.zone_key, h.display_name]));
 
   const rows: QueueRow[] = [];
   for (const v of pending) {
@@ -144,7 +135,6 @@ export async function getEnrichmentQueue(): Promise<{
     const blocks = blocksByVersion.get(v.id) ?? [];
     const claims = claimsByVersion.get(v.id) ?? [];
     const photos = (photosByProp.get(v.property_id) ?? []).sort((a: any, b: any) => a.position - b.position);
-    const hoodKey = norm(property.subzone) || norm(property.zone);
 
     const isPublished = v.status === "approved";
     // Bloques que el cliente NO ve y siguen esperando decisión humana.
@@ -160,7 +150,7 @@ export async function getEnrichmentQueue(): Promise<{
       blocks,
       claims,
       photos,
-      neighborhoodDisplayName: hoodByKey.get(hoodKey) ?? null,
+      neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
     });
     if (!isPublished && result.pass) continue; // publicable limpio: no es backlog
 
@@ -233,15 +223,14 @@ export async function getStoryReviewDetail(slug: string) {
     db.from("property_photos").select("url, position, ai_class, ai_confidence, class_override").eq("property_id", property.id).order("position"),
   ]);
 
-  const hoodKey = norm(property.subzone) || norm(property.zone);
-  const { data: hood } = await db.from("neighborhoods").select("display_name").eq("zone_key", hoodKey).maybeSingle();
+  const hoodIndex = await loadNeighborhoodIndex(db);
 
   const gate = evaluateGate({
     property,
     blocks: blocksRes.data ?? [],
     claims: claimsRes.data ?? [],
     photos: photosRes.data ?? [],
-    neighborhoodDisplayName: hood?.display_name ?? null,
+    neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
   });
 
   return {

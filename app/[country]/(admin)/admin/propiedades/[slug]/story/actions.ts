@@ -14,6 +14,7 @@ import { classifyPropertyPhotos } from "@/lib/services/photos/classify";
 import { probePropertyVideos } from "@/lib/services/video/probe";
 import { copyWordCount } from "@/lib/services/story/validate";
 import { evaluateGate } from "@/lib/services/story/gate";
+import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neighborhoods";
 
 /** Re-evalúa el quality gate compartido para una versión concreta. */
 async function evaluateGateForVersion(db: any, propertyId: string, versionId: string) {
@@ -24,16 +25,13 @@ async function evaluateGateForVersion(db: any, propertyId: string, versionId: st
     db.from("property_photos").select("position, ai_class, ai_confidence, class_override").eq("property_id", propertyId).order("position"),
   ]);
   if (!property) return null;
-  const key = (property.subzone || property.zone || "")
-    .toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const { data: hood } = await db.from("neighborhoods").select("display_name").eq("zone_key", key).maybeSingle();
+  const hoodIndex = await loadNeighborhoodIndex(db);
   return evaluateGate({
     property,
     blocks: blocks ?? [],
     claims: claims ?? [],
     photos: photos ?? [],
-    neighborhoodDisplayName: hood?.display_name ?? null,
+    neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
   });
 }
 

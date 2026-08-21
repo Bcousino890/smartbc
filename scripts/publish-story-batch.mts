@@ -14,16 +14,14 @@
 
 import { createAdminClient } from "../lib/db/admin";
 import { planPublication, GATE_LABELS } from "../lib/services/story/gate";
+import { loadNeighborhoodIndex, lookupNeighborhood } from "../lib/db/queries/neighborhoods";
 
 const TARGET = Number(process.argv[2] ?? 50);
 const DRY_RUN = process.argv.includes("--dry-run");
 
 const db = createAdminClient() as any;
 
-function norm(s: string | null | undefined): string {
-  return (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
+const hoodIndex = await loadNeighborhoodIndex(db);
 
 // Versiones en borrador (la más reciente por propiedad), paginadas.
 const versions: any[] = [];
@@ -65,12 +63,9 @@ for (const v of pending) {
   if (!property || !blocks) continue;
   const ref = property.bc_reference ?? property.slug;
 
-  const key = norm(property.subzone) || norm(property.zone);
-  const { data: hood } = await db.from("neighborhoods").select("display_name").eq("zone_key", key).maybeSingle();
-
   const plan = planPublication({
     property, blocks: blocks ?? [], claims: claims ?? [], photos: photos ?? [],
-    neighborhoodDisplayName: hood?.display_name ?? null,
+    neighborhoodDisplayName: lookupNeighborhood(hoodIndex, property.zone, property.subzone),
     hasVideo: (media ?? []).some((m: any) => m.type === "video"),
     hasPlan: (media ?? []).some((m: any) => m.type === "plan"),
     hasValidLocation: property.latitude != null && property.longitude != null,
