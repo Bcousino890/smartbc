@@ -54,3 +54,4 @@ next-env.d.ts
 # regeneran desde su .mts (ver handoff). Un bundle viejo en el repo puede
 # ejecutar logica de gate obsoleta contra produccion: nunca se versionan.
 scripts/*.bundle.mjs
+scripts/*.bundle.cjs

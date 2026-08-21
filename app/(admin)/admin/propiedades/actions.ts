@@ -419,7 +419,14 @@ export async function deleteProperty(
   const admin = createAdminClient() as any;
 
   // Rutas de storage de las fotos: las filas de property_photos caen por
-  // ON DELETE CASCADE, pero los archivos del bucket no, así que se borran a mano.
+  // ON DELETE CASCADE, pero los archivos del bucket no, así que se borran a
+  // mano — DESPUÉS de que la fila muera, nunca antes.
+  //
+  // ⚠️ Orden aprendido a base de un incidente real (BC-1397, 2026-08-21):
+  // esta acción borraba primero los archivos del bucket y LUEGO intentaba
+  // borrar la fila; cuando el DELETE falló por una FK, la propiedad quedó
+  // viva con sus 36 fotos destruidas. Lo destructivo e irreversible va
+  // siempre al final, cuando ya nada puede fallar.
   const marker = "/properties-photos/";
   const { data: photoRows } = await admin
     .from("property_photos")
@@ -435,9 +442,6 @@ export async function deleteProperty(
   };
   for (const r of (photoRows || []) as { url: string }[]) addPath(r.url);
   addPath(propRow.cover_photo_url);
-  if (paths.length > 0) {
-    await admin.storage.from("properties-photos").remove(paths);
-  }
 
   // Desvincular captaciones que apuntaban a esta propiedad y devolverlas a
   // "confirmada" (converted_to_property_id tiene FK sin cascade, hay que
@@ -478,6 +482,16 @@ export async function deleteProperty(
     .delete()
     .eq("id", propRow.id);
   if (delErr) return { ok: false, error: delErr.message };
+
+  // La fila ya no existe: ahora sí, limpiar el bucket (best-effort — un fallo
+  // aquí deja archivos huérfanos, nunca una propiedad sin fotos).
+  if (paths.length > 0) {
+    try {
+      await admin.storage.from("properties-photos").remove(paths);
+    } catch {
+      /* huérfanos tolerables */
+    }
+  }
 
   revalidatePath("/admin/propiedades");
   if (country) revalidatePath(`/${country}/admin/propiedades`);
