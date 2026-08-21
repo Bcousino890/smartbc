@@ -232,6 +232,7 @@ export default async function PublicSharePage({
         videos={videos}
         plans={plans}
         story={experience.blocks}
+        prelude={experience.prelude}
         universities={findNearbyUniversities({
           lat: property.latitude ?? null,
           lng: property.longitude ?? null,

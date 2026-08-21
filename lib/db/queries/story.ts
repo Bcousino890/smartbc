@@ -25,6 +25,9 @@ export type PublicExperienceState = "complete" | "partial" | "sparse" | "facts_l
 export type PublicStoryExperience = {
   state: PublicExperienceState;
   blocks: PublicStoryBlock[] | null;
+  /** Apertura editorial APROBADA, o null. Solo acompaña a bloques visibles:
+   *  jamás convierte un facts-led sin capítulos en "story". */
+  prelude: string | null;
 };
 
 /**
@@ -60,7 +63,7 @@ export async function getStoryExperiencePublic(
     const db = createAdminClient() as any;
     const { data: version } = await db
       .from("property_story_versions")
-      .select("id, notes")
+      .select("id, notes, prelude, prelude_status")
       .eq("property_id", propertyId)
       .eq("status", "approved")
       .maybeSingle();
@@ -78,7 +81,12 @@ export async function getStoryExperiencePublic(
         approvedNotes: version.notes,
         hasPendingConflictBlocks: rows.some((b) => b.status === "conflict"),
       });
-      return { state, blocks: project(approved) };
+      const projected = project(approved);
+      return {
+        state,
+        blocks: projected,
+        prelude: projected && version.prelude_status === "approved" ? version.prelude ?? null : null,
+      };
     }
 
     // ── FACTS-LED ──
@@ -93,13 +101,13 @@ export async function getStoryExperiencePublic(
     // exactamente lo que facts-led no exige.
     const { data: draft } = await db
       .from("property_story_versions")
-      .select("id")
+      .select("id, prelude, prelude_status")
       .eq("property_id", propertyId)
       .eq("status", "generated")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (!draft) return { state: "facts_led", blocks: null };
+    if (!draft) return { state: "facts_led", blocks: null, prelude: null };
 
     const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }, hoodIndex] =
       await Promise.all([
@@ -117,7 +125,7 @@ export async function getStoryExperiencePublic(
           .eq("property_id", propertyId).order("position"),
         loadNeighborhoodIndex(db),
       ]);
-    if (!property || !blocks?.length) return { state: "facts_led", blocks: null };
+    if (!property || !blocks?.length) return { state: "facts_led", blocks: null, prelude: null };
 
     const plan = planPublication({
       property,
@@ -136,12 +144,19 @@ export async function getStoryExperiencePublic(
     // conflictos) ocultaría la descripción sin aportar capítulos: se descarta
     // y el renderer muestra "Información de la vivienda".
     const hasNarrative = safe.some((b) => NARRATIVE_CHAPTERS.includes(b.chapter));
-    if (!hasNarrative) return { state: "facts_led", blocks: null };
-    return { state: "facts_led", blocks: project(safe) };
+    if (!hasNarrative) return { state: "facts_led", blocks: null, prelude: null };
+    const projected = project(safe);
+    // §16: en facts-led el prelude solo acompaña a capítulos visibles, y solo
+    // si un humano (o el rollout validado) lo aprobó. Nunca inventa un story.
+    return {
+      state: "facts_led",
+      blocks: projected,
+      prelude: projected && draft.prelude_status === "approved" ? draft.prelude ?? null : null,
+    };
   } catch {
     // Migración sin aplicar u otra causa: estructura 2.0 sin narrativa,
     // nunca una página rota (patrón property_media).
-    return { state: "facts_led", blocks: null };
+    return { state: "facts_led", blocks: null, prelude: null };
   }
 }
 

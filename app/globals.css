@@ -873,3 +873,14 @@
   .bcp-context-card[data-align="center"] { transform: translate(-50%, 0) !important; }
   .bcp-dest { transform: none !important; }
 }
+
+/* PROPERTY PRELUDE · apertura editorial: cuerpo mayor que el copy de
+   capítulo, interlineado generoso, sin artificios. Luxury = contención. */
+.smartlink-root .bcp-prelude {
+  font-size: 1.22rem;
+  line-height: 1.85;
+  letter-spacing: 0.005em;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude { font-size: 1.32rem; line-height: 1.9; }
+}

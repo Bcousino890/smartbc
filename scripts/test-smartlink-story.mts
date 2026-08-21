@@ -493,6 +493,78 @@ console.log("Experience state (promoción automática facts_led → story):");
     deriveExperienceState({ hasApprovedVersion: true, approvedNotes: null, hasPendingConflictBlocks: false }) === "complete");
 }
 
+// ── 8) PROPERTY PRELUDE · contrato editorial ──
+console.log("Property Prelude:");
+{
+  const { validatePrelude, collectPreludeEvidence, MIN_EVIDENCE_CLAIMS } = await import("../lib/services/story/prelude");
+  const EV = [
+    "vivienda reformada que conserva elementos originales",
+    "Se trata de una vivienda reformada, en la que se han querido conservar muchos de los elementos originales",
+    "doble salón con balcones a la calle Ayala",
+    "El doble salón se abre a los balcones de la calle Ayala",
+    "comedor independiente y cocina con office",
+    "comedor independiente, cocina con cerramiento de cristal, península y office",
+  ];
+  const BUENO =
+    "Una vivienda reformada que conserva el carácter de su arquitectura original y articula la vida diaria en una sucesión de estancias amplias y bien diferenciadas. Los balcones a la calle Ayala y el doble salón definen la zona social, mientras el comedor independiente y la cocina con office completan una distribución claramente estructurada.";
+
+  const ok = validatePrelude(BUENO, { operation: "rent" }, EV);
+  check("apertura editorial válida pasa", ok.ok, ok.failures.join(" · "));
+  check("longitud en rango objetivo", ok.words >= 45 && ok.words <= 90, String(ok.words));
+
+  // REGRESIÓN BC-1420: "se vende" fabricado en un alquiler. El caso que
+  // motivó todo el contrato — jamás debe volver a cruzar.
+  const bc1420 =
+    "Vivienda exterior orientada al norte y al sur que se vende sin amueblar y conserva su distribución original con estancias amplias en la zona social de la casa.";
+  const r1 = validatePrelude(bc1420, { operation: "rent" }, EV);
+  check("REGRESIÓN BC-1420: 'se vende' en un alquiler → rechazado",
+    !r1.ok && r1.failures.some((f) => f.includes("venta")), r1.failures.join(" · "));
+  check("y 'amueblado' también se rechaza (dato estructurado)",
+    r1.failures.some((f) => f.includes("amueblado")));
+
+  const r2 = validatePrelude(
+    "Piso señorial en finca clásica que se alquila con todos los servicios del edificio y una distribución de estancias en dos alas bien diferenciadas del conjunto.",
+    { operation: "sale" }, EV);
+  check("'se alquila' en una venta → rechazado", !r2.ok && r2.failures.some((f) => f.includes("alquiler")));
+
+  const r3 = validatePrelude(BUENO.replace("estancias amplias", "estancias de 40 m2"), { operation: "rent" }, EV);
+  check("cualquier cifra → rechazado (los números viven en Key Facts)",
+    !r3.ok && r3.failures.some((f) => f.includes("cifras")));
+
+  const r4 = validatePrelude(
+    "Una vivienda espectacular y única en pleno barrio de Salamanca, con una distribución señorial pensada para el día a día y estancias que conservan el sabor original del edificio.",
+    { operation: "rent" }, EV);
+  check("adjetivos de portal → rechazado", !r4.ok && r4.failures.some((f) => f.includes("portal")));
+
+  const r5 = validatePrelude("Una vivienda reformada con carácter.", { operation: "rent" }, EV);
+  check("texto demasiado corto → evidencia insuficiente", !r5.ok);
+
+  const r6 = validatePrelude(BUENO + " " + BUENO, { operation: "rent" }, EV);
+  check("demasiado largo / demasiadas frases → rechazado", !r6.ok);
+
+  const r7 = validatePrelude(
+    "Una vivienda reformada junto al Palacio de Cristal de Malasaña que conserva el carácter de su arquitectura original y ordena la vida diaria en estancias amplias, luminosas y bien diferenciadas entre sí.",
+    { operation: "rent" }, EV);
+  check("entidad sin respaldo en la evidencia → rechazado",
+    !r7.ok && r7.failures.some((f) => f.includes("entidades")), r7.failures.join(" · "));
+
+  // dual: las dos familias de operación prohibidas
+  const r8 = validatePrelude(BUENO + " Ideal para su compra.", { operation: "sale", dualOperation: true }, EV);
+  check("dual: lenguaje de venta también rechazado", !r8.ok);
+
+  // evidencia: solo claims seguros, sin duplicados de key facts ni barrio
+  const evidence = collectPreludeEvidence([
+    { id: "a", fact: "doble salón con balcones", source_text: "s1", category: "living" },
+    { id: "b", fact: "tres dormitorios", source_text: "s2", category: "private", conflict: true },
+    { id: "c", fact: "88 m2", source_text: "s3", category: "overview", is_duplicate: true },
+    { id: "d", fact: "en el corazón de Salamanca", source_text: "s4", category: "barrio" },
+    { id: "e", fact: "cocina con office", source_text: "s5", category: "kitchen" },
+  ]);
+  check("evidencia excluye conflictos, duplicados y barrio",
+    JSON.stringify(evidence.claimIds) === JSON.stringify(["a", "e"]), JSON.stringify(evidence.claimIds));
+  check("umbral mínimo de evidencia declarado", MIN_EVIDENCE_CLAIMS >= 3);
+}
+
 console.log("");
 if (failures > 0) {
   console.error(`✗ ${failures} comprobaciones fallidas`);

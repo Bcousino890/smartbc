@@ -197,6 +197,7 @@ export default async function TokenSharePage({
         shareId={resolved.shareId}
         publicUrl={publicUrl}
         story={experience.blocks}
+        prelude={experience.prelude}
         universities={findNearbyUniversities({
           lat: property.latitude ?? null,
           lng: property.longitude ?? null,

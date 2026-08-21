@@ -15,6 +15,14 @@ import { probePropertyVideos } from "@/lib/services/video/probe";
 import { copyWordCount } from "@/lib/services/story/validate";
 import { evaluateGate } from "@/lib/services/story/gate";
 import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neighborhoods";
+import {
+  collectPreludeEvidence,
+  MIN_EVIDENCE_CLAIMS,
+  preludeSystemPrompt,
+  preludeUserPrompt,
+  validatePrelude,
+} from "@/lib/services/story/prelude";
+import { aiComplete } from "@/lib/services/ai/chat";
 
 /** Re-evalúa el quality gate compartido para una versión concreta. */
 async function evaluateGateForVersion(db: any, propertyId: string, versionId: string) {
@@ -202,4 +210,117 @@ export async function disableStoryAction(propertyId: string, path: string) {
     .eq("status", "approved");
   revalidatePath(path);
   return error ? { ok: false as const, error: error.message } : { ok: true as const };
+}
+
+
+// ── PROPERTY PRELUDE · workflow humano ──────────────────────────────────────
+// El prelude vive en columnas de la versión, fuera de los gates de capítulos:
+// se edita, aprueba o regenera SIN tocar la Property Story.
+
+async function preludeContext(db: any, versionId: string) {
+  const { data: version } = await db
+    .from("property_story_versions")
+    .select("id, property_id")
+    .eq("id", versionId)
+    .maybeSingle();
+  if (!version) return null;
+  const [{ data: property }, { data: claims }] = await Promise.all([
+    db.from("properties").select("id, operation, operations").eq("id", version.property_id).maybeSingle(),
+    db.from("property_story_claims")
+      .select("id, fact, source_text, category, conflict, is_duplicate")
+      .eq("version_id", versionId),
+  ]);
+  if (!property) return null;
+  const ops: string[] = Array.isArray(property.operations) ? property.operations : [];
+  return {
+    version,
+    ctx: {
+      operation: (property.operation === "rent" ? "rent" : "sale") as "rent" | "sale",
+      dualOperation: ops.includes("sale") && ops.includes("rent"),
+    },
+    evidence: collectPreludeEvidence(claims ?? []),
+  };
+}
+
+/** Edición humana: se valida con el MISMO contrato que la generación. */
+export async function updatePreludeAction(versionId: string, text: string, path: string) {
+  await requireStaff();
+  const db = createAdminClient() as any;
+  const data = await preludeContext(db, versionId);
+  if (!data) return { ok: false as const, error: "Versión no encontrada" };
+  const verdict = validatePrelude(text, data.ctx, data.evidence.texts);
+  if (!verdict.ok) {
+    return { ok: false as const, error: `El prelude no cumple el contrato: ${verdict.failures.join(" · ")}` };
+  }
+  const { error } = await db
+    .from("property_story_versions")
+    .update({ prelude: text.trim(), prelude_status: "generated" })
+    .eq("id", versionId);
+  revalidatePath(path);
+  return error ? { ok: false as const, error: error.message } : { ok: true as const };
+}
+
+export async function setPreludeStatusAction(
+  versionId: string,
+  status: "approved" | "rejected",
+  path: string,
+) {
+  await requireStaff();
+  const db = createAdminClient() as any;
+  if (status === "approved") {
+    // Aprobar re-valida SIEMPRE: el contrato se comprueba en el momento de
+    // publicar, igual que hace el quality gate con los bloques.
+    const data = await preludeContext(db, versionId);
+    if (!data) return { ok: false as const, error: "Versión no encontrada" };
+    const { data: v } = await db
+      .from("property_story_versions").select("prelude").eq("id", versionId).maybeSingle();
+    const verdict = validatePrelude(v?.prelude ?? "", data.ctx, data.evidence.texts);
+    if (!verdict.ok) {
+      return { ok: false as const, error: `No aprobable: ${verdict.failures.join(" · ")}` };
+    }
+  }
+  const { error } = await db
+    .from("property_story_versions")
+    .update({ prelude_status: status })
+    .eq("id", versionId);
+  revalidatePath(path);
+  return error ? { ok: false as const, error: error.message } : { ok: true as const };
+}
+
+/** Regenera SOLO el prelude — jamás la Property Story entera. */
+export async function regeneratePreludeAction(versionId: string, path: string) {
+  await requireStaff();
+  const db = createAdminClient() as any;
+  const data = await preludeContext(db, versionId);
+  if (!data) return { ok: false as const, error: "Versión no encontrada" };
+  if (data.evidence.claimIds.length < MIN_EVIDENCE_CLAIMS) {
+    return { ok: false as const, error: "Evidencia insuficiente para un prelude honesto." };
+  }
+  // Hasta 2 intentos: si el modelo incumple el contrato, se reintenta con los
+  // fallos como feedback; si vuelve a fallar, NO se guarda nada a medias.
+  let feedback = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const raw = await aiComplete({
+      system: preludeSystemPrompt(data.ctx),
+      userText: preludeUserPrompt(data.evidence) + feedback,
+      maxTokens: 400,
+    });
+    const text = raw.trim().replace(/^["“]|["”]$/g, "");
+    const verdict = validatePrelude(text, data.ctx, data.evidence.texts);
+    if (verdict.ok) {
+      const { error } = await db
+        .from("property_story_versions")
+        .update({
+          prelude: text,
+          prelude_status: "generated",
+          prelude_evidence: { claimIds: data.evidence.claimIds },
+          prelude_generated_at: new Date().toISOString(),
+        })
+        .eq("id", versionId);
+      revalidatePath(path);
+      return error ? { ok: false as const, error: error.message } : { ok: true as const, prelude: text };
+    }
+    feedback = `\n\nEL INTENTO ANTERIOR INCUMPLIÓ: ${verdict.failures.join("; ")}. Corrígelo.`;
+  }
+  return { ok: false as const, error: "El modelo no produjo un prelude que cumpla el contrato." };
 }

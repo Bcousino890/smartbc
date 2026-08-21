@@ -209,7 +209,7 @@ export async function getStoryReviewDetail(slug: string) {
 
   const { data: version } = await db
     .from("property_story_versions")
-    .select("id, status, created_at, reviewed_at, notes, model, provider")
+    .select("id, status, created_at, reviewed_at, notes, model, provider, prelude, prelude_status")
     .eq("property_id", property.id)
     .in("status", ["generated", "approved"])
     .order("created_at", { ascending: false })
