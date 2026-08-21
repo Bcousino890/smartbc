@@ -459,7 +459,7 @@ export function LocationModule({
             ) : null}
             {/* Control secundario, en esquina: no compite con el mapa. */}
             <button type="button" onClick={focus ? restoreOverview : exitLive}
-              className="crm-meta absolute bottom-3 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
+              className="crm-meta absolute bottom-11 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 md:bottom-3 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
               {focus ? <Maximize2 size={11} strokeWidth={2} /> : <Lock size={11} strokeWidth={2} />}
               {focus ? "Ver zona completa" : "Salir de la zona"}
             </button>

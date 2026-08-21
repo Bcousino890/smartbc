@@ -155,6 +155,18 @@ console.log("Analítica:");
     LOCATION_EVENTS.every((e) => isAllowedLocationEvent(e)));
 }
 
+// ── 7) MapLibre congelado en la v5 ──
+console.log("Versión de MapLibre:");
+{
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  const v: string = req("maplibre-gl/package.json").version;
+  // La v6 se distribuye solo como ESM y su web worker se construye con la URL
+  // de la página bajo el bundling de Next: el mapa se monta y NO carga una
+  // sola tesela. NO SUBIR A V6 sin resolver antes ese empaquetado.
+  check(`v5 congelada (instalada ${v})`, v.startsWith("5."), v);
+}
+
 console.log("");
 if (failures > 0) {
   console.error(`✗ ${failures} comprobaciones fallidas`);
