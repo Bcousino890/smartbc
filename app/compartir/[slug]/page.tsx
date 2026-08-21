@@ -191,6 +191,7 @@ export default async function PublicSharePage({
     height?: number | null;
     duration_seconds?: number | null;
     poster_url?: string | null;
+    has_watermark?: boolean | null;
   }>;
   const videos = media
     .filter((m) => m.type === "video" && m.url)
@@ -203,6 +204,7 @@ export default async function PublicSharePage({
       height: m.height ?? null,
       durationSeconds: m.duration_seconds != null ? Number(m.duration_seconds) : null,
       posterUrl: m.poster_url ?? null,
+      hasWatermark: m.has_watermark ?? null,
     }));
   const plans = media
     .filter((m) => m.type === "plan" && m.url)

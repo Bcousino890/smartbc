@@ -317,6 +317,12 @@ export async function insertImportedProperty(
       videoRows.push({
         property_id: propertyId,
         type: "video",
+        // 'imported': vídeo del anuncio de origen, NO nuestro. Sin esto, el
+        // default 'manual' de la columna lo hacía hero-eligible y un mp4 de
+        // Idealista con la marca de agua de otra agencia acababa de portada
+        // del SmartLink (caso real BC-1397). Los importados se muestran en la
+        // sección de vídeos, nunca como hero (decisión D4).
+        source: "imported",
         file_name: host,
         storage_path: url,
         url,

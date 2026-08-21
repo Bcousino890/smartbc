@@ -151,6 +151,7 @@ export default async function TokenSharePage({
         height?: number | null;
         duration_seconds?: number | null;
         poster_url?: string | null;
+        has_watermark?: boolean | null;
       };
       return {
         url: m.url,
@@ -161,6 +162,7 @@ export default async function TokenSharePage({
         height: meta.height ?? null,
         durationSeconds: meta.duration_seconds != null ? Number(meta.duration_seconds) : null,
         posterUrl: meta.poster_url ?? null,
+        hasWatermark: meta.has_watermark ?? null,
       };
     });
   const plans = media

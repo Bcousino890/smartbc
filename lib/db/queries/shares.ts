@@ -114,7 +114,7 @@ export async function getPropertyByShareToken(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from("property_media")
-      .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
+      .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url, has_watermark")
       .eq("property_id", share.property_id)
       .in("type", ["video", "plan"]);
     if (!error) media = data ?? [];

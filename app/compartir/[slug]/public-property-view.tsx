@@ -59,6 +59,8 @@ export type VideoMedia = {
   height?: number | null;
   durationSeconds?: number | null;
   posterUrl?: string | null;
+  /** Marcado por un humano (property_media.has_watermark): nunca hero. */
+  hasWatermark?: boolean | null;
 };
 
 export type NeighborhoodData = {
@@ -98,6 +100,8 @@ function pickHeroVideo(videos: VideoMedia[]): VideoMedia | null {
   return (
     videos.find((v) => {
       if (v.source !== "manual") return false;
+      // Vídeo con marca de agua marcado por un humano: jamás de portada.
+      if (v.hasWatermark) return false;
       if (detectVideoType(v.url).type !== "direct") return false;
       if (!v.width || !v.height || v.width < v.height) return false;
       if (v.format === "vertical") return false;
