@@ -48,18 +48,19 @@ const alreadyApproved = new Set((approvedList ?? []).map((r: any) => r.property_
 const pending = [...latest.values()].filter((v) => !alreadyApproved.has(v.property_id));
 console.log(`[publish] ${pending.length} versiones candidatas (engine v4.1)`);
 
-const stats = { complete: 0, partial: 0, blocked: 0 };
+const stats = { complete: 0, partial: 0, sparse: 0, blocked: 0 };
 const blockedBy: Record<string, number> = {};
 const published: Array<{ ref: string; mode: string; caps: number; excl: number }> = [];
 
 for (const v of pending) {
   if (published.length >= TARGET) break;
 
-  const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }] = await Promise.all([
-    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at").eq("id", v.property_id).maybeSingle(),
+  const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }, { data: media }] = await Promise.all([
+    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, latitude, longitude").eq("id", v.property_id).maybeSingle(),
     db.from("property_story_blocks").select("id, chapter, copy, status, claim_ids").eq("version_id", v.id).order("position"),
     db.from("property_story_claims").select("id, source_text, fact, category, conflict").eq("version_id", v.id),
     db.from("property_photos").select("position, ai_class, ai_confidence, class_override").eq("property_id", v.property_id).order("position"),
+    db.from("property_media").select("type").eq("property_id", v.property_id),
   ]);
   if (!property || !blocks) continue;
   const ref = property.bc_reference ?? property.slug;
@@ -70,6 +71,9 @@ for (const v of pending) {
   const plan = planPublication({
     property, blocks: blocks ?? [], claims: claims ?? [], photos: photos ?? [],
     neighborhoodDisplayName: hood?.display_name ?? null,
+    hasVideo: (media ?? []).some((m: any) => m.type === "video"),
+    hasPlan: (media ?? []).some((m: any) => m.type === "plan"),
+    hasValidLocation: property.latitude != null && property.longitude != null,
   });
 
   if (!plan.publishable) {
@@ -91,17 +95,19 @@ for (const v of pending) {
     await db.from("property_story_versions").update({
       status: "approved",
       reviewed_at: new Date().toISOString(),
-      notes: plan.mode === "partial"
+      notes: plan.mode === "sparse"
+        ? `Publicación SPARSE segura · 2 capítulos verificados + estructura de apoyo`
+        : plan.mode === "partial"
         ? `Publicación parcial segura · ${plan.excluded.length} capítulo(s) excluido(s): ${plan.excluded.map((e) => `${e.chapter}(${e.reason})`).join(", ")}`
         : "Publicación completa · quality gate superado.",
     }).eq("id", v.id);
   }
 
-  stats[plan.mode === "complete" ? "complete" : "partial"]++;
+  stats[plan.mode as "complete"|"partial"|"sparse"]++;
   published.push({ ref, mode: plan.mode, caps: plan.publishBlockIds.length, excl: plan.excluded.length });
 }
 
-console.log(`\n[publish] ${DRY_RUN ? "DRY-RUN " : ""}publicables: ${published.length} · completas: ${stats.complete} · parciales: ${stats.partial}`);
+console.log(`\n[publish] ${DRY_RUN ? "DRY-RUN " : ""}publicables: ${published.length} · completas: ${stats.complete} · parciales: ${stats.partial} · sparse: ${stats.sparse}`);
 console.log(`[publish] retenidas en fallback: ${stats.blocked}`);
 for (const [label, n] of Object.entries(blockedBy).sort((a, b) => b[1] - a[1])) {
   console.log(`   ${String(n).padStart(4)} · ${label}`);

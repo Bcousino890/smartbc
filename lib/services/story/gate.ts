@@ -119,6 +119,11 @@ export type GateInput = {
   }>;
   /** Barrio curado que casaría con esta propiedad, si existe. */
   neighborhoodDisplayName?: string | null;
+  // Elementos estructurales de apoyo (solo para la densidad editorial SPARSE;
+  // no intervienen en ningún invariante de seguridad factual).
+  hasVideo?: boolean;
+  hasPlan?: boolean;
+  hasValidLocation?: boolean;
 };
 
 export type GateFailure = {
@@ -156,7 +161,7 @@ const BLOCK_LOCAL_CODES: GateCode[] = ["conflict", "too_short"];
 export type PublishPlan = {
   /** true si se puede publicar algo con total seguridad factual. */
   publishable: boolean;
-  mode: "complete" | "partial" | "none";
+  mode: "complete" | "partial" | "sparse" | "none";
   /** Bloques que pueden pasar a 'approved' (y por tanto al SmartLink). */
   publishBlockIds: string[];
   /** Bloques excluidos y por qué (conflicto o demasiado corto). */
@@ -208,18 +213,62 @@ export function planPublication(input: GateInput): PublishPlan {
 
   // Re-evaluación completa del gate SOLO sobre lo que se publicaría.
   const subsetResult = evaluateGate({ ...input, blocks: keep });
-  const storyFailures = subsetResult.failures.filter(
+  let storyFailures = subsetResult.failures.filter(
     (f) => !BLOCK_LOCAL_CODES.includes(f.code),
   );
+
+  const nPhotos = input.photos.length;
+  const nNarrative = subsetResult.narrativeChapters;
+
+  // ── Umbrales editoriales (no de seguridad) ──────────────────────────────
+  // Los invariantes factuales NO se tocan: siguen evaluándose arriba. Aquí
+  // solo se decide cuánta densidad editorial exigimos para no dejar una ficha
+  // rica atrapada en un muro de texto.
+
+  // 1 · STRUCTURED — SPARSE: exactamente 2 capítulos narrativos limpios,
+  //     ≥4 fotos y al menos 2 elementos estructurales de apoyo. Nunca se
+  //     inventa un tercer capítulo para cumplir densidad.
+  let sparse = false;
+  if (nNarrative === 2 && nPhotos >= 4) {
+    const featureCount = [
+      ...(input.property.features ?? []),
+      ...(input.property.features_manual ?? []),
+    ].length;
+    const supporting = [
+      !!input.neighborhoodDisplayName, // barrio curado
+      featureCount >= 3,               // Residence Details poblado
+      input.hasVideo === true,
+      input.hasPlan === true,
+      input.hasValidLocation === true,
+      nPhotos >= 8,
+    ].filter(Boolean).length;
+    if (supporting >= 2) {
+      sparse = true;
+      storyFailures = storyFailures.filter((f) => f.code !== "few_chapters");
+    }
+  }
+
+  // 2 · Gate fotográfico por tramos: 0-3 fallback · 4-7 admisible con ≥3
+  //     capítulos limpios (los que no tengan foto de su clase van solo-texto,
+  //     nunca con una foto incorrecta) · 8+ normal.
+  if (nPhotos >= 4 && nPhotos < 8 && nNarrative >= 3) {
+    storyFailures = storyFailures.filter((f) => f.code !== "low_photos");
+  }
 
   const publishable = storyFailures.length === 0 && keep.length > 0;
   return {
     publishable,
-    mode: !publishable ? "none" : excluded.length === 0 ? "complete" : "partial",
+    mode: !publishable
+      ? "none"
+      : sparse
+        ? "sparse"
+        : excluded.length === 0
+          ? "complete"
+          : "partial",
     publishBlockIds: keep.map((b) => b.id),
     excluded,
     storyFailures,
-    narrativeChapters: subsetResult.narrativeChapters,
+    narrativeChapters: nNarrative,
   };
 }
 
