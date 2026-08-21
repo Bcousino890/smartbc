@@ -135,9 +135,12 @@ export function PublicPropertyView({
   story?: PublicStoryBlock[] | null;
   neighborhood?: NeighborhoodData | null;
 }) {
+  // property.id en el DTO público ES el slug (nunca se expone el UUID):
+  // se manda como propertySlug y el servidor lo resuelve a property_id.
+  // Mandarlo como propertyId era el 500 que perdía los page views.
   const trackerRef = useAnalytics({
     pageType: "public_property",
-    propertyId: property.id,
+    propertySlug: property.id,
     shareId: shareId,
   });
 

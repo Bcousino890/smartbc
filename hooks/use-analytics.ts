@@ -16,6 +16,8 @@ type PageType =
 interface UseAnalyticsOptions {
   pageType: PageType;
   propertyId?: string;
+  /** Slug público de la propiedad (las páginas públicas no conocen el UUID). */
+  propertySlug?: string;
   shareId?: string;
   collectionToken?: string;
   /** Token del Shortlist. El servidor lo cambia por su id: el token no se
@@ -43,6 +45,7 @@ export function useAnalytics(options: UseAnalyticsOptions) {
       tracker.init({
         pageType: options.pageType,
         propertyId: options.propertyId,
+        propertySlug: options.propertySlug,
         shareId: options.shareId,
         collectionToken: options.collectionToken,
         shortlistToken: options.shortlistToken,

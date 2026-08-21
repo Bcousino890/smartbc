@@ -116,7 +116,7 @@ export async function getEnrichmentQueue(): Promise<{
   // Carga en bloque, PAGINADA: un `.in()` con 500+ UUIDs supera el límite de
   // longitud de URL de PostgREST y devuelve vacío en silencio. Se trocea.
   const [props, blocks, claims, photos, hoodIndex] = await Promise.all([
-    fetchIn(db, "properties", "id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation", "id", pendingIds),
+    fetchIn(db, "properties", "id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation, floor_override", "id", pendingIds),
     fetchIn(db, "property_story_blocks", "id, version_id, chapter, copy, status, claim_ids", "version_id", versionIds),
     fetchIn(db, "property_story_claims", "id, version_id, source_text, fact, category, conflict", "version_id", versionIds),
     fetchIn(db, "property_photos", "property_id, position, ai_class, ai_confidence, class_override", "property_id", pendingIds),
@@ -202,7 +202,7 @@ export async function getStoryReviewDetail(slug: string) {
   const db = createAdminClient() as any;
   const { data: property } = await db
     .from("properties")
-    .select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation, bedrooms, bathrooms, square_meters")
+    .select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, operation, bedrooms, bathrooms, square_meters, floor_override")
     .eq("slug", slug)
     .maybeSingle();
   if (!property) return null;

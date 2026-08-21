@@ -101,6 +101,44 @@ export function extractFloor(
   return null;
 }
 
+/**
+ * Override humano de planta (`properties.floor_override`, migración 0146).
+ * Mismo patrón que `class_override` en fotos: la decisión humana manda.
+ *
+ * Devuelve:
+ *   `undefined` → no hay override: aplica el parser automático;
+ *   `null`      → 'none': la propiedad NO tiene planta (chalet, unifamiliar) —
+ *                 no se pinta el key fact y la regla contextual del gate no
+ *                 aplica;
+ *   `number`    → planta verificada por un humano.
+ *
+ * NO modifica `extractFloor`: es una capa previa, por propiedad y explícita.
+ */
+export function parseFloorOverride(
+  value: string | null | undefined,
+): number | null | undefined {
+  if (value == null || value === "") return undefined;
+  const s = fold(value.trim());
+  if (s === "none") return null;
+  if (s === "atico") return ATICO_FLOOR;
+  const n = Number(s);
+  return Number.isInteger(n) && n >= -2 && n <= 40 ? n : undefined;
+}
+
+/**
+ * Planta efectiva: override humano si existe, si no el parser automático.
+ * Punto único para adapters (key fact "Planta" del SmartLink incluido).
+ */
+export function resolveFloor(
+  floorOverride: string | null | undefined,
+  features: string[] | null | undefined,
+  ...texts: Array<string | null | undefined>
+): number | null {
+  const overridden = parseFloorOverride(floorOverride);
+  if (overridden !== undefined) return overridden;
+  return extractFloor(features, ...texts);
+}
+
 /** Etiqueta legible de una planta extraída ("3ª", "Bajo", "Ático"…). */
 export function floorLabel(n: number): string {
   if (n === ATICO_FLOOR) return "Ático";

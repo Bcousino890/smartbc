@@ -18,7 +18,7 @@ import type {
   VisitRequest,
   VisitRequestStatus,
 } from "@/lib/types";
-import { extractFloor } from "@/lib/floor";
+import { resolveFloor } from "@/lib/floor";
 import type {
   Database,
   PropertyStatus,
@@ -442,7 +442,8 @@ export function propertyRowToClientProperty(
     longitude: row.longitude ?? null,
     photoClasses,
     bcReference: row.bc_reference ?? null,
-    floor: extractFloor(
+    floor: resolveFloor(
+      (row as { floor_override?: string | null }).floor_override,
       [...(row.features ?? []), ...(row.features_manual ?? [])],
       row.title,
       row.description,
@@ -485,7 +486,8 @@ export function propertyRowToAdminProperty(
     squareMeters: row.square_meters ?? 0,
     price: Number(row.price),
     currency: (row as any).currency ?? null,
-    floor: extractFloor(
+    floor: resolveFloor(
+      (row as { floor_override?: string | null }).floor_override,
       [...(row.features ?? []), ...(row.features_manual ?? [])],
       row.title,
       row.description,

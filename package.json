@@ -33,7 +33,8 @@
     "test:sales-inbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-sales-inbox.mts",
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
     "fotocasa:zones": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/fotocasa-zones-dump.mts",
-    "test:neighborhoods": "node scripts/qa-neighborhood-layer.mjs"
+    "test:neighborhoods": "node scripts/qa-neighborhood-layer.mjs",
+    "test:tracking": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-tracking.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",

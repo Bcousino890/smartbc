@@ -19,7 +19,7 @@ import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neig
 /** Re-evalúa el quality gate compartido para una versión concreta. */
 async function evaluateGateForVersion(db: any, propertyId: string, versionId: string) {
   const [{ data: property }, { data: blocks }, { data: claims }, { data: photos }] = await Promise.all([
-    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at").eq("id", propertyId).maybeSingle(),
+    db.from("properties").select("id, bc_reference, slug, zone, subzone, title, description, features, features_manual, status, archived_at, floor_override").eq("id", propertyId).maybeSingle(),
     db.from("property_story_blocks").select("id, chapter, copy, status, claim_ids").eq("version_id", versionId).neq("status", "rejected").order("position"),
     db.from("property_story_claims").select("id, source_text, fact, category, conflict").eq("version_id", versionId),
     db.from("property_photos").select("position, ai_class, ai_confidence, class_override").eq("property_id", propertyId).order("position"),

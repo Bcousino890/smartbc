@@ -313,6 +313,57 @@ console.log("Tiempos a POIs:");
   check("punto dentro del recinto → 1 min (mínimo), no negativo", dentro != null && dentro.minutes === 1, JSON.stringify(dentro));
 }
 
+// ── 5) Gate SPARSE — alineación con la política aprobada (2026-08-22) ──
+console.log("Gate SPARSE (2 capítulos + ≥4 fotos + ≥2 apoyos):");
+{
+  const { planPublication } = await import("../lib/services/story/gate");
+  const mkBlocks = () => [
+    { id: "b1", chapter: "living", copy: "Salón amplio con orientación sur y balcón corrido a la calle principal.", status: "generated", claim_ids: ["c1"] },
+    { id: "b2", chapter: "kitchen", copy: "Cocina equipada con office y zona de lavadero independiente al fondo.", status: "generated", claim_ids: ["c2"] },
+  ];
+  const claims = [
+    { id: "c1", source_text: "salón amplio con orientación sur y balcón corrido a la calle", fact: "salón amplio con orientación sur y balcón", category: "espacios" },
+    { id: "c2", source_text: "cocina equipada con office y zona de lavadero independiente", fact: "cocina equipada con office y lavadero", category: "espacios" },
+  ];
+  const base = {
+    property: { id: "p1", bc_reference: "BC-TEST", slug: "t", zone: "Goya", subzone: null, title: "Piso", description: "d", features: ["Ascensor", "Aire acondicionado", "Exterior"], features_manual: [], status: "available", archived_at: null },
+    claims,
+    neighborhoodDisplayName: "Goya",
+    hasVideo: false, hasPlan: false, hasValidLocation: false,
+  };
+  const photos = (n: number) => Array.from({ length: n }, (_, i) => ({ position: i, ai_class: null, ai_confidence: null, class_override: null }));
+
+  // La política aprobada: 2 caps + ≥4 fotos + ≥2 apoyos (hood + features) → SPARSE.
+  const p4 = planPublication({ ...base, blocks: mkBlocks(), photos: photos(4) } as any);
+  check("2 caps + 4 fotos + 2 apoyos → SPARSE publicable", p4.publishable && p4.mode === "sparse", JSON.stringify(p4.storyFailures));
+
+  const p7 = planPublication({ ...base, blocks: mkBlocks(), photos: photos(7) } as any);
+  check("2 caps + 7 fotos + 2 apoyos → SPARSE publicable", p7.publishable && p7.mode === "sparse", JSON.stringify(p7.storyFailures));
+
+  // 0-3 fotos sigue siendo fallback: NO se ha bajado ese suelo.
+  const p3 = planPublication({ ...base, blocks: mkBlocks(), photos: photos(3) } as any);
+  check("2 caps + 3 fotos → sigue en fallback (suelo de 4 intacto)", !p3.publishable);
+
+  // Con un solo apoyo tampoco: el requisito de 2 apoyos no se toca.
+  const p1sup = planPublication({ ...base, neighborhoodDisplayName: null, property: { ...base.property, features: [] }, blocks: mkBlocks(), photos: photos(6) } as any);
+  check("2 caps + 6 fotos + 1 apoyo → sigue en fallback", !p1sup.publishable);
+}
+
+// ── 6) Override humano de planta (migración 0146) ──
+console.log("Override de planta:");
+{
+  const { parseFloorOverride, resolveFloor } = await import("../lib/floor");
+  check("'none' → null (sin planta: chalet)", parseFloorOverride("none") === null);
+  check("'3' → 3", parseFloorOverride("3") === 3);
+  check("sin override → undefined (aplica el parser)", parseFloorOverride(null) === undefined);
+  check("valor corrupto → undefined (no inventa)", parseFloorOverride("garbage") === undefined);
+  // Caso real BC-0002: "planta baja o sótano" describe un nivel interno del
+  // chalet; con override 'none' el key fact no se pinta.
+  const desc = "La vivienda se distribuye en tres plantas: planta baja o sótano, planta principal y planta alta.";
+  check("BC-0002 sin override → el parser infiere 0 (el caso dudoso)", resolveFloor(null, [], null, desc) === 0);
+  check("BC-0002 con override 'none' → null, el key fact Planta no se pinta", resolveFloor("none", [], null, desc) === null);
+}
+
 console.log("");
 if (failures > 0) {
   console.error(`✗ ${failures} comprobaciones fallidas`);

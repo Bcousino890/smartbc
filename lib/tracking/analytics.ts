@@ -4,6 +4,10 @@ export class AnalyticsTracker {
   private static instance: AnalyticsTracker
 
   private pageViewId: string | null = null
+  // Clave de la última init (pageType|path): evita duplicar el page_view si
+  // el componente vuelve a montar en la MISMA página (StrictMode, remontajes
+  // de árbol). Una navegación real cambia el path y sí vuelve a contar.
+  private lastInitKey: string | null = null
   private sessionId: string
   private eventQueue: Array<{ eventType: string; data?: unknown }> = []
   private flushTimer: ReturnType<typeof setInterval> | null = null
@@ -30,10 +34,16 @@ export class AnalyticsTracker {
   init(params: {
     pageType: string
     propertyId?: string
+    /** Slug público de la propiedad. Las páginas públicas no conocen el UUID
+     *  (el DTO expone id=slug); el servidor lo resuelve a property_id. */
+    propertySlug?: string
     shareId?: string
     collectionToken?: string
     shortlistToken?: string
   }): void {
+    const key = `${params.pageType}|${window.location.pathname}`
+    if (this.lastInitKey === key) return
+    this.lastInitKey = key
     this.pageViewId = null
     this.timeOnPageStart = Date.now()
     void this.sendPageView(params)
@@ -42,6 +52,7 @@ export class AnalyticsTracker {
   private async sendPageView(params: {
     pageType: string
     propertyId?: string
+    propertySlug?: string
     shareId?: string
     collectionToken?: string
     shortlistToken?: string
@@ -53,6 +64,7 @@ export class AnalyticsTracker {
         body: JSON.stringify({
           pageType: params.pageType,
           propertyId: params.propertyId ?? null,
+          propertySlug: params.propertySlug ?? null,
           shareId: params.shareId ?? null,
           collectionToken: params.collectionToken ?? null,
           shortlistToken: params.shortlistToken ?? null,

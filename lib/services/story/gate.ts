@@ -10,7 +10,7 @@
 
 import { copyWordCount } from "./validate";
 import { unsupportedEntities } from "./structure";
-import { extractFloor } from "@/lib/floor";
+import { extractFloor, parseFloorOverride } from "@/lib/floor";
 
 export const GATE_CODES = [
   "conflict",        // 1
@@ -95,6 +95,9 @@ export type GateInput = {
     features_manual: string[] | null;
     status: string | null;
     archived_at: string | null;
+    /** Planta verificada por un humano (patrón class_override): manda sobre
+     *  el parser. 'none' = la propiedad no tiene planta (chalet). */
+    floor_override?: string | null;
   };
   blocks: Array<{
     id: string;
@@ -249,9 +252,14 @@ export function planPublication(input: GateInput): PublishPlan {
   }
 
   // 2 · Gate fotográfico por tramos: 0-3 fallback · 4-7 admisible con ≥3
-  //     capítulos limpios (los que no tengan foto de su clase van solo-texto,
-  //     nunca con una foto incorrecta) · 8+ normal.
-  if (nPhotos >= 4 && nPhotos < 8 && nNarrative >= 3) {
+  //     capítulos limpios O en modo SPARSE (los que no tengan foto de su
+  //     clase van solo-texto, nunca con una foto incorrecta) · 8+ normal.
+  //
+  //     La rama sparse es la corrección 2026-08-22: la política aprobada dice
+  //     "2 capítulos + ≥4 fotos + ≥2 apoyos", pero este tramo exigía de facto
+  //     ≥3 capítulos, así que el suelo real del sparse era 8 fotos. No es una
+  //     relajación nueva: es alinear la implementación con la regla aprobada.
+  if (nPhotos >= 4 && nPhotos < 8 && (nNarrative >= 3 || sparse)) {
     storyFailures = storyFailures.filter((f) => f.code !== "low_photos");
   }
 
@@ -344,16 +352,23 @@ export function evaluateGate(input: GateInput): GateResult {
   if (entityBad.length > 0) add("entity", entityBad, entityDetail.join(" · "));
 
   // 7 · planta inferida de zona secundaria
-  const floor = extractFloor(
-    [...(property.features ?? []), ...(property.features_manual ?? [])],
-    property.title,
-    property.description,
-  );
-  if (
-    floor === 0 &&
-    /planta baja[^.]*\b(trastero|garaje|gimnasio|almacen|zonas? comunes)\b/i.test(property.description ?? "")
-  ) {
-    add("floor");
+  //
+  // Si un humano ya verificó la planta (floor_override, migración 0146), su
+  // decisión manda y la regla contextual no aplica: existe exactamente para
+  // el caso en que la inferencia automática es dudosa. La regla en sí queda
+  // intacta para toda propiedad sin override.
+  if (parseFloorOverride(property.floor_override) === undefined) {
+    const floor = extractFloor(
+      [...(property.features ?? []), ...(property.features_manual ?? [])],
+      property.title,
+      property.description,
+    );
+    if (
+      floor === 0 &&
+      /planta baja[^.]*\b(trastero|garaje|gimnasio|almacen|zonas? comunes)\b/i.test(property.description ?? "")
+    ) {
+      add("floor");
+    }
   }
 
   // 8 · foto coherente por capítulo
