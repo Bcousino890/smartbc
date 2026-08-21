@@ -386,4 +386,127 @@ regresión que mide el ancho real del encuadre en metros.
 3. El foco muestra un destino cada vez, a propósito: comparar dos destinos a la
    vez volvería a llenar el mapa de marcadores.
 
-# LUXURY LOCATION MODULE — COMPLETE
+
+---
+
+# RECOMPOSICIÓN FINAL · 2026-08-21
+
+La paleta aprobada (ivory / warm stone / champagne / sage / charcoal) no se ha
+tocado. Lo que cambia es la **composición**, que aún se leía como un mapa
+funcional con componentes encima.
+
+Dirección: **DAMAC para el overview y el relato de conectividad, EMAAR para la
+exploración con fichas contextuales, BCP para color, tipografía y marca.**
+
+## Arquitectura de información
+
+```
+UBICACIÓN · RECOLETOS
+Distrito de Salamanca · Madrid
+
+CONECTADA CON MADRID
+  ●────────●────────●────────●────────●
+  6 min    9 min    14 min   15 min   20 min
+  Mercado  Alcalá   Retiro   Serrano  Prado
+
+[ ESCENARIO ]
+  área de foco · LA VIVIENDA · cápsulas de POI · control secundario
+
+CERCA DE LA VIVIENDA        (complementaria)
+UNIVERSIDADES CERCANAS      (cuando aportan)
+```
+
+## Rail de conectividad
+
+Fuera las cinco cards de dashboard. En su lugar una **línea fina con hitos**:
+punto, minutos, modo solo cuando no es a pie, nombre con su icono de
+categoría. Se ordena de menos a más minutos porque ahora **es** una
+progresión temporal, y el modo se etiqueta para que 12 en coche no se
+confundan con 12 andando. En móvil se desliza en horizontal.
+
+## Composición del overview
+
+- **Área de foco**: halo champán muy suave alrededor de la vivienda que ancla
+  la mirada. ⚠️ Es una **herramienta de composición**, no una isócrona: no
+  lleva ninguna cifra dentro y no representa un radio de viaje.
+- **LA VIVIENDA**: pill de marca charcoal con punto dorado, no un círculo
+  anónimo. Idéntico en el mapa vivo: la marca no cambia al explorar.
+- **Cápsulas de POI** (hasta 4) flotando sobre el mapa: el lifestyle se
+  entiende **sin bajar a la lista**. Se ocultan si caen fuera del lienzo o si
+  pisarían a la vivienda — mejor un destino menos que un amontonamiento.
+- **El encuadre del overview enmarca la vivienda CON sus destinos más
+  cercanos** (`fitPoints`), con el zoom acotado para no acabar enseñando media
+  ciudad por un destino lejano.
+
+## Destination Focus
+
+- La conexión deja de dominar: **curva fina, champán, opacidad 0,55,
+  discontinua**. Manda la pareja vivienda/destino, nunca la línea. Sigue
+  siendo una curva y no un trazado callejero: no hay routing real y fingirlo
+  mentiría.
+- **Marcador de destino** champán de 26 px con aro blanco, por encima de todo
+  salvo la vivienda. Entra con escala y fundido, sin rebote.
+- **Ficha contextual propia** (principio EMAAR): nombre, categoría, ETA, modo,
+  "Desde la vivienda" y cerrar. Nunca el popup por defecto de Leaflet.
+- **`VER ZONA COMPLETA`** pasa a control secundario en la esquina inferior.
+
+## Exploración (EMAAR)
+
+Tras `Explorar mapa`, los POIs del mapa son pulsables y abren **esa misma**
+ficha contextual, con el mismo estado activo en rail y lista. Antes de
+activar: cero captura de scroll, verificado con rueda de ratón en los 21
+casos.
+
+## Lenguaje de categorías
+
+Naturaleza, Cultura, Compras, Gastronomía, Transporte, Educación, Salud y
+Deporte comparten **la misma familia visual**: mismo tamaño, mismo trazo,
+mismo color. Se distinguen por icono y etiqueta, nunca por color — el champán
+queda reservado a la **selección**.
+
+## Contrato de estado
+
+`data-rail-poi`, `data-row-poi`, `data-capsule` y `data-active` hacen
+explícito y verificable el estado activo. La QA comprueba la sincronización
+**por contrato**, no deduciéndola de clases de Tailwind que cambian con cada
+retoque visual. Una sola máquina de estados alimenta rail, cápsulas, lista y
+universidades.
+
+## Universidades
+
+Sin cambios de fuente: catálogo `lib/data/universities.ts` y el
+`computePoiTravel` del propio módulo. Se integran como destinos de categoría
+`educacion` y usan el mismo focus, la misma ficha y la misma analítica.
+
+## Tres defectos que encontró la QA visual
+
+1. **En Lista no aparecía ninguna cápsula**: el overview encuadraba solo la
+   vivienda con un zoom fijo y sus destinos caían fuera. Rompía justo lo que
+   el módulo promete. Corregido encuadrando también los destinos cercanos.
+2. **La ficha contextual tapaba el pill de la vivienda** — en móvil lo tapaba
+   entero. Probar posiciones alternativas no bastaba: en móvil la ficha ocupa
+   casi todo el ancho y no hay escape horizontal. La solución es geométrica:
+   el encuadre **reserva la banda superior** (`shiftViewVertically`), así que
+   queda libre por construcción. Cubierto con un test del viewport móvil.
+3. **El pill "La vivienda" colapsaba en el mapa vivo**: Leaflet da al `divIcon`
+   un contenedor de 0×0 y el flex interior se quedaba sin ancho, mostrando una
+   mancha oscura donde debía ir el marcador de marca.
+
+## QA visual y funcional
+
+Capturas reales de los cinco estados —overview, destino seleccionado, mapa
+interactivo con ficha, universidad y móvil— sobre Recoletos, Goya y Lista,
+revisadas una a una contra la pregunta del brief. **21/21** en la QA funcional
+de Destination Focus (7 SmartLinks × 3 viewports), **66/66** en la del módulo
+de ubicación, `test:smartlink` con las comprobaciones nuevas de encuadre y
+banda reservada, `test:tracking`, `test:neighborhoods` 28/28, typecheck y
+build.
+
+## Limitación conocida
+
+El basemap de CARTO se sirve sin contrato ni SLA: es lo correcto hoy
+(gratuito, con atribución, misma data OSM), pero la lección del 418 de OSM es
+que un basemap gratuito puede cortar sin avisar. Si el tráfico crece, conviene
+un plan con SLA o teselas propias.
+
+# LUXURY LOCATION MODULE — PREMIUM BASELINE
