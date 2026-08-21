@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PLACEHOLDER_GRADIENTS } from "@/lib/constants";
@@ -82,6 +83,10 @@ export function PropertyGallery({
           gradient={PLACEHOLDER_GRADIENTS[0]}
           className="aspect-[4/3] md:aspect-auto md:h-[520px]"
           onClick={main ? () => openAt(0) : undefined}
+          // Foto principal = candidata a LCP: sin lazy, con prioridad — el
+          // resto de fotos de la ficha se quedan en lazy (ver Tile abajo).
+          priority
+          sizes="(max-width: 768px) 100vw, 60vw"
         >
           {property.badge && (
             // Clases legacy (11px) para portal cliente; dentro de .smartlink-root
@@ -104,6 +109,9 @@ export function PropertyGallery({
                 gradient={PLACEHOLDER_GRADIENTS[(i + 1) % PLACEHOLDER_GRADIENTS.length]}
                 className="aspect-[4/3] md:aspect-auto md:h-[167px]"
                 onClick={thumb ? () => openAt(i + 1) : undefined}
+                // 3-en-fila en móvil (~33vw c/u); apiladas en una columna de
+                // ~40% en desktop (grid-cols-[1.55fr_1fr] — ver el grid de arriba).
+                sizes="(max-width: 768px) 33vw, 40vw"
               >
                 {showOverlay && (
                   <button
@@ -234,6 +242,11 @@ function Lightbox({
           <ChevronLeft size={24} strokeWidth={1.75} />
         </button>
 
+        {/* Se queda en <img> a propósito: se apoya en su tamaño intrínseco
+            (max-h-full/max-w-full + object-contain) para no recortar fotos
+            verticales u horizontales, y next/image con `fill` forzaría a
+            rellenar el contenedor — cambiaría el encuadre. Ya es lazy de
+            facto: la lightbox no existe en el DOM hasta que se abre. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={photos[index]}
@@ -262,14 +275,13 @@ function Lightbox({
             }}
             aria-label={t("detail.gallery.goTo", { n: i + 1 })}
             className={cn(
-              "h-14 w-20 shrink-0 overflow-hidden rounded-md border-2 transition",
+              "relative h-14 w-20 shrink-0 overflow-hidden rounded-md border-2 transition",
               i === index
                 ? "border-gold"
                 : "border-transparent opacity-60 hover:opacity-100",
             )}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p} alt="" loading="lazy" className="h-full w-full object-cover" />
+            <SafeImage src={p} sizes="80px" className="object-cover" />
           </button>
         ))}
       </footer>
@@ -278,17 +290,65 @@ function Lightbox({
   );
 }
 
+// La galería completa (import-by-link) puede tardar en re-alojarse a nuestro
+// storage: durante esa ventana `photo` puede venir del CDN de origen del
+// portal, un host que no está en `images.remotePatterns` (next.config.ts) —
+// ahí next/image devuelve 400. Se cae a <img> sin optimizar en vez de
+// mostrar una foto rota; el resto del tiempo (el caso normal) usa
+// next/image tal cual.
+function SafeImage({
+  src,
+  sizes,
+  priority,
+  className,
+}: {
+  src: string;
+  sizes: string;
+  priority?: boolean;
+  className?: string;
+}) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        loading={priority ? "eager" : "lazy"}
+        className={cn("h-full w-full", className)}
+      />
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt=""
+      fill
+      sizes={sizes}
+      priority={priority}
+      onError={() => setErrored(true)}
+      className={className}
+    />
+  );
+}
+
 function Tile({
   photo,
   gradient,
   className,
   onClick,
+  priority = false,
+  sizes,
   children,
 }: {
   photo?: string;
   gradient: string;
   className?: string;
   onClick?: () => void;
+  /** Solo la foto principal del grid — es la candidata a LCP; el resto se
+   *  queda en lazy (default de next/image sin `priority`). */
+  priority?: boolean;
+  sizes: string;
   children?: React.ReactNode;
 }) {
   const interactive = !!onClick;
@@ -302,13 +362,12 @@ function Tile({
       onClick={onClick}
     >
       {photo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <SafeImage
           src={photo}
-          alt=""
-          loading="lazy"
+          priority={priority}
+          sizes={sizes}
           className={cn(
-            "h-full w-full object-cover transition",
+            "object-cover transition",
             interactive && "group-hover:scale-[1.02]",
           )}
         />

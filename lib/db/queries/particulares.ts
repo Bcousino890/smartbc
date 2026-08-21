@@ -1,5 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
+import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
+import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 
 /**
  * Listado de particulares enriquecido para el panel:
@@ -58,6 +60,106 @@ async function fetchAllRows(
   return { rows: all, error: null };
 }
 
+// Valor de `id` que NUNCA existe en la tabla (UUID nulo): forma segura de
+// devolver cero filas sin usar `.in(col, [])` (PostgREST no garantiza el
+// mismo comportamiento con un array vacío) — para "d:<distrito>" sin zonas
+// conocidas, o "gestión: mía" sin usuario en sesión.
+const IMPOSSIBLE_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Filtros server-side del listado — mismos que sincroniza la URL en
+ * use-particulares-filters.ts (duplicados a propósito: ese hook es
+ * "use client" y este módulo es server-only, no se puede importar directo;
+ * si cambias un valor allí, cámbialo también aquí).
+ *
+ * `floorMin` y `furnished` NO están: se deducen de features/descripción con
+ * un parser de texto (lib/floor.ts, lib/furnished.ts) que no vale la pena
+ * — ni es seguro — reimplementar en SQL. Se aplican en el cliente como
+ * post-filtro sobre la página ya traída (ver particulares-client.tsx): una
+ * página filtrada por planta o amueblado puede devolver menos de
+ * ANUNCIOS_POR_PAGINA resultados — tradeoff aceptado frente a traer la
+ * tabla entera para filtrar bien.
+ *
+ * `gestion: "contacted"/"unmanaged"` tampoco quedan del todo resueltos aquí:
+ * si el anuncio tiene contactos vive en `particulares_contacts`, no en una
+ * columna de `particulares`, y no hay forma fiable de expresar "sin
+ * contactos" en PostgREST sin un JOIN que además pagina mal. Se filtra lo
+ * que SÍ es columna plana (`assigned_to`) y el resto se remata en el
+ * cliente tras el enrichment, con el mismo tradeoff que planta/amueblado.
+ */
+export type ParticularesFilters = {
+  search?: string;
+  operation?: "rent" | "sale" | "";
+  /** Valor crudo del filtro: "", "d:<distrito>", "z:<zona>", o un valor
+   *  legado sin prefijo (comparación exacta, tal cual llegaba antes). */
+  zone?: string;
+  /** Solo para "d:<distrito>": lista EXACTA de `zone` crudos de ese
+   *  distrito, ya resuelta contra getParticularesZoneCounts() — el mismo
+   *  criterio que ve el desplegable, en vez de reimplementar
+   *  normalizeZone() en SQL. */
+  zoneDistrictRaw?: string[];
+  priceMin?: number;
+  priceMax?: number;
+  bedroomsMin?: number;
+  areaMin?: number;
+  last24h?: boolean;
+  phoneFilter?: "no_phone" | "with_phone" | "";
+  gestion?: "unmanaged" | "contacted" | "assigned" | "mine" | "";
+  currentUserId?: string;
+  advertiser?: "particular" | "professional" | "unknown" | "";
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress: boolean) {
+  let q = query;
+  const term = f.search?.trim();
+  if (term) {
+    // Mismo escapado que lib/db/queries/sales-inbox.ts: PostgREST usa ","
+    // como separador de cláusulas .or(), así que un término con comas
+    // rompería el filtro si no se sustituye antes.
+    const like = `%${term.replace(/[%,]/g, " ")}%`;
+    const clauses = [`zone.ilike.${like}`, `description.ilike.${like}`, `external_id.ilike.${like}`];
+    if (hasAddress) clauses.push(`address.ilike.${like}`);
+    q = q.or(clauses.join(","));
+  }
+
+  if (f.operation) q = q.eq("operation", f.operation);
+
+  if (f.zoneDistrictRaw) {
+    q = f.zoneDistrictRaw.length > 0 ? q.in("zone", f.zoneDistrictRaw) : q.eq("id", IMPOSSIBLE_ID);
+  } else if (f.zone?.startsWith("z:")) {
+    q = q.eq("zone", f.zone.slice(2));
+  } else if (f.zone && !f.zone.startsWith("d:")) {
+    q = q.eq("zone", f.zone);
+  }
+
+  if (f.priceMin != null) q = q.gte("price", f.priceMin);
+  if (f.priceMax != null) q = q.lte("price", f.priceMax);
+  if (f.bedroomsMin != null) q = q.gte("bedrooms", f.bedroomsMin);
+  if (f.areaMin != null) q = q.gte("square_meters", f.areaMin);
+
+  if (f.last24h) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    q = q.gte("created_at", since);
+  }
+
+  if (f.phoneFilter === "no_phone") q = q.is("phone", null);
+  else if (f.phoneFilter === "with_phone") q = q.not("phone", "is", null);
+
+  if (f.advertiser === "unknown") q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
+  else if (f.advertiser) q = q.eq("advertiser_type", f.advertiser);
+
+  // "contacted" se queda sin tocar aquí (ver el comentario del tipo): el
+  // resto de gestión sí son columnas planas.
+  if (f.gestion === "assigned") q = q.not("assigned_to", "is", null);
+  else if (f.gestion === "unmanaged") q = q.is("assigned_to", null);
+  else if (f.gestion === "mine") {
+    q = f.currentUserId ? q.eq("assigned_to", f.currentUserId) : q.eq("id", IMPOSSIBLE_ID);
+  }
+
+  return q;
+}
+
 export async function getParticularesPage(opts?: {
   /** Si se pasa junto a `pageSize`, activa paginación real server-side en
    *  vez del comportamiento histórico de traer todo. */
@@ -66,6 +168,8 @@ export async function getParticularesPage(opts?: {
   pageSize?: number;
   /** Con paginación real: activos (default) o retirados. */
   showRetired?: boolean;
+  /** Filtros de la URL, resueltos a WHERE de SQL — ver ParticularesFilters. */
+  filters?: ParticularesFilters;
 }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
@@ -100,6 +204,7 @@ export async function getParticularesPage(opts?: {
         .from("particulares")
         .select(cols, { count: "exact" })
         .eq("is_active", !showRetired);
+      query = applyParticularesFilters(query, opts.filters ?? {}, cols.includes("address"));
       query = showRetired
         ? query.order("taken_down_at", { ascending: false, nullsFirst: false })
         : query.order("created_at", { ascending: false });
@@ -263,4 +368,130 @@ export async function getStaffOptions(
     id: p.id as string,
     name: (p.full_name as string) || (p.email as string),
   }));
+}
+
+export type ParticularesStats = {
+  /** Activos, SIN los filtros de la UI — así el header y la pestaña
+   *  "Activos (N)" siempre muestran el total real, no el de la búsqueda en
+   *  curso (igual que antes, cuando salían de `allRows` sin `filtered`). */
+  total: number;
+  retiredTotal: number;
+  rent: number;
+  sale: number;
+  last24h: number;
+};
+
+/**
+ * Cabecera del panel: 5 COUNT-only (`head: true`, sin traer filas) contra el
+ * índice `(is_active, created_at desc)` de la migración 0111. Sustituye a
+ * derivar estos 5 números en JS sobre las ~10.7k filas enriquecidas que
+ * antes traía la página entera.
+ */
+export async function getParticularesStats(): Promise<ParticularesStats> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const [total, retiredTotal, rent, sale, last24h] = await Promise.all([
+    supabase.from("particulares").select("*", { count: "exact", head: true }).eq("is_active", true),
+    supabase.from("particulares").select("*", { count: "exact", head: true }).eq("is_active", false),
+    supabase
+      .from("particulares")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("operation", "rent"),
+    supabase
+      .from("particulares")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("operation", "sale"),
+    supabase
+      .from("particulares")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .gte("created_at", since),
+  ]);
+
+  return {
+    total: total.count ?? 0,
+    retiredTotal: retiredTotal.count ?? 0,
+    rent: rent.count ?? 0,
+    sale: sale.count ?? 0,
+    last24h: last24h.count ?? 0,
+  };
+}
+
+// Agrupa por distrito canónico de Madrid — mismo algoritmo que antes vivía
+// en el `useMemo` de particulares-client.tsx sobre `allRows`; se movió aquí
+// para poder calcularlo server-side sobre el dataset ligero de abajo, en vez
+// de sobre las filas enriquecidas completas.
+function buildZoneGroups(
+  rows: Array<{ zone: string | null; is_active: boolean; phone: string | null }>,
+  showRetired: boolean,
+): ZoneFilterGroup[] {
+  const districts = new Map<
+    string,
+    { total: number; missingPhone: number; zones: Map<string, { total: number; missingPhone: number }> }
+  >();
+  for (const r of rows) {
+    if (showRetired ? r.is_active : !r.is_active) continue;
+    if (!r.zone) continue;
+    const { district } = normalizeZone(r.zone);
+    if (!districts.has(district)) {
+      districts.set(district, { total: 0, missingPhone: 0, zones: new Map() });
+    }
+    const d = districts.get(district)!;
+    d.total++;
+    if (!r.phone) d.missingPhone++;
+    if (!d.zones.has(r.zone)) d.zones.set(r.zone, { total: 0, missingPhone: 0 });
+    const z = d.zones.get(r.zone)!;
+    z.total++;
+    if (!r.phone) z.missingPhone++;
+  }
+  return Array.from(districts.entries())
+    .sort((a, b) => {
+      if (a[0] === OTHER_ZONE_LABEL) return 1;
+      if (b[0] === OTHER_ZONE_LABEL) return -1;
+      return a[0].localeCompare(b[0], "es");
+    })
+    .map(([district, d]) => ({
+      district,
+      total: d.total,
+      missingPhone: d.missingPhone,
+      zones: Array.from(d.zones.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], "es"))
+        .map(([name, c]) => ({ name, total: c.total, missingPhone: c.missingPhone })),
+    }));
+}
+
+function buildPortalCounts(rows: Array<{ portal: string; is_active: boolean }>): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.is_active) continue;
+    counts[r.portal] = (counts[r.portal] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Dataset ligero para el desplegable de zonas y el desglose por portal: solo
+ * zone/is_active/phone/portal de TODOS los anuncios (activos y retirados),
+ * sin enrichment (nada de particulares_contacts ni profiles) ni columnas
+ * pesadas (description/features/photos). Sigue recorriendo la tabla
+ * entera — el desplegable necesita contar TODAS las zonas, no solo la
+ * página visible — pero 4 columnas cortas sin JOINs es una fracción mínima
+ * del payload que traía el listado completo.
+ */
+export async function getParticularesZoneCounts(
+  showRetired: boolean,
+): Promise<{ zoneGroups: ZoneFilterGroup[]; portalCounts: Record<string, number> }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { rows } = await fetchAllRows((from, to) =>
+    supabase.from("particulares").select("zone, is_active, phone, portal").range(from, to),
+  );
+  return {
+    zoneGroups: buildZoneGroups(rows, showRetired),
+    portalCounts: buildPortalCounts(rows),
+  };
 }
