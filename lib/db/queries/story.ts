@@ -7,7 +7,7 @@
 import { createAdminClient } from "@/lib/db/admin";
 import type { PublicStoryBlock, StoryChapter } from "@/lib/services/story/types";
 import { STORY_CHAPTERS } from "@/lib/services/story/types";
-import { planPublication } from "@/lib/services/story/gate";
+import { planPublication, NARRATIVE_CHAPTERS } from "@/lib/services/story/gate";
 import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neighborhoods";
 
 /**
@@ -113,6 +113,13 @@ export async function getStoryExperiencePublic(
     for (const f of plan.storyFailures) for (const id of f.blockIds) safeIds.delete(id);
     const safe = (blocks as Array<{ id: string; chapter: StoryChapter; copy: string }>)
       .filter((b) => safeIds.has(b.id));
+    // Regla A/B del sprint: los bloques solo sustituyen a la descripción si
+    // sobrevive AL MENOS un capítulo NARRATIVO limpio. Una proyección que
+    // quedó en overview/barrio sueltos (todo lo narrativo excluido por
+    // conflictos) ocultaría la descripción sin aportar capítulos: se descarta
+    // y el renderer muestra "Información de la vivienda".
+    const hasNarrative = safe.some((b) => NARRATIVE_CHAPTERS.includes(b.chapter));
+    if (!hasNarrative) return { state: "facts_led", blocks: null };
     return { state: "facts_led", blocks: project(safe) };
   } catch {
     // Migración sin aplicar u otra causa: estructura 2.0 sin narrativa,
