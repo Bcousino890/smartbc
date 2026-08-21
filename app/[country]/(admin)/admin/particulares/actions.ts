@@ -7,6 +7,10 @@ import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { assertPermission } from "@/lib/auth/guard";
 import { normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
+// Alias: el módulo de queries usa el mismo nombre para la función de datos;
+// el server action de abajo se llama igual de cara al cliente.
+import { createParticularShareLink as insertParticularShareLink } from "@/lib/db/queries/particulares-shares";
+import { PORTAL_URL } from "@/lib/portal-url";
 
 export type UpdatePhoneResult =
   | { ok: true }
@@ -399,6 +403,46 @@ export async function markParticularAsVerified(
   const updated = (data as { id: string }[])?.length ?? 0;
   revalidatePath("/admin/particulares");
   return { ok: true, updated };
+}
+
+export type CreateParticularShareLinkResult =
+  | { ok: true; url: string; expiresAt: string }
+  | { ok: false; error: string };
+
+/**
+ * Genera un enlace temporal (7 días) para compartir ESTE particular fuera
+ * del equipo (WhatsApp a un cliente o a un colega externo). Vive en su
+ * propia tabla y ruta (particulares_share_links + /a/[token], migración
+ * 0149) — no toca properties/property_shares/client_portal_links.
+ *
+ * Permiso "view" y no "edit": no modifica el particular, solo publica una
+ * vista de solo lectura de sus datos de escaparate.
+ */
+export async function createParticularShareLink(
+  particularId: string,
+): Promise<CreateParticularShareLinkResult> {
+  await assertPermission("particulares", "view");
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!particularId) return { ok: false, error: "id_required" };
+
+  const profile = await getCurrentProfile();
+
+  try {
+    const { token, expiresAt } = await insertParticularShareLink({
+      particularId,
+      createdBy: profile?.id ?? null,
+      ttlDays: 7,
+    });
+    return { ok: true, url: `${PORTAL_URL}/a/${token}`, expiresAt };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "unknown_error",
+    };
+  }
 }
 
 export async function rescrapeParticularPhones(

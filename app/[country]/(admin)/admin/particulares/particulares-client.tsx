@@ -50,6 +50,7 @@ import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/vid
 import { cn } from "@/lib/utils";
 import {
   assignParticular,
+  createParticularShareLink,
   createPropertyFromParticular,
   logParticularContact,
   setParticularActive,
@@ -221,6 +222,98 @@ function EditPhoneModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ─── Link temporal externo ──────────────────────────────────────────────────
+// Genera un enlace público de solo lectura para ESTE anuncio, pensado para
+// reenviar FUERA del equipo (WhatsApp a un cliente o a un colega externo).
+// Vive en su propia tabla/ruta (particulares_share_links + /a/[token], ver
+// migración 0149) — no toca properties/SmartLinks/Viewing Collections, así
+// que este bloque es autónomo a propósito: no comparte estado con el resto
+// del modal más allá del `particularId` que recibe por prop.
+function ShareLinkAction({ particularId }: { particularId: string }) {
+  const [creating, setCreating] = useState(false);
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCreate() {
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await createParticularShareLink(particularId);
+      if (res.ok) setLink({ url: res.url, expiresAt: res.expiresAt });
+      else setError((res as any).error || "unknown_error");
+    } catch {
+      setError("network_error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function handleCopy() {
+    if (!link) return;
+    navigator.clipboard.writeText(link.url).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="border-t border-ink/8 pt-4">
+      {!link ? (
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-ink/15 px-4 py-2 text-sm text-ink/70 transition hover:border-gold/40 hover:text-ink disabled:opacity-60"
+        >
+          {creating ? (
+            <Loader2 size={14} strokeWidth={2} className="animate-spin" />
+          ) : (
+            <ExternalLink size={14} strokeWidth={1.75} />
+          )}
+          {creating ? "Creando enlace…" : "Crear link temporal para compartir"}
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-lg border border-ink/10 bg-white px-3 py-2.5">
+          <p className="crm-label-sm text-ink/40">Enlace temporal (7 días)</p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={link.url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 rounded border border-ink/10 bg-cream-50 px-2 py-1.5 text-xs text-ink/70"
+            />
+            <button
+              onClick={handleCopy}
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-ink/15 px-2.5 py-1.5 text-xs font-semibold text-ink transition hover:border-gold/40"
+            >
+              {copied ? (
+                <Check size={12} strokeWidth={2} />
+              ) : (
+                <Copy size={12} strokeWidth={1.75} />
+              )}
+              {copied ? "Copiado" : "Copiar"}
+            </button>
+          </div>
+          <p className="text-[11px] text-ink/40">
+            Caduca el{" "}
+            {new Date(link.expiresAt).toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              timeZone: "Europe/Madrid",
+            })}
+            . Cualquiera con el enlace puede verlo, sin iniciar sesión.
+          </p>
+        </div>
+      )}
+      {error && (
+        <p className="mt-2 text-xs text-red-600">
+          No se pudo crear el enlace ({error}). Inténtalo de nuevo.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1399,6 +1492,10 @@ function ParticularModal({
               No se pudo crear la propiedad ({createError}). Inténtalo de nuevo.
             </p>
           )}
+
+          {/* Link temporal externo — independiente de las acciones de arriba,
+              ver el bloque "Link temporal externo" más arriba en el archivo. */}
+          <ShareLinkAction particularId={currentRow.id} />
         </div>
       </div>
       </div>

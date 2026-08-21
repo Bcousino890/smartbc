@@ -14,7 +14,9 @@ import {
 // "/v" → Viewing Collections: colección privada de un itinerario publicado,
 // con su propio token. NO confundir con "/c", que es el SmartLink de UNA sola
 // propiedad. Ambas son públicas y se resuelven con service role en servidor.
-const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p", "/v"];
+// "/a" → enlace temporal de UN particular (anuncio scrapeado, no ficha
+// nuestra), completamente aparte de "/c"/"/v" — ver migración 0149.
+const PUBLIC_PATHS = ["/login", "/auth", "/compartir", "/c", "/og", "/p", "/v", "/a"];
 const CLIENT_PATHS = ["/inicio", "/propiedades", "/favoritos", "/perfil", "/mensajes", "/documentacion"];
 // Los árboles de país (/es/admin, /cl/admin) también son admin: antes solo
 // se protegían en el layout; el middleware ni los miraba.
