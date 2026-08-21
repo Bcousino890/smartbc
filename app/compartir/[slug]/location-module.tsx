@@ -77,6 +77,7 @@ export function LocationModule({
   lng,
   pois,
   universities = [],
+  mapProvider = "osm",
   neighborhood,
   fallbackCoords,
   onView,
@@ -89,6 +90,8 @@ export function LocationModule({
   lng: number | null;
   pois: PoiTravel[];
   universities?: NearbyUniversity[];
+  /** Proveedor del explorador de zona. Sin credenciales de Google → "osm". */
+  mapProvider?: "osm" | "google";
   neighborhood?: LocationNeighborhood | null;
   /** Centro aproximado del barrio cuando la propiedad no está geocodificada. */
   fallbackCoords: { lat: number; lng: number; zoom: number };
@@ -391,6 +394,7 @@ export function LocationModule({
       <div
         ref={stageRef}
         data-focus={focus ? "true" : "false"}
+        data-map-provider={mapProvider}
         className={`bcp-map-stage relative mt-6 w-full overflow-hidden ${
           live ? "bcp-map-live h-[64vh] min-h-[420px]" : "h-[52vh] min-h-[340px] md:h-[540px]"
         }`}
@@ -413,7 +417,7 @@ export function LocationModule({
             <button type="button" onClick={focus ? restoreOverview : exitLive}
               className="crm-meta absolute bottom-3 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
               {focus ? <Maximize2 size={11} strokeWidth={2} /> : <Lock size={11} strokeWidth={2} />}
-              {focus ? "Ver zona completa" : "Salir del mapa"}
+              {focus ? "Ver zona completa" : "Salir de la zona"}
             </button>
           </>
         ) : (
@@ -524,7 +528,7 @@ export function LocationModule({
               className="crm-meta absolute bottom-3 left-3 z-[7] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
             >
               {focus ? <Maximize2 size={11} strokeWidth={2} /> : <Compass size={11} strokeWidth={2} />}
-              {focus ? "Ver zona completa" : "Explorar mapa"}
+              {focus ? "Ver zona completa" : "Explorar la zona"}
             </button>
 
             <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">

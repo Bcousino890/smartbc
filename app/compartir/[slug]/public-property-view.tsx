@@ -31,6 +31,7 @@ import type { Property } from "@/lib/types";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { LocationModule } from "./location-module";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
+import type { MapProvider } from "@/lib/services/location/provider";
 
 // ============================================================================
 // SMARTLINK 2.0 · Adaptive Property Renderer
@@ -133,6 +134,7 @@ export function PublicPropertyView({
   story,
   neighborhood,
   universities,
+  mapProvider,
   experienceState,
 }: {
   property: Property;
@@ -146,6 +148,8 @@ export function PublicPropertyView({
   neighborhood?: NeighborhoodData | null;
   /** Universidades cercanas (catálogo existente, mismo cálculo de tiempos). */
   universities?: NearbyUniversity[];
+  /** Proveedor del explorador de zona. Sin credenciales de Google → "osm". */
+  mapProvider?: MapProvider;
   /** Estado de EXPERIENCIA (no de Property Story): complete | partial |
    *  sparse llegan de una story aprobada; facts_led = estructura 2.0 sin
    *  narrativa aprobada. Solo alimenta analytics — el render se decide por
@@ -504,6 +508,7 @@ export function PublicPropertyView({
             ZONE_COORDS[property.zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 }
           }
           universities={universities ?? []}
+          mapProvider={mapProvider ?? "osm"}
           onView={() => trackerRef.current?.trackEvent("location_module_view")}
           onExplore={() => trackerRef.current?.trackEvent("map_explore")}
           onRestore={() => trackerRef.current?.trackEvent("location_overview_restore")}

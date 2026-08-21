@@ -8,6 +8,7 @@ import {
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
 import { getStoryExperiencePublic } from "@/lib/db/queries/story";
 import { findNearbyUniversities } from "@/lib/geo/universities-nearby";
+import { currentMapProvider } from "@/lib/services/location/provider";
 import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 import { PublicPropertyView } from "./public-property-view";
 import { CollectionReturnBar } from "@/components/public/collection-return-bar";
@@ -235,6 +236,7 @@ export default async function PublicSharePage({
           lat: property.latitude ?? null,
           lng: property.longitude ?? null,
         })}
+        mapProvider={currentMapProvider().provider}
         experienceState={experience.state}
         neighborhood={neighborhood}
       />
