@@ -433,16 +433,21 @@ export function LocationModule({
             ) : (
               <div ref={mapElRef} className="absolute inset-0 h-full w-full" />
             )}
-            <div className="absolute right-3 top-3 z-[500] flex flex-col gap-1.5">
-              <button type="button" aria-label="Acercar" onClick={() => leafletRef.current?.map.zoomIn()}
-                className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                <Plus size={15} strokeWidth={2} />
-              </button>
-              <button type="button" aria-label="Alejar" onClick={() => leafletRef.current?.map.zoomOut()}
-                className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                <Minus size={15} strokeWidth={2} />
-              </button>
-            </div>
+            {/* Los controles de zoom los pone MapLibre. Los propios solo
+                existen para el renderer anterior: tenerlos a la vez apilaba
+                dos juegos en la misma esquina y se robaban los clics. */}
+            {!useVectorMap && (
+              <div className="absolute right-3 top-3 z-[500] flex flex-col gap-1.5">
+                <button type="button" aria-label="Acercar" onClick={() => leafletRef.current?.map.zoomIn()}
+                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
+                  <Plus size={15} strokeWidth={2} />
+                </button>
+                <button type="button" aria-label="Alejar" onClick={() => leafletRef.current?.map.zoomOut()}
+                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
+                  <Minus size={15} strokeWidth={2} />
+                </button>
+              </div>
+            )}
             {placeFocus ? (
               <ContextCard
                 place={placeFocus}
