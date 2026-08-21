@@ -24,7 +24,7 @@ create index if not exists idx_neighborhoods_aliases on neighborhoods using gin 
 update neighborhoods set aliases = '{"barrio-de-salamanca"}', updated_at = now() where zone_key = 'salamanca';
 update neighborhoods set aliases = '{"pozuelo-de-alarcon"}', updated_at = now() where zone_key = 'pozuelo';
 
--- 3) Barrios nuevos (19), ordenados por volumen de propiedades activas.
+-- 3) Barrios nuevos (20), ordenados por volumen de propiedades activas.
 insert into neighborhoods (country, zone_key, display_name, intro, aliases, district, municipality, active) values
   ('es', 'castellana', 'Castellana', 'Castellana es uno de los seis barrios del distrito de Salamanca, el que se apoya en el paseo del mismo nombre. Su trama es la del Plan Castro de 1860: manzanas rectangulares y calles anchas y arboladas. Buena parte de los palacetes decimonónicos que lo ocupan son hoy embajadas, fundaciones y sedes corporativas, entre edificios de vivienda de techos altos.', '{}', 'Salamanca', 'Madrid', true),
   ('es', 'lista', 'Lista', 'Lista es el barrio más pequeño del distrito de Salamanca, delimitado por Ortega y Gasset, Juan Bravo, Príncipe de Vergara y el paseo de la Castellana. Es residencial, con comercio a pie de calle y edificación cerrada del ensanche del siglo XIX y principios del XX. Toma el nombre de la antigua calle de Lista, hoy José Ortega y Gasset.', '{"lista-barrio-de-salamanca"}', 'Salamanca', 'Madrid', true),
@@ -44,7 +44,8 @@ insert into neighborhoods (country, zone_key, display_name, intro, aliases, dist
   ('es', 'nino-jesus', 'Niño Jesús', 'Niño Jesús es un barrio del distrito de Retiro situado al sur de Sainz de Baranda, junto al límite meridional del parque del Retiro. Toma su nombre del hospital infantil abierto en 1877 en la avenida de Menéndez Pelayo, el primero de España dedicado a la infancia. Es residencial y de densidad menor que los barrios contiguos.', '{}', 'Retiro', 'Madrid', true),
   ('es', 'estrella', 'Estrella', 'Estrella es un barrio del distrito de Retiro, al este de Doctor Esquerdo y al sur de O''Donnell. Se construyó en su mayor parte entre los años cuarenta y sesenta con bloques abiertos y colonias, de modo que abunda el espacio libre entre edificios. El hospital Gregorio Marañón queda junto a su borde noroeste.', '{}', 'Retiro', 'Madrid', true),
   ('es', 'somosaguas', 'Somosaguas', 'Somosaguas es una zona residencial del municipio de Pozuelo de Alarcón, al oeste de Madrid y contigua a la Casa de Campo. Está formada por urbanizaciones de vivienda unifamiliar con parcela y apenas tiene edificación en altura. El campus de Somosaguas de la Universidad Complutense, con las facultades de Ciencias Sociales, ocupa su extremo norte.', '{}', null, 'Pozuelo de Alarcón', true),
-  ('es', 'prado-de-somosaguas', 'Prado de Somosaguas', 'Prado de Somosaguas es una urbanización del municipio de Pozuelo de Alarcón, contigua a Somosaguas por el oeste. Se desarrolló como área residencial de baja densidad, con viviendas unifamiliares y adosadas sobre calles de trazado curvo y sin tráfico de paso. Los servicios y el comercio del casco de Pozuelo quedan al norte.', '{}', null, 'Pozuelo de Alarcón', true)
+  ('es', 'prado-de-somosaguas', 'Prado de Somosaguas', 'Prado de Somosaguas es una urbanización del municipio de Pozuelo de Alarcón, contigua a Somosaguas por el oeste. Se desarrolló como área residencial de baja densidad, con viviendas unifamiliares y adosadas sobre calles de trazado curvo y sin tráfico de paso. Los servicios y el comercio del casco de Pozuelo quedan al norte.', '{}', null, 'Pozuelo de Alarcón', true),
+  ('es', 'torrelodones', 'Torrelodones', 'Torrelodones es un municipio del noroeste de la Comunidad de Madrid, en el piedemonte de la sierra de Guadarrama y a unos veintinueve kilómetros de la capital. Se organiza en dos núcleos principales: el casco antiguo y la Colonia, surgida en el último tercio del siglo XIX alrededor de la estación de ferrocarril. Predomina la vivienda unifamiliar con parcela.', '{"centro-comercial-hospital","los-bomberos","torrelodones-colonia","la-colonia"}', null, 'Torrelodones', true)
 on conflict (zone_key) do update set
   display_name = excluded.display_name,
   intro        = excluded.intro,
@@ -197,7 +198,12 @@ join (values
   ('prado-de-somosaguas', 'Campus de Somosaguas (UCM)', 'educacion', 40.433444, -3.795142, 10, '{"drive"}', 'osm-2026-08 node/5311950999', null::double precision, null::double precision, null::double precision, null::double precision),
   ('prado-de-somosaguas', 'Zoco de Pozuelo', 'compras', 40.419663, -3.797476, 20, '{"drive"}', 'osm-2026-08 way/28327068', 40.4192191, -3.7981957, 40.4200564, -3.7967555),
   ('prado-de-somosaguas', 'Estación de Pozuelo (Cercanías)', 'transporte', 40.447408, -3.800061, 30, '{"drive"}', 'osm-2026-08 node/5318415084', null::double precision, null::double precision, null::double precision, null::double precision),
-  ('prado-de-somosaguas', 'Casa de Campo', 'parque', 40.424191, -3.755858, 50, '{"drive"}', 'osm-2026-08 relation/1946885', 40.3992357, -3.7813887, 40.449071, -3.7227618)
+  ('prado-de-somosaguas', 'Casa de Campo', 'parque', 40.424191, -3.755858, 50, '{"drive"}', 'osm-2026-08 relation/1946885', 40.3992357, -3.7813887, 40.449071, -3.7227618),
+  ('torrelodones', 'Centro Comercial Espacio Torrelodones', 'compras', 40.569194, -3.921166, 10, '{"drive"}', 'osm-2026-08 node/1994670507', null::double precision, null::double precision, null::double precision, null::double precision),
+  ('torrelodones', 'Hospital HM Torrelodones', 'salud', 40.570555, -3.926011, 20, '{"drive"}', 'osm-2026-08 way/143437105', null::double precision, null::double precision, null::double precision, null::double precision),
+  ('torrelodones', 'Parque Pradogrande', 'parque', 40.578187, -3.952231, 40, '{"walk","drive"}', 'osm-2026-08 node/1590221261', null::double precision, null::double precision, null::double precision, null::double precision),
+  ('torrelodones', 'Parque JH', 'parque', 40.57656, -3.92531, 50, '{"walk","drive"}', 'osm-2026-08 way/643098137', 40.5757166, -3.9262004, 40.57737, -3.9242609),
+  ('torrelodones', 'Casino Gran Madrid', 'otro', 40.565656, -3.914338, 60, '{"drive"}', 'osm-2026-08 way/550627000', 40.5649683, -3.9149127, 40.5663438, -3.9137488)
 ) as p(zone_key, name, category, lat, lng, priority, modes, src, bmin_lat, bmin_lng, bmax_lat, bmax_lng)
   on p.zone_key = n.zone_key;
 

@@ -340,6 +340,31 @@ export const NEIGHBORHOODS = [
       ["Casa de Campo", "parque", "Casa de Campo, Madrid", 50, ["drive"]],
     ],
   },
+
+  // ── Municipio de Torrelodones ────────────────────────────────────────
+  // "Centro Comercial - Hospital" es como el catálogo nombra el núcleo de
+  // Los Bomberos (salida 29 de la A-6), donde están Espacio Torrelodones y
+  // el hospital. Es un descriptor real, sólo que impresentable como título.
+  {
+    key: "torrelodones",
+    display: "Torrelodones",
+    district: null,
+    municipality: "Torrelodones",
+    aliases: ["centro-comercial-hospital", "los-bomberos", "torrelodones-colonia", "la-colonia"],
+    center: { lat: 40.5756, lng: -3.9294 },
+    maxKm: 5.0,
+    pois: [
+      // La estación de Cercanías queda FUERA a propósito: no hay nodo suyo en
+      // OSM con etiquetas de estación, y el único candidato que devuelve
+      // Nominatim es el centroide del barrio de La Colonia, no el andén.
+      // Antes que publicar un tiempo aproximado, no se publica.
+      ["Centro Comercial Espacio Torrelodones", "compras", "Espacio Torrelodones, Torrelodones", 10, ["drive"]],
+      ["Hospital HM Torrelodones", "salud", "Hospital de Madrid Torrelodones", 20, ["drive"]],
+      ["Parque Pradogrande", "parque", "Parque Pradogrande, Torrelodones", 40, ["walk", "drive"]],
+      ["Parque JH", "parque", "Parque JH, Torrelodones", 50, ["walk", "drive"]],
+      ["Casino Gran Madrid", "otro", "Casino Gran Madrid, Torrelodones", 60, ["drive"]],
+    ],
+  },
 ];
 
 /** Alias que se añaden a barrios YA existentes en producción. */

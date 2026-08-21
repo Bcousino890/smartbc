@@ -1756,6 +1756,92 @@
         "maxLng": -3.7227618
       },
       "extentKm": 5.55
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Centro Comercial Espacio Torrelodones",
+      "category": "compras",
+      "priority": 10,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.569194,
+      "lng": -3.921166,
+      "km": 1,
+      "osm": "node/1994670507",
+      "query": "Espacio Torrelodones, Torrelodones"
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Hospital HM Torrelodones",
+      "category": "salud",
+      "priority": 20,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.570555,
+      "lng": -3.926011,
+      "km": 0.63,
+      "osm": "way/143437105",
+      "query": "Hospital de Madrid Torrelodones"
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Parque Pradogrande",
+      "category": "parque",
+      "priority": 40,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.578187,
+      "lng": -3.952231,
+      "km": 1.95,
+      "osm": "node/1590221261",
+      "query": "Parque Pradogrande, Torrelodones"
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Parque JH",
+      "category": "parque",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.57656,
+      "lng": -3.92531,
+      "km": 0.36,
+      "osm": "way/643098137",
+      "query": "Parque JH, Torrelodones",
+      "bounds": {
+        "minLat": 40.5757166,
+        "minLng": -3.9262004,
+        "maxLat": 40.57737,
+        "maxLng": -3.9242609
+      },
+      "extentKm": 0.18
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Casino Gran Madrid",
+      "category": "otro",
+      "priority": 60,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.565656,
+      "lng": -3.914338,
+      "km": 1.69,
+      "osm": "way/550627000",
+      "query": "Casino Gran Madrid, Torrelodones",
+      "bounds": {
+        "minLat": 40.5649683,
+        "minLng": -3.9149127,
+        "maxLat": 40.5663438,
+        "maxLng": -3.9137488
+      },
+      "extentKm": 0.15
     }
   ],
   "rejected": [

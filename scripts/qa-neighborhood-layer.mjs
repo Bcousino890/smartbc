@@ -41,13 +41,14 @@ const CASES = [
   ["alquiler-de-piso-en-goya-hp51", "BC-1410", "Barrio de Salamanca", true],
   ["piso-en-venta-en-calle-tramontana-pozuelo-de-alarcon-c7vh", "BC-1277", "Prado de Somosaguas", true],
   ["atico-en-venta-en-avenida-de-los-angeles-qytl", "BC-1301", "Somosaguas", true],
+  // "Centro Comercial - Hospital" resultó ser el núcleo de Los Bomberos, en
+  // Torrelodones: resuelve por alias a la capa municipal.
+  ["piso-en-venta-en-avenida-de-la-fontanilla-15-6qgl", "BC-1017", "Torrelodones", false],
   // Negativos deliberados: zonas que NO deben resolver contra ningún barrio.
   // "Colina" es la comuna chilena (Chicureo), no el barrio de Ciudad Lineal:
-  // si algún día resuelve, el cliente vería POIs de Madrid en una casa de
-  // Chile. "Centro Comercial - Hospital" es una zona ambigua sin coordenadas.
-  ["increible-casa-en-condominio-2fzn", "BC-1238", null, false],
-  ["casa-en-chicureo-9pna", "BC-1232", null, true],
-  ["piso-en-venta-en-avenida-de-la-fontanilla-15-cw0u", "BC-1017", null, false],
+  // si algún día resuelve, el cliente vería POIs de Madrid en una casa de Chile.
+  ["increible-casa-en-condominio-0e0x", "BC-1238", null, false],
+  ["casa-en-chicureo-ixo2", "BC-1232", null, true],
 ];
 
 // React parte cada interpolación con un comentario vacío ("Vivir en
@@ -78,33 +79,33 @@ for (const [slug, ref, expected, hasCoords] of CASES) {
 
   const heading = html.match(/Vivir en ([^<]{2,60})</);
   const got = heading ? heading[1].trim() : null;
-
-  if (expected === null) {
-    if (got) problems.push(`no debía resolver barrio y muestra "${got}"`);
-  } else if (got !== expected) {
-    problems.push(`barrio "${got ?? "(ninguno)"}" ≠ esperado "${expected}"`);
-  }
-
-  // Minutos que se ven en el bloque de ubicación.
+  // La intro curada: el <p> que sigue al título. Sin barrio resuelto no
+  // existe, aunque el título pueda caer al nombre crudo de la zona.
+  const intro = html.match(/Vivir en [^<]{2,60}<\/h2>\s*<div[^>]*>\s*<p>([^<]{40,900})<\/p>/);
   const minutes = [...html.matchAll(/≈\s*(\d+)\s*min\s*(a pie|en coche)/g)]
     .map((m) => [Number(m[1]), m[2]]);
 
-  if (hasCoords) {
-    if (minutes.length === 0) problems.push("tiene coordenadas pero no muestra ningún POI");
-    for (const [n, mode] of minutes) {
-      if (n < 1 || n > 40) problems.push(`minuto implausible: ${n} min ${mode}`);
-      if (mode === "a pie" && n > 22) problems.push(`${n} min "a pie" supera el techo de 22`);
-    }
-  } else if (minutes.length > 0) {
-    // Regla dura del sprint: sin coordenadas fiables, ningún número.
-    problems.push(`SIN coordenadas y muestra ${minutes.length} tiempo(s)`);
-  }
-
-  // La intro nunca debe llevar minutos escritos.
-  const intro = html.match(/Vivir en [^<]{2,60}<\/h2>\s*<div[^>]*>\s*<p>([^<]{40,900})<\/p>/);
-  if (expected !== null) {
+  if (expected === null) {
+    // Lo que importa en un negativo no es el título —que cae al valor crudo
+    // del catálogo— ni el párrafo, que puede ser el capítulo de barrio que
+    // el Engine saca de la propia descripción y es contenido legítimo. Lo
+    // que NO puede pasar es que se muestren tiempos a POIs de otra ciudad.
+    if (minutes.length > 0) problems.push(`no debía resolver barrio y muestra ${minutes.length} tiempo(s)`);
+  } else {
+    if (got !== expected) problems.push(`barrio "${got ?? "(ninguno)"}" ≠ esperado "${expected}"`);
     if (!intro) problems.push("no se encuentra la intro del barrio");
     else if (/\b\d+\s*min/i.test(intro[1])) problems.push("la intro contiene minutos escritos");
+
+    if (hasCoords) {
+      if (minutes.length === 0) problems.push("tiene coordenadas pero no muestra ningún POI");
+      for (const [n, mode] of minutes) {
+        if (n < 1 || n > 40) problems.push(`minuto implausible: ${n} min ${mode}`);
+        if (mode === "a pie" && n > 22) problems.push(`${n} min "a pie" supera el techo de 22`);
+      }
+    } else if (minutes.length > 0) {
+      // Regla dura del sprint: sin coordenadas fiables, ningún número.
+      problems.push(`SIN coordenadas y muestra ${minutes.length} tiempo(s)`);
+    }
   }
 
   if (problems.length === 0) {

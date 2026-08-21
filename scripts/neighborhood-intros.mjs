@@ -54,5 +54,8 @@ export const INTROS = {
   // ── Municipio de Pozuelo de Alarcón ─────────────────────────────────
   somosaguas: `Somosaguas es una zona residencial del municipio de Pozuelo de Alarcón, al oeste de Madrid y contigua a la Casa de Campo. Está formada por urbanizaciones de vivienda unifamiliar con parcela y apenas tiene edificación en altura. El campus de Somosaguas de la Universidad Complutense, con las facultades de Ciencias Sociales, ocupa su extremo norte.`,
 
+  // ── Municipio de Torrelodones ───────────────────────────────────────
+  torrelodones: `Torrelodones es un municipio del noroeste de la Comunidad de Madrid, en el piedemonte de la sierra de Guadarrama y a unos veintinueve kilómetros de la capital. Se organiza en dos núcleos principales: el casco antiguo y la Colonia, surgida en el último tercio del siglo XIX alrededor de la estación de ferrocarril. Predomina la vivienda unifamiliar con parcela.`,
+
   "prado-de-somosaguas": `Prado de Somosaguas es una urbanización del municipio de Pozuelo de Alarcón, contigua a Somosaguas por el oeste. Se desarrolló como área residencial de baja densidad, con viviendas unifamiliares y adosadas sobre calles de trazado curvo y sin tráfico de paso. Los servicios y el comercio del casco de Pozuelo quedan al norte.`,
 };
