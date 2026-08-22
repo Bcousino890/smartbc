@@ -4,12 +4,14 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { StatCard } from "@/components/ui/stat-card";
 import {
+  getParticularesIdsInPolygons,
   getParticularesPage,
   getParticularesStats,
   getParticularesZoneCounts,
   getStaffOptions,
   type ParticularesFilters,
 } from "@/lib/db/queries/particulares";
+import { decodeZonePolygons } from "@/lib/zone-polygon";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { ParticularesClient, type ParticularRow } from "./particulares-client";
@@ -57,15 +59,24 @@ export default async function AdminParticularesPage({
   const sp = await searchParams;
   const showRetired = one(sp.retired) === "1";
   const zoneParam = one(sp.zone) ?? "";
+  // Zona dibujada a mano en el mapa (alternativa al desplegable de arriba —
+  // ver el comentario de mutua exclusión en use-particulares-filters.ts).
+  // Un JSON corrupto o manipulado a mano decodifica a [] sin romper la
+  // página, simplemente sin filtro de zona dibujada.
+  const drawnPolygons = decodeZonePolygons(one(sp.zonePoly));
   const page = Math.max(1, Number(one(sp.page)) || 1);
 
   // Arrancan ya, en paralelo — solo la query principal necesita esperar a
-  // zoneCounts (para resolver "d:<distrito>", ver abajo), el resto no depende
-  // de nada de esto.
+  // zoneCounts (para resolver "d:<distrito>", ver abajo) e idsInZone (para
+  // resolver la zona dibujada), el resto no depende de nada de esto.
   const zoneCountsPromise = getParticularesZoneCounts(showRetired);
   const statsPromise = getParticularesStats();
   const staffOptionsPromise = getStaffOptions().catch(() => []);
   const scraperConfigPromise = getIdealistaScraperConfig();
+  // Mismo criterio que getParticularesZoneCounts: solo 3 columnas cortas
+  // (id/latitude/longitude) recorridas una vez, nunca la fila enriquecida
+  // completa — ver el comentario de getParticularesIdsInPolygons().
+  const idsInZonePromise = getParticularesIdsInPolygons(drawnPolygons, showRetired);
 
   // Conteos de zona para el desplegable — antes salían de recorrer las 10.7k
   // filas enriquecidas en el cliente; ahora es un fetch aparte, ligero (ver
@@ -77,12 +88,14 @@ export default async function AdminParticularesPage({
   const zoneDistrictRaw = zoneParam.startsWith("d:")
     ? (zoneCounts.zoneGroups.find((g) => g.district === zoneParam.slice(2))?.zones.map((z) => z.name) ?? [])
     : undefined;
+  const idsInZone = drawnPolygons.length > 0 ? await idsInZonePromise : undefined;
 
   const filters: ParticularesFilters = {
     search: one(sp.q),
     operation: pick(one(sp.operation), ["rent", "sale"] as const),
     zone: zoneParam,
     zoneDistrictRaw,
+    idsInZone,
     priceMin: numOrUndef(one(sp.priceMin)),
     priceMax: numOrUndef(one(sp.priceMax)),
     bedroomsMin: numOrUndef(one(sp.bedrooms)),

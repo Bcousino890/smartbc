@@ -41,6 +41,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { Modal } from "@/components/ui/modal";
 import { ZoneFilter, type ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
+import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter";
 import { extractFloor } from "@/lib/floor";
 import { extractFurnished } from "@/lib/furnished";
 import { formatPrice } from "@/lib/format";
@@ -1543,6 +1544,8 @@ export function ParticularesClient({
     setOperation,
     zone,
     setZone,
+    drawnZone,
+    setDrawnZone,
     priceMin,
     setPriceMin,
     priceMax,
@@ -1783,6 +1786,11 @@ export function ParticularesClient({
             <option value="sale">Venta</option>
           </select>
           <ZoneFilter groups={zoneGroups} value={zone} onChange={setZone} />
+          {/* Dibujar zona: alternativa al desplegable de arriba para áreas que
+              no coinciden con ningún distrito/barrio (no hay geometría oficial
+              de Madrid en este repo — ver lib/zone-polygon.ts). Bloque
+              autónomo a propósito, igual que ShareLinkAction más abajo. */}
+          <DrawZoneFilter value={drawnZone} onChange={setDrawnZone} />
           <select
             value={gestion}
             onChange={(e) => setGestion(e.target.value as typeof gestion)}

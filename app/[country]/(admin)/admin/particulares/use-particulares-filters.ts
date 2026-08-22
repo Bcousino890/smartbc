@@ -32,6 +32,11 @@ type FilterValues = {
   query: string;
   operation: OperationFilter;
   zone: string;
+  /** JSON de ZonePolygon[] (o "") — ver lib/zone-polygon.ts. Alternativa al
+   *  desplegable `zone`: dibujar una zona en el mapa y elegir distrito/barrio
+   *  son dos formas de acotar por ubicación que NO se combinan (ver
+   *  setZone/setDrawnZone abajo, que se limpian mutuamente). */
+  drawnZone: string;
   priceMin: string;
   priceMax: string;
   bedrooms: string;
@@ -49,6 +54,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   query: "q",
   operation: "operation",
   zone: "zone",
+  drawnZone: "zonePoly",
   priceMin: "priceMin",
   priceMax: "priceMax",
   bedrooms: "bedrooms",
@@ -89,7 +95,8 @@ export function useParticularesFilters() {
   const [operation, setOperation] = useState<OperationFilter>(() =>
     readEnum<OperationFilter>(searchParams.get(PARAM_KEYS.operation), OPERATION_VALUES),
   );
-  const [zone, setZone] = useState(() => searchParams.get(PARAM_KEYS.zone) ?? "");
+  const [zone, setZoneRaw] = useState(() => searchParams.get(PARAM_KEYS.zone) ?? "");
+  const [drawnZone, setDrawnZoneRaw] = useState(() => searchParams.get(PARAM_KEYS.drawnZone) ?? "");
   const [priceMin, setPriceMin] = useState(() => searchParams.get(PARAM_KEYS.priceMin) ?? "");
   const [priceMax, setPriceMax] = useState(() => searchParams.get(PARAM_KEYS.priceMax) ?? "");
   const [bedrooms, setBedrooms] = useState(() => searchParams.get(PARAM_KEYS.bedrooms) ?? "");
@@ -110,10 +117,24 @@ export function useParticularesFilters() {
   );
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
 
+  // Dibujar una zona y elegir distrito/barrio son dos formas ALTERNATIVAS de
+  // acotar por ubicación, no combinables (ver el comentario de FilterValues):
+  // activar una limpia la otra en vez de dejarlas apilarse como AND, que
+  // confundiría más de lo que ayuda en una primera versión.
+  function setZone(v: string) {
+    setZoneRaw(v);
+    if (v) setDrawnZoneRaw("");
+  }
+  function setDrawnZone(v: string) {
+    setDrawnZoneRaw(v);
+    if (v) setZoneRaw("");
+  }
+
   const values: FilterValues = {
     query,
     operation,
     zone,
+    drawnZone,
     priceMin,
     priceMax,
     bedrooms,
@@ -162,6 +183,7 @@ export function useParticularesFilters() {
     query,
     operation,
     zone,
+    drawnZone,
     priceMin,
     priceMax,
     bedrooms,
@@ -188,6 +210,8 @@ export function useParticularesFilters() {
     setOperation,
     zone,
     setZone,
+    drawnZone,
+    setDrawnZone,
     priceMin,
     setPriceMin,
     priceMax,
