@@ -996,7 +996,10 @@ function DestinationPlaque({
       {/* Ancla en la coordenada exacta. */}
       <span className="bcp-plaque-anchor absolute left-0 top-0 block -translate-x-1/2 -translate-y-1/2" />
       {/* Rótulo justo encima, con su punta. */}
-      <span className="bcp-plaque absolute left-0 top-0 flex -translate-x-1/2 items-center gap-1.5">
+      {/* Sin `top`: la placa se coloca por `bottom` (en el CSS) para quedar
+          POR ENCIMA del ancla. Con las dos propiedades definidas gana `top` y
+          el punto acababa pisando el texto. */}
+      <span className="bcp-plaque absolute left-0 flex -translate-x-1/2 items-center gap-1.5">
         <Icon size={12} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
         <span className="max-w-[13rem] truncate">{poi.name}</span>
       </span>
