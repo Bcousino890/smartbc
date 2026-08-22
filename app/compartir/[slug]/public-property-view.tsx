@@ -24,6 +24,7 @@ import { shareSlug } from "@/lib/share-slug";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { splitDescriptionForFactsLed } from "@/lib/services/story/fallback";
 import { isMicroChapter, microChapterFact } from "@/lib/services/story/micro-chapter";
+import { heroSrcSet } from "./hero-srcset";
 import { CHAPTER_HEADINGS, type PublicStoryBlock, type StoryChapter } from "@/lib/services/story/types";
 import { groupFeatures } from "@/lib/property-features-taxonomy";
 import { ATICO_FLOOR } from "@/lib/floor";
@@ -700,25 +701,6 @@ export function PublicPropertyView({
 }
 
 // ─── 01 · HERO MEDIA ─────────────────────────────────────────────────────────
-
-/** Anchos que sirve el proxy (`/p/…?w=`). Mismo escalón, misma caché. */
-const HERO_WIDTHS = [640, 828, 1080, 1280, 1600, 1920, 2560, 3200];
-
-/**
- * `srcset` del hero acotado al ancho REAL del original. Ofrecer anchos que la
- * fotografía no tiene no añade un solo detalle: el proxy devolvería el mismo
- * fichero y el navegador se lo creería. Cuando no sabemos las dimensiones
- * (foto sin medir) se ofrece la escala completa, que es el comportamiento
- * conservador: como mucho se pide de más una vez.
- */
-function heroSrcSet(src: string, sourceWidth: number | null): string | undefined {
-  const sep = src.includes("?") ? "&" : "?";
-  const max = sourceWidth ?? HERO_WIDTHS[HERO_WIDTHS.length - 1];
-  const widths = HERO_WIDTHS.filter((w) => w < max);
-  if (sourceWidth) widths.push(sourceWidth);
-  if (widths.length < 2) return undefined;
-  return widths.map((w) => `${src}${sep}w=${w} ${w}w`).join(", ");
-}
 
 function HeroMedia({
   heroVideo,

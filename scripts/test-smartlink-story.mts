@@ -672,6 +672,24 @@ console.log("Micro-capítulos:");
     microChapterFact("Finca construida en 1941.") === "Finca construida en 1941");
 }
 
+// ── 10) HERO · srcset honesto ──
+console.log("Hero media:");
+{
+  const mod = await import("../app/compartir/[slug]/hero-srcset");
+  const { heroSrcSet } = mod;
+  check("sin dimensiones conocidas NO se declara srcset",
+    heroSrcSet("/p/x/0?v=1", null) === undefined);
+  check("una foto pequeña tampoco (no hay nada que ofrecer)",
+    heroSrcSet("/p/x/0?v=1", 500) === undefined);
+  const ss = heroSrcSet("/p/x/0?v=1", 1600) ?? "";
+  check("nunca promete más píxeles de los que hay",
+    ss.length > 0 && !/\b(1920|2560|3200)w/.test(ss), ss);
+  check("el último candidato es el ancho real del original",
+    ss.endsWith("w=1600 1600w"), ss.slice(-30));
+  check("los anchos van con & cuando la url ya trae query",
+    ss.startsWith("/p/x/0?v=1&w=640 640w"), ss.slice(0, 30));
+}
+
 console.log("");
 if (failures > 0) {
   console.error(`✗ ${failures} comprobaciones fallidas`);
