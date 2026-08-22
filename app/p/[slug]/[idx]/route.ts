@@ -30,8 +30,15 @@ export const runtime = "nodejs";
 
 /** Anchos servibles. Cubre móvil (dpr 2-3), portátil, 1440@2x y 2560. */
 const WIDTHS = [640, 828, 1080, 1200, 1280, 1600, 1920, 2560, 3200] as const;
-/** Calidad del reencode. Alta a propósito: es la foto principal. */
-const QUALITY = 86;
+/**
+ * Calidad del reencode. Alta a propósito en los tamaños que se miran de
+ * cerca; algo menor en los enormes, donde el ojo no distingue y el peso se
+ * dispara: la misma foto pasa de 314KB a 834KB entre 1920 y 3200 px, y un
+ * hero de 800KB estropea el LCP mucho más de lo que aporta el detalle.
+ */
+function qualityFor(width: number): number {
+  return width > 2048 ? 78 : 86;
+}
 
 function snapWidth(raw: string | null): number | null {
   const n = Number.parseInt(raw ?? "", 10);
@@ -138,7 +145,7 @@ export async function GET(
         }
         const out = await image
           .resize({ width, withoutEnlargement: true, fit: "inside" })
-          .webp({ quality: QUALITY })
+          .webp({ quality: qualityFor(width) })
           .toBuffer();
         return new NextResponse(new Uint8Array(out), {
           headers: {
