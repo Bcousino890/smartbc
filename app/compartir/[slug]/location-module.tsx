@@ -408,7 +408,7 @@ export function LocationModule({
       {rail.length > 0 && (
         <div className="mt-7 px-6 md:px-8">
           <p className="crm-label-sm text-gold-dark">Conectada con Madrid</p>
-          <div className="bcp-rail-scroll mt-5 -mx-6 overflow-x-auto px-6 pb-1 md:mx-0 md:overflow-visible md:px-0">
+          <div className="bcp-rail-scroll mt-7 -mx-6 overflow-x-auto px-6 pb-1 pt-1 md:mx-0 md:overflow-visible md:px-0">
             <ul ref={railRef} className="relative flex min-w-[32rem] items-start gap-1 md:min-w-0">
               {/* Hilo continuo detrás de los hitos, a la altura de los puntos. */}
               <span
@@ -423,7 +423,7 @@ export function LocationModule({
                 ref={indicatorRef}
                 aria-hidden
                 data-resting={railIndex < 0 ? "true" : "false"}
-                className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-1/2"
+                className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-[78%]"
               >
                 {focus && focus.mode !== "walk" ? (
                   <Car size={13} strokeWidth={1.75} />
@@ -621,10 +621,19 @@ export function LocationModule({
 
             {/* MARCADOR DEL DESTINO: jerarquía por encima de todo salvo la
                 vivienda, con su ficha contextual anclada. */}
-            {focusPt && (
+            {/* DESTINO SELECCIONADO · misma familia que los POIs curados
+                (cápsula con glifo), en champán porque está elegido. Un
+                círculo suelto se leía como el vértice de un grafo; un destino
+                tiene que parecer un LUGAR (§19-20). */}
+            {focusPt && focus && (
               <span className="absolute z-[5]" style={{ left: focusPt.left, top: focusPt.top }} aria-hidden>
-                <span className="bcp-dest absolute left-0 top-0 block">
-                  <span className="block h-[26px] w-[26px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold shadow-[0_12px_28px_-8px_rgba(40,28,10,0.95)] ring-[4px] ring-white" />
+                <span className="bcp-dest absolute left-0 top-0 block -translate-x-1/2 -translate-y-1/2">
+                  <span className="bcp-poi is-active">
+                    {(() => {
+                      const { Icon } = categoryOf(focus.category);
+                      return <Icon size={13} strokeWidth={1.75} />;
+                    })()}
+                  </span>
                 </span>
               </span>
             )}
