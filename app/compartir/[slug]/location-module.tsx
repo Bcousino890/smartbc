@@ -1049,33 +1049,43 @@ function DestinationRow({
  *  y a un sitio que el cliente ha descubierto en Google — con una diferencia
  *  deliberada: el de Google enseña dirección y enlace externo, y NUNCA se
  *  presenta como recomendación de BCP. */
+/**
+ * FICHA DE EXPLORACIÓN · modo descubierto/buscado (EMAAR).
+ *
+ * Solo para lugares que BCP NO había presentado: los que el cliente pulsa en
+ * el mapa o encuentra buscando. Ahí sí aporta el contexto completo —nombre,
+ * categoría, dirección, tiempo o distancia—, porque es la primera noticia que
+ * tiene de ese sitio.
+ *
+ * Los destinos curados NO pasan por aquí: su información ya vive en el rail
+ * de conectividad y en el mapa les basta con la placa.
+ */
 function ContextCard({
-  poi, place, onClose, side = "top", align = "center", live,
+  place, onClose, side = "top", align = "center", live,
 }: {
-  poi?: PoiTravel;
-  place?: LocationDestination;
+  place: LocationDestination;
   onClose: () => void;
   side?: "top" | "bottom"; align?: "center" | "left" | "right"; live?: boolean;
 }) {
-  const name = place?.name ?? poi?.name ?? "";
-  const categoryKey = place?.category ?? poi?.category ?? "";
+  const name = place.name;
+  const categoryKey = place.category ?? "";
   const { label, Icon } = categoryOf(categoryKey);
-  const subtitle = place?.subtitle ?? null;
-  const eta = place?.eta ?? (poi ? { minutes: poi.minutes, mode: poi.mode } : null);
-  const isDiscovered = place?.source === "osm_discovered";
-  const isSearch = place?.source === "osm_search";
+  const subtitle = place.subtitle ?? null;
+  const eta = place.eta ?? null;
+  const isDiscovered = place.source === "osm_discovered";
+  const isSearch = place.source === "osm_search";
   // Enlace a OSM solo si el id es REAL (no el generado desde coordenadas):
   // preferimos no ofrecer enlace a ofrecer uno que lleve a ninguna parte.
   // Los ids de búsqueda conservan el tipo ("search:way/123") para enlazar a
   // la página correcta de OSM.
-  const osmId = place?.id.replace(/^osm:/, "") ?? "";
-  const searchRef = /^search:(node|way|relation)\/(\d+)$/.exec(place?.id ?? "");
+  const osmId = place.id.replace(/^osm:/, "");
+  const searchRef = /^search:(node|way|relation)\/(\d+)$/.exec(place.id);
   const osmUrl = isDiscovered && /^\d+$/.test(osmId)
     ? `https://www.openstreetmap.org/node/${osmId}`
     : searchRef
       ? `https://www.openstreetmap.org/${searchRef[1]}/${searchRef[2]}`
       : isDiscovered
-        ? `https://www.openstreetmap.org/?mlat=${place!.lat}&mlon=${place!.lng}#map=18/${place!.lat}/${place!.lng}`
+        ? `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=18/${place.lat}/${place.lng}`
         : null;
 
   return (
@@ -1108,7 +1118,7 @@ function ContextCard({
           {subtitle || label}
         </p>
       )}
-      {place?.address && <p className="crm-meta mt-1.5 text-ink/45">{place.address}</p>}
+      {place.address && <p className="crm-meta mt-1.5 text-ink/45">{place.address}</p>}
       {eta ? (
         <>
           <p className="crm-number mt-2.5 text-xl leading-none text-ink">
@@ -1117,7 +1127,7 @@ function ContextCard({
           </p>
           <p className="crm-meta mt-1 text-ink/40">Desde la vivienda</p>
         </>
-      ) : isSearch && place?.distanceKm != null ? (
+      ) : isSearch && place.distanceKm != null ? (
         // Sin ETA honesto, la distancia geodésica sí es un hecho (§9).
         <>
           <p className="crm-number mt-2.5 text-xl leading-none text-ink">{formatDistance(place.distanceKm)}</p>

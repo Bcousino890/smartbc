@@ -275,3 +275,34 @@ QA final (vivienda en Goya): "UAH" → Rectorado de Alcalá ≈36 min ·
 "Colegio del Pilar" → el de Castelló (600 m) primero · "El Corte Inglés" →
 Goya 87 ≈6 min · "restaurante" → los de la manzana · "Museo del Prado" ≈9 min
 · "centro comercial" → FNAC Goya ≈4 min.
+
+## Dos superficies, dos modos (placa vs ficha)
+
+Comparando de nuevo DAMAC y EMAAR quedó claro que la ficha grande sobraba en
+lo curado: repetía lo que el rail acababa de decir dos centímetros más arriba
+—nombre, minutos, modo, "desde la vivienda"— y pesaba tres veces más.
+
+**Regla de producto: un dato, un sitio.**
+
+| Fuente | Superficie | Contenido |
+|---|---|---|
+| `bcp_curated`, `university` (catálogo) | **DestinationPlaque** (~167 px) | icono de categoría + nombre, con punta anclada a la coordenada |
+| `osm_discovered`, `osm_search` | **Ficha de exploración** (~336 px) | nombre, categoría, dirección, tiempo o distancia, enlace a OSM |
+
+El reparto es el mismo del documento, llevado hasta el final:
+
+```
+RAIL   → conectividad (tiempo y modo)
+MAPA   → lugar (dónde está)
+PLACA  → identidad (cuál es)
+FICHA  → contexto (solo si BCP no lo había presentado)
+```
+
+En móvil la placa se queda igual de pequeña (sin tarjeta inferior); solo lo
+descubierto y lo buscado abren la tarjeta, que es donde el contexto extra
+compensa el espacio. Como la placa ocupa mucho menos, la banda que reserva el
+encuadre baja de 168→72 px en overview y de 172→96 px al explorar.
+
+⚠️ Detalle que costó un despliegue: la placa llevaba `top-0` de Tailwind y
+`bottom` del CSS a la vez. Con las dos definidas gana `top`, así que se
+colocaba SOBRE la coordenada y el punto del ancla partía el texto.
