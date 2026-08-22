@@ -23,6 +23,7 @@ import { formatPrice } from "@/lib/format";
 import { shareSlug } from "@/lib/share-slug";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { splitDescriptionForFactsLed } from "@/lib/services/story/fallback";
+import { isMicroChapter, microChapterFact } from "@/lib/services/story/micro-chapter";
 import { CHAPTER_HEADINGS, type PublicStoryBlock, type StoryChapter } from "@/lib/services/story/types";
 import { groupFeatures } from "@/lib/property-features-taxonomy";
 import { ATICO_FLOOR } from "@/lib/floor";
@@ -217,9 +218,17 @@ export function PublicPropertyView({
     .split(/\n+/)
     .map((p) => p.trim())
     .filter(Boolean);
-  const chapterBlocks = (blocks ?? []).filter((b) =>
-    CHAPTER_ORDER.includes(b.chapter),
-  );
+  // §9 · REGLA DE MICRO-CAPÍTULO (presentación, no validación).
+  // Un capítulo que solo dice un dato suelto ("Finca construida en 1941.") no
+  // sostiene una banda entera con su rótulo: el hecho se enseña en Detalles y
+  // el capítulo desaparece. El dato NO se pierde ni se relaja ningún
+  // invariante — solo cambia de sitio.
+  const allChapterBlocks = (blocks ?? []).filter((b) => CHAPTER_ORDER.includes(b.chapter));
+  const chapterBlocks = allChapterBlocks.filter((b) => !isMicroChapter(b.chapter, b.copy));
+  const movedFacts = allChapterBlocks
+    .filter((b) => isMicroChapter(b.chapter, b.copy))
+    .map((b) => microChapterFact(b.copy))
+    .filter(Boolean);
   const barrioBlock = blocks?.find((b) => b.chapter === "barrio") ?? null;
 
   // Asignación foto→capítulo: primera foto con clase compatible aún no usada.
@@ -507,7 +516,7 @@ export function PublicPropertyView({
         )}
 
         {/* 12 · DETALLES DE LA VIVIENDA — taxonomía determinista. */}
-        {detailGroups.length > 0 && (
+        {(detailGroups.length > 0 || movedFacts.length > 0) && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
             <h2 className="crm-section-title text-ink">Detalles de la vivienda</h2>
             <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -525,6 +534,20 @@ export function PublicPropertyView({
                 </div>
               ))}
             </div>
+            {/* Datos rescatados de capítulos que no daban para capítulo. Van
+                en frase, no en viñeta: no son etiquetas de taxonomía. */}
+            {movedFacts.length > 0 && (
+              <div className="mt-6 border-t border-gold/15 pt-5">
+                <ul className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm text-ink/75 md:grid-cols-2">
+                  {movedFacts.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
 

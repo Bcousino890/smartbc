@@ -638,6 +638,29 @@ console.log("Property Prelude:");
   check("umbral mínimo de evidencia declarado", MIN_EVIDENCE_CLAIMS >= 3);
 }
 
+// ── 9) REGLA DE MICRO-CAPÍTULO · presentación editorial ──
+console.log("Micro-capítulos:");
+{
+  const { isMicroChapter, microChapterFact, informationUnits } = await import("../lib/services/story/micro-chapter");
+  // El caso que motivó la regla.
+  check("'Finca construida en 1941.' no sostiene un capítulo",
+    isMicroChapter("building", "Finca construida en 1941."));
+  check("un capítulo con dos datos SÍ se queda, por corto que sea",
+    !isMicroChapter("building", "Edificio de 1910 con portería y patio interior."));
+  check("dos frases ya sostienen capítulo",
+    !isMicroChapter("kitchen", "Cocina funcional. Está integrada en el salón."));
+  check("puro adjetivo sin hecho → micro",
+    isMicroChapter("finishes", "El hogar es moderno, elegante y cómodo."));
+  check("un dato breve pero distintivo se queda (Velux)",
+    !isMicroChapter("private", "Dormitorio diáfano en planta superior con ventanas tipo Velux."));
+  check("no es solo longitud: texto largo nunca es micro",
+    !isMicroChapter("building", "Finca construida en 1941 " + "y ".repeat(20)));
+  check("estancias distintas cuentan por separado",
+    informationUnits("Salón y comedor independiente") === 2, String(informationUnits("Salón y comedor independiente")));
+  check("el dato rescatado pierde el punto final",
+    microChapterFact("Finca construida en 1941.") === "Finca construida en 1941");
+}
+
 console.log("");
 if (failures > 0) {
   console.error(`✗ ${failures} comprobaciones fallidas`);
