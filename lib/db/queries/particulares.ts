@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
+import { isPointInAnyPolygon, type ZonePolygon } from "@/lib/zone-polygon";
 import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 
 /**
@@ -98,6 +99,14 @@ export type ParticularesFilters = {
    *  criterio que ve el desplegable, en vez de reimplementar
    *  normalizeZone() en SQL. */
   zoneDistrictRaw?: string[];
+  /** Zona dibujada a mano en el mapa (ver components/admin/particulares/
+   *  draw-zone-filter.tsx): lista EXACTA de ids ya resuelta por
+   *  getParticularesIdsInPolygons() contra lat/lng. Alternativa a
+   *  zone/zoneDistrictRaw — page.tsx solo rellena UNO de los dos (dibujar
+   *  zona y elegir distrito/barrio no se combinan, ver
+   *  use-particulares-filters.ts), pero si algún día llegaran ambos a la
+   *  vez, este gana (es más específico que el desplegable). */
+  idsInZone?: string[];
   priceMin?: number;
   priceMax?: number;
   bedroomsMin?: number;
@@ -125,7 +134,13 @@ function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress
 
   if (f.operation) q = q.eq("operation", f.operation);
 
-  if (f.zoneDistrictRaw) {
+  // `idsInZone` (zona dibujada en el mapa) gana sobre el desplegable de
+  // distrito/barrio si por lo que sea llegaran los dos a la vez — en la
+  // práctica no pasa, use-particulares-filters.ts limpia uno al fijar el
+  // otro, pero un `else` deja claro que no se combinan como AND.
+  if (f.idsInZone) {
+    q = f.idsInZone.length > 0 ? q.in("id", f.idsInZone) : q.eq("id", IMPOSSIBLE_ID);
+  } else if (f.zoneDistrictRaw) {
     q = f.zoneDistrictRaw.length > 0 ? q.in("zone", f.zoneDistrictRaw) : q.eq("id", IMPOSSIBLE_ID);
   } else if (f.zone?.startsWith("z:")) {
     q = q.eq("zone", f.zone.slice(2));
@@ -494,4 +509,36 @@ export async function getParticularesZoneCounts(
     zoneGroups: buildZoneGroups(rows, showRetired),
     portalCounts: buildPortalCounts(rows),
   };
+}
+
+/**
+ * Resuelve el filtro de "zona dibujada en el mapa" a la lista EXACTA de ids
+ * que caen dentro de alguno de los polígonos — mismo criterio de disciplina
+ * que getParticularesZoneCounts(): 3 columnas cortas (id, latitude,
+ * longitude), NUNCA la fila enriquecida completa, y el point-in-polygon se
+ * hace en Node (ray casting, lib/zone-polygon.ts) porque no hay PostGIS en
+ * este esquema. `showRetired` reduce cuánto hay que traer y calcular — no
+ * cambia el resultado semántico (la ubicación no depende de si el anuncio
+ * sigue activo), pero como page.tsx ya sabe qué pestaña se está mirando, no
+ * tiene sentido escanear la otra mitad de la tabla en vano.
+ */
+export async function getParticularesIdsInPolygons(
+  polygons: ZonePolygon[],
+  showRetired: boolean,
+): Promise<string[]> {
+  if (polygons.length === 0) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { rows } = await fetchAllRows((from, to) =>
+    supabase
+      .from("particulares")
+      .select("id, latitude, longitude")
+      .eq("is_active", !showRetired)
+      .not("latitude", "is", null)
+      .not("longitude", "is", null)
+      .range(from, to),
+  );
+  return rows
+    .filter((r) => isPointInAnyPolygon([r.longitude as number, r.latitude as number], polygons))
+    .map((r) => r.id as string);
 }
