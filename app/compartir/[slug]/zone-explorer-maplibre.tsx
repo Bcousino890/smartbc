@@ -236,9 +236,16 @@ export function ZoneExplorerMapLibre({
       map.on("click", (e: any) => {
         if (!interactiveRef.current) return;
         const layers = CLICKABLE_LAYER_IDS.filter((l) => map.getLayer(l));
-        const features = layers.length
-          ? map.queryRenderedFeatures(e.point, { layers })
-          : [];
+        // Tolerancia de acierto: los puntos de POI miden 3px de radio y
+        // pedirle al cliente que clave el cursor en ellos convierte la
+        // exploración en un juego de puntería. Se consulta una caja alrededor
+        // del clic, como hace cualquier mapa que se deje usar.
+        const T = 10;
+        const box: [[number, number], [number, number]] = [
+          [e.point.x - T, e.point.y - T],
+          [e.point.x + T, e.point.y + T],
+        ];
+        const features = layers.length ? map.queryRenderedFeatures(box, { layers }) : [];
         if (!features.length) {
           // Geometría vacía: NO se inventa un lugar ni se deja marcador
           // fantasma. Simplemente se cierra lo que hubiera seleccionado.
