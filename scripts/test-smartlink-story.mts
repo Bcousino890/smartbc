@@ -688,6 +688,18 @@ console.log("Hero media:");
     ss.endsWith("w=1600 1600w"), ss.slice(-30));
   check("los anchos van con & cuando la url ya trae query",
     ss.startsWith("/p/x/0?v=1&w=640 640w"), ss.slice(0, 30));
+
+  // El perfil del CDN de Idealista: la descarga prueba el grande y cae al
+  // seguro. Es lo que separaba a BC-1421 (850px) del resto (1600px).
+  const { idealistaSourceCandidates } = await import("../lib/sync/scrapers/idealista");
+  const cands = idealistaSourceCandidates(
+    "https://img4.idealista.com/blur/WEB_DETAIL_TOP-L-L/0/id.pro.es.image.master/71/33/71/785432477.jpg",
+  );
+  check("se prueba primero el perfil grande y luego el seguro",
+    cands.length === 2 && cands[0].includes("WEB_DETAIL_TOP-XL-L") && cands[1].includes("WEB_DETAIL_TOP-L-L"),
+    cands.join(" | "));
+  check("una url que no es del CDN de Idealista se deja intacta",
+    idealistaSourceCandidates("https://example.com/foto.jpg").length === 1);
 }
 
 console.log("");
