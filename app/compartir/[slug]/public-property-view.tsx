@@ -31,6 +31,7 @@ import type { Property } from "@/lib/types";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { LocationModule } from "./location-module";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
+import type { MapProvider } from "@/lib/services/location/provider";
 
 // ============================================================================
 // SMARTLINK 2.0 · Adaptive Property Renderer
@@ -131,8 +132,10 @@ export function PublicPropertyView({
   shareId,
   publicUrl,
   story,
+  prelude,
   neighborhood,
   universities,
+  mapProvider,
   experienceState,
 }: {
   property: Property;
@@ -143,9 +146,14 @@ export function PublicPropertyView({
   // para que el reenvío por WhatsApp conserve el tracking (fix del sprint).
   publicUrl?: string;
   story?: PublicStoryBlock[] | null;
+  /** Apertura editorial aprobada (Property Prelude). Sustituye al overview
+   *  como comienzo del libro de la vivienda; nunca conviven los dos. */
+  prelude?: string | null;
   neighborhood?: NeighborhoodData | null;
   /** Universidades cercanas (catálogo existente, mismo cálculo de tiempos). */
   universities?: NearbyUniversity[];
+  /** Proveedor del explorador de zona. Sin credenciales de Google → "osm". */
+  mapProvider?: MapProvider;
   /** Estado de EXPERIENCIA (no de Property Story): complete | partial |
    *  sparse llegan de una story aprobada; facts_led = estructura 2.0 sin
    *  narrativa aprobada. Solo alimenta analytics — el render se decide por
@@ -190,7 +198,10 @@ export function PublicPropertyView({
 
   // ── Story: intro + capítulos + barrio ──
   const blocks = story ?? null;
-  const intro = blocks?.find((b) => b.chapter === "overview") ?? null;
+  // §17: una sola responsabilidad. Con prelude aprobado, el overview calla —
+  // queda como capa de evidencia en admin. Sin prelude, el overview sigue
+  // haciendo de intro como hasta ahora.
+  const intro = prelude ? null : (blocks?.find((b) => b.chapter === "overview") ?? null);
   const chapterBlocks = (blocks ?? []).filter((b) =>
     CHAPTER_ORDER.includes(b.chapter),
   );
@@ -376,6 +387,15 @@ export function PublicPropertyView({
         </section>
 
         {/* 04 · INTRO editorial (solo story aprobado). */}
+        {/* PROPERTY PRELUDE · apertura editorial. Sin card, sin borde, sin
+            heading: el comienzo de un libro, no una ficha. Cuerpo mayor que
+            el copy de capítulo, interlineado generoso y ancho de lectura. */}
+        {prelude && blocks && (
+          <section className="mx-auto mt-10 max-w-[50rem] px-1 md:mt-14">
+            <p className="bcp-prelude text-ink/85">{prelude}</p>
+          </section>
+        )}
+
         {intro && (
           <section className="mx-auto mt-8 max-w-3xl px-1 text-center">
             <p className="text-lg leading-relaxed text-ink/80">{intro.copy}</p>
@@ -504,6 +524,7 @@ export function PublicPropertyView({
             ZONE_COORDS[property.zone] ?? { lat: 40.4168, lng: -3.7038, zoom: 14 }
           }
           universities={universities ?? []}
+          mapProvider={mapProvider ?? "maplibre"}
           onView={() => trackerRef.current?.trackEvent("location_module_view")}
           onExplore={() => trackerRef.current?.trackEvent("map_explore")}
           onRestore={() => trackerRef.current?.trackEvent("location_overview_restore")}

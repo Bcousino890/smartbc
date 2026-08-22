@@ -856,6 +856,14 @@
 }
 .bcp-live-poi:hover { background: #d4af7f; }
 
+/* Sitio descubierto en Google: neutro y claramente distinto de los POIs
+   curados por BCP — nunca se insinúa que BCP lo recomienda (§10). */
+.bcp-live-place {
+  display: block; width: 16px; height: 16px; border-radius: 9999px;
+  background: #fbf8f3; border: 3px solid #2c2113;
+  box-shadow: 0 8px 20px -6px rgba(40, 28, 10, 0.8);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bcp-focus-area, .bcp-dest, .bcp-context-card, .bcp-capsule {
     animation: none !important;
@@ -864,4 +872,15 @@
   .bcp-capsule { transform: translate(-50%, -50%) !important; }
   .bcp-context-card[data-align="center"] { transform: translate(-50%, 0) !important; }
   .bcp-dest { transform: none !important; }
+}
+
+/* PROPERTY PRELUDE · apertura editorial: cuerpo mayor que el copy de
+   capítulo, interlineado generoso, sin artificios. Luxury = contención. */
+.smartlink-root .bcp-prelude {
+  font-size: 1.22rem;
+  line-height: 1.85;
+  letter-spacing: 0.005em;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude { font-size: 1.32rem; line-height: 1.9; }
 }

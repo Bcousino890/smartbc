@@ -34,7 +34,8 @@
     "cleanup-events": "node --loader ts-node/esm scripts/cleanup-old-events.ts",
     "fotocasa:zones": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/fotocasa-zones-dump.mts",
     "test:neighborhoods": "node scripts/qa-neighborhood-layer.mjs",
-    "test:tracking": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-tracking.mts"
+    "test:tracking": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-tracking.mts",
+    "test:zone": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zone-explorer.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",
@@ -48,6 +49,7 @@
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "lucide-react": "^0.460.0",
+    "maplibre-gl": "^5.24.0",
     "next": "^15.1.6",
     "nodemailer": "^6.10.1",
     "playwright": "^1.49.1",

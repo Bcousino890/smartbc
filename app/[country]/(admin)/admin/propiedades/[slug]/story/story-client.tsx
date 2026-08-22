@@ -15,8 +15,11 @@ import {
   generateStoryAction,
   nextInQueueAction,
   probeVideosAction,
+  regeneratePreludeAction,
   setBlockStatusAction,
+  setPreludeStatusAction,
   updateBlockCopyAction,
+  updatePreludeAction,
 } from "./actions";
 
 type Version = {
@@ -26,6 +29,8 @@ type Version = {
   provider: string | null;
   created_at: string;
   reviewed_at: string | null;
+  prelude?: string | null;
+  prelude_status?: string | null;
 };
 type Block = {
   id: string;
@@ -79,6 +84,7 @@ export function StoryClient({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
+  const [preludeDraft, setPreludeDraft] = useState<string | null>(null);
   // Bloques señalados por el quality gate: se resaltan para que el agente sepa
   // exactamente cuál resolver sin leerse la story entera.
   const flaggedBlocks = new Map<string, string[]>();
@@ -291,6 +297,59 @@ export function StoryClient({
             )
           }
         >
+          {/* PROPERTY PRELUDE · apertura editorial. Vive fuera de los gates:
+              se edita, aprueba o regenera sin tocar la story. */}
+          {latest && (
+          <div className="mb-5 rounded-lg border border-gold/30 bg-gold/5 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="crm-label-sm text-gold-dark">Prelude · apertura editorial</p>
+              <div className="flex items-center gap-1.5">
+                <Pill tone={latest.prelude_status === "approved" ? "positive" : latest.prelude_status === "rejected" ? "neutral" : latest.prelude_status ? "info" : "neutral"}>
+                  {latest.prelude_status ?? "sin prelude"}
+                </Pill>
+                {latest.prelude && latest.prelude_status !== "approved" && (
+                  <Button size="sm" disabled={pending}
+                    onClick={() => run(() => setPreludeStatusAction(latest.id, "approved", path))}>
+                    Aprobar
+                  </Button>
+                )}
+                {latest.prelude && latest.prelude_status !== "rejected" && (
+                  <Button size="sm" disabled={pending}
+                    onClick={() => run(() => setPreludeStatusAction(latest.id, "rejected", path))}>
+                    Rechazar
+                  </Button>
+                )}
+                <Button size="sm" disabled={pending}
+                  onClick={() => run(() => regeneratePreludeAction(latest.id, path))}>
+                  {latest.prelude ? "Regenerar" : "Generar"}
+                </Button>
+              </div>
+            </div>
+            {preludeDraft !== null ? (
+              <div className="mt-3 space-y-2">
+                <TextArea value={preludeDraft} onChange={(e) => setPreludeDraft(e.target.value)} rows={4} />
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={pending}
+                    onClick={() => run(async () => { const r = await updatePreludeAction(latest.id, preludeDraft, path); if (r.ok) setPreludeDraft(null); return r; })}>
+                    Guardar
+                  </Button>
+                  <Button size="sm" disabled={pending} onClick={() => setPreludeDraft(null)}>Cancelar</Button>
+                </div>
+              </div>
+            ) : latest.prelude ? (
+              <p className="mt-2 cursor-pointer text-sm leading-relaxed text-ink/80"
+                onClick={() => setPreludeDraft(latest.prelude ?? "")}
+                title="Pulsa para editar">
+                {latest.prelude}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-ink/45">
+                Sin apertura editorial. Con evidencia suficiente, «Generar» compone una desde los claims seguros.
+              </p>
+            )}
+          </div>
+          )}
+
           <div className="space-y-4">
             {blocks.map((b) => {
               const evidence = b.claim_ids

@@ -30,6 +30,8 @@ import {
 import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
+import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
+import { fromCuratedPoi, type LocationDestination } from "@/lib/services/location/destination";
 
 // Basemap: CARTO Voyager sobre datos de OpenStreetMap.
 //
@@ -77,6 +79,7 @@ export function LocationModule({
   lng,
   pois,
   universities = [],
+  mapProvider = "maplibre",
   neighborhood,
   fallbackCoords,
   onView,
@@ -89,6 +92,8 @@ export function LocationModule({
   lng: number | null;
   pois: PoiTravel[];
   universities?: NearbyUniversity[];
+  /** Proveedor del explorador de zona. */
+  mapProvider?: "maplibre" | "osm-static";
   neighborhood?: LocationNeighborhood | null;
   /** Centro aproximado del barrio cuando la propiedad no está geocodificada. */
   fallbackCoords: { lat: number; lng: number; zoom: number };
@@ -106,6 +111,12 @@ export function LocationModule({
   // máquina de estados, no cuatro implementaciones.
   const [focus, setFocus] = useState<PoiTravel | null>(null);
   const activePoi = focus?.name ?? null;
+  // Lugar DESCUBIERTO por el cliente en el basemap. Se guarda aparte de los
+  // POIs curados: nunca se mezclan ni se presenta como recomendación de BCP.
+  const [placeFocus, setPlaceFocus] = useState<LocationDestination | null>(null);
+  // El mapa no cargó → se vuelve al mosaico estático: nunca un hueco roto.
+  const [mapDown, setMapDown] = useState(false);
+  const useVectorMap = mapProvider === "maplibre" && !mapDown;
 
   const hasPreciseCoords = lat != null && lng != null;
   const center = hasPreciseCoords
@@ -218,6 +229,7 @@ export function LocationModule({
   const enterLive = useCallback(async () => {
     setLive(true);
     onExplore();
+    if (mapProvider === "maplibre" && !mapDown) return; // lo monta ZoneExplorerMapLibre
     const L = (await import("leaflet")).default;
     if (!document.getElementById("leaflet-css")) {
       const link = document.createElement("link");
@@ -260,19 +272,26 @@ export function LocationModule({
       mk.on("click", () => selectPoiRef.current?.(p));
     }
     leafletRef.current = { L, map };
-  }, [center.lat, center.lng, view.lat, view.lng, view.zoom, mapPois, universities, onExplore]);
+  }, [center.lat, center.lng, view.lat, view.lng, view.zoom, mapPois, universities, onExplore, mapProvider, mapDown]);
 
   const exitLive = useCallback(() => {
     leafletRef.current?.map.remove();
     leafletRef.current = null;
     setLive(false);
     setFocus(null);
+    setPlaceFocus(null);
   }, []);
 
   useEffect(() => () => leafletRef.current?.map?.remove(), []);
 
+  useEffect(() => {
+    onExternalOpenRef.current = (name) => onPoiClick(name, "external_osm");
+    return () => { onExternalOpenRef.current = null; };
+  }, [onPoiClick]);
+
   const restoreOverview = useCallback(() => {
     setFocus(null);
+    setPlaceFocus(null);
     onRestore();
     const inst = leafletRef.current;
     inst?.map.flyTo([center.lat, center.lng], contextZoomForWidth(size?.w ?? 900, center.lat), {
@@ -391,29 +410,58 @@ export function LocationModule({
       <div
         ref={stageRef}
         data-focus={focus ? "true" : "false"}
+        data-map-provider={mapProvider}
         className={`bcp-map-stage relative mt-6 w-full overflow-hidden ${
           live ? "bcp-map-live h-[64vh] min-h-[420px]" : "h-[52vh] min-h-[340px] md:h-[540px]"
         }`}
       >
         {live ? (
           <>
-            <div ref={mapElRef} className="absolute inset-0 h-full w-full" />
-            <div className="absolute right-3 top-3 z-[500] flex flex-col gap-1.5">
-              <button type="button" aria-label="Acercar" onClick={() => leafletRef.current?.map.zoomIn()}
-                className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                <Plus size={15} strokeWidth={2} />
-              </button>
-              <button type="button" aria-label="Alejar" onClick={() => leafletRef.current?.map.zoomOut()}
-                className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                <Minus size={15} strokeWidth={2} />
-              </button>
-            </div>
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} live />}
+            {useVectorMap ? (
+              <ZoneExplorerMapLibre
+                origin={{ lat: center.lat, lng: center.lng }}
+                originLabel="La vivienda"
+                curated={[...mapPois, ...universities.slice(0, 3)].map(fromCuratedPoi)}
+                focus={placeFocus ?? (focus ? fromCuratedPoi(focus) : null)}
+                onSelectPlace={(d) => {
+                  setPlaceFocus(d);
+                  setFocus(null);
+                  onPoiClick(d.name, d.category);
+                }}
+                onUnavailable={() => setMapDown(true)}
+              />
+            ) : (
+              <div ref={mapElRef} className="absolute inset-0 h-full w-full" />
+            )}
+            {/* Los controles de zoom los pone MapLibre. Los propios solo
+                existen para el renderer anterior: tenerlos a la vez apilaba
+                dos juegos en la misma esquina y se robaban los clics. */}
+            {!useVectorMap && (
+              <div className="absolute right-3 top-3 z-[500] flex flex-col gap-1.5">
+                <button type="button" aria-label="Acercar" onClick={() => leafletRef.current?.map.zoomIn()}
+                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
+                  <Plus size={15} strokeWidth={2} />
+                </button>
+                <button type="button" aria-label="Alejar" onClick={() => leafletRef.current?.map.zoomOut()}
+                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
+                  <Minus size={15} strokeWidth={2} />
+                </button>
+              </div>
+            )}
+            {placeFocus ? (
+              <ContextCard
+                place={placeFocus}
+                onClose={() => { setPlaceFocus(null); restoreOverview(); }}
+                side="top" align="center" live
+              />
+            ) : focus ? (
+              <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} live />
+            ) : null}
             {/* Control secundario, en esquina: no compite con el mapa. */}
             <button type="button" onClick={focus ? restoreOverview : exitLive}
-              className="crm-meta absolute bottom-3 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
+              className="crm-meta absolute bottom-11 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 md:bottom-3 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
               {focus ? <Maximize2 size={11} strokeWidth={2} /> : <Lock size={11} strokeWidth={2} />}
-              {focus ? "Ver zona completa" : "Salir del mapa"}
+              {focus ? "Ver zona completa" : "Salir de la zona"}
             </button>
           </>
         ) : (
@@ -524,7 +572,7 @@ export function LocationModule({
               className="crm-meta absolute bottom-3 left-3 z-[7] inline-flex items-center gap-1.5 rounded-full bg-ink/95 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] backdrop-blur-sm transition hover:bg-ink"
             >
               {focus ? <Maximize2 size={11} strokeWidth={2} /> : <Compass size={11} strokeWidth={2} />}
-              {focus ? "Ver zona completa" : "Explorar mapa"}
+              {focus ? "Ver zona completa" : "Explorar la zona"}
             </button>
 
             <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
@@ -611,19 +659,39 @@ function DestinationRow({
 }
 
 /** Ficha contextual del destino (principio EMAAR): componente NUESTRO, nunca
- *  el popup por defecto de Leaflet. Se ancla arriba para no taparse con el
- *  control de la esquina inferior ni salirse en móvil. */
+ *  el popup por defecto del proveedor. Sirve por igual a un POI curado por BCP
+ *  y a un sitio que el cliente ha descubierto en Google — con una diferencia
+ *  deliberada: el de Google enseña dirección y enlace externo, y NUNCA se
+ *  presenta como recomendación de BCP. */
 function ContextCard({
-  poi, onClose, side = "top", align = "center", live,
+  poi, place, onClose, side = "top", align = "center", live,
 }: {
-  poi: PoiTravel; onClose: () => void;
+  poi?: PoiTravel;
+  place?: LocationDestination;
+  onClose: () => void;
   side?: "top" | "bottom"; align?: "center" | "left" | "right"; live?: boolean;
 }) {
-  const { label, Icon } = categoryOf(poi.category);
+  const name = place?.name ?? poi?.name ?? "";
+  const categoryKey = place?.category ?? poi?.category ?? "";
+  const { label, Icon } = categoryOf(categoryKey);
+  const subtitle = place?.subtitle ?? null;
+  const eta = place?.eta ?? (poi ? { minutes: poi.minutes, mode: poi.mode } : null);
+  const isDiscovered = place?.source === "osm_discovered";
+  // Enlace a OSM solo si el id es REAL (no el generado desde coordenadas):
+  // preferimos no ofrecer enlace a ofrecer uno que lleve a ninguna parte.
+  const osmId = place?.id.replace(/^osm:/, "") ?? "";
+  const osmUrl = isDiscovered && /^\d+$/.test(osmId)
+    ? `https://www.openstreetmap.org/node/${osmId}`
+    : isDiscovered
+      ? `https://www.openstreetmap.org/?mlat=${place!.lat}&mlon=${place!.lng}#map=18/${place!.lat}/${place!.lng}`
+      : null;
+
   return (
     <div
       data-side={side}
       data-align={align}
+      role="dialog"
+      aria-label={name}
       className={`bcp-context-card absolute z-[600] w-[min(19rem,calc(100%-1.5rem))] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm ${
         side === "top" ? "top-3.5" : "bottom-14"
       } ${
@@ -636,21 +704,41 @@ function ContextCard({
       >
         <X size={13} strokeWidth={2} />
       </button>
-      <p className="crm-label-sm pr-6 text-ink">{poi.name}</p>
-      {label && (
+      <p className="crm-label-sm pr-6 text-ink">{name}</p>
+      {(subtitle || label) && (
         <p className="crm-meta mt-1 flex items-center gap-1.5 text-ink/50">
           <Icon size={11} strokeWidth={1.75} className="text-gold-dark" />
-          {label}
+          {subtitle || label}
         </p>
       )}
-      <p className="crm-number mt-2.5 text-xl leading-none text-ink">
-        ≈ {poi.minutes}
-        <span className="crm-meta ml-1.5 text-ink/50">min {modeLabel(poi.mode)}</span>
-      </p>
-      <p className="crm-meta mt-1 text-ink/40">Desde la vivienda</p>
+      {place?.address && <p className="crm-meta mt-1.5 text-ink/45">{place.address}</p>}
+      {eta ? (
+        <>
+          <p className="crm-number mt-2.5 text-xl leading-none text-ink">
+            ≈ {eta.minutes}
+            <span className="crm-meta ml-1.5 text-ink/50">min {modeLabel(eta.mode as PoiTravel["mode"])}</span>
+          </p>
+          <p className="crm-meta mt-1 text-ink/40">Desde la vivienda</p>
+        </>
+      ) : (
+        // Sin tiempo verificado NO se inventa uno: se dice lo que se sabe.
+        <p className="crm-meta mt-2.5 text-ink/45">En la zona de la vivienda</p>
+      )}
+      {osmUrl && (
+        <a
+          href={osmUrl} target="_blank" rel="noopener noreferrer"
+          onClick={() => onExternalOpenRef.current?.(name)}
+          className="crm-meta mt-3 inline-block text-gold-dark underline-offset-2 hover:underline"
+        >
+          Ver en OpenStreetMap ↗
+        </a>
+      )}
     </div>
   );
 }
+
+/** Callback de "Ver en Google Maps" para analítica, sin acoplar la ficha. */
+const onExternalOpenRef: { current: ((name: string) => void) | null } = { current: null };
 
 /** Curva suave entre dos puntos: se comba perpendicular al segmento para que
  *  se lea como un gesto de conexión y no como el trazado de una calle. */
