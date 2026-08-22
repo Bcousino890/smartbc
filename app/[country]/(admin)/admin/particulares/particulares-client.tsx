@@ -1028,11 +1028,14 @@ function ParticularModal({
         />
       )}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+        // h-[100dvh]: en iOS la barra del navegador se come el `inset-0` y
+        // la X de cerrar de la esquina quedaba debajo de ella (ver el mismo
+        // fix en book-mode.tsx).
+        className="fixed inset-0 h-[100dvh] z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
         onClick={onClose}
       >
         <div
-          className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+          className="relative flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Foto + nav */}
