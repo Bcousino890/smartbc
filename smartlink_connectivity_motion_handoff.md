@@ -235,3 +235,43 @@ MOBILE:                    PASS
   el buscador no se monta (no hay contra qué sesgar ni medir).
 - El resultado externo hereda la calidad de OSM: un lugar mal etiquetado
   llega sin categoría (icono genérico) — se muestra, no se inventa.
+
+## Ampliación: catálogo completo de Madrid (zone_places)
+
+Tras la primera QA con usuarios reales salieron tres fallos, todos corregidos:
+
+1. **"≈ 78 min en coche" a Torrejón.** La velocidad plana de 18 km/h (media
+   urbana) aplicada a un trayecto de 20 km por la A-2 mentía al revés. La
+   velocidad media ahora crece con la distancia hacia media de autovía
+   (1 km→19, 10 km→46, ≥15 km→60 km/h) y el factor de callejero baja en
+   trayectos largos. Contrastado: Torrejón 24 (real ~25), Alcalá 36 (~35),
+   aeropuerto 19 (~20), IE Tower 16 (~15). Sigue siendo `≈`.
+2. **"UAH" contestaba con el campus de Torrejón** por ser el más cercano.
+   Quien busca una universidad pregunta por la institución: la búsqueda
+   responde ahora la SEDE PRINCIPAL (la primera del catálogo). La lista de
+   "Universidades cercanas" sigue siendo de proximidad, que ahí sí procede.
+3. **Dependencia del geocoder para todo lo demás.** `zone_places` (0154) trae
+   el dato a casa: **21.540 lugares con nombre** de la Comunidad de Madrid
+   importados desde OSM vía Overpass (una vez, refrescable con
+   `scripts/import-zone-places.mts`): colegios, universidades, hospitales
+   (amenity y healthcare), restaurantes/cafés/bares, centros comerciales,
+   museos/monumentos/teatros, estaciones, polideportivos y parques.
+
+Con el dato en casa, las sugerencias al teclear consultan NUESTRA base
+(debounce 240 ms, índice trigram) — instantáneas y sin políticas de terceros.
+Nominatim queda solo para el Enter: direcciones y lo que no esté en el
+catálogo.
+
+**Vocabulario del que busca ≠ nombre oficial de OSM.** "Colegio del Pilar" no
+encontraba al de Castelló porque su registro se llama "Centro Privado de
+Educación Infantil, Primaria y Secundaria Nuestra Señora del Pilar". Los
+términos genéricos (colegio, restaurante, hospital, museo, gimnasio, centro
+comercial…) filtran por CATEGORÍA; los artículos no filtran; el resto exige
+aparecer en el nombre. Y en una consulta puramente genérica ("hospital" a
+secas) manda la cercanía y nada más — el bono de prefijo premiaba a un
+hospital a 24 min solo por llamarse "Hospital…".
+
+QA final (vivienda en Goya): "UAH" → Rectorado de Alcalá ≈36 min ·
+"Colegio del Pilar" → el de Castelló (600 m) primero · "El Corte Inglés" →
+Goya 87 ≈6 min · "restaurante" → los de la manzana · "Museo del Prado" ≈9 min
+· "centro comercial" → FNAC Goya ≈4 min.
