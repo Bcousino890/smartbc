@@ -20,7 +20,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   bcpLuxuryMadridStyle,
   CLICKABLE_LAYER_IDS,
-  MAP_ATTRIBUTION,
 } from "@/lib/services/location/bcp-map-style";
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
 
@@ -111,7 +110,7 @@ export function ZoneExplorerMapLibre({
       mapRef.current = map;
 
       // Atribución obligatoria, compacta pero presente.
-      map.addControl(new maplibre.AttributionControl({ compact: true, customAttribution: MAP_ATTRIBUTION }), "bottom-right");
+      map.addControl(new maplibre.AttributionControl({ compact: true }), "bottom-right");
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("error", (e: any) => {

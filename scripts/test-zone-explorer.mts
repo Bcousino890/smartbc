@@ -129,8 +129,24 @@ console.log("Estilo BCP Luxury Madrid:");
     CLICKABLE_LAYER_IDS.every((l) => ids.includes(l)), ids.join(","));
   check("hay parques, agua y edificios (no es un mapa vacío)",
     ["park", "water", "building"].every((l) => ids.includes(l)));
-  check("NO es escala de grises: parques verdes y agua azulada",
-    /#dde5d0/i.test(JSON.stringify(style)) && /#cdd9de/i.test(JSON.stringify(style)));
+  // Se comprueba el PRINCIPIO (el verde tira a verde y el agua a azul), no
+  // un hex concreto: la paleta se ha revisado ya una vez y un test clavado a
+  // "#dde5d0" solo obliga a editarlo sin vigilar nada.
+  const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const paintOf = (id: string, key: string) =>
+    String(style.layers.find((l: any) => l.id === id)?.paint?.[key] ?? "");
+  const [pr, pg, pb] = hex(paintOf("park", "fill-color"));
+  const [wr, , wb] = hex(paintOf("water", "fill-color"));
+  check("NO es escala de grises: el parque tira a verde",
+    pg > pr && pg > pb, paintOf("park", "fill-color"));
+  check("NO es escala de grises: el agua tira a azul",
+    wb > wr, paintOf("water", "fill-color"));
+  // El viario principal tiene que despegarse del suelo: es lo que hace
+  // legible una ciudad y lo que fallaba en la paleta "desert wash".
+  const lum = (h: string) => hex(h).reduce((a, b) => a + b, 0) / 3;
+  check("el viario principal contrasta con el suelo",
+    lum(paintOf("road-major", "line-color")) - lum(paintOf("background", "background-color")) >= 8,
+    `${paintOf("road-major", "line-color")} vs ${paintOf("background", "background-color")}`);
   check("los puntos de POI no aparecen antes de z15 (densidad contenida)",
     style.layers.filter((l: any) => l["source-layer"] === "poi").every((l: any) => l.minzoom >= 15));
   check("los RÓTULOS de POI esperan a z16: la vista de entrada no se llena de texto",

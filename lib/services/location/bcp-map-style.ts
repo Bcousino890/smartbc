@@ -32,14 +32,13 @@ export const MAP_ATTRIBUTION =
 // para lo que estructura una ciudad: el viario en BLANCO y la vegetación en
 // verde salvia real. La calidez sigue en el suelo y en la edificación.
 const C = {
-  land: "#f1eee7",
-  landuseUrban: "#eae5da",
+  land: "#f2f0ea",
   landcoverWood: "#d9e3cc",
   park: "#cfdec2",
   parkDark: "#b9cda6",
   water: "#b6cedb",
-  building: "#e2dbcd",
-  buildingOutline: "#cfc5b1",
+  building: "#e3ddd1",
+  buildingOutline: "#c7bda8",
   // El viario principal en blanco es lo que hace legible una ciudad: destaca
   // sobre el suelo cálido sin meter un color nuevo en la escena.
   roadMajor: "#ffffff",
@@ -66,7 +65,11 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
     name: "BCP Luxury Madrid",
     glyphs: OPENFREEMAP_GLYPHS,
     sources: {
-      openmaptiles: { type: "vector", url: OPENFREEMAP_TILES },
+      // La atribución se declara AQUÍ. Si se deja que MapLibre la tome del
+      // TileJSON y además se pasa `customAttribution`, el pie del mapa
+      // aparece repetido ("OpenMapTiles · OSM | OpenFreeMap · OpenMapTiles ·
+      // OSM"), que es lo que pasaba antes.
+      openmaptiles: { type: "vector", url: OPENFREEMAP_TILES, attribution: MAP_ATTRIBUTION },
     },
     layers: [
       { id: "background", type: "background", paint: { "background-color": C.land } },
@@ -79,16 +82,6 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         "source-layer": "landcover",
         filter: ["in", ["get", "class"], ["literal", ["wood", "forest", "grass"]]],
         paint: { "fill-color": C.landcoverWood, "fill-opacity": 0.65 },
-      },
-      {
-        // Masa urbana: una veladura cálida sobre lo construido para que se
-        // distinga de los descampados y los parques incluso a zoom bajo.
-        id: "landuse-urban",
-        type: "fill",
-        source: "openmaptiles",
-        "source-layer": "landuse",
-        filter: ["in", ["get", "class"], ["literal", ["residential", "commercial", "retail", "industrial"]]],
-        paint: { "fill-color": C.landuseUrban, "fill-opacity": 0.75 },
       },
       {
         id: "park",
