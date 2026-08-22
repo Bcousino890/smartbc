@@ -89,6 +89,8 @@ export function ZoneExplorerMapLibre({
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const residenceElRef = useRef<HTMLElement | null>(null);
+  const curatedMarkersRef = useRef<any[]>([]);
+  const navControlRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
 
   const onSelectRef = useRef(onSelectPlace);
@@ -97,6 +99,9 @@ export function ZoneExplorerMapLibre({
   useEffect(() => { onSelectCuratedRef.current = onSelectCurated; }, [onSelectCurated]);
   const onProjectorRef = useRef(onProjector);
   useEffect(() => { onProjectorRef.current = onProjector; }, [onProjector]);
+  // El handler de clic se registra una vez y lee el estado por ref.
+  const interactiveRef = useRef(interactive);
+  useEffect(() => { interactiveRef.current = interactive; }, [interactive]);
 
   const makeEl = useCallback((className: string, html?: string) => {
     const el = document.createElement("span");
@@ -154,8 +159,7 @@ export function ZoneExplorerMapLibre({
 
       // Atribución obligatoria, compacta pero presente.
       map.addControl(new maplibre.AttributionControl({ compact: true }), "bottom-right");
-      // Los controles de zoom solo tienen sentido donde se puede mover.
-      if (interactive) map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
+      // Los controles de zoom los pone/quita el efecto de interacción.
 
       map.on("error", (e: any) => {
         // Un fallo de teselas no debe tumbar el módulo; se registra y ya.
@@ -171,40 +175,13 @@ export function ZoneExplorerMapLibre({
         const residence = document.createElement("div");
         // En overview el medallón lleva rótulo; en explorar se reconoce solo,
         // que es justo lo que se le pide al marcador (§3).
-        residence.innerHTML = residenceMarkerHtml(interactive ? undefined : originLabel);
+        // El rótulo se crea SIEMPRE y se oculta al explorar: el marcador es
+        // el mismo objeto en los dos estados.
+        residence.innerHTML = residenceMarkerHtml(originLabel);
         residenceElRef.current = residence.firstElementChild as HTMLElement;
         new maplibre.Marker({ element: residence, anchor: "center" })
           .setLngLat([origin.lng, origin.lat])
           .addTo(map);
-
-        // ── POIs curados de BCP: marca champán ──
-        for (const c of curated) {
-          const wrap = document.createElement("div");
-          wrap.innerHTML = curatedMarkerHtml(c.category);
-          const el = wrap.firstElementChild as HTMLElement;
-          el.title = c.name;
-          curatedElsRef.current.set(c.id, el);
-          // En overview los marcadores son composición, no interfaz: quien
-          // manda es el rail editorial. En explorar sí se pueden pulsar.
-          if (interactive) {
-            el.addEventListener("click", (ev) => {
-              ev.stopPropagation();
-              (onSelectCuratedRef.current ?? onSelectRef.current)(c);
-            });
-          } else {
-            el.style.pointerEvents = "none";
-          }
-          new maplibre.Marker({ element: wrap, anchor: "center" })
-            .setLngLat([c.lng, c.lat])
-            .addTo(map);
-        }
-
-        // §5 · en overview los lugares de OSM NO compiten: se apagan del todo.
-        if (!interactive) {
-          for (const id of CLICKABLE_LAYER_IDS) {
-            if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
-          }
-        }
 
         // ── Cursor de "aquí se puede pulsar" solo sobre features válidas ──
         const setCursor = (v: string) => { map.getCanvas().style.cursor = v; };
@@ -256,7 +233,8 @@ export function ZoneExplorerMapLibre({
       });
 
       // ── Clic sobre el mapa: solo capas de la lista blanca ──
-      if (interactive) map.on("click", (e: any) => {
+      map.on("click", (e: any) => {
+        if (!interactiveRef.current) return;
         const layers = CLICKABLE_LAYER_IDS.filter((l) => map.getLayer(l));
         const features = layers.length
           ? map.queryRenderedFeatures(e.point, { layers })
@@ -357,6 +335,79 @@ export function ZoneExplorerMapLibre({
       duration: 700,
     });
   }, [focus, ready, origin, makeEl, interactive]);
+
+  // ── Marcadores curados ──
+  // Van en su propio efecto porque la lista CAMBIA: en overview está vacía
+  // (los dibujan las cápsulas editoriales) y al explorar entran los POIs y
+  // las universidades. Con el mapa montado una sola vez, crearlos dentro del
+  // `load` los dejaba congelados en el estado inicial.
+  useEffect(() => {
+    const map = mapRef.current;
+    const maplibre = libRef.current;
+    if (!map || !maplibre || !ready) return;
+
+    for (const m of curatedMarkersRef.current) m.remove();
+    curatedMarkersRef.current = [];
+    curatedElsRef.current.clear();
+
+    for (const c of curated) {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = curatedMarkerHtml(c.category);
+      const el = wrap.firstElementChild as HTMLElement;
+      el.title = c.name;
+      curatedElsRef.current.set(c.id, el);
+      if (interactive) {
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          (onSelectCuratedRef.current ?? onSelectRef.current)(c);
+        });
+      } else {
+        el.style.pointerEvents = "none";
+      }
+      if (focus?.id === c.id) el.classList.add("is-active");
+      curatedMarkersRef.current.push(
+        new maplibre.Marker({ element: wrap, anchor: "center" }).setLngLat([c.lng, c.lat]).addTo(map),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curated, ready, interactive]);
+
+  // ── Interacción: overview ⇄ explorar sobre el MISMO mapa ──
+  // No se remonta nada (eso recargaría teselas y parpadearía): se sueltan o
+  // se atan los gestos, aparecen los controles y se revelan los lugares de
+  // OSM. Sin esto, pulsar "Explorar la zona" dejaba un mapa que no se podía
+  // mover, porque las opciones del constructor son las del primer render.
+  useEffect(() => {
+    const map = mapRef.current;
+    const maplibre = libRef.current;
+    if (!map || !maplibre || !ready) return;
+
+    const handlers = ["dragPan", "scrollZoom", "boxZoom", "dragRotate", "keyboard", "doubleClickZoom", "touchZoomRotate"];
+    for (const h of handlers) {
+      const handler = (map as any)[h];
+      if (!handler) continue;
+      if (interactive) handler.enable();
+      else handler.disable();
+    }
+    map.getCanvas().style.cursor = interactive ? "" : "default";
+
+    if (interactive && !navControlRef.current) {
+      navControlRef.current = new maplibre.NavigationControl({ showCompass: false });
+      map.addControl(navControlRef.current, "top-right");
+    } else if (!interactive && navControlRef.current) {
+      map.removeControl(navControlRef.current);
+      navControlRef.current = null;
+    }
+
+    // §5 · los lugares de OSM solo existen al explorar.
+    for (const id of CLICKABLE_LAYER_IDS) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", interactive ? "visible" : "none");
+    }
+
+    // El rótulo del medallón sobra al explorar: ahí se reconoce solo.
+    const caption = residenceElRef.current?.querySelector(".bcp-residence-caption") as HTMLElement | null;
+    if (caption) caption.style.display = interactive ? "none" : "";
+  }, [interactive, ready]);
 
   // ── Cámara impuesta (overview) ──
   // El módulo compone el encuadre con la vivienda y sus destinos; el mapa se
