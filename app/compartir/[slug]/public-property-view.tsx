@@ -133,6 +133,7 @@ export function PublicPropertyView({
   publicUrl,
   story,
   prelude,
+  preludeHeadline,
   neighborhood,
   universities,
   mapProvider,
@@ -149,6 +150,9 @@ export function PublicPropertyView({
   /** Apertura editorial aprobada (Property Prelude). Sustituye al overview
    *  como comienzo del libro de la vivienda; nunca conviven los dos. */
   prelude?: string | null;
+  /** Titular editorial del spread (columna izquierda). Opcional: sin él la
+   *  banda se compone igual, solo con el eyebrow. */
+  preludeHeadline?: string | null;
   neighborhood?: NeighborhoodData | null;
   /** Universidades cercanas (catálogo existente, mismo cálculo de tiempos). */
   universities?: NearbyUniversity[];
@@ -202,6 +206,12 @@ export function PublicPropertyView({
   // queda como capa de evidencia en admin. Sin prelude, el overview sigue
   // haciendo de intro como hasta ahora.
   const intro = prelude ? null : (blocks?.find((b) => b.chapter === "overview") ?? null);
+  // El cuerpo llega con los párrafos separados por líneas en blanco: el
+  // spread los renderiza como bloques con aire, no como un muro de texto.
+  const preludeParagraphs = (prelude ?? "")
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   const chapterBlocks = (blocks ?? []).filter((b) =>
     CHAPTER_ORDER.includes(b.chapter),
   );
@@ -391,8 +401,24 @@ export function PublicPropertyView({
             heading: el comienzo de un libro, no una ficha. Cuerpo mayor que
             el copy de capítulo, interlineado generoso y ancho de lectura. */}
         {prelude && blocks && (
-          <section className="mx-auto mt-10 max-w-[50rem] px-1 md:mt-14">
-            <p className="bcp-prelude text-ink/85">{prelude}</p>
+          <section className="bcp-prelude-spread mx-auto mt-12 max-w-[71rem] px-1 md:mt-20">
+            <div className="md:flex md:items-start md:gap-12 lg:gap-16">
+              {/* Columna izquierda (35-40%): eyebrow + titular editorial. */}
+              <div className="md:w-[36%] md:shrink-0">
+                <p className="crm-label-sm text-gold-dark">La residencia</p>
+                {preludeHeadline && (
+                  <h2 className="bcp-prelude-headline mt-3 text-ink md:mt-4">{preludeHeadline}</h2>
+                )}
+              </div>
+              {/* Columna derecha (60-65%): el prelude, en medida de lectura. */}
+              <div className="mt-6 md:mt-0 md:w-[64%] md:max-w-[45rem]">
+                {preludeParagraphs.map((p, i) => (
+                  <p key={i} className={`bcp-prelude text-ink/85${i > 0 ? " mt-5" : ""}`}>
+                    {p}
+                  </p>
+                ))}
+              </div>
+            </div>
           </section>
         )}
 

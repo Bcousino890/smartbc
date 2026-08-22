@@ -876,11 +876,43 @@
 
 /* PROPERTY PRELUDE · apertura editorial: cuerpo mayor que el copy de
    capítulo, interlineado generoso, sin artificios. Luxury = contención. */
+/* PROPERTY PRELUDE v2 · EDITORIAL OPENING SPREAD.
+   Banda completa entre Key Facts y el primer capítulo: presencia horizontal
+   (~1136px) pero medida de lectura contenida (~720px) en la columna derecha.
+   Sin card, sin borde, sin sombra — el mismo lienzo ivory del SmartLink. El
+   aire de abajo es parte de la composición: separa el prólogo del capítulo 01
+   sin necesidad de un divisor gráfico. */
+.smartlink-root .bcp-prelude-spread {
+  padding-bottom: 0.5rem;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude-spread { padding-bottom: 2.5rem; }
+}
+
+/* Titular editorial. Optima del sistema de display: 400, versal y tracking
+   normal, como el resto de títulos del SmartLink (regla absoluta del sistema
+   tipográfico — el Prelude no inventa una voz nueva, usa la de la casa). */
+.smartlink-root .bcp-prelude-headline {
+  font-family: var(--crm-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  font-size: 1.65rem;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude-headline { font-size: 2.15rem; line-height: 1.18; }
+}
+@media (min-width: 1024px) {
+  .smartlink-root .bcp-prelude-headline { font-size: 2.3rem; }
+}
+
 .smartlink-root .bcp-prelude {
-  font-size: 1.22rem;
-  line-height: 1.85;
+  font-size: 1.1rem;
+  line-height: 1.8;
   letter-spacing: 0.005em;
 }
 @media (min-width: 768px) {
-  .smartlink-root .bcp-prelude { font-size: 1.32rem; line-height: 1.9; }
+  .smartlink-root .bcp-prelude { font-size: 1.22rem; line-height: 1.85; }
 }

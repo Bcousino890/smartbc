@@ -1,32 +1,34 @@
 // PROPERTY PRELUDE · generación en lote (piloto y rollout).
 //
 // GUARDRAIL: sin --confirm se ejecuta como dry-run (no escribe nada).
-// Uso (VPS): node scripts/preludes.bundle.cjs [pilot|all] [--confirm] [--approve]
+// Uso (VPS): node scripts/preludes.bundle.cjs [pilot|all] [opciones]
 //
-//   pilot     → 5 COMPLETE + 5 PARTIAL + 5 SPARSE + 5 FACTS-LED, status 'generated'
-//   all       → todas las versiones candidatas sin prelude
-//   --approve → además aprueba los que pasan el contrato (rollout tras piloto)
+//   pilot          → 5 COMPLETE + 5 PARTIAL + 5 SPARSE + 5 FACTS-LED
+//   all            → todas las versiones candidatas
+//   --slugs=a,b,c  → exactamente esas propiedades (piloto dirigido)
+//   --refresh      → reprocesa también las que YA tienen prelude (v1 → v2)
+//   --approve      → aprueba las que pasan el contrato (rollout validado)
+//   --confirm      → sin esto no escribe nada
 //
 // El prelude se compone SOLO desde claims seguros (collectPreludeEvidence) y
-// se valida con el contrato completo. Si el modelo incumple, un reintento con
-// feedback; si vuelve a incumplir, esa propiedad queda SIN prelude. Nunca se
-// guarda nada que no pase el contrato.
+// se valida con el contrato completo (cuerpo + titular). Si el modelo
+// incumple, se reintenta con feedback; si vuelve a incumplir, esa propiedad
+// queda SIN prelude. Nunca se guarda nada que no pase el contrato.
 
 import { createAdminClient } from "../lib/db/admin";
-import {
-  collectPreludeEvidence,
-  MIN_EVIDENCE_CLAIMS,
-  preludeSystemPrompt,
-  preludeUserPrompt,
-  validatePrelude,
-} from "../lib/services/story/prelude";
-import { aiComplete } from "../lib/services/ai/chat";
+import { collectPreludeEvidence, MIN_EVIDENCE_CLAIMS } from "../lib/services/story/prelude";
+import { composePrelude } from "../lib/services/story/prelude-compose";
 import { NARRATIVE_CHAPTERS } from "../lib/services/story/gate";
 
 async function main() {
   const MODE = process.argv[2] === "all" ? "all" : "pilot";
   const CONFIRM = process.argv.includes("--confirm");
   const APPROVE = process.argv.includes("--approve");
+  const REFRESH = process.argv.includes("--refresh");
+  const SLUGS = (process.argv.find((a) => a.startsWith("--slugs="))?.slice(8) ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (!CONFIRM) console.log("[preludes] sin --confirm → DRY-RUN (no escribe)");
 
   const db = createAdminClient() as any;
@@ -54,13 +56,12 @@ async function main() {
     if (!prev || (prev.status !== "approved" && v.status === "approved")) byProp.set(v.property_id, v);
   }
 
-  const { data: propsData } = { data: [] as any[] };
   const props = new Map<string, any>();
   const ids = [...byProp.keys()];
   for (let i = 0; i < ids.length; i += 120) {
     const { data } = await db
       .from("properties")
-      .select("id, bc_reference, operation, operations, status, archived_at")
+      .select("id, bc_reference, slug, operation, operations, status, archived_at")
       .in("id", ids.slice(i, i + 120));
     for (const p of data ?? []) props.set(p.id, p);
   }
@@ -70,7 +71,10 @@ async function main() {
   for (const [pid, v] of byProp) {
     const p = props.get(pid);
     if (!p || p.archived_at || p.status === "archived") continue;
-    if (v.prelude_status) continue; // ya tiene prelude (en cualquier estado)
+    if (SLUGS.length > 0 && !SLUGS.includes(p.slug)) continue;
+    // Sin --refresh se respeta lo que ya existe (en cualquier estado): así el
+    // rollout es reanudable y no pisa revisiones humanas.
+    if (v.prelude_status && !REFRESH) continue;
     let state: string;
     if (v.status === "approved") {
       state = /SPARSE/i.test(v.notes ?? "") ? "sparse" : "partial-or-complete";
@@ -91,17 +95,17 @@ async function main() {
   }
 
   let pool: Cand[];
-  if (MODE === "pilot") {
+  if (SLUGS.length > 0 || MODE === "all") {
+    pool = candidates;
+  } else {
     pool = [];
     for (const st of ["complete", "partial", "sparse", "facts_led"]) {
       pool.push(...candidates.filter((c) => c.state === st).slice(0, 5));
     }
-  } else {
-    pool = candidates;
   }
-  console.log(`[preludes] modo=${MODE} candidatas=${candidates.length} a procesar=${pool.length}`);
+  console.log(`[preludes] modo=${MODE} refresh=${REFRESH} candidatas=${candidates.length} a procesar=${pool.length}`);
 
-  const stats = { ok: 0, insufficient: 0, contractFail: 0, aiFail: 0 };
+  const stats = { ok: 0, insufficient: 0, contractFail: 0 };
   for (const { v, p, state } of pool) {
     const { data: claims } = await db
       .from("property_story_claims")
@@ -129,45 +133,28 @@ async function main() {
       dualOperation: ops.includes("sale") && ops.includes("rent"),
     };
 
-    let saved = false;
-    let feedback = "";
-    for (let attempt = 0; attempt < 3 && !saved; attempt++) {
-      let raw: string;
-      try {
-        raw = await aiComplete({
-          system: preludeSystemPrompt(ctx),
-          userText: preludeUserPrompt(evidence) + feedback,
-          maxTokens: 400,
-        });
-      } catch (e: any) {
-        stats.aiFail++;
-        console.log(`  ✗ ${p.bc_reference} [${state}] IA: ${e?.message?.slice(0, 60)}`);
-        break;
-      }
-      const text = raw.trim().replace(/^["“]|["”]$/g, "");
-      const verdict = validatePrelude(text, ctx, evidence.texts);
-      if (!verdict.ok) {
-        feedback = `\n\nEL INTENTO ANTERIOR INCUMPLIÓ: ${verdict.failures.join("; ")}. Corrígelo.`;
-        if (attempt === 2) {
-          stats.contractFail++;
-          console.log(`  ✗ ${p.bc_reference} [${state}] contrato: ${verdict.failures.join(" · ")}`);
-        }
-        continue;
-      }
-      if (CONFIRM) {
-        await db.from("property_story_versions").update({
-          prelude: text,
+    const result = await composePrelude(ctx, evidence);
+    if (!result.ok) {
+      stats.contractFail++;
+      console.log(`  ✗ ${p.bc_reference} [${state}] ${result.failures.join(" · ")}`);
+      continue;
+    }
+    if (CONFIRM) {
+      await db
+        .from("property_story_versions")
+        .update({
+          prelude: result.body,
+          prelude_headline: result.headline,
           prelude_status: APPROVE ? "approved" : "generated",
           prelude_evidence: { claimIds: evidence.claimIds },
           prelude_generated_at: new Date().toISOString(),
-        }).eq("id", v.id);
-      }
-      stats.ok++;
-      saved = true;
-      console.log(`  ✓ ${p.bc_reference} [${state}] ${verdict.words}p/${verdict.sentences}f · ${text.slice(0, 100)}…`);
+        })
+        .eq("id", v.id);
     }
+    stats.ok++;
+    console.log(`  ✓ ${p.bc_reference} [${state}] ${result.words}p/${result.paragraphs}¶ · ${result.headline}`);
   }
-  console.log(`\n[preludes] ok=${stats.ok} · insuficiente=${stats.insufficient} · contrato=${stats.contractFail} · ia=${stats.aiFail}`);
+  console.log(`\n[preludes] ok=${stats.ok} · insuficiente=${stats.insufficient} · contrato=${stats.contractFail}`);
   process.exit(0);
 }
 
