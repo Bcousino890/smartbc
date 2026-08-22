@@ -35,7 +35,8 @@
     "fotocasa:zones": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/fotocasa-zones-dump.mts",
     "test:neighborhoods": "node scripts/qa-neighborhood-layer.mjs",
     "test:tracking": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-tracking.mts",
-    "test:zone": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zone-explorer.mts"
+    "test:zone": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zone-explorer.mts",
+    "test:media": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-media-range.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",

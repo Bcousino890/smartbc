@@ -189,6 +189,20 @@ export async function uploadPropertyPhoto(
   const path = `${propRow.id}/${Date.now()}-${safeName}`;
 
   const arrayBuffer = await file.arrayBuffer();
+  // Dimensiones REALES de lo que se sube (0153). Sin esto, una fotografía
+  // nueva y buenísima entra sin medir y el hero no puede preferirla sobre la
+  // pequeña que ya había: la reevaluación de la portada dejaría de ser
+  // automática justo cuando más falta hace.
+  let sourceWidth: number | null = null;
+  let sourceHeight: number | null = null;
+  try {
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(Buffer.from(arrayBuffer), { failOn: "none" }).metadata();
+    sourceWidth = meta.width ?? null;
+    sourceHeight = meta.height ?? null;
+  } catch {
+    // Formato que sharp no entiende: se sube igual y ya se medirá luego.
+  }
   const uploadResult = await supabase.storage
     .from("properties-photos")
     .upload(path, arrayBuffer, {
@@ -228,6 +242,8 @@ export async function uploadPropertyPhoto(
     url: publicUrl,
     position: lastPos,
     is_cover: isCover,
+    source_width: sourceWidth,
+    source_height: sourceHeight,
   });
   if (photoInsert.error) {
     console.error("[uploadPropertyPhoto] insert error:", photoInsert.error);

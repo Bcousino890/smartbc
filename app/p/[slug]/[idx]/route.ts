@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { isMobiliaImageUrl, toMobiliaOriginal } from "@/lib/sync/scrapers/mobilia";
+import { contentRange, parseRangeHeader, unsatisfiedContentRange } from "@/lib/http/range";
 
 // Proxy de fotos de propiedad. Sirve la foto en posición `idx` para la
 // propiedad con `slug`, leyéndola desde Supabase Storage en streaming. El
@@ -25,6 +26,17 @@ import { isMobiliaImageUrl, toMobiliaOriginal } from "@/lib/sync/scrapers/mobili
 //   · calidad 86 en WebP: el hero es la imagen más importante de la página y
 //     ahorrar 150KB destrozando una fotografía premium es mal negocio.
 // Sin `?w=` el comportamiento es exactamente el de antes.
+//
+// ── `Range` ──
+// El storage de origen lo maneja mal y lo pagábamos nosotros: con un fichero
+// de 60.720 bytes, `bytes=0-60719` responde 206 en 270ms, pero `bytes=0-60720`
+// —un byte más allá del final— deja la conexión colgada hasta el timeout, y un
+// `start` posterior al final o un rango sufijo devuelven 500. Pedir de más es
+// legal y normal en un cliente; la respuesta correcta es recortar.
+//
+// Así que aquí se resuelve el rango contra el TAMAÑO REAL (una petición HEAD
+// barata) y aguas arriba solo se pide lo que ya se sabe satisfacible. Nunca se
+// reenvía el rango del cliente tal cual.
 
 export const runtime = "nodejs";
 
@@ -38,6 +50,47 @@ const WIDTHS = [640, 828, 1080, 1200, 1280, 1600, 1920, 2560, 3200] as const;
  */
 function qualityFor(width: number): number {
   return width > 2048 ? 78 : 86;
+}
+
+/**
+ * Respuesta para un cuerpo que hemos generado nosotros (las variantes `?w=`).
+ * Como el buffer ya está en memoria, el rango se sirve exacto sin volver al
+ * origen. Mismo contrato HTTP que el camino de la foto original.
+ */
+function respondBuffer(
+  buf: Buffer,
+  contentType: string,
+  cache: string,
+  rangeHeader: string | null,
+  extra: Record<string, string> = {},
+): NextResponse {
+  const base = {
+    "Content-Type": contentType,
+    "Cache-Control": cache,
+    "Accept-Ranges": "bytes",
+    ...extra,
+  };
+  const parsed = parseRangeHeader(rangeHeader, buf.length);
+  if (parsed.kind === "unsatisfiable") {
+    return new NextResponse(null, {
+      status: 416,
+      headers: { "Content-Range": unsatisfiedContentRange(buf.length), "Accept-Ranges": "bytes" },
+    });
+  }
+  if (parsed.kind === "satisfiable") {
+    const slice = buf.subarray(parsed.start, parsed.end + 1);
+    return new NextResponse(new Uint8Array(slice), {
+      status: 206,
+      headers: {
+        ...base,
+        "Content-Length": String(slice.length),
+        "Content-Range": contentRange(parsed.start, parsed.end, buf.length),
+      },
+    });
+  }
+  return new NextResponse(new Uint8Array(buf), {
+    headers: { ...base, "Content-Length": String(buf.length) },
+  });
 }
 
 function snapWidth(raw: string | null): number | null {
@@ -112,9 +165,58 @@ export async function GET(
     ? [toMobiliaOriginal(photo.url), photo.url]
     : [photo.url];
 
+  const rangeHeader = req.headers.get("range");
+
   for (let i = 0; i < candidates.length; i++) {
     const isLast = i === candidates.length - 1;
     try {
+      // Con `Range` hay que conocer el tamaño ANTES de pedir nada: es lo que
+      // permite recortar y, de paso, no disparar el fallo del origen.
+      if (rangeHeader && !width) {
+        const head = await fetch(candidates[i], {
+          method: "HEAD",
+          cache: "no-store",
+          signal: AbortSignal.timeout(10_000),
+        });
+        const size = Number(head.headers.get("content-length") ?? 0);
+        const type = head.headers.get("content-type") ?? "image/webp";
+        if (head.ok && Number.isFinite(size) && size > 0) {
+          const parsed = parseRangeHeader(rangeHeader, size);
+          if (parsed.kind === "unsatisfiable") {
+            return new NextResponse(null, {
+              status: 416,
+              headers: {
+                "Content-Range": unsatisfiedContentRange(size),
+                "Accept-Ranges": "bytes",
+              },
+            });
+          }
+          if (parsed.kind === "satisfiable") {
+            // El rango ya está recortado: esta petición SÍ la sirve el origen.
+            const partial = await fetch(candidates[i], {
+              headers: { Range: `bytes=${parsed.start}-${parsed.end}` },
+              cache: "no-store",
+              signal: AbortSignal.timeout(10_000),
+            });
+            if (!partial.ok || !partial.body) {
+              if (!isLast) continue;
+              return new NextResponse("upstream_error", { status: 502 });
+            }
+            return new NextResponse(partial.body, {
+              status: 206,
+              headers: {
+                "Content-Type": type,
+                "Content-Length": String(parsed.end - parsed.start + 1),
+                "Content-Range": contentRange(parsed.start, parsed.end, size),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=86400, s-maxage=86400",
+              },
+            });
+          }
+          // "none" o "ignored": sigue el camino normal y se responde entera.
+        }
+      }
+
       const upstream = await fetch(candidates[i], {
         cache: "no-store",
         signal: AbortSignal.timeout(10_000),
@@ -127,8 +229,14 @@ export async function GET(
       const cache = "public, max-age=86400, s-maxage=86400";
       if (!width) {
         // Sin `?w=`: se sirve el original en streaming, sin tocar un byte.
+        const length = upstream.headers.get("content-length");
         return new NextResponse(upstream.body, {
-          headers: { "Content-Type": contentType, "Cache-Control": cache },
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": cache,
+            "Accept-Ranges": "bytes",
+            ...(length ? { "Content-Length": length } : {}),
+          },
         });
       }
       const source = Buffer.from(await upstream.arrayBuffer());
@@ -139,27 +247,17 @@ export async function GET(
         // Más pequeña que lo pedido → se devuelve tal cual. Ampliar aquí solo
         // añadiría peso y no un solo detalle real.
         if (!meta.width || meta.width <= width) {
-          return new NextResponse(new Uint8Array(source), {
-            headers: { "Content-Type": contentType, "Cache-Control": cache, "X-Bcp-Variant": "original" },
-          });
+          return respondBuffer(source, contentType, cache, rangeHeader, { "X-Bcp-Variant": "original" });
         }
         const out = await image
           .resize({ width, withoutEnlargement: true, fit: "inside" })
           .webp({ quality: qualityFor(width) })
           .toBuffer();
-        return new NextResponse(new Uint8Array(out), {
-          headers: {
-            "Content-Type": "image/webp",
-            "Cache-Control": cache,
-            "X-Bcp-Variant": `w${width}`,
-          },
-        });
+        return respondBuffer(out, "image/webp", cache, rangeHeader, { "X-Bcp-Variant": `w${width}` });
       } catch {
         // Si el reencode falla por lo que sea, manda el original: una foto
         // grande de más es infinitamente mejor que un hueco roto.
-        return new NextResponse(new Uint8Array(source), {
-          headers: { "Content-Type": contentType, "Cache-Control": cache, "X-Bcp-Variant": "fallback" },
-        });
+        return respondBuffer(source, contentType, cache, rangeHeader, { "X-Bcp-Variant": "fallback" });
       }
     } catch {
       if (!isLast) continue;

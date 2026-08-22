@@ -55,10 +55,19 @@ async function measure(url: string): Promise<{ w: number; h: number } | null> {
   // caídas de socket, no cabeceras ilegibles. El timeout es corto a
   // propósito: una lectura sana tarda 17ms contra el propio storage, así que
   // esperar 15s a las que fallan multiplicaba por cincuenta el tiempo total.
-  // Primero un trozo de cabecera; si no basta (o el fichero es más pequeño
-  // que el trozo pedido), el fichero entero.
+  // Se pregunta el tamaño ANTES de pedir un rango: el storage cuelga la
+  // conexión si el rango termina más allá del final del fichero. Con el
+  // tamaño en la mano el rango va siempre recortado y no hay timeouts.
+  let size = 0;
+  try {
+    const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(8_000) });
+    size = Number(head.headers.get("content-length") ?? 0);
+  } catch {
+    // sin HEAD se prueba igual, con el rango recortado por lo bajo
+  }
+  const end = size > 0 ? Math.min(HEAD_BYTES, size) - 1 : HEAD_BYTES - 1;
   const attempts: RequestInit[] = [
-    { headers: { Range: `bytes=0-${HEAD_BYTES - 1}` } },
+    { headers: { Range: `bytes=0-${end}` } },
     {},
   ];
   for (const init of attempts) {

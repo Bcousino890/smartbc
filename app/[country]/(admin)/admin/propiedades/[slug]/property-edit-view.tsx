@@ -63,7 +63,12 @@ type Photo = {
   alt: string | null;
   position: number;
   is_cover: boolean;
+  source_width: number | null;
+  source_height: number | null;
 };
+
+/** Ancho que pide la foto principal del SmartLink a 1× en un portátil. */
+const HERO_MIN_WIDTH = 1440;
 
 export type PropertyForEdit = {
   id: string;
@@ -796,6 +801,31 @@ export function PropertyEditView({
           </a>
         </div>
       )}
+
+      {/* Aviso de portada corta. No es un error: la ficha funciona igual, pero
+          la foto principal del SmartLink ocupa el ancho completo y por debajo
+          de 1440px se ve blanda. Aparece aquí, junto a las fotos, que es donde
+          se arregla: subiendo una mejor. En cuanto se suba, el SmartLink la
+          prefiere solo — la portada se decide al renderizar, no hay ningún
+          flag que tocar. */}
+      {(() => {
+        const best = property.photos.reduce(
+          (m, ph) => Math.max(m, ph.source_width ?? 0),
+          0,
+        );
+        if (best === 0 || best >= HERO_MIN_WIDTH) return null;
+        return (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-xs text-ink/80">
+            <ImageIcon size={14} strokeWidth={1.75} className="mt-0.5 shrink-0 text-amber-600" />
+            <span>
+              <strong className="font-medium">Fotografía de baja resolución.</strong>{" "}
+              La mejor foto de esta ficha mide {best}px de ancho y la portada del
+              SmartLink pide {HERO_MIN_WIDTH}px. Se ve blanda a pantalla completa:
+              hace falta una fotografía mejor. Al subirla, la portada se actualiza sola.
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Descargar fotos (con el logo superpuesto): las fotos no dependen de
           la operación, así que este botón va una sola vez, sea o no dual. */}
