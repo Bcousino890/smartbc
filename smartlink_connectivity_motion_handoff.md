@@ -136,3 +136,102 @@ sigue sin parecer recomendado por BCP.
   el recorte que se arregló en su día.
 
 # BCP CONNECTIVITY MOTION — DAMAC-INSPIRED PREMIUM BASELINE
+
+---
+
+# SEARCH NEAR THIS HOME
+
+Fecha: 2026-08-22 · En producción y verificado con QA real.
+
+El cliente puede comprobar personalmente cualquier lugar relevante para su
+decisión —universidad, colegio, hospital, restaurante, dirección— sin que
+SmartLink se convierta en Google Maps: el overview conserva la historia curada
+y la búsqueda vive SOLO en modo explorar.
+
+## Arquitectura
+
+```
+teclear   → búsqueda LOCAL (universidades verificadas + POIs curados) · 0 red
+Enter /   → servidor BCP → LocationSearchProvider → Nominatim
+"Buscar"     · ritmo GLOBAL 1 req/s · caché 24h · dedupe de concurrentes
+          → SearchPlaceDto → fromSearchResult() → LocationDestination
+             (source: osm_search, ETA de NUESTRA capa geométrica o distancia)
+```
+
+- **Proveedor abstracto** ([search-provider.ts](lib/services/location/search-provider.ts)):
+  la UI y la ruta API solo conocen `LocationSearchProvider`. Migrar a Photon
+  self-hosted = cambiar una línea (`locationSearchProvider`). El dominio puro
+  vive en [search.ts](lib/services/location/search.ts), con tests.
+- **Local primero (§3, §13)**: al teclear, sugerencias instantáneas de datos
+  NUESTROS. La universidad verificada gana al resultado externo homónimo, y
+  el dedupe conoce las siglas: "URJC" local absorbe a "Universidad Rey Juan
+  Carlos" del geocoder (salió en la QA real — sin mirar el catálogo, la misma
+  entidad aparecía dos veces).
+- **Sesgo hacia la vivienda (§12)**: viewbox de ~10km sin `bounded` +
+  `countrycodes=es`. "Colegio del Pilar" devuelve el de Castelló primero, sin
+  impedir resultados legítimos más lejos.
+- **ETA honesto (§9)**: la misma capa geométrica de universidades y POIs
+  (haversine + factor de callejero, siempre `≈`). Si andando no aplica, en
+  coche; si nada aplica con honestidad, distancia geodésica ("1,8 km · De la
+  vivienda, en línea recta"). Sin routing, sin horarios, sin reseñas.
+- **Marcador propio (§7)**: lupa carbón que solo viste champán por estar
+  seleccionada. Ni curado ni descubierto: lo trajo una búsqueda del cliente.
+- **El rail NO se toca (§19)**: el resultado es exploración de sesión. No
+  entra en CONECTADA CON MADRID, ni en la capa de barrios, ni implica
+  recomendación de BCP.
+
+## Política de proveedor (§21) — leer antes de "mejorar"
+
+El Nominatim público **no es infraestructura de autocompletado**. Nada de
+peticiones por tecla: la búsqueda externa se dispara solo con Enter o
+"Buscar", pasa siempre por el servidor BCP y este impone el ritmo global de
+1 req/s (cola en memoria; asume el PM2 de un solo proceso, como los
+limitadores de Idealista), caché de 24h por consulta+celda de ~1km y dedupe
+de consultas concurrentes. Si algún día hace falta autocompletado global en
+vivo, NO se estira esto: se migra el proveedor (Photon soporta forward search
+y sesgo por ubicación).
+
+## Privacidad (§17-18)
+
+Al geocoder viajan solo la consulta y la coordenada de la vivienda (pública).
+Sin nombre de cliente, sin email, sin identidad de navegación. La consulta en
+crudo no se persiste; la analítica registra `zone_search_submit` (el hecho) y
+`zone_search_result_select` con categoría + fuente, nunca el texto tecleado.
+
+## QA real ejecutada (§20)
+
+| Consulta | Resultado |
+|---|---|
+| "IE" (local) | IE · campus más cercano según zona: María de Molina en Salamanca, IE Tower en Pozuelo · 0 llamadas API |
+| "Colegio del Pilar" | el de Calle de Castelló primero (cercanía) |
+| "Hospital Ruber" | Ruber Juan Bravo primero |
+| "Ten con Ten" | Calle de Ayala 6 · ≈11 min a pie |
+| "El Corte Inglés" | Preciados, Princesa, Fernando el Católico |
+| "Calle de Serrano 21, Madrid" | dirección exacta resuelta |
+| "xyzzy quijotesco 999" | mensaje de no encontrado, mapa intacto |
+| "URJC" | 1 sola fila (verificada); reset limpio |
+
+Zonas probadas: Salamanca, Chamberí, El Viso, Pozuelo. Teclado
+(flechas/Enter/Escape, combobox accesible) y móvil 390 verificados; al elegir
+resultado el teclado se cierra antes de mover la cámara.
+
+```
+LOCAL SEARCH:              PASS
+EXTERNAL PLACE SEARCH:     PASS
+UNIVERSITY PRIORITY:       PASS  (1 fila, gana la verificada)
+MAP FOCUS:                 PASS  (vivienda + resultado, lupa, ficha)
+DISTANCE:                  PASS  (ETA ≈ o distancia geodésica)
+NOMINATIM REQUEST RATE:    ≤1/s  (5 consultas concurrentes sin caché → 4,7s)
+RAW SEARCH PII STORED:     0
+MOBILE:                    PASS
+```
+
+## Limitaciones conocidas
+
+- La caché y el limitador viven **en memoria del proceso**: asumen el PM2 de
+  un solo proceso, la misma asunción documentada de los limitadores de
+  Idealista. Si eso cambia, mover ambos a la BD.
+- La búsqueda requiere **coordenadas precisas** de la vivienda: sin geocodificar,
+  el buscador no se monta (no hay contra qué sesgar ni medir).
+- El resultado externo hereda la calidad de OSM: un lugar mal etiquetado
+  llega sin categoría (icono genérico) — se muestra, no se inventa.
