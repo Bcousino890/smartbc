@@ -220,11 +220,12 @@ export function LocationModule({
       indicator.style.transform = `translateX(${x}px) translateX(-50%)`;
     };
 
-    // Al cargar (sin selección) se coloca en reposo sin animar: el overview
-    // tiene que entrar quieto (§41).
-    if (reduced || !indicatorReady) {
+    // La colocación INICIAL (en reposo, sin selección) no se anima: el
+    // overview tiene que entrar quieto (§41). A partir de ahí, cada cambio
+    // viaja — incluida la primera selección, que es la que más importa.
+    if (reduced || !indicatorReady || Math.abs(toX - fromX) < 1) {
       place(toX);
-      if (railIndex >= 0) setIndicatorReady(true);
+      setIndicatorReady(true);
       return;
     }
     place(toX);
