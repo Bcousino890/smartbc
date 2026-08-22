@@ -76,6 +76,10 @@ const categoryOf = (c: string) => CATEGORY[c] ?? { label: "", Icon: MapPin };
 const modeLabel = (m: PoiTravel["mode"]) => (m === "walk" ? "a pie" : "en coche");
 /** Banda superior reservada a la ficha contextual (alto de la ficha + aire). */
 const CARD_BAND_PX = 168;
+/** La placa del destino curado es pequeña: le basta con su propio alto más
+ *  un respiro. Reservar los 168px de la ficha empujaba el mapa hacia abajo
+ *  para dejar sitio a algo que ya no existe. */
+const PLAQUE_BAND_PX = 72;
 
 export type LocationNeighborhood = {
   displayName: string;
@@ -261,7 +265,7 @@ export function LocationModule({
       // en un lienzo más bajo y luego se baja el contenido. En móvil la ficha
       // ocupa casi todo el ancho, así que ese hueco es la única forma de que
       // no tape a la vivienda ni al destino.
-      const BAND = CARD_BAND_PX;
+      const BAND = PLAQUE_BAND_PX;
       const padding = Math.max(48, Math.round(Math.min(size.w, size.h - BAND) * 0.12));
       const fitted = fitTwoPoints({
         a: { lat: center.lat, lng: center.lng },
@@ -385,11 +389,6 @@ export function LocationModule({
   const focusAreaPx = size ? Math.round(Math.min(size.w, size.h) * 0.46) : 0;
 
   // La ficha contextual se coloca en la banda LIBRE del escenario. Anclarla
-  // siempre arriba tapaba el pill de "La vivienda" —y en móvil lo tapaba
-  // entero—, que es justo el marcador que nunca debe perderse de vista.
-  // Con la banda superior reservada por el encuadre, la ficha va arriba y
-  // centrada: es la posición más legible y ya no puede pisar a nadie.
-  const cardPos = { side: "top" as const, align: "center" as const };
 
   // Cápsula de POI: se oculta si su punto cae fuera del lienzo o si pisa al
   // marcador de la vivienda — mejor un destino menos que un amontonamiento.
@@ -594,15 +593,20 @@ export function LocationModule({
                 onEvent={(event, meta) => onSearchEvent?.(event, meta)}
               />
             )}
-            {placeFocus ? (
+            {/* La placa acompaña al destino curado también al explorar: mismo
+                objeto, misma proyección. */}
+            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
+
+            {/* MODO EXPLORACIÓN (EMAAR): un lugar que BCP no había presentado
+                merece contexto — nombre, categoría, dirección y distancia.
+                Lo curado NO pasa por aquí: su información ya vive en el rail. */}
+            {placeFocus && (
               <ContextCard
                 place={placeFocus}
                 onClose={() => { setPlaceFocus(null); restoreOverview(); }}
                 side="top" align="center" live
               />
-            ) : focus ? (
-              <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} live />
-            ) : null}
+            )}
             {/* Control secundario, en esquina: no compite con el mapa. */}
             <button type="button" onClick={focus || placeFocus ? restoreOverview : exitLive}
               className="crm-meta absolute bottom-11 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 md:bottom-3 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
@@ -660,22 +664,13 @@ export function LocationModule({
 
             {/* MARCADOR DEL DESTINO: jerarquía por encima de todo salvo la
                 vivienda, con su ficha contextual anclada. */}
-            {/* DESTINO SELECCIONADO · misma familia que los POIs curados
-                (cápsula con glifo), en champán porque está elegido. Un
-                círculo suelto se leía como el vértice de un grafo; un destino
-                tiene que parecer un LUGAR (§19-20). */}
-            {focusPt && focus && (
-              <span className="absolute z-[5]" style={{ left: focusPt.left, top: focusPt.top }} aria-hidden>
-                <span className="bcp-dest absolute left-0 top-0 block -translate-x-1/2 -translate-y-1/2">
-                  <span className="bcp-poi is-active">
-                    {(() => {
-                      const { Icon } = categoryOf(focus.category);
-                      return <Icon size={13} strokeWidth={1.75} />;
-                    })()}
-                  </span>
-                </span>
-              </span>
-            )}
+
+            {/* PLACA DEL DESTINO (modo DAMAC · curado).
+                El rail ya dice cuánto se tarda y en qué modo; al mapa solo le
+                toca decir CUÁL es el sitio. Una ficha repitiendo "Calle
+                Serrano · 19 min · desde la vivienda" duplicaba lo que estaba
+                dos centímetros más arriba y pesaba tres veces más. */}
+            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
 
             {/* LA VIVIENDA · con el mapa vectorial el medallón lo pinta el
                 propio mapa (un solo marcador para overview y explorar); este
@@ -700,7 +695,7 @@ export function LocationModule({
                 className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold/75 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.16)] md:h-40 md:w-40" />
             )}
 
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} />}
+
 
             {/* Activación EXPLÍCITA, nunca por hover, y como control
                 secundario en esquina: la escena manda, no el botón. */}
@@ -971,6 +966,41 @@ function ZoneSearch({
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * PLACA DEL DESTINO · modo curado (DAMAC).
+ *
+ * Identifica geográficamente el destino y nada más: icono de categoría y
+ * nombre, con una punta que lo ancla a su coordenada. El tiempo, el modo y
+ * la relación con la vivienda ya los cuenta el rail de conectividad; volver a
+ * escribirlos aquí era duplicar la misma información en dos superficies.
+ *
+ * Regla de producto: un dato, un sitio.
+ */
+function DestinationPlaque({
+  point,
+  poi,
+}: {
+  point: { left: number; top: number };
+  poi: PoiTravel;
+}) {
+  const { Icon } = categoryOf(poi.category);
+  return (
+    <span
+      className="pointer-events-none absolute z-[5]"
+      style={{ left: point.left, top: point.top }}
+      aria-hidden
+    >
+      {/* Ancla en la coordenada exacta. */}
+      <span className="bcp-plaque-anchor absolute left-0 top-0 block -translate-x-1/2 -translate-y-1/2" />
+      {/* Rótulo justo encima, con su punta. */}
+      <span className="bcp-plaque absolute left-0 top-0 flex -translate-x-1/2 items-center gap-1.5">
+        <Icon size={12} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
+        <span className="max-w-[13rem] truncate">{poi.name}</span>
+      </span>
+    </span>
   );
 }
 

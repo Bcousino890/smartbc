@@ -331,10 +331,13 @@ export function ZoneExplorerMapLibre({
     const bounds = new maplibre.LngLatBounds([origin.lng, origin.lat], [origin.lng, origin.lat]);
     bounds.extend([focus.lng, focus.lat]);
     map.stop();
+    // La banda superior se reserva para lo que de verdad va a ocupar sitio:
+    // la ficha de exploración (grande) o la placa del destino curado
+    // (pequeña). Reservar siempre lo mismo empujaba el mapa por una ficha
+    // que en modo curado ya no se dibuja.
+    const needsCardBand = focus.source === "osm_discovered" || focus.source === "osm_search";
     map.fitBounds(bounds, {
-      // Banda superior reservada a la ficha contextual, igual que en el
-      // overview: nunca puede tapar a la vivienda ni al destino.
-      padding: { top: 172, bottom: 76, left: 56, right: 56 },
+      padding: { top: needsCardBand ? 172 : 96, bottom: 76, left: 56, right: 56 },
       maxZoom: 17,
       duration: prefersReducedMotion() ? 0 : LOCATION_MOTION.camera,
     });
