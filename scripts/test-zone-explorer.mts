@@ -262,6 +262,15 @@ console.log("Búsqueda de zona:");
     merged.filter((d) => /^IE\b|IE University/i.test(d.name)).length === 1, JSON.stringify(merged.map((d) => [d.name, d.source])));
   check("y la que queda es la verificada", merged.find((d) => /IE/i.test(d.name))?.source === "university");
 
+  // Dedupe por sigla: "URJC" local vs "Universidad Rey Juan Carlos" del
+  // geocoder son la MISMA entidad aunque el campus difiera (QA real).
+  const localURJC = searchLocal("URJC", HOME, CURATED);
+  const extURJC = fromSearchResult({ id: "search:way/55", name: "Universidad Rey Juan Carlos", category: "educacion", lat: 40.3336, lng: -3.8766, address: "Calle Tulipán, Móstoles" }, HOME);
+  const mergedURJC = mergeResults(localURJC, [extURJC]);
+  check("la sigla local absorbe el nombre completo del geocoder",
+    mergedURJC.filter((d) => /URJC|Rey Juan Carlos/i.test(d.name)).length === 1,
+    JSON.stringify(mergedURJC.map((d) => [d.name, d.source])));
+
   // Categorías OSM → categorías de la casa.
   check("'university' cae en educación", categoryFromOsm("amenity", "university") === "educacion");
   check("'restaurant' cae en gastronomía", categoryFromOsm("amenity", "restaurant") === "gastronomia");

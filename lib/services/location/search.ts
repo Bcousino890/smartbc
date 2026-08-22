@@ -187,13 +187,21 @@ export function mergeResults(
 ): LocationDestination[] {
   const out = [...local];
   for (const ext of external) {
-    const dup = local.some(
-      (l) =>
-        foldText(l.name) === foldText(ext.name) ||
-        matches(l.name, ext.name) ||
-        matches(ext.name, l.name) ||
-        haversineKm(l.lat, l.lng, ext.lat, ext.lng) < 0.15,
-    );
+    const dup = local.some((l) => {
+      if (foldText(l.name) === foldText(ext.name)) return true;
+      if (matches(l.name, ext.name) || matches(ext.name, l.name)) return true;
+      if (haversineKm(l.lat, l.lng, ext.lat, ext.lng) < 0.15) return true;
+      // Una universidad local se muestra por su sigla ("URJC"), pero el
+      // geocoder devuelve el nombre completo ("Universidad Rey Juan
+      // Carlos"): sin mirar el catálogo, la MISMA entidad salía dos veces
+      // (visto en la QA real). El campus distinto no la convierte en otra
+      // entidad: la fila verificada ya lleva el campus más cercano.
+      if (l.source === "university" && l.id.startsWith("uni:")) {
+        const uni = UNIVERSITIES.find((u) => `uni:${u.id}` === l.id);
+        if (uni && (matches(uni.name, ext.name) || matches(ext.name, uni.name))) return true;
+      }
+      return false;
+    });
     if (!dup) out.push(ext);
   }
   return out.slice(0, MAX_RESULTS);
