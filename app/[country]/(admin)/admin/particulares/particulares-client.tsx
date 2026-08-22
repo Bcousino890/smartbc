@@ -1497,6 +1497,22 @@ function ParticularModal({
               ver el bloque "Link temporal externo" más arriba en el archivo. */}
           <ShareLinkAction particularId={currentRow.id} />
         </div>
+
+        {/* Cerrar, fijo debajo del contenido con scroll (no dentro de él):
+            la X de la esquina superior queda fuera del alcance del pulgar
+            en pantallas grandes (iPhone 16 Pro Max) sujetando el móvil con
+            una mano. Este botón vive al ras del borde inferior de la
+            ficha, que sí cae dentro de esa zona. */}
+        <div className="shrink-0 border-t border-ink/8 bg-cream-50 p-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 text-sm font-semibold text-cream-50 transition hover:bg-ink-soft"
+          >
+            <X size={16} strokeWidth={2} />
+            Cerrar
+          </button>
+        </div>
       </div>
       </div>
     </>
@@ -1567,7 +1583,6 @@ export function ParticularesClient({
     setShowRetired,
   } = useParticularesFilters();
   const [pageRows, setPageRows] = useState(rows);
-  const [selected, setSelected] = useState<ParticularRow | null>(null);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<RefreshState>("idle");
   const [refreshResult, setRefreshResult] = useState<{ updated: number; checked: number } | null>(null);
@@ -1581,6 +1596,29 @@ export function ParticularesClient({
   // pide la página al servidor — esto solo pinta un estado de carga breve
   // mientras esa respuesta llega.
   const [pageNavPending, startPageNav] = useTransition();
+
+  // Ficha abierta = una entrada de historial (?ficha=<id>), no solo estado
+  // local: así el gesto nativo de "atrás" de iOS Safari cierra la ficha y
+  // vuelve al listado con sus filtros intactos, en vez de navegar fuera de
+  // la página entera (antes con useState puro, "volver" en el móvil se
+  // salía de /admin/particulares y parecía "borrar" el listado). `selected`
+  // se deriva de la página actual — si el id no está en `pageRows` (enlace
+  // caducado o página distinta), simplemente no hay nada que abrir.
+  const fichaId = searchParams.get("ficha");
+  const selected = fichaId ? (pageRows.find((r) => r.id === fichaId) ?? null) : null;
+
+  function openParticular(row: ParticularRow) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("ficha", row.id);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  // Deshace exactamente el push de openParticular — mismo efecto que el
+  // gesto de "atrás", lo dispare el usuario con la X, el fondo o el botón
+  // "Cerrar" de abajo.
+  function closeParticular() {
+    router.back();
+  }
 
   // Sincronizar con los datos frescos del servidor: cambio de filtro/página
   // (page.tsx vuelve a renderizar con las searchParams nuevas) o
@@ -1720,8 +1758,8 @@ export function ParticularesClient({
   }
 
   function handlePhoneUpdated(newPhone: string | null) {
-    setSelected((prev) => (prev ? { ...prev, phone: newPhone } : null));
-    // Reflejar también en el listado sin recargar.
+    // `selected` se deriva de `pageRows`: basta con actualizar aquí para que
+    // tanto el listado como la ficha abierta reflejen el cambio.
     setPageRows((prev) =>
       prev.map((r) =>
         selected && r.id === selected.id ? { ...r, phone: newPhone } : r,
@@ -1735,7 +1773,7 @@ export function ParticularesClient({
       {selected && (
         <ParticularModal
           row={selected}
-          onClose={() => setSelected(null)}
+          onClose={closeParticular}
           onPhoneUpdated={handlePhoneUpdated}
           onAssigned={(advisorId, advisorName) => {
             setPageRows((prev) =>
@@ -1974,7 +2012,7 @@ export function ParticularesClient({
                 <button
                   key={r.id}
                   type="button"
-                  onClick={() => setSelected(r)}
+                  onClick={() => openParticular(r)}
                   className="group flex flex-col overflow-hidden rounded-xl border border-ink/10 bg-white text-left transition hover:border-gold/50 hover:shadow-[0_12px_30px_-18px_rgba(40,28,10,0.35)]"
                 >
                   <div className="relative aspect-[16/10] w-full overflow-hidden bg-ink/5">
