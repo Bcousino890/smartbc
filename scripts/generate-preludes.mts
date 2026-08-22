@@ -154,7 +154,7 @@ async function main() {
   }
   console.log(`[preludes] modo=${MODE} refresh=${REFRESH} candidatas=${candidates.length} a procesar=${pool.length}`);
 
-  const stats = { ok: 0, insufficient: 0, contractFail: 0 };
+  const stats = { ok: 0, insufficient: 0, contractFail: 0, kept: 0 };
   for (const { v, p, state } of pool) {
     const { data: claims } = await db
       .from("property_story_claims")
@@ -182,6 +182,26 @@ async function main() {
       dualOperation: ops.includes("sale") && ops.includes("rent"),
     };
 
+    // --refresh idempotente: si lo que ya hay APROBADO cumple el contrato
+    // vigente (cuerpo y titular), no se toca. Así una segunda pasada solo
+    // gasta llamadas en lo que de verdad falla, y no re-tira los dados sobre
+    // textos ya buenos.
+    if (REFRESH && v.prelude_status === "approved") {
+      const { data: cur } = await db
+        .from("property_story_versions")
+        .select("prelude, prelude_headline")
+        .eq("id", v.id)
+        .maybeSingle();
+      const okBody = validatePrelude(cur?.prelude ?? "", ctx, evidence.texts).ok;
+      const okHead = cur?.prelude_headline
+        ? validatePreludeHeadline(cur.prelude_headline, ctx, evidence.texts).ok
+        : false;
+      if (okBody && okHead) {
+        stats.kept++;
+        continue;
+      }
+    }
+
     const result = await composePrelude(ctx, evidence);
     if (!result.ok) {
       stats.contractFail++;
@@ -203,7 +223,7 @@ async function main() {
     stats.ok++;
     console.log(`  ✓ ${p.bc_reference} [${state}] ${result.words}p/${result.paragraphs}¶ · ${result.headline}`);
   }
-  console.log(`\n[preludes] ok=${stats.ok} · insuficiente=${stats.insufficient} · contrato=${stats.contractFail}`);
+  console.log(`\n[preludes] ok=${stats.ok} · intactos=${stats.kept} · insuficiente=${stats.insufficient} · contrato=${stats.contractFail}`);
   process.exit(0);
 }
 

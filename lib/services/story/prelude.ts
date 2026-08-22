@@ -88,6 +88,8 @@ const FLOOR_WORDS =
 const ROOM_NOUNS =
   /\b(sal[óo]n|cocina|dormitorio\w*|ba[ñn]o\w*|terraza\w*|recibidor|comedor|vestidor\w*|despacho|aseo\w*|trastero|garaje|office|lavadero)\b/gi;
 const MAX_DISTINCT_ROOMS = 3;
+/** Misma lista sin la bandera global: para clasificar un fact suelto. */
+const ROOM_NOUN_ONE = new RegExp(ROOM_NOUNS.source, "i");
 
 // §2: titulares que no dicen nada de ESTA vivienda.
 const EMPTY_HEADLINE =
@@ -310,9 +312,17 @@ TITULAR: <${HEADLINE_TARGET.min} a ${HEADLINE_TARGET.max} palabras, sin punto fi
 
 <párrafo 2>
 
-LA REGLA QUE MÁS SE INCUMPLE — NO RECORRAS LA CASA.
-Después de este texto vienen capítulos dedicados al salón, a la cocina, a los dormitorios y a las terrazas. Si tú los enumeras, sobran. Nombra COMO MUCHO dos espacios en todo el texto, y solo si definen el carácter de la vivienda. Nunca escribas una frase del tipo "recibidor que da paso al salón, comedor independiente y cocina con office".
-En su lugar, sintetiza: de qué época y qué carácter es la casa, qué dos o tres rasgos la definen, y cómo se organiza la vida en ella (por ejemplo: la zona de día separada del descanso, la relación con el exterior, la luz).
+LAS DOS REGLAS QUE MÁS SE INCUMPLEN. Léelas dos veces.
+
+1) NO RECORRAS LA CASA. Después de este texto vienen capítulos dedicados al salón, a la cocina, a los dormitorios y a las terrazas. Si tú los enumeras, sobran. Puedes nombrar COMO MUCHO DOS de estos espacios en todo el texto (salón, cocina, comedor, dormitorio, baño, aseo, terraza, recibidor, vestidor, despacho, office, trastero, garaje), y solo si definen el carácter de la vivienda.
+   MAL: "Un recibidor da paso al salón, al comedor independiente y a la cocina con office; la zona privada reúne los dormitorios y los baños."
+   BIEN: "La vida de día se separa con claridad del descanso, y los balcones ordenan esa frontera."
+
+2) NO DIGAS EN QUÉ PLANTA ESTÁ. La planta aparece impresa justo encima de tu texto, en los datos de la vivienda. Repetirla es un error.
+   MAL: "Esta vivienda, ubicada en una segunda planta exterior, …" · "Su quinta planta ofrece…" · "en primera planta"
+   BIEN: "Esta vivienda exterior…"
+
+En lugar de recorrer o de situar: sintetiza de qué época y qué carácter es la casa, qué dos o tres rasgos la definen, y cómo se organiza la vida en ella (la zona de día separada del descanso, la relación con el exterior, la luz).
 
 EJEMPLO DEL REGISTRO Y LA FORMA (no copies su contenido):
 TITULAR: Molduras de 1925 y una reforma que las respeta
@@ -339,7 +349,26 @@ REGLAS ABSOLUTAS — COMPONER, NO INVENTAR:
 export function preludeUserPrompt(evidence: PreludeEvidence): string {
   // Solo los facts (la síntesis limpia); el source_text queda para validar.
   const facts = [...new Set(evidence.texts.filter((_, i) => i % 2 === 0))];
-  return `EVIDENCIA DE LA VIVIENDA (única fuente permitida):\n${facts.map((f) => `- ${f}`).join("\n")}`;
+  // La evidencia del engine viene ordenada POR ESTANCIAS (un claim por
+  // capítulo), y si se le entrega así al modelo, escribe un inventario: el
+  // rollout v2 lo demostró en 96 fichas. Se separa lo que habla del carácter
+  // de la casa —lo que el Prelude debe contar— de lo que habla de cada
+  // habitación, que es material de los capítulos.
+  const character = facts.filter((f) => !ROOM_NOUN_ONE.test(f));
+  const rooms = facts.filter((f) => ROOM_NOUN_ONE.test(f));
+  const parts = [
+    `CARÁCTER DE LA VIVIENDA (construye el texto CON ESTO):\n${
+      character.length > 0 ? character.map((f) => `- ${f}`).join("\n") : "- (sin datos: apóyate en la organización general que se deduce de abajo)"
+    }`,
+  ];
+  if (rooms.length > 0) {
+    parts.push(
+      `ESTANCIAS (contexto para entender la casa — NO las enumeres; como mucho dos de ellas, y solo si definen el carácter):\n${rooms
+        .map((f) => `- ${f}`)
+        .join("\n")}`,
+    );
+  }
+  return parts.join("\n\n");
 }
 
 /**
