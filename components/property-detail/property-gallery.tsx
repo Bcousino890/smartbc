@@ -153,7 +153,11 @@ export function PropertyGallery({
   );
 }
 
-function Lightbox({
+// Exportado: /a/[token] (enlace temporal de particulares, ver
+// app/a/[token]/particular-hero.tsx) la reutiliza tal cual para que el
+// visor de fotos sea idéntico al de un SmartLink real, en vez de duplicar
+// el nav/teclado/swipe en una segunda implementación.
+export function Lightbox({
   photos,
   index,
   onClose,
