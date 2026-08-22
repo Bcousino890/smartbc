@@ -849,6 +849,39 @@
   white-space: nowrap; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
 }
 .bcp-live-home-dot { width: 10px; height: 10px; border-radius: 9999px; background: #d4af7f; }
+/* FICHA CONTEXTUAL en móvil: tarjeta inferior DENTRO del mapa.
+   Anclar una ficha de 300px sobre un marcador en 390px de ancho no cabe, así
+   que en móvil ocupa el borde inferior del escenario del mapa —no del
+   viewport— dejando mapa visible por encima. */
+@media (max-width: 767px) {
+  .smartlink-root .bcp-context-card--mobile-sheet {
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 3.25rem;
+    width: auto;
+    transform: none;
+  }
+}
+
+/* INDICADOR DE VIAJE del rail de conectividad.
+   Cápsula marfil con filo champán y glifo carbón: el modo de viaje, no un
+   vehículo ilustrado. Vive en el rail (tiempo), nunca sobre el mapa
+   (geografía). Sin rebote, sin rotación, sin 3D. */
+.bcp-travel-indicator {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #fbf8f3;
+  color: #3b332a;
+  border: 1px solid rgba(200, 168, 106, 0.8);
+  box-shadow: 0 4px 14px -6px rgba(40, 28, 10, 0.5);
+}
+/* El rail en móvil hace scroll y el nodo activo se centra solo. */
+.bcp-rail-scroll { scroll-snap-type: x proximity; }
+.bcp-rail-scroll > ul > li { scroll-snap-align: center; }
+
 /* ── BCP RESIDENCE MARKER ───────────────────────────────────────────────
    Medallón, no chapa de sistema. Disco carbón + aro champán fino + detalle
    marfil dentro. Es el ancla geográfica de la experiencia (DAMAC) y tiene

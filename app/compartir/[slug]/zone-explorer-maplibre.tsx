@@ -27,6 +27,7 @@ import {
   CLICKABLE_LAYER_IDS,
 } from "@/lib/services/location/bcp-map-style";
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
+import { LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
 import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
@@ -47,6 +48,33 @@ const LINK_SOURCE = "bcp-link";
  * escala. Lo vigila `npm run test:zone-explorer`.
  */
 export const MAPLIBRE_ZOOM_OFFSET = -1;
+
+/**
+ * La curva de aceleración compartida, traducida a la función `easing` que
+ * pide MapLibre (recibe t en 0..1 y devuelve el progreso). Así el mapa y el
+ * rail se mueven con el MISMO carácter en vez de parecerse solo de lejos.
+ */
+function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
+  const cx = 3 * x1;
+  const bx = 3 * (x2 - x1) - cx;
+  const ax = 1 - cx - bx;
+  const cy = 3 * y1;
+  const by = 3 * (y2 - y1) - cy;
+  const ay = 1 - cy - by;
+  const sampleX = (t: number) => ((ax * t + bx) * t + cx) * t;
+  const sampleDX = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
+  return (x: number) => {
+    // Newton-Raphson: suficiente para una curva monótona y sin dependencias.
+    let t = x;
+    for (let i = 0; i < 5; i++) {
+      const dx = sampleX(t) - x;
+      const d = sampleDX(t);
+      if (Math.abs(dx) < 1e-4 || d === 0) break;
+      t -= dx / d;
+    }
+    return ((ay * t + by) * t + cy) * t;
+  };
+}
 export const toMapLibreZoom = (slippyZoom: number) => slippyZoom + MAPLIBRE_ZOOM_OFFSET;
 const emptyLine = () => ({ type: "FeatureCollection", features: [] }) as any;
 
@@ -191,43 +219,10 @@ export function ZoneExplorerMapLibre({
           map.on("mouseleave", layer, () => setCursor(""));
         }
 
-        // ── Conexión vivienda → destino ──
-        // Una línea editorial, no una ruta: el cliente tiene que entender de
-        // un vistazo QUÉ ha elegido y a qué distancia está de la casa, sin
-        // que le vendamos un cálculo de trayecto que no hemos hecho.
-        map.addSource(LINK_SOURCE, { type: "geojson", data: emptyLine() });
-        map.addLayer({
-          id: "bcp-link-halo",
-          type: "line",
-          source: LINK_SOURCE,
-          layout: { "line-cap": "round" },
-          paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0.85 },
-        });
-        map.addLayer({
-          id: "bcp-link",
-          type: "line",
-          source: LINK_SOURCE,
-          layout: { "line-cap": "round" },
-          paint: {
-            "line-color": "#8a6d3b",
-            "line-width": 2,
-            "line-dasharray": [1.6, 1.7],
-            "line-opacity": 0.95,
-          },
-        });
-
-        // Proyector para las capas HTML del módulo (cápsulas, área de foco,
-        // curva). Se toma DE MAPLIBRE en vez de recalcular la proyección por
-        // nuestra cuenta: así no hay dos matemáticas que puedan desalinearse.
-        const publishProjector = () => {
-          onProjectorRef.current?.((lat: number, lng: number) => {
-            const p = map.project([lng, lat]);
-            return { left: p.x, top: p.y };
-          });
-        };
-        publishProjector();
-        map.on("move", publishProjector);
-        map.on("resize", publishProjector);
+        // Aquí vivían dos capas de línea entre la vivienda y el destino.
+        // Se han retirado: la conexión la cuenta el rail de conectividad, no
+        // una diagonal sobre las calles que se lee como una ruta que no hemos
+        // calculado (§16 y §37 del documento de arquitectura).
 
         setReady(true);
       });
@@ -298,22 +293,12 @@ export function ZoneExplorerMapLibre({
     }
     residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
-    const link = map.getSource(LINK_SOURCE);
     if (!focus) {
-      link?.setData(emptyLine());
       // En overview la cámara la compone el módulo (encuadra la vivienda con
       // sus destinos); en explorar se vuelve al encuadre de entrada.
-      if (interactive) map.easeTo({ center: [origin.lng, origin.lat], zoom: 15.4, duration: 600 });
+      if (interactive) map.easeTo({ center: [origin.lng, origin.lat], zoom: 15.4, duration: LOCATION_MOTION.reset });
       return;
     }
-    link?.setData({
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [[origin.lng, origin.lat], [focus.lng, focus.lat]],
-      },
-      properties: {},
-    });
 
     // Lo descubierto lleva marcador NEUTRO: nunca se insinúa que BCP lo
     // recomienda. Solo lo curado va en champán.
@@ -334,12 +319,13 @@ export function ZoneExplorerMapLibre({
     if (!interactive) return;
     const bounds = new maplibre.LngLatBounds([origin.lng, origin.lat], [origin.lng, origin.lat]);
     bounds.extend([focus.lng, focus.lat]);
+    map.stop();
     map.fitBounds(bounds, {
       // Banda superior reservada a la ficha contextual, igual que en el
       // overview: nunca puede tapar a la vivienda ni al destino.
       padding: { top: 172, bottom: 76, left: 56, right: 56 },
       maxZoom: 17,
-      duration: 700,
+      duration: prefersReducedMotion() ? 0 : LOCATION_MOTION.camera,
     });
   }, [focus, ready, origin, makeEl, interactive]);
 
@@ -417,13 +403,30 @@ export function ZoneExplorerMapLibre({
   }, [interactive, ready]);
 
   // ── Cámara impuesta (overview) ──
-  // El módulo compone el encuadre con la vivienda y sus destinos; el mapa se
-  // limita a obedecer. Sin animación: en pasivo un vuelo llamaría la atención
-  // sobre el mapa justo cuando debe estar callado.
+  // El módulo compone el encuadre —vivienda + destino, con la banda de la
+  // ficha ya reservada— y el mapa obedece. La PRIMERA colocación es un salto
+  // seco: al cargar, el overview tiene que estar quieto. A partir de ahí cada
+  // cambio se desliza, porque ese movimiento es justo lo que explica la
+  // geografía cuando alguien elige un destino en el rail.
+  const cameraPlacedRef = useRef(false);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || interactive || !camera) return;
-    map.jumpTo({ center: [camera.lng, camera.lat], zoom: toMapLibreZoom(camera.zoom) });
+    const target = { center: [camera.lng, camera.lat] as [number, number], zoom: toMapLibreZoom(camera.zoom) };
+    if (!cameraPlacedRef.current || prefersReducedMotion()) {
+      cameraPlacedRef.current = true;
+      map.jumpTo(target);
+      return;
+    }
+    // Interrumpible: si llega otro destino a mitad de vuelo, se corta el
+    // anterior en vez de encolar tres movimientos (§40).
+    map.stop();
+    map.easeTo({
+      ...target,
+      duration: LOCATION_MOTION.camera,
+      easing: cubicBezier(0.22, 1, 0.36, 1),
+      delay: LOCATION_MOTION.cameraDelay,
+    });
   }, [camera?.lat, camera?.lng, camera?.zoom, ready, interactive]);
 
   return (

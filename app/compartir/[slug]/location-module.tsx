@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Compass, Dumbbell, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
+  Car, Compass, Dumbbell, Footprints, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
   Maximize2, Minus, Plus, ShoppingBag, TrainFront, Trees, UtensilsCrossed, X,
 } from "lucide-react";
 import { buildMosaic, clampPointInView, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
@@ -32,6 +32,7 @@ import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
 import { residenceMarkerHtml } from "@/lib/services/location/markers";
+import { LOCATION_EASING, LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
 import { fromCuratedPoi, fromUniversity, type LocationDestination } from "@/lib/services/location/destination";
 
 /** Una universidad se distingue de un POI curado por su campus: es el único
@@ -117,6 +118,13 @@ export function LocationModule({
   // cápsulas del mapa, la lista inferior y las universidades. Una sola
   // máquina de estados, no cuatro implementaciones.
   const [focus, setFocus] = useState<PoiTravel | null>(null);
+  // Rail de conectividad: el indicador de viaje viaja hasta el nodo elegido.
+  const railRef = useRef<HTMLUListElement | null>(null);
+  const indicatorRef = useRef<HTMLSpanElement | null>(null);
+  const railAnimRef = useRef<Animation | null>(null);
+  /** El indicador no se coloca hasta la primera selección: al cargar, el
+   *  overview tiene que estar quieto (§41 — nada de viajes automáticos). */
+  const [indicatorReady, setIndicatorReady] = useState(false);
   const activePoi = focus?.name ?? null;
   // Lugar DESCUBIERTO por el cliente en el basemap. Se guarda aparte de los
   // POIs curados: nunca se mezclan ni se presenta como recomendación de BCP.
@@ -170,6 +178,54 @@ export function LocationModule({
   const ordered = useMemo(() => [...pois].sort((a, b) => a.minutes - b.minutes), [pois]);
   const rail = ordered.slice(0, 5);
   const mapPois = ordered.slice(0, 4);
+
+  // ── Indicador de viaje ──
+  // Se anima hasta el CENTRO REAL del nodo activo, medido en el DOM: con
+  // etiquetas de ancho variable y un rail que en móvil hace scroll, calcular
+  // la posición por porcentaje se desalinea. Y se mide dentro del sistema de
+  // coordenadas del propio rail, no del viewport.
+  const railIndex = focus ? rail.findIndex((p) => p.name === focus.name) : -1;
+  useEffect(() => {
+    const railEl = railRef.current;
+    const indicator = indicatorRef.current;
+    if (!railEl || !indicator) return;
+    if (railIndex < 0) return; // sin selección el indicador no existe todavía
+
+    const node = railEl.querySelector<HTMLElement>(`[data-rail-node="${railIndex}"]`);
+    if (!node) return;
+    const nodeRect = node.getBoundingClientRect();
+    const railRect = railEl.getBoundingClientRect();
+    const toX = nodeRect.left - railRect.left + nodeRect.width / 2;
+
+    // Interrumpible: si se pulsa otro destino a mitad de recorrido, el viaje
+    // anterior se cancela en seco en vez de encolarse (§40).
+    railAnimRef.current?.cancel();
+
+    const reduced = prefersReducedMotion();
+    const previous = indicator.style.getPropertyValue("--x");
+    const fromX = previous ? Number.parseFloat(previous) : toX;
+    indicator.style.setProperty("--x", `${toX}`);
+
+    if (reduced || !indicatorReady) {
+      // Sin animación: aparece ya colocado. La información es la misma.
+      indicator.style.transform = `translateX(${toX}px) translateX(-50%)`;
+      setIndicatorReady(true);
+      return;
+    }
+    railAnimRef.current = indicator.animate(
+      [
+        { transform: `translateX(${fromX}px) translateX(-50%)` },
+        { transform: `translateX(${toX}px) translateX(-50%)` },
+      ],
+      { duration: LOCATION_MOTION.rail, easing: LOCATION_EASING, fill: "forwards" },
+    );
+
+    // En móvil el rail hace scroll: el nodo elegido tiene que quedar a la vista.
+    node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest", inline: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [railIndex]);
+
+  useEffect(() => () => railAnimRef.current?.cancel(), []);
 
   // ── Vista del mapa ──
   const view = useMemo(() => {
@@ -272,7 +328,11 @@ export function LocationModule({
     return () => { onExternalOpenRef.current = null; };
   }, [onPoiClick]);
 
+  /** Vuelta al overview. Una sola puerta: rail, mapa, ficha y listas a la vez. */
   const restoreOverview = useCallback(() => {
+    // El indicador se retira con el mismo carácter con el que llegó; el
+    // encuadre vuelve solo porque `view` se recalcula sin foco.
+    railAnimRef.current?.cancel();
     setFocus(null);
     setPlaceFocus(null);
     onRestore();
@@ -331,18 +391,35 @@ export function LocationModule({
       {rail.length > 0 && (
         <div className="mt-7 px-6 md:px-8">
           <p className="crm-label-sm text-gold-dark">Conectada con Madrid</p>
-          <div className="mt-5 -mx-6 overflow-x-auto px-6 pb-1 md:mx-0 md:overflow-visible md:px-0">
-            <ul className="relative flex min-w-[32rem] items-start gap-1 md:min-w-0">
+          <div className="bcp-rail-scroll mt-5 -mx-6 overflow-x-auto px-6 pb-1 md:mx-0 md:overflow-visible md:px-0">
+            <ul ref={railRef} className="relative flex min-w-[32rem] items-start gap-1 md:min-w-0">
               {/* Hilo continuo detrás de los hitos, a la altura de los puntos. */}
               <span
                 aria-hidden
                 className="pointer-events-none absolute left-[10%] right-[10%] top-[5px] h-px bg-gradient-to-r from-transparent via-gold/45 to-transparent"
               />
+              {/* INDICADOR DE VIAJE · viaja por el rail hasta el destino
+                  elegido. Es narrativa de tiempo, no un vehículo sobre un
+                  mapa: por eso vive en el rail y no en la geografía. Su
+                  glifo cambia con el modo (a pie / en coche). */}
+              {railIndex >= 0 && (
+                <span
+                  ref={indicatorRef}
+                  aria-hidden
+                  className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-1/2"
+                >
+                  {focus?.mode === "walk" ? (
+                    <Footprints size={13} strokeWidth={1.75} />
+                  ) : (
+                    <Car size={13} strokeWidth={1.75} />
+                  )}
+                </span>
+              )}
               {rail.map((p, i) => {
                 const isActive = activePoi === p.name;
                 const { Icon } = categoryOf(p.category);
                 return (
-                  <li key={p.name} className="bcp-rise relative flex-1" style={{ animationDelay: `${90 + i * 70}ms` }}>
+                  <li key={p.name} className="bcp-rise relative flex-1 scroll-mx-6" style={{ animationDelay: `${90 + i * 70}ms` }}>
                     <button
                       type="button"
                       onClick={() => selectPoi(p)}
@@ -350,7 +427,10 @@ export function LocationModule({
                       data-active={isActive ? "true" : "false"}
                       className="group flex w-full flex-col items-center px-1 text-center"
                     >
+                      {/* El nodo activo se distingue por relleno Y por peso de
+                          la etiqueta, nunca solo por color (§44). */}
                       <span
+                        data-rail-node={i}
                         className={`relative z-[1] block h-[11px] w-[11px] rounded-full border transition ${
                           isActive
                             ? "border-gold-dark bg-gold shadow-[0_0_0_4px_rgba(212,175,127,0.28)]"
@@ -359,7 +439,7 @@ export function LocationModule({
                       />
                       <span
                         className={`crm-number mt-3 block text-lg leading-none transition ${
-                          isActive ? "text-ink" : "text-ink/75"
+                          isActive ? "font-medium text-ink" : "text-ink/75"
                         }`}
                       >
                         {p.minutes}
@@ -492,19 +572,11 @@ export function LocationModule({
               />
             )}
 
-            {/* CONEXIÓN vivienda → destino: curva, fina y MUY secundaria.
-                Representa proximidad; jamás un recorrido por calles, porque
-                no tenemos geometría de routing real. */}
-            {focusPt && propertyPt && size && (
-              <svg className="pointer-events-none absolute inset-0 z-[2]" width={size.w} height={size.h} aria-hidden>
-                <path
-                  className="bcp-connection"
-                  d={curveBetween(propertyPt, focusPt)}
-                  fill="none" stroke="#c9a86a" strokeWidth={1.25}
-                  strokeLinecap="round" strokeDasharray="3 7" opacity={0.55}
-                />
-              </svg>
-            )}
+            {/* Aquí iba una curva discontinua entre la vivienda y el destino.
+                Se ha quitado a propósito: por fina que fuera, leía como
+                software de medición y era lo único que impedía que el mapa se
+                viese como un lugar. La relación ya la cuentan el rail (tiempo),
+                la cámara (geografía) y la ficha (contexto). */}
 
             {/* CÁPSULAS DE POI en overview: el lifestyle se entiende SIN
                 bajar a la lista. Son los marcadores curados de este estado —
@@ -698,10 +770,15 @@ function ContextCard({
       data-align={align}
       role="dialog"
       aria-label={name}
-      className={`bcp-context-card absolute z-[600] w-[min(19rem,calc(100%-1.5rem))] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm ${
-        side === "top" ? "top-3.5" : "bottom-14"
+      // En escritorio flota arriba y centrada, sobre la banda que el encuadre
+      // ya reserva para ella. En móvil NO se intenta anclar una ficha de 300px
+      // sobre un marcador en 390px de ancho: se convierte en una tarjeta
+      // inferior dentro del propio mapa (§35), que deja ver el mapa y no
+      // secuestra el scroll de la página.
+      className={`bcp-context-card bcp-context-card--mobile-sheet absolute z-[600] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm md:w-[min(21rem,calc(100%-1.5rem))] ${
+        side === "top" ? "md:top-3.5" : "md:bottom-14"
       } ${
-        align === "center" ? "left-1/2 -translate-x-1/2" : align === "left" ? "left-3.5" : "right-3.5"
+        align === "center" ? "md:left-1/2 md:-translate-x-1/2" : align === "left" ? "md:left-3.5" : "md:right-3.5"
       }`}
     >
       <button
@@ -746,14 +823,3 @@ function ContextCard({
 /** Callback de "Ver en Google Maps" para analítica, sin acoplar la ficha. */
 const onExternalOpenRef: { current: ((name: string) => void) | null } = { current: null };
 
-/** Curva suave entre dos puntos: se comba perpendicular al segmento para que
- *  se lea como un gesto de conexión y no como el trazado de una calle. */
-function curveBetween(a: { left: number; top: number }, b: { left: number; top: number }): string {
-  const dx = b.left - a.left;
-  const dy = b.top - a.top;
-  const dist = Math.hypot(dx, dy) || 1;
-  const bow = Math.min(46, dist * 0.16);
-  const mx = (a.left + b.left) / 2 - (dy / dist) * bow;
-  const my = (a.top + b.top) / 2 + (dx / dist) * bow;
-  return `M ${a.left} ${a.top} Q ${mx} ${my} ${b.left} ${b.top}`;
-}
