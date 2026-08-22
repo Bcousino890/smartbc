@@ -184,6 +184,41 @@ export function shiftViewVertically(
 }
 
 /**
+ * Garantiza que un punto (la vivienda) quede DENTRO de un margen de seguridad
+ * del lienzo, desplazando el centro lo justo. Encuadrar la vivienda con sus
+ * destinos puede empujarla contra un borde cuando todos caen al mismo lado, y
+ * en móvil el medallón acababa cortado por el canto (visto en el chalet de
+ * Pozuelo). El zoom NO se toca: solo se recentra.
+ */
+export function clampPointInView(
+  view: { lat: number; lng: number; zoom: number },
+  point: { lat: number; lng: number },
+  width: number,
+  height: number,
+  inset: number,
+): { lat: number; lng: number; zoom: number } {
+  const c = latLngToWorldPixel(view.lat, view.lng, view.zoom);
+  const p = latLngToWorldPixel(point.lat, point.lng, view.zoom);
+  // Posición del punto dentro del contenedor con el centro actual.
+  const x = p.x - c.x + width / 2;
+  const y = p.y - c.y + height / 2;
+  // Si el margen pedido no cabe, se centra el punto y ya está.
+  const maxInsetX = width / 2;
+  const maxInsetY = height / 2;
+  const ix = Math.min(inset, maxInsetX);
+  const iy = Math.min(inset, maxInsetY);
+  let dx = 0;
+  let dy = 0;
+  if (x < ix) dx = x - ix;
+  else if (x > width - ix) dx = x - (width - ix);
+  if (y < iy) dy = y - iy;
+  else if (y > height - iy) dy = y - (height - iy);
+  if (dx === 0 && dy === 0) return view;
+  const moved = worldPixelToLatLng(c.x + dx, c.y + dy, view.zoom);
+  return { lat: moved.lat, lng: moved.lng, zoom: view.zoom };
+}
+
+/**
  * Zoom que encuadra al inmueble CON su barrio alrededor, no solo su portal.
  * Se ajusta al ancho disponible para que móvil y escritorio muestren una
  * extensión comparable de ciudad (§7C del brief: contexto de barrio, no

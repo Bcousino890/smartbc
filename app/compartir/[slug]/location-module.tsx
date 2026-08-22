@@ -27,7 +27,7 @@ import {
   Compass, Dumbbell, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
   Maximize2, Minus, Plus, ShoppingBag, TrainFront, Trees, UtensilsCrossed, X,
 } from "lucide-react";
-import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
+import { buildMosaic, clampPointInView, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
@@ -201,7 +201,15 @@ export function LocationModule({
       padding: Math.max(56, Math.round(Math.min(size.w, size.h) * 0.16)),
       minZoom: Math.max(13, z - 2), maxZoom: z,
     });
-    return fitted;
+    // Si los destinos caen todos al mismo lado, el encuadre empuja la vivienda
+    // contra el borde y en móvil el medallón se corta. Se recentra lo justo.
+    return clampPointInView(
+      fitted,
+      { lat: center.lat, lng: center.lng },
+      size.w,
+      size.h,
+      Math.max(64, Math.round(size.w * 0.16)),
+    );
   }, [size, center.lat, center.lng, hasPreciseCoords, fallbackCoords.zoom, focus, mapPois]);
 
   const mosaic: Mosaic | null = useMemo(() => {

@@ -23,7 +23,7 @@ import {
   CLICKABLE_POI_CLASSES,
 } from "../lib/services/location/destination";
 import { bcpLuxuryMadridStyle, CLICKABLE_LAYER_IDS, MAP_ATTRIBUTION } from "../lib/services/location/bcp-map-style";
-import { latLngToWorldPixel } from "../lib/geo/tile-math";
+import { clampPointInView, latLngToWorldPixel } from "../lib/geo/tile-math";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -164,6 +164,27 @@ console.log("Estilo BCP Luxury Madrid:");
     Math.abs(dy(16) / dy(15) - 2) < 1e-9, String(dy(16) / dy(15)));
   check("slippy z16 mide los 612.3px que MapLibre da en z15",
     Math.abs(dy(16) - 612.28) < 0.1, dy(16).toFixed(2));
+
+  // La vivienda no puede quedar pegada al canto: si los destinos caen todos
+  // al mismo lado, el encuadre la empujaba fuera y en móvil el medallón se
+  // cortaba (chalet de Pozuelo, 390px).
+  {
+    const W = 390, H = 420, INSET = 64;
+    const home = { lat: 40.43, lng: -3.6883 };
+    // Vista descentrada a propósito: la casa cae fuera del margen.
+    const off = { lat: 40.43, lng: -3.6783, zoom: 15 };
+    const before = latLngToWorldPixel(home.lat, home.lng, off.zoom).x
+      - latLngToWorldPixel(off.lat, off.lng, off.zoom).x + W / 2;
+    const fixed = clampPointInView(off, home, W, H, INSET);
+    const after = latLngToWorldPixel(home.lat, home.lng, fixed.zoom).x
+      - latLngToWorldPixel(fixed.lat, fixed.lng, fixed.zoom).x + W / 2;
+    check("la vivienda estaba fuera del margen de seguridad", before < INSET, before.toFixed(1));
+    check("y el recentrado la mete dentro sin tocar el zoom",
+      after >= INSET - 0.6 && fixed.zoom === off.zoom, `${after.toFixed(1)} @z${fixed.zoom}`);
+    const centered = clampPointInView({ ...home, zoom: 15 }, home, W, H, INSET);
+    check("si ya está dentro, no se mueve nada",
+      centered.lat === home.lat && centered.lng === home.lng);
+  }
 
   check("la lista blanca de lo pulsable no está vacía",
     Object.keys(CLICKABLE_POI_CLASSES).length > 20);
