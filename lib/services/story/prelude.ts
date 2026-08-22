@@ -42,13 +42,13 @@ export const HEADLINE_TARGET = { min: 4, max: 10 };
 // §5 del brief v1: la vivienda debe parecer premium por LOS HECHOS. Estos
 // adjetivos son el esmalte de portal inmobiliario que el brief veta.
 const BANNED_ADJECTIVES =
-  /\b(exclusiv\w*|espectacular\w*|impresionante\w*|únic[oa]s?|lujo(s[oa]s?)?|privilegiad\w*|joya|oportunidad\w*|soñad\w*|incre[íi]ble\w*|inmejorable\w*)\b/i;
+  /\b(exclusiv\w*|espectacular\w*|impresionante\w*|únic[oa]s?|lujo(s[oa]s?)?|privilegiad\w*|joya|oportunidad\w*|soñad\w*|incre[íi]ble\w*|inmejorable\w*|select[oa]s?)\b/i;
 
 // §5 v2: copy que ocupa sitio sin decir nada. Se veta la COLOCACIÓN genérica
 // (adjetivo de relumbrón sobre sustantivo vacío), no el adjetivo suelto:
 // "luminosidad excepcional" informa, "espacios excepcionales" no.
 const EMPTY_COPY =
-  /(dise[ñn]o\s+(único|exclusivo|excepcional)|distribuci[óo]n\s+elegante|destaca\s+su\s+car[áa]cter|espacios?\s+excepcional\w*|elegancia\s+(incomparable|excepcional)|calidad\s+de\s+vida|acabados\s+de\s+(alta\s+)?calidad|materiales\s+de\s+(alta\s+)?calidad|confort\s+y\s+elegancia)/i;
+  /(dise[ñn]o\s+(único|exclusivo|excepcional)|distribuci[óo]n\s+elegante|destaca\s+su\s+car[áa]cter|espacios?\s+excepcional\w*|elegancia\s+(incomparable|excepcional)|calidad\s+de\s+vida|acabados\s+de\s+(alta\s+)?calidad|materiales\s+de\s+(alta\s+)?calidad|confort\s+y\s+elegancia|de\s+primer\s+nivel|(los\s+)?mejores\s+acabados|experiencia\s+(de\s+vida|vital))/i;
 
 // §8 v1: alto riesgo. Cada término tiene su lugar estructurado en el
 // SmartLink; en el Prelude solo pueden entrar mal (duplicados o contradictorios).
@@ -62,7 +62,7 @@ const APPLIANCE_WORDS =
   /\b(caldera|vitrocer[áa]mica|nevera|frigor[íi]fico|lavadora|secadora|lavavajillas|microondas|electrodom[ée]stic\w*|climalit)\b/i;
 // Frases de portal detectadas en el piloto v1 (BC-0917).
 const PORTAL_PHRASES =
-  /(list[oa]\s+para\s+(entrar\s+a\s+vivir|habitar)|equipamiento\s+completo|totalmente\s+equipad\w*)/i;
+  /(list[oa]\s+para\s+((entrar\s+a\s+)?vivir|(ser\s+)?habitad[oa]|habitar)|equipamiento\s+completo|totalmente\s+equipad\w*)/i;
 const ENERGY_WORDS = /\b(consumo\s+energ|kwh|certificad[oa]\s+energ|calificaci[óo]n\s+energ)\w*/i;
 const AVAILABILITY_WORDS = /\b(disponib\w*|entrega\s+inmediata|libre\s+de\s+inquilinos)\b/i;
 
@@ -71,9 +71,17 @@ const AVAILABILITY_WORDS = /\b(disponib\w*|entrega\s+inmediata|libre\s+de\s+inqu
 const YEAR_RE = /^(1[5-9]\d{2}|20\d{2})$/;
 const SPELLED_YEAR = /\b(mil\s+(ochocientos|novecientos)|dos\s+mil)\b/i;
 const AREA_UNITS = /(\bm²|\bm2\b|metros\s+cuadrados)/i;
-// §7: tampoco en letra — "tres dormitorios" es la misma duplicación.
+// §7: tampoco en letra — "tres dormitorios" es la misma duplicación. Ojo:
+// "un/una" quedan FUERA a propósito. En castellano son artículo antes que
+// numeral, y "un dormitorio principal con vestidor" no duplica ningún Key
+// Fact: el piloto v2 lo demostró rechazando frases perfectamente correctas.
 const SPELLED_COUNTS =
-  /\b(un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(dormitorios?|habitaciones?|baños?|aseos?)\b/i;
+  /\b(dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(dormitorios?|habitaciones?|baños?|aseos?)\b/i;
+// La PLANTA es uno de los Key Facts impresos justo encima del spread: decirla
+// otra vez en la apertura es la duplicación que §7 quiere evitar (el piloto
+// v2 la coló en dos titulares).
+const FLOOR_WORDS =
+  /\b((primera|segunda|tercera|cuarta|quinta|sexta|séptima|septima|octava|novena|décima|decima|última|ultima)\s+planta|planta\s+(baja|primera|segunda|tercera|cuarta|quinta|sexta))\b/i;
 
 // §4: los capítulos desarrollan las estancias. El Prelude sintetiza la idea;
 // si nombra media casa, se está comiendo el contenido de los capítulos.
@@ -144,6 +152,7 @@ function sharedLexicalFailures(
   if (SPELLED_YEAR.test(t)) failures.push("año escrito en letra (debe ir en cifra: 1945)");
   if (AREA_UNITS.test(t)) failures.push("menciona superficie (Key Fact)");
   if (SPELLED_COUNTS.test(t)) failures.push(`cuenta de estancias en letra: "${t.match(SPELLED_COUNTS)?.[0]}"`);
+  if (FLOOR_WORDS.test(t)) failures.push(`menciona la planta (Key Fact): "${t.match(FLOOR_WORDS)?.[0]}"`);
 
   if (BANNED_ADJECTIVES.test(t)) failures.push(`adjetivo de portal prohibido: "${t.match(BANNED_ADJECTIVES)?.[0]}"`);
   if (EMPTY_COPY.test(t)) failures.push(`copy genérico sin información: "${t.match(EMPTY_COPY)?.[0]}"`);
@@ -285,29 +294,45 @@ export const MIN_EVIDENCE_CLAIMS = 4;
 // ── Composición ──
 
 export function preludeSystemPrompt(ctx: PreludeContext): string {
-  return `Eres el editor de una casa de lujo inmobiliaria en Madrid (BCP). Escribes la APERTURA editorial de la presentación de una vivienda: el prólogo de un libro, no una ficha. Consta de un TITULAR breve y un cuerpo de dos párrafos.
+  const operacion =
+    ctx.dualOperation
+      ? "Esta vivienda está a la vez en venta y en alquiler: no menciones NINGUNA de las dos operaciones."
+      : ctx.operation === "rent"
+        ? "Esta vivienda está en ALQUILER: no menciones venta, compra ni comprador."
+        : "Esta vivienda está en VENTA: no menciones alquiler, arrendamiento ni inquilinos.";
 
-FORMATO DE RESPUESTA (exacto, sin nada más):
-TITULAR: <titular de ${HEADLINE_TARGET.min}-${HEADLINE_TARGET.max} palabras, sin punto final>
-<línea en blanco>
+  return `Eres el editor de una casa de lujo inmobiliaria en Madrid (BCP). Escribes la APERTURA editorial de una vivienda: el prólogo de un libro, no una ficha. Consta de un TITULAR breve y un cuerpo de EXACTAMENTE DOS párrafos.
+
+FORMATO DE RESPUESTA (exacto, nada más):
+TITULAR: <${HEADLINE_TARGET.min} a ${HEADLINE_TARGET.max} palabras, sin punto final>
+
 <párrafo 1>
-<línea en blanco>
+
 <párrafo 2>
 
-REGLAS ABSOLUTAS — COMPONER, no inventar:
-- Usa EXCLUSIVAMENTE la evidencia que se te da. Nada de vistas, materiales, marcas, orientaciones, sensaciones o amenities que no estén en ella.
-- El cuerpo responde a tres preguntas, en este orden: qué tipo de vivienda es; qué dos a cuatro rasgos la definen; cómo se organiza y cómo se vive.
-- Cuerpo: 2 párrafos cortos, entre ${PRELUDE_TARGET.min} y ${PRELUDE_TARGET.sweetMax} palabras en total (máximo ${PRELUDE_TARGET.max}), 3 a 6 frases.
-- Los AÑOS se escriben en cifra: "1945", nunca "mil novecientos cuarenta y cinco".
-- PROHIBIDA cualquier otra cifra: superficie, metros cuadrados, plantas, dormitorios, baños, precios. Están justo encima, en los datos de la vivienda.
-- PROHIBIDO mencionar: venta, alquiler, precio, gastos, amueblado o sin amueblar, consumo o certificación energética, disponibilidad.
-- PROHIBIDO recorrer la casa estancia por estancia (salón, cocina, dormitorios, baños, terraza…): eso lo desarrollan los capítulos que vienen después. Sintetiza la idea general; nombra como mucho dos o tres espacios y solo si definen el carácter.
-- PROHIBIDO el copy vacío: "diseño único", "distribución elegante", "espacios excepcionales", "acabados de alta calidad", "excelente calidad de vida", "destaca su carácter". Si una frase no aporta un hecho concreto, se borra.
-- PROHIBIDOS los adjetivos de portal: exclusiva, espectacular, impresionante, única, lujo, privilegiada, joya, oportunidad, soñada, increíble, inmejorable.
-- PROHIBIDO enumerar electrodomésticos o equipamiento, y las frases de portal tipo "listo para entrar a vivir".
-- El TITULAR debe describir a ESTA vivienda y salir de la evidencia. Dirección (no plantillas, no los copies): carácter arquitectónico, relación entre espacios, luz y proporción, lo que la reforma respetó. Nunca eslóganes tipo "Una vivienda única" o "Elegancia incomparable".
-- Prefiere hechos concretos y respaldados: el año del edificio, techos altos, molduras originales, carpintería, madera, balcones, la separación entre zona social y privada, la relación entre interior y exterior.
-- Tono editorial, sereno, adulto, concreto. La vivienda parece premium por los hechos.
+LA REGLA QUE MÁS SE INCUMPLE — NO RECORRAS LA CASA.
+Después de este texto vienen capítulos dedicados al salón, a la cocina, a los dormitorios y a las terrazas. Si tú los enumeras, sobran. Nombra COMO MUCHO dos espacios en todo el texto, y solo si definen el carácter de la vivienda. Nunca escribas una frase del tipo "recibidor que da paso al salón, comedor independiente y cocina con office".
+En su lugar, sintetiza: de qué época y qué carácter es la casa, qué dos o tres rasgos la definen, y cómo se organiza la vida en ella (por ejemplo: la zona de día separada del descanso, la relación con el exterior, la luz).
+
+EJEMPLO DEL REGISTRO Y LA FORMA (no copies su contenido):
+TITULAR: Molduras de 1925 y una reforma que las respeta
+
+Una vivienda de 1925 que conserva las molduras y la carpintería originales del edificio. La reforma no borró ese carácter: lo ordenó, y la arquitectura sigue marcando el ritmo de la casa.
+
+Los balcones abren la zona de día al exterior y dejan el descanso en un ala aparte, en una distribución que se entiende de un vistazo.
+
+REGLAS ABSOLUTAS — COMPONER, NO INVENTAR:
+- Usa EXCLUSIVAMENTE la evidencia que se te da. Nada de vistas, materiales, marcas, orientaciones ni sensaciones que no estén en ella.
+- Extensión: entre ${PRELUDE_TARGET.min} y ${PRELUDE_TARGET.sweetMax} palabras en total (máximo ${PRELUDE_TARGET.max}), de 3 a 6 frases, en DOS párrafos. Ni uno ni tres.
+- Los AÑOS van en cifra: "1945", nunca "mil novecientos cuarenta y cinco". Y solo si el año aparece en la evidencia.
+- PROHIBIDA cualquier otra cifra (superficie, metros, plantas, dormitorios, baños, precios): están justo encima, en los datos de la vivienda. No escribas ni "3" ni "tres dormitorios". Tampoco la planta en letra ("una quinta planta", "planta baja"): también está impresa arriba.
+- ${operacion} Tampoco menciones precio, gastos, amueblado o sin amueblar, consumo o certificación energética, ni disponibilidad.
+- PROHIBIDOS los adjetivos de portal: exclusiva, espectacular, impresionante, única, lujo, lujosa, privilegiada, joya, oportunidad, soñada, increíble, inmejorable.
+- PROHIBIDO el copy vacío: "diseño único", "distribución elegante", "espacios excepcionales", "acabados de alta calidad", "materiales de alta calidad", "excelente calidad de vida", "destaca su carácter". Si una frase no aporta un hecho concreto, bórrala.
+- PROHIBIDO enumerar electrodomésticos o equipamiento, y las frases de portal tipo "listo para entrar a vivir" o "totalmente equipada".
+- El TITULAR describe a ESTA vivienda y sale de la evidencia: carácter arquitectónico, relación entre espacios, luz y proporción, lo que la reforma respetó. Nunca eslóganes como "Una vivienda única" o "Elegancia incomparable". Es DESCRIPTIVO, no poético: nada de metáforas ni imágenes literarias ("techos que abrazan el cielo"). No inventes nombres propios.
+- Prefiere hechos concretos y respaldados: el año del edificio, los techos altos, las molduras, la carpintería, la madera, los balcones, la separación entre zona social y privada, la relación entre interior y exterior.
+- Tono editorial, sereno, adulto, concreto. La vivienda parece premium por los hechos, no por los adjetivos.
 - Escribe en español. Devuelve SOLO el titular y los dos párrafos, sin comillas ni encabezados adicionales.`;
 }
 

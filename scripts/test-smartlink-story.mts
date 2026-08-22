@@ -547,6 +547,10 @@ console.log("Property Prelude:");
   const r3b = validatePrelude(BUENO.replace("el ritmo de las estancias", "el ritmo de los tres dormitorios"), { operation: "rent" }, EV);
   check("cuenta de estancias en letra → rechazada", !r3b.ok, r3b.failures.join(" · "));
 
+  const rFloor = validatePrelude(BUENO.replace("Una vivienda reformada", "Una vivienda en una quinta planta, reformada,"), { operation: "rent" }, EV);
+  check("menciona la planta → rechazado (Key Fact duplicado)",
+    !rFloor.ok && rFloor.failures.some((f) => f.includes("planta")), rFloor.failures.join(" · "));
+
   const r4 = validatePrelude(BUENO.replace("Una vivienda reformada", "Una vivienda espectacular y única"), { operation: "rent" }, EV);
   check("adjetivos de portal → rechazado", !r4.ok && r4.failures.some((f) => f.includes("portal")));
 

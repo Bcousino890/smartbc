@@ -26,7 +26,7 @@ export type ComposeResult =
 export async function composePrelude(
   ctx: PreludeContext,
   evidence: PreludeEvidence,
-  attempts = 3,
+  attempts = 4,
 ): Promise<ComposeResult> {
   let feedback = "";
   let last: string[] = ["el modelo no respondió"];

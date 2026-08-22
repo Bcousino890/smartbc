@@ -4,6 +4,10 @@
 // Uso (VPS): node scripts/preludes.bundle.cjs [pilot|all] [opciones]
 //
 //   pilot          → 5 COMPLETE + 5 PARTIAL + 5 SPARSE + 5 FACTS-LED
+//   sweep          → NO llama a la IA: revalida los preludes APROBADOS contra
+//                    el contrato actual y baja a 'rejected' los que ya no lo
+//                    cumplen (un texto de una versión vieja del contrato no
+//                    puede quedarse en público por inercia)
 //   all            → todas las versiones candidatas
 //   --slugs=a,b,c  → exactamente esas propiedades (piloto dirigido)
 //   --refresh      → reprocesa también las que YA tienen prelude (v1 → v2)
@@ -16,12 +20,18 @@
 // queda SIN prelude. Nunca se guarda nada que no pase el contrato.
 
 import { createAdminClient } from "../lib/db/admin";
-import { collectPreludeEvidence, MIN_EVIDENCE_CLAIMS } from "../lib/services/story/prelude";
+import {
+  collectPreludeEvidence,
+  MIN_EVIDENCE_CLAIMS,
+  validatePrelude,
+  validatePreludeHeadline,
+} from "../lib/services/story/prelude";
 import { composePrelude } from "../lib/services/story/prelude-compose";
 import { NARRATIVE_CHAPTERS } from "../lib/services/story/gate";
 
 async function main() {
-  const MODE = process.argv[2] === "all" ? "all" : "pilot";
+  const ARG = process.argv[2];
+  const MODE = ARG === "all" ? "all" : ARG === "sweep" ? "sweep" : "pilot";
   const CONFIRM = process.argv.includes("--confirm");
   const APPROVE = process.argv.includes("--approve");
   const REFRESH = process.argv.includes("--refresh");
@@ -92,6 +102,45 @@ async function main() {
       .eq("version_id", c.v.id)
       .eq("status", "conflict");
     c.state = (count ?? 0) > 0 ? "partial" : "complete";
+  }
+
+  // ── SWEEP ── revalidación sin IA de lo que hay publicado.
+  if (MODE === "sweep") {
+    let checked = 0;
+    let demoted = 0;
+    for (const [pid, v] of byProp) {
+      const p = props.get(pid);
+      if (!p || p.archived_at || p.status === "archived") continue;
+      if (v.prelude_status !== "approved") continue;
+      const { data: full } = await db
+        .from("property_story_versions")
+        .select("prelude, prelude_headline")
+        .eq("id", v.id)
+        .maybeSingle();
+      const { data: claims } = await db
+        .from("property_story_claims")
+        .select("id, fact, source_text, category, conflict, is_duplicate")
+        .eq("version_id", v.id);
+      const evidence = collectPreludeEvidence(claims ?? []);
+      const ops: string[] = Array.isArray(p.operations) ? p.operations : [];
+      const ctx = {
+        operation: (p.operation === "rent" ? "rent" : "sale") as "rent" | "sale",
+        dualOperation: ops.includes("sale") && ops.includes("rent"),
+      };
+      checked++;
+      const bodyV = validatePrelude(full?.prelude ?? "", ctx, evidence.texts);
+      const headV = full?.prelude_headline
+        ? validatePreludeHeadline(full.prelude_headline, ctx, evidence.texts)
+        : { ok: false, failures: ["sin titular (contrato v2)"] };
+      if (bodyV.ok && headV.ok) continue;
+      demoted++;
+      console.log(`  ↓ ${p.bc_reference} ${[...headV.failures.map((f) => `TITULAR: ${f}`), ...bodyV.failures].join(" · ")}`);
+      if (CONFIRM) {
+        await db.from("property_story_versions").update({ prelude_status: "rejected" }).eq("id", v.id);
+      }
+    }
+    console.log(`\n[preludes] sweep: revisados=${checked} · retirados=${demoted}`);
+    process.exit(0);
   }
 
   let pool: Cand[];
