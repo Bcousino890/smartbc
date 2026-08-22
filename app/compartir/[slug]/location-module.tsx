@@ -259,7 +259,12 @@ export function LocationModule({
         b: { lat: focus.latitude, lng: focus.longitude },
         width: size.w, height: Math.max(140, size.h - BAND), padding, maxZoom: 16,
       });
-      return shiftViewVertically(fitted, -BAND / 2);
+      // La banda se reserva DONDE va la ficha: arriba en escritorio, abajo en
+      // móvil (donde es una tarjeta inferior). Reservarla siempre arriba hacía
+      // que en móvil la tarjeta acabara tapando el marcador de la vivienda,
+      // que es justo lo que la banda existe para evitar.
+      const cardAtBottom = size.w < 768;
+      return shiftViewVertically(fitted, cardAtBottom ? BAND / 2 : -BAND / 2);
     }
     const z = contextZoomForWidth(size.w, center.lat);
     if (!hasPreciseCoords) return { lat: center.lat, lng: center.lng, zoom: Math.min(z, fallbackCoords.zoom) };
