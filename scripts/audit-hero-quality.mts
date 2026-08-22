@@ -48,6 +48,7 @@ async function main() {
     if (data.length < 1000) break;
   }
 
+  let autoFixed = 0;
   const buckets = {
     GOOD: [] as string[],
     MARGINAL: [] as string[],
@@ -67,7 +68,21 @@ async function main() {
     const photos = (data ?? []) as Photo[];
     if (!photos.length) { buckets.SIN_FOTOS.push(p.bc_reference); continue; }
 
-    const cover = photos.find((x) => x.position === 0) ?? photos[0];
+    // Portada EFECTIVA: la misma regla que aplica el adaptador al renderizar
+    // (marca de agua y resolución sobre las ocho primeras). Auditar la foto 0
+    // en crudo daría por malas fichas que el renderer ya corrige solo.
+    const raw = photos.find((x) => x.position === 0) ?? photos[0];
+    const SHORT = 1440;
+    let cover = raw;
+    if (raw.ai_watermark || (raw.source_width != null && raw.source_width < SHORT)) {
+      let bestScore = -Infinity;
+      for (const cand of photos.slice(0, 8)) {
+        const score =
+          (cand.source_width ?? SHORT) - (cand.ai_watermark ? 4000 : 0) - cand.position * 40;
+        if (score > bestScore) { bestScore = score; cover = cand; }
+      }
+    }
+    if (cover.position !== raw.position) autoFixed++;
     if (cover.source_width == null) { buckets.SIN_DATO.push(p.bc_reference); continue; }
 
     // La mejor alternativa limpia entre las primeras (mismo horizonte que usa
@@ -88,6 +103,7 @@ async function main() {
   }
 
   console.log(`ACTIVE HEROES AUDITED: ${props.length}`);
+  console.log(`  AUTO-FIXED (el renderer ya usa otra foto mejor): ${autoFixed}`);
   console.log(`  GOOD (≥${GOOD_2X}px, sirve hasta retina): ${buckets.GOOD.length}`);
   console.log(`  MARGINAL (≥${GOOD_1X}px, se queda corta en retina): ${buckets.MARGINAL.length}`);
   console.log(`  WRONG_VARIANT (hay otra foto mejor): ${buckets.WRONG_VARIANT.length}`);

@@ -419,10 +419,10 @@ export function propertyRowToClientProperty(
   const coverIdx = (() => {
     const w0 = dimsOf(0);
     const clean0 = !photoWatermarked[0];
-    // Se considera "corta" una portada que no llega al ancho de un hero de
-    // portátil sin ampliar. Por debajo de eso merece la pena mirar si hay
-    // algo claramente mejor entre las primeras.
-    const SHORT = 1280;
+    // "Corta" = no llega ni al ancho que pide el hero a 1× en un portátil
+    // (1440 CSS px). Por debajo de eso merece la pena mirar si hay algo
+    // claramente mejor entre las primeras.
+    const SHORT = 1440;
     const needsBetter = !clean0 || (w0 != null && w0 < SHORT);
     if (!needsBetter) return 0;
     let best = 0;
