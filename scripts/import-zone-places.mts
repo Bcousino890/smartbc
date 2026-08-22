@@ -22,7 +22,9 @@ const PAUSE_MS = 8000;
 /** Cada lote es una categoría de la casa con sus etiquetas OSM. */
 const BATCHES: Array<{ category: string; selector: string }> = [
   { category: "educacion", selector: '(nwr["amenity"~"^(university|college)$"](area.a); nwr["amenity"="school"](area.a););' },
-  { category: "salud", selector: 'nwr["amenity"~"^(hospital|clinic)$"](area.a);' },
+  // El etiquetado moderno de OSM usa healthcare=* y algunos centros ya no
+  // llevan amenity: se piden las dos familias (el upsert deduplica).
+  { category: "salud", selector: '(nwr["amenity"~"^(hospital|clinic)$"](area.a); nwr["healthcare"~"^(hospital|clinic)$"](area.a););' },
   { category: "gastronomia", selector: 'nwr["amenity"~"^(restaurant|cafe|bar)$"](area.a);' },
   { category: "compras", selector: '(nwr["shop"~"^(mall|department_store)$"](area.a); nwr["amenity"="marketplace"](area.a););' },
   { category: "cultura", selector: '(nwr["tourism"~"^(museum|gallery|attraction)$"](area.a); nwr["amenity"~"^(theatre|cinema)$"](area.a); nwr["historic"~"^(monument|memorial|castle)$"](area.a););' },

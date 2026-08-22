@@ -84,12 +84,14 @@ export async function GET(req: Request) {
       }>;
       // Prefijo gana a subcadena; a igualdad, lo más cercano a la vivienda.
       const score = (r: (typeof rows)[number]) => {
-        const name = foldText(r.name);
-        // La frase entera contigua sigue puntuando mejor que las palabras
-        // sueltas, y el prefijo mejor que todo; la cercanía desempata.
-        const phrase = name.indexOf(folded);
-        const base = phrase === 0 ? 0 : phrase > 0 ? 500 : 2000;
         const km = Math.hypot((r.lat - lat) * 111, (r.lng - lng) * 85);
+        // Consulta puramente genérica ("hospital", "colegio"): manda la
+        // CERCANÍA y nada más — el bono de frase premiaba a un hospital a
+        // 24 min solo porque su nombre empezaba por "Hospital" (visto en QA).
+        if (nameTokens.length === 0) return km;
+        const name = foldText(r.name);
+        const phrase = name.indexOf(nameTokens.join(" "));
+        const base = phrase === 0 ? 0 : phrase > 0 ? 500 : 2000;
         return base + km;
       };
       const results: SearchPlaceDto[] = rows
