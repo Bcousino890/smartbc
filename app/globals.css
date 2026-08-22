@@ -868,6 +868,7 @@
    vehículo ilustrado. Vive en el rail (tiempo), nunca sobre el mapa
    (geografía). Sin rebote, sin rotación, sin 3D. */
 .bcp-travel-indicator {
+  transition: opacity .3s ease;
   display: grid;
   place-items: center;
   width: 30px;
@@ -878,6 +879,10 @@
   border: 1px solid rgba(200, 168, 106, 0.8);
   box-shadow: 0 4px 14px -6px rgba(40, 28, 10, 0.5);
 }
+/* En reposo espera al comienzo del hilo, discreto: está, pero no reclama
+   atención hasta que hay un destino elegido. */
+.bcp-travel-indicator[data-resting="true"] { opacity: 0.45; }
+
 /* El rail en móvil hace scroll y el nodo activo se centra solo. */
 .bcp-rail-scroll { scroll-snap-type: x proximity; }
 .bcp-rail-scroll > ul > li { scroll-snap-align: center; }

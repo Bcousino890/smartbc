@@ -122,8 +122,8 @@ export function LocationModule({
   const railRef = useRef<HTMLUListElement | null>(null);
   const indicatorRef = useRef<HTMLSpanElement | null>(null);
   const railAnimRef = useRef<Animation | null>(null);
-  /** El indicador no se coloca hasta la primera selección: al cargar, el
-   *  overview tiene que estar quieto (§41 — nada de viajes automáticos). */
+  /** Falso hasta la primera selección: al cargar, el indicador se coloca en
+   *  reposo sin animar — el overview entra quieto (§41). */
   const [indicatorReady, setIndicatorReady] = useState(false);
   const activePoi = focus?.name ?? null;
   // Lugar DESCUBIERTO por el cliente en el basemap. Se guarda aparte de los
@@ -189,29 +189,45 @@ export function LocationModule({
     const railEl = railRef.current;
     const indicator = indicatorRef.current;
     if (!railEl || !indicator) return;
-    if (railIndex < 0) return; // sin selección el indicador no existe todavía
 
-    const node = railEl.querySelector<HTMLElement>(`[data-rail-node="${railIndex}"]`);
-    if (!node) return;
-    const nodeRect = node.getBoundingClientRect();
     const railRect = railEl.getBoundingClientRect();
-    const toX = nodeRect.left - railRect.left + nodeRect.width / 2;
+    // En reposo el indicador espera al COMIENZO del hilo, donde arranca el
+    // recorrido (el 10% coincide con el inicio del degradado del rail). Sin
+    // ese punto de partida, la primera selección hacía aparecer el indicador
+    // ya colocado sobre el nodo y el viaje —que es justo lo que cuenta la
+    // historia— no se veía nunca. Medido en la QA de movimiento.
+    const restX = railRect.width * 0.1;
+    const node =
+      railIndex >= 0
+        ? railEl.querySelector<HTMLElement>(`[data-rail-node="${railIndex}"]`)
+        : null;
+    let toX = restX;
+    if (node) {
+      const nodeRect = node.getBoundingClientRect();
+      toX = nodeRect.left - railRect.left + nodeRect.width / 2;
+    }
 
     // Interrumpible: si se pulsa otro destino a mitad de recorrido, el viaje
     // anterior se cancela en seco en vez de encolarse (§40).
     railAnimRef.current?.cancel();
 
     const reduced = prefersReducedMotion();
-    const previous = indicator.style.getPropertyValue("--x");
-    const fromX = previous ? Number.parseFloat(previous) : toX;
-    indicator.style.setProperty("--x", `${toX}`);
+    const previous = indicator.dataset.x;
+    const fromX = previous ? Number.parseFloat(previous) : restX;
+    indicator.dataset.x = String(toX);
 
+    const place = (x: number) => {
+      indicator.style.transform = `translateX(${x}px) translateX(-50%)`;
+    };
+
+    // Al cargar (sin selección) se coloca en reposo sin animar: el overview
+    // tiene que entrar quieto (§41).
     if (reduced || !indicatorReady) {
-      // Sin animación: aparece ya colocado. La información es la misma.
-      indicator.style.transform = `translateX(${toX}px) translateX(-50%)`;
-      setIndicatorReady(true);
+      place(toX);
+      if (railIndex >= 0) setIndicatorReady(true);
       return;
     }
+    place(toX);
     railAnimRef.current = indicator.animate(
       [
         { transform: `translateX(${fromX}px) translateX(-50%)` },
@@ -221,9 +237,9 @@ export function LocationModule({
     );
 
     // En móvil el rail hace scroll: el nodo elegido tiene que quedar a la vista.
-    node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest", inline: "center" });
+    node?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest", inline: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [railIndex]);
+  }, [railIndex, indicatorReady]);
 
   useEffect(() => () => railAnimRef.current?.cancel(), []);
 
@@ -402,19 +418,18 @@ export function LocationModule({
                   elegido. Es narrativa de tiempo, no un vehículo sobre un
                   mapa: por eso vive en el rail y no en la geografía. Su
                   glifo cambia con el modo (a pie / en coche). */}
-              {railIndex >= 0 && (
-                <span
-                  ref={indicatorRef}
-                  aria-hidden
-                  className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-1/2"
-                >
-                  {focus?.mode === "walk" ? (
-                    <Footprints size={13} strokeWidth={1.75} />
-                  ) : (
-                    <Car size={13} strokeWidth={1.75} />
-                  )}
-                </span>
-              )}
+              <span
+                ref={indicatorRef}
+                aria-hidden
+                data-resting={railIndex < 0 ? "true" : "false"}
+                className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-1/2"
+              >
+                {focus && focus.mode !== "walk" ? (
+                  <Car size={13} strokeWidth={1.75} />
+                ) : (
+                  <Footprints size={13} strokeWidth={1.75} />
+                )}
+              </span>
               {rail.map((p, i) => {
                 const isActive = activePoi === p.name;
                 const { Icon } = categoryOf(p.category);
