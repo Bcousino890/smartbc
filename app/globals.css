@@ -832,6 +832,10 @@
 .bcp-context-card[data-align="center"] { animation-name: bcpCardInCenter; }
 .bcp-context-card[data-align="center"][data-side="bottom"] { animation-name: bcpCardInCenterUp; }
 .bcp-context-card { animation: bcpCardIn 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes bcpSheetIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* Vivienda y POIs dentro del mapa VIVO (Leaflet), con el mismo lenguaje que
    el overview: la marca no cambia al explorar. */
@@ -859,6 +863,12 @@
     right: 0.6rem;
     bottom: 3.25rem;
     width: auto;
+    /* La animación de entrada de escritorio lleva el translateX(-50%) de la
+       ficha centrada horneado en sus keyframes: si no se sustituye, en móvil
+       empuja la tarjeta media pantalla a la izquierda y se sale del mapa.
+       Aquí entra desde abajo, que es lo que corresponde a una tarjeta
+       inferior. */
+    animation-name: bcpSheetIn;
     transform: none;
   }
 }

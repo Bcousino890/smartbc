@@ -423,7 +423,7 @@ export function LocationModule({
                 ref={indicatorRef}
                 aria-hidden
                 data-resting={railIndex < 0 ? "true" : "false"}
-                className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-[78%]"
+                className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-[92%]"
               >
                 {focus && focus.mode !== "walk" ? (
                   <Car size={13} strokeWidth={1.75} />
