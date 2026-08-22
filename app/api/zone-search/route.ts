@@ -36,19 +36,28 @@ export async function GET(req: Request) {
     try {
       const db = createAdminClient() as any;
       const folded = foldText(q).replace(/[%_]/g, "");
-      const { data } = await db
+      // Por PALABRAS, no por frase contigua: "Colegio del Pilar" tiene que
+      // encontrar a "Colegio NUESTRA SEÑORA del Pilar". Cada término es un
+      // filtro AND; los vacíos de una letra no filtran nada.
+      const tokens = folded.split(/\s+/).filter((t) => t.length >= 2);
+      if (tokens.length === 0) return NextResponse.json({ results: [] });
+      let sel = db
         .from("zone_places")
-        .select("osm_ref, name, category, lat, lng, address")
-        .ilike("name_folded", `%${folded}%`)
-        .limit(40);
+        .select("osm_ref, name, category, lat, lng, address");
+      for (const t of tokens) sel = sel.ilike("name_folded", `%${t}%`);
+      const { data } = await sel.limit(40);
       const rows = (data ?? []) as Array<{
         osm_ref: string; name: string; category: string; lat: number; lng: number; address: string | null;
       }>;
       // Prefijo gana a subcadena; a igualdad, lo más cercano a la vivienda.
       const score = (r: (typeof rows)[number]) => {
-        const pos = foldText(r.name).indexOf(folded);
+        const name = foldText(r.name);
+        // La frase entera contigua sigue puntuando mejor que las palabras
+        // sueltas, y el prefijo mejor que todo; la cercanía desempata.
+        const phrase = name.indexOf(folded);
+        const base = phrase === 0 ? 0 : phrase > 0 ? 500 : 2000;
         const km = Math.hypot((r.lat - lat) * 111, (r.lng - lng) * 85);
-        return (pos === 0 ? 0 : pos > 0 ? 1000 : 5000) + km;
+        return base + km;
       };
       const results: SearchPlaceDto[] = rows
         .sort((a, b) => score(a) - score(b))
