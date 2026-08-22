@@ -24,6 +24,13 @@ import {
 } from "../lib/services/location/destination";
 import { bcpLuxuryMadridStyle, CLICKABLE_LAYER_IDS, MAP_ATTRIBUTION } from "../lib/services/location/bcp-map-style";
 import { clampPointInView, latLngToWorldPixel } from "../lib/geo/tile-math";
+import {
+  categoryFromOsm,
+  formatDistance,
+  fromSearchResult,
+  mergeResults,
+  searchLocal,
+} from "../lib/services/location/search";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -214,6 +221,55 @@ console.log("Versión de MapLibre:");
   // de la página bajo el bundling de Next: el mapa se monta y NO carga una
   // sola tesela. NO SUBIR A V6 sin resolver antes ese empaquetado.
   check(`v5 congelada (instalada ${v})`, v.startsWith("5."), v);
+}
+
+// ── BUSCAR CERCA DE ESTA VIVIENDA ──
+console.log("Búsqueda de zona:");
+{
+  const HOME = { lat: 40.4304, lng: -3.6821 }; // Salamanca
+  const CURATED = [
+    { name: "Mercado de la Paz", category: "gastronomia", latitude: 40.4239, longitude: -3.6839, minutes: 4, mode: "walk" as const },
+  ];
+
+  // Local: universidades verificadas ganan, sin red.
+  const ie = searchLocal("IE", HOME, CURATED);
+  check("'IE' encuentra IE University en el catálogo local",
+    ie.some((d) => d.source === "university" && /IE/i.test(d.name)), JSON.stringify(ie.map((d) => d.name)));
+  const merc = searchLocal("mercado", HOME, CURATED);
+  check("'mercado' encuentra el POI curado con su ETA",
+    merc.some((d) => d.source === "bcp_curated" && d.eta?.minutes === 4));
+  check("acentos ignorados: 'medico' no casa, 'MERCADO' sí",
+    searchLocal("MERCADO", HOME, CURATED).length === 1);
+  check("una letra no dispara sugerencias", searchLocal("I", HOME, CURATED).length === 0);
+
+  // Normalización externa → dominio, con ETA de NUESTRA capa.
+  const dto = { id: "search:way/123", name: "Hospital Ruber", category: "salud", lat: 40.4408, lng: -3.6851, address: "Calle Juan Bravo, Madrid" };
+  const dest = fromSearchResult(dto, HOME);
+  check("el resultado externo llega como osm_search", dest.source === "osm_search");
+  check("con ETA aproximado de la capa geométrica propia",
+    dest.eta != null && dest.eta.approximate === true && dest.eta.minutes > 0, JSON.stringify(dest.eta));
+  check("y con distancia geodésica de respaldo", (dest.distanceKm ?? 0) > 0);
+
+  const far = fromSearchResult({ ...dto, id: "search:node/9", name: "Lejos", lat: 40.9, lng: -3.9 }, HOME);
+  check("un lugar a 55km no recibe minutos andando",
+    far.eta == null || far.eta.mode !== "walk", JSON.stringify(far.eta));
+
+  // Dedupe §13: la universidad verificada gana al resultado externo homónimo.
+  const localIE = searchLocal("IE University", HOME, CURATED);
+  const extIE = fromSearchResult({ id: "search:node/77", name: "IE University", category: "educacion", lat: 40.4757, lng: -3.6892, address: null }, HOME);
+  const merged = mergeResults(localIE, [extIE]);
+  check("sin filas duplicadas para la misma entidad",
+    merged.filter((d) => /^IE\b|IE University/i.test(d.name)).length === 1, JSON.stringify(merged.map((d) => [d.name, d.source])));
+  check("y la que queda es la verificada", merged.find((d) => /IE/i.test(d.name))?.source === "university");
+
+  // Categorías OSM → categorías de la casa.
+  check("'university' cae en educación", categoryFromOsm("amenity", "university") === "educacion");
+  check("'restaurant' cae en gastronomía", categoryFromOsm("amenity", "restaurant") === "gastronomia");
+  check("lo desconocido queda sin categoría (icono genérico)", categoryFromOsm("man_made", "obelisk") === "");
+
+  // Formato de distancia.
+  check("350 m se dice en metros", formatDistance(0.35) === "340 m" || formatDistance(0.35) === "360 m" || formatDistance(0.35) === "350 m", formatDistance(0.35));
+  check("1.8 km se dice en km con coma", formatDistance(1.8) === "1,8 km", formatDistance(1.8));
 }
 
 console.log("");

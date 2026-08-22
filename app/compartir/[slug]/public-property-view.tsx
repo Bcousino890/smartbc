@@ -595,6 +595,11 @@ export function PublicPropertyView({
               { name, category, experienceState },
             )
           }
+          // Búsqueda de zona: jamás la consulta en crudo (§17-18) — solo el
+          // hecho de buscar y la categoría/fuente del resultado elegido.
+          onSearchEvent={(event, meta) =>
+            trackerRef.current?.trackEvent(event, { ...meta, experienceState })
+          }
         />
 
         {/* 16 · CONDICIONES + 17 · SERVICIO PRIVADO BCP */}

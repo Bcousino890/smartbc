@@ -13,7 +13,13 @@
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 
-export type DestinationSource = "bcp_curated" | "osm_discovered" | "university";
+export type DestinationSource =
+  | "bcp_curated"
+  | "osm_discovered"
+  | "university"
+  /** Resultado de "Buscar cerca de esta vivienda": exploración de sesión.
+   *  NUNCA entra en el rail curado ni en la capa de barrios. */
+  | "osm_search";
 
 export type TravelEstimate = {
   minutes: number;
@@ -34,6 +40,8 @@ export type LocationDestination = {
   /** Sede concreta, cuando el dato ya existe (campus universitario). */
   subtitle?: string | null;
   eta?: TravelEstimate | null;
+  /** Distancia geodésica en km, para cuando el ETA no aplica con honestidad. */
+  distanceKm?: number | null;
 };
 
 /** POI curado de la capa de barrios → destino. */

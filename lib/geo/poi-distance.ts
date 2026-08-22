@@ -27,7 +27,7 @@ const DRIVE_OVERHEAD_MIN = 3; // aparcar/arrancar
 // Por encima de esto, andar deja de ser la recomendación y se muestra coche.
 const MAX_WALK_MINUTES = 22;
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);

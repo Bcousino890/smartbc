@@ -32,6 +32,7 @@ import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
   residenceMarkerHtml,
+  searchMarkerHtml,
 } from "@/lib/services/location/markers";
 
 type LatLng = { lat: number; lng: number };
@@ -300,11 +301,21 @@ export function ZoneExplorerMapLibre({
       return;
     }
 
-    // Lo descubierto lleva marcador NEUTRO: nunca se insinúa que BCP lo
-    // recomienda. Solo lo curado va en champán.
-    if (focus.source === "osm_discovered") {
+    // Marcador temporal del foco cuando el destino no está ya pintado como
+    // POI curado. Lo descubierto va NEUTRO y lo buscado lleva la lupa: en
+    // ningún caso se insinúa que BCP lo recomienda. La excepción es una
+    // universidad encontrada por búsqueda (dato verificado nuestro): usa el
+    // lenguaje de educación aprobado, activado.
+    if (!curatedElsRef.current.has(focus.id)) {
       const placeWrap = document.createElement("div");
-      placeWrap.innerHTML = discoveredMarkerHtml();
+      placeWrap.innerHTML =
+        focus.source === "osm_search"
+          ? searchMarkerHtml()
+          : focus.source === "university"
+            ? curatedMarkerHtml("educacion")
+            : discoveredMarkerHtml();
+      const el = placeWrap.firstElementChild as HTMLElement | null;
+      if (focus.source === "university" && el) el.classList.add("is-active");
       discoveredMarkerRef.current = new maplibre.Marker({
         element: placeWrap,
         anchor: "center",

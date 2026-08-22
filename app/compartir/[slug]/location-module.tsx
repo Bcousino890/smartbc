@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Car, Compass, Dumbbell, Footprints, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
+  Car, Compass, Dumbbell, Footprints, GraduationCap, HeartPulse, Landmark, Loader2, Lock, MapPin, Search,
   Maximize2, Minus, Plus, ShoppingBag, TrainFront, Trees, UtensilsCrossed, X,
 } from "lucide-react";
 import { buildMosaic, clampPointInView, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
@@ -33,6 +33,8 @@ import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
 import { residenceMarkerHtml } from "@/lib/services/location/markers";
 import { LOCATION_EASING, LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
+import { formatDistance, fromSearchResult, mergeResults, searchLocal } from "@/lib/services/location/search";
+import type { SearchPlaceDto } from "@/lib/services/location/search";
 import { fromCuratedPoi, fromUniversity, type LocationDestination } from "@/lib/services/location/destination";
 
 /** Una universidad se distingue de un POI curado por su campus: es el único
@@ -92,6 +94,7 @@ export function LocationModule({
   fallbackCoords,
   onView,
   onPoiClick,
+  onSearchEvent,
   onExplore,
   onRestore,
 }: {
@@ -107,6 +110,12 @@ export function LocationModule({
   fallbackCoords: { lat: number; lng: number; zoom: number };
   onView: () => void;
   onPoiClick: (name: string, category: string) => void;
+  /** Eventos de búsqueda de zona. Sin la consulta en crudo: solo categoría y
+   *  fuente del resultado elegido (§17-18). */
+  onSearchEvent?: (
+    event: "zone_search_submit" | "zone_search_result_select",
+    meta: Record<string, string>,
+  ) => void;
   onExplore: () => void;
   onRestore: () => void;
 }) {
@@ -560,6 +569,31 @@ export function LocationModule({
 
         {live ? (
           <>
+            {/* BUSCAR CERCA DE ESTA VIVIENDA · solo al explorar (§1). */}
+            {hasPreciseCoords && (
+              <ZoneSearch
+                property={{ lat: center.lat, lng: center.lng }}
+                curated={ordered}
+                onSelect={(d) => {
+                  // Lo local vuelve por su máquina de estados (rail + lista
+                  // sincronizados); lo externo es exploración de sesión y va
+                  // por la vía del lugar descubierto. El rail curado NUNCA se
+                  // toca (§19).
+                  const original =
+                    d.source === "bcp_curated" || d.source === "university"
+                      ? [...ordered, ...universities].find((p) => p.name === d.name)
+                      : null;
+                  if (original) {
+                    setPlaceFocus(null);
+                    selectPoi(original);
+                  } else {
+                    setFocus(null);
+                    setPlaceFocus(d);
+                  }
+                }}
+                onEvent={(event, meta) => onSearchEvent?.(event, meta)}
+              />
+            )}
             {placeFocus ? (
               <ContextCard
                 place={placeFocus}
@@ -729,6 +763,190 @@ export function LocationModule({
   );
 }
 
+// ─── BUSCAR CERCA DE ESTA VIVIENDA ───────────────────────────────────────────
+// Solo existe en modo explorar: el overview conserva su calma curada (§1).
+//
+// Dos velocidades y ni una petición por tecla:
+//   · al escribir → sugerencias LOCALES (universidades verificadas + POIs
+//     curados), instantáneas y sin red;
+//   · al enviar (Enter o "Buscar") → búsqueda externa vía servidor BCP, que
+//     es quien respeta el ritmo de Nominatim.
+function ZoneSearch({
+  property,
+  curated,
+  onSelect,
+  onEvent,
+}: {
+  property: { lat: number; lng: number };
+  curated: PoiTravel[];
+  onSelect: (d: LocationDestination) => void;
+  onEvent: (event: "zone_search_submit" | "zone_search_result_select", meta: Record<string, string>) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LocationDestination[]>([]);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [status, setStatus] = useState<"idle" | "loading" | "empty" | "error">("idle");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const showLocal = useCallback(
+    (q: string) => {
+      const local = searchLocal(q, property, curated);
+      setResults(local);
+      setOpen(local.length > 0);
+      setActive(-1);
+      setStatus("idle");
+    },
+    [property, curated],
+  );
+
+  const submit = useCallback(async () => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    // Si hay una sugerencia resaltada, Enter la elige: no hace falta red.
+    abortRef.current?.abort();
+    const local = searchLocal(q, property, curated);
+    setStatus("loading");
+    setOpen(true);
+    onEvent("zone_search_submit", {});
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const res = await fetch(
+        `/api/zone-search?q=${encodeURIComponent(q)}&lat=${property.lat}&lng=${property.lng}`,
+        { signal: ctrl.signal },
+      );
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as { results: SearchPlaceDto[] | null };
+      if (body.results === null) throw new Error("unavailable");
+      const external = body.results.map((r) => fromSearchResult(r, property));
+      // Lo verificado gana y no se duplica la misma entidad (§13).
+      const merged = mergeResults(local, external);
+      setResults(merged);
+      setActive(-1);
+      setStatus(merged.length === 0 ? "empty" : "idle");
+      setOpen(true);
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      setResults(local);
+      setStatus("error");
+      setOpen(true);
+    }
+  }, [query, property, curated, onEvent]);
+
+  const choose = useCallback(
+    (d: LocationDestination) => {
+      setOpen(false);
+      setActive(-1);
+      onEvent("zone_search_result_select", { category: d.category || "lugar", source: d.source });
+      // En móvil, cerrar el teclado antes de mover la cámara evita el salto
+      // de layout a mitad de animación.
+      inputRef.current?.blur();
+      onSelect(d);
+    },
+    [onSelect, onEvent],
+  );
+
+  return (
+    <div className="absolute left-3 right-14 top-3 z-[550] md:right-auto md:w-[21rem]">
+      <div className="flex items-center gap-2 rounded-full border border-gold/30 bg-cream-50/95 py-1 pl-3.5 pr-1 shadow-[0_10px_26px_-14px_rgba(40,28,10,0.7)] backdrop-blur-sm">
+        {status === "loading" ? (
+          <Loader2 size={13} strokeWidth={2} className="shrink-0 animate-spin text-gold-dark" />
+        ) : (
+          <Search size={13} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="bcp-zone-search-results"
+          aria-label="Buscar cerca de esta vivienda"
+          aria-activedescendant={active >= 0 ? `bcp-zs-${active}` : undefined}
+          placeholder="Universidad, colegio, restaurante, dirección…"
+          className="w-full bg-transparent py-1 text-[13px] text-ink placeholder:text-ink/40 focus:outline-none"
+          onChange={(e) => {
+            setQuery(e.target.value);
+            showLocal(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setActive((a) => Math.min(a + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActive((a) => Math.max(a - 1, -1));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (active >= 0 && results[active]) choose(results[active]);
+              else void submit();
+            } else if (e.key === "Escape") {
+              setOpen(false);
+              setActive(-1);
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          className="crm-meta shrink-0 rounded-full bg-ink px-3 py-1.5 text-cream-50 transition hover:bg-ink-soft"
+        >
+          Buscar
+        </button>
+      </div>
+
+      {open && (
+        <ul
+          id="bcp-zone-search-results"
+          role="listbox"
+          aria-label="Resultados de búsqueda"
+          className="mt-1.5 overflow-hidden rounded-xl border border-gold/25 bg-cream-50/98 shadow-[0_18px_44px_-18px_rgba(40,28,10,0.65)] backdrop-blur-sm"
+        >
+          {results.map((d, i) => {
+            const { Icon } = categoryOf(d.category);
+            const secondary = [d.subtitle, d.address, categoryOf(d.category).label].filter(Boolean)[0];
+            return (
+              <li key={d.id} role="option" id={`bcp-zs-${i}`} aria-selected={i === active}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(d)}
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition ${
+                    i === active ? "bg-gold/10" : "hover:bg-gold/5"
+                  }`}
+                >
+                  <Icon size={13} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] text-ink/90">{d.name}</span>
+                    {secondary && <span className="crm-meta block truncate text-ink/45">{secondary}</span>}
+                  </span>
+                  {d.eta ? (
+                    <span className="crm-meta shrink-0 text-ink/50">≈ {d.eta.minutes} min</span>
+                  ) : d.distanceKm != null ? (
+                    <span className="crm-meta shrink-0 text-ink/50">{formatDistance(d.distanceKm)}</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+          {status === "empty" && (
+            <li className="px-3.5 py-2.5 text-[13px] text-ink/55">
+              No hemos encontrado ese lugar. Prueba con otro nombre o dirección.
+            </li>
+          )}
+          {status === "error" && (
+            <li className="px-3.5 py-2.5 text-[13px] text-ink/55">
+              No podemos realizar la búsqueda en este momento.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Fila de destino. La usan "Cerca de la vivienda" y las universidades: una
  *  sola pieza, un solo estado activo, la misma interacción. */
 function DestinationRow({
@@ -785,14 +1003,20 @@ function ContextCard({
   const subtitle = place?.subtitle ?? null;
   const eta = place?.eta ?? (poi ? { minutes: poi.minutes, mode: poi.mode } : null);
   const isDiscovered = place?.source === "osm_discovered";
+  const isSearch = place?.source === "osm_search";
   // Enlace a OSM solo si el id es REAL (no el generado desde coordenadas):
   // preferimos no ofrecer enlace a ofrecer uno que lleve a ninguna parte.
+  // Los ids de búsqueda conservan el tipo ("search:way/123") para enlazar a
+  // la página correcta de OSM.
   const osmId = place?.id.replace(/^osm:/, "") ?? "";
+  const searchRef = /^search:(node|way|relation)\/(\d+)$/.exec(place?.id ?? "");
   const osmUrl = isDiscovered && /^\d+$/.test(osmId)
     ? `https://www.openstreetmap.org/node/${osmId}`
-    : isDiscovered
-      ? `https://www.openstreetmap.org/?mlat=${place!.lat}&mlon=${place!.lng}#map=18/${place!.lat}/${place!.lng}`
-      : null;
+    : searchRef
+      ? `https://www.openstreetmap.org/${searchRef[1]}/${searchRef[2]}`
+      : isDiscovered
+        ? `https://www.openstreetmap.org/?mlat=${place!.lat}&mlon=${place!.lng}#map=18/${place!.lat}/${place!.lng}`
+        : null;
 
   return (
     <div
@@ -832,6 +1056,12 @@ function ContextCard({
             <span className="crm-meta ml-1.5 text-ink/50">min {modeLabel(eta.mode as PoiTravel["mode"])}</span>
           </p>
           <p className="crm-meta mt-1 text-ink/40">Desde la vivienda</p>
+        </>
+      ) : isSearch && place?.distanceKm != null ? (
+        // Sin ETA honesto, la distancia geodésica sí es un hecho (§9).
+        <>
+          <p className="crm-number mt-2.5 text-xl leading-none text-ink">{formatDistance(place.distanceKm)}</p>
+          <p className="crm-meta mt-1 text-ink/40">De la vivienda, en línea recta</p>
         </>
       ) : (
         // Sin tiempo verificado NO se inventa uno: se dice lo que se sabe.

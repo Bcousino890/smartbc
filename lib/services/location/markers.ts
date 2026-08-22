@@ -75,3 +75,11 @@ export function curatedMarkerHtml(category: string): string {
 export function discoveredMarkerHtml(): string {
   return `<span class="bcp-place">${svg('<path d="M7 12.6s4-3.6 4-6.4a4 4 0 1 0-8 0c0 2.8 4 6.4 4 6.4Z"/><circle cx="7" cy="6.2" r="1.4"/>')}</span>`;
 }
+
+/** Resultado de búsqueda: carbón con lupa. Distinto de lo curado (no es una
+ *  recomendación de BCP) y distinto de lo descubierto (lo trajo una búsqueda
+ *  del cliente, no un toque en el mapa). El estado elegido lo da la clase
+ *  `is-active`, donde el champán toma el mando. */
+export function searchMarkerHtml(): string {
+  return `<span class="bcp-place bcp-place-search is-active">${svg('<circle cx="6.2" cy="6.2" r="3.6"/><path d="m9 9 3.2 3.2"/>')}</span>`;
+}

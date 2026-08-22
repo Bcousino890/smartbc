@@ -957,6 +957,13 @@
 }
 .bcp-poi-uni.is-active { box-shadow: 0 0 0 2.5px #fbf8f3, 0 0 0 5px rgba(138, 109, 59, 0.5), 0 10px 24px -8px rgba(40, 28, 10, 0.75); }
 
+/* Resultado de BÚSQUEDA seleccionado: la lupa lo delata como algo que trajo
+   el cliente; el champán, como lo elegido ahora mismo. */
+.bcp-place-search.is-active {
+  background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
+  box-shadow: 0 0 0 5px rgba(138, 109, 59, 0.18), 0 10px 24px -8px rgba(40, 28, 10, 0.75);
+}
+
 /* Lugar DESCUBIERTO en el basemap: neutro y claramente distinto de lo
    curado — nunca se insinúa que BCP lo recomienda. */
 .bcp-place {
