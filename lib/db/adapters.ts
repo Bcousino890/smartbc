@@ -407,13 +407,45 @@ export function propertyRowToClientProperty(
   const photoWatermarked = sortedPhotos.map(
     (p) => (p as { ai_watermark?: boolean | null }).ai_watermark === true,
   );
-  // La portada es lo PRIMERO que se ve: si lleva el logo de otro portal y hay
-  // una foto limpia, manda la limpia. No se reordena la galería (los índices
-  // son públicos y se comparten): solo cambia cuál se usa de portada.
-  const coverIdx = photoWatermarked[0]
-    ? Math.max(0, photoWatermarked.findIndex((w) => !w))
-    : 0;
+  // ── Elección de portada ──
+  // La portada es lo PRIMERO que se ve, así que además de la composición
+  // (posición 0 = la elegida por el equipo) pesan dos cosas técnicas: que no
+  // lleve el logo de otro portal y que tenga resolución para el hueco que va
+  // a ocupar. Una foto preciosa de 850px pierde contra su equivalente de
+  // 1600 cuando el hero pide 2880. No se reordena la galería (sus índices son
+  // públicos y se comparten): solo cambia cuál se usa de portada.
+  const dimsOf = (i: number) =>
+    (sortedPhotos[i] as { source_width?: number | null } | undefined)?.source_width ?? null;
+  const coverIdx = (() => {
+    const w0 = dimsOf(0);
+    const clean0 = !photoWatermarked[0];
+    // Se considera "corta" una portada que no llega al ancho de un hero de
+    // portátil sin ampliar. Por debajo de eso merece la pena mirar si hay
+    // algo claramente mejor entre las primeras.
+    const SHORT = 1280;
+    const needsBetter = !clean0 || (w0 != null && w0 < SHORT);
+    if (!needsBetter) return 0;
+    let best = 0;
+    let bestScore = -Infinity;
+    for (let i = 0; i < Math.min(sortedPhotos.length, 8); i++) {
+      const w = dimsOf(i);
+      // Sin dato de ancho no se penaliza (NULL es "no sé", no "pequeña").
+      const resolution = w == null ? SHORT : w;
+      const score =
+        resolution -
+        (photoWatermarked[i] ? 4000 : 0) - // una marca de agua pesa más que cualquier píxel
+        i * 40; // a igualdad, respeta el orden editorial
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    return best;
+  })();
   const cover = photoUrls[coverIdx];
+  // Dimensiones reales de la portada (0153). El hero las necesita para no
+  // ofrecer en su `srcset` anchos que la fotografía no tiene: prometer 2560px
+  // de una foto de 850 no añade un solo detalle y engaña al navegador.
+  const coverMeta = sortedPhotos[coverIdx] as
+    | { source_width?: number | null; source_height?: number | null }
+    | undefined;
   // SmartLink 2.0: clase de estancia por foto, alineada con photoUrls. El
   // override humano manda; SOLO cruza el nombre de la clase (nada de hashes,
   // modelo ni confianza — el umbral de uso se aplica aquí, server-side).
@@ -458,6 +490,8 @@ export function propertyRowToClientProperty(
     longitude: row.longitude ?? null,
     photoClasses,
     photoWatermarked,
+    coverWidth: coverMeta?.source_width ?? null,
+    coverHeight: coverMeta?.source_height ?? null,
     bcReference: row.bc_reference ?? null,
     floor: resolveFloor(
       (row as { floor_override?: string | null }).floor_override,

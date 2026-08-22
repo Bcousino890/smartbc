@@ -334,6 +334,7 @@ export function PublicPropertyView({
       <HeroMedia
         heroVideo={heroVideo}
         coverImage={property.image ?? property.photos?.[0] ?? null}
+        coverWidth={property.coverWidth ?? null}
         title={property.title}
         photoCount={property.photos?.length ?? 0}
         onOpenGallery={() => {
@@ -700,9 +701,29 @@ export function PublicPropertyView({
 
 // ─── 01 · HERO MEDIA ─────────────────────────────────────────────────────────
 
+/** Anchos que sirve el proxy (`/p/…?w=`). Mismo escalón, misma caché. */
+const HERO_WIDTHS = [640, 828, 1080, 1280, 1600, 1920, 2560, 3200];
+
+/**
+ * `srcset` del hero acotado al ancho REAL del original. Ofrecer anchos que la
+ * fotografía no tiene no añade un solo detalle: el proxy devolvería el mismo
+ * fichero y el navegador se lo creería. Cuando no sabemos las dimensiones
+ * (foto sin medir) se ofrece la escala completa, que es el comportamiento
+ * conservador: como mucho se pide de más una vez.
+ */
+function heroSrcSet(src: string, sourceWidth: number | null): string | undefined {
+  const sep = src.includes("?") ? "&" : "?";
+  const max = sourceWidth ?? HERO_WIDTHS[HERO_WIDTHS.length - 1];
+  const widths = HERO_WIDTHS.filter((w) => w < max);
+  if (sourceWidth) widths.push(sourceWidth);
+  if (widths.length < 2) return undefined;
+  return widths.map((w) => `${src}${sep}w=${w} ${w}w`).join(", ");
+}
+
 function HeroMedia({
   heroVideo,
   coverImage,
+  coverWidth,
   title,
   photoCount,
   onOpenGallery,
@@ -711,6 +732,8 @@ function HeroMedia({
 }: {
   heroVideo: VideoMedia | null;
   coverImage: string | null;
+  /** Ancho real de la portada; acota el `srcset`. */
+  coverWidth: number | null;
   title: string;
   photoCount: number;
   onOpenGallery: () => void;
@@ -774,9 +797,14 @@ function HeroMedia({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={coverImage}
+            srcSet={heroSrcSet(coverImage, coverWidth)}
+            // El hero ocupa el ancho completo del viewport: cualquier otra
+            // cosa haría que el navegador pidiese una variante pequeña.
+            sizes="100vw"
             alt={title}
             className="h-full w-full object-cover"
             fetchPriority="high"
+            decoding="async"
           />
         ) : null}
         {/* Gradiente inferior para que el acceso a galería siempre se lea. */}

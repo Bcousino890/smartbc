@@ -108,6 +108,9 @@ export type Property = {
   photoClasses?: Array<string | null>;
   /** Alineado con `photos`: true si la foto lleva marca de agua de un portal. */
   photoWatermarked?: boolean[];
+  /** Dimensiones reales de la portada, para acotar el `srcset` del hero. */
+  coverWidth?: number | null;
+  coverHeight?: number | null;
 };
 
 export type Filters = {
