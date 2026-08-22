@@ -103,6 +103,31 @@ const MAX_DISTINCT_ROOMS = 3;
 /** Misma lista sin la bandera global: para clasificar un fact suelto. */
 const ROOM_NOUN_ONE = new RegExp(ROOM_NOUNS.source, "i");
 
+// §13 · un titular que valdría para cientos de fichas no es un titular. Si
+// TODAS sus palabras con contenido salen de este saco común, no ancla la
+// vivienda en nada suyo: ni un año, ni un material, ni un elemento, ni una
+// calle. Auditados los 655 en producción, 25 estaban en ese caso.
+const HEADLINE_POOL = new Set(
+  ("luz luminosidad luminoso luminosa amplitud amplio amplia espacio espacios diseño confort funcionalidad funcional " +
+    "elegancia elegante serenidad calma orden calidez equilibrio armonia armonía vivienda piso hogar casa apartamento " +
+    "residencia propiedad caracter carácter estilo ambiente distribucion distribución reforma reformado reformada " +
+    "renovacion renovación renovado renovada moderno moderna clasico clásico clasica clásica contemporaneo contemporáneo " +
+    "contemporanea contemporánea actual actualizado cuidado cuidada natural interior exterior nuevo nueva practico " +
+    "práctico practica sereno serena acogedor acogedora familiar personalizado personalizacion personalización potencial " +
+    "calidad primera dia día vida vivirla estrenar bienestar comodidad comodidades disfrutar incluidas").split(" "),
+);
+const HEADLINE_STOP = new Set(
+  "y e o en de del la el los las un una con para que su sus entre sobre al a por como donde".split(" "),
+);
+
+function isInterchangeableHeadline(t: string): boolean {
+  const content = t
+    .split(/\s+/)
+    .map((w) => w.toLowerCase().replace(/[^\wáéíóúñü]/g, ""))
+    .filter((w) => w && !HEADLINE_STOP.has(w));
+  return content.length > 0 && content.every((w) => HEADLINE_POOL.has(w));
+}
+
 // §2: titulares que no dicen nada de ESTA vivienda.
 const EMPTY_HEADLINE =
   /^(una?\s+)?(vivienda|residencia|casa|piso|hogar|propiedad)\s+(única|excepcional|exclusiva|singular|inigualable)$/i;
@@ -256,6 +281,9 @@ export function validatePreludeHeadline(
   if (/[.!?]$/.test(t)) failures.push("el titular no lleva punto final");
   if (/\n/.test(text ?? "")) failures.push("el titular es una sola línea");
   if (EMPTY_HEADLINE.test(t)) failures.push(`titular vacío de contenido: "${t}"`);
+  if (isInterchangeableHeadline(t)) {
+    failures.push("titular intercambiable: valdría para cientos de viviendas, no ancla nada de ESTA");
+  }
 
   failures.push(...sharedLexicalFailures(t, ctx, evidenceTexts));
 
@@ -352,6 +380,7 @@ REGLAS ABSOLUTAS — COMPONER, NO INVENTAR:
 - PROHIBIDOS los adjetivos de portal: exclusiva, espectacular, impresionante, única, lujo, lujosa, privilegiada, joya, oportunidad, soñada, increíble, inmejorable.
 - PROHIBIDO el copy vacío: "diseño único", "distribución elegante", "espacios excepcionales", "acabados de alta calidad", "materiales de alta calidad", "excelente calidad de vida", "destaca su carácter". Si una frase no aporta un hecho concreto, bórrala.
 - PROHIBIDO enumerar electrodomésticos o equipamiento, y las frases de portal tipo "listo para entrar a vivir" o "totalmente equipada".
+- El TITULAR tiene que anclarse en algo SUYO: el año, un material, un elemento (molduras, chimenea, patio, balcones, torreón), una calle o una altura concreta. Si solo dice "luz, amplitud, diseño, reforma, confort" valdría para cientos de pisos y no sirve.
 - El TITULAR describe a ESTA vivienda y sale de la evidencia: carácter arquitectónico, relación entre espacios, luz y proporción, lo que la reforma respetó. Nunca eslóganes como "Una vivienda única" o "Elegancia incomparable". Es DESCRIPTIVO, no poético: nada de metáforas ni imágenes literarias ("techos que abrazan el cielo"). No inventes nombres propios.
 - Prefiere hechos concretos y respaldados: el año del edificio, los techos altos, las molduras, la carpintería, la madera, los balcones, la separación entre zona social y privada, la relación entre interior y exterior.
 - Tono editorial, sereno, adulto, concreto. La vivienda parece premium por los hechos, no por los adjetivos.
@@ -395,11 +424,16 @@ export function parsePreludeCompletion(raw: string): { headline: string; body: s
     .trim();
   const lines = clean.split("\n");
   const first = (lines[0] ?? "").trim();
-  const labeled = /^(titular|título|headline)\s*[:—-]\s*/i.test(first);
+  // El rótulo lo escribe el modelo, así que se acepta como lo escriba: con
+  // acento donde no toca ("TÍTULAR"), sin tilde, en mayúsculas o en inglés.
+  // Seis titulares llegaron a producción con la etiqueta pegada por no
+  // contemplar una falta de ortografía.
+  const LABEL = /^\s*(t[íi]tular|t[íi]tulo|headline|encabezado)\s*[:：—-]\s*/i;
+  const labeled = LABEL.test(first);
   if (!labeled && lines.length < 2) return { headline: "", body: clean };
 
   const headline = first
-    .replace(/^(titular|título|headline)\s*[:—-]\s*/i, "")
+    .replace(LABEL, "")
     .replace(/^[*_#\s]+|[*_#\s]+$/g, "")
     .replace(/^["“«]|["”»]$/g, "")
     .trim();

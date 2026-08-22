@@ -402,7 +402,18 @@ export function propertyRowToClientProperty(
   const photoUrls = sortedPhotos.map(
     (_, i) => `/p/${row.slug}/${i}?v=${orderHash}`,
   );
-  const cover = photoUrls[0];
+  // Marca de agua de otro portal (0152). NULL todavía sin analizar → se trata
+  // como limpia: el dato sirve para PREFERIR una foto, nunca para esconderla.
+  const photoWatermarked = sortedPhotos.map(
+    (p) => (p as { ai_watermark?: boolean | null }).ai_watermark === true,
+  );
+  // La portada es lo PRIMERO que se ve: si lleva el logo de otro portal y hay
+  // una foto limpia, manda la limpia. No se reordena la galería (los índices
+  // son públicos y se comparten): solo cambia cuál se usa de portada.
+  const coverIdx = photoWatermarked[0]
+    ? Math.max(0, photoWatermarked.findIndex((w) => !w))
+    : 0;
+  const cover = photoUrls[coverIdx];
   // SmartLink 2.0: clase de estancia por foto, alineada con photoUrls. El
   // override humano manda; SOLO cruza el nombre de la clase (nada de hashes,
   // modelo ni confianza — el umbral de uso se aplica aquí, server-side).
@@ -421,11 +432,6 @@ export function propertyRowToClientProperty(
     const floor = meta.ai_class === "facade_building" ? 0.85 : 0.75;
     return (meta.ai_confidence ?? 0) >= floor ? meta.ai_class : null;
   });
-  // Marca de agua de otro portal (0152). NULL todavía sin analizar → se trata
-  // como limpia: el dato sirve para PREFERIR una foto, nunca para esconderla.
-  const photoWatermarked = sortedPhotos.map(
-    (p) => (p as { ai_watermark?: boolean | null }).ai_watermark === true,
-  );
   return {
     id: row.slug,
     title: displayPropertyTitle(row, effectiveTitleRaw),

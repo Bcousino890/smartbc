@@ -74,6 +74,7 @@ async function main() {
   const micro: Array<{ ref: string; chapter: string; copy: string }> = [];
   let losesAll = 0;
   const causes = { conflictBlocks: 0, draftVersion: 0, fewChapters: 0, unusedClaims: 0 };
+  let noPrelude = 0;
 
   for (const p of props) {
     const v = byProp.get(p.id);
@@ -94,7 +95,13 @@ async function main() {
       (b: any) => b.status !== "rejected" && b.status !== "conflict" && b.copy,
     );
     const narrative = visible.filter((b: any) => NARRATIVE_CHAPTERS.includes(b.chapter));
-    const renderedWords = visible.reduce((a: number, b: any) => a + words(b.copy), 0);
+    // Lo que el cliente lee incluye la APERTURA EDITORIAL, no solo los
+    // capítulos: contar únicamente los bloques daba por pobre a una ficha con
+    // un prelude de 90 palabras y un capítulo. Es el texto que se ve.
+    const preludeWords =
+      v?.prelude_status === "approved" ? words(v.prelude ?? "") : 0;
+    const renderedWords =
+      visible.reduce((a: number, b: any) => a + words(b.copy), 0) + preludeWords;
     const evidence = collectPreludeEvidence((claims ?? []) as any);
 
     // Micro-capítulos: un capítulo que ocupa sitio para decir un dato suelto.
@@ -117,7 +124,9 @@ async function main() {
     const descWords = words(p.description ?? "");
 
     // El listón de "pobre a la vista": poca narrativa renderizada.
-    const thinOutput = narrative.length < 2 || renderedWords < 70;
+    // Pobre a la vista = poco texto Y poca estructura. Con prelude aprobado
+    // el listón de capítulos baja: la apertura ya sostiene la lectura.
+    const thinOutput = renderedWords < 90 || (narrative.length < 2 && preludeWords === 0);
 
     if (!thinOutput) {
       buckets.ok++;
@@ -125,6 +134,7 @@ async function main() {
     }
     if (evidence.claimIds.length >= 6) {
       buckets.A.push(p.bc_reference);
+      if (preludeWords === 0) noPrelude++;
       // §10 · por qué la salida es pobre teniendo materia prima.
       const conflicted = (blocks ?? []).filter((b: any) => b.status === "conflict").length;
       if (conflicted > 0) causes.conflictBlocks++;
@@ -145,6 +155,7 @@ async function main() {
   console.log(`C · GENUINELY CONTENT-POOR: ${buckets.C.length}`);
   console.log(`MICRO-CAPÍTULOS (solo capítulos con banda propia): ${micro.length}`);
   console.log(`  props que se quedarían SIN ningún capítulo: ${losesAll}`);
+  console.log(`  de ellas, SIN apertura editorial (recuperable): ${noPrelude}`);
   console.log(`CAUSAS EN EL GRUPO A: bloques en conflicto=${causes.conflictBlocks} · versión borrador=${causes.draftVersion} · pocos capítulos=${causes.fewChapters} · claims sin usar=${causes.unusedClaims}`);
   console.log(`\nA (primeros 25): ${buckets.A.slice(0, 25).join(", ")}`);
   console.log(`\nB (primeros 25): ${buckets.B.slice(0, 25).join(", ")}`);

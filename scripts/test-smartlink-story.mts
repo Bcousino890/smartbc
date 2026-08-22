@@ -616,11 +616,22 @@ console.log("Property Prelude:");
   const hMkt = validatePreludeHeadline("Encanto de 1925 con molduras originales", { operation: "rent" }, EV);
   check("titular marketinero ('Encanto') → rechazado", !hMkt.ok, hMkt.failures.join(" · "));
 
+  const hGen = validatePreludeHeadline("Luz y amplitud en una vivienda contemporánea", { operation: "rent" }, EV);
+  check("titular intercambiable → rechazado (valdría para cientos)",
+    !hGen.ok && hGen.failures.some((f) => f.includes("intercambiable")), hGen.failures.join(" · "));
+  const hAnchored = validatePreludeHeadline("Luz y amplitud tras las molduras de 1925", { operation: "rent" }, EV);
+  check("el mismo titular con un ancla propia sí pasa", hAnchored.ok, hAnchored.failures.join(" · "));
+
   const h6 = validatePreludeHeadline("Lujo y elegancia en Malasaña", { operation: "rent" }, EV);
   check("titular con adjetivo de portal y entidad sin respaldo → rechazado", !h6.ok);
 
   // El parser separa titular y cuerpo; el contrato juzga después.
   const parsed = parsePreludeCompletion(`TITULAR: Molduras originales y una reforma contenida\n\nPárrafo uno.\n\nPárrafo dos.`);
+  // El modelo escribe el rótulo como le parece: seis titulares llegaron a
+  // producción con "TÍTULAR:" pegado por no contemplar la falta de ortografía.
+  const parsedTypo = parsePreludeCompletion(`TÍTULAR: Bajo de 1930 con patio privado\n\nUno.\n\nDos.`);
+  check("el parser tolera el rótulo mal escrito ('TÍTULAR')",
+    parsedTypo.headline === "Bajo de 1930 con patio privado", parsedTypo.headline);
   check("parser separa titular y cuerpo",
     parsed.headline === "Molduras originales y una reforma contenida" &&
     parsed.body === "Párrafo uno.\n\nPárrafo dos.", JSON.stringify(parsed));
