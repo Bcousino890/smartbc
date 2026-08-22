@@ -26,6 +26,10 @@ import { fromOsmFeature, type LocationDestination } from "@/lib/services/locatio
 
 type LatLng = { lat: number; lng: number };
 
+/** Fuente de la línea vivienda→destino. Una sola, se reescribe al cambiar. */
+const LINK_SOURCE = "bcp-link";
+const emptyLine = () => ({ type: "FeatureCollection", features: [] }) as any;
+
 export function ZoneExplorerMapLibre({
   origin,
   originLabel,
@@ -47,6 +51,8 @@ export function ZoneExplorerMapLibre({
   const mapRef = useRef<any>(null);
   const libRef = useRef<any>(null);
   const discoveredMarkerRef = useRef<any>(null);
+  /** Elementos de los marcadores curados, por id: para marcar el activo. */
+  const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const [ready, setReady] = useState(false);
 
   const onSelectRef = useRef(onSelectPlace);
@@ -131,8 +137,11 @@ export function ZoneExplorerMapLibre({
 
         // ── POIs curados de BCP: marca champán ──
         for (const c of curated) {
-          const el = makeEl("bcp-live-poi");
+          // Las universidades llevan marca propia: son una categoría, no un
+          // POI de lifestyle más.
+          const el = makeEl(c.category === "educacion" ? "bcp-live-poi bcp-live-poi-uni" : "bcp-live-poi");
           el.title = c.name;
+          curatedElsRef.current.set(c.id, el);
           el.addEventListener("click", (ev) => {
             ev.stopPropagation();
             onSelectRef.current(c);
@@ -149,6 +158,31 @@ export function ZoneExplorerMapLibre({
           map.on("mouseenter", layer, () => setCursor("pointer"));
           map.on("mouseleave", layer, () => setCursor(""));
         }
+
+        // ── Conexión vivienda → destino ──
+        // Una línea editorial, no una ruta: el cliente tiene que entender de
+        // un vistazo QUÉ ha elegido y a qué distancia está de la casa, sin
+        // que le vendamos un cálculo de trayecto que no hemos hecho.
+        map.addSource(LINK_SOURCE, { type: "geojson", data: emptyLine() });
+        map.addLayer({
+          id: "bcp-link-halo",
+          type: "line",
+          source: LINK_SOURCE,
+          layout: { "line-cap": "round" },
+          paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0.85 },
+        });
+        map.addLayer({
+          id: "bcp-link",
+          type: "line",
+          source: LINK_SOURCE,
+          layout: { "line-cap": "round" },
+          paint: {
+            "line-color": "#8a6d3b",
+            "line-width": 2,
+            "line-dasharray": [1.6, 1.7],
+            "line-opacity": 0.95,
+          },
+        });
 
         setReady(true);
       });
@@ -202,10 +236,27 @@ export function ZoneExplorerMapLibre({
     discoveredMarkerRef.current?.remove();
     discoveredMarkerRef.current = null;
 
+    // Estado activo del POI curado: el seleccionado se agranda y se llena;
+    // los demás vuelven a su estado de reposo. Una sola clase, un solo
+    // estado — el mismo principio que la máquina de selección del módulo.
+    for (const [id, el] of curatedElsRef.current) {
+      el.classList.toggle("is-active", focus?.id === id);
+    }
+
+    const link = map.getSource(LINK_SOURCE);
     if (!focus) {
+      link?.setData(emptyLine());
       map.easeTo({ center: [origin.lng, origin.lat], zoom: 15.4, duration: 600 });
       return;
     }
+    link?.setData({
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [[origin.lng, origin.lat], [focus.lng, focus.lat]],
+      },
+      properties: {},
+    });
 
     // Lo descubierto lleva marcador NEUTRO: nunca se insinúa que BCP lo
     // recomienda. Solo lo curado va en champán.

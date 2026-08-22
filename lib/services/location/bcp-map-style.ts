@@ -25,23 +25,33 @@ export const MAP_ATTRIBUTION =
   '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · ' +
   '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
+// Paleta v2 · "city luxury", no "desert wash". El problema de la v1 era que
+// TODO caía en la misma franja de arena: el viario se fundía con el suelo, la
+// masa urbana no se distinguía del vacío y los parques apenas asomaban. Aquí
+// el suelo se enfría un punto y se reservan los dos extremos de contraste
+// para lo que estructura una ciudad: el viario en BLANCO y la vegetación en
+// verde salvia real. La calidez sigue en el suelo y en la edificación.
 const C = {
-  land: "#f4efe4",
-  landcoverWood: "#e2e7d6",
-  park: "#dde5d0",
-  parkDark: "#d2ddc2",
-  water: "#cdd9de",
-  building: "#e8dfd0",
-  buildingOutline: "#ddd2bf",
-  roadMajor: "#eadfc4",
-  roadMajorCasing: "#ddceac",
-  roadMinor: "#faf6ee",
-  roadMinorCasing: "#e9e1d1",
-  rail: "#ddd4c4",
-  labelDark: "#4a4034",
-  labelMuted: "#8c8172",
-  labelHalo: "#f8f4ec",
-  boundary: "#d8cdba",
+  land: "#f1eee7",
+  landuseUrban: "#eae5da",
+  landcoverWood: "#d9e3cc",
+  park: "#cfdec2",
+  parkDark: "#b9cda6",
+  water: "#b6cedb",
+  building: "#e2dbcd",
+  buildingOutline: "#cfc5b1",
+  // El viario principal en blanco es lo que hace legible una ciudad: destaca
+  // sobre el suelo cálido sin meter un color nuevo en la escena.
+  roadMajor: "#ffffff",
+  roadMajorCasing: "#d8ccb4",
+  roadMinor: "#fbf9f5",
+  roadMinorCasing: "#e3dbcb",
+  rail: "#cec5b3",
+  labelDark: "#332d24",
+  labelMuted: "#645b4e",
+  labelHalo: "#f7f4ee",
+  boundary: "#cbbfa8",
+  poiDot: "#9c7f4e",
 };
 
 const FONT = ["Noto Sans Regular"];
@@ -71,18 +81,28 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         paint: { "fill-color": C.landcoverWood, "fill-opacity": 0.65 },
       },
       {
+        // Masa urbana: una veladura cálida sobre lo construido para que se
+        // distinga de los descampados y los parques incluso a zoom bajo.
+        id: "landuse-urban",
+        type: "fill",
+        source: "openmaptiles",
+        "source-layer": "landuse",
+        filter: ["in", ["get", "class"], ["literal", ["residential", "commercial", "retail", "industrial"]]],
+        paint: { "fill-color": C.landuseUrban, "fill-opacity": 0.75 },
+      },
+      {
         id: "park",
         type: "fill",
         source: "openmaptiles",
         "source-layer": "park",
-        paint: { "fill-color": C.park, "fill-opacity": 0.9 },
+        paint: { "fill-color": C.park, "fill-opacity": 0.95 },
       },
       {
         id: "park-outline",
         type: "line",
         source: "openmaptiles",
         "source-layer": "park",
-        paint: { "line-color": C.parkDark, "line-width": 0.6, "line-opacity": 0.55 },
+        paint: { "line-color": C.parkDark, "line-width": 0.8, "line-opacity": 0.7 },
       },
       {
         id: "water",
@@ -108,7 +128,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         minzoom: 13,
         paint: {
           "fill-color": C.building,
-          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 15, 0.85],
+          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 15, 0.95],
           "fill-outline-color": C.buildingOutline,
         },
       },
@@ -194,7 +214,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "symbol-placement": "line",
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 9.5, 18, 12],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10, 18, 12.5],
         },
         paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.2 },
       },
@@ -208,7 +228,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "text-font": FONT,
           "text-size": 11,
         },
-        paint: { "text-color": "#8fa3ac", "text-halo-color": C.labelHalo, "text-halo-width": 1.1 },
+        paint: { "text-color": "#6d8b9b", "text-halo-color": C.labelHalo, "text-halo-width": 1.1 },
       },
       {
         id: "place-label",
@@ -250,14 +270,14 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10, 18, 11.5],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10.5, 18, 12],
           "text-anchor": "top",
           "text-offset": [0, 0.7],
           "text-max-width": 7,
           "text-padding": 10,
           "symbol-sort-key": ["get", "rank"],
         },
-        paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.4 },
+        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 1.5 },
       },
       {
         id: "poi-dot",
@@ -274,7 +294,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         ],
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.4, 18, 3.8],
-          "circle-color": "#b9ac96",
+          "circle-color": C.poiDot,
           "circle-stroke-color": C.labelHalo,
           "circle-stroke-width": 1,
         },

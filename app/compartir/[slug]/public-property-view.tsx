@@ -85,8 +85,13 @@ const CHAPTER_PHOTO_CLASSES: Record<StoryChapter, string[]> = {
   // Sin clase de foto propia para acabados: mejor bloque solo-texto que
   // reutilizar un salón que no aporta información (decisión del piloto).
   finishes: [],
+  // "LA FINCA" habla del INMUEBLE: fachada, portal, zaguán, patio, entrada y
+  // zonas comunes. Nada de calle, edificios vecinos, monumentos ni skyline —
+  // eso es `street_context`, y su sitio es el barrio, no la finca. Antes las
+  // dos cosas compartían clase (`facade_building` incluía "calle"), y por eso
+  // aparecían iglesias y fachadas ajenas encabezando el capítulo.
   building: ["facade_building"],
-  barrio: ["facade_building", "view"],
+  barrio: ["street_context", "view"],
 };
 
 const CHAPTER_ORDER: StoryChapter[] = [
@@ -224,20 +229,26 @@ export function PublicPropertyView({
     const used = new Set<number>([0]);
     const photos = property.photos ?? [];
     const classes = property.photoClasses ?? [];
+    const marked = property.photoWatermarked ?? [];
     const map = new Map<StoryChapter, string>();
     for (const block of chapterBlocks) {
       const wanted = CHAPTER_PHOTO_CLASSES[block.chapter];
-      const idx = photos.findIndex(
-        (_, i) => !used.has(i) && classes[i] != null && wanted.includes(classes[i]!),
-      );
-      if (idx >= 0) {
+      const candidates = photos
+        .map((_, i) => i)
+        .filter((i) => !used.has(i) && classes[i] != null && wanted.includes(classes[i]!));
+      // Entre las candidatas de la clase correcta, primero las limpias: una
+      // foto con el logo de otro portal encabezando un capítulo es lo menos
+      // premium que puede pasar. Si TODAS están marcadas se usa igualmente la
+      // primera — mejor una foto marcada que un capítulo mutilado.
+      const idx = candidates.find((i) => !marked[i]) ?? candidates[0];
+      if (idx != null) {
         used.add(idx);
         map.set(block.chapter, photos[idx]);
       }
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [story, property.photos, property.photoClasses]);
+  }, [story, property.photos, property.photoClasses, property.photoWatermarked]);
 
   // Capítulos partidos en dos tandas: el vídeo signature entra tras el 2º
   // (patrón DAMAC medido: el film a media página, nunca al final).
@@ -765,6 +776,13 @@ function HeroMedia({
 
 // ─── 05-10 · CAPÍTULOS con foto integrada y alternancia ──────────────────────
 
+/** Un capítulo sin foto y de longitud contenida puede compartir fila con el
+ *  siguiente: dos columnas equilibradas en vez de dos párrafos sueltos. */
+const PAIRABLE_WORDS = 85;
+function isPairable(copy: string): boolean {
+  return (copy.trim().match(/\S+/g) ?? []).length <= PAIRABLE_WORDS;
+}
+
 function StoryChapters({
   blocks,
   photos,
@@ -776,18 +794,131 @@ function StoryChapters({
   startIndex: number;
   onView: (chapter: string) => void;
 }) {
+  // Composición: los capítulos CON foto alternan izquierda/derecha (patrón
+  // EMAAR). Los que se quedan sin foto no se dejan caer como párrafos
+  // sueltos: si vienen dos seguidos y ambos son cortos, forman una rejilla
+  // editorial a dos columnas; si van solos, se maquetan como el spread del
+  // prelude (rótulo a la izquierda, texto a la derecha).
+  const rows: Array<
+    | { kind: "photo"; block: PublicStoryBlock; photo: string; reversed: boolean }
+    | { kind: "solo"; block: PublicStoryBlock }
+    | { kind: "pair"; left: PublicStoryBlock; right: PublicStoryBlock }
+  > = [];
+  let photoIndex = startIndex;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const photo = photos.get(block.chapter) ?? null;
+    if (photo) {
+      rows.push({ kind: "photo", block, photo, reversed: photoIndex % 2 === 1 });
+      photoIndex++;
+      continue;
+    }
+    const next = blocks[i + 1];
+    const nextPhoto = next ? photos.get(next.chapter) ?? null : null;
+    if (next && !nextPhoto && isPairable(block.copy) && isPairable(next.copy)) {
+      rows.push({ kind: "pair", left: block, right: next });
+      i++;
+      continue;
+    }
+    rows.push({ kind: "solo", block });
+  }
+
   return (
-    <div className="mt-8 space-y-8 md:space-y-12">
-      {blocks.map((block, i) => (
-        <Chapter
-          key={block.chapter}
-          block={block}
-          photo={photos.get(block.chapter) ?? null}
-          // Alternancia izquierda/derecha estricta (patrón EMAAR medido).
-          reversed={(startIndex + i) % 2 === 1}
-          onView={onView}
-        />
-      ))}
+    <div className="mt-8 space-y-8 md:space-y-14">
+      {rows.map((row) =>
+        row.kind === "photo" ? (
+          <Chapter
+            key={row.block.chapter}
+            block={row.block}
+            photo={row.photo}
+            reversed={row.reversed}
+            onView={onView}
+          />
+        ) : row.kind === "pair" ? (
+          <TextChapterPair key={row.left.chapter} left={row.left} right={row.right} onView={onView} />
+        ) : (
+          <TextChapter key={row.block.chapter} block={row.block} onView={onView} />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Observador de lectura del capítulo: una sola vez, al 40% visible. */
+function useChapterSeen(chapter: string, onView: (c: string) => void) {
+  const ref = useRef<HTMLElement | null>(null);
+  const seen = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !seen.current) {
+          seen.current = true;
+          onView(chapter);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [chapter, onView]);
+  return ref;
+}
+
+/** Capítulo solo-texto: rótulo a la izquierda, texto en medida de lectura a
+ *  la derecha. Es la misma retórica del spread del prelude, y evita el
+ *  párrafo centrado a la deriva entre dos capítulos con foto. */
+function TextChapter({
+  block,
+  onView,
+}: {
+  block: PublicStoryBlock;
+  onView: (chapter: string) => void;
+}) {
+  const ref = useChapterSeen(block.chapter, onView);
+  return (
+    <section ref={ref} className="border-t border-gold/20 pt-7 md:pt-9">
+      <div className="md:flex md:items-start md:gap-12 lg:gap-16">
+        <div className="md:w-[36%] md:shrink-0">
+          <h2 className="crm-section-title text-ink">{CHAPTER_HEADINGS[block.chapter]}</h2>
+        </div>
+        <div className="mt-3 md:mt-0 md:w-[64%] md:max-w-[45rem]">
+          <p className="text-[1.02rem] leading-[1.8] text-ink/75 md:text-[1.08rem]">{block.copy}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Dos capítulos solo-texto seguidos: rejilla editorial 2-up en desktop,
+ *  apilados en móvil. La línea superior los une como una unidad compuesta en
+ *  vez de dejarlos como dos bloques huérfanos. */
+function TextChapterPair({
+  left,
+  right,
+  onView,
+}: {
+  left: PublicStoryBlock;
+  right: PublicStoryBlock;
+  onView: (chapter: string) => void;
+}) {
+  const refLeft = useChapterSeen(left.chapter, onView);
+  const refRight = useChapterSeen(right.chapter, onView);
+  return (
+    <div className="border-t border-gold/20 pt-7 md:pt-9">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-14">
+        {[
+          { block: left, ref: refLeft },
+          { block: right, ref: refRight },
+        ].map(({ block, ref }) => (
+          <section key={block.chapter} ref={ref} className="max-w-[34rem]">
+            <h2 className="crm-section-title text-ink">{CHAPTER_HEADINGS[block.chapter]}</h2>
+            <p className="mt-3 text-[1.02rem] leading-[1.8] text-ink/75">{block.copy}</p>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -799,28 +930,11 @@ function Chapter({
   onView,
 }: {
   block: PublicStoryBlock;
-  photo: string | null;
+  photo: string;
   reversed: boolean;
   onView: (chapter: string) => void;
 }) {
-  const ref = useRef<HTMLElement | null>(null);
-  const seen = useRef(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting) && !seen.current) {
-          seen.current = true;
-          onView(block.chapter);
-          obs.disconnect();
-        }
-      },
-      { threshold: 0.4 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [block.chapter, onView]);
+  const ref = useChapterSeen(block.chapter, onView);
 
   const copy = (
     <div className="flex flex-col justify-center">
@@ -828,15 +942,6 @@ function Chapter({
       <p className="mt-3 max-w-xl text-base leading-relaxed text-ink/75">{block.copy}</p>
     </div>
   );
-
-  // Sin foto de su clase: capítulo compacto solo-texto (jamás foto incorrecta).
-  if (!photo) {
-    return (
-      <section ref={ref} className="mx-auto max-w-3xl">
-        {copy}
-      </section>
-    );
-  }
 
   return (
     <section

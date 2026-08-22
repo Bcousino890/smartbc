@@ -31,7 +31,13 @@ import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVer
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
-import { fromCuratedPoi, type LocationDestination } from "@/lib/services/location/destination";
+import { fromCuratedPoi, fromUniversity, type LocationDestination } from "@/lib/services/location/destination";
+
+/** Una universidad se distingue de un POI curado por su campus: es el único
+ *  campo que el catálogo de universidades añade sobre `PoiTravel`. */
+function isUniversity(p: PoiTravel): p is NearbyUniversity {
+  return "campusLabel" in p;
+}
 
 // Basemap: CARTO Voyager sobre datos de OpenStreetMap.
 //
@@ -260,12 +266,12 @@ export function LocationModule({
 
     // Los POIs son pulsables en el mapa vivo: exploración a la EMAAR, con
     // NUESTRA ficha contextual, nunca el tooltip por defecto de Leaflet.
-    for (const p of [...mapPois, ...universities.slice(0, 3)]) {
+    for (const p of [...mapPois, ...universities]) {
       const mk = L.marker([p.latitude, p.longitude], {
         title: p.name,
         icon: L.divIcon({
           className: "",
-          html: `<span class="bcp-live-poi"></span>`,
+          html: `<span class="bcp-live-poi${isUniversity(p) ? " bcp-live-poi-uni" : ""}"></span>`,
           iconSize: [12, 12], iconAnchor: [6, 6],
         }),
       }).addTo(map);
@@ -421,8 +427,23 @@ export function LocationModule({
               <ZoneExplorerMapLibre
                 origin={{ lat: center.lat, lng: center.lng }}
                 originLabel="La vivienda"
-                curated={[...mapPois, ...universities.slice(0, 3)].map(fromCuratedPoi)}
-                focus={placeFocus ?? (focus ? fromCuratedPoi(focus) : null)}
+                // Las universidades entran como destinos de pleno derecho, con
+                // su categoría (`educacion`) y su sede: `fromUniversity`, no
+                // `fromCuratedPoi`, que las degradaba a POI genérico y les
+                // quitaba el campus. Y entran TODAS las que encontró el
+                // catálogo, no las tres primeras.
+                curated={[
+                  ...mapPois.map(fromCuratedPoi),
+                  ...universities.map(fromUniversity),
+                ]}
+                focus={
+                  placeFocus ??
+                  (focus
+                    ? isUniversity(focus)
+                      ? fromUniversity(focus)
+                      : fromCuratedPoi(focus)
+                    : null)
+                }
                 onSelectPlace={(d) => {
                   setPlaceFocus(d);
                   setFocus(null);

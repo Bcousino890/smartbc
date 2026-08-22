@@ -855,6 +855,25 @@
   box-shadow: 0 4px 12px -4px rgba(40, 28, 10, 0.7);
 }
 .bcp-live-poi:hover { background: #d4af7f; }
+/* Universidad: categoría propia, marca propia. Un anillo doble la separa del
+   POI de lifestyle sin inventar un color nuevo en la escena. */
+.bcp-live-poi-uni {
+  width: 14px; height: 14px;
+  background: #8a6d3b; border-color: #fbf8f3;
+  box-shadow: 0 0 0 2px #8a6d3b, 0 4px 12px -4px rgba(40, 28, 10, 0.7);
+}
+/* Seleccionado: el destino elegido tiene que cantar. Se agranda, se llena de
+   champán y proyecta un halo — con la línea que lo une a la vivienda, la
+   relación se lee sin explicarla. */
+.bcp-live-poi.is-active {
+  width: 20px; height: 20px;
+  background: #8a6d3b; border-color: #fbf8f3; border-width: 3px;
+  box-shadow: 0 0 0 6px rgba(138, 109, 59, 0.18), 0 8px 22px -6px rgba(40, 28, 10, 0.75);
+  z-index: 5;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bcp-live-poi { transition: width .18s ease, height .18s ease, background .18s ease, box-shadow .18s ease; }
+}
 
 /* Sitio descubierto en Google: neutro y claramente distinto de los POIs
    curados por BCP — nunca se insinúa que BCP lo recomienda (§10). */

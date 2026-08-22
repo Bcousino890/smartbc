@@ -413,9 +413,19 @@ export function propertyRowToClientProperty(
       ai_confidence?: number | null;
     };
     if (meta.class_override) return meta.class_override;
-    if (meta.ai_class && (meta.ai_confidence ?? 0) >= 0.75) return meta.ai_class;
-    return null;
+    if (!meta.ai_class) return null;
+    // "LA FINCA" es el capítulo donde una foto mal clasificada más canta: una
+    // calle cualquiera presentada como el edificio. Por eso la fachada exige
+    // más certeza que el resto de clases; si no llega, el capítulo se queda
+    // sin foto, que es la degradación correcta.
+    const floor = meta.ai_class === "facade_building" ? 0.85 : 0.75;
+    return (meta.ai_confidence ?? 0) >= floor ? meta.ai_class : null;
   });
+  // Marca de agua de otro portal (0152). NULL todavía sin analizar → se trata
+  // como limpia: el dato sirve para PREFERIR una foto, nunca para esconderla.
+  const photoWatermarked = sortedPhotos.map(
+    (p) => (p as { ai_watermark?: boolean | null }).ai_watermark === true,
+  );
   return {
     id: row.slug,
     title: displayPropertyTitle(row, effectiveTitleRaw),
@@ -441,6 +451,7 @@ export function propertyRowToClientProperty(
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
     photoClasses,
+    photoWatermarked,
     bcReference: row.bc_reference ?? null,
     floor: resolveFloor(
       (row as { floor_override?: string | null }).floor_override,
