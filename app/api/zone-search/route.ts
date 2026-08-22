@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/db/admin";
 import { locationSearchProvider } from "@/lib/services/location/search-provider";
+import { foldText, type SearchPlaceDto } from "@/lib/services/location/search";
 
 // BUSCAR CERCA DE ESTA VIVIENDA · ruta de búsqueda externa.
 //
@@ -24,6 +26,48 @@ export async function GET(req: Request) {
   if (q.length < 2) return NextResponse.json({ results: [] });
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     return new NextResponse("bad_bias", { status: 400 });
+  }
+
+  // ── mode=local · sugerencias al teclear contra NUESTRA base ──
+  // zone_places (0154) tiene el catálogo completo de Madrid importado de OSM:
+  // buscar aquí es instantáneo y no toca a ningún tercero, así que sí puede
+  // dispararse mientras se escribe. Nominatim queda para el Enter.
+  if (url.searchParams.get("mode") === "local") {
+    try {
+      const db = createAdminClient() as any;
+      const folded = foldText(q).replace(/[%_]/g, "");
+      const { data } = await db
+        .from("zone_places")
+        .select("osm_ref, name, category, lat, lng, address")
+        .ilike("name_folded", `%${folded}%`)
+        .limit(40);
+      const rows = (data ?? []) as Array<{
+        osm_ref: string; name: string; category: string; lat: number; lng: number; address: string | null;
+      }>;
+      // Prefijo gana a subcadena; a igualdad, lo más cercano a la vivienda.
+      const score = (r: (typeof rows)[number]) => {
+        const pos = foldText(r.name).indexOf(folded);
+        const km = Math.hypot((r.lat - lat) * 111, (r.lng - lng) * 85);
+        return (pos === 0 ? 0 : pos > 0 ? 1000 : 5000) + km;
+      };
+      const results: SearchPlaceDto[] = rows
+        .sort((a, b) => score(a) - score(b))
+        .slice(0, 6)
+        .map((r) => ({
+          id: `search:${r.osm_ref}`,
+          name: r.name,
+          category: r.category,
+          lat: r.lat,
+          lng: r.lng,
+          address: r.address,
+        }));
+      return NextResponse.json(
+        { results },
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=3600" } },
+      );
+    } catch {
+      return NextResponse.json({ results: [] });
+    }
   }
 
   try {

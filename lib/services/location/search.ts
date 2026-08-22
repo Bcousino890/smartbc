@@ -80,38 +80,37 @@ export function searchLocal(
     });
   }
 
-  // Universidades: catálogo completo, un resultado por universidad con su
-  // campus más cercano a la vivienda. Sin techo de minutos: quien busca
-  // "URJC" quiere encontrarla aunque esté a una hora.
+  // Universidades: catálogo completo, un resultado por universidad. Quien
+  // BUSCA una universidad por nombre pregunta por la institución, y la
+  // respuesta honesta es su SEDE PRINCIPAL (la primera del catálogo) — no el
+  // anexo que casualmente cae más cerca: "UAH" contestaba con el campus de
+  // Torrejón cuando el rectorado está en Alcalá. La lista de "Universidades
+  // cercanas" sigue siendo de proximidad y ahí el campus más cercano sí es
+  // la respuesta correcta.
   for (const uni of UNIVERSITIES) {
     if (!matches(query, uni.name, uni.shortName)) continue;
-    let best: LocationDestination | null = null;
-    let bestKm = Infinity;
-    for (const campus of uni.campuses) {
-      const km = haversineKm(property.lat, property.lng, campus.lat, campus.lng);
-      if (km >= bestKm) continue;
-      bestKm = km;
-      const travel = computePoiTravel(property, {
-        name: uni.shortName ?? uni.name,
-        category: "educacion",
-        latitude: campus.lat,
-        longitude: campus.lng,
-        travel_modes: ["walk", "drive"],
-      });
-      best = {
-        source: "university",
-        id: `uni:${uni.id}`,
-        name: uni.shortName ?? uni.name,
-        category: "educacion",
-        lat: campus.lat,
-        lng: campus.lng,
-        address: campus.address,
-        subtitle: uni.campuses.length > 1 ? campus.label : null,
-        eta: travel ? { minutes: travel.minutes, mode: travel.mode, approximate: true } : null,
-        distanceKm: Math.round(km * 10) / 10,
-      };
-    }
-    if (best) out.push(best);
+    const campus = uni.campuses[0];
+    if (!campus) continue;
+    const km = haversineKm(property.lat, property.lng, campus.lat, campus.lng);
+    const travel = computePoiTravel(property, {
+      name: uni.shortName ?? uni.name,
+      category: "educacion",
+      latitude: campus.lat,
+      longitude: campus.lng,
+      travel_modes: ["walk", "drive"],
+    });
+    out.push({
+      source: "university",
+      id: `uni:${uni.id}`,
+      name: uni.shortName ?? uni.name,
+      category: "educacion",
+      lat: campus.lat,
+      lng: campus.lng,
+      address: campus.address,
+      subtitle: uni.campuses.length > 1 ? campus.label : null,
+      eta: travel ? { minutes: travel.minutes, mode: travel.mode, approximate: true } : null,
+      distanceKm: Math.round(km * 10) / 10,
+    });
   }
 
   return out.slice(0, MAX_RESULTS);

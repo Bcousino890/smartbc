@@ -790,16 +790,43 @@ function ZoneSearch({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showLocal = useCallback(
     (q: string) => {
+      // Instantáneo y sin red: universidades verificadas + POIs curados.
       const local = searchLocal(q, property, curated);
       setResults(local);
       setOpen(local.length > 0);
       setActive(-1);
       setStatus("idle");
+      // Y con un respiro de tecleo, el catálogo COMPLETO de Madrid — que es
+      // NUESTRA base (zone_places), no Nominatim: por eso sí puede
+      // consultarse mientras se escribe sin violar ninguna política.
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (q.trim().length < 2) return;
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `/api/zone-search?mode=local&q=${encodeURIComponent(q.trim())}&lat=${property.lat}&lng=${property.lng}`,
+          );
+          if (!res.ok) return;
+          const body = (await res.json()) as { results: SearchPlaceDto[] };
+          const places = (body.results ?? []).map((r) => fromSearchResult(r, property));
+          setResults((prev) => {
+            // Solo si la consulta sigue siendo la misma que disparó esto.
+            const merged = mergeResults(searchLocal(q, property, curated), places);
+            return merged.length > 0 ? merged : prev;
+          });
+          setOpen(true);
+        } catch {
+          // sin sugerencias ampliadas; las locales ya están puestas
+        }
+      }, 240);
     },
     [property, curated],
   );
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   const submit = useCallback(async () => {
     const q = query.trim();
