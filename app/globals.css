@@ -849,38 +849,78 @@
   white-space: nowrap; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
 }
 .bcp-live-home-dot { width: 10px; height: 10px; border-radius: 9999px; background: #d4af7f; }
-.bcp-live-poi {
-  display: block; width: 12px; height: 12px; border-radius: 9999px;
-  background: #fbf8f3; border: 2px solid #8a6d3b; cursor: pointer;
-  box-shadow: 0 4px 12px -4px rgba(40, 28, 10, 0.7);
+/* ── BCP RESIDENCE MARKER ───────────────────────────────────────────────
+   Medallón, no chapa de sistema. Disco carbón + aro champán fino + detalle
+   marfil dentro. Es el ancla geográfica de la experiencia (DAMAC) y tiene
+   que reconocerse sin rótulo (EMAAR), con la contención de una casa
+   madrileña: ni pin rojo, ni emoji, ni píldora enorme. */
+.bcp-residence {
+  position: absolute;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  width: max-content; pointer-events: none;
+  transform: translate(-50%, -50%);
 }
-.bcp-live-poi:hover { background: #d4af7f; }
-/* Universidad: categoría propia, marca propia. Un anillo doble la separa del
-   POI de lifestyle sin inventar un color nuevo en la escena. */
-.bcp-live-poi-uni {
-  width: 14px; height: 14px;
-  background: #8a6d3b; border-color: #fbf8f3;
-  box-shadow: 0 0 0 2px #8a6d3b, 0 4px 12px -4px rgba(40, 28, 10, 0.7);
+.bcp-residence-medal {
+  display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 9999px;
+  background: #2c2113; color: #f6f0e4;
+  box-shadow:
+    0 0 0 1.5px #c8a86a,          /* aro champán */
+    0 0 0 4.5px rgba(246, 240, 228, 0.9), /* respiro marfil */
+    0 10px 22px -10px rgba(40, 28, 10, 0.75);
 }
-/* Seleccionado: el destino elegido tiene que cantar. Se agranda, se llena de
-   champán y proyecta un halo — con la línea que lo une a la vivienda, la
-   relación se lee sin explicarla. */
-.bcp-live-poi.is-active {
-  width: 20px; height: 20px;
-  background: #8a6d3b; border-color: #fbf8f3; border-width: 3px;
-  box-shadow: 0 0 0 6px rgba(138, 109, 59, 0.18), 0 8px 22px -6px rgba(40, 28, 10, 0.75);
-  z-index: 5;
+.bcp-residence-caption {
+  font-family: var(--crm-font-sans);
+  font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase;
+  color: #2c2113;
+  background: rgba(251, 248, 243, 0.94);
+  border-radius: 9999px; padding: 2px 9px;
+  box-shadow: 0 4px 12px -8px rgba(40, 28, 10, 0.6);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .bcp-live-poi { transition: width .18s ease, height .18s ease, background .18s ease, box-shadow .18s ease; }
+/* Foco: halo, nunca rebote. */
+.bcp-residence.is-focus .bcp-residence-medal {
+  box-shadow:
+    0 0 0 1.5px #c8a86a,
+    0 0 0 4.5px rgba(246, 240, 228, 0.9),
+    0 0 0 12px rgba(200, 168, 106, 0.16),
+    0 10px 22px -10px rgba(40, 28, 10, 0.75);
 }
 
-/* Sitio descubierto en Google: neutro y claramente distinto de los POIs
-   curados por BCP — nunca se insinúa que BCP lo recomienda (§10). */
-.bcp-live-place {
-  display: block; width: 16px; height: 16px; border-radius: 9999px;
-  background: #fbf8f3; border: 3px solid #2c2113;
+/* ── POI CURADO POR BCP ──
+   Cápsula marfil con glifo carbón y borde champán fino. Misma familia para
+   todas las categorías: cambia el glifo, nunca el color — el champán se
+   reserva a la selección. */
+.bcp-poi {
+  display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 9999px;
+  background: #fbf8f3; color: #3b332a;
+  border: 1px solid rgba(200, 168, 106, 0.75);
+  box-shadow: 0 6px 16px -8px rgba(40, 28, 10, 0.6);
+  cursor: pointer;
+}
+.bcp-poi:hover { border-color: #c8a86a; background: #fffdf9; }
+/* Universidad: doble aro, distinción aprobada en el sprint anterior. */
+.bcp-poi-uni { box-shadow: 0 0 0 2.5px rgba(251, 248, 243, 0.95), 0 0 0 3.5px rgba(200, 168, 106, 0.55), 0 6px 16px -8px rgba(40, 28, 10, 0.6); }
+/* Seleccionado: el champán toma el mando. */
+.bcp-poi.is-active {
+  background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
+  box-shadow: 0 0 0 5px rgba(138, 109, 59, 0.18), 0 10px 24px -8px rgba(40, 28, 10, 0.75);
+  transform: scale(1.12);
+}
+.bcp-poi-uni.is-active { box-shadow: 0 0 0 2.5px #fbf8f3, 0 0 0 5px rgba(138, 109, 59, 0.5), 0 10px 24px -8px rgba(40, 28, 10, 0.75); }
+
+/* Lugar DESCUBIERTO en el basemap: neutro y claramente distinto de lo
+   curado — nunca se insinúa que BCP lo recomienda. */
+.bcp-place {
+  display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  background: #fbf8f3; color: #2c2113;
+  border: 2px solid #2c2113;
   box-shadow: 0 8px 20px -6px rgba(40, 28, 10, 0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bcp-poi { transition: transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease; }
 }
 
 @media (prefers-reduced-motion: reduce) {

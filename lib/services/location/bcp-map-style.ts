@@ -43,6 +43,8 @@ const C = {
   // sobre el suelo cálido sin meter un color nuevo en la escena.
   roadMajor: "#ffffff",
   roadMajorCasing: "#d8ccb4",
+  roadSecondary: "#f0ebe0",
+  roadSecondaryCasing: "#ddd3c0",
   roadMinor: "#fbf9f5",
   roadMinorCasing: "#e3dbcb",
   rail: "#cec5b3",
@@ -153,12 +155,39 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "line-width": ["interpolate", ["linear"], ["zoom"], 13, 0.6, 18, 7],
         },
       },
+      // Viario en TRES pesos, no en dos: es lo que da jerarquía urbana. El
+      // secundario en gris cálido separa las travesías de las grandes vías
+      // sin meter un color nuevo.
+      {
+        id: "road-secondary-casing",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": C.roadSecondaryCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.1, 18, 12],
+        },
+      },
+      {
+        id: "road-secondary",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": C.roadSecondary,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 18, 9.5],
+        },
+      },
       {
         id: "road-major-casing",
         type: "line",
         source: "openmaptiles",
         "source-layer": "transportation",
-        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary"]]],
+        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadMajorCasing,
@@ -170,7 +199,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "line",
         source: "openmaptiles",
         "source-layer": "transportation",
-        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary"]]],
+        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadMajor,
@@ -207,7 +236,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "symbol-placement": "line",
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10, 18, 12.5],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 9.5, 18, 11.5],
         },
         paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.2 },
       },
@@ -232,12 +261,12 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT_MEDIUM,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 11, 16, 14],
-          "text-letter-spacing": 0.08,
+          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 12, 16, 16.5],
+          "text-letter-spacing": 0.12,
           "text-transform": "uppercase",
           "text-max-width": 8,
         },
-        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 1.6 },
+        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 2 },
       },
 
       // ── POIs: la capa que hace posible EXPLORAR. Densidad contenida —
@@ -255,9 +284,11 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         // zoom y descartando la cola rank>=20, que es la que llenaba la
         // escena de clínicas y tiendas de barrio.
         minzoom: 16,
+        // Densidad PROGRESIVA (§5): a z16 solo lo verdaderamente relevante y
+        // a partir de ahí se abre. `rank` bajo = más importante.
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], 20],
+          ["<", ["get", "rank"], ["step", ["zoom"], 10, 17, 16, 18, 20]],
           ["has", "name"],
         ],
         layout: {
@@ -282,12 +313,26 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         minzoom: 15,
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], 20],
+          ["<", ["get", "rank"], ["step", ["zoom"], 7, 16, 14, 17, 20]],
           ["has", "name"],
         ],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.4, 18, 3.8],
-          "circle-color": C.poiDot,
+          // El tamaño distingue lo importante de lo secundario…
+          "circle-radius": [
+            "interpolate", ["linear"], ["zoom"],
+            15, ["case", ["<", ["get", "rank"], 7], 3.2, 2.3],
+            18, ["case", ["<", ["get", "rank"], 7], 4.6, 3.4],
+          ],
+          // …y un desvío de tono discreto insinúa la categoría sin convertir
+          // el mapa en un semáforo. NUNCA champán: lo descubierto en OSM no
+          // puede parecer recomendado por BCP (§5).
+          "circle-color": [
+            "match", ["get", "class"],
+            ["park", "garden", "wood", "playground", "pitch"], "#6f8a5c",
+            ["railway", "bus", "airport", "ferry_terminal"], "#5e7382",
+            ["hospital", "pharmacy", "doctors"], "#8a6b6b",
+            C.poiDot,
+          ],
           "circle-stroke-color": C.labelHalo,
           "circle-stroke-width": 1,
         },

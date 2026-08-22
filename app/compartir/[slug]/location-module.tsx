@@ -31,6 +31,7 @@ import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVer
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
+import { residenceMarkerHtml } from "@/lib/services/location/markers";
 import { fromCuratedPoi, fromUniversity, type LocationDestination } from "@/lib/services/location/destination";
 
 /** Una universidad se distingue de un POI curado por su campus: es el único
@@ -208,87 +209,55 @@ export function LocationModule({
     return buildMosaic({ lat: view.lat, lng: view.lng, zoom: view.zoom, width: size.w, height: size.h });
   }, [size, view]);
 
-  const propertyPt = mosaic && hasPreciseCoords ? mosaic.project(center.lat, center.lng) : null;
-  const focusPt = mosaic && focus ? mosaic.project(focus.latitude, focus.longitude) : null;
+  // Proyección de las capas HTML (medallón, cápsulas, área de foco, curva).
+  // Con el mapa vectorial la da MAPLIBRE: dos matemáticas distintas para el
+  // mismo encuadre acabarían desalineándose. El mosaico solo proyecta cuando
+  // es él quien pinta (fallback).
+  const projectorRef = useRef<((lat: number, lng: number) => { left: number; top: number }) | null>(null);
+  const [projVersion, setProjVersion] = useState(0);
+  const handleProjector = useCallback(
+    (fn: ((lat: number, lng: number) => { left: number; top: number }) | null) => {
+      projectorRef.current = fn;
+      setProjVersion((v) => v + 1);
+    },
+    [],
+  );
+  const project = useMemo(() => {
+    if (useVectorMap && projectorRef.current) return projectorRef.current;
+    return mosaic ? mosaic.project : null;
+    // projVersion fuerza el recálculo cuando el mapa publica un proyector nuevo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useVectorMap, mosaic, projVersion]);
+
+  const propertyPt = project && hasPreciseCoords ? project(center.lat, center.lng) : null;
+  const focusPt = project && focus ? project(focus.latitude, focus.longitude) : null;
 
   // ── Modo explorar (Leaflet bajo demanda) ──
-  const leafletRef = useRef<any>(null);
-  const mapElRef = useRef<HTMLDivElement | null>(null);
 
   /** ÚNICO punto de entrada del DESTINATION FOCUS. */
   const selectPoi = useCallback(
     (p: PoiTravel) => {
+      // El encuadre lo calcula `view` (fitTwoPoints con la banda de la ficha
+      // reservada) y lo aplica la cámara del mapa: una sola geometría para
+      // overview y exploración.
       setFocus((prev) => (prev?.name === p.name ? prev : p));
       onPoiClick(p.name, p.category);
-      const inst = leafletRef.current;
-      if (!inst) return; // bloqueado: el encuadre lo resuelve el mosaico
-      const bounds = inst.L.latLngBounds([center.lat, center.lng], [p.latitude, p.longitude]);
-      inst.map.flyToBounds(bounds, { padding: [70, 70], duration: 0.7, maxZoom: 16 });
     },
-    [center.lat, center.lng, onPoiClick],
+    [onPoiClick],
   );
-  // Los marcadores de Leaflet se crean una vez: leen el handler por ref para
-  // no quedarse con una versión obsoleta en su closure.
-  const selectPoiRef = useRef(selectPoi);
-  useEffect(() => { selectPoiRef.current = selectPoi; }, [selectPoi]);
 
-  const enterLive = useCallback(async () => {
+  const enterLive = useCallback(() => {
+    // Un solo renderer: "explorar" ya no monta otro mapa, solo desbloquea la
+    // interacción del que ya está pintado.
     setLive(true);
     onExplore();
-    if (mapProvider === "maplibre" && !mapDown) return; // lo monta ZoneExplorerMapLibre
-    const L = (await import("leaflet")).default;
-    if (!document.getElementById("leaflet-css")) {
-      const link = document.createElement("link");
-      link.id = "leaflet-css";
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
-    await new Promise((r) => requestAnimationFrame(() => r(null)));
-    const host = mapElRef.current;
-    if (!host || leafletRef.current) return;
-
-    const map = L.map(host, {
-      center: [view.lat, view.lng], zoom: view.zoom,
-      zoomControl: false, attributionControl: true, scrollWheelZoom: true,
-    });
-    L.tileLayer(TILE_TEMPLATE, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(map);
-
-    L.marker([center.lat, center.lng], {
-      keyboard: false,
-      zIndexOffset: 1000,
-      icon: L.divIcon({
-        className: "",
-        html: `<span class="bcp-live-home"><span class="bcp-live-home-dot"></span><span class="bcp-live-home-label">La vivienda</span></span>`,
-        iconSize: [0, 0], iconAnchor: [0, 0],
-      }),
-    }).addTo(map);
-
-    // Los POIs son pulsables en el mapa vivo: exploración a la EMAAR, con
-    // NUESTRA ficha contextual, nunca el tooltip por defecto de Leaflet.
-    for (const p of [...mapPois, ...universities]) {
-      const mk = L.marker([p.latitude, p.longitude], {
-        title: p.name,
-        icon: L.divIcon({
-          className: "",
-          html: `<span class="bcp-live-poi${isUniversity(p) ? " bcp-live-poi-uni" : ""}"></span>`,
-          iconSize: [12, 12], iconAnchor: [6, 6],
-        }),
-      }).addTo(map);
-      mk.on("click", () => selectPoiRef.current?.(p));
-    }
-    leafletRef.current = { L, map };
-  }, [center.lat, center.lng, view.lat, view.lng, view.zoom, mapPois, universities, onExplore, mapProvider, mapDown]);
+  }, [onExplore]);
 
   const exitLive = useCallback(() => {
-    leafletRef.current?.map.remove();
-    leafletRef.current = null;
     setLive(false);
     setFocus(null);
     setPlaceFocus(null);
   }, []);
-
-  useEffect(() => () => leafletRef.current?.map?.remove(), []);
 
   useEffect(() => {
     onExternalOpenRef.current = (name) => onPoiClick(name, "external_osm");
@@ -299,11 +268,7 @@ export function LocationModule({
     setFocus(null);
     setPlaceFocus(null);
     onRestore();
-    const inst = leafletRef.current;
-    inst?.map.flyTo([center.lat, center.lng], contextZoomForWidth(size?.w ?? 900, center.lat), {
-      duration: 0.6,
-    });
-  }, [center.lat, center.lng, size?.w, onRestore]);
+  }, [onRestore]);
 
   // ── Cabecera editorial: SOLO dato administrativo verificado. ──
   const editorialLine = useMemo(() => {
@@ -421,54 +386,71 @@ export function LocationModule({
           live ? "bcp-map-live h-[64vh] min-h-[420px]" : "h-[52vh] min-h-[340px] md:h-[540px]"
         }`}
       >
+        {/* UN SOLO MAPA para overview y exploración: mismo renderer, mismo
+            estilo, misma cámara, mismos marcadores. Lo único que cambia es el
+            estado de interacción. El mosaico de teselas ráster queda como red
+            de seguridad si MapLibre no carga. */}
+        {useVectorMap ? (
+          <ZoneExplorerMapLibre
+            origin={{ lat: center.lat, lng: center.lng }}
+            originLabel="La vivienda"
+            interactive={live}
+            // En overview la cámara la compone el módulo; al explorar el mapa
+            // se gobierna solo.
+            camera={live ? null : view}
+            // En overview los POIs curados los dibujan las cápsulas
+            // editoriales (con nombre, máximo cuatro y con comprobación de
+            // colisión); al explorar pasan a marcadores de glifo, que es lo
+            // que aguanta la densidad.
+            curated={
+              live
+                ? [...mapPois.map(fromCuratedPoi), ...universities.map(fromUniversity)]
+                : []
+            }
+            focus={
+              placeFocus ??
+              (focus
+                ? isUniversity(focus)
+                  ? fromUniversity(focus)
+                  : fromCuratedPoi(focus)
+                : null)
+            }
+            onSelectPlace={(d) => {
+              setPlaceFocus(d);
+              setFocus(null);
+              onPoiClick(d.name, d.category);
+            }}
+            onSelectCurated={(d) => {
+              // El mapa devuelve un destino; la máquina de estados sigue
+              // hablando en POIs del catálogo, así que se busca el original.
+              const original = [...mapPois, ...universities].find((p) => p.name === d.name);
+              if (original) selectPoi(original);
+            }}
+            onProjector={handleProjector}
+            onUnavailable={() => setMapDown(true)}
+          />
+        ) : (
+          /* Mosaico de respaldo: son <img>, así que pasar el ratón por encima
+             NUNCA intercepta el scroll de la página. */
+          <div className="absolute inset-0" style={{ isolation: "isolate" }} aria-hidden>
+            <div className="bcp-map-tiles absolute inset-0">
+              {mosaic?.tiles.map((t) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${t.z}/${t.x}/${t.y}`}
+                  src={TILE_URL(t.z, t.x, t.y)}
+                  alt="" width={256} height={256} loading="lazy" decoding="async" draggable={false}
+                  className="absolute max-w-none"
+                  style={{ left: t.left, top: t.top, width: 256, height: 256 }}
+                />
+              ))}
+            </div>
+            <div className="bcp-map-wash absolute inset-0" />
+          </div>
+        )}
+
         {live ? (
           <>
-            {useVectorMap ? (
-              <ZoneExplorerMapLibre
-                origin={{ lat: center.lat, lng: center.lng }}
-                originLabel="La vivienda"
-                // Las universidades entran como destinos de pleno derecho, con
-                // su categoría (`educacion`) y su sede: `fromUniversity`, no
-                // `fromCuratedPoi`, que las degradaba a POI genérico y les
-                // quitaba el campus. Y entran TODAS las que encontró el
-                // catálogo, no las tres primeras.
-                curated={[
-                  ...mapPois.map(fromCuratedPoi),
-                  ...universities.map(fromUniversity),
-                ]}
-                focus={
-                  placeFocus ??
-                  (focus
-                    ? isUniversity(focus)
-                      ? fromUniversity(focus)
-                      : fromCuratedPoi(focus)
-                    : null)
-                }
-                onSelectPlace={(d) => {
-                  setPlaceFocus(d);
-                  setFocus(null);
-                  onPoiClick(d.name, d.category);
-                }}
-                onUnavailable={() => setMapDown(true)}
-              />
-            ) : (
-              <div ref={mapElRef} className="absolute inset-0 h-full w-full" />
-            )}
-            {/* Los controles de zoom los pone MapLibre. Los propios solo
-                existen para el renderer anterior: tenerlos a la vez apilaba
-                dos juegos en la misma esquina y se robaban los clics. */}
-            {!useVectorMap && (
-              <div className="absolute right-3 top-3 z-[500] flex flex-col gap-1.5">
-                <button type="button" aria-label="Acercar" onClick={() => leafletRef.current?.map.zoomIn()}
-                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                  <Plus size={15} strokeWidth={2} />
-                </button>
-                <button type="button" aria-label="Alejar" onClick={() => leafletRef.current?.map.zoomOut()}
-                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                  <Minus size={15} strokeWidth={2} />
-                </button>
-              </div>
-            )}
             {placeFocus ? (
               <ContextCard
                 place={placeFocus}
@@ -487,24 +469,6 @@ export function LocationModule({
           </>
         ) : (
           <>
-            {/* Mosaico: son <img>, así que pasar el ratón por encima NUNCA
-                intercepta el scroll de la página. */}
-            <div className="absolute inset-0" style={{ isolation: "isolate" }} aria-hidden>
-              <div className="bcp-map-tiles absolute inset-0">
-                {mosaic?.tiles.map((t) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`${t.z}/${t.x}/${t.y}`}
-                    src={TILE_URL(t.z, t.x, t.y)}
-                    alt="" width={256} height={256} loading="lazy" decoding="async" draggable={false}
-                    className="absolute max-w-none"
-                    style={{ left: t.left, top: t.top, width: 256, height: 256 }}
-                  />
-                ))}
-              </div>
-              <div className="bcp-map-wash absolute inset-0" />
-            </div>
-
             {/* ÁREA DE FOCO de la vivienda. Es una HERRAMIENTA DE COMPOSICIÓN
                 para anclar la mirada — NO representa un radio de viaje, no
                 lleva minutos dentro y no es una isócrona. */}
@@ -535,10 +499,13 @@ export function LocationModule({
             )}
 
             {/* CÁPSULAS DE POI en overview: el lifestyle se entiende SIN
-                bajar a la lista. Como máximo cuatro, y solo las que caben. */}
-            {mosaic && hasPreciseCoords && !focus &&
+                bajar a la lista. Son los marcadores curados de este estado —
+                misma familia visual que los glifos del explorador (marfil,
+                carbón, filo champán), pero con nombre. Como máximo cuatro, y
+                solo las que caben (§4). */}
+            {project && hasPreciseCoords && !focus &&
               mapPois.map((p, i) => {
-                const pt = mosaic.project(p.latitude, p.longitude);
+                const pt = project(p.latitude, p.longitude);
                 if (!capsuleVisible(pt)) return null;
                 const { Icon } = categoryOf(p.category);
                 return (
@@ -547,7 +514,7 @@ export function LocationModule({
                     type="button"
                     onClick={() => selectPoi(p)}
                     data-capsule={p.name}
-                    className="bcp-capsule absolute z-[3] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-ink/10 bg-cream-50/95 px-2.5 py-1 text-[11px] text-ink/85 shadow-[0_6px_18px_-10px_rgba(40,28,10,0.55)] transition hover:border-gold hover:bg-white"
+                    className="bcp-capsule absolute z-[3] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-gold/45 bg-cream-50/95 px-2.5 py-1 text-[11px] text-ink/85 shadow-[0_6px_18px_-10px_rgba(40,28,10,0.55)] transition hover:border-gold hover:bg-white"
                     style={{ left: pt.left, top: pt.top, animationDelay: `${260 + i * 90}ms` }}
                   >
                     <Icon size={11} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
@@ -566,19 +533,25 @@ export function LocationModule({
               </span>
             )}
 
-            {/* LA VIVIENDA: identidad de marca, siempre reconocible. */}
+            {/* LA VIVIENDA · con el mapa vectorial el medallón lo pinta el
+                propio mapa (un solo marcador para overview y explorar); este
+                overlay solo existe para el mosaico de respaldo. */}
             {propertyPt && (
               <span className="absolute z-[6]" style={{ left: propertyPt.left, top: propertyPt.top }} aria-hidden>
-                {!focus && <span className="bcp-marker-halo absolute left-0 top-0 block h-16 w-16 rounded-full bg-gold/40" />}
-                <span className="bcp-marker absolute left-0 top-0 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-ink px-2 py-[5px] pr-3 shadow-[0_12px_30px_-10px_rgba(10,10,10,0.95)] ring-1 ring-gold/60">
-                  <span className="block h-2.5 w-2.5 shrink-0 rounded-full bg-gold" />
-                  <span className="crm-meta whitespace-nowrap text-cream-50">La vivienda</span>
-                </span>
+                {!focus && !useVectorMap && (
+                  <span className="bcp-marker-halo absolute left-0 top-0 block h-16 w-16 rounded-full bg-gold/40" />
+                )}
+                {!useVectorMap && (
+                  <span
+                    className="absolute left-0 top-0"
+                    dangerouslySetInnerHTML={{ __html: residenceMarkerHtml("La vivienda") }}
+                  />
+                )}
               </span>
             )}
 
             {/* Sin coordenadas: círculo de zona, jamás un pin falso. */}
-            {mosaic && !hasPreciseCoords && (
+            {!hasPreciseCoords && (
               <span aria-hidden
                 className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold/75 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.16)] md:h-40 md:w-40" />
             )}
@@ -596,12 +569,16 @@ export function LocationModule({
               {focus ? "Ver zona completa" : "Explorar la zona"}
             </button>
 
-            <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
-              ©{" "}
-              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">OpenStreetMap</a>{" "}
-              ©{" "}
-              <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">CARTO</a>
-            </span>
+            {/* Con el mapa vectorial la atribución la pone MapLibre; esta
+                solo acompaña al mosaico de respaldo (teselas de CARTO). */}
+            {!useVectorMap && (
+              <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
+                ©{" "}
+                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">OpenStreetMap</a>{" "}
+                ©{" "}
+                <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">CARTO</a>
+              </span>
+            )}
           </>
         )}
       </div>

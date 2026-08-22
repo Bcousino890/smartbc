@@ -23,6 +23,7 @@ import {
   CLICKABLE_POI_CLASSES,
 } from "../lib/services/location/destination";
 import { bcpLuxuryMadridStyle, CLICKABLE_LAYER_IDS, MAP_ATTRIBUTION } from "../lib/services/location/bcp-map-style";
+import { latLngToWorldPixel } from "../lib/geo/tile-math";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -153,6 +154,17 @@ console.log("Estilo BCP Luxury Madrid:");
     style.layers.find((l: any) => l.id === "poi-label")?.minzoom >= 16);
   check("atribución de OpenFreeMap, OpenMapTiles y OSM presente",
     /OpenFreeMap/.test(MAP_ATTRIBUTION) && /OpenMapTiles/.test(MAP_ATTRIBUTION) && /OpenStreetMap/.test(MAP_ATTRIBUTION));
+  // Convenio de zoom: MapLibre cuenta sobre teselas de 512px y nosotros sobre
+  // las de 256. La equivalencia está MEDIDA en un navegador real (0.01º de
+  // latitud = 612.3px en slippy z16 y en MapLibre z15); esto vigila que la
+  // matemática de la que depende el overview siga dando ese número.
+  const dy = (z: number) =>
+    latLngToWorldPixel(40.43, -3.6883, z).y - latLngToWorldPixel(40.44, -3.6883, z).y;
+  check("un nivel de slippy = doble de escala (base del offset de MapLibre)",
+    Math.abs(dy(16) / dy(15) - 2) < 1e-9, String(dy(16) / dy(15)));
+  check("slippy z16 mide los 612.3px que MapLibre da en z15",
+    Math.abs(dy(16) - 612.28) < 0.1, dy(16).toFixed(2));
+
   check("la lista blanca de lo pulsable no está vacía",
     Object.keys(CLICKABLE_POI_CLASSES).length > 20);
 }

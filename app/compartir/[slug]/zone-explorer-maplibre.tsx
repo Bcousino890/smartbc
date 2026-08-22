@@ -10,10 +10,15 @@
 // Esta es la ÚNICA pieza de la interfaz que conoce MapLibre. Todo lo que sale
 // de aquí hacia el resto del módulo es un `LocationDestination` de BCP.
 //
-// El estado PASIVO no monta nada de esto: sigue con el mosaico de teselas
-// propio, que ya está validado y no captura el scroll. MapLibre se carga al
-// pulsar "Explorar la zona", nunca al abrir el SmartLink (está bajo el
-// pliegue y la mayoría de visitas no exploran).
+// UN SOLO MAPA. Overview y exploración comparten renderer, estilo, cámara,
+// marcador de la vivienda y POIs curados: lo único que cambia es el ESTADO DE
+// INTERACCIÓN. Antes el pasivo era un mosaico de teselas ráster de CARTO y el
+// explorador MapLibre, y el cliente lo notaba ("cuando pulso Explorar se ve
+// mejor"). El mosaico sobrevive solo como red de seguridad si MapLibre no
+// carga (`onUnavailable`), nunca como experiencia paralela.
+//
+// En overview el mapa se monta con `interactive: false`: MapLibre no engancha
+// un solo gesto, así que no puede secuestrar el scroll de la página.
 // ============================================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -22,11 +27,27 @@ import {
   CLICKABLE_LAYER_IDS,
 } from "@/lib/services/location/bcp-map-style";
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
+import {
+  curatedMarkerHtml,
+  discoveredMarkerHtml,
+  residenceMarkerHtml,
+} from "@/lib/services/location/markers";
 
 type LatLng = { lat: number; lng: number };
 
 /** Fuente de la línea vivienda→destino. Una sola, se reescribe al cambiar. */
 const LINK_SOURCE = "bcp-link";
+
+/**
+ * MapLibre cuenta el zoom sobre teselas de 512px y nuestra geometría (mosaico,
+ * fitPoints, contextZoomForWidth) sobre las de 256px del esquema slippy. La
+ * misma escala se obtiene UN NIVEL más abajo en MapLibre — medido, no
+ * supuesto: a lat 40.43, 0.01º de latitud ocupan 612.3px tanto en slippy z16
+ * como en MapLibre z15. Sin esta conversión el overview saldría al doble de
+ * escala. Lo vigila `npm run test:zone-explorer`.
+ */
+export const MAPLIBRE_ZOOM_OFFSET = -1;
+export const toMapLibreZoom = (slippyZoom: number) => slippyZoom + MAPLIBRE_ZOOM_OFFSET;
 const emptyLine = () => ({ type: "FeatureCollection", features: [] }) as any;
 
 export function ZoneExplorerMapLibre({
@@ -34,7 +55,11 @@ export function ZoneExplorerMapLibre({
   originLabel,
   curated,
   focus,
+  interactive = true,
+  camera,
   onSelectPlace,
+  onSelectCurated,
+  onProjector,
   onUnavailable,
 }: {
   origin: LatLng;
@@ -42,7 +67,18 @@ export function ZoneExplorerMapLibre({
   /** POIs curados de BCP: champán y de marca, distintos de lo descubierto. */
   curated: LocationDestination[];
   focus: LocationDestination | null;
+  /** false = overview: sin gestos, sin controles y sin descubrimiento OSM. */
+  interactive?: boolean;
+  /** Cámara impuesta desde fuera (composición del overview). El zoom va en
+   *  convenio SLIPPY (256px), como el resto de la geometría del módulo. */
+  camera?: { lat: number; lng: number; zoom: number } | null;
   onSelectPlace: (d: LocationDestination) => void;
+  /** Selección de un POI curado desde el propio mapa (modo explorar). */
+  onSelectCurated?: (d: LocationDestination) => void;
+  /** Proyector lat/lng → píxeles del contenedor, para las capas HTML del
+   *  módulo (cápsulas, área de foco, curva). Se entrega al montar y cada vez
+   *  que la cámara se mueve. */
+  onProjector?: (project: ((lat: number, lng: number) => { left: number; top: number }) | null) => void;
   /** El mapa no cargó: el módulo vuelve al renderer actual sin romper nada. */
   onUnavailable: () => void;
 }) {
@@ -52,10 +88,15 @@ export function ZoneExplorerMapLibre({
   const discoveredMarkerRef = useRef<any>(null);
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const residenceElRef = useRef<HTMLElement | null>(null);
   const [ready, setReady] = useState(false);
 
   const onSelectRef = useRef(onSelectPlace);
   useEffect(() => { onSelectRef.current = onSelectPlace; }, [onSelectPlace]);
+  const onSelectCuratedRef = useRef(onSelectCurated);
+  useEffect(() => { onSelectCuratedRef.current = onSelectCurated; }, [onSelectCurated]);
+  const onProjectorRef = useRef(onProjector);
+  useEffect(() => { onProjectorRef.current = onProjector; }, [onProjector]);
 
   const makeEl = useCallback((className: string, html?: string) => {
     const el = document.createElement("span");
@@ -94,11 +135,13 @@ export function ZoneExplorerMapLibre({
         map = new maplibre.Map({
           container: hostRef.current,
           style: bcpLuxuryMadridStyle(),
-          center: [origin.lng, origin.lat],
-          zoom: 15.4,
+          center: [camera?.lng ?? origin.lng, camera?.lat ?? origin.lat],
+          zoom: camera ? toMapLibreZoom(camera.zoom) : 15.4,
           attributionControl: false,
-          // El zoom con rueda se habilita porque YA estamos en exploración
-          // explícita; en pasivo no existe mapa que pueda capturar nada.
+          // En overview NINGÚN gesto se engancha (`interactive: false`), así
+          // que el mapa no puede robar el scroll de la página. En explorar sí,
+          // porque el cliente ya ha pedido explorar de forma explícita.
+          interactive,
           cooperativeGestures: false,
           maxZoom: 18,
           minZoom: 11,
@@ -111,7 +154,8 @@ export function ZoneExplorerMapLibre({
 
       // Atribución obligatoria, compacta pero presente.
       map.addControl(new maplibre.AttributionControl({ compact: true }), "bottom-right");
-      map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
+      // Los controles de zoom solo tienen sentido donde se puede mover.
+      if (interactive) map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("error", (e: any) => {
         // Un fallo de teselas no debe tumbar el módulo; se registra y ya.
@@ -124,30 +168,42 @@ export function ZoneExplorerMapLibre({
         if (cancelled) return;
 
         // ── LA VIVIENDA: el origen, siempre dominante ──
-        new maplibre.Marker({
-          element: makeEl(
-            "bcp-live-home",
-            `<span class="bcp-live-home-dot"></span><span class="bcp-live-home-label">${originLabel}</span>`,
-          ),
-          anchor: "center",
-        })
+        const residence = document.createElement("div");
+        // En overview el medallón lleva rótulo; en explorar se reconoce solo,
+        // que es justo lo que se le pide al marcador (§3).
+        residence.innerHTML = residenceMarkerHtml(interactive ? undefined : originLabel);
+        residenceElRef.current = residence.firstElementChild as HTMLElement;
+        new maplibre.Marker({ element: residence, anchor: "center" })
           .setLngLat([origin.lng, origin.lat])
           .addTo(map);
 
         // ── POIs curados de BCP: marca champán ──
         for (const c of curated) {
-          // Las universidades llevan marca propia: son una categoría, no un
-          // POI de lifestyle más.
-          const el = makeEl(c.category === "educacion" ? "bcp-live-poi bcp-live-poi-uni" : "bcp-live-poi");
+          const wrap = document.createElement("div");
+          wrap.innerHTML = curatedMarkerHtml(c.category);
+          const el = wrap.firstElementChild as HTMLElement;
           el.title = c.name;
           curatedElsRef.current.set(c.id, el);
-          el.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            onSelectRef.current(c);
-          });
-          new maplibre.Marker({ element: el, anchor: "center" })
+          // En overview los marcadores son composición, no interfaz: quien
+          // manda es el rail editorial. En explorar sí se pueden pulsar.
+          if (interactive) {
+            el.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              (onSelectCuratedRef.current ?? onSelectRef.current)(c);
+            });
+          } else {
+            el.style.pointerEvents = "none";
+          }
+          new maplibre.Marker({ element: wrap, anchor: "center" })
             .setLngLat([c.lng, c.lat])
             .addTo(map);
+        }
+
+        // §5 · en overview los lugares de OSM NO compiten: se apagan del todo.
+        if (!interactive) {
+          for (const id of CLICKABLE_LAYER_IDS) {
+            if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+          }
         }
 
         // ── Cursor de "aquí se puede pulsar" solo sobre features válidas ──
@@ -183,11 +239,24 @@ export function ZoneExplorerMapLibre({
           },
         });
 
+        // Proyector para las capas HTML del módulo (cápsulas, área de foco,
+        // curva). Se toma DE MAPLIBRE en vez de recalcular la proyección por
+        // nuestra cuenta: así no hay dos matemáticas que puedan desalinearse.
+        const publishProjector = () => {
+          onProjectorRef.current?.((lat: number, lng: number) => {
+            const p = map.project([lng, lat]);
+            return { left: p.x, top: p.y };
+          });
+        };
+        publishProjector();
+        map.on("move", publishProjector);
+        map.on("resize", publishProjector);
+
         setReady(true);
       });
 
       // ── Clic sobre el mapa: solo capas de la lista blanca ──
-      map.on("click", (e: any) => {
+      if (interactive) map.on("click", (e: any) => {
         const layers = CLICKABLE_LAYER_IDS.filter((l) => map.getLayer(l));
         const features = layers.length
           ? map.queryRenderedFeatures(e.point, { layers })
@@ -219,6 +288,7 @@ export function ZoneExplorerMapLibre({
 
     return () => {
       cancelled = true;
+      onProjectorRef.current?.(null);
       try { mapRef.current?.remove(); } catch { /* ya desmontado */ }
       mapRef.current = null;
     };
@@ -241,11 +311,14 @@ export function ZoneExplorerMapLibre({
     for (const [id, el] of curatedElsRef.current) {
       el.classList.toggle("is-active", focus?.id === id);
     }
+    residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
     const link = map.getSource(LINK_SOURCE);
     if (!focus) {
       link?.setData(emptyLine());
-      map.easeTo({ center: [origin.lng, origin.lat], zoom: 15.4, duration: 600 });
+      // En overview la cámara la compone el módulo (encuadra la vivienda con
+      // sus destinos); en explorar se vuelve al encuadre de entrada.
+      if (interactive) map.easeTo({ center: [origin.lng, origin.lat], zoom: 15.4, duration: 600 });
       return;
     }
     link?.setData({
@@ -260,14 +333,20 @@ export function ZoneExplorerMapLibre({
     // Lo descubierto lleva marcador NEUTRO: nunca se insinúa que BCP lo
     // recomienda. Solo lo curado va en champán.
     if (focus.source === "osm_discovered") {
+      const placeWrap = document.createElement("div");
+      placeWrap.innerHTML = discoveredMarkerHtml();
       discoveredMarkerRef.current = new maplibre.Marker({
-        element: makeEl("bcp-live-place"),
+        element: placeWrap,
         anchor: "center",
       })
         .setLngLat([focus.lng, focus.lat])
         .addTo(map);
     }
 
+    // El encuadre lo decide quien manda en la cámara: en overview es el
+    // módulo (que además reserva la banda de la ficha en su propio cálculo),
+    // en explorar es el mapa.
+    if (!interactive) return;
     const bounds = new maplibre.LngLatBounds([origin.lng, origin.lat], [origin.lng, origin.lat]);
     bounds.extend([focus.lng, focus.lat]);
     map.fitBounds(bounds, {
@@ -277,7 +356,17 @@ export function ZoneExplorerMapLibre({
       maxZoom: 17,
       duration: 700,
     });
-  }, [focus, ready, origin, makeEl]);
+  }, [focus, ready, origin, makeEl, interactive]);
+
+  // ── Cámara impuesta (overview) ──
+  // El módulo compone el encuadre con la vivienda y sus destinos; el mapa se
+  // limita a obedecer. Sin animación: en pasivo un vuelo llamaría la atención
+  // sobre el mapa justo cuando debe estar callado.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || interactive || !camera) return;
+    map.jumpTo({ center: [camera.lng, camera.lat], zoom: toMapLibreZoom(camera.zoom) });
+  }, [camera?.lat, camera?.lng, camera?.zoom, ready, interactive]);
 
   return (
     <div
