@@ -251,9 +251,12 @@ export function PublicPropertyView({
   }, [story, property.photos, property.photoClasses, property.photoWatermarked]);
 
   // Capítulos partidos en dos tandas: el vídeo signature entra tras el 2º
-  // (patrón DAMAC medido: el film a media página, nunca al final).
-  const firstChapters = chapterBlocks.slice(0, 2);
-  const restChapters = chapterBlocks.slice(2);
+  // (patrón DAMAC medido: el film a media página, nunca al final). El corte
+  // se hace sobre las FILAS ya compuestas, para no partir en dos una pareja
+  // de capítulos solo-texto.
+  const chapterRows = buildChapterRows(chapterBlocks, chapterPhotos);
+  const firstRows = chapterRows.slice(0, 2);
+  const restRows = chapterRows.slice(2);
 
   // FACTS-LED sin capítulos limpios: descripción legible bajo "Información
   // de la vivienda" — splitter determinista ≤70 palabras, frases de agencia
@@ -440,11 +443,9 @@ export function PublicPropertyView({
         )}
 
         {/* 05-10 · CAPÍTULOS (primera tanda) */}
-        {firstChapters.length > 0 && (
+        {firstRows.length > 0 && (
           <StoryChapters
-            blocks={firstChapters}
-            photos={chapterPhotos}
-            startIndex={0}
+            rows={firstRows}
             onView={(ch) => trackerRef.current?.trackEvent("story_chapter_view", { chapter: ch })}
           />
         )}
@@ -462,7 +463,7 @@ export function PublicPropertyView({
         )}
 
         {/* Conversión MID tras el momento fuerte de media/story. */}
-        {(firstChapters.length > 0 || horizontalVideos.length > 0 || heroVideo) && (
+        {(firstRows.length > 0 || horizontalVideos.length > 0 || heroVideo) && (
           <div className="mt-8 text-center">
             <a
               href="#contacto"
@@ -476,11 +477,9 @@ export function PublicPropertyView({
         )}
 
         {/* Capítulos restantes */}
-        {restChapters.length > 0 && (
+        {restRows.length > 0 && (
           <StoryChapters
-            blocks={restChapters}
-            photos={chapterPhotos}
-            startIndex={firstChapters.length}
+            rows={restRows}
             onView={(ch) => trackerRef.current?.trackEvent("story_chapter_view", { chapter: ch })}
           />
         )}
@@ -783,28 +782,28 @@ function isPairable(copy: string): boolean {
   return (copy.trim().match(/\S+/g) ?? []).length <= PAIRABLE_WORDS;
 }
 
-function StoryChapters({
-  blocks,
-  photos,
-  startIndex,
-  onView,
-}: {
-  blocks: PublicStoryBlock[];
-  photos: Map<StoryChapter, string>;
-  startIndex: number;
-  onView: (chapter: string) => void;
-}) {
-  // Composición: los capítulos CON foto alternan izquierda/derecha (patrón
-  // EMAAR). Los que se quedan sin foto no se dejan caer como párrafos
-  // sueltos: si vienen dos seguidos y ambos son cortos, forman una rejilla
-  // editorial a dos columnas; si van solos, se maquetan como el spread del
-  // prelude (rótulo a la izquierda, texto a la derecha).
-  const rows: Array<
-    | { kind: "photo"; block: PublicStoryBlock; photo: string; reversed: boolean }
-    | { kind: "solo"; block: PublicStoryBlock }
-    | { kind: "pair"; left: PublicStoryBlock; right: PublicStoryBlock }
-  > = [];
-  let photoIndex = startIndex;
+type ChapterRow =
+  | { kind: "photo"; block: PublicStoryBlock; photo: string; reversed: boolean }
+  | { kind: "solo"; block: PublicStoryBlock }
+  | { kind: "pair"; left: PublicStoryBlock; right: PublicStoryBlock };
+
+/**
+ * Composición de los capítulos, calculada ANTES de partirlos en tandas: los
+ * que llevan foto alternan izquierda/derecha (patrón EMAAR); los que se
+ * quedan sin foto no se dejan caer como párrafos sueltos — si vienen dos
+ * seguidos y ambos son cortos forman una rejilla a dos columnas, y si van
+ * solos se maquetan como el spread del prelude.
+ *
+ * Se calcula sobre la lista COMPLETA a propósito: el vídeo signature y el CTA
+ * se cuelan entre la primera tanda y el resto, y partir por número de
+ * capítulos rompía la pareja justo por la mitad (visto en BC-0527).
+ */
+function buildChapterRows(
+  blocks: PublicStoryBlock[],
+  photos: Map<StoryChapter, string>,
+): ChapterRow[] {
+  const rows: ChapterRow[] = [];
+  let photoIndex = 0;
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     const photo = photos.get(block.chapter) ?? null;
@@ -822,7 +821,16 @@ function StoryChapters({
     }
     rows.push({ kind: "solo", block });
   }
+  return rows;
+}
 
+function StoryChapters({
+  rows,
+  onView,
+}: {
+  rows: ChapterRow[];
+  onView: (chapter: string) => void;
+}) {
   return (
     <div className="mt-8 space-y-8 md:space-y-14">
       {rows.map((row) =>
