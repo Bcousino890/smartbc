@@ -3,7 +3,7 @@
 // deja la foto MÁS borrosa que no poner nada, así que la regla merece test.
 
 /** Anchos que sirve el proxy (`/p/…?w=`). Mismo escalón, misma caché. */
-export const HERO_WIDTHS = [640, 828, 1080, 1280, 1600, 1920, 2560, 3200];
+export const HERO_WIDTHS = [640, 828, 1080, 1200, 1280, 1600, 1920, 2560, 3200];
 
 /**
  * `srcset` acotado al ancho REAL del original.

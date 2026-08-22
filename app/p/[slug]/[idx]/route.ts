@@ -29,7 +29,7 @@ import { isMobiliaImageUrl, toMobiliaOriginal } from "@/lib/sync/scrapers/mobili
 export const runtime = "nodejs";
 
 /** Anchos servibles. Cubre móvil (dpr 2-3), portátil, 1440@2x y 2560. */
-const WIDTHS = [640, 828, 1080, 1280, 1600, 1920, 2560, 3200] as const;
+const WIDTHS = [640, 828, 1080, 1200, 1280, 1600, 1920, 2560, 3200] as const;
 /** Calidad del reencode. Alta a propósito: es la foto principal. */
 const QUALITY = 86;
 

@@ -7,8 +7,12 @@
 
 import { createAdminClient } from "../lib/db/admin";
 
-const HEAD_BYTES = 65536;
-const CONCURRENCY = 6;
+// ⚠️ Si el Range pedido SUPERA el tamaño del fichero, el storage se queda
+// colgado en vez de responder 206 o 416 (medido: 60.720 bytes de fichero y
+// Range 0-65535 → timeout; Range 0-2000 → 21ms). Por eso se pide poco y, si
+// las cabeceras no bastan, se baja el fichero entero, que pesa poco.
+const HEAD_BYTES = 16384;
+const CONCURRENCY = 16;
 
 export function readDimensions(buf: Buffer): { w: number; h: number } | null {
   // PNG · IHDR
@@ -48,18 +52,23 @@ export function readDimensions(buf: Buffer): { w: number; h: number } | null {
 
 async function measure(url: string): Promise<{ w: number; h: number } | null> {
   // Un intento más: la primera tanda dejó 9 de 40 sin medir y todas eran
-  // caídas de socket, no cabeceras ilegibles.
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // caídas de socket, no cabeceras ilegibles. El timeout es corto a
+  // propósito: una lectura sana tarda 17ms contra el propio storage, así que
+  // esperar 15s a las que fallan multiplicaba por cincuenta el tiempo total.
+  // Primero un trozo de cabecera; si no basta (o el fichero es más pequeño
+  // que el trozo pedido), el fichero entero.
+  const attempts: RequestInit[] = [
+    { headers: { Range: `bytes=0-${HEAD_BYTES - 1}` } },
+    {},
+  ];
+  for (const init of attempts) {
     try {
-      const res = await fetch(url, {
-        headers: { Range: `bytes=0-${HEAD_BYTES - 1}` },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok && res.status !== 206) return null;
+      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(8_000) });
+      if (!res.ok && res.status !== 206) continue;
       const d = readDimensions(Buffer.from(await res.arrayBuffer()));
       if (d) return d;
     } catch {
-      // reintenta
+      // siguiente estrategia
     }
   }
   return null;
@@ -101,7 +110,10 @@ async function main() {
         .from("property_photos")
         .select("id, url, position")
         .in("property_id", activeIds.slice(i, i + 60))
-        .lte("position", 4)
+        // Hasta la 7: es el mismo horizonte que mira el adaptador al elegir
+        // portada. Si se mide menos, puede elegir una foto sin dimensiones y
+        // entonces el hero se queda sin `srcset` (pasó con BC-1421).
+        .lte("position", 7)
         .is("source_width", null);
       rows.push(...(data ?? []));
     }
