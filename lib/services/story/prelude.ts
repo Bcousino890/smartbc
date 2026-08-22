@@ -39,10 +39,20 @@ export const PRELUDE_HARD_MIN = 55;
 export const HEADLINE_TARGET = { min: 4, max: 10 };
 
 // ── Léxico prohibido ──
+//
+// ⚠️ Ojo con `\b` en las alternativas que empiezan por vocal acentuada. En
+// JavaScript el límite de palabra es ASCII (`\w` = [A-Za-z0-9_]), así que
+// "única" o "última" nunca casaban tras `\b`: el contrato dejaba pasar
+// "Única vivienda" y "Última planta". Donde hay acentos iniciales se usan
+// límites Unicode explícitos con la bandera `u`.
+const L = "(?<![\\p{L}\\p{N}])";
+const R = "(?![\\p{L}\\p{N}])";
 // §5 del brief v1: la vivienda debe parecer premium por LOS HECHOS. Estos
 // adjetivos son el esmalte de portal inmobiliario que el brief veta.
-const BANNED_ADJECTIVES =
-  /\b(exclusiv\w*|espectacular\w*|impresionante\w*|únic[oa]s?|lujo(s[oa]s?)?|privilegiad\w*|joya|oportunidad\w*|soñad\w*|incre[íi]ble\w*|inmejorable\w*|select[oa]s?)\b/i;
+const BANNED_ADJECTIVES = new RegExp(
+  `${L}(exclusiv\\w*|espectacular\\w*|impresionante\\w*|[úu]nic[oa]s?|lujo(s[oa]s?)?|privilegiad\\w*|joya|oportunidad\\w*|so[ñn]ad\\w*|incre[íi]ble\\w*|inmejorable\\w*|select[oa]s?|encanto|oasis|para[íi]so|refugio|ensue[ñn]o|tesoro)${R}`,
+  "iu",
+);
 
 // §5 v2: copy que ocupa sitio sin decir nada. Se veta la COLOCACIÓN genérica
 // (adjetivo de relumbrón sobre sustantivo vacío), no el adjetivo suelto:
@@ -80,8 +90,10 @@ const SPELLED_COUNTS =
 // La PLANTA es uno de los Key Facts impresos justo encima del spread: decirla
 // otra vez en la apertura es la duplicación que §7 quiere evitar (el piloto
 // v2 la coló en dos titulares).
-const FLOOR_WORDS =
-  /\b((primera|segunda|tercera|cuarta|quinta|sexta|séptima|septima|octava|novena|décima|decima|última|ultima)\s+planta|planta\s+(baja|primera|segunda|tercera|cuarta|quinta|sexta))\b/i;
+const FLOOR_WORDS = new RegExp(
+  `${L}((primera|segunda|tercera|cuarta|quinta|sexta|s[ée]ptima|octava|novena|d[ée]cima|[úu]ltima)\\s+planta|planta\\s+(baja|primera|segunda|tercera|cuarta|quinta|sexta))${R}`,
+  "iu",
+);
 
 // §4: los capítulos desarrollan las estancias. El Prelude sintetiza la idea;
 // si nombra media casa, se está comiendo el contenido de los capítulos.

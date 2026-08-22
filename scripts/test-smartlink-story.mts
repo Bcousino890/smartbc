@@ -604,6 +604,18 @@ console.log("Property Prelude:");
   check("titular demasiado largo → rechazado", !h4.ok && h4.failures.some((f) => f.includes("largo")));
   const h5 = validatePreludeHeadline("Molduras originales y luz de la calle Ayala.", { operation: "rent" }, EV);
   check("titular con punto final → rechazado", !h5.ok && h5.failures.some((f) => f.includes("punto")));
+  // El límite \b de JavaScript es ASCII: "Única" y "Última" empezaban por
+  // vocal acentuada y se colaban enteras por el contrato (652 titulares
+  // auditados lo destaparon). Estos dos casos vigilan los límites Unicode.
+  const hAcc = validatePreludeHeadline("Única vivienda de 1925 con molduras", { operation: "rent" }, EV);
+  check("titular con adjetivo acentuado ('Única') → rechazado",
+    !hAcc.ok && hAcc.failures.some((f) => f.includes("portal")), hAcc.failures.join(" · "));
+  const hFloor = validatePreludeHeadline("Última planta con carpintería original", { operation: "rent" }, EV);
+  check("titular con 'Última planta' → rechazado (Key Fact)",
+    !hFloor.ok && hFloor.failures.some((f) => f.includes("planta")), hFloor.failures.join(" · "));
+  const hMkt = validatePreludeHeadline("Encanto de 1925 con molduras originales", { operation: "rent" }, EV);
+  check("titular marketinero ('Encanto') → rechazado", !hMkt.ok, hMkt.failures.join(" · "));
+
   const h6 = validatePreludeHeadline("Lujo y elegancia en Malasaña", { operation: "rent" }, EV);
   check("titular con adjetivo de portal y entidad sin respaldo → rechazado", !h6.ok);
 
