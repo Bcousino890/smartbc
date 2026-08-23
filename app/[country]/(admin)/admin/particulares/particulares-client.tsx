@@ -894,6 +894,23 @@ function ParticularModal({
     currentRow.photos ??
     (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
   const cover = photos[photoIdx]?.url;
+
+  // Preload the next/prev slide so paging the gallery is instant. The list only
+  // ships the cover, so the gallery loads on demand; without this each slide
+  // waits on its own download.
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const around = [
+      photos[(photoIdx + 1) % photos.length]?.url,
+      photos[(photoIdx - 1 + photos.length) % photos.length]?.url,
+    ];
+    for (const u of around) {
+      if (u) {
+        const img = new window.Image();
+        img.src = u;
+      }
+    }
+  }, [photoIdx, photos]);
   const hasPhone = Boolean(currentRow.phone);
 
   // Scroll-lock + Escape-para-cerrar: este modal no usa el <Modal> compartido
