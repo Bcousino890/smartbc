@@ -273,68 +273,105 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
       //    solo desde z15 y limitando el rango, para que la escena respire
       //    sin dejar al cliente sin nada que descubrir. Su id se usa en
       //    queryRenderedFeatures, así que no debe renombrarse a la ligera.
+      // ── BCP DISCOVERY LAYER ──
+      // Los lugares reales del basemap dejan de ser puntitos indistinguibles
+      // del rótulo de una calle: cada uno lleva el glifo de su familia, que
+      // es lo que dice "esto es un sitio y se puede pulsar".
+      //
+      // Densidad SEMÁNTICA, no un único `rank <= N`: qué aparece depende de
+      // la familia Y del zoom. A lo lejos solo lo que orienta una ciudad
+      // (estaciones, universidades, hospitales, museos); de cerca, la vida
+      // de barrio.
       {
-        id: "poi-label",
+        id: "poi-icon",
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "poi",
-        // Tramos de `rank` según la semántica real de OpenMapTiles: rank BAJO
-        // = más importante. Se replican los cortes que usa el estilo oficial
-        // (comprobados contra sus propias capas) pero subidos un nivel de
-        // zoom y descartando la cola rank>=20, que es la que llenaba la
-        // escena de clínicas y tiendas de barrio.
-        minzoom: 16,
-        // Densidad PROGRESIVA (§5): a z16 solo lo verdaderamente relevante y
-        // a partir de ahí se abre. `rank` bajo = más importante.
+        minzoom: 12,
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], ["step", ["zoom"], 10, 17, 16, 18, 20]],
           ["has", "name"],
+          [
+            "case",
+            // Referencias urbanas: visibles desde lejos.
+            ["match", ["get", "class"],
+              ["railway", "bus", "airport", "university", "college", "hospital", "museum", "attraction", "stadium"],
+              true, false],
+            [">=", ["zoom"], 12],
+            // Cultura, educación, transporte y compras de peso.
+            ["match", ["get", "class"],
+              ["school", "art_gallery", "theatre", "cinema", "library", "department_store", "mall", "marketplace", "park", "hotel"],
+              true, false],
+            [">=", ["zoom"], 13.5],
+            // Vida de barrio: a partir de aquí.
+            ["match", ["get", "class"],
+              ["restaurant", "cafe", "bar", "pub", "fast_food", "bakery", "grocery", "supermarket", "shop", "clothing_store", "pharmacy", "clinic", "doctors", "sports_centre", "fitness_centre", "garden", "playground"],
+              true, false],
+            [">=", ["zoom"], 14.5],
+            false,
+          ],
         ],
         layout: {
-          "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
-          "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10.5, 18, 12],
-          "text-anchor": "top",
-          "text-offset": [0, 0.7],
-          "text-max-width": 7,
-          "text-padding": 10,
-          "symbol-sort-key": ["get", "rank"],
-        },
-        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 1.5 },
-      },
-      {
-        id: "poi-dot",
-        type: "circle",
-        source: "openmaptiles",
-        "source-layer": "poi",
-        // Los puntos entran antes que los rótulos: insinúan que ahí hay algo
-        // que pulsar sin llenar la escena de texto.
-        minzoom: 15,
-        filter: ["all",
-          ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], ["step", ["zoom"], 7, 16, 14, 17, 20]],
-          ["has", "name"],
-        ],
-        paint: {
-          // El tamaño distingue lo importante de lo secundario…
-          "circle-radius": [
+          "icon-image": [
+            "concat",
+            "bcp-poi-",
+            ["match", ["get", "class"],
+              ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "bakery"], "gastronomia",
+              ["grocery", "supermarket", "shop", "clothing_store", "department_store", "mall", "marketplace"], "compras",
+              ["school", "college", "university", "kindergarten", "library"], "educacion",
+              ["railway", "bus", "airport", "ferry_terminal"], "transporte",
+              ["hospital", "pharmacy", "doctors", "clinic", "dentist"], "salud",
+              ["stadium", "sports_centre", "fitness_centre", "swimming_pool", "pitch"], "deporte",
+              ["museum", "art_gallery", "theatre", "cinema", "attraction", "monument", "place_of_worship"], "cultura",
+              ["hotel", "hostel", "motel"], "hotel",
+              ["park", "garden", "playground"], "parque",
+              "lugar",
+            ],
+            ["case", ["boolean", ["feature-state", "selected"], false], "-sel", ""],
+          ],
+          "icon-size": [
             "interpolate", ["linear"], ["zoom"],
-            15, ["case", ["<", ["get", "rank"], 7], 3.2, 2.3],
-            18, ["case", ["<", ["get", "rank"], 7], 4.6, 3.4],
+            12, 0.62,
+            15, 0.78,
+            17, 0.92,
           ],
-          // …y un desvío de tono discreto insinúa la categoría sin convertir
-          // el mapa en un semáforo. NUNCA champán: lo descubierto en OSM no
-          // puede parecer recomendado por BCP (§5).
-          "circle-color": [
-            "match", ["get", "class"],
-            ["park", "garden", "wood", "playground", "pitch"], "#6f8a5c",
-            ["railway", "bus", "airport", "ferry_terminal"], "#5e7382",
-            ["hospital", "pharmacy", "doctors"], "#8a6b6b",
-            C.poiDot,
+          "icon-allow-overlap": false,
+          "icon-padding": 3,
+          "symbol-sort-key": ["get", "rank"],
+          // El nombre solo en los lugares que orientan; el resto se descubre
+          // pulsando o pasando el ratón (§9).
+          "text-field": [
+            "case",
+            [
+              "any",
+              ["boolean", ["feature-state", "hover"], false],
+              ["boolean", ["feature-state", "selected"], false],
+              ["all", [">=", ["zoom"], 15.5], ["<", ["get", "rank"], 12]],
+            ],
+            ["coalesce", ["get", "name:es"], ["get", "name"]],
+            "",
           ],
-          "circle-stroke-color": C.labelHalo,
-          "circle-stroke-width": 1,
+          "text-font": FONT,
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10.5, 18, 12],
+          "text-anchor": "top",
+          "text-offset": [0, 0.85],
+          "text-max-width": 8,
+          "text-padding": 6,
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false], "#6b5326",
+            C.labelDark,
+          ],
+          "text-halo-color": C.labelHalo,
+          "text-halo-width": 1.6,
+          "icon-opacity": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false], 1,
+            0.92,
+          ],
         },
       },
     ],
@@ -342,4 +379,4 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
 }
 
 /** Capas sobre las que se consulta al pulsar el mapa. */
-export const CLICKABLE_LAYER_IDS = ["poi-dot", "poi-label"] as const;
+export const CLICKABLE_LAYER_IDS = ["poi-icon"] as const;

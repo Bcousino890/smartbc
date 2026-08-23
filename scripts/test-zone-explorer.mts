@@ -155,10 +155,37 @@ console.log("Estilo BCP Luxury Madrid:");
   check("el viario principal contrasta con el suelo",
     lum(paintOf("road-major", "line-color")) - lum(paintOf("background", "background-color")) >= 8,
     `${paintOf("road-major", "line-color")} vs ${paintOf("background", "background-color")}`);
-  check("los puntos de POI no aparecen antes de z15 (densidad contenida)",
-    style.layers.filter((l: any) => l["source-layer"] === "poi").every((l: any) => l.minzoom >= 15));
-  check("los RÓTULOS de POI esperan a z16: la vista de entrada no se llena de texto",
-    style.layers.find((l: any) => l.id === "poi-label")?.minzoom >= 16);
+  // ── BCP DISCOVERY LAYER ──
+  // Una SOLA capa de descubrimiento: si hubiera además una de texto sobre el
+  // mismo `poi`, cada lugar saldría con su nombre dos veces (§17).
+  const poiLayers = style.layers.filter((l: any) => l["source-layer"] === "poi");
+  check("una única capa de descubrimiento sobre `poi`", poiLayers.length === 1,
+    poiLayers.map((l: any) => l.id).join(","));
+  const poi = poiLayers[0];
+  check("es de símbolo: icono, no un punto suelto", poi?.type === "symbol");
+  const filterStr = JSON.stringify(poi?.filter ?? []);
+  check("densidad SEMÁNTICA por zoom, no un único rank global",
+    filterStr.includes("12") && filterStr.includes("13.5") && filterStr.includes("14.5")
+      && !/\["<=?",\s*\["get","rank"\]/.test(filterStr.replace(/\s/g, "")),
+    filterStr.slice(0, 90));
+  check("las referencias urbanas se ven desde lejos (estación, universidad, hospital)",
+    ["railway", "university", "hospital"].every((c) => filterStr.includes(c)));
+  check("la vida de barrio espera a estar cerca",
+    ["restaurant", "cafe", "supermarket"].every((c) => filterStr.includes(c)));
+  const textField = JSON.stringify(poi?.layout?.["text-field"] ?? "");
+  check("el nombre NO se muestra en todos: depende de hover, selección o rango",
+    textField.includes("hover") && textField.includes("selected") && textField.includes("rank"),
+    textField.slice(0, 80));
+  check("el icono cambia al seleccionar (misma familia, acento champán)",
+    JSON.stringify(poi?.layout?.["icon-image"] ?? "").includes("-sel"));
+
+  const { DISCOVERY_CATEGORIES, discoveryIconName } = await import("../lib/services/location/discovery-icons");
+  check("taxonomía compacta: entre 8 y 12 familias",
+    DISCOVERY_CATEGORIES.length >= 8 && DISCOVERY_CATEGORIES.length <= 12, String(DISCOVERY_CATEGORIES.length));
+  check("una clase desconocida cae al glifo genérico",
+    discoveryIconName("obelisco_raro") === "bcp-poi-lugar");
+  check("la variante seleccionada tiene su propio nombre de imagen",
+    discoveryIconName("gastronomia", true) === "bcp-poi-gastronomia-sel");
   check("atribución de OpenFreeMap, OpenMapTiles y OSM presente",
     /OpenFreeMap/.test(MAP_ATTRIBUTION) && /OpenMapTiles/.test(MAP_ATTRIBUTION) && /OpenStreetMap/.test(MAP_ATTRIBUTION));
   // Convenio de zoom: MapLibre cuenta sobre teselas de 512px y nosotros sobre

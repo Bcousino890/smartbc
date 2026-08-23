@@ -29,6 +29,7 @@ import {
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
 import { LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
 import { haversineKm } from "@/lib/geo/poi-distance";
+import { registerDiscoveryIcons } from "@/lib/services/location/discovery-icons";
 import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
@@ -118,6 +119,10 @@ export function ZoneExplorerMapLibre({
   const libRef = useRef<any>(null);
   const discoveredMarkerRef = useRef<any>(null);
   const plaqueMarkerRef = useRef<any>(null);
+  /** Feature de OSM bajo el puntero y feature seleccionada: viven como
+   *  estado del mapa (feature-state), no de React. */
+  const hoveredRef = useRef<string | number | null>(null);
+  const selectedFeatureRef = useRef<string | number | null>(null);
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const residenceElRef = useRef<HTMLElement | null>(null);
@@ -203,6 +208,11 @@ export function ZoneExplorerMapLibre({
       map.on("load", () => {
         if (cancelled) return;
 
+        // Los iconos de la capa de descubrimiento se dibujan y se registran
+        // aquí: mismos trazos que los marcadores del módulo, sin sprite que
+        // hospedar ni una segunda familia de iconos que mantener.
+        registerDiscoveryIcons(map);
+
         // ── LA VIVIENDA: el origen, siempre dominante ──
         const residence = document.createElement("div");
         // En overview el medallón lleva rótulo; en explorar se reconoce solo,
@@ -219,8 +229,28 @@ export function ZoneExplorerMapLibre({
         const setCursor = (v: string) => { map.getCanvas().style.cursor = v; };
         for (const layer of CLICKABLE_LAYER_IDS) {
           if (!map.getLayer(layer)) continue;
-          map.on("mouseenter", layer, () => setCursor("pointer"));
-          map.on("mouseleave", layer, () => setCursor(""));
+          // `hover` revela el nombre del lugar y realza su icono. Se lleva
+          // con feature-state, que es estado del MAPA: nada que sincronizar
+          // desde React y nada que se quede desfasado.
+          map.on("mousemove", layer, (e: any) => {
+            setCursor("pointer");
+            const f = e.features?.[0];
+            if (!f || f.id === hoveredRef.current) return;
+            if (hoveredRef.current != null) {
+              map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: hoveredRef.current }, { hover: false });
+            }
+            hoveredRef.current = f.id;
+            if (f.id != null) {
+              map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: f.id }, { hover: true });
+            }
+          });
+          map.on("mouseleave", layer, () => {
+            setCursor("");
+            if (hoveredRef.current != null) {
+              map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: hoveredRef.current }, { hover: false });
+              hoveredRef.current = null;
+            }
+          });
         }
 
         // Proyector para las capas HTML del módulo (cápsulas, área de foco y
@@ -258,7 +288,9 @@ export function ZoneExplorerMapLibre({
         // pedirle al cliente que clave el cursor en ellos convierte la
         // exploración en un juego de puntería. Se consulta una caja alrededor
         // del clic, como hace cualquier mapa que se deje usar.
-        const T = 10;
+        // Un icono pequeño no puede significar un objetivo pequeño (§14): en
+        // táctil el dedo pide más margen que el ratón.
+        const T = window.matchMedia("(pointer: coarse)").matches ? 18 : 10;
         const box: [[number, number], [number, number]] = [
           [e.point.x - T, e.point.y - T],
           [e.point.x + T, e.point.y + T],
@@ -277,6 +309,18 @@ export function ZoneExplorerMapLibre({
           (a, b) => (Number(a.properties?.rank ?? 99) - Number(b.properties?.rank ?? 99)),
         )[0];
         const coords = best.geometry?.type === "Point" ? best.geometry.coordinates : null;
+        selectedFeatureRef.current != null &&
+          map.setFeatureState(
+            { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
+            { selected: false },
+          );
+        selectedFeatureRef.current = best.id ?? null;
+        if (selectedFeatureRef.current != null) {
+          map.setFeatureState(
+            { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
+            { selected: true },
+          );
+        }
         const destination = fromOsmFeature({
           id: best.id ?? best.properties?.id ?? null,
           properties: best.properties ?? {},
@@ -316,6 +360,13 @@ export function ZoneExplorerMapLibre({
     applyFocusHierarchy(focus);
     residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
+    if (!focus && selectedFeatureRef.current != null && map.getSource("openmaptiles")) {
+      map.setFeatureState(
+        { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
+        { selected: false },
+      );
+      selectedFeatureRef.current = null;
+    }
     if (!focus) {
       // En overview la cámara la compone el módulo (encuadra la vivienda con
       // sus destinos); en explorar se vuelve al encuadre de entrada.
