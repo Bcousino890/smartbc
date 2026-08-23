@@ -357,7 +357,12 @@ export function ZoneExplorerMapLibre({
    */
   const applyFocusHierarchy = useCallback(
     (current: LocationDestination | null) => {
-      const external = current?.source === "osm_search" || current?.source === "osm_discovered";
+      // "Externo" no es una cuestión de FUENTE sino de si ese destino está
+      // entre los curados que hay pintados: UCJC sale de nuestro catálogo de
+      // universidades (source `university`) pero no es una de las cercanas de
+      // esta vivienda, así que compite con ellas igual que un resultado de
+      // OSM. Mirar la fuente dejaba los diez marcadores encendidos.
+      const external = !!current && !curatedElsRef.current.has(current.id);
       const farKm = external && current ? haversineKm(origin.lat, origin.lng, current.lat, current.lng) : 0;
       for (const [id, el] of curatedElsRef.current) {
         el.classList.toggle("is-active", current?.id === id);
