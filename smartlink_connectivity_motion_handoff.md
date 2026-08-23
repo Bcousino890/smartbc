@@ -306,3 +306,85 @@ encuadre baja de 168→72 px en overview y de 172→96 px al explorar.
 ⚠️ Detalle que costó un despliegue: la placa llevaba `top-0` de Tailwind y
 `bottom` del CSS a la vez. Con las dos definidas gana `top`, así que se
 colocaba SOBRE la coordenada y el punto del ancla partía el texto.
+
+---
+
+# BCP ZONE EXPLORER — COMPLETE & FROZEN
+
+Pulido final de UX. Sin cambios de arquitectura ni de proveedor.
+
+## Buscador visible desde el overview
+
+Estaba escondido tras "Explorar la zona": había que descubrir primero que
+existía un modo de exploración. Ahora vive en la cabecera —bajo el título,
+antes del rail— con ancho contenido (544 px en escritorio, 100% en móvil)
+para no robarle el protagonismo a la sección. Buscar desde el overview entra
+solo en explorar y enfoca el resultado.
+
+El CTA se integra dentro de la propia barra: carbón, pequeño, sin ser una
+segunda caja. El overview sigue calmado: residencia, POIs curados, rail y
+buscador; **cero POIs de OSM** hasta que se explora.
+
+## Ficha de exploración compacta
+
+De 21 a 20 rem y con la jerarquía invertida respecto a lo que había:
+
+```
+UCJC                              ← nombre, 19px, manda
+Villafranca · Educación           ← campus + categoría
+C/ Castillo de Alarcón 49…        ← dirección
+≈ 27 min en coche · 19,9 km       ← tiempo y distancia en UNA línea, 17px
+Desde la vivienda
+```
+
+Antes el "≈ 27" a 20px dominaba la tarjeta entera. La distancia geodésica
+acompaña al tiempo cuando existe y lo sustituye cuando no, siempre dicha
+"en línea recta": nunca se insinúa distancia por carretera.
+
+## Jerarquía de foco a larga distancia
+
+Con un destino que no está entre los curados pintados, estos se atenúan; a
+más de 5 km se retiran. Con UCJC seleccionada quedan **1 marcador y la
+vivienda**, no once compitiendo.
+
+⚠️ La pregunta correcta no era la FUENTE sino la pertenencia: UCJC sale de
+nuestro catálogo de universidades (`source: university`) pero no es una de las
+cercanas de esta vivienda, así que compite igual que un resultado de OSM.
+Mirando la fuente, los diez marcadores seguían encendidos.
+
+⚠️ Y los marcadores curados **heredan el foco al nacer**: al buscar desde el
+overview la lista pasa de vacía a llena y se recrean; sin eso nacían a plena
+luz aunque el foco estuviese a 24 km.
+
+## Reset
+
+"Ver zona completa" limpia destino, marcador, ficha, cámara **y la consulta**:
+una búsqueda vieja en la barra con el mapa ya restaurado solo confunde.
+
+## QA final
+
+| Caso | Resultado |
+|---|---|
+| IE University | IE Tower ≈16 min (catálogo verificado) |
+| UCJC | Villafranca ≈27 min · 19,9 km, foco regional limpio |
+| Colegio del Pilar | el de Castelló primero |
+| Hospital Ruber | Juan Bravo primero |
+| Ten con Ten | Ayala 6 ≈11 min |
+| Calle de Serrano 21 | dirección resuelta, ficha con 1,6 km |
+| consulta sin sentido | mensaje, mapa intacto |
+
+Zonas: Goya, Recoletos, Chamberí, Pozuelo. Vistas: 1440, 390, 125%.
+Teclado: ↓↓↑ recorre y resalta, Enter elige, Escape cierra.
+
+```
+SEARCH FROM OVERVIEW:   PASS      LONG-DISTANCE FOCUS:  PASS
+LOCAL-FIRST SEARCH:     PASS      TIME:                 FACTUAL (≈)
+EXTERNAL SEARCH:        PASS      DISTANCE:             FACTUAL (geodésica)
+CURATED UI:             placa     SEARCH CARD:          320 px
+MOBILE:                 PASS      SCROLL HIJACK:        0
+MAP ERRORS:             0
+```
+
+Sin proveedor nuevo, sin routing, sin datasets nuevos.
+
+# BCP ZONE EXPLORER — COMPLETE & FROZEN
