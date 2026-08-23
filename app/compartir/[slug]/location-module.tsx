@@ -447,10 +447,19 @@ export function LocationModule({
                 // Lo local vuelve por su máquina de estados (rail + lista
                 // sincronizados); lo externo es exploración de sesión. El rail
                 // curado NUNCA se toca.
-                const original =
-                  d.source === "bcp_curated" || d.source === "university"
-                    ? [...ordered, ...universities].find((p) => p.name === d.name)
-                    : null;
+                // El origen del resultado NO basta para saber si el sitio ya
+                // estaba presentado: la Complutense llega del catálogo local
+                // como "UCM" y el rail la llama "Universidad Complutense", así
+                // que por nombre no casaba y se abría ficha de exploración
+                // ENCIMA de la placa del destino curado — las dos cosas a la
+                // vez, justo lo que no debe pasar. Se compara por el LUGAR:
+                // mismo nombre o a menos de 150 m.
+                const mismoSitio = (p: { name: string; lat?: number | null; lng?: number | null }) => {
+                  if (p.name === d.name) return true;
+                  if (typeof p.lat !== "number" || typeof p.lng !== "number") return false;
+                  return haversineKm(p.lat, p.lng, d.lat, d.lng) <= 0.15;
+                };
+                const original = [...ordered, ...universities].find(mismoSitio) ?? null;
                 if (original) {
                   setPlaceFocus(null);
                   selectPoi(original);
