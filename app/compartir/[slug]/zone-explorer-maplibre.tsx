@@ -366,11 +366,28 @@ export function ZoneExplorerMapLibre({
           return;
         }
         // Se elige la feature de mayor prioridad: menor `rank` en OpenMapTiles
-        // significa más relevante.
-        const best = [...features].sort(
+        // significa más relevante. Pero la elegida tiene que PODER abrirse:
+        // si el vecino mejor clasificado no resuelve a destino, el clic caía
+        // en saco roto aunque justo debajo hubiera un sitio perfectamente
+        // válido (visto con una clínica y un centro de documentación, los dos
+        // con un vecino sin ficha por delante).
+        const ordenadas = [...features].sort(
           (a, b) => (Number(a.properties?.rank ?? 99) - Number(b.properties?.rank ?? 99)),
-        )[0];
-        const coords = best.geometry?.type === "Point" ? best.geometry.coordinates : null;
+        );
+        const puntoDe = (f: any) =>
+          f.geometry?.type === "Point" ? f.geometry.coordinates : null;
+        let best = ordenadas[0];
+        let destination = null as ReturnType<typeof fromOsmFeature>;
+        for (const f of ordenadas) {
+          const c = puntoDe(f);
+          const d = fromOsmFeature({
+            id: f.id ?? f.properties?.id ?? null,
+            properties: f.properties ?? {},
+            lat: c ? Number(c[1]) : e.lngLat.lat,
+            lng: c ? Number(c[0]) : e.lngLat.lng,
+          });
+          if (d) { best = f; destination = d; break; }
+        }
         selectedFeatureRef.current != null &&
           map.setFeatureState(
             { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
@@ -378,14 +395,8 @@ export function ZoneExplorerMapLibre({
           );
         selectedFeatureRef.current = best.id ?? null;
         showFocusLabel(map, selectedFeatureRef.current);
-        const destination = fromOsmFeature({
-          id: best.id ?? best.properties?.id ?? null,
-          properties: best.properties ?? {},
-          lat: coords ? Number(coords[1]) : e.lngLat.lat,
-          lng: coords ? Number(coords[0]) : e.lngLat.lng,
-        });
         // fromOsmFeature devuelve null si la categoría no es pulsable o si la
-        // feature no tiene nombre: en ese caso no se abre ficha alguna.
+        // feature no tiene nombre: si NINGUNA lo consigue, no se abre nada.
         if (destination) onSelectRef.current(destination);
       });
     })();

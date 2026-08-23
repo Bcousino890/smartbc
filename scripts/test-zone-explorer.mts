@@ -160,6 +160,17 @@ console.log("Estilo BCP Luxury Madrid:");
   // en propiedades de layout y `["zoom"]` solo como entrada de un `step` de
   // nivel superior. Saltarse cualquiera de las dos invalida el estilo entero
   // y deja el mapa EN BLANCO — pasó, y por eso existe el validador.
+  // Estas aparecen en el filtro para EXCLUIRSE (mobiliario urbano y matices
+  // de subclass que bajan de tramo): no se dibujan, así que no han de ser
+  // pulsables.
+  const STREET_FURNITURE_OK = [
+    "bus_stop", "tram_stop", "subway_entrance", "platform", "halt", "taxi",
+    "bicycle_rental", "bicycle_parking", "car_sharing", "charging_station",
+    "parking", "parking_space", "toilets", "bench", "waste_basket", "atm",
+    "vending_machine", "post_box", "telephone", "drinking_water", "shelter",
+    "subway", "artwork", "books", "chapel", "picnic_site", "pitch",
+    "language_school", "driving_school", "art", "arts_centre", "gallery",
+  ];
   const poiLayers = style.layers.filter((l: any) => l["source-layer"] === "poi");
   check("una capa de iconos y dos de texto (icono / mayores / foco)",
     poiLayers.length === 3 && poiLayers.some((l: any) => l.id === "poi-icon"),
@@ -183,6 +194,26 @@ console.log("Estilo BCP Luxury Madrid:");
     ["bus_stop", "subway_entrance", "atm"].every((c) => filterStr.includes(c)));
   check("cuando el subclass contradice a la clase, manda el subclass",
     ["artwork", "clinic", "school"].every((c) => filterStr.includes(c)));
+
+  // ⚠️ ESTRUCTURAL. Todo lo que la capa DIBUJA tiene que poder abrirse: un
+  // icono que no responde al clic es peor que no dibujarlo. `mall` y
+  // `fitness_centre` se dibujaban sin estar en la lista blanca, y bastaba con
+  // que uno de ellos ganara el desempate por `rank` para que el clic no
+  // abriera nada.
+  {
+    const { CLICKABLE_POI_CLASSES } = await import("../lib/services/location/destination");
+    const priority = JSON.stringify(icon?.filter ?? []);
+    // Las clases nombradas en el filtro (tramos 1-3 de POI_PRIORITY) salen de
+    // los propios arrays del `match`; se leen del filtro serializado.
+    const dibujadas = [...priority.matchAll(/"([a-z_]+)"/g)]
+      .map((m) => m[1])
+      .filter((c) => !["match", "class", "subclass", "get", "step", "zoom", "all", "has", "name",
+        "geometry-type", "Point", "MultiPoint", "case", "true", "false"].includes(c));
+    const huerfanas = dibujadas.filter(
+      (c) => !(c in CLICKABLE_POI_CLASSES) && !STREET_FURNITURE_OK.includes(c),
+    );
+    check("todo lo que se dibuja se puede pulsar", huerfanas.length === 0, huerfanas.join(", "));
+  }
 
   // ⚠️ REGRESIÓN. `text-allow-overlap` dice "dibújame igual"; SOLO
   // `text-ignore-placement` dice "y no ocupes sitio en el índice de
