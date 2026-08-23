@@ -28,6 +28,7 @@ import {
 } from "@/lib/services/location/bcp-map-style";
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
 import { LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
+import { haversineKm } from "@/lib/geo/poi-distance";
 import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
@@ -289,8 +290,16 @@ export function ZoneExplorerMapLibre({
     // Estado activo del POI curado: el seleccionado se agranda y se llena;
     // los demás vuelven a su estado de reposo. Una sola clase, un solo
     // estado — el mismo principio que la máquina de selección del módulo.
+    // §8 · jerarquía del foco. Con un destino de fuera seleccionado —sobre
+    // todo si está lejos— los POIs curados dejan de ser información y pasan a
+    // ser ruido: seis universidades de Madrid compitiendo con la que el
+    // cliente acaba de buscar. Se apagan, y a distancia regional se retiran.
+    const external = focus?.source === "osm_search" || focus?.source === "osm_discovered";
+    const farKm = external && focus ? haversineKm(origin.lat, origin.lng, focus.lat, focus.lng) : 0;
     for (const [id, el] of curatedElsRef.current) {
       el.classList.toggle("is-active", focus?.id === id);
+      el.classList.toggle("is-dimmed", external && farKm <= 5);
+      el.style.display = external && farKm > 5 ? "none" : "";
     }
     residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
@@ -308,14 +317,19 @@ export function ZoneExplorerMapLibre({
     // lenguaje de educación aprobado, activado.
     if (!curatedElsRef.current.has(focus.id)) {
       const placeWrap = document.createElement("div");
+      // Una universidad encontrada buscando lleva el glifo de educación
+      // (§9): sigue sin ser recomendación de BCP —el champán lo gana solo por
+      // estar seleccionada— pero se lee como lo que es.
       placeWrap.innerHTML =
-        focus.source === "osm_search"
-          ? searchMarkerHtml()
-          : focus.source === "university"
-            ? curatedMarkerHtml("educacion")
+        focus.source === "university" || (focus.source === "osm_search" && focus.category === "educacion")
+          ? curatedMarkerHtml("educacion")
+          : focus.source === "osm_search"
+            ? searchMarkerHtml()
             : discoveredMarkerHtml();
       const el = placeWrap.firstElementChild as HTMLElement | null;
-      if (focus.source === "university" && el) el.classList.add("is-active");
+      if (el && (focus.source === "university" || focus.category === "educacion")) {
+        el.classList.add("is-active");
+      }
       discoveredMarkerRef.current = new maplibre.Marker({
         element: placeWrap,
         anchor: "center",

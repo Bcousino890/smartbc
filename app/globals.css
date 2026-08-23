@@ -949,6 +949,9 @@
 .bcp-poi:hover { border-color: #c8a86a; background: #fffdf9; }
 /* Universidad: doble aro, distinción aprobada en el sprint anterior. */
 .bcp-poi-uni { box-shadow: 0 0 0 2.5px rgba(251, 248, 243, 0.95), 0 0 0 3.5px rgba(200, 168, 106, 0.55), 0 6px 16px -8px rgba(40, 28, 10, 0.6); }
+/* Atenuado: hay un destino de fuera en foco y lo curado deja paso. */
+.bcp-poi.is-dimmed { opacity: 0.28; }
+
 /* Seleccionado: el champán toma el mando. */
 .bcp-poi.is-active {
   background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
