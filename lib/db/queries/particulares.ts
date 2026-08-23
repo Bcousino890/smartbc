@@ -223,17 +223,39 @@ export async function getParticularesPage(opts?: {
       query = showRetired
         ? query.order("taken_down_at", { ascending: false, nullsFirst: false })
         : query.order("created_at", { ascending: false });
-      const res = await query.range(offset, offset + pageSize - 1);
-      if (res.error) {
-        lastError = res.error;
+      // try/catch, no solo `res.error`: un `.in("id", idsInZone)` con miles
+      // de ids (zona dibujada grande) puede hacer que la petición a
+      // PostgREST falle a nivel de red/HTTP (URL demasiado larga) — eso
+      // RECHAZA la promesa, no devuelve `{error}`, y sin este try/catch
+      // tumbaba la página igual que el `throw` de abajo que reemplaza.
+      try {
+        const res = await query.range(offset, offset + pageSize - 1);
+        if (res.error) {
+          lastError = res.error;
+          continue;
+        }
+        rows = res.data ?? [];
+        total = res.count ?? rows.length;
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = { message: err instanceof Error ? err.message : "query_failed" };
         continue;
       }
-      rows = res.data ?? [];
-      total = res.count ?? rows.length;
-      lastError = null;
-      break;
     }
-    if (lastError) throw new Error(lastError.message);
+    if (lastError) {
+      // Antes tiraba la página entera abajo (throw) si las 7 variantes de
+      // columnas fallaban igual. Con el filtro de zona dibujada eso dejó de
+      // ser "solo pasa si la BD está realmente rota": un polígono grande
+      // puede devolver miles de ids, y el `.in("id", idsInZone)` de
+      // applyParticularesFilters genera una URL tan larga que la petición a
+      // PostgREST falla — las 7 variantes fallan igual (todas llevan el
+      // mismo filtro), así que antes SIEMPRE terminaba en throw. Degradar a
+      // "0 anuncios" es mejor que tumbar /admin/particulares entero por
+      // dibujar una zona grande.
+      console.error("[particulares] getParticularesPage: fallaron todas las variantes de columnas", lastError);
+      return finishEnrichment(supabase, [], 0);
+    }
     return finishEnrichment(supabase, rows, total);
   }
 
@@ -500,15 +522,26 @@ function buildPortalCounts(rows: Array<{ portal: string; is_active: boolean }>):
 export async function getParticularesZoneCounts(
   showRetired: boolean,
 ): Promise<{ zoneGroups: ZoneFilterGroup[]; portalCounts: Record<string, number> }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-  const { rows } = await fetchAllRows((from, to) =>
-    supabase.from("particulares").select("zone, is_active, phone, portal").range(from, to),
-  );
-  return {
-    zoneGroups: buildZoneGroups(rows, showRetired),
-    portalCounts: buildPortalCounts(rows),
-  };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const { rows, error } = await fetchAllRows((from, to) =>
+      supabase.from("particulares").select("zone, is_active, phone, portal").range(from, to),
+    );
+    if (error) {
+      console.error("[particulares] getParticularesZoneCounts: error de BD", error);
+      return { zoneGroups: [], portalCounts: {} };
+    }
+    return {
+      zoneGroups: buildZoneGroups(rows, showRetired),
+      portalCounts: buildPortalCounts(rows),
+    };
+  } catch (err) {
+    // El desplegable de zonas/el desglose por portal son secundarios frente
+    // a poder ver el listado — nunca deben tumbar la página entera.
+    console.error("[particulares] getParticularesZoneCounts: excepción", err);
+    return { zoneGroups: [], portalCounts: {} };
+  }
 }
 
 /**
@@ -527,18 +560,30 @@ export async function getParticularesIdsInPolygons(
   showRetired: boolean,
 ): Promise<string[]> {
   if (polygons.length === 0) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-  const { rows } = await fetchAllRows((from, to) =>
-    supabase
-      .from("particulares")
-      .select("id, latitude, longitude")
-      .eq("is_active", !showRetired)
-      .not("latitude", "is", null)
-      .not("longitude", "is", null)
-      .range(from, to),
-  );
-  return rows
-    .filter((r) => isPointInAnyPolygon([r.longitude as number, r.latitude as number], polygons))
-    .map((r) => r.id as string);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const { rows, error } = await fetchAllRows((from, to) =>
+      supabase
+        .from("particulares")
+        .select("id, latitude, longitude")
+        .eq("is_active", !showRetired)
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        .range(from, to),
+    );
+    if (error) {
+      console.error("[particulares] getParticularesIdsInPolygons: error de BD", error);
+      return [];
+    }
+    return rows
+      .filter((r) => isPointInAnyPolygon([r.longitude as number, r.latitude as number], polygons))
+      .map((r) => r.id as string);
+  } catch (err) {
+    // Nunca dejar que un fallo aquí (red, dato inesperado…) tumbe la página
+    // entera de particulares: sin resultado de zona es "no hay match", no
+    // un 500. Se registra para poder diagnosticarlo en los logs del VPS.
+    console.error("[particulares] getParticularesIdsInPolygons: excepción", err);
+    return [];
+  }
 }
