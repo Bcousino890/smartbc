@@ -89,6 +89,7 @@ export function ZoneExplorerMapLibre({
   focus,
   interactive = true,
   camera,
+  focusIsCurated,
   onSelectPlace,
   onSelectCurated,
   onProjector,
@@ -101,6 +102,13 @@ export function ZoneExplorerMapLibre({
   focus: LocationDestination | null;
   /** false = overview: sin gestos, sin controles y sin descubrimiento OSM. */
   interactive?: boolean;
+  /** ¿El foco es un destino que BCP PRESENTA para esta vivienda (rail /
+   *  universidades cercanas), o un lugar que el visitante ha encontrado? Lo
+   *  decide el módulo, que es quien tiene la máquina de estados: el `source`
+   *  del destino no sirve —una búsqueda de la Complutense llega marcada como
+   *  `university` sin ser destino de esta ficha— y la pertenencia a los
+   *  marcadores curados tampoco, porque en el overview no existen. */
+  focusIsCurated?: boolean;
   /** Cámara impuesta desde fuera (composición del overview). El zoom va en
    *  convenio SLIPPY (256px), como el resto de la geometría del módulo. */
   camera?: { lat: number; lng: number; zoom: number } | null;
@@ -428,7 +436,7 @@ export function ZoneExplorerMapLibre({
     // marcador (con su ficha) sobre el mismo sitio. Ojo con la pertenencia a
     // `curatedElsRef`: solo hay marcadores curados al explorar, así que en el
     // overview no sirve para decidir — decide el origen del destino.
-    const esCurado = focus.source === "bcp_curated" || focus.source === "university";
+    const esCurado = focusIsCurated ?? (focus.source === "bcp_curated" || focus.source === "university");
     if (esCurado) {
       const plaqueWrap = document.createElement("div");
       plaqueWrap.innerHTML = plaqueMarkerHtml(focus.category, focus.name);
@@ -482,7 +490,7 @@ export function ZoneExplorerMapLibre({
       maxZoom: 17,
       duration: prefersReducedMotion() ? 0 : LOCATION_MOTION.camera,
     });
-  }, [focus, ready, origin, makeEl, interactive]);
+  }, [focus, focusIsCurated, ready, origin, makeEl, interactive]);
 
   /**
    * §8 · jerarquía del foco sobre los POIs curados. Con un destino de fuera

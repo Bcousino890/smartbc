@@ -576,6 +576,10 @@ export function LocationModule({
             origin={{ lat: center.lat, lng: center.lng }}
             originLabel="La vivienda"
             interactive={live}
+            // Quién manda aquí es la máquina de estados del módulo: si hay
+            // ficha de exploración, el foco es un hallazgo del visitante; si
+            // no, es un destino presentado por BCP.
+            focusIsCurated={!placeFocus && !!focus}
             // En overview la cámara la compone el módulo; al explorar el mapa
             // se gobierna solo.
             camera={live ? null : view}
