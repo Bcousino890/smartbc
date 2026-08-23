@@ -132,6 +132,9 @@ export function ZoneExplorerMapLibre({
   }, []);
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  /** Nombre → id del nodo que se queda con el rótulo, e ids ya descartados. */
+  const labelWinnersRef = useRef<Map<string, string | number>>(new Map());
+  const labelHiddenRef = useRef<Set<string | number>>(new Set());
   const residenceElRef = useRef<HTMLElement | null>(null);
   const curatedMarkersRef = useRef<any[]>([]);
   const navControlRef = useRef<any>(null);
@@ -285,6 +288,37 @@ export function ZoneExplorerMapLibre({
         publishProjector();
         map.on("move", publishProjector);
         map.on("resize", publishProjector);
+
+        // ── Un lugar, un nombre ──
+        // OSM parte un mismo sitio en varios nodos (tres para ESDIP en
+        // Chamberí: cada edificio el suyo), y el mapa los rotulaba todos: el
+        // mismo nombre repetido dos y tres veces a pocos metros. No se puede
+        // resolver en el estilo —una expresión no ve las otras features—, así
+        // que se resuelve como el rótulo del foco: reescribiendo el filtro.
+        // El ganador de cada nombre se recuerda, así que el conjunto de
+        // ocultos solo crece y el rótulo no parpadea al mover el mapa.
+        const labelBaseFilter = map.getFilter("poi-label-major");
+        const dedupeLabels = () => {
+          if (!map.getLayer("poi-label-major")) return;
+          let nuevos = false;
+          for (const f of map.queryRenderedFeatures({ layers: ["poi-label-major"] })) {
+            const name = f.properties?.name;
+            if (!name || f.id == null) continue;
+            const ganador = labelWinnersRef.current.get(name);
+            if (ganador === undefined) { labelWinnersRef.current.set(name, f.id); continue; }
+            if (ganador !== f.id && !labelHiddenRef.current.has(f.id)) {
+              labelHiddenRef.current.add(f.id);
+              nuevos = true;
+            }
+          }
+          if (!nuevos) return;
+          map.setFilter("poi-label-major", [
+            "all",
+            labelBaseFilter,
+            ["!", ["in", ["id"], ["literal", [...labelHiddenRef.current]]]],
+          ]);
+        };
+        map.on("idle", dedupeLabels);
 
         setReady(true);
       });
