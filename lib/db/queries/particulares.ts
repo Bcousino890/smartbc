@@ -416,6 +416,8 @@ export type ParticularesStats = {
   rent: number;
   sale: number;
   last24h: number;
+  /** Activos con teléfono — total real, no solo el de la página visible. */
+  withPhone: number;
 };
 
 /**
@@ -429,7 +431,7 @@ export async function getParticularesStats(): Promise<ParticularesStats> {
   const supabase = createAdminClient() as any;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const [total, retiredTotal, rent, sale, last24h] = await Promise.all([
+  const [total, retiredTotal, rent, sale, last24h, withPhone] = await Promise.all([
     supabase.from("particulares").select("*", { count: "exact", head: true }).eq("is_active", true),
     supabase.from("particulares").select("*", { count: "exact", head: true }).eq("is_active", false),
     supabase
@@ -447,6 +449,11 @@ export async function getParticularesStats(): Promise<ParticularesStats> {
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
       .gte("created_at", since),
+    supabase
+      .from("particulares")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .not("phone", "is", null),
   ]);
 
   return {
@@ -455,6 +462,7 @@ export async function getParticularesStats(): Promise<ParticularesStats> {
     rent: rent.count ?? 0,
     sale: sale.count ?? 0,
     last24h: last24h.count ?? 0,
+    withPhone: withPhone.count ?? 0,
   };
 }
 

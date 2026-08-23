@@ -175,6 +175,7 @@ export default async function AdminParticularesPage({
         page={page}
         activeTotal={stats.total}
         retiredTotal={stats.retiredTotal}
+        withPhoneTotal={stats.withPhone}
         zoneGroups={zoneCounts.zoneGroups}
         currentRole={currentProfile?.role}
         currentUserId={currentProfile?.id}

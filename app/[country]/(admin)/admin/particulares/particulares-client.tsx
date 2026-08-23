@@ -1663,6 +1663,7 @@ export function ParticularesClient({
   page,
   activeTotal,
   retiredTotal,
+  withPhoneTotal,
   zoneGroups,
   currentRole,
   currentUserId,
@@ -1679,6 +1680,9 @@ export function ParticularesClient({
   page: number;
   activeTotal: number;
   retiredTotal: number;
+  /** Activos con teléfono en TODA la tabla (no solo esta página) — ver
+   *  getParticularesStats(). */
+  withPhoneTotal: number;
   zoneGroups: ZoneFilterGroup[];
   currentRole?: string;
   currentUserId?: string;
@@ -2103,7 +2107,7 @@ export function ParticularesClient({
             )}
           </button>
           <span className="ml-auto text-xs text-ink/55">
-            {total} anuncios · {pageRows.filter((r) => r.phone).length} con teléfono en esta página
+            {total} anuncios · {withPhoneTotal} con teléfono en total
           </span>
         </div>
 
