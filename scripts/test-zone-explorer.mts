@@ -168,13 +168,32 @@ console.log("Estilo BCP Luxury Madrid:");
   check("el descubrimiento se dibuja con símbolos, no con puntos", icon?.type === "symbol");
   const filterStr = JSON.stringify(icon?.filter ?? []);
   check("densidad SEMÁNTICA por zoom, no un único rank global",
-    filterStr.includes("13.5") && filterStr.includes("14.5") && filterStr.includes("step")
+    filterStr.includes("13.5") && filterStr.includes("15.5") && filterStr.includes("step")
       && !/\["<=?",\s*\["get","rank"\]/.test(filterStr.replace(/\s/g, "")),
     filterStr.slice(0, 90));
   check("las referencias urbanas se ven desde lejos (estación, universidad)",
     ["railway", "university"].every((c) => filterStr.includes(c)));
   check("la vida de barrio espera a estar cerca",
     ["restaurant", "cafe", "supermarket"].every((c) => filterStr.includes(c)));
+  // El `subclass` manda cuando contradice a la clase: sin esto, `art_gallery`
+  // colaba estatuas, `library` librerías y `hospital` consultas de barrio al
+  // nivel de un museo, y las paradas de autobús entraban como referencia
+  // urbana (medido: 125 bocas de metro en pantalla a z13).
+  check("el mobiliario urbano no es un lugar (parada, boca de metro, cajero)",
+    ["bus_stop", "subway_entrance", "atm"].every((c) => filterStr.includes(c)));
+  check("cuando el subclass contradice a la clase, manda el subclass",
+    ["artwork", "clinic", "school"].every((c) => filterStr.includes(c)));
+
+  // ⚠️ REGRESIÓN. `text-allow-overlap` dice "dibújame igual"; SOLO
+  // `text-ignore-placement` dice "y no ocupes sitio en el índice de
+  // colisiones". Sin la segunda, rotular un lugar al pasar el ratón
+  // expulsaba SU PROPIO icono: desaparecía bajo el cursor y el clic no
+  // encontraba nada que abrir. Medido en navegador: 1 icono antes de
+  // rotular, 0 después.
+  const focusLayout = (poiLayers.find((l: any) => l.id === "poi-label-focus")?.layout ?? {}) as any;
+  check("el rótulo del foco NO compite por el sitio con su propio icono",
+    focusLayout["text-allow-overlap"] === true && focusLayout["text-ignore-placement"] === true,
+    JSON.stringify({ overlap: focusLayout["text-allow-overlap"], ignore: focusLayout["text-ignore-placement"] }));
 
   // ⚠️ Las dos reglas que invalidan el estilo. Se comprueban sobre TODAS las
   // capas, no solo las de `poi`.

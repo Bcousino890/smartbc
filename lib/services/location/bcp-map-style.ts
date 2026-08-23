@@ -57,14 +57,55 @@ const C = {
 
 /** Prioridad de descubrimiento por familia: 1 orienta una ciudad, 3 es vida
  *  de barrio. El zoom decide hasta qué prioridad se enseña. */
+/**
+ * Mobiliario urbano disfrazado de lugar. OpenMapTiles mete la parada de
+ * autobús y la boca de metro en las MISMAS clases que la estación y el
+ * aeropuerto (`bus`, `railway`), así que por clase entraban como referencia
+ * de primer nivel: 133 iconos en pantalla a z13, casi todos paradas. Una
+ * estación orienta; una marquesina no. Se juzga por el `subclass`, que es
+ * donde OSM guarda lo que la cosa ES.
+ */
+const STREET_FURNITURE: unknown[] = [
+  "match", ["get", "subclass"],
+  ["bus_stop", "tram_stop", "subway_entrance", "platform", "halt", "taxi",
+   "bicycle_rental", "bicycle_parking", "car_sharing", "charging_station",
+   "parking", "parking_space", "toilets", "bench", "waste_basket", "atm",
+   "vending_machine", "post_box", "telephone", "drinking_water", "shelter"],
+  true, false,
+];
+
+/**
+ * Cuando el `subclass` contradice a la clase, manda el subclass — es el dato
+ * fino. Medido en Barrio de Salamanca: la clase `art_gallery` traía 14
+ * ESTATUAS (`artwork`), `library` 11 LIBRERÍAS (`books`) y `hospital` 35
+ * CONSULTAS (`clinic`) al mismo nivel que un museo. Y el metro, que sí
+ * orienta, entraba como referencia de primer nivel: 125 bocas en pantalla a
+ * z13. Devuelve 0 cuando no tiene opinión y decide la clase.
+ */
+const SUBCLASS_TIER: unknown[] = [
+  "match", ["get", "subclass"],
+  ["subway"], 2,
+  // Un colegio del barrio importa; los cincuenta del distrito, no. Y la
+  // galería comercial no es el Thyssen: `art_gallery` traía estatuas,
+  // centros de arte y galerías al nivel de un museo.
+  ["clinic", "doctors", "dentist", "kindergarten", "books", "artwork",
+   "chapel", "picnic_site", "pitch", "playground", "school", "language_school",
+   "driving_school", "art", "arts_centre", "gallery"], 3,
+  0,
+];
+
 const POI_PRIORITY: unknown[] = [
-  "match", ["get", "class"],
+  "case",
+  STREET_FURNITURE, 9,
+  [">", SUBCLASS_TIER, 0], SUBCLASS_TIER,
+  ["match", ["get", "class"],
   // OJO: OpenMapTiles mete clínicas y consultas dentro de class "hospital",
   // así que en prioridad 1 llenaba el mapa de centros médicos de barrio.
   ["railway", "bus", "airport", "university", "college", "museum", "attraction", "stadium"], 1,
   ["school", "hospital", "art_gallery", "theatre", "cinema", "library", "department_store", "mall", "marketplace", "park", "hotel"], 2,
   ["restaurant", "cafe", "bar", "pub", "fast_food", "bakery", "grocery", "supermarket", "shop", "clothing_store", "pharmacy", "clinic", "doctors", "sports_centre", "fitness_centre", "garden", "playground"], 3,
   9,
+  ],
 ];
 
 /** Glifo por familia. Las imágenes las registra `discovery-icons.ts`. */
@@ -322,7 +363,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
           ["has", "name"],
-          ["<=", POI_PRIORITY, ["step", ["zoom"], 1, 13.5, 2, 14.5, 3]],
+          ["<=", POI_PRIORITY, ["step", ["zoom"], 1, 13.5, 2, 15.5, 3]],
         ],
         layout: {
           "icon-image": POI_ICON,
@@ -387,7 +428,17 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "text-anchor": "top",
           "text-offset": [0, 0.9],
           "text-max-width": 9,
+          // Las DOS, y no es redundancia — es la causa del fallo que dejaba
+          // los lugares sin abrir ficha. `text-allow-overlap` solo dice que
+          // este rótulo se dibuje pase lo que pase; `text-ignore-placement`
+          // dice que además NO OCUPE sitio en el índice de colisiones. Sin la
+          // segunda, rotular un lugar al pasar el ratón reordenaba la
+          // colocación de símbolos y expulsaba SU PROPIO icono: el icono
+          // desaparecía justo bajo el cursor, `queryRenderedFeatures` ya no
+          // lo encontraba y el clic no abría nada. Medido: 1 icono antes de
+          // rotular, 0 después.
           "text-allow-overlap": true,
+          "text-ignore-placement": true,
         },
         paint: {
           "text-color": "#5c4a24",
