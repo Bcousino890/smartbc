@@ -5,12 +5,18 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 
 /**
- * Campos pesados de un anuncio, servidos bajo demanda.
+ * Campos pesados / de detalle de un anuncio, servidos bajo demanda.
  *
  * El listado de /admin/particulares ya no trae el array `photos` de cada fila
  * (con 30+ URLs por anuncio el payload dejaba la página colgada). El modal
- * pide aquí la galería completa al abrirse.
+ * pide aquí la galería completa al abrirse — y, de paso, la ficha técnica
+ * scrapeada (precio/m², rebaja, planta, año, estado, energía, etc.), que
+ * tampoco viaja en el listado para mantenerlo ligero.
  */
+const DETAIL_COLUMNS =
+  "id, photos, price_per_m2, previous_price, price_drop_pct, floor, has_lift, " +
+  "condition, year_built, orientation, energy_consumption, energy_emissions, " +
+  "advertiser_profile_url, reference, source_update_text";
 export async function GET(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) {
@@ -30,7 +36,7 @@ export async function GET(req: NextRequest) {
     const admin = createAdminClient() as any;
     const { data, error } = await admin
       .from("particulares")
-      .select("id, photos")
+      .select(DETAIL_COLUMNS)
       .eq("id", id)
       .maybeSingle();
 
@@ -41,7 +47,7 @@ export async function GET(req: NextRequest) {
       return Response.json({ error: "Anuncio no encontrado" }, { status: 404 });
     }
 
-    return Response.json({ photos: data.photos ?? [] });
+    return Response.json({ ...data, photos: data.photos ?? [] });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "query_failed" },
