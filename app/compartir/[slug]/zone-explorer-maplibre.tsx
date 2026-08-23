@@ -423,14 +423,12 @@ export function ZoneExplorerMapLibre({
     // Destino CURADO: su placa con nombre, anclada por MapLibre a la
     // coordenada. Antes era una capa HTML del módulo y dependía de que
     // alguien le recalculase los píxeles en cada fotograma.
-    // La pregunta correcta es de PERTENENCIA, no de etiqueta: la placa es de
-    // los destinos que BCP ya ha presentado —los que están pintados como POI
-    // curado—, no de todo lo que traiga `source: "university"`. Una búsqueda
-    // de la Complutense llega con esa misma etiqueta, y con la condición
-    // vieja salían la placa Y la ficha de exploración a la vez. Las dos ramas
-    // son ahora exactamente complementarias: una placa o un marcador, nunca
-    // ambos.
-    const esCurado = curatedElsRef.current.has(focus.id);
+    // Placa para lo que BCP ya presenta; marcador para lo que no. Las dos
+    // ramas son COMPLEMENTARIAS a propósito: nunca se ven la placa y el
+    // marcador (con su ficha) sobre el mismo sitio. Ojo con la pertenencia a
+    // `curatedElsRef`: solo hay marcadores curados al explorar, así que en el
+    // overview no sirve para decidir — decide el origen del destino.
+    const esCurado = focus.source === "bcp_curated" || focus.source === "university";
     if (esCurado) {
       const plaqueWrap = document.createElement("div");
       plaqueWrap.innerHTML = plaqueMarkerHtml(focus.category, focus.name);
@@ -444,7 +442,7 @@ export function ZoneExplorerMapLibre({
     // ningún caso se insinúa que BCP lo recomienda. La excepción es una
     // universidad encontrada por búsqueda (dato verificado nuestro): usa el
     // lenguaje de educación aprobado, activado.
-    if (!esCurado) {
+    if (!esCurado && !curatedElsRef.current.has(focus.id)) {
       const placeWrap = document.createElement("div");
       // Una universidad encontrada buscando lleva el glifo de educación
       // (§9): sigue sin ser recomendación de BCP —el champán lo gana solo por

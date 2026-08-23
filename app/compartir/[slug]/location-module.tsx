@@ -454,10 +454,12 @@ export function LocationModule({
                 // ENCIMA de la placa del destino curado — las dos cosas a la
                 // vez, justo lo que no debe pasar. Se compara por el LUGAR:
                 // mismo nombre o a menos de 150 m.
-                const mismoSitio = (p: { name: string; lat?: number | null; lng?: number | null }) => {
+                const mismoSitio = (p: { name: string; latitude?: number | null; longitude?: number | null }) => {
                   if (p.name === d.name) return true;
-                  if (typeof p.lat !== "number" || typeof p.lng !== "number") return false;
-                  return haversineKm(p.lat, p.lng, d.lat, d.lng) <= 0.15;
+                  // OJO: el catálogo de POIs habla en `latitude`/`longitude`
+                  // (PoiTravel), no en `lat`/`lng` como los destinos del mapa.
+                  if (typeof p.latitude !== "number" || typeof p.longitude !== "number") return false;
+                  return haversineKm(p.latitude, p.longitude, d.lat, d.lng) <= 0.15;
                 };
                 const original = [...ordered, ...universities].find(mismoSitio) ?? null;
                 if (original) {
