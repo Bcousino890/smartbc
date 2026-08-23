@@ -311,6 +311,96 @@ colocaba SOBRE la coordenada y el punto del ancla partía el texto.
 
 # BCP ZONE EXPLORER — COMPLETE & FROZEN
 
+---
+
+# Capa de descubrimiento · dos incidencias de cierre
+
+## A · El marcador de búsqueda "seguía al cursor"
+
+No seguía al cursor: se quedaba quieto mientras el mapa se movía debajo. El
+proyector lat/lng → píxeles que alimenta las capas HTML del módulo se había
+perdido en un recorte por índices al retirar la línea diagonal (`5f86ef7`),
+así que nadie recolocaba la placa al arrastrar. Restaurado (con acelerón por
+`requestAnimationFrame`) y la placa pasa a ser un `Marker` de MapLibre, que es
+quien sabe anclar a una coordenada.
+
+**Medido:** arrastre de −260 px → deriva entre el marcador de búsqueda y la
+vivienda: **1 px**.
+
+## B · Los lugares de OSM no se leían
+
+Tres causas distintas, encontradas midiendo:
+
+**1. El rótulo expulsaba a su propio icono.** Al pasar el ratón se escribía el
+nombre del lugar, y ese rótulo le quitaba el sitio al icono en el índice de
+colisiones: el icono desaparecía justo bajo el cursor, `queryRenderedFeatures`
+ya no encontraba nada y el clic no abría ficha. Se veía como "el hover
+funciona pero el clic no hace nada". `text-allow-overlap` solo dice "dibújame
+igual"; faltaba **`text-ignore-placement`**, que es el que dice "y no ocupes
+sitio". Reproducido en aislado: **1 icono antes de rotular, 0 después**.
+
+**2. Densidad decidida por la clase, no por lo que las cosas son.**
+OpenMapTiles mete la parada de autobús y la boca de metro en las mismas clases
+que la estación (`bus`, `railway`), la estatua en `art_gallery`, la librería en
+`library` y la consulta en `hospital`. Por clase entraban como referencia
+urbana de primer nivel. Ahora manda el `subclass` cuando contradice a la clase.
+
+| Barrio de Salamanca | antes | después |
+|---|---|---|
+| iconos a z13 | 133 (125 bocas de metro) | **14** (estaciones) |
+| iconos a z15 | 270 | **100** |
+| iconos no consultables | — | **0** en z13-z17 |
+
+**3. Si el mapa lo dibuja, el clic lo abre.** El desempate por `rank` se
+quedaba con el vecino mejor clasificado aunque no resolviera a destino
+(`mall`, `fitness_centre` se dibujaban sin estar en la lista blanca). Ahora se
+prueba en orden y se abre el primero que resuelve. Con **test estructural**:
+toda clase que el estilo dibuja tiene que poder pulsarse.
+
+## De propina, encontrado en el QA
+
+- **Un lugar, un nombre.** OSM parte un sitio en varios nodos (tres para ESDIP
+  en Chamberí) y se rotulaban todos. No se arregla desde el estilo ni con
+  `text-padding` (medido: ni con 28 px se tocan): se resuelve reescribiendo el
+  filtro, como el rótulo del foco. ⚠️ Y **no se engancha a `idle`**: en la
+  ficha pública no llega a dispararse ni una vez (0 en 3 s tras mover el mapa).
+  Va por `moveend` + fin de carga de la fuente.
+- **Placa y ficha ya no coinciden nunca.** Buscar la Complutense desde una
+  ficha de Salamanca abría su ficha de exploración Y le ponía la placa de
+  destino curado: el mapa deducía "curado" del `source`, y el catálogo de
+  universidades marca `university` toda su procedencia, sea o no destino de
+  esta vivienda. Ahora lo dice el módulo, que es quien tiene la máquina de
+  estados (`focusIsCurated`). Retiro → placa. UCM buscada → ficha. Prado →
+  ficha con marcador de búsqueda.
+
+## QA final de la capa (producción)
+
+| Zona | iconos visibles | rótulos | duplicados | hover | clic → ficha |
+|---|---|---|---|---|---|
+| Barrio de Salamanca | 6 | 5 | 0 | 5/5 | **5/5** |
+| Chamberí (Olavide) | 10 | 3 | 0 | 5/6 | **6/6** |
+| Castellana | 10 | 0 | 0 | 6/6 | **6/6** |
+| Almagro | 10 | 1 | 0 | 6/6 | **6/6** |
+| Chamberí · móvil 390 | 4 | 0 | 0 | n/a | **3/3** |
+
+Hover 5/6 en dos zonas es del instrumento (lee el cursor a los 500 ms), no del
+producto: el clic siguiente abre la ficha correcta. En móvil el borde inferior
+del mapa lo tapa la barra fija de contacto, así que ahí no hay objetivo que
+pulsar — en Salamanca no quedó ninguna muestra fuera de la barra.
+
+```
+SEARCH MARKER CURSOR DRIFT:   1 px        DUPLICATE POI LABELS:  0
+SEARCH MARKER GEO-ANCHORED:   PASS        OVERVIEW DISCOVERY:    0 iconos
+DISCOVERED POIs SEMANTIC:     PASS        PLACA + FICHA A LA VEZ: 0
+CLIC → FICHA:                 23/23       MOBILE:                PASS
+MAP ERRORS:                   0
+```
+
+MapLibre 5.24.0 y OpenFreeMap sin tocar. Sin proveedor nuevo, sin routing, sin
+datasets nuevos.
+
+# BCP ZONE EXPLORER — FINAL INTERACTION BASELINE
+
 Pulido final de UX. Sin cambios de arquitectura ni de proveedor.
 
 ## Buscador visible desde el overview
@@ -388,3 +478,93 @@ MAP ERRORS:             0
 Sin proveedor nuevo, sin routing, sin datasets nuevos.
 
 # BCP ZONE EXPLORER — COMPLETE & FROZEN
+
+---
+
+# Capa de descubrimiento · dos incidencias de cierre
+
+## A · El marcador de búsqueda "seguía al cursor"
+
+No seguía al cursor: se quedaba quieto mientras el mapa se movía debajo. El
+proyector lat/lng → píxeles que alimenta las capas HTML del módulo se había
+perdido en un recorte por índices al retirar la línea diagonal (`5f86ef7`),
+así que nadie recolocaba la placa al arrastrar. Restaurado (con acelerón por
+`requestAnimationFrame`) y la placa pasa a ser un `Marker` de MapLibre, que es
+quien sabe anclar a una coordenada.
+
+**Medido:** arrastre de −260 px → deriva entre el marcador de búsqueda y la
+vivienda: **1 px**.
+
+## B · Los lugares de OSM no se leían
+
+Tres causas distintas, encontradas midiendo:
+
+**1. El rótulo expulsaba a su propio icono.** Al pasar el ratón se escribía el
+nombre del lugar, y ese rótulo le quitaba el sitio al icono en el índice de
+colisiones: el icono desaparecía justo bajo el cursor, `queryRenderedFeatures`
+ya no encontraba nada y el clic no abría ficha. Se veía como "el hover
+funciona pero el clic no hace nada". `text-allow-overlap` solo dice "dibújame
+igual"; faltaba **`text-ignore-placement`**, que es el que dice "y no ocupes
+sitio". Reproducido en aislado: **1 icono antes de rotular, 0 después**.
+
+**2. Densidad decidida por la clase, no por lo que las cosas son.**
+OpenMapTiles mete la parada de autobús y la boca de metro en las mismas clases
+que la estación (`bus`, `railway`), la estatua en `art_gallery`, la librería en
+`library` y la consulta en `hospital`. Por clase entraban como referencia
+urbana de primer nivel. Ahora manda el `subclass` cuando contradice a la clase.
+
+| Barrio de Salamanca | antes | después |
+|---|---|---|
+| iconos a z13 | 133 (125 bocas de metro) | **14** (estaciones) |
+| iconos a z15 | 270 | **100** |
+| iconos no consultables | — | **0** en z13-z17 |
+
+**3. Si el mapa lo dibuja, el clic lo abre.** El desempate por `rank` se
+quedaba con el vecino mejor clasificado aunque no resolviera a destino
+(`mall`, `fitness_centre` se dibujaban sin estar en la lista blanca). Ahora se
+prueba en orden y se abre el primero que resuelve. Con **test estructural**:
+toda clase que el estilo dibuja tiene que poder pulsarse.
+
+## De propina, encontrado en el QA
+
+- **Un lugar, un nombre.** OSM parte un sitio en varios nodos (tres para ESDIP
+  en Chamberí) y se rotulaban todos. No se arregla desde el estilo ni con
+  `text-padding` (medido: ni con 28 px se tocan): se resuelve reescribiendo el
+  filtro, como el rótulo del foco. ⚠️ Y **no se engancha a `idle`**: en la
+  ficha pública no llega a dispararse ni una vez (0 en 3 s tras mover el mapa).
+  Va por `moveend` + fin de carga de la fuente.
+- **Placa y ficha ya no coinciden nunca.** Buscar la Complutense desde una
+  ficha de Salamanca abría su ficha de exploración Y le ponía la placa de
+  destino curado: el mapa deducía "curado" del `source`, y el catálogo de
+  universidades marca `university` toda su procedencia, sea o no destino de
+  esta vivienda. Ahora lo dice el módulo, que es quien tiene la máquina de
+  estados (`focusIsCurated`). Retiro → placa. UCM buscada → ficha. Prado →
+  ficha con marcador de búsqueda.
+
+## QA final de la capa (producción)
+
+| Zona | iconos visibles | rótulos | duplicados | hover | clic → ficha |
+|---|---|---|---|---|---|
+| Barrio de Salamanca | 6 | 5 | 0 | 5/5 | **5/5** |
+| Chamberí (Olavide) | 10 | 3 | 0 | 5/6 | **6/6** |
+| Castellana | 10 | 0 | 0 | 6/6 | **6/6** |
+| Almagro | 10 | 1 | 0 | 6/6 | **6/6** |
+| Chamberí · móvil 390 | 4 | 0 | 0 | n/a | **3/3** |
+
+Hover 5/6 en dos zonas es del instrumento (lee el cursor a los 500 ms), no del
+producto: el clic siguiente abre la ficha correcta. En móvil el borde inferior
+del mapa lo tapa la barra fija de contacto, así que ahí no hay objetivo que
+pulsar — en Salamanca no quedó ninguna muestra fuera de la barra.
+
+```
+SEARCH MARKER CURSOR DRIFT:   1 px        DUPLICATE POI LABELS:  0
+SEARCH MARKER GEO-ANCHORED:   PASS        OVERVIEW DISCOVERY:    0 iconos
+DISCOVERED POIs SEMANTIC:     PASS        PLACA + FICHA A LA VEZ: 0
+CLIC → FICHA:                 23/23       MOBILE:                PASS
+MAP ERRORS:                   0
+```
+
+MapLibre 5.24.0 y OpenFreeMap sin tocar. Sin proveedor nuevo, sin routing, sin
+datasets nuevos.
+
+# BCP ZONE EXPLORER — FINAL INTERACTION BASELINE
