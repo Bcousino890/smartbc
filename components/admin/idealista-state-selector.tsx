@@ -3,9 +3,9 @@
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
-type StateOption = "draft" | "published" | "unpublished" | "failed";
+export type StateOption = "draft" | "published" | "unpublished" | "failed";
 
-const STATE_LABELS: Record<StateOption, { label: string; color: string; bg: string }> = {
+export const STATE_LABELS: Record<StateOption, { label: string; color: string; bg: string }> = {
   draft: { label: "Borrador", color: "text-amber-700", bg: "bg-amber-100" },
   published: { label: "Publicado", color: "text-emerald-700", bg: "bg-emerald-100" },
   unpublished: { label: "Despublicado", color: "text-slate-700", bg: "bg-slate-200" },

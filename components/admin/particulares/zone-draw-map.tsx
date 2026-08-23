@@ -81,11 +81,21 @@ export default function ZoneDrawMap({ initialPolygons, onChange }: ZoneDrawMapPr
       const polygons: ZonePolygon[] = [];
       drawnItems.current!.eachLayer((layer) => {
         if (layer instanceof L.Polygon) {
-          // Un polígono dibujado con la herramienta simple (sin agujeros)
-          // trae getLatLngs() en forma PLANA (LatLng[]), no anidada — mismo
-          // supuesto que ya usa map-component.tsx.
-          const latlngs = layer.getLatLngs() as L.LatLng[];
-          polygons.push(latlngs.map((ll): [number, number] => [ll.lng, ll.lat]));
+          // getLatLngs() de un L.Polygon SIEMPRE viene anidado un nivel
+          // (LatLng[][]: el anillo exterior, aunque sea el único) — nunca
+          // plano. Tratarlo como LatLng[] directo (como hacía antes esta
+          // función, copiando el mismo supuesto erróneo de
+          // map-component.tsx) hace que `ll` sea en realidad el array del
+          // anillo: `ll.lng`/`ll.lat` salen `undefined`, y
+          // JSON.stringify(undefined) dentro de un array se convierte en
+          // `null` — el polígono se guardaba con puros `null` y
+          // decodeZonePolygons lo descartaba entero en el servidor (el
+          // filtro parecía "no guardarse"). La herramienta simple de
+          // leaflet-draw nunca genera agujeros ni multi-polígonos, así que
+          // basta con el primer (único) anillo.
+          const rings = layer.getLatLngs() as unknown as L.LatLng[][];
+          const ring = rings[0] ?? [];
+          polygons.push(ring.map((ll): [number, number] => [ll.lng, ll.lat]));
         }
       });
       onChange(polygons);

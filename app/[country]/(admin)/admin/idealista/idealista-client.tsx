@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
 import { IdealistaListingLeadsModal } from "@/components/admin/idealista-listing-leads-modal";
-import { IdealistaStateSelector } from "@/components/admin/idealista-state-selector";
+import { IdealistaStateSelector, STATE_LABELS, type StateOption } from "@/components/admin/idealista-state-selector";
 import { cn } from "@/lib/utils";
 
 type Property = {
@@ -277,6 +277,9 @@ export function IdealistaClient({
   const [leadsModalTitle, setLeadsModalTitle] = useState("");
   const [onlyWithLeads, setOnlyWithLeads] = useState(false);
   const [sortByLeads, setSortByLeads] = useState(false);
+  // Filtro por estado (Publicado/Despublicado/Borrador/Error) — mismos 4
+  // valores que IdealistaStateSelector, "" = todos.
+  const [statusFilter, setStatusFilter] = useState<StateOption | "">("");
   const [generatingVideos, setGeneratingVideos] = useState(false);
   const [generateVideosMsg, setGenerateVideosMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const router = useRouter();
@@ -388,6 +391,9 @@ export function IdealistaClient({
           );
         });
 
+    if (statusFilter) {
+      result = result.filter((listing) => listing.idealista_state === statusFilter);
+    }
     if (onlyWithLeads) {
       result = result.filter((listing) => (leadCountsByListing[listing.id] ?? 0) > 0);
     }
@@ -397,7 +403,7 @@ export function IdealistaClient({
       );
     }
     return result;
-  }, [activeListings, properties, searchTerm, onlyWithLeads, sortByLeads, leadCountsByListing]);
+  }, [activeListings, properties, searchTerm, statusFilter, onlyWithLeads, sortByLeads, leadCountsByListing]);
 
   function clearForm() {
     setSelectedPropertyId(null);
@@ -898,6 +904,18 @@ export function IdealistaClient({
               {searchTerm ? ` de ${activeListings.length}` : ""})
             </h3>
             <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StateOption | "")}
+                className="rounded-lg border border-ink/15 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink/70 transition focus:border-gold/55 focus:outline-none hover:bg-ink/5"
+              >
+                <option value="">Estado: todos</option>
+                {(Object.keys(STATE_LABELS) as StateOption[]).map((state) => (
+                  <option key={state} value={state}>
+                    {STATE_LABELS[state].label}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={() => setOnlyWithLeads((v) => !v)}
                 className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
