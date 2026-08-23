@@ -105,6 +105,21 @@ export type ParticularRow = {
   floor_plan_url?: string | null;
   has_video?: boolean | null;
   video_url?: string | null;
+  // Ficha técnica scrapeada de Idealista — NO viaja en el listado (para no
+  // engordarlo); la carga el modal bajo demanda vía /api/admin/particulares/detail.
+  price_per_m2?: number | null;
+  previous_price?: number | null;
+  price_drop_pct?: number | null;
+  floor?: string | null;
+  has_lift?: boolean | null;
+  condition?: string | null;
+  year_built?: number | null;
+  orientation?: string | null;
+  energy_consumption?: string | null;
+  energy_emissions?: string | null;
+  advertiser_profile_url?: string | null;
+  reference?: string | null;
+  source_update_text?: string | null;
   detected_at?: string | null;
   created_at: string | null;
   taken_down_at: string | null;
@@ -876,11 +891,14 @@ function ParticularModal({
         );
         if (!res.ok || cancelled) return;
         const data = await res.json();
-        if (Array.isArray(data.photos)) {
-          setCurrentRow((prev) => ({ ...prev, photos: data.photos }));
+        if (data && typeof data === "object") {
+          // Merge the whole detail payload: photos + the scraped ficha técnica
+          // (precio/m², rebaja, planta, año, estado, energía…). `photos`
+          // defaults to [] server-side, so it's always an array here.
+          setCurrentRow((prev) => ({ ...prev, ...data }));
         }
       } catch {
-        // Sin galería: se queda la portada. No merece romper el modal.
+        // Sin galería/ficha: se queda la portada. No merece romper el modal.
       }
     })();
     return () => {
@@ -894,6 +912,23 @@ function ParticularModal({
     currentRow.photos ??
     (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
   const cover = photos[photoIdx]?.url;
+
+  // Preload the next/prev slide so paging the gallery is instant. The list only
+  // ships the cover, so the gallery loads on demand; without this each slide
+  // waits on its own download.
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const around = [
+      photos[(photoIdx + 1) % photos.length]?.url,
+      photos[(photoIdx - 1 + photos.length) % photos.length]?.url,
+    ];
+    for (const u of around) {
+      if (u) {
+        const img = new window.Image();
+        img.src = u;
+      }
+    }
+  }, [photoIdx, photos]);
   const hasPhone = Boolean(currentRow.phone);
 
   // Scroll-lock + Escape-para-cerrar: este modal no usa el <Modal> compartido
@@ -1174,6 +1209,104 @@ function ParticularModal({
                 .join(" · ")}
             </p>
           </div>
+
+          {/* Ficha técnica — datos scrapeados de Idealista (bajo demanda) */}
+          {(currentRow.price_per_m2 != null ||
+            currentRow.previous_price != null ||
+            currentRow.floor ||
+            currentRow.has_lift != null ||
+            currentRow.year_built != null ||
+            currentRow.condition ||
+            currentRow.orientation ||
+            currentRow.energy_consumption ||
+            currentRow.energy_emissions ||
+            currentRow.reference) && (
+            <div className="rounded-xl border border-gold/20 bg-white p-4">
+              <p className="mb-3 crm-label-sm text-ink/40">Ficha técnica</p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                {currentRow.price_per_m2 != null && (
+                  <div>
+                    <dt className="text-ink/40">Precio/m²</dt>
+                    <dd className="text-ink">{formatPrice(currentRow.price_per_m2)} €</dd>
+                  </div>
+                )}
+                {currentRow.previous_price != null && (
+                  <div>
+                    <dt className="text-ink/40">Precio anterior</dt>
+                    <dd className="text-ink">
+                      {formatPrice(currentRow.previous_price)} €
+                      {currentRow.price_drop_pct != null
+                        ? ` (−${currentRow.price_drop_pct}%)`
+                        : ""}
+                    </dd>
+                  </div>
+                )}
+                {currentRow.floor && (
+                  <div>
+                    <dt className="text-ink/40">Planta</dt>
+                    <dd className="text-ink">{currentRow.floor}</dd>
+                  </div>
+                )}
+                {currentRow.has_lift != null && (
+                  <div>
+                    <dt className="text-ink/40">Ascensor</dt>
+                    <dd className="text-ink">{currentRow.has_lift ? "Sí" : "No"}</dd>
+                  </div>
+                )}
+                {currentRow.year_built != null && (
+                  <div>
+                    <dt className="text-ink/40">Año construcción</dt>
+                    <dd className="text-ink">{currentRow.year_built}</dd>
+                  </div>
+                )}
+                {currentRow.condition && (
+                  <div>
+                    <dt className="text-ink/40">Estado</dt>
+                    <dd className="text-ink">{currentRow.condition}</dd>
+                  </div>
+                )}
+                {currentRow.orientation && (
+                  <div>
+                    <dt className="text-ink/40">Orientación</dt>
+                    <dd className="text-ink">{currentRow.orientation}</dd>
+                  </div>
+                )}
+                {currentRow.energy_consumption && (
+                  <div>
+                    <dt className="text-ink/40">Energía · consumo</dt>
+                    <dd className="text-ink">{currentRow.energy_consumption}</dd>
+                  </div>
+                )}
+                {currentRow.energy_emissions && (
+                  <div>
+                    <dt className="text-ink/40">Energía · emisiones</dt>
+                    <dd className="text-ink">{currentRow.energy_emissions}</dd>
+                  </div>
+                )}
+                {currentRow.reference && (
+                  <div>
+                    <dt className="text-ink/40">Referencia</dt>
+                    <dd className="text-ink">{currentRow.reference}</dd>
+                  </div>
+                )}
+              </dl>
+              {currentRow.source_update_text && (
+                <p className="mt-3 text-xs text-ink/40">
+                  {currentRow.source_update_text}
+                </p>
+              )}
+              {currentRow.advertiser_profile_url && (
+                <a
+                  href={currentRow.advertiser_profile_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs font-semibold text-gold hover:underline"
+                >
+                  Ver perfil del anunciante ↗
+                </a>
+              )}
+            </div>
+          )}
 
           {/* Datos de contacto */}
           <div className="rounded-xl border border-gold/20 bg-white p-4">

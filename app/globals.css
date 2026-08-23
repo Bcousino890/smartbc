@@ -832,6 +832,10 @@
 .bcp-context-card[data-align="center"] { animation-name: bcpCardInCenter; }
 .bcp-context-card[data-align="center"][data-side="bottom"] { animation-name: bcpCardInCenterUp; }
 .bcp-context-card { animation: bcpCardIn 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes bcpSheetIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* Vivienda y POIs dentro del mapa VIVO (Leaflet), con el mismo lenguaje que
    el overview: la marca no cambia al explorar. */
@@ -849,19 +853,175 @@
   white-space: nowrap; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
 }
 .bcp-live-home-dot { width: 10px; height: 10px; border-radius: 9999px; background: #d4af7f; }
-.bcp-live-poi {
-  display: block; width: 12px; height: 12px; border-radius: 9999px;
-  background: #fbf8f3; border: 2px solid #8a6d3b; cursor: pointer;
-  box-shadow: 0 4px 12px -4px rgba(40, 28, 10, 0.7);
+/* FICHA CONTEXTUAL en móvil: tarjeta inferior DENTRO del mapa.
+   Anclar una ficha de 300px sobre un marcador en 390px de ancho no cabe, así
+   que en móvil ocupa el borde inferior del escenario del mapa —no del
+   viewport— dejando mapa visible por encima. */
+@media (max-width: 767px) {
+  .smartlink-root .bcp-context-card--mobile-sheet {
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 3.25rem;
+    width: auto;
+    /* La animación de entrada de escritorio lleva el translateX(-50%) de la
+       ficha centrada horneado en sus keyframes: si no se sustituye, en móvil
+       empuja la tarjeta media pantalla a la izquierda y se sale del mapa.
+       Aquí entra desde abajo, que es lo que corresponde a una tarjeta
+       inferior. */
+    animation-name: bcpSheetIn;
+    transform: none;
+  }
 }
-.bcp-live-poi:hover { background: #d4af7f; }
 
-/* Sitio descubierto en Google: neutro y claramente distinto de los POIs
-   curados por BCP — nunca se insinúa que BCP lo recomienda (§10). */
-.bcp-live-place {
-  display: block; width: 16px; height: 16px; border-radius: 9999px;
-  background: #fbf8f3; border: 3px solid #2c2113;
+/* INDICADOR DE VIAJE del rail de conectividad.
+   Cápsula marfil con filo champán y glifo carbón: el modo de viaje, no un
+   vehículo ilustrado. Vive en el rail (tiempo), nunca sobre el mapa
+   (geografía). Sin rebote, sin rotación, sin 3D. */
+.bcp-travel-indicator {
+  transition: opacity .3s ease;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #fbf8f3;
+  color: #3b332a;
+  border: 1px solid rgba(200, 168, 106, 0.8);
+  box-shadow: 0 4px 14px -6px rgba(40, 28, 10, 0.5);
+}
+/* En reposo espera al comienzo del hilo, discreto: está, pero no reclama
+   atención hasta que hay un destino elegido. */
+.bcp-travel-indicator[data-resting="true"] { opacity: 0.45; }
+
+/* El rail en móvil hace scroll y el nodo activo se centra solo. */
+.bcp-rail-scroll { scroll-snap-type: x proximity; }
+.bcp-rail-scroll > ul > li { scroll-snap-align: center; }
+
+/* ── BCP RESIDENCE MARKER ───────────────────────────────────────────────
+   Medallón, no chapa de sistema. Disco carbón + aro champán fino + detalle
+   marfil dentro. Es el ancla geográfica de la experiencia (DAMAC) y tiene
+   que reconocerse sin rótulo (EMAAR), con la contención de una casa
+   madrileña: ni pin rojo, ni emoji, ni píldora enorme. */
+.bcp-residence {
+  position: absolute;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  width: max-content; pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.bcp-residence-medal {
+  display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 9999px;
+  background: #2c2113; color: #f6f0e4;
+  box-shadow:
+    0 0 0 1.5px #c8a86a,          /* aro champán */
+    0 0 0 4.5px rgba(246, 240, 228, 0.9), /* respiro marfil */
+    0 10px 22px -10px rgba(40, 28, 10, 0.75);
+}
+.bcp-residence-caption {
+  font-family: var(--crm-font-sans);
+  font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase;
+  color: #2c2113;
+  background: rgba(251, 248, 243, 0.94);
+  border-radius: 9999px; padding: 2px 9px;
+  box-shadow: 0 4px 12px -8px rgba(40, 28, 10, 0.6);
+}
+/* Foco: halo, nunca rebote. */
+.bcp-residence.is-focus .bcp-residence-medal {
+  box-shadow:
+    0 0 0 1.5px #c8a86a,
+    0 0 0 4.5px rgba(246, 240, 228, 0.9),
+    0 0 0 12px rgba(200, 168, 106, 0.16),
+    0 10px 22px -10px rgba(40, 28, 10, 0.75);
+}
+
+/* ── POI CURADO POR BCP ──
+   Cápsula marfil con glifo carbón y borde champán fino. Misma familia para
+   todas las categorías: cambia el glifo, nunca el color — el champán se
+   reserva a la selección. */
+.bcp-poi {
+  display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 9999px;
+  background: #fbf8f3; color: #3b332a;
+  border: 1px solid rgba(200, 168, 106, 0.75);
+  box-shadow: 0 6px 16px -8px rgba(40, 28, 10, 0.6);
+  cursor: pointer;
+}
+.bcp-poi:hover { border-color: #c8a86a; background: #fffdf9; }
+/* Universidad: doble aro, distinción aprobada en el sprint anterior. */
+.bcp-poi-uni { box-shadow: 0 0 0 2.5px rgba(251, 248, 243, 0.95), 0 0 0 3.5px rgba(200, 168, 106, 0.55), 0 6px 16px -8px rgba(40, 28, 10, 0.6); }
+/* Seleccionado: el champán toma el mando. */
+.bcp-poi.is-active {
+  background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
+  box-shadow: 0 0 0 5px rgba(138, 109, 59, 0.18), 0 10px 24px -8px rgba(40, 28, 10, 0.75);
+  transform: scale(1.12);
+}
+.bcp-poi-uni.is-active { box-shadow: 0 0 0 2.5px #fbf8f3, 0 0 0 5px rgba(138, 109, 59, 0.5), 0 10px 24px -8px rgba(40, 28, 10, 0.75); }
+
+/* PLACA DEL DESTINO · modo curado.
+   Marfil, carbón, filo champán y una punta que la ancla a la coordenada. Es
+   una etiqueta de lugar, no una ficha: el tiempo lo cuenta el rail. */
+.bcp-plaque {
+  bottom: 16px;
+  width: max-content;
+  max-width: 15rem;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  background: #fbf8f3;
+  color: #2c2113;
+  font-family: var(--crm-font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+  border: 1px solid rgba(200, 168, 106, 0.85);
+  box-shadow: 0 6px 16px -10px rgba(40, 28, 10, 0.55);
+}
+.bcp-plaque::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 7px;
+  height: 7px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #fbf8f3;
+  border-right: 1px solid rgba(200, 168, 106, 0.85);
+  border-bottom: 1px solid rgba(200, 168, 106, 0.85);
+}
+/* El ancla: punto lleno en champán sobre la coordenada exacta. */
+.bcp-plaque-anchor {
+  width: 11px;
+  height: 11px;
+  border-radius: 9999px;
+  background: #8a6d3b;
+  box-shadow: 0 0 0 3px rgba(251, 248, 243, 0.95), 0 0 0 6px rgba(138, 109, 59, 0.16);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bcp-plaque { animation: bcpPlaqueIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .bcp-plaque-anchor { animation: bcpPlaqueIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+@keyframes bcpPlaqueIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; }
+}
+
+/* Resultado de BÚSQUEDA seleccionado: la lupa lo delata como algo que trajo
+   el cliente; el champán, como lo elegido ahora mismo. */
+.bcp-place-search.is-active {
+  background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
+  box-shadow: 0 0 0 5px rgba(138, 109, 59, 0.18), 0 10px 24px -8px rgba(40, 28, 10, 0.75);
+}
+
+/* Lugar DESCUBIERTO en el basemap: neutro y claramente distinto de lo
+   curado — nunca se insinúa que BCP lo recomienda. */
+.bcp-place {
+  display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  background: #fbf8f3; color: #2c2113;
+  border: 2px solid #2c2113;
   box-shadow: 0 8px 20px -6px rgba(40, 28, 10, 0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bcp-poi { transition: transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -876,11 +1036,43 @@
 
 /* PROPERTY PRELUDE · apertura editorial: cuerpo mayor que el copy de
    capítulo, interlineado generoso, sin artificios. Luxury = contención. */
+/* PROPERTY PRELUDE v2 · EDITORIAL OPENING SPREAD.
+   Banda completa entre Key Facts y el primer capítulo: presencia horizontal
+   (~1136px) pero medida de lectura contenida (~720px) en la columna derecha.
+   Sin card, sin borde, sin sombra — el mismo lienzo ivory del SmartLink. El
+   aire de abajo es parte de la composición: separa el prólogo del capítulo 01
+   sin necesidad de un divisor gráfico. */
+.smartlink-root .bcp-prelude-spread {
+  padding-bottom: 0.5rem;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude-spread { padding-bottom: 2.5rem; }
+}
+
+/* Titular editorial. Optima del sistema de display: 400, versal y tracking
+   normal, como el resto de títulos del SmartLink (regla absoluta del sistema
+   tipográfico — el Prelude no inventa una voz nueva, usa la de la casa). */
+.smartlink-root .bcp-prelude-headline {
+  font-family: var(--crm-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  font-size: 1.65rem;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude-headline { font-size: 2.15rem; line-height: 1.18; }
+}
+@media (min-width: 1024px) {
+  .smartlink-root .bcp-prelude-headline { font-size: 2.3rem; }
+}
+
 .smartlink-root .bcp-prelude {
-  font-size: 1.22rem;
-  line-height: 1.85;
+  font-size: 1.1rem;
+  line-height: 1.8;
   letter-spacing: 0.005em;
 }
 @media (min-width: 768px) {
-  .smartlink-root .bcp-prelude { font-size: 1.32rem; line-height: 1.9; }
+  .smartlink-root .bcp-prelude { font-size: 1.22rem; line-height: 1.85; }
 }

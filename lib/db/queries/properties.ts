@@ -130,7 +130,9 @@ export async function getPropertyBySlugForAdmin(slug: string) {
   const { data, error } = await supabase
     .from("properties")
     .select(
-      "*, property_photos(url, alt, position, is_cover), agencies(id, name, slug, logo_url)",
+      // `source_width` viaja para poder avisar en la ficha cuando la portada
+      // no da la resolución que pide el SmartLink (LOW_RES_SOURCE).
+      "*, property_photos(url, alt, position, is_cover, source_width, source_height), agencies(id, name, slug, logo_url)",
     )
     .eq("slug", slug)
     .maybeSingle();

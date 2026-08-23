@@ -18,11 +18,10 @@ import { loadNeighborhoodIndex, lookupNeighborhood } from "@/lib/db/queries/neig
 import {
   collectPreludeEvidence,
   MIN_EVIDENCE_CLAIMS,
-  preludeSystemPrompt,
-  preludeUserPrompt,
   validatePrelude,
+  validatePreludeHeadline,
 } from "@/lib/services/story/prelude";
-import { aiComplete } from "@/lib/services/ai/chat";
+import { composePrelude } from "@/lib/services/story/prelude-compose";
 
 /** Re-evalúa el quality gate compartido para una versión concreta. */
 async function evaluateGateForVersion(db: any, propertyId: string, versionId: string) {
@@ -243,7 +242,12 @@ async function preludeContext(db: any, versionId: string) {
 }
 
 /** Edición humana: se valida con el MISMO contrato que la generación. */
-export async function updatePreludeAction(versionId: string, text: string, path: string) {
+export async function updatePreludeAction(
+  versionId: string,
+  text: string,
+  headline: string,
+  path: string,
+) {
   await requireStaff();
   const db = createAdminClient() as any;
   const data = await preludeContext(db, versionId);
@@ -252,9 +256,18 @@ export async function updatePreludeAction(versionId: string, text: string, path:
   if (!verdict.ok) {
     return { ok: false as const, error: `El prelude no cumple el contrato: ${verdict.failures.join(" · ")}` };
   }
+  // El titular es opcional (el spread se compone sin él), pero si lo hay pasa
+  // por el mismo contrato: nada publicable se salta la validación.
+  const head = headline.trim();
+  if (head) {
+    const hv = validatePreludeHeadline(head, data.ctx, data.evidence.texts);
+    if (!hv.ok) {
+      return { ok: false as const, error: `El titular no cumple el contrato: ${hv.failures.join(" · ")}` };
+    }
+  }
   const { error } = await db
     .from("property_story_versions")
-    .update({ prelude: text.trim(), prelude_status: "generated" })
+    .update({ prelude: text.trim(), prelude_headline: head || null, prelude_status: "generated" })
     .eq("id", versionId);
   revalidatePath(path);
   return error ? { ok: false as const, error: error.message } : { ok: true as const };
@@ -273,10 +286,19 @@ export async function setPreludeStatusAction(
     const data = await preludeContext(db, versionId);
     if (!data) return { ok: false as const, error: "Versión no encontrada" };
     const { data: v } = await db
-      .from("property_story_versions").select("prelude").eq("id", versionId).maybeSingle();
+      .from("property_story_versions")
+      .select("prelude, prelude_headline")
+      .eq("id", versionId)
+      .maybeSingle();
     const verdict = validatePrelude(v?.prelude ?? "", data.ctx, data.evidence.texts);
     if (!verdict.ok) {
       return { ok: false as const, error: `No aprobable: ${verdict.failures.join(" · ")}` };
+    }
+    if (v?.prelude_headline) {
+      const hv = validatePreludeHeadline(v.prelude_headline, data.ctx, data.evidence.texts);
+      if (!hv.ok) {
+        return { ok: false as const, error: `Titular no aprobable: ${hv.failures.join(" · ")}` };
+      }
     }
   }
   const { error } = await db
@@ -296,31 +318,25 @@ export async function regeneratePreludeAction(versionId: string, path: string) {
   if (data.evidence.claimIds.length < MIN_EVIDENCE_CLAIMS) {
     return { ok: false as const, error: "Evidencia insuficiente para un prelude honesto." };
   }
-  // Hasta 2 intentos: si el modelo incumple el contrato, se reintenta con los
-  // fallos como feedback; si vuelve a fallar, NO se guarda nada a medias.
-  let feedback = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const raw = await aiComplete({
-      system: preludeSystemPrompt(data.ctx),
-      userText: preludeUserPrompt(data.evidence) + feedback,
-      maxTokens: 400,
-    });
-    const text = raw.trim().replace(/^["“]|["”]$/g, "");
-    const verdict = validatePrelude(text, data.ctx, data.evidence.texts);
-    if (verdict.ok) {
-      const { error } = await db
-        .from("property_story_versions")
-        .update({
-          prelude: text,
-          prelude_status: "generated",
-          prelude_evidence: { claimIds: data.evidence.claimIds },
-          prelude_generated_at: new Date().toISOString(),
-        })
-        .eq("id", versionId);
-      revalidatePath(path);
-      return error ? { ok: false as const, error: error.message } : { ok: true as const, prelude: text };
-    }
-    feedback = `\n\nEL INTENTO ANTERIOR INCUMPLIÓ: ${verdict.failures.join("; ")}. Corrígelo.`;
+  // Mismo bucle fail-closed que el generador en lote (composePrelude): si el
+  // modelo incumple, se reintenta con los fallos como feedback; si vuelve a
+  // fallar, NO se guarda nada a medias.
+  const result = await composePrelude(data.ctx, data.evidence);
+  if (!result.ok) {
+    return { ok: false as const, error: `El modelo no cumplió el contrato: ${result.failures.join(" · ")}` };
   }
-  return { ok: false as const, error: "El modelo no produjo un prelude que cumpla el contrato." };
+  const { error } = await db
+    .from("property_story_versions")
+    .update({
+      prelude: result.body,
+      prelude_headline: result.headline,
+      prelude_status: "generated",
+      prelude_evidence: { claimIds: data.evidence.claimIds },
+      prelude_generated_at: new Date().toISOString(),
+    })
+    .eq("id", versionId);
+  revalidatePath(path);
+  return error
+    ? { ok: false as const, error: error.message }
+    : { ok: true as const, prelude: result.body, headline: result.headline };
 }

@@ -3,10 +3,18 @@ import sharp from "sharp";
 import { createAdminClient } from "@/lib/db/admin";
 import { removeKnownWatermark } from "./watermark-removal";
 import { isMobiliaImageUrl, toMobiliaOriginal } from "./scrapers/mobilia";
+import { idealistaSourceCandidates, isIdealistaImageUrl } from "./scrapers/idealista";
 
 const BUCKET = "properties-photos";
-const MAX_WIDTH = 1920;
-const WEBP_QUALITY = 82;
+// Techo del máster que guardamos. Estaba en 1920, que para un hero a ancho
+// completo en pantalla retina (1440 CSS px × 2 = 2880) se queda corto y era
+// parte de por qué la foto principal se veía blanda aun con buen original.
+// 2560 cubre el caso real sin irse a ficheros de 15MB; la variante que ve el
+// cliente la sirve el proxy por `?w=`.
+const MAX_WIDTH = 2560;
+// La foto principal es la imagen más importante de la página: 86 en vez de 82
+// cuesta unas decenas de KB y se nota en las superficies planas.
+const WEBP_QUALITY = 86;
 
 export type WatermarkedPhoto = {
   url: string;
@@ -38,26 +46,47 @@ export async function downloadAndWatermark(params: {
     const fetchUrl = isMobiliaImageUrl(params.sourceUrl)
       ? toMobiliaOriginal(params.sourceUrl)
       : params.sourceUrl;
-    let res: Response;
+    // Candidatos de MAYOR a menor resolución para la misma foto. En Idealista
+    // el perfil "seguro" del CDN da 850px; se prueba antes el grande y se cae
+    // al seguro si no existe, en vez de fiarse de que un perfil concreto siga
+    // ahí. Para el resto de orígenes hay un único candidato y esto es un no-op.
+    const sourceCandidates = isIdealistaImageUrl(fetchUrl)
+      ? idealistaSourceCandidates(fetchUrl)
+      : [fetchUrl];
+
+    let rawBuf: Buffer | null = null;
+    let usedUrl = fetchUrl;
     try {
-      res = await fetch(fetchUrl, {
-        headers: {
-          "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)",
-        },
-        cache: "no-store",
-        signal: ctrl.signal,
-      });
+      for (const candidate of sourceCandidates) {
+        try {
+          const res = await fetch(candidate, {
+            headers: {
+              "User-Agent": "smartbc-bot/1.0 (contacto@bcousinoprop.com)",
+            },
+            cache: "no-store",
+            signal: ctrl.signal,
+          });
+          if (!res.ok) continue;
+          const buf = Buffer.from(await res.arrayBuffer());
+          // Un cuerpo diminuto no es una foto: el CDN devuelve páginas de
+          // error con 200 más veces de las que uno esperaría.
+          if (buf.length < 2048) continue;
+          rawBuf = buf;
+          usedUrl = candidate;
+          break;
+        } catch {
+          // siguiente candidato
+        }
+      }
     } finally {
       clearTimeout(timer);
     }
-    if (!res.ok) {
-      return { ok: false, error: `fetch_${res.status}` };
+    if (!rawBuf) {
+      return { ok: false, error: "fetch_failed" };
     }
-
-    const rawBuf = Buffer.from(await res.arrayBuffer());
     // Si la fuente tiene marca de agua constante (ej. Clikalia), la quitamos
     // antes de procesar. Si no, devuelve el buffer igual.
-    const buf = await removeKnownWatermark(fetchUrl, rawBuf);
+    const buf = await removeKnownWatermark(usedUrl, rawBuf);
     const image = sharp(buf, { failOn: "none" }).rotate();
     const meta = await image.metadata();
     const targetWidth = Math.min(meta.width ?? MAX_WIDTH, MAX_WIDTH);

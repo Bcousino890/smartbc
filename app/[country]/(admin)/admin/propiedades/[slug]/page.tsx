@@ -66,6 +66,8 @@ export default async function PropertyDetailPage({
               alt: string | null;
               position: number;
               is_cover: boolean;
+              source_width: number | null;
+              source_height: number | null;
             }>
           | null;
         property_media:

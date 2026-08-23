@@ -25,23 +25,34 @@ export const MAP_ATTRIBUTION =
   '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · ' +
   '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
+// Paleta v2 · "city luxury", no "desert wash". El problema de la v1 era que
+// TODO caía en la misma franja de arena: el viario se fundía con el suelo, la
+// masa urbana no se distinguía del vacío y los parques apenas asomaban. Aquí
+// el suelo se enfría un punto y se reservan los dos extremos de contraste
+// para lo que estructura una ciudad: el viario en BLANCO y la vegetación en
+// verde salvia real. La calidez sigue en el suelo y en la edificación.
 const C = {
-  land: "#f4efe4",
-  landcoverWood: "#e2e7d6",
-  park: "#dde5d0",
-  parkDark: "#d2ddc2",
-  water: "#cdd9de",
-  building: "#e8dfd0",
-  buildingOutline: "#ddd2bf",
-  roadMajor: "#eadfc4",
-  roadMajorCasing: "#ddceac",
-  roadMinor: "#faf6ee",
-  roadMinorCasing: "#e9e1d1",
-  rail: "#ddd4c4",
-  labelDark: "#4a4034",
-  labelMuted: "#8c8172",
-  labelHalo: "#f8f4ec",
-  boundary: "#d8cdba",
+  land: "#f2f0ea",
+  landcoverWood: "#d9e3cc",
+  park: "#cfdec2",
+  parkDark: "#b9cda6",
+  water: "#b6cedb",
+  building: "#e3ddd1",
+  buildingOutline: "#c7bda8",
+  // El viario principal en blanco es lo que hace legible una ciudad: destaca
+  // sobre el suelo cálido sin meter un color nuevo en la escena.
+  roadMajor: "#ffffff",
+  roadMajorCasing: "#d8ccb4",
+  roadSecondary: "#f0ebe0",
+  roadSecondaryCasing: "#ddd3c0",
+  roadMinor: "#fbf9f5",
+  roadMinorCasing: "#e3dbcb",
+  rail: "#cec5b3",
+  labelDark: "#332d24",
+  labelMuted: "#645b4e",
+  labelHalo: "#f7f4ee",
+  boundary: "#cbbfa8",
+  poiDot: "#9c7f4e",
 };
 
 const FONT = ["Noto Sans Regular"];
@@ -56,7 +67,11 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
     name: "BCP Luxury Madrid",
     glyphs: OPENFREEMAP_GLYPHS,
     sources: {
-      openmaptiles: { type: "vector", url: OPENFREEMAP_TILES },
+      // La atribución se declara AQUÍ. Si se deja que MapLibre la tome del
+      // TileJSON y además se pasa `customAttribution`, el pie del mapa
+      // aparece repetido ("OpenMapTiles · OSM | OpenFreeMap · OpenMapTiles ·
+      // OSM"), que es lo que pasaba antes.
+      openmaptiles: { type: "vector", url: OPENFREEMAP_TILES, attribution: MAP_ATTRIBUTION },
     },
     layers: [
       { id: "background", type: "background", paint: { "background-color": C.land } },
@@ -75,14 +90,14 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "fill",
         source: "openmaptiles",
         "source-layer": "park",
-        paint: { "fill-color": C.park, "fill-opacity": 0.9 },
+        paint: { "fill-color": C.park, "fill-opacity": 0.95 },
       },
       {
         id: "park-outline",
         type: "line",
         source: "openmaptiles",
         "source-layer": "park",
-        paint: { "line-color": C.parkDark, "line-width": 0.6, "line-opacity": 0.55 },
+        paint: { "line-color": C.parkDark, "line-width": 0.8, "line-opacity": 0.7 },
       },
       {
         id: "water",
@@ -108,7 +123,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         minzoom: 13,
         paint: {
           "fill-color": C.building,
-          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 15, 0.85],
+          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 15, 0.95],
           "fill-outline-color": C.buildingOutline,
         },
       },
@@ -140,12 +155,39 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "line-width": ["interpolate", ["linear"], ["zoom"], 13, 0.6, 18, 7],
         },
       },
+      // Viario en TRES pesos, no en dos: es lo que da jerarquía urbana. El
+      // secundario en gris cálido separa las travesías de las grandes vías
+      // sin meter un color nuevo.
+      {
+        id: "road-secondary-casing",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": C.roadSecondaryCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.1, 18, 12],
+        },
+      },
+      {
+        id: "road-secondary",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": C.roadSecondary,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 18, 9.5],
+        },
+      },
       {
         id: "road-major-casing",
         type: "line",
         source: "openmaptiles",
         "source-layer": "transportation",
-        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary"]]],
+        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadMajorCasing,
@@ -157,7 +199,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         type: "line",
         source: "openmaptiles",
         "source-layer": "transportation",
-        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary"]]],
+        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadMajor,
@@ -194,7 +236,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "symbol-placement": "line",
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 9.5, 18, 12],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 9.5, 18, 11.5],
         },
         paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.2 },
       },
@@ -208,7 +250,7 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
           "text-font": FONT,
           "text-size": 11,
         },
-        paint: { "text-color": "#8fa3ac", "text-halo-color": C.labelHalo, "text-halo-width": 1.1 },
+        paint: { "text-color": "#6d8b9b", "text-halo-color": C.labelHalo, "text-halo-width": 1.1 },
       },
       {
         id: "place-label",
@@ -219,12 +261,12 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT_MEDIUM,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 11, 16, 14],
-          "text-letter-spacing": 0.08,
+          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 12, 16, 16.5],
+          "text-letter-spacing": 0.12,
           "text-transform": "uppercase",
           "text-max-width": 8,
         },
-        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 1.6 },
+        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 2 },
       },
 
       // ── POIs: la capa que hace posible EXPLORAR. Densidad contenida —
@@ -242,22 +284,24 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         // zoom y descartando la cola rank>=20, que es la que llenaba la
         // escena de clínicas y tiendas de barrio.
         minzoom: 16,
+        // Densidad PROGRESIVA (§5): a z16 solo lo verdaderamente relevante y
+        // a partir de ahí se abre. `rank` bajo = más importante.
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], 20],
+          ["<", ["get", "rank"], ["step", ["zoom"], 10, 17, 16, 18, 20]],
           ["has", "name"],
         ],
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10, 18, 11.5],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10.5, 18, 12],
           "text-anchor": "top",
           "text-offset": [0, 0.7],
           "text-max-width": 7,
           "text-padding": 10,
           "symbol-sort-key": ["get", "rank"],
         },
-        paint: { "text-color": C.labelMuted, "text-halo-color": C.labelHalo, "text-halo-width": 1.4 },
+        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 1.5 },
       },
       {
         id: "poi-dot",
@@ -269,12 +313,26 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
         minzoom: 15,
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], 20],
+          ["<", ["get", "rank"], ["step", ["zoom"], 7, 16, 14, 17, 20]],
           ["has", "name"],
         ],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 2.4, 18, 3.8],
-          "circle-color": "#b9ac96",
+          // El tamaño distingue lo importante de lo secundario…
+          "circle-radius": [
+            "interpolate", ["linear"], ["zoom"],
+            15, ["case", ["<", ["get", "rank"], 7], 3.2, 2.3],
+            18, ["case", ["<", ["get", "rank"], 7], 4.6, 3.4],
+          ],
+          // …y un desvío de tono discreto insinúa la categoría sin convertir
+          // el mapa en un semáforo. NUNCA champán: lo descubierto en OSM no
+          // puede parecer recomendado por BCP (§5).
+          "circle-color": [
+            "match", ["get", "class"],
+            ["park", "garden", "wood", "playground", "pitch"], "#6f8a5c",
+            ["railway", "bus", "airport", "ferry_terminal"], "#5e7382",
+            ["hospital", "pharmacy", "doctors"], "#8a6b6b",
+            C.poiDot,
+          ],
           "circle-stroke-color": C.labelHalo,
           "circle-stroke-width": 1,
         },

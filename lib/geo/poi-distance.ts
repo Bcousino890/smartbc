@@ -22,12 +22,25 @@ const EARTH_RADIUS_KM = 6371;
 // Distancia en línea recta × factor de manzana urbana ≈ distancia andando real.
 const STREET_FACTOR = 1.3;
 const WALK_KMH = 4.8;
-const DRIVE_KMH = 18; // media urbana Madrid, conservadora
 const DRIVE_OVERHEAD_MIN = 3; // aparcar/arrancar
+
+/**
+ * Velocidad media en coche según la DISTANCIA del trayecto. Una media urbana
+ * plana (18 km/h) es honesta para cruzar el barrio, pero aplicada a un viaje
+ * interurbano miente al revés: daba "≈ 78 min en coche" a Torrejón (~25 min
+ * reales), porque un trayecto de 20 km no se hace por calles — se hace por
+ * la A-2. La velocidad sube con la distancia hacia una media de autovía y el
+ * resultado sigue siendo aproximado (`≈`), pero deja de ser absurdo.
+ *
+ *   1 km → ~19 km/h (calles) · 5 km → ~31 · 10 km → ~46 · ≥15 km → 60
+ */
+function driveKmh(straightKm: number): number {
+  return Math.min(60, Math.max(16, 16 + straightKm * 3));
+}
 // Por encima de esto, andar deja de ser la recomendación y se muestra coche.
 const MAX_WALK_MINUTES = 22;
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
@@ -79,7 +92,13 @@ export function computePoiTravel(
     : haversineKm(property.lat, property.lng, poi.latitude, poi.longitude);
   const km = straightKm * STREET_FACTOR;
   const walkMin = Math.max(1, Math.round((km / WALK_KMH) * 60));
-  const driveMin = Math.max(2, Math.round((km / DRIVE_KMH) * 60) + DRIVE_OVERHEAD_MIN);
+  // En trayectos largos el factor de callejero también baja: la mayor parte
+  // del recorrido es vía rápida, no zigzag de manzanas.
+  const driveKm = straightKm * (straightKm > 8 ? 1.2 : STREET_FACTOR);
+  const driveMin = Math.max(
+    2,
+    Math.round((driveKm / driveKmh(straightKm)) * 60) + DRIVE_OVERHEAD_MIN,
+  );
 
   const canWalk = poi.travel_modes.includes("walk") && walkMin <= MAX_WALK_MINUTES;
   const canDrive = poi.travel_modes.includes("drive");

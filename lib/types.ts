@@ -106,6 +106,11 @@ export type Property = {
   // SmartLink 2.0: clase de estancia por foto (alineada 1:1 con `photos`).
   // Solo el nombre de la clase — nada más de la metadata IA cruza al cliente.
   photoClasses?: Array<string | null>;
+  /** Alineado con `photos`: true si la foto lleva marca de agua de un portal. */
+  photoWatermarked?: boolean[];
+  /** Dimensiones reales de la portada, para acotar el `srcset` del hero. */
+  coverWidth?: number | null;
+  coverHeight?: number | null;
 };
 
 export type Filters = {

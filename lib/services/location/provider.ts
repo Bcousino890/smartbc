@@ -50,6 +50,8 @@ export const LOCATION_EVENTS = [
   "map_curated_poi_select",
   "map_university_select",
   "map_discovered_place_select",
+  "zone_search_submit",
+  "zone_search_result_select",
   "map_external_osm_open",
   "location_overview_restore",
 ] as const;
@@ -61,9 +63,10 @@ export function isAllowedLocationEvent(name: string): name is LocationEvent {
 
 /** Evento que corresponde a cada fuente de destino. */
 export function selectEventFor(
-  source: "bcp_curated" | "osm_discovered" | "university",
+  source: "bcp_curated" | "osm_discovered" | "university" | "osm_search",
 ): LocationEvent {
   if (source === "university") return "map_university_select";
   if (source === "osm_discovered") return "map_discovered_place_select";
+  if (source === "osm_search") return "zone_search_result_select";
   return "map_curated_poi_select";
 }

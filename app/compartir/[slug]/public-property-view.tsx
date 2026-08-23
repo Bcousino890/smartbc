@@ -23,6 +23,8 @@ import { formatPrice } from "@/lib/format";
 import { shareSlug } from "@/lib/share-slug";
 import { detectVideoType, getYoutubeEmbedUrl, getVimeoEmbedUrl } from "@/lib/video-embed";
 import { splitDescriptionForFactsLed } from "@/lib/services/story/fallback";
+import { isMicroChapter, microChapterFact } from "@/lib/services/story/micro-chapter";
+import { heroSrcSet } from "./hero-srcset";
 import { CHAPTER_HEADINGS, type PublicStoryBlock, type StoryChapter } from "@/lib/services/story/types";
 import { groupFeatures } from "@/lib/property-features-taxonomy";
 import { ATICO_FLOOR } from "@/lib/floor";
@@ -85,8 +87,13 @@ const CHAPTER_PHOTO_CLASSES: Record<StoryChapter, string[]> = {
   // Sin clase de foto propia para acabados: mejor bloque solo-texto que
   // reutilizar un salón que no aporta información (decisión del piloto).
   finishes: [],
+  // "LA FINCA" habla del INMUEBLE: fachada, portal, zaguán, patio, entrada y
+  // zonas comunes. Nada de calle, edificios vecinos, monumentos ni skyline —
+  // eso es `street_context`, y su sitio es el barrio, no la finca. Antes las
+  // dos cosas compartían clase (`facade_building` incluía "calle"), y por eso
+  // aparecían iglesias y fachadas ajenas encabezando el capítulo.
   building: ["facade_building"],
-  barrio: ["facade_building", "view"],
+  barrio: ["street_context", "view"],
 };
 
 const CHAPTER_ORDER: StoryChapter[] = [
@@ -133,6 +140,7 @@ export function PublicPropertyView({
   publicUrl,
   story,
   prelude,
+  preludeHeadline,
   neighborhood,
   universities,
   mapProvider,
@@ -149,6 +157,9 @@ export function PublicPropertyView({
   /** Apertura editorial aprobada (Property Prelude). Sustituye al overview
    *  como comienzo del libro de la vivienda; nunca conviven los dos. */
   prelude?: string | null;
+  /** Titular editorial del spread (columna izquierda). Opcional: sin él la
+   *  banda se compone igual, solo con el eyebrow. */
+  preludeHeadline?: string | null;
   neighborhood?: NeighborhoodData | null;
   /** Universidades cercanas (catálogo existente, mismo cálculo de tiempos). */
   universities?: NearbyUniversity[];
@@ -202,9 +213,23 @@ export function PublicPropertyView({
   // queda como capa de evidencia en admin. Sin prelude, el overview sigue
   // haciendo de intro como hasta ahora.
   const intro = prelude ? null : (blocks?.find((b) => b.chapter === "overview") ?? null);
-  const chapterBlocks = (blocks ?? []).filter((b) =>
-    CHAPTER_ORDER.includes(b.chapter),
-  );
+  // El cuerpo llega con los párrafos separados por líneas en blanco: el
+  // spread los renderiza como bloques con aire, no como un muro de texto.
+  const preludeParagraphs = (prelude ?? "")
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  // §9 · REGLA DE MICRO-CAPÍTULO (presentación, no validación).
+  // Un capítulo que solo dice un dato suelto ("Finca construida en 1941.") no
+  // sostiene una banda entera con su rótulo: el hecho se enseña en Detalles y
+  // el capítulo desaparece. El dato NO se pierde ni se relaja ningún
+  // invariante — solo cambia de sitio.
+  const allChapterBlocks = (blocks ?? []).filter((b) => CHAPTER_ORDER.includes(b.chapter));
+  const chapterBlocks = allChapterBlocks.filter((b) => !isMicroChapter(b.chapter, b.copy));
+  const movedFacts = allChapterBlocks
+    .filter((b) => isMicroChapter(b.chapter, b.copy))
+    .map((b) => microChapterFact(b.copy))
+    .filter(Boolean);
   const barrioBlock = blocks?.find((b) => b.chapter === "barrio") ?? null;
 
   // Asignación foto→capítulo: primera foto con clase compatible aún no usada.
@@ -214,25 +239,34 @@ export function PublicPropertyView({
     const used = new Set<number>([0]);
     const photos = property.photos ?? [];
     const classes = property.photoClasses ?? [];
+    const marked = property.photoWatermarked ?? [];
     const map = new Map<StoryChapter, string>();
     for (const block of chapterBlocks) {
       const wanted = CHAPTER_PHOTO_CLASSES[block.chapter];
-      const idx = photos.findIndex(
-        (_, i) => !used.has(i) && classes[i] != null && wanted.includes(classes[i]!),
-      );
-      if (idx >= 0) {
+      const candidates = photos
+        .map((_, i) => i)
+        .filter((i) => !used.has(i) && classes[i] != null && wanted.includes(classes[i]!));
+      // Entre las candidatas de la clase correcta, primero las limpias: una
+      // foto con el logo de otro portal encabezando un capítulo es lo menos
+      // premium que puede pasar. Si TODAS están marcadas se usa igualmente la
+      // primera — mejor una foto marcada que un capítulo mutilado.
+      const idx = candidates.find((i) => !marked[i]) ?? candidates[0];
+      if (idx != null) {
         used.add(idx);
         map.set(block.chapter, photos[idx]);
       }
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [story, property.photos, property.photoClasses]);
+  }, [story, property.photos, property.photoClasses, property.photoWatermarked]);
 
   // Capítulos partidos en dos tandas: el vídeo signature entra tras el 2º
-  // (patrón DAMAC medido: el film a media página, nunca al final).
-  const firstChapters = chapterBlocks.slice(0, 2);
-  const restChapters = chapterBlocks.slice(2);
+  // (patrón DAMAC medido: el film a media página, nunca al final). El corte
+  // se hace sobre las FILAS ya compuestas, para no partir en dos una pareja
+  // de capítulos solo-texto.
+  const chapterRows = buildChapterRows(chapterBlocks, chapterPhotos);
+  const firstRows = chapterRows.slice(0, 2);
+  const restRows = chapterRows.slice(2);
 
   // FACTS-LED sin capítulos limpios: descripción legible bajo "Información
   // de la vivienda" — splitter determinista ≤70 palabras, frases de agencia
@@ -301,6 +335,7 @@ export function PublicPropertyView({
       <HeroMedia
         heroVideo={heroVideo}
         coverImage={property.image ?? property.photos?.[0] ?? null}
+        coverWidth={property.coverWidth ?? null}
         title={property.title}
         photoCount={property.photos?.length ?? 0}
         onOpenGallery={() => {
@@ -391,8 +426,24 @@ export function PublicPropertyView({
             heading: el comienzo de un libro, no una ficha. Cuerpo mayor que
             el copy de capítulo, interlineado generoso y ancho de lectura. */}
         {prelude && blocks && (
-          <section className="mx-auto mt-10 max-w-[50rem] px-1 md:mt-14">
-            <p className="bcp-prelude text-ink/85">{prelude}</p>
+          <section className="bcp-prelude-spread mx-auto mt-12 max-w-[71rem] px-1 md:mt-20">
+            <div className="md:flex md:items-start md:gap-12 lg:gap-16">
+              {/* Columna izquierda (35-40%): eyebrow + titular editorial. */}
+              <div className="md:w-[36%] md:shrink-0">
+                <p className="crm-label-sm text-gold-dark">La residencia</p>
+                {preludeHeadline && (
+                  <h2 className="bcp-prelude-headline mt-3 text-ink md:mt-4">{preludeHeadline}</h2>
+                )}
+              </div>
+              {/* Columna derecha (60-65%): el prelude, en medida de lectura. */}
+              <div className="mt-6 md:mt-0 md:w-[64%] md:max-w-[45rem]">
+                {preludeParagraphs.map((p, i) => (
+                  <p key={i} className={`bcp-prelude text-ink/85${i > 0 ? " mt-5" : ""}`}>
+                    {p}
+                  </p>
+                ))}
+              </div>
+            </div>
           </section>
         )}
 
@@ -403,11 +454,9 @@ export function PublicPropertyView({
         )}
 
         {/* 05-10 · CAPÍTULOS (primera tanda) */}
-        {firstChapters.length > 0 && (
+        {firstRows.length > 0 && (
           <StoryChapters
-            blocks={firstChapters}
-            photos={chapterPhotos}
-            startIndex={0}
+            rows={firstRows}
             onView={(ch) => trackerRef.current?.trackEvent("story_chapter_view", { chapter: ch })}
           />
         )}
@@ -425,7 +474,7 @@ export function PublicPropertyView({
         )}
 
         {/* Conversión MID tras el momento fuerte de media/story. */}
-        {(firstChapters.length > 0 || horizontalVideos.length > 0 || heroVideo) && (
+        {(firstRows.length > 0 || horizontalVideos.length > 0 || heroVideo) && (
           <div className="mt-8 text-center">
             <a
               href="#contacto"
@@ -439,11 +488,9 @@ export function PublicPropertyView({
         )}
 
         {/* Capítulos restantes */}
-        {restChapters.length > 0 && (
+        {restRows.length > 0 && (
           <StoryChapters
-            blocks={restChapters}
-            photos={chapterPhotos}
-            startIndex={firstChapters.length}
+            rows={restRows}
             onView={(ch) => trackerRef.current?.trackEvent("story_chapter_view", { chapter: ch })}
           />
         )}
@@ -471,7 +518,7 @@ export function PublicPropertyView({
         )}
 
         {/* 12 · DETALLES DE LA VIVIENDA — taxonomía determinista. */}
-        {detailGroups.length > 0 && (
+        {(detailGroups.length > 0 || movedFacts.length > 0) && (
           <section className="mt-5 rounded-2xl border border-gold/20 bg-white/85 p-6 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.35)] backdrop-blur-sm md:p-8">
             <h2 className="crm-section-title text-ink">Detalles de la vivienda</h2>
             <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -489,6 +536,20 @@ export function PublicPropertyView({
                 </div>
               ))}
             </div>
+            {/* Datos rescatados de capítulos que no daban para capítulo. Van
+                en frase, no en viñeta: no son etiquetas de taxonomía. */}
+            {movedFacts.length > 0 && (
+              <div className="mt-6 border-t border-gold/15 pt-5">
+                <ul className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm text-ink/75 md:grid-cols-2">
+                  {movedFacts.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
 
@@ -533,6 +594,11 @@ export function PublicPropertyView({
               category === "educacion" ? "location_university_select" : "location_poi_select",
               { name, category, experienceState },
             )
+          }
+          // Búsqueda de zona: jamás la consulta en crudo (§17-18) — solo el
+          // hecho de buscar y la categoría/fuente del resultado elegido.
+          onSearchEvent={(event, meta) =>
+            trackerRef.current?.trackEvent(event, { ...meta, experienceState })
           }
         />
 
@@ -644,6 +710,7 @@ export function PublicPropertyView({
 function HeroMedia({
   heroVideo,
   coverImage,
+  coverWidth,
   title,
   photoCount,
   onOpenGallery,
@@ -652,6 +719,8 @@ function HeroMedia({
 }: {
   heroVideo: VideoMedia | null;
   coverImage: string | null;
+  /** Ancho real de la portada; acota el `srcset`. */
+  coverWidth: number | null;
   title: string;
   photoCount: number;
   onOpenGallery: () => void;
@@ -715,9 +784,14 @@ function HeroMedia({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={coverImage}
+            srcSet={heroSrcSet(coverImage, coverWidth)}
+            // El hero ocupa el ancho completo del viewport: cualquier otra
+            // cosa haría que el navegador pidiese una variante pequeña.
+            sizes="100vw"
             alt={title}
             className="h-full w-full object-cover"
             fetchPriority="high"
+            decoding="async"
           />
         ) : null}
         {/* Gradiente inferior para que el acceso a galería siempre se lea. */}
@@ -739,29 +813,158 @@ function HeroMedia({
 
 // ─── 05-10 · CAPÍTULOS con foto integrada y alternancia ──────────────────────
 
+/** Un capítulo sin foto y de longitud contenida puede compartir fila con el
+ *  siguiente: dos columnas equilibradas en vez de dos párrafos sueltos. */
+const PAIRABLE_WORDS = 85;
+function isPairable(copy: string): boolean {
+  return (copy.trim().match(/\S+/g) ?? []).length <= PAIRABLE_WORDS;
+}
+
+type ChapterRow =
+  | { kind: "photo"; block: PublicStoryBlock; photo: string; reversed: boolean }
+  | { kind: "solo"; block: PublicStoryBlock }
+  | { kind: "pair"; left: PublicStoryBlock; right: PublicStoryBlock };
+
+/**
+ * Composición de los capítulos, calculada ANTES de partirlos en tandas: los
+ * que llevan foto alternan izquierda/derecha (patrón EMAAR); los que se
+ * quedan sin foto no se dejan caer como párrafos sueltos — si vienen dos
+ * seguidos y ambos son cortos forman una rejilla a dos columnas, y si van
+ * solos se maquetan como el spread del prelude.
+ *
+ * Se calcula sobre la lista COMPLETA a propósito: el vídeo signature y el CTA
+ * se cuelan entre la primera tanda y el resto, y partir por número de
+ * capítulos rompía la pareja justo por la mitad (visto en BC-0527).
+ */
+function buildChapterRows(
+  blocks: PublicStoryBlock[],
+  photos: Map<StoryChapter, string>,
+): ChapterRow[] {
+  const rows: ChapterRow[] = [];
+  let photoIndex = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const photo = photos.get(block.chapter) ?? null;
+    if (photo) {
+      rows.push({ kind: "photo", block, photo, reversed: photoIndex % 2 === 1 });
+      photoIndex++;
+      continue;
+    }
+    const next = blocks[i + 1];
+    const nextPhoto = next ? photos.get(next.chapter) ?? null : null;
+    if (next && !nextPhoto && isPairable(block.copy) && isPairable(next.copy)) {
+      rows.push({ kind: "pair", left: block, right: next });
+      i++;
+      continue;
+    }
+    rows.push({ kind: "solo", block });
+  }
+  return rows;
+}
+
 function StoryChapters({
-  blocks,
-  photos,
-  startIndex,
+  rows,
   onView,
 }: {
-  blocks: PublicStoryBlock[];
-  photos: Map<StoryChapter, string>;
-  startIndex: number;
+  rows: ChapterRow[];
   onView: (chapter: string) => void;
 }) {
   return (
-    <div className="mt-8 space-y-8 md:space-y-12">
-      {blocks.map((block, i) => (
-        <Chapter
-          key={block.chapter}
-          block={block}
-          photo={photos.get(block.chapter) ?? null}
-          // Alternancia izquierda/derecha estricta (patrón EMAAR medido).
-          reversed={(startIndex + i) % 2 === 1}
-          onView={onView}
-        />
-      ))}
+    <div className="mt-8 space-y-8 md:space-y-14">
+      {rows.map((row) =>
+        row.kind === "photo" ? (
+          <Chapter
+            key={row.block.chapter}
+            block={row.block}
+            photo={row.photo}
+            reversed={row.reversed}
+            onView={onView}
+          />
+        ) : row.kind === "pair" ? (
+          <TextChapterPair key={row.left.chapter} left={row.left} right={row.right} onView={onView} />
+        ) : (
+          <TextChapter key={row.block.chapter} block={row.block} onView={onView} />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Observador de lectura del capítulo: una sola vez, al 40% visible. */
+function useChapterSeen(chapter: string, onView: (c: string) => void) {
+  const ref = useRef<HTMLElement | null>(null);
+  const seen = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !seen.current) {
+          seen.current = true;
+          onView(chapter);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [chapter, onView]);
+  return ref;
+}
+
+/** Capítulo solo-texto: rótulo a la izquierda, texto en medida de lectura a
+ *  la derecha. Es la misma retórica del spread del prelude, y evita el
+ *  párrafo centrado a la deriva entre dos capítulos con foto. */
+function TextChapter({
+  block,
+  onView,
+}: {
+  block: PublicStoryBlock;
+  onView: (chapter: string) => void;
+}) {
+  const ref = useChapterSeen(block.chapter, onView);
+  return (
+    <section ref={ref} className="border-t border-gold/20 pt-7 md:pt-9">
+      <div className="md:flex md:items-start md:gap-12 lg:gap-16">
+        <div className="md:w-[36%] md:shrink-0">
+          <h2 className="crm-section-title text-ink">{CHAPTER_HEADINGS[block.chapter]}</h2>
+        </div>
+        <div className="mt-3 md:mt-0 md:w-[64%] md:max-w-[45rem]">
+          <p className="text-[1.02rem] leading-[1.8] text-ink/75 md:text-[1.08rem]">{block.copy}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Dos capítulos solo-texto seguidos: rejilla editorial 2-up en desktop,
+ *  apilados en móvil. La línea superior los une como una unidad compuesta en
+ *  vez de dejarlos como dos bloques huérfanos. */
+function TextChapterPair({
+  left,
+  right,
+  onView,
+}: {
+  left: PublicStoryBlock;
+  right: PublicStoryBlock;
+  onView: (chapter: string) => void;
+}) {
+  const refLeft = useChapterSeen(left.chapter, onView);
+  const refRight = useChapterSeen(right.chapter, onView);
+  return (
+    <div className="border-t border-gold/20 pt-7 md:pt-9">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-14">
+        {[
+          { block: left, ref: refLeft },
+          { block: right, ref: refRight },
+        ].map(({ block, ref }) => (
+          <section key={block.chapter} ref={ref} className="max-w-[34rem]">
+            <h2 className="crm-section-title text-ink">{CHAPTER_HEADINGS[block.chapter]}</h2>
+            <p className="mt-3 text-[1.02rem] leading-[1.8] text-ink/75">{block.copy}</p>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -773,28 +976,11 @@ function Chapter({
   onView,
 }: {
   block: PublicStoryBlock;
-  photo: string | null;
+  photo: string;
   reversed: boolean;
   onView: (chapter: string) => void;
 }) {
-  const ref = useRef<HTMLElement | null>(null);
-  const seen = useRef(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting) && !seen.current) {
-          seen.current = true;
-          onView(block.chapter);
-          obs.disconnect();
-        }
-      },
-      { threshold: 0.4 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [block.chapter, onView]);
+  const ref = useChapterSeen(block.chapter, onView);
 
   const copy = (
     <div className="flex flex-col justify-center">
@@ -802,15 +988,6 @@ function Chapter({
       <p className="mt-3 max-w-xl text-base leading-relaxed text-ink/75">{block.copy}</p>
     </div>
   );
-
-  // Sin foto de su clase: capítulo compacto solo-texto (jamás foto incorrecta).
-  if (!photo) {
-    return (
-      <section ref={ref} className="mx-auto max-w-3xl">
-        {copy}
-      </section>
-    );
-  }
 
   return (
     <section

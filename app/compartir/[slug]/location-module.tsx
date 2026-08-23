@@ -24,14 +24,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Compass, Dumbbell, GraduationCap, HeartPulse, Landmark, Lock, MapPin,
+  Car, Compass, Dumbbell, Footprints, GraduationCap, HeartPulse, Landmark, Loader2, Lock, MapPin, Search,
   Maximize2, Minus, Plus, ShoppingBag, TrainFront, Trees, UtensilsCrossed, X,
 } from "lucide-react";
-import { buildMosaic, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
+import { buildMosaic, clampPointInView, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
-import { fromCuratedPoi, type LocationDestination } from "@/lib/services/location/destination";
+import { residenceMarkerHtml } from "@/lib/services/location/markers";
+import { LOCATION_EASING, LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
+import { formatDistance, fromSearchResult, mergeResults, searchLocal } from "@/lib/services/location/search";
+import type { SearchPlaceDto } from "@/lib/services/location/search";
+import { fromCuratedPoi, fromUniversity, type LocationDestination } from "@/lib/services/location/destination";
+
+/** Una universidad se distingue de un POI curado por su campus: es el único
+ *  campo que el catálogo de universidades añade sobre `PoiTravel`. */
+function isUniversity(p: PoiTravel): p is NearbyUniversity {
+  return "campusLabel" in p;
+}
 
 // Basemap: CARTO Voyager sobre datos de OpenStreetMap.
 //
@@ -66,6 +76,10 @@ const categoryOf = (c: string) => CATEGORY[c] ?? { label: "", Icon: MapPin };
 const modeLabel = (m: PoiTravel["mode"]) => (m === "walk" ? "a pie" : "en coche");
 /** Banda superior reservada a la ficha contextual (alto de la ficha + aire). */
 const CARD_BAND_PX = 168;
+/** La placa del destino curado es pequeña: le basta con su propio alto más
+ *  un respiro. Reservar los 168px de la ficha empujaba el mapa hacia abajo
+ *  para dejar sitio a algo que ya no existe. */
+const PLAQUE_BAND_PX = 72;
 
 export type LocationNeighborhood = {
   displayName: string;
@@ -84,6 +98,7 @@ export function LocationModule({
   fallbackCoords,
   onView,
   onPoiClick,
+  onSearchEvent,
   onExplore,
   onRestore,
 }: {
@@ -99,6 +114,12 @@ export function LocationModule({
   fallbackCoords: { lat: number; lng: number; zoom: number };
   onView: () => void;
   onPoiClick: (name: string, category: string) => void;
+  /** Eventos de búsqueda de zona. Sin la consulta en crudo: solo categoría y
+   *  fuente del resultado elegido (§17-18). */
+  onSearchEvent?: (
+    event: "zone_search_submit" | "zone_search_result_select",
+    meta: Record<string, string>,
+  ) => void;
   onExplore: () => void;
   onRestore: () => void;
 }) {
@@ -110,6 +131,13 @@ export function LocationModule({
   // cápsulas del mapa, la lista inferior y las universidades. Una sola
   // máquina de estados, no cuatro implementaciones.
   const [focus, setFocus] = useState<PoiTravel | null>(null);
+  // Rail de conectividad: el indicador de viaje viaja hasta el nodo elegido.
+  const railRef = useRef<HTMLUListElement | null>(null);
+  const indicatorRef = useRef<HTMLSpanElement | null>(null);
+  const railAnimRef = useRef<Animation | null>(null);
+  /** Falso hasta la primera selección: al cargar, el indicador se coloca en
+   *  reposo sin animar — el overview entra quieto (§41). */
+  const [indicatorReady, setIndicatorReady] = useState(false);
   const activePoi = focus?.name ?? null;
   // Lugar DESCUBIERTO por el cliente en el basemap. Se guarda aparte de los
   // POIs curados: nunca se mezclan ni se presenta como recomendación de BCP.
@@ -164,6 +192,71 @@ export function LocationModule({
   const rail = ordered.slice(0, 5);
   const mapPois = ordered.slice(0, 4);
 
+  // ── Indicador de viaje ──
+  // Se anima hasta el CENTRO REAL del nodo activo, medido en el DOM: con
+  // etiquetas de ancho variable y un rail que en móvil hace scroll, calcular
+  // la posición por porcentaje se desalinea. Y se mide dentro del sistema de
+  // coordenadas del propio rail, no del viewport.
+  const railIndex = focus ? rail.findIndex((p) => p.name === focus.name) : -1;
+  useEffect(() => {
+    const railEl = railRef.current;
+    const indicator = indicatorRef.current;
+    if (!railEl || !indicator) return;
+
+    const railRect = railEl.getBoundingClientRect();
+    // En reposo el indicador espera al COMIENZO del hilo, donde arranca el
+    // recorrido (el 10% coincide con el inicio del degradado del rail). Sin
+    // ese punto de partida, la primera selección hacía aparecer el indicador
+    // ya colocado sobre el nodo y el viaje —que es justo lo que cuenta la
+    // historia— no se veía nunca. Medido en la QA de movimiento.
+    const restX = railRect.width * 0.1;
+    const node =
+      railIndex >= 0
+        ? railEl.querySelector<HTMLElement>(`[data-rail-node="${railIndex}"]`)
+        : null;
+    let toX = restX;
+    if (node) {
+      const nodeRect = node.getBoundingClientRect();
+      toX = nodeRect.left - railRect.left + nodeRect.width / 2;
+    }
+
+    // Interrumpible: si se pulsa otro destino a mitad de recorrido, el viaje
+    // anterior se cancela en seco en vez de encolarse (§40).
+    railAnimRef.current?.cancel();
+
+    const reduced = prefersReducedMotion();
+    const previous = indicator.dataset.x;
+    const fromX = previous ? Number.parseFloat(previous) : restX;
+    indicator.dataset.x = String(toX);
+
+    const place = (x: number) => {
+      indicator.style.transform = `translateX(${x}px) translateX(-50%)`;
+    };
+
+    // La colocación INICIAL (en reposo, sin selección) no se anima: el
+    // overview tiene que entrar quieto (§41). A partir de ahí, cada cambio
+    // viaja — incluida la primera selección, que es la que más importa.
+    if (reduced || !indicatorReady || Math.abs(toX - fromX) < 1) {
+      place(toX);
+      setIndicatorReady(true);
+      return;
+    }
+    place(toX);
+    railAnimRef.current = indicator.animate(
+      [
+        { transform: `translateX(${fromX}px) translateX(-50%)` },
+        { transform: `translateX(${toX}px) translateX(-50%)` },
+      ],
+      { duration: LOCATION_MOTION.rail, easing: LOCATION_EASING, fill: "forwards" },
+    );
+
+    // En móvil el rail hace scroll: el nodo elegido tiene que quedar a la vista.
+    node?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest", inline: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [railIndex, indicatorReady]);
+
+  useEffect(() => () => railAnimRef.current?.cancel(), []);
+
   // ── Vista del mapa ──
   const view = useMemo(() => {
     if (!size) return { lat: center.lat, lng: center.lng, zoom: 15 };
@@ -172,14 +265,19 @@ export function LocationModule({
       // en un lienzo más bajo y luego se baja el contenido. En móvil la ficha
       // ocupa casi todo el ancho, así que ese hueco es la única forma de que
       // no tape a la vivienda ni al destino.
-      const BAND = CARD_BAND_PX;
+      const BAND = PLAQUE_BAND_PX;
       const padding = Math.max(48, Math.round(Math.min(size.w, size.h - BAND) * 0.12));
       const fitted = fitTwoPoints({
         a: { lat: center.lat, lng: center.lng },
         b: { lat: focus.latitude, lng: focus.longitude },
         width: size.w, height: Math.max(140, size.h - BAND), padding, maxZoom: 16,
       });
-      return shiftViewVertically(fitted, -BAND / 2);
+      // La banda se reserva DONDE va la ficha: arriba en escritorio, abajo en
+      // móvil (donde es una tarjeta inferior). Reservarla siempre arriba hacía
+      // que en móvil la tarjeta acabara tapando el marcador de la vivienda,
+      // que es justo lo que la banda existe para evitar.
+      const cardAtBottom = size.w < 768;
+      return shiftViewVertically(fitted, cardAtBottom ? BAND / 2 : -BAND / 2);
     }
     const z = contextZoomForWidth(size.w, center.lat);
     if (!hasPreciseCoords) return { lat: center.lat, lng: center.lng, zoom: Math.min(z, fallbackCoords.zoom) };
@@ -194,7 +292,15 @@ export function LocationModule({
       padding: Math.max(56, Math.round(Math.min(size.w, size.h) * 0.16)),
       minZoom: Math.max(13, z - 2), maxZoom: z,
     });
-    return fitted;
+    // Si los destinos caen todos al mismo lado, el encuadre empuja la vivienda
+    // contra el borde y en móvil el medallón se corta. Se recentra lo justo.
+    return clampPointInView(
+      fitted,
+      { lat: center.lat, lng: center.lng },
+      size.w,
+      size.h,
+      Math.max(64, Math.round(size.w * 0.16)),
+    );
   }, [size, center.lat, center.lng, hasPreciseCoords, fallbackCoords.zoom, focus, mapPois]);
 
   const mosaic: Mosaic | null = useMemo(() => {
@@ -202,102 +308,70 @@ export function LocationModule({
     return buildMosaic({ lat: view.lat, lng: view.lng, zoom: view.zoom, width: size.w, height: size.h });
   }, [size, view]);
 
-  const propertyPt = mosaic && hasPreciseCoords ? mosaic.project(center.lat, center.lng) : null;
-  const focusPt = mosaic && focus ? mosaic.project(focus.latitude, focus.longitude) : null;
+  // Proyección de las capas HTML (medallón, cápsulas, área de foco, curva).
+  // Con el mapa vectorial la da MAPLIBRE: dos matemáticas distintas para el
+  // mismo encuadre acabarían desalineándose. El mosaico solo proyecta cuando
+  // es él quien pinta (fallback).
+  const projectorRef = useRef<((lat: number, lng: number) => { left: number; top: number }) | null>(null);
+  const [projVersion, setProjVersion] = useState(0);
+  const handleProjector = useCallback(
+    (fn: ((lat: number, lng: number) => { left: number; top: number }) | null) => {
+      projectorRef.current = fn;
+      setProjVersion((v) => v + 1);
+    },
+    [],
+  );
+  const project = useMemo(() => {
+    if (useVectorMap && projectorRef.current) return projectorRef.current;
+    return mosaic ? mosaic.project : null;
+    // projVersion fuerza el recálculo cuando el mapa publica un proyector nuevo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useVectorMap, mosaic, projVersion]);
+
+  const propertyPt = project && hasPreciseCoords ? project(center.lat, center.lng) : null;
+  const focusPt = project && focus ? project(focus.latitude, focus.longitude) : null;
 
   // ── Modo explorar (Leaflet bajo demanda) ──
-  const leafletRef = useRef<any>(null);
-  const mapElRef = useRef<HTMLDivElement | null>(null);
 
   /** ÚNICO punto de entrada del DESTINATION FOCUS. */
   const selectPoi = useCallback(
     (p: PoiTravel) => {
+      // El encuadre lo calcula `view` (fitTwoPoints con la banda de la ficha
+      // reservada) y lo aplica la cámara del mapa: una sola geometría para
+      // overview y exploración.
       setFocus((prev) => (prev?.name === p.name ? prev : p));
       onPoiClick(p.name, p.category);
-      const inst = leafletRef.current;
-      if (!inst) return; // bloqueado: el encuadre lo resuelve el mosaico
-      const bounds = inst.L.latLngBounds([center.lat, center.lng], [p.latitude, p.longitude]);
-      inst.map.flyToBounds(bounds, { padding: [70, 70], duration: 0.7, maxZoom: 16 });
     },
-    [center.lat, center.lng, onPoiClick],
+    [onPoiClick],
   );
-  // Los marcadores de Leaflet se crean una vez: leen el handler por ref para
-  // no quedarse con una versión obsoleta en su closure.
-  const selectPoiRef = useRef(selectPoi);
-  useEffect(() => { selectPoiRef.current = selectPoi; }, [selectPoi]);
 
-  const enterLive = useCallback(async () => {
+  const enterLive = useCallback(() => {
+    // Un solo renderer: "explorar" ya no monta otro mapa, solo desbloquea la
+    // interacción del que ya está pintado.
     setLive(true);
     onExplore();
-    if (mapProvider === "maplibre" && !mapDown) return; // lo monta ZoneExplorerMapLibre
-    const L = (await import("leaflet")).default;
-    if (!document.getElementById("leaflet-css")) {
-      const link = document.createElement("link");
-      link.id = "leaflet-css";
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
-    await new Promise((r) => requestAnimationFrame(() => r(null)));
-    const host = mapElRef.current;
-    if (!host || leafletRef.current) return;
-
-    const map = L.map(host, {
-      center: [view.lat, view.lng], zoom: view.zoom,
-      zoomControl: false, attributionControl: true, scrollWheelZoom: true,
-    });
-    L.tileLayer(TILE_TEMPLATE, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(map);
-
-    L.marker([center.lat, center.lng], {
-      keyboard: false,
-      zIndexOffset: 1000,
-      icon: L.divIcon({
-        className: "",
-        html: `<span class="bcp-live-home"><span class="bcp-live-home-dot"></span><span class="bcp-live-home-label">La vivienda</span></span>`,
-        iconSize: [0, 0], iconAnchor: [0, 0],
-      }),
-    }).addTo(map);
-
-    // Los POIs son pulsables en el mapa vivo: exploración a la EMAAR, con
-    // NUESTRA ficha contextual, nunca el tooltip por defecto de Leaflet.
-    for (const p of [...mapPois, ...universities.slice(0, 3)]) {
-      const mk = L.marker([p.latitude, p.longitude], {
-        title: p.name,
-        icon: L.divIcon({
-          className: "",
-          html: `<span class="bcp-live-poi"></span>`,
-          iconSize: [12, 12], iconAnchor: [6, 6],
-        }),
-      }).addTo(map);
-      mk.on("click", () => selectPoiRef.current?.(p));
-    }
-    leafletRef.current = { L, map };
-  }, [center.lat, center.lng, view.lat, view.lng, view.zoom, mapPois, universities, onExplore, mapProvider, mapDown]);
+  }, [onExplore]);
 
   const exitLive = useCallback(() => {
-    leafletRef.current?.map.remove();
-    leafletRef.current = null;
     setLive(false);
     setFocus(null);
     setPlaceFocus(null);
   }, []);
-
-  useEffect(() => () => leafletRef.current?.map?.remove(), []);
 
   useEffect(() => {
     onExternalOpenRef.current = (name) => onPoiClick(name, "external_osm");
     return () => { onExternalOpenRef.current = null; };
   }, [onPoiClick]);
 
+  /** Vuelta al overview. Una sola puerta: rail, mapa, ficha y listas a la vez. */
   const restoreOverview = useCallback(() => {
+    // El indicador se retira con el mismo carácter con el que llegó; el
+    // encuadre vuelve solo porque `view` se recalcula sin foco.
+    railAnimRef.current?.cancel();
     setFocus(null);
     setPlaceFocus(null);
     onRestore();
-    const inst = leafletRef.current;
-    inst?.map.flyTo([center.lat, center.lng], contextZoomForWidth(size?.w ?? 900, center.lat), {
-      duration: 0.6,
-    });
-  }, [center.lat, center.lng, size?.w, onRestore]);
+  }, [onRestore]);
 
   // ── Cabecera editorial: SOLO dato administrativo verificado. ──
   const editorialLine = useMemo(() => {
@@ -315,11 +389,6 @@ export function LocationModule({
   const focusAreaPx = size ? Math.round(Math.min(size.w, size.h) * 0.46) : 0;
 
   // La ficha contextual se coloca en la banda LIBRE del escenario. Anclarla
-  // siempre arriba tapaba el pill de "La vivienda" —y en móvil lo tapaba
-  // entero—, que es justo el marcador que nunca debe perderse de vista.
-  // Con la banda superior reservada por el encuadre, la ficha va arriba y
-  // centrada: es la posición más legible y ya no puede pisar a nadie.
-  const cardPos = { side: "top" as const, align: "center" as const };
 
   // Cápsula de POI: se oculta si su punto cae fuera del lienzo o si pisa al
   // marcador de la vivienda — mejor un destino menos que un amontonamiento.
@@ -352,18 +421,34 @@ export function LocationModule({
       {rail.length > 0 && (
         <div className="mt-7 px-6 md:px-8">
           <p className="crm-label-sm text-gold-dark">Conectada con Madrid</p>
-          <div className="mt-5 -mx-6 overflow-x-auto px-6 pb-1 md:mx-0 md:overflow-visible md:px-0">
-            <ul className="relative flex min-w-[32rem] items-start gap-1 md:min-w-0">
+          <div className="bcp-rail-scroll mt-7 -mx-6 overflow-x-auto px-6 pb-1 pt-1 md:mx-0 md:overflow-visible md:px-0">
+            <ul ref={railRef} className="relative flex min-w-[32rem] items-start gap-1 md:min-w-0">
               {/* Hilo continuo detrás de los hitos, a la altura de los puntos. */}
               <span
                 aria-hidden
                 className="pointer-events-none absolute left-[10%] right-[10%] top-[5px] h-px bg-gradient-to-r from-transparent via-gold/45 to-transparent"
               />
+              {/* INDICADOR DE VIAJE · viaja por el rail hasta el destino
+                  elegido. Es narrativa de tiempo, no un vehículo sobre un
+                  mapa: por eso vive en el rail y no en la geografía. Su
+                  glifo cambia con el modo (a pie / en coche). */}
+              <span
+                ref={indicatorRef}
+                aria-hidden
+                data-resting={railIndex < 0 ? "true" : "false"}
+                className="bcp-travel-indicator pointer-events-none absolute left-0 top-[5px] z-[2] -translate-y-[92%]"
+              >
+                {focus && focus.mode !== "walk" ? (
+                  <Car size={13} strokeWidth={1.75} />
+                ) : (
+                  <Footprints size={13} strokeWidth={1.75} />
+                )}
+              </span>
               {rail.map((p, i) => {
                 const isActive = activePoi === p.name;
                 const { Icon } = categoryOf(p.category);
                 return (
-                  <li key={p.name} className="bcp-rise relative flex-1" style={{ animationDelay: `${90 + i * 70}ms` }}>
+                  <li key={p.name} className="bcp-rise relative flex-1 scroll-mx-6" style={{ animationDelay: `${90 + i * 70}ms` }}>
                     <button
                       type="button"
                       onClick={() => selectPoi(p)}
@@ -371,7 +456,10 @@ export function LocationModule({
                       data-active={isActive ? "true" : "false"}
                       className="group flex w-full flex-col items-center px-1 text-center"
                     >
+                      {/* El nodo activo se distingue por relleno Y por peso de
+                          la etiqueta, nunca solo por color (§44). */}
                       <span
+                        data-rail-node={i}
                         className={`relative z-[1] block h-[11px] w-[11px] rounded-full border transition ${
                           isActive
                             ? "border-gold-dark bg-gold shadow-[0_0_0_4px_rgba(212,175,127,0.28)]"
@@ -380,7 +468,7 @@ export function LocationModule({
                       />
                       <span
                         className={`crm-number mt-3 block text-lg leading-none transition ${
-                          isActive ? "text-ink" : "text-ink/75"
+                          isActive ? "font-medium text-ink" : "text-ink/75"
                         }`}
                       >
                         {p.minutes}
@@ -415,75 +503,119 @@ export function LocationModule({
           live ? "bcp-map-live h-[64vh] min-h-[420px]" : "h-[52vh] min-h-[340px] md:h-[540px]"
         }`}
       >
+        {/* UN SOLO MAPA para overview y exploración: mismo renderer, mismo
+            estilo, misma cámara, mismos marcadores. Lo único que cambia es el
+            estado de interacción. El mosaico de teselas ráster queda como red
+            de seguridad si MapLibre no carga. */}
+        {useVectorMap ? (
+          <ZoneExplorerMapLibre
+            origin={{ lat: center.lat, lng: center.lng }}
+            originLabel="La vivienda"
+            interactive={live}
+            // En overview la cámara la compone el módulo; al explorar el mapa
+            // se gobierna solo.
+            camera={live ? null : view}
+            // En overview los POIs curados los dibujan las cápsulas
+            // editoriales (con nombre, máximo cuatro y con comprobación de
+            // colisión); al explorar pasan a marcadores de glifo, que es lo
+            // que aguanta la densidad.
+            curated={
+              live
+                ? [...mapPois.map(fromCuratedPoi), ...universities.map(fromUniversity)]
+                : []
+            }
+            focus={
+              placeFocus ??
+              (focus
+                ? isUniversity(focus)
+                  ? fromUniversity(focus)
+                  : fromCuratedPoi(focus)
+                : null)
+            }
+            onSelectPlace={(d) => {
+              setPlaceFocus(d);
+              setFocus(null);
+              onPoiClick(d.name, d.category);
+            }}
+            onSelectCurated={(d) => {
+              // El mapa devuelve un destino; la máquina de estados sigue
+              // hablando en POIs del catálogo, así que se busca el original.
+              const original = [...mapPois, ...universities].find((p) => p.name === d.name);
+              if (original) selectPoi(original);
+            }}
+            onProjector={handleProjector}
+            onUnavailable={() => setMapDown(true)}
+          />
+        ) : (
+          /* Mosaico de respaldo: son <img>, así que pasar el ratón por encima
+             NUNCA intercepta el scroll de la página. */
+          <div className="absolute inset-0" style={{ isolation: "isolate" }} aria-hidden>
+            <div className="bcp-map-tiles absolute inset-0">
+              {mosaic?.tiles.map((t) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${t.z}/${t.x}/${t.y}`}
+                  src={TILE_URL(t.z, t.x, t.y)}
+                  alt="" width={256} height={256} loading="lazy" decoding="async" draggable={false}
+                  className="absolute max-w-none"
+                  style={{ left: t.left, top: t.top, width: 256, height: 256 }}
+                />
+              ))}
+            </div>
+            <div className="bcp-map-wash absolute inset-0" />
+          </div>
+        )}
+
         {live ? (
           <>
-            {useVectorMap ? (
-              <ZoneExplorerMapLibre
-                origin={{ lat: center.lat, lng: center.lng }}
-                originLabel="La vivienda"
-                curated={[...mapPois, ...universities.slice(0, 3)].map(fromCuratedPoi)}
-                focus={placeFocus ?? (focus ? fromCuratedPoi(focus) : null)}
-                onSelectPlace={(d) => {
-                  setPlaceFocus(d);
-                  setFocus(null);
-                  onPoiClick(d.name, d.category);
+            {/* BUSCAR CERCA DE ESTA VIVIENDA · solo al explorar (§1). */}
+            {hasPreciseCoords && (
+              <ZoneSearch
+                property={{ lat: center.lat, lng: center.lng }}
+                curated={ordered}
+                onSelect={(d) => {
+                  // Lo local vuelve por su máquina de estados (rail + lista
+                  // sincronizados); lo externo es exploración de sesión y va
+                  // por la vía del lugar descubierto. El rail curado NUNCA se
+                  // toca (§19).
+                  const original =
+                    d.source === "bcp_curated" || d.source === "university"
+                      ? [...ordered, ...universities].find((p) => p.name === d.name)
+                      : null;
+                  if (original) {
+                    setPlaceFocus(null);
+                    selectPoi(original);
+                  } else {
+                    setFocus(null);
+                    setPlaceFocus(d);
+                  }
                 }}
-                onUnavailable={() => setMapDown(true)}
+                onEvent={(event, meta) => onSearchEvent?.(event, meta)}
               />
-            ) : (
-              <div ref={mapElRef} className="absolute inset-0 h-full w-full" />
             )}
-            {/* Los controles de zoom los pone MapLibre. Los propios solo
-                existen para el renderer anterior: tenerlos a la vez apilaba
-                dos juegos en la misma esquina y se robaban los clics. */}
-            {!useVectorMap && (
-              <div className="absolute right-3 top-3 z-[500] flex flex-col gap-1.5">
-                <button type="button" aria-label="Acercar" onClick={() => leafletRef.current?.map.zoomIn()}
-                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                  <Plus size={15} strokeWidth={2} />
-                </button>
-                <button type="button" aria-label="Alejar" onClick={() => leafletRef.current?.map.zoomOut()}
-                  className="rounded-lg bg-white/95 p-2 text-ink shadow-[0_8px_20px_-12px_rgba(40,28,10,0.6)] transition hover:bg-white">
-                  <Minus size={15} strokeWidth={2} />
-                </button>
-              </div>
-            )}
-            {placeFocus ? (
+            {/* La placa acompaña al destino curado también al explorar: mismo
+                objeto, misma proyección. */}
+            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
+
+            {/* MODO EXPLORACIÓN (EMAAR): un lugar que BCP no había presentado
+                merece contexto — nombre, categoría, dirección y distancia.
+                Lo curado NO pasa por aquí: su información ya vive en el rail. */}
+            {placeFocus && (
               <ContextCard
                 place={placeFocus}
                 onClose={() => { setPlaceFocus(null); restoreOverview(); }}
                 side="top" align="center" live
               />
-            ) : focus ? (
-              <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} live />
-            ) : null}
+            )}
             {/* Control secundario, en esquina: no compite con el mapa. */}
-            <button type="button" onClick={focus ? restoreOverview : exitLive}
+            <button type="button" onClick={focus || placeFocus ? restoreOverview : exitLive}
               className="crm-meta absolute bottom-11 left-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-ink/95 md:bottom-3 px-3 py-1.5 text-cream-50 shadow-[0_10px_24px_-14px_rgba(40,28,10,0.9)] transition hover:bg-ink">
-              {focus ? <Maximize2 size={11} strokeWidth={2} /> : <Lock size={11} strokeWidth={2} />}
-              {focus ? "Ver zona completa" : "Salir de la zona"}
+              {focus || placeFocus ? <Maximize2 size={11} strokeWidth={2} /> : <Lock size={11} strokeWidth={2} />}
+              {focus || placeFocus ? "Ver zona completa" : "Salir de la zona"}
             </button>
           </>
         ) : (
           <>
-            {/* Mosaico: son <img>, así que pasar el ratón por encima NUNCA
-                intercepta el scroll de la página. */}
-            <div className="absolute inset-0" style={{ isolation: "isolate" }} aria-hidden>
-              <div className="bcp-map-tiles absolute inset-0">
-                {mosaic?.tiles.map((t) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`${t.z}/${t.x}/${t.y}`}
-                    src={TILE_URL(t.z, t.x, t.y)}
-                    alt="" width={256} height={256} loading="lazy" decoding="async" draggable={false}
-                    className="absolute max-w-none"
-                    style={{ left: t.left, top: t.top, width: 256, height: 256 }}
-                  />
-                ))}
-              </div>
-              <div className="bcp-map-wash absolute inset-0" />
-            </div>
-
             {/* ÁREA DE FOCO de la vivienda. Es una HERRAMIENTA DE COMPOSICIÓN
                 para anclar la mirada — NO representa un radio de viaje, no
                 lleva minutos dentro y no es una isócrona. */}
@@ -499,25 +631,20 @@ export function LocationModule({
               />
             )}
 
-            {/* CONEXIÓN vivienda → destino: curva, fina y MUY secundaria.
-                Representa proximidad; jamás un recorrido por calles, porque
-                no tenemos geometría de routing real. */}
-            {focusPt && propertyPt && size && (
-              <svg className="pointer-events-none absolute inset-0 z-[2]" width={size.w} height={size.h} aria-hidden>
-                <path
-                  className="bcp-connection"
-                  d={curveBetween(propertyPt, focusPt)}
-                  fill="none" stroke="#c9a86a" strokeWidth={1.25}
-                  strokeLinecap="round" strokeDasharray="3 7" opacity={0.55}
-                />
-              </svg>
-            )}
+            {/* Aquí iba una curva discontinua entre la vivienda y el destino.
+                Se ha quitado a propósito: por fina que fuera, leía como
+                software de medición y era lo único que impedía que el mapa se
+                viese como un lugar. La relación ya la cuentan el rail (tiempo),
+                la cámara (geografía) y la ficha (contexto). */}
 
             {/* CÁPSULAS DE POI en overview: el lifestyle se entiende SIN
-                bajar a la lista. Como máximo cuatro, y solo las que caben. */}
-            {mosaic && hasPreciseCoords && !focus &&
+                bajar a la lista. Son los marcadores curados de este estado —
+                misma familia visual que los glifos del explorador (marfil,
+                carbón, filo champán), pero con nombre. Como máximo cuatro, y
+                solo las que caben (§4). */}
+            {project && hasPreciseCoords && !focus &&
               mapPois.map((p, i) => {
-                const pt = mosaic.project(p.latitude, p.longitude);
+                const pt = project(p.latitude, p.longitude);
                 if (!capsuleVisible(pt)) return null;
                 const { Icon } = categoryOf(p.category);
                 return (
@@ -526,7 +653,7 @@ export function LocationModule({
                     type="button"
                     onClick={() => selectPoi(p)}
                     data-capsule={p.name}
-                    className="bcp-capsule absolute z-[3] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-ink/10 bg-cream-50/95 px-2.5 py-1 text-[11px] text-ink/85 shadow-[0_6px_18px_-10px_rgba(40,28,10,0.55)] transition hover:border-gold hover:bg-white"
+                    className="bcp-capsule absolute z-[3] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-gold/45 bg-cream-50/95 px-2.5 py-1 text-[11px] text-ink/85 shadow-[0_6px_18px_-10px_rgba(40,28,10,0.55)] transition hover:border-gold hover:bg-white"
                     style={{ left: pt.left, top: pt.top, animationDelay: `${260 + i * 90}ms` }}
                   >
                     <Icon size={11} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
@@ -537,32 +664,38 @@ export function LocationModule({
 
             {/* MARCADOR DEL DESTINO: jerarquía por encima de todo salvo la
                 vivienda, con su ficha contextual anclada. */}
-            {focusPt && (
-              <span className="absolute z-[5]" style={{ left: focusPt.left, top: focusPt.top }} aria-hidden>
-                <span className="bcp-dest absolute left-0 top-0 block">
-                  <span className="block h-[26px] w-[26px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold shadow-[0_12px_28px_-8px_rgba(40,28,10,0.95)] ring-[4px] ring-white" />
-                </span>
-              </span>
-            )}
 
-            {/* LA VIVIENDA: identidad de marca, siempre reconocible. */}
+            {/* PLACA DEL DESTINO (modo DAMAC · curado).
+                El rail ya dice cuánto se tarda y en qué modo; al mapa solo le
+                toca decir CUÁL es el sitio. Una ficha repitiendo "Calle
+                Serrano · 19 min · desde la vivienda" duplicaba lo que estaba
+                dos centímetros más arriba y pesaba tres veces más. */}
+            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
+
+            {/* LA VIVIENDA · con el mapa vectorial el medallón lo pinta el
+                propio mapa (un solo marcador para overview y explorar); este
+                overlay solo existe para el mosaico de respaldo. */}
             {propertyPt && (
               <span className="absolute z-[6]" style={{ left: propertyPt.left, top: propertyPt.top }} aria-hidden>
-                {!focus && <span className="bcp-marker-halo absolute left-0 top-0 block h-16 w-16 rounded-full bg-gold/40" />}
-                <span className="bcp-marker absolute left-0 top-0 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-ink px-2 py-[5px] pr-3 shadow-[0_12px_30px_-10px_rgba(10,10,10,0.95)] ring-1 ring-gold/60">
-                  <span className="block h-2.5 w-2.5 shrink-0 rounded-full bg-gold" />
-                  <span className="crm-meta whitespace-nowrap text-cream-50">La vivienda</span>
-                </span>
+                {!focus && !useVectorMap && (
+                  <span className="bcp-marker-halo absolute left-0 top-0 block h-16 w-16 rounded-full bg-gold/40" />
+                )}
+                {!useVectorMap && (
+                  <span
+                    className="absolute left-0 top-0"
+                    dangerouslySetInnerHTML={{ __html: residenceMarkerHtml("La vivienda") }}
+                  />
+                )}
               </span>
             )}
 
             {/* Sin coordenadas: círculo de zona, jamás un pin falso. */}
-            {mosaic && !hasPreciseCoords && (
+            {!hasPreciseCoords && (
               <span aria-hidden
                 className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gold/75 bg-gold/15 shadow-[0_0_0_4px_rgba(212,175,127,0.16)] md:h-40 md:w-40" />
             )}
 
-            {focus && <ContextCard poi={focus} onClose={restoreOverview} side={cardPos.side} align={cardPos.align} />}
+
 
             {/* Activación EXPLÍCITA, nunca por hover, y como control
                 secundario en esquina: la escena manda, no el botón. */}
@@ -575,12 +708,16 @@ export function LocationModule({
               {focus ? "Ver zona completa" : "Explorar la zona"}
             </button>
 
-            <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
-              ©{" "}
-              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">OpenStreetMap</a>{" "}
-              ©{" "}
-              <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">CARTO</a>
-            </span>
+            {/* Con el mapa vectorial la atribución la pone MapLibre; esta
+                solo acompaña al mosaico de respaldo (teselas de CARTO). */}
+            {!useVectorMap && (
+              <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
+                ©{" "}
+                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">OpenStreetMap</a>{" "}
+                ©{" "}
+                <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">CARTO</a>
+              </span>
+            )}
           </>
         )}
       </div>
@@ -618,6 +755,255 @@ export function LocationModule({
         </a>
       </div>
     </section>
+  );
+}
+
+// ─── BUSCAR CERCA DE ESTA VIVIENDA ───────────────────────────────────────────
+// Solo existe en modo explorar: el overview conserva su calma curada (§1).
+//
+// Dos velocidades y ni una petición por tecla:
+//   · al escribir → sugerencias LOCALES (universidades verificadas + POIs
+//     curados), instantáneas y sin red;
+//   · al enviar (Enter o "Buscar") → búsqueda externa vía servidor BCP, que
+//     es quien respeta el ritmo de Nominatim.
+function ZoneSearch({
+  property,
+  curated,
+  onSelect,
+  onEvent,
+}: {
+  property: { lat: number; lng: number };
+  curated: PoiTravel[];
+  onSelect: (d: LocationDestination) => void;
+  onEvent: (event: "zone_search_submit" | "zone_search_result_select", meta: Record<string, string>) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LocationDestination[]>([]);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [status, setStatus] = useState<"idle" | "loading" | "empty" | "error">("idle");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showLocal = useCallback(
+    (q: string) => {
+      // Instantáneo y sin red: universidades verificadas + POIs curados.
+      const local = searchLocal(q, property, curated);
+      setResults(local);
+      setOpen(local.length > 0);
+      setActive(-1);
+      setStatus("idle");
+      // Y con un respiro de tecleo, el catálogo COMPLETO de Madrid — que es
+      // NUESTRA base (zone_places), no Nominatim: por eso sí puede
+      // consultarse mientras se escribe sin violar ninguna política.
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (q.trim().length < 2) return;
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `/api/zone-search?mode=local&q=${encodeURIComponent(q.trim())}&lat=${property.lat}&lng=${property.lng}`,
+          );
+          if (!res.ok) return;
+          const body = (await res.json()) as { results: SearchPlaceDto[] };
+          const places = (body.results ?? []).map((r) => fromSearchResult(r, property));
+          setResults((prev) => {
+            // Solo si la consulta sigue siendo la misma que disparó esto.
+            const merged = mergeResults(searchLocal(q, property, curated), places);
+            return merged.length > 0 ? merged : prev;
+          });
+          setOpen(true);
+        } catch {
+          // sin sugerencias ampliadas; las locales ya están puestas
+        }
+      }, 240);
+    },
+    [property, curated],
+  );
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  const submit = useCallback(async () => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    // Si hay una sugerencia resaltada, Enter la elige: no hace falta red.
+    abortRef.current?.abort();
+    const local = searchLocal(q, property, curated);
+    setStatus("loading");
+    setOpen(true);
+    onEvent("zone_search_submit", {});
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const res = await fetch(
+        `/api/zone-search?q=${encodeURIComponent(q)}&lat=${property.lat}&lng=${property.lng}`,
+        { signal: ctrl.signal },
+      );
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as { results: SearchPlaceDto[] | null };
+      if (body.results === null) throw new Error("unavailable");
+      const external = body.results.map((r) => fromSearchResult(r, property));
+      // Lo verificado gana y no se duplica la misma entidad (§13).
+      const merged = mergeResults(local, external);
+      setResults(merged);
+      setActive(-1);
+      setStatus(merged.length === 0 ? "empty" : "idle");
+      setOpen(true);
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      setResults(local);
+      setStatus("error");
+      setOpen(true);
+    }
+  }, [query, property, curated, onEvent]);
+
+  const choose = useCallback(
+    (d: LocationDestination) => {
+      setOpen(false);
+      setActive(-1);
+      onEvent("zone_search_result_select", { category: d.category || "lugar", source: d.source });
+      // En móvil, cerrar el teclado antes de mover la cámara evita el salto
+      // de layout a mitad de animación.
+      inputRef.current?.blur();
+      onSelect(d);
+    },
+    [onSelect, onEvent],
+  );
+
+  return (
+    <div className="absolute left-3 right-14 top-3 z-[550] md:right-auto md:w-[21rem]">
+      <div className="flex items-center gap-2 rounded-full border border-gold/30 bg-cream-50/95 py-1 pl-3.5 pr-1 shadow-[0_10px_26px_-14px_rgba(40,28,10,0.7)] backdrop-blur-sm">
+        {status === "loading" ? (
+          <Loader2 size={13} strokeWidth={2} className="shrink-0 animate-spin text-gold-dark" />
+        ) : (
+          <Search size={13} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="bcp-zone-search-results"
+          aria-label="Buscar cerca de esta vivienda"
+          aria-activedescendant={active >= 0 ? `bcp-zs-${active}` : undefined}
+          placeholder="Universidad, colegio, restaurante, dirección…"
+          className="w-full bg-transparent py-1 text-[13px] text-ink placeholder:text-ink/40 focus:outline-none"
+          onChange={(e) => {
+            setQuery(e.target.value);
+            showLocal(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setActive((a) => Math.min(a + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActive((a) => Math.max(a - 1, -1));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (active >= 0 && results[active]) choose(results[active]);
+              else void submit();
+            } else if (e.key === "Escape") {
+              setOpen(false);
+              setActive(-1);
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          className="crm-meta shrink-0 rounded-full bg-ink px-3 py-1.5 text-cream-50 transition hover:bg-ink-soft"
+        >
+          Buscar
+        </button>
+      </div>
+
+      {open && (
+        <ul
+          id="bcp-zone-search-results"
+          role="listbox"
+          aria-label="Resultados de búsqueda"
+          className="mt-1.5 overflow-hidden rounded-xl border border-gold/25 bg-cream-50/98 shadow-[0_18px_44px_-18px_rgba(40,28,10,0.65)] backdrop-blur-sm"
+        >
+          {results.map((d, i) => {
+            const { Icon } = categoryOf(d.category);
+            const secondary = [d.subtitle, d.address, categoryOf(d.category).label].filter(Boolean)[0];
+            return (
+              <li key={d.id} role="option" id={`bcp-zs-${i}`} aria-selected={i === active}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(d)}
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition ${
+                    i === active ? "bg-gold/10" : "hover:bg-gold/5"
+                  }`}
+                >
+                  <Icon size={13} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] text-ink/90">{d.name}</span>
+                    {secondary && <span className="crm-meta block truncate text-ink/45">{secondary}</span>}
+                  </span>
+                  {d.eta ? (
+                    <span className="crm-meta shrink-0 text-ink/50">≈ {d.eta.minutes} min</span>
+                  ) : d.distanceKm != null ? (
+                    <span className="crm-meta shrink-0 text-ink/50">{formatDistance(d.distanceKm)}</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+          {status === "empty" && (
+            <li className="px-3.5 py-2.5 text-[13px] text-ink/55">
+              No hemos encontrado ese lugar. Prueba con otro nombre o dirección.
+            </li>
+          )}
+          {status === "error" && (
+            <li className="px-3.5 py-2.5 text-[13px] text-ink/55">
+              No podemos realizar la búsqueda en este momento.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * PLACA DEL DESTINO · modo curado (DAMAC).
+ *
+ * Identifica geográficamente el destino y nada más: icono de categoría y
+ * nombre, con una punta que lo ancla a su coordenada. El tiempo, el modo y
+ * la relación con la vivienda ya los cuenta el rail de conectividad; volver a
+ * escribirlos aquí era duplicar la misma información en dos superficies.
+ *
+ * Regla de producto: un dato, un sitio.
+ */
+function DestinationPlaque({
+  point,
+  poi,
+}: {
+  point: { left: number; top: number };
+  poi: PoiTravel;
+}) {
+  const { Icon } = categoryOf(poi.category);
+  return (
+    <span
+      className="pointer-events-none absolute z-[5]"
+      style={{ left: point.left, top: point.top }}
+      aria-hidden
+    >
+      {/* Ancla en la coordenada exacta. */}
+      <span className="bcp-plaque-anchor absolute left-0 top-0 block -translate-x-1/2 -translate-y-1/2" />
+      {/* Rótulo justo encima, con su punta. */}
+      {/* Sin `top`: la placa se coloca por `bottom` (en el CSS) para quedar
+          POR ENCIMA del ancla. Con las dos propiedades definidas gana `top` y
+          el punto acababa pisando el texto. */}
+      <span className="bcp-plaque absolute left-0 flex -translate-x-1/2 items-center gap-1.5">
+        <Icon size={12} strokeWidth={1.75} className="shrink-0 text-gold-dark" />
+        <span className="max-w-[13rem] truncate">{poi.name}</span>
+      </span>
+    </span>
   );
 }
 
@@ -663,28 +1049,44 @@ function DestinationRow({
  *  y a un sitio que el cliente ha descubierto en Google — con una diferencia
  *  deliberada: el de Google enseña dirección y enlace externo, y NUNCA se
  *  presenta como recomendación de BCP. */
+/**
+ * FICHA DE EXPLORACIÓN · modo descubierto/buscado (EMAAR).
+ *
+ * Solo para lugares que BCP NO había presentado: los que el cliente pulsa en
+ * el mapa o encuentra buscando. Ahí sí aporta el contexto completo —nombre,
+ * categoría, dirección, tiempo o distancia—, porque es la primera noticia que
+ * tiene de ese sitio.
+ *
+ * Los destinos curados NO pasan por aquí: su información ya vive en el rail
+ * de conectividad y en el mapa les basta con la placa.
+ */
 function ContextCard({
-  poi, place, onClose, side = "top", align = "center", live,
+  place, onClose, side = "top", align = "center", live,
 }: {
-  poi?: PoiTravel;
-  place?: LocationDestination;
+  place: LocationDestination;
   onClose: () => void;
   side?: "top" | "bottom"; align?: "center" | "left" | "right"; live?: boolean;
 }) {
-  const name = place?.name ?? poi?.name ?? "";
-  const categoryKey = place?.category ?? poi?.category ?? "";
+  const name = place.name;
+  const categoryKey = place.category ?? "";
   const { label, Icon } = categoryOf(categoryKey);
-  const subtitle = place?.subtitle ?? null;
-  const eta = place?.eta ?? (poi ? { minutes: poi.minutes, mode: poi.mode } : null);
-  const isDiscovered = place?.source === "osm_discovered";
+  const subtitle = place.subtitle ?? null;
+  const eta = place.eta ?? null;
+  const isDiscovered = place.source === "osm_discovered";
+  const isSearch = place.source === "osm_search";
   // Enlace a OSM solo si el id es REAL (no el generado desde coordenadas):
   // preferimos no ofrecer enlace a ofrecer uno que lleve a ninguna parte.
-  const osmId = place?.id.replace(/^osm:/, "") ?? "";
+  // Los ids de búsqueda conservan el tipo ("search:way/123") para enlazar a
+  // la página correcta de OSM.
+  const osmId = place.id.replace(/^osm:/, "");
+  const searchRef = /^search:(node|way|relation)\/(\d+)$/.exec(place.id);
   const osmUrl = isDiscovered && /^\d+$/.test(osmId)
     ? `https://www.openstreetmap.org/node/${osmId}`
-    : isDiscovered
-      ? `https://www.openstreetmap.org/?mlat=${place!.lat}&mlon=${place!.lng}#map=18/${place!.lat}/${place!.lng}`
-      : null;
+    : searchRef
+      ? `https://www.openstreetmap.org/${searchRef[1]}/${searchRef[2]}`
+      : isDiscovered
+        ? `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=18/${place.lat}/${place.lng}`
+        : null;
 
   return (
     <div
@@ -692,10 +1094,15 @@ function ContextCard({
       data-align={align}
       role="dialog"
       aria-label={name}
-      className={`bcp-context-card absolute z-[600] w-[min(19rem,calc(100%-1.5rem))] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm ${
-        side === "top" ? "top-3.5" : "bottom-14"
+      // En escritorio flota arriba y centrada, sobre la banda que el encuadre
+      // ya reserva para ella. En móvil NO se intenta anclar una ficha de 300px
+      // sobre un marcador en 390px de ancho: se convierte en una tarjeta
+      // inferior dentro del propio mapa (§35), que deja ver el mapa y no
+      // secuestra el scroll de la página.
+      className={`bcp-context-card bcp-context-card--mobile-sheet absolute z-[600] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm md:w-[min(21rem,calc(100%-1.5rem))] ${
+        side === "top" ? "md:top-3.5" : "md:bottom-14"
       } ${
-        align === "center" ? "left-1/2 -translate-x-1/2" : align === "left" ? "left-3.5" : "right-3.5"
+        align === "center" ? "md:left-1/2 md:-translate-x-1/2" : align === "left" ? "md:left-3.5" : "md:right-3.5"
       }`}
     >
       <button
@@ -711,7 +1118,7 @@ function ContextCard({
           {subtitle || label}
         </p>
       )}
-      {place?.address && <p className="crm-meta mt-1.5 text-ink/45">{place.address}</p>}
+      {place.address && <p className="crm-meta mt-1.5 text-ink/45">{place.address}</p>}
       {eta ? (
         <>
           <p className="crm-number mt-2.5 text-xl leading-none text-ink">
@@ -719,6 +1126,12 @@ function ContextCard({
             <span className="crm-meta ml-1.5 text-ink/50">min {modeLabel(eta.mode as PoiTravel["mode"])}</span>
           </p>
           <p className="crm-meta mt-1 text-ink/40">Desde la vivienda</p>
+        </>
+      ) : isSearch && place.distanceKm != null ? (
+        // Sin ETA honesto, la distancia geodésica sí es un hecho (§9).
+        <>
+          <p className="crm-number mt-2.5 text-xl leading-none text-ink">{formatDistance(place.distanceKm)}</p>
+          <p className="crm-meta mt-1 text-ink/40">De la vivienda, en línea recta</p>
         </>
       ) : (
         // Sin tiempo verificado NO se inventa uno: se dice lo que se sabe.
@@ -740,14 +1153,3 @@ function ContextCard({
 /** Callback de "Ver en Google Maps" para analítica, sin acoplar la ficha. */
 const onExternalOpenRef: { current: ((name: string) => void) | null } = { current: null };
 
-/** Curva suave entre dos puntos: se comba perpendicular al segmento para que
- *  se lea como un gesto de conexión y no como el trazado de una calle. */
-function curveBetween(a: { left: number; top: number }, b: { left: number; top: number }): string {
-  const dx = b.left - a.left;
-  const dy = b.top - a.top;
-  const dist = Math.hypot(dx, dy) || 1;
-  const bow = Math.min(46, dist * 0.16);
-  const mx = (a.left + b.left) / 2 - (dy / dist) * bow;
-  const my = (a.top + b.top) / 2 + (dx / dist) * bow;
-  return `M ${a.left} ${a.top} Q ${mx} ${my} ${b.left} ${b.top}`;
-}

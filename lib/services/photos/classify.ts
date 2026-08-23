@@ -17,6 +17,7 @@ export const PHOTO_CLASSES = [
   "bathroom",
   "terrace_outdoor",
   "facade_building",
+  "street_context",
   "dining",
   "office",
   "view",
@@ -28,7 +29,7 @@ export const PHOTO_CLASSES = [
 ] as const;
 export type PhotoClass = (typeof PHOTO_CLASSES)[number];
 
-const MODEL_TAG = "photo-classify-v1";
+const MODEL_TAG = "photo-classify-v2";
 const BATCH = 10;
 
 const SCHEMA = {
@@ -41,11 +42,12 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["index", "class", "confidence"],
+        required: ["index", "class", "confidence", "watermark"],
         properties: {
           index: { type: "integer" },
           class: { enum: [...PHOTO_CLASSES] },
           confidence: { type: "number", minimum: 0, maximum: 1 },
+          watermark: { type: "boolean" },
         },
       },
     },
@@ -53,12 +55,30 @@ const SCHEMA = {
 } as const;
 
 const SYSTEM = `Clasificas fotos de una vivienda en venta/alquiler en Madrid.
-Para CADA foto devuelve su clase y confianza. Clases: living_room (salón),
-kitchen (cocina), bedroom (dormitorio), bathroom (baño), terrace_outdoor
-(terraza/balcón/exterior privado), facade_building (fachada/portal/edificio/calle),
-dining (comedor separado), office (despacho), view (vistas desde la vivienda),
-pool (piscina), garden (jardín), garage (garaje/trastero), floor_plan (plano), other.
-Si dudas entre dos, elige la dominante y baja la confianza. No inventes.`;
+Para CADA foto devuelve su clase, su confianza y si lleva marca de agua.
+
+Clases: living_room (salón), kitchen (cocina), bedroom (dormitorio), bathroom
+(baño), terrace_outdoor (terraza/balcón/exterior privado), dining (comedor
+separado), office (despacho), view (vistas desde la vivienda), pool (piscina),
+garden (jardín), garage (garaje/trastero), floor_plan (plano), other.
+
+DISTINCIÓN CRÍTICA — el edificio frente a su entorno:
+- facade_building = EL INMUEBLE EN SÍ: su fachada, el portal, el zaguán, el
+  patio interior, la entrada, el rellano, la escalera, el ascensor, las zonas
+  comunes o un elemento arquitectónico claramente suyo. La foto tiene que
+  mostrar ESTE edificio, no uno cualquiera.
+- street_context = TODO LO DEMÁS que está fuera: la calle, los edificios de
+  al lado, una plaza, un monumento, una iglesia, el skyline, el barrio o
+  cualquier vista urbana genérica sin vínculo claro con el inmueble.
+Ante la duda entre las dos, elige street_context: una foto de contexto puesta
+como si fuera la finca es un error mucho más caro que al revés.
+
+watermark: true si la imagen lleva encima el logo, la marca o el rótulo de un
+portal o de otra agencia (Idealista, Fotocasa, Habitaclia, pisos.com…), una
+banda con teléfono o web, o un sello grande de "vendido"/"reservado". Un
+letrero que forme parte de la escena real no cuenta.
+
+Si dudas entre dos clases, elige la dominante y baja la confianza. No inventes.`;
 
 export type ClassifySummary = { classified: number; skipped: number; failed: number };
 
@@ -92,7 +112,7 @@ export async function classifyPropertyPhotos(propertyId: string): Promise<Classi
         strictImages: true,
       });
       const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as {
-        photos: Array<{ index: number; class: PhotoClass; confidence: number }>;
+        photos: Array<{ index: number; class: PhotoClass; confidence: number; watermark?: boolean }>;
       };
       for (const r of parsed.photos ?? []) {
         const photo = batch[r.index];
@@ -102,6 +122,7 @@ export async function classifyPropertyPhotos(propertyId: string): Promise<Classi
           .update({
             ai_class: r.class,
             ai_confidence: r.confidence,
+            ai_watermark: r.watermark === true,
             ai_source_hash: sha(photo.url + MODEL_TAG),
             ai_model: MODEL_TAG,
             classified_at: new Date().toISOString(),

@@ -6,7 +6,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, RefreshCw, ShieldAlert, X } from "lucide-react";
-import { Button, Panel, Pill, TextArea } from "@/components/admin/ui/primitives";
+import { Button, Panel, Pill, TextArea, TextInput } from "@/components/admin/ui/primitives";
 import { CHAPTER_HEADINGS, type StoryChapter } from "@/lib/services/story/types";
 import {
   approveVersionAction,
@@ -30,6 +30,7 @@ type Version = {
   created_at: string;
   reviewed_at: string | null;
   prelude?: string | null;
+  prelude_headline?: string | null;
   prelude_status?: string | null;
 };
 type Block = {
@@ -85,6 +86,7 @@ export function StoryClient({
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [preludeDraft, setPreludeDraft] = useState<string | null>(null);
+  const [headlineDraft, setHeadlineDraft] = useState("");
   // Bloques señalados por el quality gate: se resaltan para que el agente sepa
   // exactamente cuál resolver sin leerse la story entera.
   const flaggedBlocks = new Map<string, string[]>();
@@ -327,21 +329,42 @@ export function StoryClient({
             </div>
             {preludeDraft !== null ? (
               <div className="mt-3 space-y-2">
-                <TextArea value={preludeDraft} onChange={(e) => setPreludeDraft(e.target.value)} rows={4} />
+                <TextInput
+                  value={headlineDraft}
+                  onChange={(e) => setHeadlineDraft(e.target.value)}
+                  placeholder="Titular editorial (4-10 palabras, sin punto final)"
+                />
+                <TextArea
+                  value={preludeDraft}
+                  onChange={(e) => setPreludeDraft(e.target.value)}
+                  rows={6}
+                  placeholder="Dos párrafos separados por una línea en blanco."
+                />
                 <div className="flex gap-2">
                   <Button size="sm" disabled={pending}
-                    onClick={() => run(async () => { const r = await updatePreludeAction(latest.id, preludeDraft, path); if (r.ok) setPreludeDraft(null); return r; })}>
+                    onClick={() => run(async () => { const r = await updatePreludeAction(latest.id, preludeDraft, headlineDraft, path); if (r.ok) setPreludeDraft(null); return r; })}>
                     Guardar
                   </Button>
                   <Button size="sm" disabled={pending} onClick={() => setPreludeDraft(null)}>Cancelar</Button>
                 </div>
               </div>
             ) : latest.prelude ? (
-              <p className="mt-2 cursor-pointer text-sm leading-relaxed text-ink/80"
-                onClick={() => setPreludeDraft(latest.prelude ?? "")}
-                title="Pulsa para editar">
-                {latest.prelude}
-              </p>
+              <div
+                className="mt-2 cursor-pointer"
+                onClick={() => { setPreludeDraft(latest.prelude ?? ""); setHeadlineDraft(latest.prelude_headline ?? ""); }}
+                title="Pulsa para editar"
+              >
+                {latest.prelude_headline ? (
+                  <p className="crm-section-title text-ink">{latest.prelude_headline}</p>
+                ) : (
+                  <p className="text-xs italic text-ink/45">Sin titular (regenera para componer el spread completo)</p>
+                )}
+                <div className="mt-1.5 space-y-2 text-sm leading-relaxed text-ink/80">
+                  {(latest.prelude ?? "").split(/\n+/).filter(Boolean).map((par, i) => (
+                    <p key={i}>{par}</p>
+                  ))}
+                </div>
+              </div>
             ) : (
               <p className="mt-2 text-sm text-ink/45">
                 Sin apertura editorial. Con evidencia suficiente, «Generar» compone una desde los claims seguros.

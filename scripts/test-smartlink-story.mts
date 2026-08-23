@@ -493,10 +493,13 @@ console.log("Experience state (promoción automática facts_led → story):");
     deriveExperienceState({ hasApprovedVersion: true, approvedNotes: null, hasPendingConflictBlocks: false }) === "complete");
 }
 
-// ── 8) PROPERTY PRELUDE · contrato editorial ──
+// ── 8) PROPERTY PRELUDE · contrato editorial (v2 · opening spread) ──
 console.log("Property Prelude:");
 {
-  const { validatePrelude, collectPreludeEvidence, MIN_EVIDENCE_CLAIMS } = await import("../lib/services/story/prelude");
+  const {
+    validatePrelude, validatePreludeHeadline, parsePreludeCompletion,
+    collectPreludeEvidence, MIN_EVIDENCE_CLAIMS,
+  } = await import("../lib/services/story/prelude");
   const EV = [
     "vivienda reformada que conserva elementos originales",
     "Se trata de una vivienda reformada, en la que se han querido conservar muchos de los elementos originales",
@@ -504,64 +507,134 @@ console.log("Property Prelude:");
     "El doble salón se abre a los balcones de la calle Ayala",
     "comedor independiente y cocina con office",
     "comedor independiente, cocina con cerramiento de cristal, península y office",
+    "edificio de 1925 con molduras y carpintería originales",
+    "La finca, construida en 1925, conserva molduras y carpintería originales",
   ];
-  const BUENO =
-    "Una vivienda reformada que conserva el carácter de su arquitectura original y articula la vida diaria en una sucesión de estancias amplias y bien diferenciadas. Los balcones a la calle Ayala y el doble salón definen la zona social, mientras el comedor independiente y la cocina con office completan una distribución claramente estructurada.";
+  const BUENO = [
+    "Una vivienda reformada en una finca de 1925 que ha conservado las molduras y la carpintería originales del edificio. La intervención no borró ese carácter: lo ordenó, dejando que la arquitectura siga marcando el ritmo de las estancias. El resultado es una casa serena, de líneas continuas y proporciones reconocibles.",
+    "Los balcones a la calle Ayala abren la zona social al exterior y separan con naturalidad el uso de día del descanso. La distribución se entiende de un vistazo, sin pasillos que sobren ni transiciones forzadas entre una zona y otra.",
+  ].join("\n\n");
 
   const ok = validatePrelude(BUENO, { operation: "rent" }, EV);
   check("apertura editorial válida pasa", ok.ok, ok.failures.join(" · "));
-  check("longitud en rango objetivo", ok.words >= 45 && ok.words <= 90, String(ok.words));
+  check("longitud v2 en rango objetivo (70-110)", ok.words >= 70 && ok.words <= 110, String(ok.words));
+  check("se compone en dos párrafos", ok.paragraphs === 2, String(ok.paragraphs));
+
+  // §6: el año va en CIFRA. El texto en letra era el estilo de la v1 y ahora
+  // se rechaza — es lo que fuerza la regeneración del catálogo.
+  const rYear = validatePrelude(BUENO.replace("1925", "mil novecientos veinticinco"), { operation: "rent" }, EV);
+  check("año en letra → rechazado (debe ir en cifra)",
+    !rYear.ok && rYear.failures.some((f) => f.includes("letra")), rYear.failures.join(" · "));
+  const rFake = validatePrelude(BUENO.replace("1925", "1890"), { operation: "rent" }, EV);
+  check("año inventado (no está en la evidencia) → rechazado",
+    !rFake.ok && rFake.failures.some((f) => f.includes("sin respaldo")), rFake.failures.join(" · "));
 
   // REGRESIÓN BC-1420: "se vende" fabricado en un alquiler. El caso que
   // motivó todo el contrato — jamás debe volver a cruzar.
-  const bc1420 =
-    "Vivienda exterior orientada al norte y al sur que se vende sin amueblar y conserva su distribución original con estancias amplias en la zona social de la casa.";
+  const bc1420 = BUENO.replace("Una vivienda reformada", "Una vivienda que se vende sin amueblar, reformada,");
   const r1 = validatePrelude(bc1420, { operation: "rent" }, EV);
   check("REGRESIÓN BC-1420: 'se vende' en un alquiler → rechazado",
     !r1.ok && r1.failures.some((f) => f.includes("venta")), r1.failures.join(" · "));
   check("y 'amueblado' también se rechaza (dato estructurado)",
     r1.failures.some((f) => f.includes("amueblado")));
 
-  const r2 = validatePrelude(
-    "Piso señorial en finca clásica que se alquila con todos los servicios del edificio y una distribución de estancias en dos alas bien diferenciadas del conjunto.",
-    { operation: "sale" }, EV);
+  const r2 = validatePrelude(BUENO.replace("Una vivienda reformada", "Una vivienda que se alquila, reformada,"), { operation: "sale" }, EV);
   check("'se alquila' en una venta → rechazado", !r2.ok && r2.failures.some((f) => f.includes("alquiler")));
 
-  const r3 = validatePrelude(BUENO.replace("estancias amplias", "estancias de 40 m2"), { operation: "rent" }, EV);
-  check("cualquier cifra → rechazado (los números viven en Key Facts)",
-    !r3.ok && r3.failures.some((f) => f.includes("cifras")));
+  const r3 = validatePrelude(BUENO.replace("las estancias", "las estancias de 40 m2"), { operation: "rent" }, EV);
+  check("cifra que no es un año → rechazada (Key Facts)",
+    !r3.ok && r3.failures.some((f) => f.includes("cifras")), r3.failures.join(" · "));
+  const r3b = validatePrelude(BUENO.replace("el ritmo de las estancias", "el ritmo de los tres dormitorios"), { operation: "rent" }, EV);
+  check("cuenta de estancias en letra → rechazada", !r3b.ok, r3b.failures.join(" · "));
 
-  const r4 = validatePrelude(
-    "Una vivienda espectacular y única en pleno barrio de Salamanca, con una distribución señorial pensada para el día a día y estancias que conservan el sabor original del edificio.",
-    { operation: "rent" }, EV);
+  const rFloor = validatePrelude(BUENO.replace("Una vivienda reformada", "Una vivienda en una quinta planta, reformada,"), { operation: "rent" }, EV);
+  check("menciona la planta → rechazado (Key Fact duplicado)",
+    !rFloor.ok && rFloor.failures.some((f) => f.includes("planta")), rFloor.failures.join(" · "));
+
+  const r4 = validatePrelude(BUENO.replace("Una vivienda reformada", "Una vivienda espectacular y única"), { operation: "rent" }, EV);
   check("adjetivos de portal → rechazado", !r4.ok && r4.failures.some((f) => f.includes("portal")));
 
-  const r5 = validatePrelude("Una vivienda reformada con carácter.", { operation: "rent" }, EV);
-  check("texto demasiado corto → evidencia insuficiente", !r5.ok);
+  // §5 v2: copy que ocupa sitio sin decir nada.
+  const r5 = validatePrelude(BUENO.replace("La distribución se entiende de un vistazo", "La distribución elegante lo gobierna todo"), { operation: "rent" }, EV);
+  check("copy genérico ('distribución elegante') → rechazado",
+    !r5.ok && r5.failures.some((f) => f.includes("genérico")), r5.failures.join(" · "));
 
-  const r6 = validatePrelude(BUENO + " " + BUENO, { operation: "rent" }, EV);
-  check("demasiado largo / demasiadas frases → rechazado", !r6.ok);
-
-  const r7 = validatePrelude(
-    "Una vivienda reformada junto al Palacio de Cristal de Malasaña que conserva el carácter de su arquitectura original y ordena la vida diaria en estancias amplias, luminosas y bien diferenciadas entre sí.",
+  // §4: el Prelude no se come el contenido de los capítulos.
+  const r6 = validatePrelude(
+    "Una vivienda reformada de 1925 en la que el salón, la cocina y el comedor se ordenan en torno al recibidor. Los dormitorios y los baños ocupan el ala privada, y la terraza cierra el recorrido por la casa.\n\nLa carpintería original marca el carácter de un conjunto que la reforma se limitó a poner en valor sin alterar su lógica.",
     { operation: "rent" }, EV);
+  check("enumerar estancias → rechazado (eso lo hacen los capítulos)",
+    !r6.ok && r6.failures.some((f) => f.includes("enumera")), r6.failures.join(" · "));
+
+  const r7 = validatePrelude("Una vivienda reformada con carácter.", { operation: "rent" }, EV);
+  check("texto demasiado corto → evidencia insuficiente", !r7.ok);
+  const r8 = validatePrelude(BUENO + "\n\n" + BUENO, { operation: "rent" }, EV);
+  check("demasiado largo / demasiados párrafos → rechazado", !r8.ok);
+  const r9 = validatePrelude(BUENO.replace("\n\n", " "), { operation: "rent" }, EV);
+  check("un solo párrafo largo → rechazado (vuelve a ser el párrafo suelto)",
+    !r9.ok && r9.failures.some((f) => f.includes("un solo párrafo")), r9.failures.join(" · "));
+
+  const r10 = validatePrelude(BUENO.replace("la calle Ayala", "el Palacio de Cristal de Malasaña"), { operation: "rent" }, EV);
   check("entidad sin respaldo en la evidencia → rechazado",
-    !r7.ok && r7.failures.some((f) => f.includes("entidades")), r7.failures.join(" · "));
+    !r10.ok && r10.failures.some((f) => f.includes("entidades")), r10.failures.join(" · "));
 
-  // Lecciones del piloto real (2026-08-22):
-  const r9 = validatePrelude(
-    "Este hogar se despliega con una distribución fluida que integra el salón y la cocina en un mismo ambiente. La presencia de una caldera y una vitrocerámica, junto a una nevera combi y lavadora, conforman un espacio funcional y preparado para el día a día.",
-    { operation: "rent" }, EV);
+  // Lecciones del piloto v1 (2026-08-22), vigentes en v2:
+  const r11 = validatePrelude(BUENO.replace("La intervención no borró ese carácter", "La caldera, la vitrocerámica y la lavadora quedaron nuevas"), { operation: "rent" }, EV);
   check("PILOTO BC-1376: inventario de electrodomésticos → rechazado",
-    !r9.ok && r9.failures.some((f) => f.includes("equipamiento")), r9.failures.join(" · "));
-  const r10 = validatePrelude(BUENO.replace("completan una distribución claramente estructurada", "completan un conjunto cuyo coste de mantenimiento resulta contenido"), { operation: "rent" }, EV);
-  check("PILOTO BC-0056: 'coste de mantenimiento' → rechazado", !r10.ok);
-  const r11 = validatePrelude(BUENO.replace("completan una distribución claramente estructurada", "conforman una propuesta lista para entrar a vivir"), { operation: "rent" }, EV);
-  check("PILOTO BC-0917: frase de portal → rechazado", !r11.ok);
+    !r11.ok && r11.failures.some((f) => f.includes("equipamiento")), r11.failures.join(" · "));
+  const r12 = validatePrelude(BUENO.replace("lo ordenó", "redujo su coste de mantenimiento"), { operation: "rent" }, EV);
+  check("PILOTO BC-0056: 'coste de mantenimiento' → rechazado", !r12.ok);
+  const r13 = validatePrelude(BUENO.replace("lo ordenó", "la dejó lista para entrar a vivir"), { operation: "rent" }, EV);
+  check("PILOTO BC-0917: frase de portal → rechazado", !r13.ok);
 
   // dual: las dos familias de operación prohibidas
-  const r8 = validatePrelude(BUENO + " Ideal para su compra.", { operation: "sale", dualOperation: true }, EV);
-  check("dual: lenguaje de venta también rechazado", !r8.ok);
+  const r14 = validatePrelude(BUENO.replace("La intervención", "Ideal para su compra. La intervención"), { operation: "sale", dualOperation: true }, EV);
+  check("dual: lenguaje de venta también rechazado", !r14.ok);
+
+  // ── TITULAR editorial (§2) ──
+  const h1 = validatePreludeHeadline("Arquitectura de 1925 y una reforma que la respeta", { operation: "rent" }, EV);
+  check("titular específico y respaldado pasa", h1.ok, h1.failures.join(" · "));
+  const h2 = validatePreludeHeadline("Una vivienda única", { operation: "rent" }, EV);
+  check("titular eslogan vacío → rechazado", !h2.ok, h2.failures.join(" · "));
+  const h3 = validatePreludeHeadline("Carácter", { operation: "rent" }, EV);
+  check("titular demasiado corto → rechazado", !h3.ok && h3.failures.some((f) => f.includes("corto")));
+  const h4 = validatePreludeHeadline(
+    "Un carácter clásico con interiores definidos por el detalle y la proporción exacta",
+    { operation: "rent" }, EV);
+  check("titular demasiado largo → rechazado", !h4.ok && h4.failures.some((f) => f.includes("largo")));
+  const h5 = validatePreludeHeadline("Molduras originales y luz de la calle Ayala.", { operation: "rent" }, EV);
+  check("titular con punto final → rechazado", !h5.ok && h5.failures.some((f) => f.includes("punto")));
+  // El límite \b de JavaScript es ASCII: "Única" y "Última" empezaban por
+  // vocal acentuada y se colaban enteras por el contrato (652 titulares
+  // auditados lo destaparon). Estos dos casos vigilan los límites Unicode.
+  const hAcc = validatePreludeHeadline("Única vivienda de 1925 con molduras", { operation: "rent" }, EV);
+  check("titular con adjetivo acentuado ('Única') → rechazado",
+    !hAcc.ok && hAcc.failures.some((f) => f.includes("portal")), hAcc.failures.join(" · "));
+  const hFloor = validatePreludeHeadline("Última planta con carpintería original", { operation: "rent" }, EV);
+  check("titular con 'Última planta' → rechazado (Key Fact)",
+    !hFloor.ok && hFloor.failures.some((f) => f.includes("planta")), hFloor.failures.join(" · "));
+  const hMkt = validatePreludeHeadline("Encanto de 1925 con molduras originales", { operation: "rent" }, EV);
+  check("titular marketinero ('Encanto') → rechazado", !hMkt.ok, hMkt.failures.join(" · "));
+
+  const hGen = validatePreludeHeadline("Luz y amplitud en una vivienda contemporánea", { operation: "rent" }, EV);
+  check("titular intercambiable → rechazado (valdría para cientos)",
+    !hGen.ok && hGen.failures.some((f) => f.includes("intercambiable")), hGen.failures.join(" · "));
+  const hAnchored = validatePreludeHeadline("Luz y amplitud tras las molduras de 1925", { operation: "rent" }, EV);
+  check("el mismo titular con un ancla propia sí pasa", hAnchored.ok, hAnchored.failures.join(" · "));
+
+  const h6 = validatePreludeHeadline("Lujo y elegancia en Malasaña", { operation: "rent" }, EV);
+  check("titular con adjetivo de portal y entidad sin respaldo → rechazado", !h6.ok);
+
+  // El parser separa titular y cuerpo; el contrato juzga después.
+  const parsed = parsePreludeCompletion(`TITULAR: Molduras originales y una reforma contenida\n\nPárrafo uno.\n\nPárrafo dos.`);
+  // El modelo escribe el rótulo como le parece: seis titulares llegaron a
+  // producción con "TÍTULAR:" pegado por no contemplar la falta de ortografía.
+  const parsedTypo = parsePreludeCompletion(`TÍTULAR: Bajo de 1930 con patio privado\n\nUno.\n\nDos.`);
+  check("el parser tolera el rótulo mal escrito ('TÍTULAR')",
+    parsedTypo.headline === "Bajo de 1930 con patio privado", parsedTypo.headline);
+  check("parser separa titular y cuerpo",
+    parsed.headline === "Molduras originales y una reforma contenida" &&
+    parsed.body === "Párrafo uno.\n\nPárrafo dos.", JSON.stringify(parsed));
 
   // evidencia: solo claims seguros, sin duplicados de key facts ni barrio
   const evidence = collectPreludeEvidence([
@@ -574,6 +647,59 @@ console.log("Property Prelude:");
   check("evidencia excluye conflictos, duplicados y barrio",
     JSON.stringify(evidence.claimIds) === JSON.stringify(["a", "e"]), JSON.stringify(evidence.claimIds));
   check("umbral mínimo de evidencia declarado", MIN_EVIDENCE_CLAIMS >= 3);
+}
+
+// ── 9) REGLA DE MICRO-CAPÍTULO · presentación editorial ──
+console.log("Micro-capítulos:");
+{
+  const { isMicroChapter, microChapterFact, informationUnits } = await import("../lib/services/story/micro-chapter");
+  // El caso que motivó la regla.
+  check("'Finca construida en 1941.' no sostiene un capítulo",
+    isMicroChapter("building", "Finca construida en 1941."));
+  check("un capítulo con dos datos SÍ se queda, por corto que sea",
+    !isMicroChapter("building", "Edificio de 1910 con portería y patio interior."));
+  check("dos frases ya sostienen capítulo",
+    !isMicroChapter("kitchen", "Cocina funcional. Está integrada en el salón."));
+  check("puro adjetivo sin hecho → micro",
+    isMicroChapter("finishes", "El hogar es moderno, elegante y cómodo."));
+  check("un dato breve pero distintivo se queda (Velux)",
+    !isMicroChapter("private", "Dormitorio diáfano en planta superior con ventanas tipo Velux."));
+  check("no es solo longitud: texto largo nunca es micro",
+    !isMicroChapter("building", "Finca construida en 1941 " + "y ".repeat(20)));
+  check("estancias distintas cuentan por separado",
+    informationUnits("Salón y comedor independiente") === 2, String(informationUnits("Salón y comedor independiente")));
+  check("el dato rescatado pierde el punto final",
+    microChapterFact("Finca construida en 1941.") === "Finca construida en 1941");
+}
+
+// ── 10) HERO · srcset honesto ──
+console.log("Hero media:");
+{
+  const mod = await import("../app/compartir/[slug]/hero-srcset");
+  const { heroSrcSet } = mod;
+  check("sin dimensiones conocidas NO se declara srcset",
+    heroSrcSet("/p/x/0?v=1", null) === undefined);
+  check("una foto pequeña tampoco (no hay nada que ofrecer)",
+    heroSrcSet("/p/x/0?v=1", 500) === undefined);
+  const ss = heroSrcSet("/p/x/0?v=1", 1600) ?? "";
+  check("nunca promete más píxeles de los que hay",
+    ss.length > 0 && !/\b(1920|2560|3200)w/.test(ss), ss);
+  check("el último candidato es el ancho real del original",
+    ss.endsWith("w=1600 1600w"), ss.slice(-30));
+  check("los anchos van con & cuando la url ya trae query",
+    ss.startsWith("/p/x/0?v=1&w=640 640w"), ss.slice(0, 30));
+
+  // El perfil del CDN de Idealista: la descarga prueba el grande y cae al
+  // seguro. Es lo que separaba a BC-1421 (850px) del resto (1600px).
+  const { idealistaSourceCandidates } = await import("../lib/sync/scrapers/idealista");
+  const cands = idealistaSourceCandidates(
+    "https://img4.idealista.com/blur/WEB_DETAIL_TOP-L-L/0/id.pro.es.image.master/71/33/71/785432477.jpg",
+  );
+  check("se prueba primero el perfil grande y luego el seguro",
+    cands.length === 2 && cands[0].includes("WEB_DETAIL_TOP-XL-L") && cands[1].includes("WEB_DETAIL_TOP-L-L"),
+    cands.join(" | "));
+  check("una url que no es del CDN de Idealista se deja intacta",
+    idealistaSourceCandidates("https://example.com/foto.jpg").length === 1);
 }
 
 console.log("");
