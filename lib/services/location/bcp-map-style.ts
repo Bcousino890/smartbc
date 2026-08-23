@@ -55,6 +55,33 @@ const C = {
   poiDot: "#9c7f4e",
 };
 
+/** Prioridad de descubrimiento por familia: 1 orienta una ciudad, 3 es vida
+ *  de barrio. El zoom decide hasta qué prioridad se enseña. */
+const POI_PRIORITY: unknown[] = [
+  "match", ["get", "class"],
+  // OJO: OpenMapTiles mete clínicas y consultas dentro de class "hospital",
+  // así que en prioridad 1 llenaba el mapa de centros médicos de barrio.
+  ["railway", "bus", "airport", "university", "college", "museum", "attraction", "stadium"], 1,
+  ["school", "hospital", "art_gallery", "theatre", "cinema", "library", "department_store", "mall", "marketplace", "park", "hotel"], 2,
+  ["restaurant", "cafe", "bar", "pub", "fast_food", "bakery", "grocery", "supermarket", "shop", "clothing_store", "pharmacy", "clinic", "doctors", "sports_centre", "fitness_centre", "garden", "playground"], 3,
+  9,
+];
+
+/** Glifo por familia. Las imágenes las registra `discovery-icons.ts`. */
+const POI_ICON: unknown[] = [
+  "match", ["get", "class"],
+  ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "bakery"], "bcp-poi-gastronomia",
+  ["grocery", "supermarket", "shop", "clothing_store", "department_store", "mall", "marketplace"], "bcp-poi-compras",
+  ["school", "college", "university", "kindergarten", "library"], "bcp-poi-educacion",
+  ["railway", "bus", "airport", "ferry_terminal"], "bcp-poi-transporte",
+  ["hospital", "pharmacy", "doctors", "clinic", "dentist"], "bcp-poi-salud",
+  ["stadium", "sports_centre", "fitness_centre", "swimming_pool", "pitch"], "bcp-poi-deporte",
+  ["museum", "art_gallery", "theatre", "cinema", "attraction", "monument", "place_of_worship"], "bcp-poi-cultura",
+  ["hotel", "hostel", "motel"], "bcp-poi-hotel",
+  ["park", "garden", "playground"], "bcp-poi-parque",
+  "bcp-poi-lugar",
+];
+
 const FONT = ["Noto Sans Regular"];
 // OpenFreeMap solo sirve "Noto Sans Regular" (Medium da 404): pedir una
 // fuente inexistente deja las etiquetas sin dibujar.
@@ -278,100 +305,94 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
       // del rótulo de una calle: cada uno lleva el glifo de su familia, que
       // es lo que dice "esto es un sitio y se puede pulsar".
       //
-      // Densidad SEMÁNTICA, no un único `rank <= N`: qué aparece depende de
-      // la familia Y del zoom. A lo lejos solo lo que orienta una ciudad
-      // (estaciones, universidades, hospitales, museos); de cerca, la vida
-      // de barrio.
+      // Va en TRES capas por una razón dura del motor, no por gusto:
+      //   · `feature-state` NO se admite en propiedades de layout, así que el
+      //     nombre en hover no puede salir de un `text-field` condicional;
+      //   · `["zoom"]` solo vale como entrada de un `step`/`interpolate` de
+      //     nivel superior, nunca anidado.
+      // Ambas cosas invalidan el estilo entero y dejan el mapa EN BLANCO.
       {
         id: "poi-icon",
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "poi",
         minzoom: 12,
+        // Densidad SEMÁNTICA: cada clase tiene una prioridad y el zoom decide
+        // hasta qué prioridad se enseña. Nada de un `rank <= N` global.
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
           ["has", "name"],
-          [
-            "case",
-            // Referencias urbanas: visibles desde lejos.
-            ["match", ["get", "class"],
-              ["railway", "bus", "airport", "university", "college", "hospital", "museum", "attraction", "stadium"],
-              true, false],
-            [">=", ["zoom"], 12],
-            // Cultura, educación, transporte y compras de peso.
-            ["match", ["get", "class"],
-              ["school", "art_gallery", "theatre", "cinema", "library", "department_store", "mall", "marketplace", "park", "hotel"],
-              true, false],
-            [">=", ["zoom"], 13.5],
-            // Vida de barrio: a partir de aquí.
-            ["match", ["get", "class"],
-              ["restaurant", "cafe", "bar", "pub", "fast_food", "bakery", "grocery", "supermarket", "shop", "clothing_store", "pharmacy", "clinic", "doctors", "sports_centre", "fitness_centre", "garden", "playground"],
-              true, false],
-            [">=", ["zoom"], 14.5],
-            false,
-          ],
+          ["<=", POI_PRIORITY, ["step", ["zoom"], 1, 13.5, 2, 14.5, 3]],
         ],
         layout: {
-          "icon-image": [
-            "concat",
-            "bcp-poi-",
-            ["match", ["get", "class"],
-              ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "bakery"], "gastronomia",
-              ["grocery", "supermarket", "shop", "clothing_store", "department_store", "mall", "marketplace"], "compras",
-              ["school", "college", "university", "kindergarten", "library"], "educacion",
-              ["railway", "bus", "airport", "ferry_terminal"], "transporte",
-              ["hospital", "pharmacy", "doctors", "clinic", "dentist"], "salud",
-              ["stadium", "sports_centre", "fitness_centre", "swimming_pool", "pitch"], "deporte",
-              ["museum", "art_gallery", "theatre", "cinema", "attraction", "monument", "place_of_worship"], "cultura",
-              ["hotel", "hostel", "motel"], "hotel",
-              ["park", "garden", "playground"], "parque",
-              "lugar",
-            ],
-            ["case", ["boolean", ["feature-state", "selected"], false], "-sel", ""],
-          ],
-          "icon-size": [
-            "interpolate", ["linear"], ["zoom"],
-            12, 0.62,
-            15, 0.78,
-            17, 0.92,
-          ],
+          "icon-image": POI_ICON,
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.62, 15, 0.78, 17, 0.92],
           "icon-allow-overlap": false,
           "icon-padding": 3,
           "symbol-sort-key": ["get", "rank"],
-          // El nombre solo en los lugares que orientan; el resto se descubre
-          // pulsando o pasando el ratón (§9).
-          "text-field": [
-            "case",
-            [
-              "any",
-              ["boolean", ["feature-state", "hover"], false],
-              ["boolean", ["feature-state", "selected"], false],
-              ["all", [">=", ["zoom"], 15.5], ["<", ["get", "rank"], 12]],
-            ],
-            ["coalesce", ["get", "name:es"], ["get", "name"]],
-            "",
-          ],
+        },
+        paint: {
+          // `feature-state` SÍ vale en paint: el realce al pasar por encima
+          // vive aquí.
+          "icon-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 1, 0.9],
+        },
+      },
+      {
+        // Nombres de los lugares que ORIENTAN. El resto se descubre pasando
+        // el ratón o pulsando: así un icono se lee como sitio y un texto
+        // suelto como rótulo del mapa.
+        id: "poi-label-major",
+        type: "symbol",
+        source: "openmaptiles",
+        "source-layer": "poi",
+        minzoom: 15,
+        filter: ["all",
+          ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
+          ["has", "name"],
+          // Nombres con cuentagotas: solo las referencias, y a partir de z16.5
+          // también las de segundo nivel. El resto, al pasar el ratón.
+          ["<=", POI_PRIORITY, ["step", ["zoom"], 1, 16.5, 2]],
+          ["<", ["get", "rank"], 15],
+        ],
+        layout: {
+          "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
           "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10.5, 18, 12],
           "text-anchor": "top",
-          "text-offset": [0, 0.85],
+          "text-offset": [0, 0.9],
           "text-max-width": 8,
           "text-padding": 6,
           "text-optional": true,
+          "symbol-sort-key": ["get", "rank"],
         },
         paint: {
-          "text-color": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], "#6b5326",
-            C.labelDark,
-          ],
+          "text-color": C.labelDark,
           "text-halo-color": C.labelHalo,
           "text-halo-width": 1.6,
-          "icon-opacity": [
-            "case",
-            ["boolean", ["feature-state", "hover"], false], 1,
-            0.92,
-          ],
+        },
+      },
+      {
+        // Nombre del lugar bajo el puntero o seleccionado. Su filtro lo
+        // reescribe el componente con el id concreto: es la única forma de
+        // reaccionar a `feature-state` en una propiedad de layout.
+        id: "poi-label-focus",
+        type: "symbol",
+        source: "openmaptiles",
+        "source-layer": "poi",
+        filter: ["==", ["id"], -1],
+        layout: {
+          "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
+          "text-font": FONT,
+          "text-size": 12,
+          "text-anchor": "top",
+          "text-offset": [0, 0.9],
+          "text-max-width": 9,
+          "text-allow-overlap": true,
+        },
+        paint: {
+          "text-color": "#5c4a24",
+          "text-halo-color": C.labelHalo,
+          "text-halo-width": 2,
         },
       },
     ],

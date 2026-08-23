@@ -156,28 +156,41 @@ console.log("Estilo BCP Luxury Madrid:");
     lum(paintOf("road-major", "line-color")) - lum(paintOf("background", "background-color")) >= 8,
     `${paintOf("road-major", "line-color")} vs ${paintOf("background", "background-color")}`);
   // ── BCP DISCOVERY LAYER ──
-  // Una SOLA capa de descubrimiento: si hubiera además una de texto sobre el
-  // mismo `poi`, cada lugar saldría con su nombre dos veces (§17).
+  // Tres capas por una razón del motor, no por gusto: `feature-state` no vale
+  // en propiedades de layout y `["zoom"]` solo como entrada de un `step` de
+  // nivel superior. Saltarse cualquiera de las dos invalida el estilo entero
+  // y deja el mapa EN BLANCO — pasó, y por eso existe el validador.
   const poiLayers = style.layers.filter((l: any) => l["source-layer"] === "poi");
-  check("una única capa de descubrimiento sobre `poi`", poiLayers.length === 1,
+  check("una capa de iconos y dos de texto (icono / mayores / foco)",
+    poiLayers.length === 3 && poiLayers.some((l: any) => l.id === "poi-icon"),
     poiLayers.map((l: any) => l.id).join(","));
-  const poi = poiLayers[0];
-  check("es de símbolo: icono, no un punto suelto", poi?.type === "symbol");
-  const filterStr = JSON.stringify(poi?.filter ?? []);
+  const icon = poiLayers.find((l: any) => l.id === "poi-icon");
+  check("el descubrimiento se dibuja con símbolos, no con puntos", icon?.type === "symbol");
+  const filterStr = JSON.stringify(icon?.filter ?? []);
   check("densidad SEMÁNTICA por zoom, no un único rank global",
-    filterStr.includes("12") && filterStr.includes("13.5") && filterStr.includes("14.5")
+    filterStr.includes("13.5") && filterStr.includes("14.5") && filterStr.includes("step")
       && !/\["<=?",\s*\["get","rank"\]/.test(filterStr.replace(/\s/g, "")),
     filterStr.slice(0, 90));
-  check("las referencias urbanas se ven desde lejos (estación, universidad, hospital)",
-    ["railway", "university", "hospital"].every((c) => filterStr.includes(c)));
+  check("las referencias urbanas se ven desde lejos (estación, universidad)",
+    ["railway", "university"].every((c) => filterStr.includes(c)));
   check("la vida de barrio espera a estar cerca",
     ["restaurant", "cafe", "supermarket"].every((c) => filterStr.includes(c)));
-  const textField = JSON.stringify(poi?.layout?.["text-field"] ?? "");
-  check("el nombre NO se muestra en todos: depende de hover, selección o rango",
-    textField.includes("hover") && textField.includes("selected") && textField.includes("rank"),
-    textField.slice(0, 80));
-  check("el icono cambia al seleccionar (misma familia, acento champán)",
-    JSON.stringify(poi?.layout?.["icon-image"] ?? "").includes("-sel"));
+
+  // ⚠️ Las dos reglas que invalidan el estilo. Se comprueban sobre TODAS las
+  // capas, no solo las de `poi`.
+  for (const l of style.layers as any[]) {
+    const layout = JSON.stringify(l.layout ?? {});
+    check(`\`${l.id}\`: sin feature-state en layout`, !layout.includes("feature-state"));
+    const zoomOk = !layout.includes('"zoom"') ||
+      /\["(step|interpolate)"/.test(layout.slice(Math.max(0, layout.indexOf('"zoom"') - 40)));
+    check(`\`${l.id}\`: el zoom solo como entrada de step/interpolate`, zoomOk);
+  }
+  const focusLayer = poiLayers.find((l: any) => l.id === "poi-label-focus");
+  check("hay una capa de nombre para el lugar enfocado (hover/selección)",
+    !!focusLayer && JSON.stringify(focusLayer.filter).includes('"id"'));
+  const majorLabel = poiLayers.find((l: any) => l.id === "poi-label-major");
+  check("los nombres permanentes son solo para los que orientan",
+    JSON.stringify(majorLabel?.filter ?? "").includes("step"));
 
   const { DISCOVERY_CATEGORIES, discoveryIconName } = await import("../lib/services/location/discovery-icons");
   check("taxonomía compacta: entre 8 y 12 familias",

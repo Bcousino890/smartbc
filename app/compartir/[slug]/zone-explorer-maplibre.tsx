@@ -123,6 +123,13 @@ export function ZoneExplorerMapLibre({
    *  estado del mapa (feature-state), no de React. */
   const hoveredRef = useRef<string | number | null>(null);
   const selectedFeatureRef = useRef<string | number | null>(null);
+  /** Reescribe el filtro de la capa que rotula el lugar enfocado. Es la única
+   *  vía: `feature-state` no se admite en propiedades de layout, y el nombre
+   *  es una de ellas. */
+  const showFocusLabel = useCallback((map: any, id: string | number | null) => {
+    if (!map?.getLayer?.("poi-label-focus")) return;
+    map.setFilter("poi-label-focus", ["==", ["id"], id ?? -1]);
+  }, []);
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const residenceElRef = useRef<HTMLElement | null>(null);
@@ -243,6 +250,7 @@ export function ZoneExplorerMapLibre({
             if (f.id != null) {
               map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: f.id }, { hover: true });
             }
+            showFocusLabel(map, selectedFeatureRef.current ?? f.id);
           });
           map.on("mouseleave", layer, () => {
             setCursor("");
@@ -250,6 +258,7 @@ export function ZoneExplorerMapLibre({
               map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: hoveredRef.current }, { hover: false });
               hoveredRef.current = null;
             }
+            showFocusLabel(map, selectedFeatureRef.current);
           });
         }
 
@@ -315,12 +324,7 @@ export function ZoneExplorerMapLibre({
             { selected: false },
           );
         selectedFeatureRef.current = best.id ?? null;
-        if (selectedFeatureRef.current != null) {
-          map.setFeatureState(
-            { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
-            { selected: true },
-          );
-        }
+        showFocusLabel(map, selectedFeatureRef.current);
         const destination = fromOsmFeature({
           id: best.id ?? best.properties?.id ?? null,
           properties: best.properties ?? {},
@@ -360,12 +364,9 @@ export function ZoneExplorerMapLibre({
     applyFocusHierarchy(focus);
     residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
-    if (!focus && selectedFeatureRef.current != null && map.getSource("openmaptiles")) {
-      map.setFeatureState(
-        { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
-        { selected: false },
-      );
+    if (!focus && selectedFeatureRef.current != null) {
       selectedFeatureRef.current = null;
+      showFocusLabel(map, null);
     }
     if (!focus) {
       // En overview la cámara la compone el módulo (encuadra la vivienda con
