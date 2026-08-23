@@ -318,7 +318,18 @@ export function ZoneExplorerMapLibre({
             ["!", ["in", ["id"], ["literal", [...labelHiddenRef.current]]]],
           ]);
         };
-        map.on("idle", dedupeLabels);
+        // OJO: NO se engancha a `idle`. Medido en producción: no llega a
+        // dispararse ni una vez (0 en 3 s tras mover el mapa), así que la
+        // deduplicación no se ejecutaba nunca. `moveend` y el fin de carga de
+        // la fuente sí llegan siempre.
+        let dedupePend: ReturnType<typeof setTimeout> | null = null;
+        const dedupeSoon = () => {
+          if (dedupePend) return;
+          dedupePend = setTimeout(() => { dedupePend = null; dedupeLabels(); }, 250);
+        };
+        map.on("moveend", dedupeSoon);
+        map.on("sourcedata", (e: any) => { if (e.isSourceLoaded) dedupeSoon(); });
+        dedupeSoon();
 
         setReady(true);
       });
