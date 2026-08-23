@@ -32,6 +32,7 @@ import { haversineKm } from "@/lib/geo/poi-distance";
 import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
+  plaqueMarkerHtml,
   residenceMarkerHtml,
   searchMarkerHtml,
 } from "@/lib/services/location/markers";
@@ -116,6 +117,7 @@ export function ZoneExplorerMapLibre({
   const mapRef = useRef<any>(null);
   const libRef = useRef<any>(null);
   const discoveredMarkerRef = useRef<any>(null);
+  const plaqueMarkerRef = useRef<any>(null);
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const residenceElRef = useRef<HTMLElement | null>(null);
@@ -221,10 +223,29 @@ export function ZoneExplorerMapLibre({
           map.on("mouseleave", layer, () => setCursor(""));
         }
 
-        // Aquí vivían dos capas de línea entre la vivienda y el destino.
-        // Se han retirado: la conexión la cuenta el rail de conectividad, no
-        // una diagonal sobre las calles que se lee como una ruta que no hemos
-        // calculado (§16 y §37 del documento de arquitectura).
+        // Proyector para las capas HTML del módulo (cápsulas, área de foco y
+        // el respaldo del mosaico). Se toma DE MAPLIBRE para no mantener dos
+        // matemáticas en paralelo.
+        //
+        // ⚠️ Esto se perdió al retirar las capas de la línea diagonal y el
+        // resultado fue que esas capas se quedaban clavadas en la pantalla
+        // mientras el mapa se movía debajo. Con freno de fotograma: publicar
+        // en cada evento `move` provocaba un render de React por frame.
+        let queued = false;
+        const publishProjector = () => {
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(() => {
+            queued = false;
+            onProjectorRef.current?.((lat: number, lng: number) => {
+              const p = map.project([lng, lat]);
+              return { left: p.x, top: p.y };
+            });
+          });
+        };
+        publishProjector();
+        map.on("move", publishProjector);
+        map.on("resize", publishProjector);
 
         setReady(true);
       });
@@ -286,6 +307,8 @@ export function ZoneExplorerMapLibre({
 
     discoveredMarkerRef.current?.remove();
     discoveredMarkerRef.current = null;
+    plaqueMarkerRef.current?.remove();
+    plaqueMarkerRef.current = null;
 
     // Estado activo del POI curado: el seleccionado se agranda y se llena;
     // los demás vuelven a su estado de reposo. Una sola clase, un solo
@@ -298,6 +321,17 @@ export function ZoneExplorerMapLibre({
       // sus destinos); en explorar se vuelve al encuadre de entrada.
       if (interactive) map.easeTo({ center: [origin.lng, origin.lat], zoom: 15.4, duration: LOCATION_MOTION.reset });
       return;
+    }
+
+    // Destino CURADO: su placa con nombre, anclada por MapLibre a la
+    // coordenada. Antes era una capa HTML del módulo y dependía de que
+    // alguien le recalculase los píxeles en cada fotograma.
+    if (focus.source === "bcp_curated" || focus.source === "university") {
+      const plaqueWrap = document.createElement("div");
+      plaqueWrap.innerHTML = plaqueMarkerHtml(focus.category, focus.name);
+      plaqueMarkerRef.current = new maplibre.Marker({ element: plaqueWrap, anchor: "center" })
+        .setLngLat([focus.lng, focus.lat])
+        .addTo(map);
     }
 
     // Marcador temporal del foco cuando el destino no está ya pintado como

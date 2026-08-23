@@ -623,8 +623,6 @@ export function LocationModule({
           <>
             {/* La placa acompaña al destino curado también al explorar: mismo
                 objeto, misma proyección. */}
-            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
-
             {/* MODO EXPLORACIÓN (EMAAR): un lugar que BCP no había presentado
                 merece contexto — nombre, categoría, dirección y distancia.
                 Lo curado NO pasa por aquí: su información ya vive en el rail. */}
@@ -698,7 +696,10 @@ export function LocationModule({
                 toca decir CUÁL es el sitio. Una ficha repitiendo "Calle
                 Serrano · 19 min · desde la vivienda" duplicaba lo que estaba
                 dos centímetros más arriba y pesaba tres veces más. */}
-            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
+            {/* Con el mapa vectorial la placa la ancla MapLibre por
+                coordenada; este overlay solo existe para el mosaico de
+                respaldo, donde no hay quien la ancle. */}
+            {focusPt && focus && !useVectorMap && <DestinationPlaque point={focusPt} poi={focus} />}
 
             {/* LA VIVIENDA · con el mapa vectorial el medallón lo pinta el
                 propio mapa (un solo marcador para overview y explorar); este
