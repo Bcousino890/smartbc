@@ -71,6 +71,28 @@ export function curatedMarkerHtml(category: string): string {
   return `<span class="bcp-poi${uni}">${categoryGlyph(category)}</span>`;
 }
 
+/**
+ * PLACA DEL DESTINO curado, como marcador de MapLibre.
+ *
+ * Se dibuja aquí y no como capa HTML del módulo para que la ANCLE MAPLIBRE:
+ * una capa posicionada por React necesita que alguien le recalcule los
+ * píxeles en cada fotograma del arrastre, y el día que ese cálculo se cae la
+ * placa se queda clavada en la pantalla mientras el mapa se mueve debajo
+ * —que es exactamente lo que pasó—. Con `setLngLat` no hay nada que
+ * mantener sincronizado: la coordenada manda.
+ */
+export function plaqueMarkerHtml(category: string, name: string): string {
+  const safe = name.replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
+  );
+  return (
+    `<span class="bcp-plaque-marker">` +
+    `<span class="bcp-plaque">${categoryGlyph(category)}<span class="bcp-plaque-name">${safe}</span></span>` +
+    `<span class="bcp-plaque-anchor"></span>` +
+    `</span>`
+  );
+}
+
 /** Lugar descubierto en el basemap: marcador NEUTRO, nunca champán. */
 export function discoveredMarkerHtml(): string {
   return `<span class="bcp-place">${svg('<path d="M7 12.6s4-3.6 4-6.4a4 4 0 1 0-8 0c0 2.8 4 6.4 4 6.4Z"/><circle cx="7" cy="6.2" r="1.4"/>')}</span>`;

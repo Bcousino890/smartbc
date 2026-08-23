@@ -29,9 +29,11 @@ import {
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
 import { LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
 import { haversineKm } from "@/lib/geo/poi-distance";
+import { registerDiscoveryIcons } from "@/lib/services/location/discovery-icons";
 import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
+  plaqueMarkerHtml,
   residenceMarkerHtml,
   searchMarkerHtml,
 } from "@/lib/services/location/markers";
@@ -87,6 +89,7 @@ export function ZoneExplorerMapLibre({
   focus,
   interactive = true,
   camera,
+  focusIsCurated,
   onSelectPlace,
   onSelectCurated,
   onProjector,
@@ -99,6 +102,13 @@ export function ZoneExplorerMapLibre({
   focus: LocationDestination | null;
   /** false = overview: sin gestos, sin controles y sin descubrimiento OSM. */
   interactive?: boolean;
+  /** ¿El foco es un destino que BCP PRESENTA para esta vivienda (rail /
+   *  universidades cercanas), o un lugar que el visitante ha encontrado? Lo
+   *  decide el módulo, que es quien tiene la máquina de estados: el `source`
+   *  del destino no sirve —una búsqueda de la Complutense llega marcada como
+   *  `university` sin ser destino de esta ficha— y la pertenencia a los
+   *  marcadores curados tampoco, porque en el overview no existen. */
+  focusIsCurated?: boolean;
   /** Cámara impuesta desde fuera (composición del overview). El zoom va en
    *  convenio SLIPPY (256px), como el resto de la geometría del módulo. */
   camera?: { lat: number; lng: number; zoom: number } | null;
@@ -116,8 +126,23 @@ export function ZoneExplorerMapLibre({
   const mapRef = useRef<any>(null);
   const libRef = useRef<any>(null);
   const discoveredMarkerRef = useRef<any>(null);
+  const plaqueMarkerRef = useRef<any>(null);
+  /** Feature de OSM bajo el puntero y feature seleccionada: viven como
+   *  estado del mapa (feature-state), no de React. */
+  const hoveredRef = useRef<string | number | null>(null);
+  const selectedFeatureRef = useRef<string | number | null>(null);
+  /** Reescribe el filtro de la capa que rotula el lugar enfocado. Es la única
+   *  vía: `feature-state` no se admite en propiedades de layout, y el nombre
+   *  es una de ellas. */
+  const showFocusLabel = useCallback((map: any, id: string | number | null) => {
+    if (!map?.getLayer?.("poi-label-focus")) return;
+    map.setFilter("poi-label-focus", ["==", ["id"], id ?? -1]);
+  }, []);
   /** Elementos de los marcadores curados, por id: para marcar el activo. */
   const curatedElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  /** Nombre → id del nodo que se queda con el rótulo, e ids ya descartados. */
+  const labelWinnersRef = useRef<Map<string, string | number>>(new Map());
+  const labelHiddenRef = useRef<Set<string | number>>(new Set());
   const residenceElRef = useRef<HTMLElement | null>(null);
   const curatedMarkersRef = useRef<any[]>([]);
   const navControlRef = useRef<any>(null);
@@ -201,6 +226,11 @@ export function ZoneExplorerMapLibre({
       map.on("load", () => {
         if (cancelled) return;
 
+        // Los iconos de la capa de descubrimiento se dibujan y se registran
+        // aquí: mismos trazos que los marcadores del módulo, sin sprite que
+        // hospedar ni una segunda familia de iconos que mantener.
+        registerDiscoveryIcons(map);
+
         // ── LA VIVIENDA: el origen, siempre dominante ──
         const residence = document.createElement("div");
         // En overview el medallón lleva rótulo; en explorar se reconoce solo,
@@ -217,14 +247,97 @@ export function ZoneExplorerMapLibre({
         const setCursor = (v: string) => { map.getCanvas().style.cursor = v; };
         for (const layer of CLICKABLE_LAYER_IDS) {
           if (!map.getLayer(layer)) continue;
-          map.on("mouseenter", layer, () => setCursor("pointer"));
-          map.on("mouseleave", layer, () => setCursor(""));
+          // `hover` revela el nombre del lugar y realza su icono. Se lleva
+          // con feature-state, que es estado del MAPA: nada que sincronizar
+          // desde React y nada que se quede desfasado.
+          map.on("mousemove", layer, (e: any) => {
+            setCursor("pointer");
+            const f = e.features?.[0];
+            if (!f || f.id === hoveredRef.current) return;
+            if (hoveredRef.current != null) {
+              map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: hoveredRef.current }, { hover: false });
+            }
+            hoveredRef.current = f.id;
+            if (f.id != null) {
+              map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: f.id }, { hover: true });
+            }
+            showFocusLabel(map, selectedFeatureRef.current ?? f.id);
+          });
+          map.on("mouseleave", layer, () => {
+            setCursor("");
+            if (hoveredRef.current != null) {
+              map.setFeatureState({ source: "openmaptiles", sourceLayer: "poi", id: hoveredRef.current }, { hover: false });
+              hoveredRef.current = null;
+            }
+            showFocusLabel(map, selectedFeatureRef.current);
+          });
         }
 
-        // Aquí vivían dos capas de línea entre la vivienda y el destino.
-        // Se han retirado: la conexión la cuenta el rail de conectividad, no
-        // una diagonal sobre las calles que se lee como una ruta que no hemos
-        // calculado (§16 y §37 del documento de arquitectura).
+        // Proyector para las capas HTML del módulo (cápsulas, área de foco y
+        // el respaldo del mosaico). Se toma DE MAPLIBRE para no mantener dos
+        // matemáticas en paralelo.
+        //
+        // ⚠️ Esto se perdió al retirar las capas de la línea diagonal y el
+        // resultado fue que esas capas se quedaban clavadas en la pantalla
+        // mientras el mapa se movía debajo. Con freno de fotograma: publicar
+        // en cada evento `move` provocaba un render de React por frame.
+        let queued = false;
+        const publishProjector = () => {
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(() => {
+            queued = false;
+            onProjectorRef.current?.((lat: number, lng: number) => {
+              const p = map.project([lng, lat]);
+              return { left: p.x, top: p.y };
+            });
+          });
+        };
+        publishProjector();
+        map.on("move", publishProjector);
+        map.on("resize", publishProjector);
+
+        // ── Un lugar, un nombre ──
+        // OSM parte un mismo sitio en varios nodos (tres para ESDIP en
+        // Chamberí: cada edificio el suyo), y el mapa los rotulaba todos: el
+        // mismo nombre repetido dos y tres veces a pocos metros. No se puede
+        // resolver en el estilo —una expresión no ve las otras features—, así
+        // que se resuelve como el rótulo del foco: reescribiendo el filtro.
+        // El ganador de cada nombre se recuerda, así que el conjunto de
+        // ocultos solo crece y el rótulo no parpadea al mover el mapa.
+        const labelBaseFilter = map.getFilter("poi-label-major");
+        const dedupeLabels = () => {
+          if (!map.getLayer("poi-label-major")) return;
+          let nuevos = false;
+          for (const f of map.queryRenderedFeatures({ layers: ["poi-label-major"] })) {
+            const name = f.properties?.name;
+            if (!name || f.id == null) continue;
+            const ganador = labelWinnersRef.current.get(name);
+            if (ganador === undefined) { labelWinnersRef.current.set(name, f.id); continue; }
+            if (ganador !== f.id && !labelHiddenRef.current.has(f.id)) {
+              labelHiddenRef.current.add(f.id);
+              nuevos = true;
+            }
+          }
+          if (!nuevos) return;
+          map.setFilter("poi-label-major", [
+            "all",
+            labelBaseFilter,
+            ["!", ["in", ["id"], ["literal", [...labelHiddenRef.current]]]],
+          ]);
+        };
+        // OJO: NO se engancha a `idle`. Medido en producción: no llega a
+        // dispararse ni una vez (0 en 3 s tras mover el mapa), así que la
+        // deduplicación no se ejecutaba nunca. `moveend` y el fin de carga de
+        // la fuente sí llegan siempre.
+        let dedupePend: ReturnType<typeof setTimeout> | null = null;
+        const dedupeSoon = () => {
+          if (dedupePend) return;
+          dedupePend = setTimeout(() => { dedupePend = null; dedupeLabels(); }, 250);
+        };
+        map.on("moveend", dedupeSoon);
+        map.on("sourcedata", (e: any) => { if (e.isSourceLoaded) dedupeSoon(); });
+        dedupeSoon();
 
         setReady(true);
       });
@@ -237,7 +350,9 @@ export function ZoneExplorerMapLibre({
         // pedirle al cliente que clave el cursor en ellos convierte la
         // exploración en un juego de puntería. Se consulta una caja alrededor
         // del clic, como hace cualquier mapa que se deje usar.
-        const T = 10;
+        // Un icono pequeño no puede significar un objetivo pequeño (§14): en
+        // táctil el dedo pide más margen que el ratón.
+        const T = window.matchMedia("(pointer: coarse)").matches ? 18 : 10;
         const box: [[number, number], [number, number]] = [
           [e.point.x - T, e.point.y - T],
           [e.point.x + T, e.point.y + T],
@@ -251,19 +366,37 @@ export function ZoneExplorerMapLibre({
           return;
         }
         // Se elige la feature de mayor prioridad: menor `rank` en OpenMapTiles
-        // significa más relevante.
-        const best = [...features].sort(
+        // significa más relevante. Pero la elegida tiene que PODER abrirse:
+        // si el vecino mejor clasificado no resuelve a destino, el clic caía
+        // en saco roto aunque justo debajo hubiera un sitio perfectamente
+        // válido (visto con una clínica y un centro de documentación, los dos
+        // con un vecino sin ficha por delante).
+        const ordenadas = [...features].sort(
           (a, b) => (Number(a.properties?.rank ?? 99) - Number(b.properties?.rank ?? 99)),
-        )[0];
-        const coords = best.geometry?.type === "Point" ? best.geometry.coordinates : null;
-        const destination = fromOsmFeature({
-          id: best.id ?? best.properties?.id ?? null,
-          properties: best.properties ?? {},
-          lat: coords ? Number(coords[1]) : e.lngLat.lat,
-          lng: coords ? Number(coords[0]) : e.lngLat.lng,
-        });
+        );
+        const puntoDe = (f: any) =>
+          f.geometry?.type === "Point" ? f.geometry.coordinates : null;
+        let best = ordenadas[0];
+        let destination = null as ReturnType<typeof fromOsmFeature>;
+        for (const f of ordenadas) {
+          const c = puntoDe(f);
+          const d = fromOsmFeature({
+            id: f.id ?? f.properties?.id ?? null,
+            properties: f.properties ?? {},
+            lat: c ? Number(c[1]) : e.lngLat.lat,
+            lng: c ? Number(c[0]) : e.lngLat.lng,
+          });
+          if (d) { best = f; destination = d; break; }
+        }
+        selectedFeatureRef.current != null &&
+          map.setFeatureState(
+            { source: "openmaptiles", sourceLayer: "poi", id: selectedFeatureRef.current },
+            { selected: false },
+          );
+        selectedFeatureRef.current = best.id ?? null;
+        showFocusLabel(map, selectedFeatureRef.current);
         // fromOsmFeature devuelve null si la categoría no es pulsable o si la
-        // feature no tiene nombre: en ese caso no se abre ficha alguna.
+        // feature no tiene nombre: si NINGUNA lo consigue, no se abre nada.
         if (destination) onSelectRef.current(destination);
       });
     })();
@@ -286,6 +419,8 @@ export function ZoneExplorerMapLibre({
 
     discoveredMarkerRef.current?.remove();
     discoveredMarkerRef.current = null;
+    plaqueMarkerRef.current?.remove();
+    plaqueMarkerRef.current = null;
 
     // Estado activo del POI curado: el seleccionado se agranda y se llena;
     // los demás vuelven a su estado de reposo. Una sola clase, un solo
@@ -293,6 +428,10 @@ export function ZoneExplorerMapLibre({
     applyFocusHierarchy(focus);
     residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
+    if (!focus && selectedFeatureRef.current != null) {
+      selectedFeatureRef.current = null;
+      showFocusLabel(map, null);
+    }
     if (!focus) {
       // En overview la cámara la compone el módulo (encuadra la vivienda con
       // sus destinos); en explorar se vuelve al encuadre de entrada.
@@ -300,12 +439,29 @@ export function ZoneExplorerMapLibre({
       return;
     }
 
+    // Destino CURADO: su placa con nombre, anclada por MapLibre a la
+    // coordenada. Antes era una capa HTML del módulo y dependía de que
+    // alguien le recalculase los píxeles en cada fotograma.
+    // Placa para lo que BCP ya presenta; marcador para lo que no. Las dos
+    // ramas son COMPLEMENTARIAS a propósito: nunca se ven la placa y el
+    // marcador (con su ficha) sobre el mismo sitio. Ojo con la pertenencia a
+    // `curatedElsRef`: solo hay marcadores curados al explorar, así que en el
+    // overview no sirve para decidir — decide el origen del destino.
+    const esCurado = focusIsCurated ?? (focus.source === "bcp_curated" || focus.source === "university");
+    if (esCurado) {
+      const plaqueWrap = document.createElement("div");
+      plaqueWrap.innerHTML = plaqueMarkerHtml(focus.category, focus.name);
+      plaqueMarkerRef.current = new maplibre.Marker({ element: plaqueWrap, anchor: "center" })
+        .setLngLat([focus.lng, focus.lat])
+        .addTo(map);
+    }
+
     // Marcador temporal del foco cuando el destino no está ya pintado como
     // POI curado. Lo descubierto va NEUTRO y lo buscado lleva la lupa: en
     // ningún caso se insinúa que BCP lo recomienda. La excepción es una
     // universidad encontrada por búsqueda (dato verificado nuestro): usa el
     // lenguaje de educación aprobado, activado.
-    if (!curatedElsRef.current.has(focus.id)) {
+    if (!esCurado && !curatedElsRef.current.has(focus.id)) {
       const placeWrap = document.createElement("div");
       // Una universidad encontrada buscando lleva el glifo de educación
       // (§9): sigue sin ser recomendación de BCP —el champán lo gana solo por
@@ -345,7 +501,7 @@ export function ZoneExplorerMapLibre({
       maxZoom: 17,
       duration: prefersReducedMotion() ? 0 : LOCATION_MOTION.camera,
     });
-  }, [focus, ready, origin, makeEl, interactive]);
+  }, [focus, focusIsCurated, ready, origin, makeEl, interactive]);
 
   /**
    * §8 · jerarquía del foco sobre los POIs curados. Con un destino de fuera

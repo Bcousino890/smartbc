@@ -155,10 +155,100 @@ console.log("Estilo BCP Luxury Madrid:");
   check("el viario principal contrasta con el suelo",
     lum(paintOf("road-major", "line-color")) - lum(paintOf("background", "background-color")) >= 8,
     `${paintOf("road-major", "line-color")} vs ${paintOf("background", "background-color")}`);
-  check("los puntos de POI no aparecen antes de z15 (densidad contenida)",
-    style.layers.filter((l: any) => l["source-layer"] === "poi").every((l: any) => l.minzoom >= 15));
-  check("los RÓTULOS de POI esperan a z16: la vista de entrada no se llena de texto",
-    style.layers.find((l: any) => l.id === "poi-label")?.minzoom >= 16);
+  // ── BCP DISCOVERY LAYER ──
+  // Tres capas por una razón del motor, no por gusto: `feature-state` no vale
+  // en propiedades de layout y `["zoom"]` solo como entrada de un `step` de
+  // nivel superior. Saltarse cualquiera de las dos invalida el estilo entero
+  // y deja el mapa EN BLANCO — pasó, y por eso existe el validador.
+  // Estas aparecen en el filtro para EXCLUIRSE (mobiliario urbano y matices
+  // de subclass que bajan de tramo): no se dibujan, así que no han de ser
+  // pulsables.
+  const STREET_FURNITURE_OK = [
+    "bus_stop", "tram_stop", "subway_entrance", "platform", "halt", "taxi",
+    "bicycle_rental", "bicycle_parking", "car_sharing", "charging_station",
+    "parking", "parking_space", "toilets", "bench", "waste_basket", "atm",
+    "vending_machine", "post_box", "telephone", "drinking_water", "shelter",
+    "subway", "artwork", "books", "chapel", "picnic_site", "pitch",
+    "language_school", "driving_school", "art", "arts_centre", "gallery",
+  ];
+  const poiLayers = style.layers.filter((l: any) => l["source-layer"] === "poi");
+  check("una capa de iconos y dos de texto (icono / mayores / foco)",
+    poiLayers.length === 3 && poiLayers.some((l: any) => l.id === "poi-icon"),
+    poiLayers.map((l: any) => l.id).join(","));
+  const icon = poiLayers.find((l: any) => l.id === "poi-icon");
+  check("el descubrimiento se dibuja con símbolos, no con puntos", icon?.type === "symbol");
+  const filterStr = JSON.stringify(icon?.filter ?? []);
+  check("densidad SEMÁNTICA por zoom, no un único rank global",
+    filterStr.includes("13.5") && filterStr.includes("15.5") && filterStr.includes("step")
+      && !/\["<=?",\s*\["get","rank"\]/.test(filterStr.replace(/\s/g, "")),
+    filterStr.slice(0, 90));
+  check("las referencias urbanas se ven desde lejos (estación, universidad)",
+    ["railway", "university"].every((c) => filterStr.includes(c)));
+  check("la vida de barrio espera a estar cerca",
+    ["restaurant", "cafe", "supermarket"].every((c) => filterStr.includes(c)));
+  // El `subclass` manda cuando contradice a la clase: sin esto, `art_gallery`
+  // colaba estatuas, `library` librerías y `hospital` consultas de barrio al
+  // nivel de un museo, y las paradas de autobús entraban como referencia
+  // urbana (medido: 125 bocas de metro en pantalla a z13).
+  check("el mobiliario urbano no es un lugar (parada, boca de metro, cajero)",
+    ["bus_stop", "subway_entrance", "atm"].every((c) => filterStr.includes(c)));
+  check("cuando el subclass contradice a la clase, manda el subclass",
+    ["artwork", "clinic", "school"].every((c) => filterStr.includes(c)));
+
+  // ⚠️ ESTRUCTURAL. Todo lo que la capa DIBUJA tiene que poder abrirse: un
+  // icono que no responde al clic es peor que no dibujarlo. `mall` y
+  // `fitness_centre` se dibujaban sin estar en la lista blanca, y bastaba con
+  // que uno de ellos ganara el desempate por `rank` para que el clic no
+  // abriera nada.
+  {
+    const { CLICKABLE_POI_CLASSES } = await import("../lib/services/location/destination");
+    const priority = JSON.stringify(icon?.filter ?? []);
+    // Las clases nombradas en el filtro (tramos 1-3 de POI_PRIORITY) salen de
+    // los propios arrays del `match`; se leen del filtro serializado.
+    const dibujadas = [...priority.matchAll(/"([a-z_]+)"/g)]
+      .map((m) => m[1])
+      .filter((c) => !["match", "class", "subclass", "get", "step", "zoom", "all", "has", "name",
+        "geometry-type", "Point", "MultiPoint", "case", "true", "false"].includes(c));
+    const huerfanas = dibujadas.filter(
+      (c) => !(c in CLICKABLE_POI_CLASSES) && !STREET_FURNITURE_OK.includes(c),
+    );
+    check("todo lo que se dibuja se puede pulsar", huerfanas.length === 0, huerfanas.join(", "));
+  }
+
+  // ⚠️ REGRESIÓN. `text-allow-overlap` dice "dibújame igual"; SOLO
+  // `text-ignore-placement` dice "y no ocupes sitio en el índice de
+  // colisiones". Sin la segunda, rotular un lugar al pasar el ratón
+  // expulsaba SU PROPIO icono: desaparecía bajo el cursor y el clic no
+  // encontraba nada que abrir. Medido en navegador: 1 icono antes de
+  // rotular, 0 después.
+  const focusLayout = (poiLayers.find((l: any) => l.id === "poi-label-focus")?.layout ?? {}) as any;
+  check("el rótulo del foco NO compite por el sitio con su propio icono",
+    focusLayout["text-allow-overlap"] === true && focusLayout["text-ignore-placement"] === true,
+    JSON.stringify({ overlap: focusLayout["text-allow-overlap"], ignore: focusLayout["text-ignore-placement"] }));
+
+  // ⚠️ Las dos reglas que invalidan el estilo. Se comprueban sobre TODAS las
+  // capas, no solo las de `poi`.
+  for (const l of style.layers as any[]) {
+    const layout = JSON.stringify(l.layout ?? {});
+    check(`\`${l.id}\`: sin feature-state en layout`, !layout.includes("feature-state"));
+    const zoomOk = !layout.includes('"zoom"') ||
+      /\["(step|interpolate)"/.test(layout.slice(Math.max(0, layout.indexOf('"zoom"') - 40)));
+    check(`\`${l.id}\`: el zoom solo como entrada de step/interpolate`, zoomOk);
+  }
+  const focusLayer = poiLayers.find((l: any) => l.id === "poi-label-focus");
+  check("hay una capa de nombre para el lugar enfocado (hover/selección)",
+    !!focusLayer && JSON.stringify(focusLayer.filter).includes('"id"'));
+  const majorLabel = poiLayers.find((l: any) => l.id === "poi-label-major");
+  check("los nombres permanentes son solo para los que orientan",
+    JSON.stringify(majorLabel?.filter ?? "").includes("step"));
+
+  const { DISCOVERY_CATEGORIES, discoveryIconName } = await import("../lib/services/location/discovery-icons");
+  check("taxonomía compacta: entre 8 y 12 familias",
+    DISCOVERY_CATEGORIES.length >= 8 && DISCOVERY_CATEGORIES.length <= 12, String(DISCOVERY_CATEGORIES.length));
+  check("una clase desconocida cae al glifo genérico",
+    discoveryIconName("obelisco_raro") === "bcp-poi-lugar");
+  check("la variante seleccionada tiene su propio nombre de imagen",
+    discoveryIconName("gastronomia", true) === "bcp-poi-gastronomia-sel");
   check("atribución de OpenFreeMap, OpenMapTiles y OSM presente",
     /OpenFreeMap/.test(MAP_ATTRIBUTION) && /OpenMapTiles/.test(MAP_ATTRIBUTION) && /OpenStreetMap/.test(MAP_ATTRIBUTION));
   // Convenio de zoom: MapLibre cuenta sobre teselas de 512px y nosotros sobre

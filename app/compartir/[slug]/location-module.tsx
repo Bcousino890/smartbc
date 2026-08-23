@@ -447,10 +447,21 @@ export function LocationModule({
                 // Lo local vuelve por su máquina de estados (rail + lista
                 // sincronizados); lo externo es exploración de sesión. El rail
                 // curado NUNCA se toca.
-                const original =
-                  d.source === "bcp_curated" || d.source === "university"
-                    ? [...ordered, ...universities].find((p) => p.name === d.name)
-                    : null;
+                // El origen del resultado NO basta para saber si el sitio ya
+                // estaba presentado: la Complutense llega del catálogo local
+                // como "UCM" y el rail la llama "Universidad Complutense", así
+                // que por nombre no casaba y se abría ficha de exploración
+                // ENCIMA de la placa del destino curado — las dos cosas a la
+                // vez, justo lo que no debe pasar. Se compara por el LUGAR:
+                // mismo nombre o a menos de 150 m.
+                const mismoSitio = (p: { name: string; latitude?: number | null; longitude?: number | null }) => {
+                  if (p.name === d.name) return true;
+                  // OJO: el catálogo de POIs habla en `latitude`/`longitude`
+                  // (PoiTravel), no en `lat`/`lng` como los destinos del mapa.
+                  if (typeof p.latitude !== "number" || typeof p.longitude !== "number") return false;
+                  return haversineKm(p.latitude, p.longitude, d.lat, d.lng) <= 0.15;
+                };
+                const original = [...ordered, ...universities].find(mismoSitio) ?? null;
                 if (original) {
                   setPlaceFocus(null);
                   selectPoi(original);
@@ -565,6 +576,10 @@ export function LocationModule({
             origin={{ lat: center.lat, lng: center.lng }}
             originLabel="La vivienda"
             interactive={live}
+            // Quién manda aquí es la máquina de estados del módulo: si hay
+            // ficha de exploración, el foco es un hallazgo del visitante; si
+            // no, es un destino presentado por BCP.
+            focusIsCurated={!placeFocus && !!focus}
             // En overview la cámara la compone el módulo; al explorar el mapa
             // se gobierna solo.
             camera={live ? null : view}
@@ -623,8 +638,6 @@ export function LocationModule({
           <>
             {/* La placa acompaña al destino curado también al explorar: mismo
                 objeto, misma proyección. */}
-            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
-
             {/* MODO EXPLORACIÓN (EMAAR): un lugar que BCP no había presentado
                 merece contexto — nombre, categoría, dirección y distancia.
                 Lo curado NO pasa por aquí: su información ya vive en el rail. */}
@@ -698,7 +711,10 @@ export function LocationModule({
                 toca decir CUÁL es el sitio. Una ficha repitiendo "Calle
                 Serrano · 19 min · desde la vivienda" duplicaba lo que estaba
                 dos centímetros más arriba y pesaba tres veces más. */}
-            {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
+            {/* Con el mapa vectorial la placa la ancla MapLibre por
+                coordenada; este overlay solo existe para el mosaico de
+                respaldo, donde no hay quien la ancle. */}
+            {focusPt && focus && !useVectorMap && <DestinationPlaque point={focusPt} poi={focus} />}
 
             {/* LA VIVIENDA · con el mapa vectorial el medallón lo pinta el
                 propio mapa (un solo marcador para overview y explorar); este

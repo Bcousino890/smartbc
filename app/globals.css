@@ -963,6 +963,30 @@
 /* PLACA DEL DESTINO · modo curado.
    Marfil, carbón, filo champán y una punta que la ancla a la coordenada. Es
    una etiqueta de lugar, no una ficha: el tiempo lo cuenta el rail. */
+/* Contenedor del marcador-placa: MapLibre lo coloca en la coordenada y
+   nosotros solo apilamos rótulo y ancla alrededor de ese punto. */
+.bcp-plaque-marker {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+}
+.bcp-plaque-marker .bcp-plaque {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bcp-plaque-marker .bcp-plaque-anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.bcp-plaque-name { white-space: nowrap; }
+
 .bcp-plaque {
   bottom: 16px;
   width: max-content;

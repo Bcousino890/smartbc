@@ -55,6 +55,74 @@ const C = {
   poiDot: "#9c7f4e",
 };
 
+/** Prioridad de descubrimiento por familia: 1 orienta una ciudad, 3 es vida
+ *  de barrio. El zoom decide hasta qué prioridad se enseña. */
+/**
+ * Mobiliario urbano disfrazado de lugar. OpenMapTiles mete la parada de
+ * autobús y la boca de metro en las MISMAS clases que la estación y el
+ * aeropuerto (`bus`, `railway`), así que por clase entraban como referencia
+ * de primer nivel: 133 iconos en pantalla a z13, casi todos paradas. Una
+ * estación orienta; una marquesina no. Se juzga por el `subclass`, que es
+ * donde OSM guarda lo que la cosa ES.
+ */
+const STREET_FURNITURE: unknown[] = [
+  "match", ["get", "subclass"],
+  ["bus_stop", "tram_stop", "subway_entrance", "platform", "halt", "taxi",
+   "bicycle_rental", "bicycle_parking", "car_sharing", "charging_station",
+   "parking", "parking_space", "toilets", "bench", "waste_basket", "atm",
+   "vending_machine", "post_box", "telephone", "drinking_water", "shelter"],
+  true, false,
+];
+
+/**
+ * Cuando el `subclass` contradice a la clase, manda el subclass — es el dato
+ * fino. Medido en Barrio de Salamanca: la clase `art_gallery` traía 14
+ * ESTATUAS (`artwork`), `library` 11 LIBRERÍAS (`books`) y `hospital` 35
+ * CONSULTAS (`clinic`) al mismo nivel que un museo. Y el metro, que sí
+ * orienta, entraba como referencia de primer nivel: 125 bocas en pantalla a
+ * z13. Devuelve 0 cuando no tiene opinión y decide la clase.
+ */
+const SUBCLASS_TIER: unknown[] = [
+  "match", ["get", "subclass"],
+  ["subway"], 2,
+  // Un colegio del barrio importa; los cincuenta del distrito, no. Y la
+  // galería comercial no es el Thyssen: `art_gallery` traía estatuas,
+  // centros de arte y galerías al nivel de un museo.
+  ["clinic", "doctors", "dentist", "kindergarten", "books", "artwork",
+   "chapel", "picnic_site", "pitch", "playground", "school", "language_school",
+   "driving_school", "art", "arts_centre", "gallery"], 3,
+  0,
+];
+
+const POI_PRIORITY: unknown[] = [
+  "case",
+  STREET_FURNITURE, 9,
+  [">", SUBCLASS_TIER, 0], SUBCLASS_TIER,
+  ["match", ["get", "class"],
+  // OJO: OpenMapTiles mete clínicas y consultas dentro de class "hospital",
+  // así que en prioridad 1 llenaba el mapa de centros médicos de barrio.
+  ["railway", "bus", "airport", "university", "college", "museum", "attraction", "stadium"], 1,
+  ["school", "hospital", "art_gallery", "theatre", "cinema", "library", "department_store", "mall", "marketplace", "park", "hotel"], 2,
+  ["restaurant", "cafe", "bar", "pub", "fast_food", "bakery", "grocery", "supermarket", "shop", "clothing_store", "pharmacy", "clinic", "doctors", "sports_centre", "fitness_centre", "garden", "playground"], 3,
+  9,
+  ],
+];
+
+/** Glifo por familia. Las imágenes las registra `discovery-icons.ts`. */
+const POI_ICON: unknown[] = [
+  "match", ["get", "class"],
+  ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "bakery"], "bcp-poi-gastronomia",
+  ["grocery", "supermarket", "shop", "clothing_store", "department_store", "mall", "marketplace"], "bcp-poi-compras",
+  ["school", "college", "university", "kindergarten", "library"], "bcp-poi-educacion",
+  ["railway", "bus", "airport", "ferry_terminal"], "bcp-poi-transporte",
+  ["hospital", "pharmacy", "doctors", "clinic", "dentist"], "bcp-poi-salud",
+  ["stadium", "sports_centre", "fitness_centre", "swimming_pool", "pitch"], "bcp-poi-deporte",
+  ["museum", "art_gallery", "theatre", "cinema", "attraction", "monument", "place_of_worship"], "bcp-poi-cultura",
+  ["hotel", "hostel", "motel"], "bcp-poi-hotel",
+  ["park", "garden", "playground"], "bcp-poi-parque",
+  "bcp-poi-lugar",
+];
+
 const FONT = ["Noto Sans Regular"];
 // OpenFreeMap solo sirve "Noto Sans Regular" (Medium da 404): pedir una
 // fuente inexistente deja las etiquetas sin dibujar.
@@ -273,68 +341,109 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
       //    solo desde z15 y limitando el rango, para que la escena respire
       //    sin dejar al cliente sin nada que descubrir. Su id se usa en
       //    queryRenderedFeatures, así que no debe renombrarse a la ligera.
+      // ── BCP DISCOVERY LAYER ──
+      // Los lugares reales del basemap dejan de ser puntitos indistinguibles
+      // del rótulo de una calle: cada uno lleva el glifo de su familia, que
+      // es lo que dice "esto es un sitio y se puede pulsar".
+      //
+      // Va en TRES capas por una razón dura del motor, no por gusto:
+      //   · `feature-state` NO se admite en propiedades de layout, así que el
+      //     nombre en hover no puede salir de un `text-field` condicional;
+      //   · `["zoom"]` solo vale como entrada de un `step`/`interpolate` de
+      //     nivel superior, nunca anidado.
+      // Ambas cosas invalidan el estilo entero y dejan el mapa EN BLANCO.
       {
-        id: "poi-label",
+        id: "poi-icon",
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "poi",
-        // Tramos de `rank` según la semántica real de OpenMapTiles: rank BAJO
-        // = más importante. Se replican los cortes que usa el estilo oficial
-        // (comprobados contra sus propias capas) pero subidos un nivel de
-        // zoom y descartando la cola rank>=20, que es la que llenaba la
-        // escena de clínicas y tiendas de barrio.
-        minzoom: 16,
-        // Densidad PROGRESIVA (§5): a z16 solo lo verdaderamente relevante y
-        // a partir de ahí se abre. `rank` bajo = más importante.
+        minzoom: 12,
+        // Densidad SEMÁNTICA: cada clase tiene una prioridad y el zoom decide
+        // hasta qué prioridad se enseña. Nada de un `rank <= N` global.
         filter: ["all",
           ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], ["step", ["zoom"], 10, 17, 16, 18, 20]],
           ["has", "name"],
+          ["<=", POI_PRIORITY, ["step", ["zoom"], 1, 13.5, 2, 15.5, 3]],
+        ],
+        layout: {
+          "icon-image": POI_ICON,
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.62, 15, 0.78, 17, 0.92],
+          "icon-allow-overlap": false,
+          "icon-padding": 3,
+          "symbol-sort-key": ["get", "rank"],
+        },
+        paint: {
+          // `feature-state` SÍ vale en paint: el realce al pasar por encima
+          // vive aquí.
+          "icon-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 1, 0.9],
+        },
+      },
+      {
+        // Nombres de los lugares que ORIENTAN. El resto se descubre pasando
+        // el ratón o pulsando: así un icono se lee como sitio y un texto
+        // suelto como rótulo del mapa.
+        id: "poi-label-major",
+        type: "symbol",
+        source: "openmaptiles",
+        "source-layer": "poi",
+        minzoom: 15,
+        filter: ["all",
+          ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
+          ["has", "name"],
+          // Nombres con cuentagotas: solo las referencias, y a partir de z16.5
+          // también las de segundo nivel. El resto, al pasar el ratón.
+          ["<=", POI_PRIORITY, ["step", ["zoom"], 1, 16.5, 2]],
+          ["<", ["get", "rank"], 15],
         ],
         layout: {
           "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
           "text-font": FONT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 10.5, 18, 12],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10.5, 18, 12],
           "text-anchor": "top",
-          "text-offset": [0, 0.7],
-          "text-max-width": 7,
-          "text-padding": 10,
+          "text-offset": [0, 0.9],
+          "text-max-width": 8,
+          "text-padding": 6,
+          "text-optional": true,
           "symbol-sort-key": ["get", "rank"],
         },
-        paint: { "text-color": C.labelDark, "text-halo-color": C.labelHalo, "text-halo-width": 1.5 },
+        paint: {
+          "text-color": C.labelDark,
+          "text-halo-color": C.labelHalo,
+          "text-halo-width": 1.6,
+        },
       },
       {
-        id: "poi-dot",
-        type: "circle",
+        // Nombre del lugar bajo el puntero o seleccionado. Su filtro lo
+        // reescribe el componente con el id concreto: es la única forma de
+        // reaccionar a `feature-state` en una propiedad de layout.
+        id: "poi-label-focus",
+        type: "symbol",
         source: "openmaptiles",
         "source-layer": "poi",
-        // Los puntos entran antes que los rótulos: insinúan que ahí hay algo
-        // que pulsar sin llenar la escena de texto.
-        minzoom: 15,
-        filter: ["all",
-          ["match", ["geometry-type"], ["Point", "MultiPoint"], true, false],
-          ["<", ["get", "rank"], ["step", ["zoom"], 7, 16, 14, 17, 20]],
-          ["has", "name"],
-        ],
+        filter: ["==", ["id"], -1],
+        layout: {
+          "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
+          "text-font": FONT,
+          "text-size": 12,
+          "text-anchor": "top",
+          "text-offset": [0, 0.9],
+          "text-max-width": 9,
+          // Las DOS, y no es redundancia — es la causa del fallo que dejaba
+          // los lugares sin abrir ficha. `text-allow-overlap` solo dice que
+          // este rótulo se dibuje pase lo que pase; `text-ignore-placement`
+          // dice que además NO OCUPE sitio en el índice de colisiones. Sin la
+          // segunda, rotular un lugar al pasar el ratón reordenaba la
+          // colocación de símbolos y expulsaba SU PROPIO icono: el icono
+          // desaparecía justo bajo el cursor, `queryRenderedFeatures` ya no
+          // lo encontraba y el clic no abría nada. Medido: 1 icono antes de
+          // rotular, 0 después.
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
         paint: {
-          // El tamaño distingue lo importante de lo secundario…
-          "circle-radius": [
-            "interpolate", ["linear"], ["zoom"],
-            15, ["case", ["<", ["get", "rank"], 7], 3.2, 2.3],
-            18, ["case", ["<", ["get", "rank"], 7], 4.6, 3.4],
-          ],
-          // …y un desvío de tono discreto insinúa la categoría sin convertir
-          // el mapa en un semáforo. NUNCA champán: lo descubierto en OSM no
-          // puede parecer recomendado por BCP (§5).
-          "circle-color": [
-            "match", ["get", "class"],
-            ["park", "garden", "wood", "playground", "pitch"], "#6f8a5c",
-            ["railway", "bus", "airport", "ferry_terminal"], "#5e7382",
-            ["hospital", "pharmacy", "doctors"], "#8a6b6b",
-            C.poiDot,
-          ],
-          "circle-stroke-color": C.labelHalo,
-          "circle-stroke-width": 1,
+          "text-color": "#5c4a24",
+          "text-halo-color": C.labelHalo,
+          "text-halo-width": 2,
         },
       },
     ],
@@ -342,4 +451,4 @@ export function bcpLuxuryMadridStyle(): Record<string, unknown> {
 }
 
 /** Capas sobre las que se consulta al pulsar el mapa. */
-export const CLICKABLE_LAYER_IDS = ["poi-dot", "poi-label"] as const;
+export const CLICKABLE_LAYER_IDS = ["poi-icon"] as const;
