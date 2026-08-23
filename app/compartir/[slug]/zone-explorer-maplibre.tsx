@@ -28,6 +28,7 @@ import {
 } from "@/lib/services/location/bcp-map-style";
 import { fromOsmFeature, type LocationDestination } from "@/lib/services/location/destination";
 import { LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
+import { haversineKm } from "@/lib/geo/poi-distance";
 import {
   curatedMarkerHtml,
   discoveredMarkerHtml,
@@ -289,9 +290,7 @@ export function ZoneExplorerMapLibre({
     // Estado activo del POI curado: el seleccionado se agranda y se llena;
     // los demás vuelven a su estado de reposo. Una sola clase, un solo
     // estado — el mismo principio que la máquina de selección del módulo.
-    for (const [id, el] of curatedElsRef.current) {
-      el.classList.toggle("is-active", focus?.id === id);
-    }
+    applyFocusHierarchy(focus);
     residenceElRef.current?.classList.toggle("is-focus", !!focus);
 
     if (!focus) {
@@ -308,14 +307,19 @@ export function ZoneExplorerMapLibre({
     // lenguaje de educación aprobado, activado.
     if (!curatedElsRef.current.has(focus.id)) {
       const placeWrap = document.createElement("div");
+      // Una universidad encontrada buscando lleva el glifo de educación
+      // (§9): sigue sin ser recomendación de BCP —el champán lo gana solo por
+      // estar seleccionada— pero se lee como lo que es.
       placeWrap.innerHTML =
-        focus.source === "osm_search"
-          ? searchMarkerHtml()
-          : focus.source === "university"
-            ? curatedMarkerHtml("educacion")
+        focus.source === "university" || (focus.source === "osm_search" && focus.category === "educacion")
+          ? curatedMarkerHtml("educacion")
+          : focus.source === "osm_search"
+            ? searchMarkerHtml()
             : discoveredMarkerHtml();
       const el = placeWrap.firstElementChild as HTMLElement | null;
-      if (focus.source === "university" && el) el.classList.add("is-active");
+      if (el && (focus.source === "university" || focus.category === "educacion")) {
+        el.classList.add("is-active");
+      }
       discoveredMarkerRef.current = new maplibre.Marker({
         element: placeWrap,
         anchor: "center",
@@ -342,6 +346,32 @@ export function ZoneExplorerMapLibre({
       duration: prefersReducedMotion() ? 0 : LOCATION_MOTION.camera,
     });
   }, [focus, ready, origin, makeEl, interactive]);
+
+  /**
+   * §8 · jerarquía del foco sobre los POIs curados. Con un destino de fuera
+   * seleccionado dejan de ser información y pasan a ser ruido: se apagan, y a
+   * distancia regional se retiran del todo. Vive en una función porque hay
+   * que aplicarla en DOS momentos —al cambiar el foco y al (re)crear los
+   * marcadores—: al entrar en explorar la lista de curados pasa de vacía a
+   * llena, los marcadores nacen de nuevo y sin esto nacían a plena luz.
+   */
+  const applyFocusHierarchy = useCallback(
+    (current: LocationDestination | null) => {
+      // "Externo" no es una cuestión de FUENTE sino de si ese destino está
+      // entre los curados que hay pintados: UCJC sale de nuestro catálogo de
+      // universidades (source `university`) pero no es una de las cercanas de
+      // esta vivienda, así que compite con ellas igual que un resultado de
+      // OSM. Mirar la fuente dejaba los diez marcadores encendidos.
+      const external = !!current && !curatedElsRef.current.has(current.id);
+      const farKm = external && current ? haversineKm(origin.lat, origin.lng, current.lat, current.lng) : 0;
+      for (const [id, el] of curatedElsRef.current) {
+        el.classList.toggle("is-active", current?.id === id);
+        el.classList.toggle("is-dimmed", external && farKm <= 5);
+        el.style.display = external && farKm > 5 ? "none" : "";
+      }
+    },
+    [origin.lat, origin.lng],
+  );
 
   // ── Marcadores curados ──
   // Van en su propio efecto porque la lista CAMBIA: en overview está vacía
@@ -371,11 +401,14 @@ export function ZoneExplorerMapLibre({
       } else {
         el.style.pointerEvents = "none";
       }
-      if (focus?.id === c.id) el.classList.add("is-active");
       curatedMarkersRef.current.push(
         new maplibre.Marker({ element: wrap, anchor: "center" }).setLngLat([c.lng, c.lat]).addTo(map),
       );
     }
+    // Los marcadores acaban de nacer: heredan el estado del foco vigente.
+    applyFocusHierarchy(focus);
+    // `focus` a propósito fuera de las dependencias: aquí solo se hereda el
+    // estado al crear; los cambios de foco los aplica su propio efecto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curated, ready, interactive]);
 

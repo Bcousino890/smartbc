@@ -34,6 +34,7 @@ import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
 import { residenceMarkerHtml } from "@/lib/services/location/markers";
 import { LOCATION_EASING, LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
 import { formatDistance, fromSearchResult, mergeResults, searchLocal } from "@/lib/services/location/search";
+import { haversineKm } from "@/lib/geo/poi-distance";
 import type { SearchPlaceDto } from "@/lib/services/location/search";
 import { fromCuratedPoi, fromUniversity, type LocationDestination } from "@/lib/services/location/destination";
 
@@ -364,12 +365,14 @@ export function LocationModule({
   }, [onPoiClick]);
 
   /** Vuelta al overview. Una sola puerta: rail, mapa, ficha y listas a la vez. */
+  const [resetSignal, setResetSignal] = useState(0);
   const restoreOverview = useCallback(() => {
     // El indicador se retira con el mismo carácter con el que llegó; el
     // encuadre vuelve solo porque `view` se recalcula sin foco.
     railAnimRef.current?.cancel();
     setFocus(null);
     setPlaceFocus(null);
+    setResetSignal((n) => n + 1);
     onRestore();
   }, [onRestore]);
 
@@ -392,6 +395,17 @@ export function LocationModule({
 
   // Cápsula de POI: se oculta si su punto cae fuera del lienzo o si pisa al
   // marcador de la vivienda — mejor un destino menos que un amontonamiento.
+  /** Distancia geodésica a la vivienda: un hecho que sí podemos dar cuando
+   *  no hay tiempo fiable (y que acompaña al tiempo cuando lo hay). Nunca se
+   *  presenta como distancia por carretera. */
+  const withDistance = useCallback(
+    (d: LocationDestination): LocationDestination =>
+      d.distanceKm != null
+        ? d
+        : { ...d, distanceKm: Math.round(haversineKm(center.lat, center.lng, d.lat, d.lng) * 10) / 10 },
+    [center.lat, center.lng],
+  );
+
   const capsuleVisible = (pt: { left: number; top: number }) => {
     if (!size || !propertyPt) return false;
     const margin = 46;
@@ -414,6 +428,45 @@ export function LocationModule({
             : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
         </p>
       </div>
+
+      {/* ── BUSCAR CERCA DE ESTA VIVIENDA ────────────────────────────────
+             Visible desde el primer momento: quien llega aquí puede escribir
+             "colegio" o el nombre de su gimnasio sin tener que descubrir
+             antes que existe un modo de exploración. Buscar desde el overview
+             entra solo en explorar y enfoca el resultado.
+             No es el protagonista de la sección: ancho contenido y un CTA
+             integrado en la propia barra. */}
+      {hasPreciseCoords && (
+        <div className="mt-5 px-6 md:px-8">
+          <div className="w-full md:max-w-[34rem]">
+            <ZoneSearch
+              property={{ lat: center.lat, lng: center.lng }}
+              curated={ordered}
+              resetSignal={resetSignal}
+              onSelect={(d) => {
+                // Lo local vuelve por su máquina de estados (rail + lista
+                // sincronizados); lo externo es exploración de sesión. El rail
+                // curado NUNCA se toca.
+                const original =
+                  d.source === "bcp_curated" || d.source === "university"
+                    ? [...ordered, ...universities].find((p) => p.name === d.name)
+                    : null;
+                if (original) {
+                  setPlaceFocus(null);
+                  selectPoi(original);
+                } else {
+                  // Un lugar de fuera necesita el mapa suelto para poder
+                  // mirarlo: buscar desde el overview entra en explorar solo.
+                  setFocus(null);
+                  setPlaceFocus(withDistance(d));
+                  if (!live) enterLive();
+                }
+              }}
+              onEvent={(event, meta) => onSearchEvent?.(event, meta)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── CONECTADA CON MADRID · pieza editorial, no cards de dashboard.
              Una línea fina con hitos: se lee como una progresión, no como
@@ -568,31 +621,6 @@ export function LocationModule({
 
         {live ? (
           <>
-            {/* BUSCAR CERCA DE ESTA VIVIENDA · solo al explorar (§1). */}
-            {hasPreciseCoords && (
-              <ZoneSearch
-                property={{ lat: center.lat, lng: center.lng }}
-                curated={ordered}
-                onSelect={(d) => {
-                  // Lo local vuelve por su máquina de estados (rail + lista
-                  // sincronizados); lo externo es exploración de sesión y va
-                  // por la vía del lugar descubierto. El rail curado NUNCA se
-                  // toca (§19).
-                  const original =
-                    d.source === "bcp_curated" || d.source === "university"
-                      ? [...ordered, ...universities].find((p) => p.name === d.name)
-                      : null;
-                  if (original) {
-                    setPlaceFocus(null);
-                    selectPoi(original);
-                  } else {
-                    setFocus(null);
-                    setPlaceFocus(d);
-                  }
-                }}
-                onEvent={(event, meta) => onSearchEvent?.(event, meta)}
-              />
-            )}
             {/* La placa acompaña al destino curado también al explorar: mismo
                 objeto, misma proyección. */}
             {focusPt && focus && <DestinationPlaque point={focusPt} poi={focus} />}
@@ -769,11 +797,14 @@ export function LocationModule({
 function ZoneSearch({
   property,
   curated,
+  resetSignal,
   onSelect,
   onEvent,
 }: {
   property: { lat: number; lng: number };
   curated: PoiTravel[];
+  /** Cambia al volver al overview: limpia la consulta y el desplegable. */
+  resetSignal: number;
   onSelect: (d: LocationDestination) => void;
   onEvent: (event: "zone_search_submit" | "zone_search_result_select", meta: Record<string, string>) => void;
 }) {
@@ -823,6 +854,19 @@ function ZoneSearch({
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
+  // "Ver zona completa" devuelve la sección a su estado inicial: una consulta
+  // vieja en la barra, con el mapa ya restaurado, solo confunde.
+  const firstReset = useRef(true);
+  useEffect(() => {
+    if (firstReset.current) { firstReset.current = false; return; }
+    abortRef.current?.abort();
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+    setActive(-1);
+    setStatus("idle");
+  }, [resetSignal]);
+
   const submit = useCallback(async () => {
     const q = query.trim();
     if (q.length < 2) return;
@@ -871,8 +915,8 @@ function ZoneSearch({
   );
 
   return (
-    <div className="absolute left-3 right-14 top-3 z-[550] md:right-auto md:w-[21rem]">
-      <div className="flex items-center gap-2 rounded-full border border-gold/30 bg-cream-50/95 py-1 pl-3.5 pr-1 shadow-[0_10px_26px_-14px_rgba(40,28,10,0.7)] backdrop-blur-sm">
+    <div className="relative z-[20]">
+      <div className="flex items-center gap-2 rounded-full border border-gold/30 bg-cream-50/95 py-1 pl-3.5 pr-1 shadow-[0_8px_22px_-16px_rgba(40,28,10,0.6)]">
         {status === "loading" ? (
           <Loader2 size={13} strokeWidth={2} className="shrink-0 animate-spin text-gold-dark" />
         ) : (
@@ -910,10 +954,13 @@ function ZoneSearch({
             }
           }}
         />
+        {/* CTA integrado en la propia barra: carbón, contenido, sin
+            convertirse en una segunda caja visual. */}
         <button
           type="button"
           onClick={() => void submit()}
-          className="crm-meta shrink-0 rounded-full bg-ink px-3 py-1.5 text-cream-50 transition hover:bg-ink-soft"
+          aria-label="Buscar"
+          className="shrink-0 rounded-full bg-ink px-3 py-[7px] text-[11px] font-medium tracking-wide text-cream-50 transition hover:bg-ink-soft"
         >
           Buscar
         </button>
@@ -924,7 +971,7 @@ function ZoneSearch({
           id="bcp-zone-search-results"
           role="listbox"
           aria-label="Resultados de búsqueda"
-          className="mt-1.5 overflow-hidden rounded-xl border border-gold/25 bg-cream-50/98 shadow-[0_18px_44px_-18px_rgba(40,28,10,0.65)] backdrop-blur-sm"
+          className="absolute left-0 right-0 top-full z-[30] mt-1.5 overflow-hidden rounded-xl border border-gold/25 bg-cream-50 shadow-[0_18px_44px_-18px_rgba(40,28,10,0.65)]"
         >
           {results.map((d, i) => {
             const { Icon } = categoryOf(d.category);
@@ -1073,7 +1120,6 @@ function ContextCard({
   const subtitle = place.subtitle ?? null;
   const eta = place.eta ?? null;
   const isDiscovered = place.source === "osm_discovered";
-  const isSearch = place.source === "osm_search";
   // Enlace a OSM solo si el id es REAL (no el generado desde coordenadas):
   // preferimos no ofrecer enlace a ofrecer uno que lleve a ninguna parte.
   // Los ids de búsqueda conservan el tipo ("search:way/123") para enlazar a
@@ -1099,7 +1145,7 @@ function ContextCard({
       // sobre un marcador en 390px de ancho: se convierte en una tarjeta
       // inferior dentro del propio mapa (§35), que deja ver el mapa y no
       // secuestra el scroll de la página.
-      className={`bcp-context-card bcp-context-card--mobile-sheet absolute z-[600] rounded-2xl border border-gold/25 bg-cream-50/95 p-4 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm md:w-[min(21rem,calc(100%-1.5rem))] ${
+      className={`bcp-context-card bcp-context-card--mobile-sheet absolute z-[600] rounded-2xl border border-gold/25 bg-cream-50/95 px-4 py-3.5 shadow-[0_22px_50px_-20px_rgba(40,28,10,0.6)] backdrop-blur-sm md:w-[min(20rem,calc(100%-1.5rem))] ${
         side === "top" ? "md:top-3.5" : "md:bottom-14"
       } ${
         align === "center" ? "md:left-1/2 md:-translate-x-1/2" : align === "left" ? "md:left-3.5" : "md:right-3.5"
@@ -1111,30 +1157,38 @@ function ContextCard({
       >
         <X size={13} strokeWidth={2} />
       </button>
-      <p className="crm-label-sm pr-6 text-ink">{name}</p>
+      {/* Jerarquía: el NOMBRE manda; el tiempo es información fuerte pero
+          secundaria, en una sola línea con el modo y la distancia. Antes el
+          "≈27" a 20px dominaba la ficha entera. */}
+      <p className="pr-6 text-[19px] leading-tight text-ink">{name}</p>
       {(subtitle || label) && (
         <p className="crm-meta mt-1 flex items-center gap-1.5 text-ink/50">
           <Icon size={11} strokeWidth={1.75} className="text-gold-dark" />
-          {subtitle || label}
+          {[subtitle, label].filter(Boolean).join(" · ")}
         </p>
       )}
-      {place.address && <p className="crm-meta mt-1.5 text-ink/45">{place.address}</p>}
+      {place.address && <p className="crm-meta mt-2 text-ink/45">{place.address}</p>}
       {eta ? (
         <>
-          <p className="crm-number mt-2.5 text-xl leading-none text-ink">
-            ≈ {eta.minutes}
-            <span className="crm-meta ml-1.5 text-ink/50">min {modeLabel(eta.mode as PoiTravel["mode"])}</span>
+          <p className="mt-2.5 text-[17px] leading-none text-ink">
+            <span className="crm-number">≈ {eta.minutes}</span>
+            <span className="ml-1.5 text-[13px] text-ink/60">
+              min {modeLabel(eta.mode as PoiTravel["mode"])}
+              {place.distanceKm != null && ` · ${formatDistance(place.distanceKm)}`}
+            </span>
           </p>
           <p className="crm-meta mt-1 text-ink/40">Desde la vivienda</p>
         </>
-      ) : isSearch && place.distanceKm != null ? (
-        // Sin ETA honesto, la distancia geodésica sí es un hecho (§9).
+      ) : place.distanceKm != null ? (
+        // Sin tiempo fiable, la distancia geodésica sí es un hecho. Se dice
+        // "en línea recta" para no insinuar kilómetros por carretera.
         <>
-          <p className="crm-number mt-2.5 text-xl leading-none text-ink">{formatDistance(place.distanceKm)}</p>
+          <p className="mt-2.5 text-[17px] leading-none text-ink">
+            <span className="crm-number">{formatDistance(place.distanceKm)}</span>
+          </p>
           <p className="crm-meta mt-1 text-ink/40">De la vivienda, en línea recta</p>
         </>
       ) : (
-        // Sin tiempo verificado NO se inventa uno: se dice lo que se sabe.
         <p className="crm-meta mt-2.5 text-ink/45">En la zona de la vivienda</p>
       )}
       {osmUrl && (
