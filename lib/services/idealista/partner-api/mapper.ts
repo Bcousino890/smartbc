@@ -612,8 +612,8 @@ export function buildPropertyPayload(row: IdealistaListingRow, options: MapperOp
   const contactId = Number(row.contact_id ?? "");
   if (!Number.isInteger(contactId) || contactId <= 0) {
     errors.push(
-      'Falta el contacto de Idealista en la ficha (sección "Contacto e info interna"). ' +
-        "Créalo o selecciónalo en Configuración → Idealista antes de publicar."
+      'Falta el contacto de Idealista en la ficha. Selecciónalo o créalo en la sección ' +
+        '"Contacto e info interna" del formulario, antes de publicar.'
     );
   }
 

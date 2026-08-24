@@ -764,6 +764,69 @@ export function IdealistaForm({
       })
       .catch(() => {});
   }, []);
+
+  // Contactos de Idealista (espejo local, tabla idealista_api_contacts): el
+  // campo de "Contacto e info interna" era un input de texto libre que
+  // exigía saber de memoria el id numérico del contacto en Idealista — ahora
+  // es un desplegable con la lista real + opción de crear uno nuevo, usando
+  // endpoints que ya existían (GET/POST /api/admin/idealista/api/contacts)
+  // pero a los que ninguna pantalla llamaba todavía.
+  const [contactOptions, setContactOptions] = useState<
+    Array<{ contactId: number; name: string; email: string }>
+  >([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [newContactError, setNewContactError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/idealista/api/contacts")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.contacts)) setContactOptions(d.contacts);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingContacts(false));
+  }, []);
+
+  async function handleCreateContact() {
+    setNewContactError(null);
+    if (!newContactName.trim() || !newContactEmail.trim() || !newContactPhone.trim()) {
+      setNewContactError("Nombre, email y teléfono son obligatorios.");
+      return;
+    }
+    setCreatingContact(true);
+    try {
+      const res = await fetch("/api/admin/idealista/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newContactName.trim(),
+          email: newContactEmail.trim(),
+          phone: newContactPhone.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.contactId) {
+        setNewContactError(data.errors?.[0] || data.error || "No se pudo crear el contacto.");
+        return;
+      }
+      const created = { contactId: data.contactId as number, name: newContactName.trim(), email: newContactEmail.trim() };
+      setContactOptions((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      set("contactId", String(data.contactId));
+      setShowNewContact(false);
+      setNewContactName("");
+      setNewContactEmail("");
+      setNewContactPhone("");
+    } catch (err) {
+      setNewContactError(err instanceof Error ? err.message : "Error de red.");
+    } finally {
+      setCreatingContact(false);
+    }
+  }
   // Scheduling UI state
   const [schedDate, setSchedDate] = useState(() => {
     if (!form.scheduledPublishAt) return "";
@@ -1642,14 +1705,73 @@ export function IdealistaForm({
       <section className="space-y-4">
         <SectionHeader step={10} title="Contacto e info interna" />
         <div>
-          <Label>ID de contacto en Idealista</Label>
-          <input
-            type="text"
+          <Label>Contacto en Idealista</Label>
+          <select
             value={form.contactId}
             onChange={(e) => set("contactId", e.target.value)}
-            placeholder="Dejar vacío si no se conoce aún"
-            className={inputCls}
-          />
+            disabled={loadingContacts}
+            className={selectCls}
+          >
+            <option value="">
+              {loadingContacts ? "Cargando contactos…" : "Sin contacto todavía"}
+            </option>
+            {contactOptions.map((c) => (
+              <option key={c.contactId} value={String(c.contactId)}>
+                {c.name} — {c.email} (#{c.contactId})
+              </option>
+            ))}
+            {/* El contacto ya guardado en la ficha puede no estar en el espejo local
+                todavía (p.ej. se escribió el id a mano antes de este cambio) — se
+                muestra igual para no perder el valor guardado. */}
+            {form.contactId && !contactOptions.some((c) => String(c.contactId) === form.contactId) && (
+              <option value={form.contactId}>Contacto #{form.contactId}</option>
+            )}
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowNewContact((v) => !v)}
+            className="mt-1.5 text-xs font-medium text-gold-dark hover:underline"
+          >
+            {showNewContact ? "Cancelar" : "+ Crear nuevo contacto"}
+          </button>
+
+          {showNewContact && (
+            <div className="mt-2 space-y-2 rounded-lg border border-gold/20 bg-gold/5 p-3">
+              {newContactError && (
+                <p className="text-xs text-rose-600">{newContactError}</p>
+              )}
+              <input
+                type="text"
+                value={newContactName}
+                onChange={(e) => setNewContactName(e.target.value)}
+                placeholder="Nombre"
+                className={inputCls}
+              />
+              <input
+                type="email"
+                value={newContactEmail}
+                onChange={(e) => setNewContactEmail(e.target.value)}
+                placeholder="Email"
+                className={inputCls}
+              />
+              <input
+                type="text"
+                value={newContactPhone}
+                onChange={(e) => setNewContactPhone(e.target.value)}
+                placeholder="Teléfono (sin prefijo, ej. 612345678)"
+                className={inputCls}
+              />
+              <button
+                type="button"
+                onClick={handleCreateContact}
+                disabled={creatingContact}
+                className="flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+              >
+                {creatingContact && <Loader2 size={12} className="animate-spin" />}
+                Crear contacto en Idealista
+              </button>
+            </div>
+          )}
         </div>
         <div>
           <Label>Notas internas (no se publican)</Label>

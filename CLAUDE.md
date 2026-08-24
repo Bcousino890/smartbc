@@ -333,6 +333,28 @@ El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
 selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo
 importan para el listado oficial de pruebas, no para `mapper.ts`.
 
+### El error de "falta el contacto" mentía sobre dónde arreglarlo (2026-08-24)
+`mapper.ts` exige `contact_id` (ver arriba) y hasta esta fecha el mensaje decía
+"Créalo o selecciónalo en Configuración → Idealista" — pero ahí **no existe
+ningún UI de contactos**, solo el botón "Sincronizar contactos" (`PUT`, tira
+todos los de Idealista). Y el campo real, en "Contacto e info interna" del
+propio formulario, era un `<input type="text">` de solo el id numérico: había
+que saberlo de memoria, no se podía crear ni elegir de una lista.
+
+Los endpoints para eso YA EXISTÍAN sin que nada los llamara —
+`GET/POST /api/admin/idealista/api/contacts` → `listLocalContacts()` /
+`upsertContact()` en `reconcile.ts` — el comentario de `listLocalContacts()`
+literalmente dice "para el desplegable del formulario", pero ningún
+desplegable lo usaba. `idealista-form.tsx` ahora sí: un `<select>` con los
+contactos ya conocidos (espejo local `idealista_api_contacts`) + "+ Crear
+nuevo contacto" que llama al `POST` ya existente. El mensaje de error de
+`mapper.ts` se corrigió para apuntar a la sección correcta.
+⚠️ Ese `GET`/`POST` exige `role` `owner`/`admin` (`guard()` en
+`app/api/admin/idealista/api/contacts/route.ts`) — un asesor/agente que use
+este formulario ve el desplegable vacío (salvo el contacto ya guardado en esa
+ficha, que se sigue mostrando aunque no esté en la lista) y no puede crear uno
+nuevo. No se tocó ese guard: ampliarlo es una decisión de permisos aparte.
+
 ## Enlaces de portales en la ficha del cliente (`lib/portal-links/**`)
 El paso que faltaba **antes** de la selección: el piso que se ve con el cliente
 en Idealista todavía no es ficha nuestra, así que no cabe en
