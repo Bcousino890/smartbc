@@ -142,17 +142,3 @@ export async function signOutAction() {
   revalidatePath("/", "layout");
   redirect("/login");
 }
-
-export async function requestPasswordResetAction(formData: FormData) {
-  // Mismo saneado que en el login: con un espacio del teclado del móvil, el
-  // correo de recuperación no llegaba a ninguna parte.
-  const email = String(formData.get("email") ?? "").replace(/\s/g, "").toLowerCase();
-  if (!email) return { error: "auth.error.invalidEmail" };
-
-  const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/auth/reset-password`,
-  });
-
-  return { ok: true };
-}

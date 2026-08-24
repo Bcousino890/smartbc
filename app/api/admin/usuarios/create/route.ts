@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
+import { createInvitedUser } from "@/lib/email/password-reset";
 
 export async function POST(req: Request) {
   let body: {
@@ -101,21 +102,26 @@ export async function POST(req: Request) {
   // Crear usuario en auth
   let userId: string = "";
   let authError: string | null = null;
+  let clientEmailSent: boolean | undefined;
+  let clientTempPassword: string | undefined;
 
   if (role === "client") {
-    // Clientes reciben email de invitación (sin contraseña)
-    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: {
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-      },
+    // Cliente: cuenta ya confirmada (el acceso no depende de que llegue el
+    // correo) + enlace de fijar contraseña por AWS SES, en vez del mailer
+    // propio de Supabase Auth/GoTrue.
+    const inviteResult = await createInvitedUser({
+      email,
+      firstName,
+      lastName,
+      userMetadata: { phone },
     });
 
-    if (error) {
-      authError = error.message;
+    if (!inviteResult.ok) {
+      authError = inviteResult.error;
     } else {
-      userId = data.user?.id || "";
+      userId = inviteResult.userId;
+      clientEmailSent = inviteResult.emailSent;
+      clientTempPassword = inviteResult.emailSent ? undefined : inviteResult.tempPassword;
     }
   } else {
     // Staff (owner, admin, advisor, agent_*): crear con contraseña confirmada
@@ -241,5 +247,7 @@ export async function POST(req: Request) {
     userId,
     role,
     email,
+    ...(clientEmailSent !== undefined ? { emailSent: clientEmailSent } : {}),
+    ...(clientTempPassword ? { tempPassword: clientTempPassword } : {}),
   });
 }

@@ -115,12 +115,31 @@ if (!result.success) {
 }
 ```
 
-### Send Invitation Email
+### Invite a New User (owner/admin/advisor/agent/client)
 ```typescript
-import { sendInvitationEmail } from "@/lib/email/password-reset";
+import { createInvitedUser } from "@/lib/email/password-reset";
 
-const inviteUrl = `${appUrl}/auth/setup?token=${inviteToken}`;
-await sendInvitationEmail(userEmail, userName, inviteUrl);
+// Creates the auth user pre-confirmed (email_confirm: true + a random temp
+// password, so account access never depends on the invite email arriving)
+// and best-effort sends a "set your password" link — reusing the same
+// password_reset_tokens + /auth/reset-password flow as a real password
+// reset, through this file's AWS SES config. This is what
+// /api/admin/usuarios/invite, /api/admin/usuarios/create (client role) and
+// createNewClient() in app/(admin)/admin/clientes/actions.ts call — replaces
+// supabase.auth.admin.inviteUserByEmail(), which sent through Supabase
+// Auth/GoTrue's own separate mailer instead of this AWS SES config.
+const result = await createInvitedUser({
+  email: userEmail,
+  firstName,
+  lastName,
+  userMetadata: { role }, // only needed when the role isn't the "client" default
+});
+
+if (!result.ok) throw new Error(result.error);
+if (!result.emailSent) {
+  // Fallback: hand result.tempPassword to the admin so they can share it
+  // manually — the account already works, only the email didn't arrive.
+}
 ```
 
 ## Security Notes

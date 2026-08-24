@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { assertPermission } from "@/lib/auth/guard";
+import { createInvitedUser } from "@/lib/email/password-reset";
 import type { ClientProfileType, Operation, StayType } from "@/lib/types";
 
 export type SaveClientPreferencesInput = {
@@ -135,27 +136,25 @@ export async function createNewClient(
   const adminClient = createAdminClient();
 
   // Crear usuario en auth (esto dispara el trigger handle_new_user, que crea
-  // la fila en profiles) y enviar invitación por email para que fije su contraseña.
-  const { data, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    input.email,
-    {
-      data: {
-        full_name: `${input.firstName} ${input.lastName}`,
-        first_name: input.firstName,
-        last_name: input.lastName,
-        phone: input.phone,
-      },
-    },
-  );
+  // la fila en profiles), ya confirmado, y enviar por AWS SES un enlace para
+  // fijar contraseña — en vez del mailer propio de Supabase Auth/GoTrue que
+  // usaba inviteUserByEmail, para que todo el correo saliente pase por la
+  // misma región de SES configurada en /admin/configuracion.
+  const inviteResult = await createInvitedUser({
+    email: input.email,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    userMetadata: { phone: input.phone },
+  });
 
-  if (inviteError || !data?.user) {
+  if (!inviteResult.ok) {
     return {
       ok: false,
-      error: inviteError?.message || "Error creating profile",
+      error: inviteResult.error || "Error creating profile",
     };
   }
 
-  const clientId = data.user.id;
+  const clientId = inviteResult.userId;
 
   if (input.phone) {
     const { error: phoneError } = await (adminClient as any)

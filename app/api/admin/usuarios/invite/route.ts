@@ -1,6 +1,6 @@
 import "server-only";
-import { createAdminClient } from "@/lib/db/admin";
 import { requirePermission } from "@/lib/auth/guard";
+import { createInvitedUser } from "@/lib/email/password-reset";
 
 export async function POST(req: Request) {
   // Gate de autorización: invitar usuarios requiere usuarios/create.
@@ -25,20 +25,24 @@ export async function POST(req: Request) {
     return Response.json({ error: "Rol inválido" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-
-  // Envía email de invitación. Supabase crea el usuario con estado "invited".
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-    data: {
-      role,
-      first_name: firstName ?? "",
-      last_name: lastName ?? "",
-    },
+  // Crea el usuario ya confirmado (el acceso no depende de que llegue el
+  // correo) y manda por AWS SES un enlace para fijar contraseña, en vez de
+  // pasar por el mailer propio de Supabase Auth/GoTrue.
+  const result = await createInvitedUser({
+    email,
+    firstName: firstName ?? "",
+    lastName: lastName ?? "",
+    userMetadata: { role },
   });
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 400 });
+  if (!result.ok) {
+    return Response.json({ error: result.error }, { status: 400 });
   }
 
-  return Response.json({ ok: true, userId: data.user?.id });
+  return Response.json({
+    ok: true,
+    userId: result.userId,
+    emailSent: result.emailSent,
+    ...(result.emailSent ? {} : { tempPassword: result.tempPassword }),
+  });
 }

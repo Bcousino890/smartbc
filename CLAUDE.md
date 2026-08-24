@@ -66,12 +66,13 @@ root@…` y `ssh root@…` son dos prefijos distintos.
 - Desarrollo: `claude/adoring-pasteur-3OgFB`
 - Producción: `main`
 
-## Email (AWS SES) — verificación de identidades (2026-08-24)
+## Email (AWS SES) — todo el correo saliente pasa por eu-west-3 (2026-08-24)
 - Panel: `/admin/configuracion` → "Configuración de Email (AWS SES)"
   (`app/[country]/(admin)/admin/configuracion/email-config-client.tsx` +
-  `app/api/admin/email-config/route.ts`, tabla `email_config`). Se usa para
-  el reset de contraseña propio (`/api/auth/forgot-password`) y el correo de
-  prueba del panel — **no** para las invitaciones de usuario (ver más abajo).
+  `app/api/admin/email-config/route.ts`, tabla `email_config`,
+  `lib/email/send-email.ts`). **Todo** el correo saliente de la app (reset de
+  contraseña, invitaciones de owner/admin/advisor/agent/cliente, correo de
+  prueba del panel) pasa por aquí — ver "Un único camino de correo" abajo.
 - ⚠️ **La verificación de identidades y el estado sandbox/producción de SES
   son POR REGIÓN, no de la cuenta.** Verificar `noreply@bcousinoprop.com` (o
   cualquier otra) en la consola de una región no sirve en otra. La región
@@ -81,7 +82,10 @@ root@…` y `ssh root@…` son dos prefijos distintos.
   (p.ej. `eu-west-1`, el default viejo del formulario antes de esta fecha),
   CUALQUIER envío falla con "Email address is not verified" aunque el
   remitente esté verificado y todo parezca correcto — no es un problema de
-  credenciales ni de que falte volver a verificar nada.
+  credenciales ni de que falte volver a verificar nada. El default del
+  formulario y del fallback por env ya apuntan a eu-west-3, pero **la fila ya
+  guardada en la tabla `email_config` hay que corregirla a mano una vez**
+  desde el panel (guardar no toca el valor si no lo cambiás vos).
 - Con "Acceso a producción concedido" en eu-west-3, apuntando el panel ahí
   NO hace falta verificar cada destinatario (cliente, admin, etc.) uno por
   uno: en producción solo el remitente debe seguir verificado, cualquier
@@ -89,23 +93,40 @@ root@…` y `ssh root@…` son dos prefijos distintos.
   (`bcousinoprop.com`, por DKIM) en vez de una sola dirección suelta es más
   duradero que verificar `noreply@` o una casilla personal — no caduca ni
   hay que repetirlo por cada remitente nuevo.
-- ⚠️ **Las invitaciones de usuario NO pasan por este panel.** Crear un
-  usuario "cliente" (o invitar cualquier rol vía
-  `/api/admin/usuarios/invite`) llama a
-  `supabase.auth.admin.inviteUserByEmail()` — el mailer propio de Supabase
-  Auth/GoTrue, configurado aparte a nivel de VPS (variables `GOTRUE_SMTP_*`
-  del contenedor de auth en el `docker-compose.yml` de Supabase), no desde
-  `email_config`. Arreglar la región de SES en el panel no toca ese flujo;
-  si las invitaciones no llegan, hay que revisar el SMTP de GoTrue en el VPS.
-- Los usuarios de staff (owner/admin/advisor/agent_*) creados desde
-  `/admin/usuarios` (`app/api/admin/usuarios/create/route.ts`) **ya quedan
-  verificados sin depender de ningún correo**: se crean con
-  `email_confirm: true` y contraseña asignada directamente. Solo "cliente"
-  (y cualquiera invitado en vez de creado-con-contraseña) depende de que el
-  email llegue. Para clientes existe el mismo patrón sin email en
+- ⚠️ **Un único camino de correo (2026-08-24): ya no se usa el mailer propio
+  de Supabase Auth/GoTrue.** Antes, invitar un usuario (owner/admin/advisor/
+  agent_* vía `/api/admin/usuarios/invite`, o un cliente vía
+  `/api/admin/usuarios/create` o `createNewClient` en
+  `app/(admin)/admin/clientes/actions.ts`) llamaba a
+  `supabase.auth.admin.inviteUserByEmail()`, que manda el correo con el
+  mailer propio de GoTrue — configurado aparte a nivel de VPS
+  (`GOTRUE_SMTP_*`), sin relación con `email_config` ni con esta región. Los
+  tres sitios ahora usan `createInvitedUser()`
+  (`lib/email/password-reset.ts`): crean el usuario con
+  `admin.createUser({ email_confirm: true, password: <temporal> })` — igual
+  que el patrón de staff/cliente-sin-email de abajo, así que el acceso nunca
+  depende de que el correo llegue — y mandan el enlace de "fijar contraseña"
+  reutilizando `password_reset_tokens` + `/auth/reset-password` (el mismo
+  camino que ya usaba el reset de contraseña) en vez del enlace nativo de
+  Supabase. No hace falta página `/auth/setup` ni manejar el hash de
+  Supabase: es el mismo flujo de "pon tu contraseña con este token" para
+  invitación y para reset. Si el envío falla, la respuesta trae
+  `tempPassword` como red de seguridad (nadie la muestra en el panel todavía
+  — hoy solo queda en la respuesta JSON/logs, pendiente de UI si hace falta).
+- Los usuarios de staff (owner/admin/advisor/agent_*) y los clientes creados
+  desde `/admin/usuarios` o "Clientes" **ya quedan verificados sin depender
+  de ningún correo**: se crean con `email_confirm: true` y contraseña
+  asignada directamente (temporal para los que reciben invitación). Para
+  clientes sin ni siquiera intentar el envío existe además
   `app/api/admin/clientes/create-no-email/route.ts` (ya usado desde
-  Solicitudes → preparar visita y Demo Setup) por si hace falta evitarlo ahí
-  también.
+  Solicitudes → preparar visita y Demo Setup).
+- `app/(auth)/actions.ts` tenía una SEGUNDA implementación de "olvidé mi
+  contraseña" (`requestPasswordResetAction`, con
+  `supabase.auth.resetPasswordForEmail()` — mailer de GoTrue) que nunca se
+  usaba desde ningún componente: el link real del login va a
+  `/auth/forgot-password` → `/api/auth/forgot-password` → SES. Se borró en
+  2026-08-24 para que no queden dos caminos de "reset" — uno vivo por SES y
+  uno muerto por GoTrue.
 
 ## Upload de archivos (Vídeos, Planos)
 - **Límites en la app:** vídeos ≤500MB, planos ≤100MB
