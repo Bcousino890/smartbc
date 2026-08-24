@@ -118,6 +118,7 @@ export async function sendPasswordResetEmail(
     to: userEmail,
     subject: "Recupera tu contraseña - Benjamín Cousiño Propiedades",
     html: renderEmailLayout({
+      eyebrow: "Restablecer contraseña",
       title: "Recupera tu contraseña",
       bodyHtml: `
         <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>
@@ -143,6 +144,7 @@ export async function sendInvitationEmail(
     to: userEmail,
     subject: "Bienvenido a Benjamín Cousiño Propiedades - Configura tu cuenta",
     html: renderEmailLayout({
+      eyebrow: "Nueva cuenta",
       title: "Configura tu cuenta",
       bodyHtml: `
         <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>

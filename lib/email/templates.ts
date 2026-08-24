@@ -4,20 +4,36 @@
  * Genera HTML seguro para clientes de correo:
  * - Layout basado en tablas (sin flexbox) con ancho máximo de 600px.
  * - Solo estilos inline (sin CSS externo ni <style>).
- * - Cabecera de marca, botón CTA opcional y pie de página estándar.
+ * - Mismo lockup de marca (wordmark + "PROPIEDADES" + regla dorada) que la
+ *   barra lateral de la app, y el mismo botón primario (fondo ink, texto
+ *   crema) que "Guardar Configuración" en el panel — para que el correo se
+ *   sienta parte del mismo producto, no una plantilla genérica aparte.
+ * - Fuentes solo del sistema (sin @font-face / Google Fonts): Outlook de
+ *   escritorio no carga fuentes web y cae en Times New Roman sin avisar, así
+ *   que se listan pilas de fuentes reales en vez de apostar a una externa.
+ * - Un único tema (claro), a propósito: el dark-mode de correo es
+ *   inconsistente entre clientes — Outlook/Gmail pueden re-invertir colores
+ *   por su cuenta y pelearse con CSS de dark-mode escrito a mano, así que se
+ *   elige un solo diseño de alto contraste en vez de arriesgar una inversión
+ *   rota en la bandeja de un cliente.
  */
 
-// Paleta de marca
-const INK = "#2a1f10"; // tinta oscura
+// Paleta de marca — la misma que el resto de la app (barra lateral, botones).
+const INK = "#2a1f10"; // tinta oscura — wordmark, títulos, botón primario
 const CREAM = "#fbf8f3"; // crema de fondo
-const GOLD = "#c9a96e"; // acento dorado
+const PAPER = "#ffffff"; // superficie de la tarjeta
+const GOLD = "#c9a96e"; // acento dorado — regla, flecha del botón
+const GOLD_DEEP = "#a3824f"; // dorado oscurecido — texto pequeño sobre crema (el dorado claro no da contraste suficiente para texto)
 const MUTED = "#8a7c66"; // texto secundario
 const BORDER = "#e8dfd0"; // bordes suaves
 
-const SERIF_FONT = "Georgia, 'Times New Roman', Times, serif";
-const SANS_FONT = "Arial, Helvetica, sans-serif";
+// Pilas de fuentes seguras para correo (sin fuentes web).
+const SERIF_FONT = "Georgia, 'Iowan Old Style', 'Times New Roman', Times, serif";
+const SANS_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 export interface RenderEmailLayoutOptions {
+  /** Etiqueta corta sobre el título (p.ej. "RESTABLECER CONTRASEÑA"). */
+  eyebrow?: string;
   /** Título principal del correo (se muestra como encabezado del contenido). */
   title: string;
   /** Cuerpo del correo en HTML (párrafos, etc.). Debe ser HTML de confianza. */
@@ -44,19 +60,24 @@ export function escapeHtml(text: string): string {
  * Renderiza el layout de correo de marca completo (documento HTML).
  */
 export function renderEmailLayout({
+  eyebrow,
   title,
   bodyHtml,
   ctaLabel,
   ctaUrl,
 }: RenderEmailLayoutOptions): string {
+  const eyebrowBlock = eyebrow
+    ? `<p style="margin: 0 0 10px 0; font-family: ${SANS_FONT}; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${GOLD_DEEP};">${escapeHtml(eyebrow)}</p>`
+    : "";
+
   const ctaBlock =
     ctaLabel && ctaUrl
       ? `
-              <!-- CTA -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 28px auto;">
+              <!-- CTA: mismo estilo que el botón primario del panel (fondo ink, texto crema) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 30px auto 0;">
                 <tr>
-                  <td align="center" bgcolor="${GOLD}" style="border-radius: 8px;">
-                    <a href="${ctaUrl}" target="_blank" style="display: inline-block; padding: 14px 36px; font-family: ${SANS_FONT}; font-size: 16px; font-weight: bold; color: ${INK}; text-decoration: none; border-radius: 8px; background-color: ${GOLD};">${escapeHtml(ctaLabel)}</a>
+                  <td align="center" bgcolor="${INK}" style="border-radius: 6px;">
+                    <a href="${ctaUrl}" target="_blank" style="display: inline-block; padding: 15px 34px; font-family: ${SANS_FONT}; font-size: 15px; font-weight: 600; color: ${CREAM}; text-decoration: none; border-radius: 6px; background-color: ${INK}; letter-spacing: 0.01em;">${escapeHtml(ctaLabel)}&nbsp;&nbsp;<span style="color: ${GOLD};">&rarr;</span></a>
                   </td>
                 </tr>
               </table>
@@ -69,40 +90,44 @@ export function renderEmailLayout({
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
     <title>${escapeHtml(title)}</title>
   </head>
   <body style="margin: 0; padding: 0; background-color: ${CREAM};">
     <!-- Contenedor exterior -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${CREAM}" style="background-color: ${CREAM};">
       <tr>
-        <td align="center" style="padding: 24px 12px;">
+        <td align="center" style="padding: 40px 16px;">
           <!-- Contenedor principal 600px -->
           <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%;">
-            <!-- Cabecera de marca -->
+            <!-- Wordmark: mismo lockup de dos líneas que la barra lateral de la app -->
             <tr>
-              <td align="center" style="padding: 28px 24px 20px 24px;">
-                <span style="font-family: ${SERIF_FONT}; font-size: 24px; font-weight: bold; color: ${INK}; letter-spacing: 1px;">Benjam&iacute;n Cousi&ntilde;o Propiedades</span>
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top: 12px;">
+              <td align="center" style="padding: 0 24px 30px 24px;">
+                <div style="font-family: ${SERIF_FONT}; font-size: 21px; line-height: 1.2; color: ${INK};">Benjam&iacute;n Cousi&ntilde;o</div>
+                <div style="margin-top: 4px; font-family: ${SANS_FONT}; font-size: 11px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: ${MUTED};">Propiedades</div>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top: 16px;">
                   <tr>
-                    <td width="60" height="3" bgcolor="${GOLD}" style="font-size: 0; line-height: 0;">&nbsp;</td>
+                    <td width="40" height="2" bgcolor="${GOLD}" style="font-size: 0; line-height: 0;">&nbsp;</td>
                   </tr>
                 </table>
               </td>
             </tr>
             <!-- Tarjeta de contenido -->
             <tr>
-              <td bgcolor="#ffffff" style="background-color: #ffffff; border: 1px solid ${BORDER}; border-radius: 10px; padding: 36px 40px;">
-                <h1 style="margin: 0 0 18px 0; font-family: ${SERIF_FONT}; font-size: 22px; font-weight: bold; color: ${INK};">${escapeHtml(title)}</h1>
-                <div style="font-family: ${SANS_FONT}; font-size: 15px; line-height: 1.6; color: ${INK};">
+              <td bgcolor="${PAPER}" style="background-color: ${PAPER}; border: 1px solid ${BORDER}; border-radius: 6px; padding: 40px 40px 36px 40px;">
+                ${eyebrowBlock}
+                <h1 style="margin: 0 0 16px 0; font-family: ${SERIF_FONT}; font-size: 25px; line-height: 1.3; font-weight: 400; color: ${INK};">${escapeHtml(title)}</h1>
+                <div style="font-family: ${SANS_FONT}; font-size: 15px; line-height: 1.65; color: ${INK};">
                   ${bodyHtml}
                 </div>${ctaBlock}
               </td>
             </tr>
             <!-- Pie de página -->
             <tr>
-              <td align="center" style="padding: 24px 24px 8px 24px;">
-                <p style="margin: 0 0 6px 0; font-family: ${SANS_FONT}; font-size: 12px; color: ${MUTED};">&copy; Benjam&iacute;n Cousi&ntilde;o Propiedades &middot; Madrid</p>
-                <p style="margin: 0; font-family: ${SANS_FONT}; font-size: 12px; color: ${MUTED};">Si no solicitaste este correo, puedes ignorarlo.</p>
+              <td align="center" style="padding: 28px 24px 8px 24px;">
+                <p style="margin: 0 0 6px 0; font-family: ${SANS_FONT}; font-size: 12px; color: ${MUTED};">Benjam&iacute;n Cousi&ntilde;o Propiedades &middot; Madrid</p>
+                <p style="margin: 0; font-family: ${SANS_FONT}; font-size: 12px; color: ${MUTED};">Si no solicitaste este correo, puedes ignorarlo con tranquilidad.</p>
               </td>
             </tr>
           </table>
@@ -118,6 +143,6 @@ export function renderEmailLayout({
  */
 export function renderFallbackUrl(url: string): string {
   return `
-    <p style="margin: 16px 0 6px 0; font-family: ${SANS_FONT}; font-size: 13px; color: ${MUTED};">Si el bot&oacute;n no funciona, copia y pega este enlace en tu navegador:</p>
-    <p style="margin: 0; padding: 10px 12px; background-color: ${CREAM}; border: 1px solid ${BORDER}; border-radius: 6px; font-family: ${SANS_FONT}; font-size: 12px; color: ${INK}; word-break: break-all;"><a href="${url}" target="_blank" style="color: ${INK}; text-decoration: underline;">${escapeHtml(url)}</a></p>`;
+    <p style="margin: 18px 0 6px 0; font-family: ${SANS_FONT}; font-size: 12.5px; color: ${MUTED};">Si el bot&oacute;n no funciona, copia y pega este enlace en tu navegador:</p>
+    <p style="margin: 0; padding: 11px 13px; background-color: ${CREAM}; border: 1px solid ${BORDER}; border-radius: 5px; font-family: ${SANS_FONT}; font-size: 12px; color: ${INK}; word-break: break-all;"><a href="${url}" target="_blank" style="color: ${INK}; text-decoration: underline;">${escapeHtml(url)}</a></p>`;
 }

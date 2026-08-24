@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       to,
       subject: "✅ Prueba de email (AWS SES) — Benjamín Cousiño Propiedades",
       html: renderEmailLayout({
+        eyebrow: "Panel de administración",
         title: "Correo de prueba",
         bodyHtml: `
           <p style="margin:0 0 14px 0;">Este es un correo de prueba enviado desde el panel de administración de <strong>Benjamín Cousiño Propiedades</strong>.</p>
