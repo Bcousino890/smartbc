@@ -19,7 +19,10 @@ The key should be at least 32 characters long and securely managed in production
 ### 2. Configure AWS SES in Admin Panel
 Navigate to `/admin/configuracion` and add:
 - Correo de remitente (From Email): a verified SES sender identity
-- AWS Region: e.g. `eu-west-1`
+- AWS Region: the region that identity is *actually* verified in (currently
+  `eu-west-3` — SES verification and sandbox/production status are per-region,
+  so pointing at the wrong region fails with "Email address is not verified"
+  even though the sender exists and is verified elsewhere)
 - AWS Access Key ID / Secret Access Key: from a dedicated IAM user with
   `ses:SendEmail` + `ses:SendRawEmail` permissions only
 
@@ -167,6 +170,12 @@ Located in `password-reset.ts` - `sendInvitationEmail()` function
 4. Read the raw AWS error message returned by "Probar Conexión" — SES errors
    are structured (e.g. `InvalidClientTokenId`, `SignatureDoesNotMatch`,
    `MessageRejected`), much more specific than the old SMTP error strings
+5. ⚠️ **"Email address is not verified" even though you just verified it in
+   the AWS console** → check the region first. Identity verification and
+   sandbox/production access in SES are per-region, not account-wide. The
+   `AWS Region` field here must match the region shown in the SES console
+   URL/header where the identity is actually verified (currently
+   `eu-west-3` / Europe-Paris) — not just any region you happen to have open.
 
 ### Emails Not Received
 1. Check spam/junk folder

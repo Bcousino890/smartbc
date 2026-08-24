@@ -19,7 +19,7 @@ interface LoadedFlags {
 export function EmailConfigClient() {
   const t = useT();
   const [config, setConfig] = useState<EmailConfigData>({
-    awsRegion: "eu-west-1",
+    awsRegion: "eu-west-3",
     awsAccessKeyId: "",
     awsSecretAccessKey: "",
     fromEmail: "",
@@ -208,7 +208,7 @@ export function EmailConfigClient() {
             type="text"
             value={config.awsRegion}
             onChange={(v) => handleInputChange("awsRegion", v)}
-            placeholder="eu-west-1"
+            placeholder="eu-west-3"
           />
 
           {/* AWS Access Key ID */}

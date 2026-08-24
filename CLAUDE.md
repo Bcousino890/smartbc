@@ -66,6 +66,47 @@ root@…` y `ssh root@…` son dos prefijos distintos.
 - Desarrollo: `claude/adoring-pasteur-3OgFB`
 - Producción: `main`
 
+## Email (AWS SES) — verificación de identidades (2026-08-24)
+- Panel: `/admin/configuracion` → "Configuración de Email (AWS SES)"
+  (`app/[country]/(admin)/admin/configuracion/email-config-client.tsx` +
+  `app/api/admin/email-config/route.ts`, tabla `email_config`). Se usa para
+  el reset de contraseña propio (`/api/auth/forgot-password`) y el correo de
+  prueba del panel — **no** para las invitaciones de usuario (ver más abajo).
+- ⚠️ **La verificación de identidades y el estado sandbox/producción de SES
+  son POR REGIÓN, no de la cuenta.** Verificar `noreply@bcousinoprop.com` (o
+  cualquier otra) en la consola de una región no sirve en otra. La región
+  donde la cuenta tiene identidades verificadas y "Acceso a producción
+  concedido" es **eu-west-3** (Europa – París) — confirmado en la consola de
+  AWS el 2026-08-24. Si el campo "AWS Region" del panel queda en otra región
+  (p.ej. `eu-west-1`, el default viejo del formulario antes de esta fecha),
+  CUALQUIER envío falla con "Email address is not verified" aunque el
+  remitente esté verificado y todo parezca correcto — no es un problema de
+  credenciales ni de que falte volver a verificar nada.
+- Con "Acceso a producción concedido" en eu-west-3, apuntando el panel ahí
+  NO hace falta verificar cada destinatario (cliente, admin, etc.) uno por
+  uno: en producción solo el remitente debe seguir verificado, cualquier
+  destinatario funciona. Verificar el **dominio** completo
+  (`bcousinoprop.com`, por DKIM) en vez de una sola dirección suelta es más
+  duradero que verificar `noreply@` o una casilla personal — no caduca ni
+  hay que repetirlo por cada remitente nuevo.
+- ⚠️ **Las invitaciones de usuario NO pasan por este panel.** Crear un
+  usuario "cliente" (o invitar cualquier rol vía
+  `/api/admin/usuarios/invite`) llama a
+  `supabase.auth.admin.inviteUserByEmail()` — el mailer propio de Supabase
+  Auth/GoTrue, configurado aparte a nivel de VPS (variables `GOTRUE_SMTP_*`
+  del contenedor de auth en el `docker-compose.yml` de Supabase), no desde
+  `email_config`. Arreglar la región de SES en el panel no toca ese flujo;
+  si las invitaciones no llegan, hay que revisar el SMTP de GoTrue en el VPS.
+- Los usuarios de staff (owner/admin/advisor/agent_*) creados desde
+  `/admin/usuarios` (`app/api/admin/usuarios/create/route.ts`) **ya quedan
+  verificados sin depender de ningún correo**: se crean con
+  `email_confirm: true` y contraseña asignada directamente. Solo "cliente"
+  (y cualquiera invitado en vez de creado-con-contraseña) depende de que el
+  email llegue. Para clientes existe el mismo patrón sin email en
+  `app/api/admin/clientes/create-no-email/route.ts` (ya usado desde
+  Solicitudes → preparar visita y Demo Setup) por si hace falta evitarlo ahí
+  también.
+
 ## Upload de archivos (Vídeos, Planos)
 - **Límites en la app:** vídeos ≤500MB, planos ≤100MB
 - **Almacenamiento:** bucket Supabase `properties-photos` (self-hosted en VPS)
