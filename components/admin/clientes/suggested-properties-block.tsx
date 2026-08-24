@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Home, Loader2, Ruler, Star, Users } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle, Home, Loader2, Mail, Ruler, Star, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { addPropertyToSelection } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
+import {
+  offerPropertyToClient,
+  setNewListingAlertsEnabled,
+} from "@/app/[country]/(admin)/admin/clientes/property-offer-actions";
 import { AddToSelectionButton } from "@/components/admin/viewing-collections/selected-properties-block";
 import type { SuggestedProperty } from "@/lib/db/queries/suggested-properties";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
@@ -27,6 +31,8 @@ export function SuggestedPropertiesBlock({
   canAddToSelection?: boolean;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  const [togglingAlerts, setTogglingAlerts] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +51,7 @@ export function SuggestedPropertiesBlock({
           });
           return;
         }
+        setAlertsEnabled(Boolean(json.alertsEnabled));
         if (json.reason === "no_preferences") {
           setState({ kind: "no_preferences" });
           return;
@@ -67,17 +74,51 @@ export function SuggestedPropertiesBlock({
 
   const count = state.kind === "ready" ? state.suggestions.length : 0;
 
+  const handleToggleAlerts = async () => {
+    const next = !alertsEnabled;
+    setTogglingAlerts(true);
+    setAlertsEnabled(next); // optimista; se revierte si falla
+    try {
+      const res = await setNewListingAlertsEnabled(clientId, next);
+      if (!res.ok) setAlertsEnabled(!next);
+    } catch {
+      setAlertsEnabled(!next);
+    } finally {
+      setTogglingAlerts(false);
+    }
+  };
+
   return (
     <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="crm-label-sm text-ink/50">
-          Propiedades sugeridas
-        </h2>
-        {count > 0 && (
-          <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold-dark">
-            {count}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <h2 className="crm-label-sm text-ink/50">
+            Propiedades sugeridas
+          </h2>
+          {count > 0 && (
+            <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold-dark">
+              {count}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleToggleAlerts}
+          disabled={togglingAlerts}
+          title={
+            alertsEnabled
+              ? "Recibirá un resumen cuando entren propiedades nuevas que coincidan"
+              : "Activar aviso de propiedades nuevas que coincidan"
+          }
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${
+            alertsEnabled
+              ? "border-gold/40 bg-gold/15 text-gold-dark"
+              : "border-ink/10 text-ink/45 hover:border-gold/30 hover:text-ink/70"
+          }`}
+        >
+          <Bell size={12} className={alertsEnabled ? "fill-gold-dark/20" : ""} />
+          {alertsEnabled ? "Avisos activados" : "Avisar de nuevas"}
+        </button>
       </div>
 
       {state.kind === "loading" && (
@@ -141,6 +182,19 @@ function SuggestionCard({
   const config = getCountryConfig(country);
   const router = useRouter();
   const mainPhoto = property.photos[0];
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const handleSendEmail = async () => {
+    setEmailStatus("sending");
+    try {
+      const res = await offerPropertyToClient(clientId, property.id);
+      setEmailStatus(res.ok ? "sent" : "error");
+    } catch {
+      setEmailStatus("error");
+    } finally {
+      setTimeout(() => setEmailStatus("idle"), 2500);
+    }
+  };
 
   return (
     <div className="rounded-lg border border-gold/15 bg-white/55 p-3 transition hover:border-gold/40 hover:bg-white/80">
@@ -209,26 +263,55 @@ function SuggestionCard({
                 property.operation,
               )}
             </span>
-            {canAdd ? (
-              <AddToSelectionButton
-                added={alreadySelected}
-                onAdd={async () => {
-                  const res = await addPropertyToSelection(
-                    clientId,
-                    property.id,
-                    "suggestion",
-                  );
-                  if (res.ok) router.refresh();
-                  return res;
-                }}
-              />
-            ) : (
-              property.matchReasons.length > 0 && (
-                <span className="truncate text-xs text-ink/55">
-                  {property.matchReasons[0]}
-                </span>
-              )
-            )}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                title={
+                  emailStatus === "sent"
+                    ? "Enviado"
+                    : emailStatus === "error"
+                      ? "No se pudo enviar — inténtalo de nuevo"
+                      : "Enviar esta propiedad por correo al cliente"
+                }
+                disabled={emailStatus === "sending"}
+                onClick={handleSendEmail}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border transition disabled:opacity-50 ${
+                  emailStatus === "sent"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-600"
+                    : emailStatus === "error"
+                      ? "border-rose-300 bg-rose-50 text-rose-600"
+                      : "border-gold/25 text-ink/45 hover:border-gold/50 hover:text-gold-dark"
+                }`}
+              >
+                {emailStatus === "sending" ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : emailStatus === "sent" ? (
+                  <CheckCircle size={12} />
+                ) : (
+                  <Mail size={11} />
+                )}
+              </button>
+              {canAdd ? (
+                <AddToSelectionButton
+                  added={alreadySelected}
+                  onAdd={async () => {
+                    const res = await addPropertyToSelection(
+                      clientId,
+                      property.id,
+                      "suggestion",
+                    );
+                    if (res.ok) router.refresh();
+                    return res;
+                  }}
+                />
+              ) : (
+                property.matchReasons.length > 0 && (
+                  <span className="truncate text-xs text-ink/55">
+                    {property.matchReasons[0]}
+                  </span>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>

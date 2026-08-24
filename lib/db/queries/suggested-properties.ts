@@ -59,7 +59,7 @@ function hashStrings(parts: string[]): string {
 // URLs neutras vía el proxy /p/{slug}/{idx}. `property_photos.url` apunta a
 // Storage y delata el portal de origen (…/synced/level/…), así que nunca debe
 // salir de aquí tal cual.
-function proxyPhotoUrls(prop: PropertyRow): string[] {
+export function proxyPhotoUrls(prop: PropertyRow): string[] {
   const seen = new Set<string>();
   const sorted = (prop.property_photos ?? [])
     .slice()
@@ -86,9 +86,14 @@ function proxyPhotoUrls(prop: PropertyRow): string[] {
  */
 export async function getSuggestedProperties(
   clientId: string,
-  opts?: { country?: string; limit?: number },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  opts?: { country?: string; limit?: number; createdAfter?: string; supabase?: any },
 ): Promise<SuggestedPropertiesResult> {
-  const supabase = await createClient();
+  // El cron de property-alerts no tiene sesión de usuario (server-to-server,
+  // sin cookies) — con el cliente normal, RLS bloquea todo. Le pasa su propio
+  // admin client; el resto de llamadas (panel, con sesión de staff) sigue
+  // usando el cliente normal por defecto.
+  const supabase = opts?.supabase ?? (await createClient());
 
   const { data: prefsData, error: prefsError } = await supabase
     .from("client_preferences")
@@ -130,6 +135,7 @@ export async function getSuggestedProperties(
     .is("archived_at", null);
 
   if (opts?.country) query = query.eq("country", opts.country);
+  if (opts?.createdAfter) query = query.gt("created_at", opts.createdAfter);
 
   // `operation` y `stay` pueden ser null en las preferencias. `.eq(col, null)`
   // no casa ninguna fila, así que filtrar incondicionalmente vaciaba el
@@ -244,4 +250,56 @@ export async function getAvailablePropertiesCount(
 ): Promise<number> {
   const result = await getSuggestedProperties(clientId, opts);
   return result.ok ? result.suggestions.length : 0;
+}
+
+/**
+ * Una propiedad concreta, con la misma foto proxied que `getSuggestedProperties`,
+ * para el correo de "te ofrecemos esta propiedad" (offerPropertyToClient).
+ */
+export async function getPropertyForOffer(
+  propertyId: string,
+): Promise<Omit<SuggestedProperty, "matchScore" | "matchReasons"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .select(
+      `
+      id,
+      slug,
+      title,
+      zone,
+      subzone,
+      bedrooms,
+      bathrooms,
+      square_meters,
+      price,
+      currency,
+      operation,
+      bc_reference,
+      last_synced_at,
+      updated_at,
+      property_photos(url, position, is_cover)
+    `,
+    )
+    .eq("id", propertyId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const prop = data as PropertyRow;
+  return {
+    id: prop.id,
+    slug: prop.slug,
+    title: prop.title,
+    zone: prop.zone,
+    subzone: prop.subzone,
+    bedrooms: prop.bedrooms,
+    bathrooms: prop.bathrooms,
+    squareMeters: prop.square_meters ?? 0,
+    price: Number(prop.price),
+    currency: prop.currency,
+    operation: prop.operation,
+    bcReference: prop.bc_reference,
+    photos: proxyPhotoUrls(prop),
+  };
 }

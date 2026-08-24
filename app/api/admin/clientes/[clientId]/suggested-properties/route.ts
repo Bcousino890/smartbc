@@ -29,6 +29,13 @@ export async function GET(
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
+    const { data: prefs } = await admin
+      .from("client_preferences")
+      .select("new_listing_alerts_enabled")
+      .eq("client_id", clientId)
+      .maybeSingle();
+    const alertsEnabled = Boolean(prefs?.new_listing_alerts_enabled);
+
     const result = await getSuggestedProperties(clientId, {
       country: client.country ?? undefined,
     });
@@ -41,6 +48,7 @@ export async function GET(
           ok: true,
           suggestions: [],
           reason: "no_preferences",
+          alertsEnabled,
         });
       }
       return NextResponse.json(
@@ -49,7 +57,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ ok: true, suggestions: result.suggestions });
+    return NextResponse.json({ ok: true, suggestions: result.suggestions, alertsEnabled });
   } catch (error) {
     console.error("Error in suggested properties endpoint:", error);
     return NextResponse.json(

@@ -120,6 +120,40 @@ root@…` y `ssh root@…` son dos prefijos distintos.
   clientes sin ni siquiera intentar el envío existe además
   `app/api/admin/clientes/create-no-email/route.ts` (ya usado desde
   Solicitudes → preparar visita y Demo Setup).
+- El logo del correo es `/public/logo.png` real (misma imagen que la barra
+  lateral) por URL absoluta, con su navy nativo — sin el filtro
+  brightness/invert que lo pone blanco sobre el fondo oscuro de la barra
+  lateral, aquí no hace falta porque el fondo del correo es claro.
+
+### Correos de propiedades (2026-08-24) — dos flujos, uno manual y uno cron
+- **"Enviar por correo" (manual):** botón junto a cada propiedad sugerida en
+  la ficha del cliente (`components/admin/clientes/suggested-properties-block.tsx`
+  → `offerPropertyToClient()` en
+  `app/[country]/(admin)/admin/clientes/property-offer-actions.ts`). A
+  propósito NO es automático al añadir a la selección: eso también pasa en
+  flujos internos (p.ej. "preparar visita"), y ahí no se quiere avisar al
+  cliente todavía.
+- **Digest de "nuevas propiedades" (cron, opt-in por cliente):** el botón de
+  campana en el mismo bloque activa/desactiva
+  `client_preferences.new_listing_alerts_enabled` (migración 0155) — nunca se
+  enciende solo, lo activa un asesor por cliente. `app/api/cron/property-alerts`
+  reutiliza el matching de `getSuggestedProperties()` (mismo scoring que
+  "Propiedades sugeridas") filtrando por `created_at` posterior a
+  `new_listing_alerts_last_sent_at`, agrupa todo en un solo correo (nunca uno
+  por propiedad) y trae enlace de baja de un clic sin login
+  (`app/api/public/property-alerts/unsubscribe`, HMAC con
+  `EMAIL_ENCRYPTION_KEY`, no expira — a diferencia de `password_reset_tokens`
+  no hace falta tabla ni limpieza).
+  ⚠️ **Igual que el cron de vídeos, el código no alcanza — hay que añadir la
+  entrada al crontab del VPS a mano** (`0 9 * * * curl -s -X POST -H
+  "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/property-alerts`);
+  sin eso el botón de campana no hace nada visible hasta que alguien dispare
+  el cron.
+- Las alertas de reset/invitación NO llevan enlace de baja (no lo necesitan:
+  son correos transaccionales que el propio usuario pidió al hacer clic en
+  "olvidé mi contraseña" o al ser invitado, no listas de correo de las que
+  darse de baja). El enlace de baja es solo para el digest de propiedades,
+  que sí es contenido más cercano a marketing.
 - `app/(auth)/actions.ts` tenía una SEGUNDA implementación de "olvidé mi
   contraseña" (`requestPasswordResetAction`, con
   `supabase.auth.resetPasswordForEmail()` — mailer de GoTrue) que nunca se
