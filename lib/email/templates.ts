@@ -4,10 +4,14 @@
  * Genera HTML seguro para clientes de correo:
  * - Layout basado en tablas (sin flexbox) con ancho máximo de 600px.
  * - Solo estilos inline (sin CSS externo ni <style>).
- * - Mismo lockup de marca (wordmark + "PROPIEDADES" + regla dorada) que la
- *   barra lateral de la app, y el mismo botón primario (fondo ink, texto
- *   crema) que "Guardar Configuración" en el panel — para que el correo se
- *   sienta parte del mismo producto, no una plantilla genérica aparte.
+ * - El logo es el mismo /public/logo.png que usa el resto de la app (barra
+ *   lateral, portal del cliente), servido por URL absoluta — un correo no
+ *   puede cargar un asset relativo. Es el navy nativo del archivo, sin el
+ *   filtro brightness/invert que lo pone blanco en la barra lateral oscura:
+ *   aquí el fondo es claro, así que no hace falta.
+ * - El botón es el mismo que "Guardar Configuración" en el panel (fondo ink,
+ *   texto crema) — para que el correo se sienta parte del mismo producto, no
+ *   una plantilla genérica aparte.
  * - Fuentes solo del sistema (sin @font-face / Google Fonts): Outlook de
  *   escritorio no carga fuentes web y cae en Times New Roman sin avisar, así
  *   que se listan pilas de fuentes reales en vez de apostar a una externa.
@@ -30,6 +34,14 @@ const BORDER = "#e8dfd0"; // bordes suaves
 // Pilas de fuentes seguras para correo (sin fuentes web).
 const SERIF_FONT = "Georgia, 'Iowan Old Style', 'Times New Roman', Times, serif";
 const SANS_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+// Mismo dominio público que usan los enlaces de reset/invitación
+// (lib/email/password-reset.ts) — el logo necesita una URL absoluta, un
+// correo no puede resolver "/logo.png" como haría el navegador.
+const APP_URL =
+  process.env.NEXT_PUBLIC_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const LOGO_WIDTH = 220;
+const LOGO_HEIGHT = Math.round(LOGO_WIDTH * (519 / 3282)); // aspect ratio real de /public/logo.png
 
 export interface RenderEmailLayoutOptions {
   /** Etiqueta corta sobre el título (p.ej. "RESTABLECER CONTRASEÑA"). */
@@ -101,12 +113,17 @@ export function renderEmailLayout({
         <td align="center" style="padding: 40px 16px;">
           <!-- Contenedor principal 600px -->
           <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%;">
-            <!-- Wordmark: mismo lockup de dos líneas que la barra lateral de la app -->
+            <!-- Logo: el mismo /public/logo.png que la barra lateral de la app -->
             <tr>
-              <td align="center" style="padding: 0 24px 30px 24px;">
-                <div style="font-family: ${SERIF_FONT}; font-size: 21px; line-height: 1.2; color: ${INK};">Benjam&iacute;n Cousi&ntilde;o</div>
-                <div style="margin-top: 4px; font-family: ${SANS_FONT}; font-size: 11px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: ${MUTED};">Propiedades</div>
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top: 16px;">
+              <td align="center" style="padding: 0 24px 28px 24px;">
+                <img
+                  src="${APP_URL}/logo.png"
+                  width="${LOGO_WIDTH}"
+                  height="${LOGO_HEIGHT}"
+                  alt="Benjam&iacute;n Cousi&ntilde;o Propiedades"
+                  style="display: block; border: 0; outline: none; text-decoration: none; width: ${LOGO_WIDTH}px; max-width: 70%; height: auto; font-family: ${SERIF_FONT}; font-size: 18px; font-weight: bold; color: ${INK};"
+                >
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top: 18px;">
                   <tr>
                     <td width="40" height="2" bgcolor="${GOLD}" style="font-size: 0; line-height: 0;">&nbsp;</td>
                   </tr>
