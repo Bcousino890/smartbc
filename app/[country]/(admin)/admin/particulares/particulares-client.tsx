@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   CartesianGrid,
   Line,
@@ -1052,7 +1053,19 @@ function ParticularModal({
     }
   }
 
-  return (
+  // Portal a document.body — igual que el Lightbox de PropertyGallery. Antes
+  // este modal renderizaba inline, anidado varios niveles dentro del
+  // contenedor flex-col de la página (page.tsx: `flex min-h-screen flex-col`).
+  // WebKit/iOS tiene bugs conocidos donde un `fixed` anidado así de profundo
+  // dentro de un flex container no siempre escapa al viewport real: en vez
+  // de quedar fijo en pantalla, terminaba posicionándose relativo a la
+  // altura TOTAL de ese contenedor (que crece con el listado + paginación +
+  // pie de página), así que el contenido de la ficha aparecía "flotando" en
+  // mitad de esa altura total en vez de sobre la pantalla — justo el bug
+  // reportado ("el gráfico y la foto aparecen debajo del pie de página").
+  // Un portal a <body> saca el modal de esa jerarquía por completo.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <>
       {showEditPhone && (
         <EditPhoneModal
@@ -1649,7 +1662,8 @@ function ParticularModal({
         </div>
       </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
