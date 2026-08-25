@@ -393,6 +393,30 @@ igual que "Generar descripción" o "Analizar fotos"). El modal cachea el
 resultado en memoria del componente — reabrir el modal no vuelve a gastar IA,
 solo el botón "Regenerar" lo hace.
 
+### El mismo análisis, como saludo en el Dashboard (`dashboard-greeting.ts`)
+El Dashboard (`/{country}/admin`, solo España) muestra una tarjeta "Hola
+{nombre}, ..." con un párrafo corto generado por IA — mismos datos que
+"Sugerencias IA" (`gatherSignals()` en `ai-suggestions.ts`, compartido por
+las dos funciones) pero condensados por `generateDashboardGreeting()` en
+prosa: leads de hoy + como mucho una recomendación sobre una ficha.
+
+- El texto generado por la IA **nunca incluye el saludo ni el nombre** — el
+  `<Hola {firstName}, >` lo antepone `dashboard-greeting-card.tsx` en código,
+  no la IA. Motivo: el resultado se cachea en `app_settings`
+  (`idealista.dashboard_greeting`) **compartido por todo el equipo** durante
+  3h, para no disparar una llamada a la IA en cada carga del Dashboard —
+  si el nombre fuera parte del texto cacheado, todo el mundo vería el
+  saludo de quien lo generó primero.
+- Va dentro de un `<Suspense>` (`DashboardGreetingSkeleton` de fallback):
+  en caché fría la generación tarda unos segundos, y no debe bloquear el
+  resto del Dashboard (KPIs, últimas propiedades/solicitudes) mientras
+  responde.
+- Si la IA falla y no hay nada cacheado todavía, la tarjeta simplemente no
+  se muestra — es un extra, nunca un bloqueante. Si falla pero había una
+  versión vieja cacheada, se sigue mostrando esa en vez de nada.
+- Solo `country === "es"`: el análisis depende de `idealista_listings` /
+  `idealista_leads`, que no existen para Chile.
+
 ## Enlaces de portales en la ficha del cliente (`lib/portal-links/**`)
 El paso que faltaba **antes** de la selección: el piso que se ve con el cliente
 en Idealista todavía no es ficha nuestra, así que no cabe en

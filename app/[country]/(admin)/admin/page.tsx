@@ -1,7 +1,10 @@
 import { CalendarClock, Home, Send, Users } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { getDashboardData } from "@/lib/db/queries/dashboard";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { DashboardGreetingCard, DashboardGreetingSkeleton } from "@/components/admin/dashboard-greeting-card";
 
 function formatDate(iso: string, locale: string) {
   return new Date(iso).toLocaleDateString(locale, {
@@ -49,6 +52,8 @@ export default async function AdminDashboardPage({
     sold: "Vendida",
     draft: "Borrador",
   };
+  const profile = await getCurrentProfile();
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] || null;
   const data = await getDashboardData(country);
   const { kpis, recentProperties, recentVisits } = data;
 
@@ -84,6 +89,15 @@ export default async function AdminDashboardPage({
           Resumen general de la actividad del CRM
         </p>
       </div>
+
+      {/* Saludo con IA: leads recientes + una sugerencia sobre fichas de
+          Idealista. Solo España — es donde vive todo ese análisis (ver
+          lib/services/idealista/ai-suggestions.ts). */}
+      {country === "es" && (
+        <Suspense fallback={<DashboardGreetingSkeleton />}>
+          <DashboardGreetingCard firstName={firstName} />
+        </Suspense>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

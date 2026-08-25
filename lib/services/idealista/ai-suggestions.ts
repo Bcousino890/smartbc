@@ -3,12 +3,14 @@ import { createAdminClient } from "@/lib/db/admin";
 import { aiComplete, AINotConfiguredError } from "@/lib/services/ai/chat";
 import { PROPERTY_TYPE_MAP } from "@/lib/services/idealista/selectors";
 
-// Sugerencias de IA para "Fichas guardadas" (/admin/idealista): cruza fichas
-// publicadas sin leads recientes, fichas en cartera sin publicar y la
-// demanda reciente (leads matcheados a fichas propias) para sugerir qué
-// bajar, qué subir de precio y qué publicar en su lugar. Es puro análisis —
-// nunca cambia el estado de ninguna ficha, eso lo decide el equipo a mano
-// con los controles que ya existen.
+// Sugerencias de IA a partir de "Fichas guardadas": cruza fichas publicadas
+// sin leads recientes, fichas en cartera sin publicar y la demanda reciente
+// (leads matcheados a fichas propias) para sugerir qué bajar, qué subir de
+// precio y qué publicar en su lugar. Es puro análisis — nunca cambia el
+// estado de ninguna ficha, eso lo decide el equipo a mano con los controles
+// que ya existen. Dos presentaciones del mismo análisis comparten los datos
+// (gatherSignals): la lista detallada de /admin/idealista y el saludo corto
+// del Dashboard.
 
 export type ListingSuggestion = {
   priority: "alta" | "media" | "baja";
@@ -18,6 +20,10 @@ export type ListingSuggestion = {
 
 export type SuggestionsResult =
   | { ok: true; summary: string; suggestions: ListingSuggestion[]; generatedAt: string }
+  | { ok: false; error: string };
+
+export type DashboardGreetingResult =
+  | { ok: true; text: string; generatedAt: string }
   | { ok: false; error: string };
 
 const LEAD_LOOKBACK_DAYS = 30; // ventana para "último lead" / total de leads
@@ -73,7 +79,16 @@ const IDLE_STATE_LABEL: Record<string, string> = {
   failed: "con error al publicar",
 };
 
-export async function generateListingSuggestions(): Promise<SuggestionsResult> {
+type Signals = {
+  publishedCount: number;
+  idleCount: number;
+  publishedLines: string;
+  idleLines: string;
+  demandLines: string;
+  todayCount: number;
+};
+
+async function gatherSignals(): Promise<{ ok: true; signals: Signals } | { ok: false; error: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
 
@@ -89,12 +104,11 @@ export async function generateListingSuggestions(): Promise<SuggestionsResult> {
   if (listingsErr) return { ok: false, error: listingsErr.message };
 
   const rows = (listings ?? []) as ListingRow[];
-  const published = rows.filter((r) => r.idealista_state === "published");
-  const idle = rows.filter((r) => r.idealista_state !== "published");
-
   if (rows.length === 0) {
     return { ok: false, error: "No hay fichas guardadas todavía — nada que analizar." };
   }
+  const published = rows.filter((r) => r.idealista_state === "published");
+  const idle = rows.filter((r) => r.idealista_state !== "published");
 
   const leadsSince = new Date(Date.now() - LEAD_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { data: leads, error: leadsErr } = await db
@@ -146,7 +160,9 @@ export async function generateListingSuggestions(): Promise<SuggestionsResult> {
     )
     .join("\n");
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   const demandCutoff = Date.now() - RECENT_DEMAND_DAYS * 24 * 60 * 60 * 1000;
+  let todayCount = 0;
   const demandLines = leadRows
     .filter((l) => new Date(l.created_at).getTime() >= demandCutoff)
     .map((lead) => {
@@ -154,10 +170,29 @@ export async function generateListingSuggestions(): Promise<SuggestionsResult> {
       const listing = listingId ? rows.find((r) => r.id === listingId) : null;
       if (!listing) return null;
       const day = lead.created_at.slice(0, 10);
+      if (day === todayStr) todayCount++;
       return `${day} | ${listing.operation === "sale" ? "venta" : "alquiler"} | ${fmtPrice(listing.operation, listing.price, listing.total_rental_price)} | ${listing.address_city ?? "zona sin indicar"}`;
     })
     .filter((x): x is string => !!x)
     .join("\n");
+
+  return {
+    ok: true,
+    signals: {
+      publishedCount: published.length,
+      idleCount: idle.length,
+      publishedLines,
+      idleLines,
+      demandLines,
+      todayCount,
+    },
+  };
+}
+
+export async function generateListingSuggestions(): Promise<SuggestionsResult> {
+  const gathered = await gatherSignals();
+  if (!gathered.ok) return gathered;
+  const { publishedCount, idleCount, publishedLines, idleLines, demandLines } = gathered.signals;
 
   const system = `Eres un asesor comercial senior de una inmobiliaria premium en España, especializado en decidir qué mantener publicado en Idealista, qué retirar y qué publicar a continuación según la demanda real (leads recibidos).
 
@@ -168,10 +203,10 @@ Con los datos de abajo, da sugerencias CONCRETAS y ACCIONABLES en español, con 
 - No inventes datos que no estén abajo. Si una categoría no tiene datos (p. ej. no hay nada en cartera), simplemente no la menciones.
 - Máximo 6 sugerencias, ordenadas por prioridad. Cada una en 1-2 frases, como un mensaje directo al equipo comercial, citando siempre la referencia de la ficha cuando exista.
 
-FICHAS PUBLICADAS ACTUALMENTE (${published.length}):
+FICHAS PUBLICADAS ACTUALMENTE (${publishedCount}):
 ${publishedLines || "(ninguna)"}
 
-FICHAS EN CARTERA SIN PUBLICAR — borrador, despublicadas o con error (${idle.length}):
+FICHAS EN CARTERA SIN PUBLICAR — borrador, despublicadas o con error (${idleCount}):
 ${idleLines || "(ninguna)"}
 
 LEADS RECIENTES MATCHEADOS A FICHAS PROPIAS, últimos ${RECENT_DEMAND_DAYS} días, uno por línea (fecha | operación | precio de la ficha a la que llegó | zona) — usa esto para ver qué se está pidiendo ahora:
@@ -204,5 +239,58 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
     if (err instanceof AINotConfiguredError) return { ok: false, error: err.message };
     console.error("[idealista-ai-suggestions]", err);
     return { ok: false, error: err instanceof Error ? err.message : "Error al generar sugerencias" };
+  }
+}
+
+// Saldo corto para el saludo del Dashboard — mismo análisis que
+// generateListingSuggestions() pero condensado en un único párrafo de
+// prosa, sin viñetas. El texto NUNCA incluye el saludo ("Hola...") ni un
+// nombre: quien llama antepone eso, porque el resultado se cachea de forma
+// global (ver dashboard-greeting.ts) y no sabe quién lo va a leer.
+export async function generateDashboardGreeting(): Promise<DashboardGreetingResult> {
+  const gathered = await gatherSignals();
+  if (!gathered.ok) return gathered;
+  const { publishedCount, idleCount, publishedLines, idleLines, demandLines, todayCount } = gathered.signals;
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const system = `Eres el asistente del panel de una inmobiliaria premium en España. Vas a escribir el cuerpo de un saludo breve para el Dashboard: UN SOLO PÁRRAFO corto (2-4 frases), en español, tono cercano y directo, sin viñetas, sin markdown, sin emoji.
+
+NO escribas ningún saludo ni nombre (ni "Hola", ni "Buenos días") — eso lo añade la interfaz antes de tu texto. Empieza directo con la información.
+
+Con los datos de abajo:
+- Si hoy llegó algún lead, menciónalo con el número exacto (LEADS DE HOY, dato ya calculado, no lo recalcules). Si hoy no llegó ninguno, no lo menciones como algo negativo — pasa directamente a lo siguiente.
+- Da COMO MÁXIMO una recomendación concreta y accionable sobre una ficha en concreto: la publicada que lleva más días sin ningún lead es la más urgente, sobre todo si hay algo en cartera que podría publicarse en su lugar. Cita su referencia.
+- Si no hay ninguna señal clara (todo bien, o no hay datos suficientes), dilo en una frase breve y positiva — no inventes un problema que no existe.
+- No inventes datos que no estén abajo.
+
+HOY es ${todayStr}. LEADS DE HOY: ${todayCount}.
+
+FICHAS PUBLICADAS ACTUALMENTE (${publishedCount}):
+${publishedLines || "(ninguna)"}
+
+FICHAS EN CARTERA SIN PUBLICAR (${idleCount}):
+${idleLines || "(ninguna)"}
+
+LEADS RECIENTES MATCHEADOS A FICHAS PROPIAS, últimos ${RECENT_DEMAND_DAYS} días (fecha | operación | precio | zona):
+${demandLines || "(sin leads en este periodo)"}
+
+Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
+{ "text": "<el párrafo>" }`;
+
+  try {
+    const raw = await aiComplete({
+      system,
+      userText: "Escribe el párrafo respondiendo solo con el JSON solicitado.",
+      maxTokens: 400,
+    });
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`Respuesta IA sin JSON: ${raw.slice(0, 200)}`);
+    const parsed = JSON.parse(match[0]) as { text?: string };
+    if (!parsed.text) throw new Error("Respuesta IA sin texto");
+    return { ok: true, text: parsed.text, generatedAt: new Date().toISOString() };
+  } catch (err) {
+    if (err instanceof AINotConfiguredError) return { ok: false, error: err.message };
+    console.error("[idealista-dashboard-greeting]", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Error al generar el saludo" };
   }
 }
