@@ -439,6 +439,47 @@ function renderFloorPlanSvg(
 </svg>`;
 }
 
+type FloorPlanInputs = {
+  title: string;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  squareMeters: number | null;
+  photoUrls: string[];
+};
+
+// Paso común a las dos fuentes posibles (propiedad real vía property_photos,
+// o ficha de Idealista vía idealista_listings.photo_ids): arma los espacios,
+// los anota con la IA y renderiza. Solo cambia de dónde salen los datos, no
+// qué se hace con ellos.
+async function renderFloorPlanFromInputs(inputs: FloorPlanInputs): Promise<FloorPlanSketchResult> {
+  if (inputs.photoUrls.length === 0) {
+    return { ok: false, error: "Esta ficha no tiene fotos todavía — sube al menos una foto para generar la distribución." };
+  }
+
+  let slots = buildRoomSlots(inputs.bedrooms, inputs.bathrooms);
+  try {
+    slots = await annotateFromPhotos(slots, inputs.photoUrls.slice(0, MAX_VISION_PHOTOS));
+  } catch (err) {
+    if (err instanceof AINotConfiguredError) return { ok: false, error: err.message };
+    // Un fallo puntual de la IA (red, proveedor caído) no debe bloquear el
+    // dibujo — sigue siendo útil con los tamaños por defecto, sin notas.
+    console.error("[floorplan-sketch] Error consultando la IA:", err);
+  }
+
+  const svg = renderFloorPlanSvg(slots, {
+    title: sanitizeAddressForDisplay(inputs.title),
+    squareMeters: inputs.squareMeters,
+  });
+
+  try {
+    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    return { ok: true, pngBuffer };
+  } catch (err) {
+    console.error("[floorplan-sketch] Error renderizando la imagen:", err);
+    return { ok: false, error: "No se pudo generar la imagen." };
+  }
+}
+
 export async function generateApproximateFloorPlan(propertyId: string): Promise<FloorPlanSketchResult> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
@@ -459,31 +500,39 @@ export async function generateApproximateFloorPlan(propertyId: string): Promise<
     .limit(MAX_VISION_PHOTOS);
   if (photosErr) return { ok: false, error: photosErr.message };
 
-  const photoUrls = ((photos ?? []) as Array<{ url: string }>).map((p) => p.url).filter(Boolean);
-  if (photoUrls.length === 0) {
-    return { ok: false, error: "Esta ficha no tiene fotos todavía — sube al menos una foto para generar la distribución." };
-  }
-
-  let slots = buildRoomSlots(property.bedrooms, property.bathrooms);
-  try {
-    slots = await annotateFromPhotos(slots, photoUrls);
-  } catch (err) {
-    if (err instanceof AINotConfiguredError) return { ok: false, error: err.message };
-    // Un fallo puntual de la IA (red, proveedor caído) no debe bloquear el
-    // dibujo — sigue siendo útil con los tamaños por defecto, sin notas.
-    console.error("[floorplan-sketch] Error consultando la IA:", err);
-  }
-
-  const svg = renderFloorPlanSvg(slots, {
-    title: sanitizeAddressForDisplay((property.title as string) ?? ""),
+  return renderFloorPlanFromInputs({
+    title: (property.title as string) ?? "",
+    bedrooms: property.bedrooms,
+    bathrooms: property.bathrooms,
     squareMeters: (property.square_meters as number | null) ?? null,
+    photoUrls: ((photos ?? []) as Array<{ url: string }>).map((p) => p.url).filter(Boolean),
   });
+}
 
-  try {
-    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
-    return { ok: true, pngBuffer };
-  } catch (err) {
-    console.error("[floorplan-sketch] Error renderizando la imagen:", err);
-    return { ok: false, error: "No se pudo generar la imagen." };
-  }
+// Mismo dibujo, pero para una ficha de "Fichas guardadas" en /admin/idealista
+// (inspo o vinculada a una propiedad real) en vez de la ficha de propiedad.
+// Ahí las fotos y los datos (dormitorios, baños, m²) viven en la propia fila
+// de idealista_listings — es su propia galería, independiente de
+// property_photos — así que nunca hace falta tocar `properties` para esto.
+export async function generateApproximateFloorPlanForListing(listingId: string): Promise<FloorPlanSketchResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+
+  const { data: listing, error } = await db
+    .from("idealista_listings")
+    .select("inspo_title, address_street, bedrooms, bathrooms, square_meters, photo_ids")
+    .eq("id", listingId)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!listing) return { ok: false, error: "No se encontró la ficha." };
+
+  return renderFloorPlanFromInputs({
+    // address_street ya viene sin número de portal (columna separada de
+    // address_number) — más seguro que depender solo del saneador de texto.
+    title: (listing.address_street as string) || (listing.inspo_title as string) || "",
+    bedrooms: listing.bedrooms,
+    bathrooms: listing.bathrooms,
+    squareMeters: (listing.square_meters as number | null) ?? null,
+    photoUrls: ((listing.photo_ids ?? []) as string[]).filter(Boolean),
+  });
 }

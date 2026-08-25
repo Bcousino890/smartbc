@@ -209,6 +209,20 @@ que existen, y nunca puede agregar ni quitar espacios de esa lista fija
   igual con tamaños por defecto ("mediano") y sin notas — solo si la IA no
   está configurada en absoluto se corta con un error, para no generar algo
   que aparente venir de las fotos sin haberlas mirado.
+- La cabecera del dibujo nunca muestra el número exacto del portal —
+  `sanitizeAddressForDisplay()` corta cualquier "Calle X, 23" o "Calle X 23,
+  4ºB" al nombre de la calle solo. Este dibujo puede llegar a un cliente
+  antes de cerrar nada; no debe delatar la dirección exacta.
+- **También disponible por ficha en "Fichas guardadas" (`/admin/idealista`)**
+  vía el botón "Plano IA" (`generateApproximateFloorPlanForListing()`,
+  `POST /api/admin/idealista/listings/[id]/floorplan`) — para inspo y para
+  fichas vinculadas a una propiedad real por igual, siempre usa las fotos y
+  los dormitorios/baños/m² de la propia fila de `idealista_listings`
+  (`photo_ids`, su propia galería, independiente de `property_photos`).
+  ⚠️ Se guarda en `idealista_listings.plan_ids` — la galería de "Planos" del
+  formulario de Idealista — **no** en `property_media`: son dos galerías de
+  planos completamente separadas y no se mezclan (una es de la ficha de
+  Idealista, la otra de la propiedad). Se abre en pestaña nueva al terminar.
 
 ## Vídeos automáticos de propiedad (`lib/services/video/**`)
 Genera un vídeo tipo Ken Burns (zoom + paneo + transiciones) con las fotos de

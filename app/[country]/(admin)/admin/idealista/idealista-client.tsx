@@ -284,6 +284,8 @@ export function IdealistaClient({
   const [statusFilter, setStatusFilter] = useState<StateOption | "">("");
   const [generatingVideos, setGeneratingVideos] = useState(false);
   const [generateVideosMsg, setGenerateVideosMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [generatingPlanId, setGeneratingPlanId] = useState<string | null>(null);
+  const [planActionError, setPlanActionError] = useState<string | null>(null);
   const router = useRouter();
 
   const videoIds = useMemo(() => new Set(listingsWithVideo), [listingsWithVideo]);
@@ -653,6 +655,29 @@ export function IdealistaClient({
     a.remove();
   };
 
+  // Distribución APROXIMADA (no un plano medido) generada con IA a partir de
+  // las fotos ya subidas a esta ficha — ver
+  // lib/services/properties/floorplan-sketch.ts para el porqué de esa
+  // limitación. Se guarda en los planos de la propia ficha (plan_ids) y se
+  // abre en una pestaña nueva para que quede lista para guardar.
+  const handleGenerateFloorplan = async (id: string) => {
+    setPlanActionError(null);
+    setGeneratingPlanId(id);
+    try {
+      const res = await fetch(`/api/admin/idealista/listings/${id}/floorplan`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setPlanActionError(data.error || "No se pudo generar la distribución");
+        return;
+      }
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setPlanActionError(err instanceof Error ? err.message : "No se pudo generar la distribución");
+    } finally {
+      setGeneratingPlanId(null);
+    }
+  };
+
   const handleDelete = async (id: string, isPublished: boolean) => {
     const message = isPublished
       ? "¿Bajar esta ficha de Idealista? Se archivará (no se borra: fotos y datos quedan guardados) y podrás restaurarla luego."
@@ -979,6 +1004,9 @@ export function IdealistaClient({
               {generateVideosMsg.text}
             </p>
           )}
+          {planActionError && (
+            <p className="mb-3 text-xs text-red-600">{planActionError}</p>
+          )}
           {searchTerm && filteredActiveListings.length === 0 && (
             <p className="rounded-xl border border-ink/10 bg-white/40 px-4 py-6 text-center text-sm text-ink/45">
               Ninguna ficha guardada coincide con &quot;{searchTerm}&quot;.
@@ -1143,6 +1171,17 @@ export function IdealistaClient({
                       >
                         <Download size={12} />
                         Fotos
+                      </button>
+                    )}
+                    {listing.photo_ids?.length > 0 && (
+                      <button
+                        onClick={() => handleGenerateFloorplan(listing.id)}
+                        disabled={generatingPlanId === listing.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-2.5 py-1.5 text-xs font-semibold text-gold transition hover:bg-gold/20 disabled:opacity-50"
+                        title="Distribución orientativa a partir de las fotos — no sustituye un plano medido. Se genera y se descarga."
+                      >
+                        {generatingPlanId === listing.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        Plano IA
                       </button>
                     )}
                     {hasVideo && videoHref && (
