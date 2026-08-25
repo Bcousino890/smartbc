@@ -115,11 +115,19 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// Jerarquía de muros como en un plano CAD real: perímetro exterior grueso,
+// partición mayor (columna↔pasillo, con hueco de puerta) media, división
+// entre habitaciones de una misma columna fina. Esa jerarquía de grosores es
+// gran parte de lo que hace que un dibujo lea como "plano" y no como
+// "diagrama de cajas".
+const WALL_EXT = 9;
+const WALL_MID = 6;
+const WALL_THIN = 3;
+
 // Pictogramas estilo plano arquitectónico, en coordenadas locales centradas
 // en (0,0) — se posicionan con un <g transform="translate(...) scale(...)">
 // al dibujar cada habitación. Trazo fino, sin relleno, como los símbolos de
-// mobiliario de un plano real — es lo que más cambia la sensación de
-// "boceto" a "ficha técnica".
+// mobiliario de un plano real.
 const ICON_STROKE = `stroke="${INK}" stroke-width="1.7" fill="none" stroke-linejoin="round" stroke-linecap="round"`;
 
 function bedIcon(): string {
@@ -129,6 +137,8 @@ function bedIcon(): string {
     <rect x="-30" y="-40" width="26" height="20" rx="5" />
     <rect x="4" y="-40" width="26" height="20" rx="5" />
     <line x1="-38" y1="20" x2="38" y2="20" />
+    <rect x="-53" y="-30" width="13" height="17" rx="2" />
+    <rect x="40" y="-30" width="13" height="17" rx="2" />
   </g>`;
 }
 
@@ -149,6 +159,7 @@ function kitchenIcon(): string {
     <circle cx="-6" cy="-3" r="6.5" />
     <rect x="16" y="-11" width="27" height="15" rx="2" />
     <line x1="16" y1="-3.5" x2="43" y2="-3.5" />
+    <rect x="33" y="12" width="15" height="34" rx="3" />
   </g>`;
 }
 
@@ -161,15 +172,16 @@ function bathIcon(): string {
   </g>`;
 }
 
-function doorIcon(): string {
+// Felpudo — para "Entrada", que ya lleva el símbolo de puerta real en el
+// hueco del muro; un segundo icono de puerta flotando encima sobraba.
+function matIcon(): string {
   return `<g ${ICON_STROKE}>
-    <rect x="-22" y="-30" width="16" height="16" rx="2" />
-    <circle cx="-12" cy="-10" r="1.6" fill="${INK}" stroke="none" />
+    <rect x="-26" y="-15" width="52" height="30" rx="3" stroke-dasharray="4 3" />
   </g>`;
 }
 
 const ROOM_ICON: Record<string, () => string> = {
-  entrada: doorIcon,
+  entrada: matIcon,
   salon: sofaIcon,
   cocina: kitchenIcon,
 };
@@ -177,30 +189,55 @@ const ROOM_ICON: Record<string, () => string> = {
 function iconForRoom(room: RoomSlot): string {
   if (room.id.startsWith("dormitorio")) return bedIcon();
   if (room.id.startsWith("bano")) return bathIcon();
-  return (ROOM_ICON[room.id] ?? doorIcon)();
+  return (ROOM_ICON[room.id] ?? matIcon)();
 }
 
-// Arco de apertura de puerta en la esquina superior izquierda de cada
-// habitación — el símbolo más reconocible de un plano arquitectónico real.
-function doorSwing(x: number, y: number): string {
-  const r = 26;
+// Hueco de puerta en el muro medio (columna↔pasillo), con su arco de
+// apertura — el símbolo más reconocible de un plano arquitectónico real.
+// `dir` indica hacia qué lado del muro se abre (adentro de la habitación).
+function doorway(px: number, gapCenterY: number, gapHalf: number, dir: 1 | -1): string {
+  const r = gapHalf * 2;
+  const sweep = dir > 0 ? 1 : 0;
+  const hingeY = gapCenterY - gapHalf;
+  const closedY = gapCenterY + gapHalf;
   return `<g stroke="${INK}" stroke-width="1.3" fill="none">
-    <line x1="${x}" y1="${y}" x2="${x}" y2="${y + r}" />
-    <path d="M ${x} ${y} A ${r} ${r} 0 0 1 ${x + r} ${y + r}" stroke-dasharray="2.5 3" />
+    <line x1="${px}" y1="${hingeY}" x2="${px + dir * r}" y2="${hingeY}" />
+    <path d="M ${px + dir * r} ${hingeY} A ${r} ${r} 0 0 ${sweep} ${px} ${closedY}" stroke-dasharray="2.5 3" />
   </g>`;
 }
 
+// Marca de ventana (dos trazos cruzando el muro exterior) — junto con el
+// hueco de puerta, es la otra convención que más "vende" un plano real.
+function windowTicks(x: number, yCenter: number): string {
+  const gap = 8;
+  return `<line x1="${x - 7}" y1="${yCenter - gap}" x2="${x + 7}" y2="${yCenter - gap}" stroke="${INK}" stroke-width="2.2" />
+          <line x1="${x - 7}" y1="${yCenter + gap}" x2="${x + 7}" y2="${yCenter + gap}" stroke="${INK}" stroke-width="2.2" />`;
+}
+
 // Apila las habitaciones de una zona en una sola columna, a lo ancho
-// completo y SIN huecos entre ellas — como paredes compartidas de verdad —
-// con la altura de cada caja proporcional a su peso (tamaño relativo). No es
-// un plano real: es deliberadamente una maqueta simple (una columna, cajas
-// apiladas) en vez de un packing 2D, para que nunca se solapen ni queden
-// huecos raros, y como los pesos suman exactamente `h` no hay riesgo de que
-// una fila se salga del bloque aunque haya muchas habitaciones.
-function renderZoneColumn(rooms: RoomSlot[], x: number, y: number, w: number, h: number): string {
+// completo y SIN huecos entre ellas — paredes compartidas de verdad — con la
+// altura de cada caja proporcional a su peso (tamaño relativo). `corridorSide`
+// dice qué borde vertical da al pasillo (ahí van los huecos de puerta) y cuál
+// es el muro exterior (ahí van las ventanas). No es un plano real: es
+// deliberadamente una maqueta simple (una columna, cajas apiladas) en vez de
+// un packing 2D, para que nunca se solapen ni queden huecos raros, y como los
+// pesos suman exactamente `h` no hay riesgo de que una fila se salga del
+// bloque aunque haya muchas habitaciones.
+function renderZoneColumn(
+  rooms: RoomSlot[],
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  corridorSide: "left" | "right",
+): string {
   const totalWeight = rooms.reduce((sum, r) => sum + SIZE_WEIGHT[r.size], 0) || 1;
   let cursorY = y;
-  const parts: string[] = [`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${INK}" stroke-width="3.5" />`];
+  const parts: string[] = [];
+
+  const corridorX = corridorSide === "right" ? x + w : x;
+  const exteriorX = corridorSide === "right" ? x : x + w;
+  const doorDir: 1 | -1 = corridorSide === "right" ? -1 : 1;
 
   rooms.forEach((room, i) => {
     const boxH = (SIZE_WEIGHT[room.size] / totalWeight) * h;
@@ -210,15 +247,28 @@ function renderZoneColumn(rooms: RoomSlot[], x: number, y: number, w: number, h:
     const hasNote = room.note.length > 0;
     const labelY = cursorY + boxH - (hasNote ? 34 : 18);
 
+    const gapHalf = 15;
+    const hasDoorGap = boxH > gapHalf * 2 + 40;
+    const gapCenterY = Math.min(Math.max(centerY, cursorY + gapHalf + 12), cursorY + boxH - gapHalf - 12);
+
+    const midWall = hasDoorGap
+      ? `<line x1="${corridorX}" y1="${cursorY}" x2="${corridorX}" y2="${gapCenterY - gapHalf}" stroke="${INK}" stroke-width="${WALL_MID}" />
+         <line x1="${corridorX}" y1="${gapCenterY + gapHalf}" x2="${corridorX}" y2="${cursorY + boxH}" stroke="${INK}" stroke-width="${WALL_MID}" />
+         ${doorway(corridorX, gapCenterY, gapHalf, doorDir)}`
+      : `<line x1="${corridorX}" y1="${cursorY}" x2="${corridorX}" y2="${cursorY + boxH}" stroke="${INK}" stroke-width="${WALL_MID}" />`;
+
+    const showWindow = room.id !== "entrada" && !room.id.startsWith("bano") && boxH > 70;
+
     parts.push(`
       <g>
-        ${i > 0 ? `<line x1="${x}" y1="${cursorY}" x2="${x + w}" y2="${cursorY}" stroke="${INK}" stroke-width="1.5" />` : ""}
+        ${i > 0 ? `<line x1="${x}" y1="${cursorY}" x2="${x + w}" y2="${cursorY}" stroke="${INK}" stroke-width="${WALL_THIN}" />` : ""}
+        ${midWall}
+        ${showWindow ? windowTicks(exteriorX, centerY) : ""}
         <g transform="translate(${centerX} ${centerY - 16}) scale(${iconScale.toFixed(2)})">${iconForRoom(room)}</g>
         <text x="${centerX}" y="${labelY}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
               font-size="17" font-weight="600" letter-spacing="0.3" fill="${INK}">${escapeXml(room.label)}</text>
         ${hasNote ? `<text x="${centerX}" y="${labelY + 19}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
               font-size="12.5" fill="${INK_SOFT}" font-style="italic">${escapeXml(room.note)}</text>` : ""}
-        ${doorSwing(x + 14, cursorY + 14)}
       </g>`);
     cursorY += boxH;
   });
@@ -227,15 +277,16 @@ function renderZoneColumn(rooms: RoomSlot[], x: number, y: number, w: number, h:
 
 // Franja de circulación entre las dos zonas — sin esto, dos columnas
 // separadas leen como dos habitaciones flotando en el vacío en vez de una
-// vivienda conectada.
+// vivienda conectada. Sin borde propio: sus cuatro lados ya quedan definidos
+// por el perímetro exterior (arriba/abajo) y los muros medios de cada
+// columna (izquierda/derecha, dibujados en renderZoneColumn).
 function renderCorridor(x: number, y: number, w: number, h: number): string {
   const hatchGap = 22;
   const hatches: string[] = [];
-  for (let hy = y + hatchGap; hy < y + h; hy += hatchGap) {
+  for (let hy = y + hatchGap; hy < y + h + w; hy += hatchGap) {
     hatches.push(`<line x1="${x}" y1="${hy}" x2="${x + w}" y2="${hy - w}" stroke="${INK}" stroke-width="0.6" opacity="0.22" />`);
   }
   return `<g>
-    <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${CREAM}" stroke="${INK}" stroke-width="3.5" />
     <clipPath id="corridorClip"><rect x="${x}" y="${y}" width="${w}" height="${h}" /></clipPath>
     <g clip-path="url(#corridorClip)">${hatches.join("")}</g>
     <text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="middle"
@@ -283,9 +334,14 @@ function renderFloorPlanSvg(
   <text x="${pad}" y="${bodyY - 10}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="${INK_SOFT}">ZONA DE DÍA</text>
   <text x="${nocheX}" y="${bodyY - 10}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="${INK_SOFT}">ZONA DE NOCHE</text>
 
-  ${renderZoneColumn(dia, pad, bodyY, diaW, bodyH)}
+  ${renderZoneColumn(dia, pad, bodyY, diaW, bodyH, "right")}
   ${renderCorridor(corridorX, bodyY, corridorW, bodyH)}
-  ${renderZoneColumn(noche, nocheX, bodyY, nocheW, bodyH)}
+  ${renderZoneColumn(noche, nocheX, bodyY, nocheW, bodyH, "left")}
+
+  <!-- Perímetro exterior por encima de todo lo demás: un solo trazo grueso
+       alrededor de toda la vivienda, en vez de un borde por columna, para
+       que lea como UN edificio y no como tres cajas sueltas. -->
+  <rect x="${pad}" y="${bodyY}" width="${CANVAS_W - pad * 2}" height="${bodyH}" fill="none" stroke="${INK}" stroke-width="${WALL_EXT}" />
 
   <rect x="0" y="${CANVAS_H - footerH}" width="${CANVAS_W}" height="${footerH}" fill="${FOOTER_BG}" />
   <rect x="0" y="${CANVAS_H - footerH}" width="${CANVAS_W}" height="3" fill="${GOLD}" />
