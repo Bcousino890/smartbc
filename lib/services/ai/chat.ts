@@ -85,7 +85,14 @@ async function resolveConfig(): Promise<ProviderConfig> {
   }
   const key = stored?.apiKey || process.env.AI_API_KEY || (provider === "ollama" ? "ollama" : "");
   if (!key) throw new AINotConfiguredError(`Falta la clave (API key) para "${provider}".`);
-  const model = stored?.model || process.env.AI_MODEL;
+  // OpenRouter es el proveedor recomendado (preseleccionado en el panel) y el
+  // campo "Modelo de texto" del formulario arranca vacío — sin este fallback,
+  // guardar solo la clave y dejar el modelo en blanco deja la IA rota con un
+  // error que no dice qué modelo poner. deepseek/deepseek-v4-flash-latest es
+  // barato y con contexto de sobra para las tareas de este proyecto (análisis
+  // de leads, descripciones, clasificación de documentos).
+  const model =
+    stored?.model || process.env.AI_MODEL || (provider === "openrouter" ? "deepseek/deepseek-v4-flash-latest" : undefined);
   if (!model) throw new AINotConfiguredError(`Falta el modelo para "${provider}".`);
   return { kind: "openai", base, key, model, visionModel: stored?.visionModel || process.env.AI_VISION_MODEL || model };
 }

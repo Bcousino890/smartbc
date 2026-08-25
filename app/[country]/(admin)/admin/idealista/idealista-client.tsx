@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Clapperboard, Video, Plug, Power, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Edit2, Loader2, Search, Sparkles, Send, Calendar, Trash2, Link2, Wand2, Droplets, Download, Archive, RotateCcw, History, Clapperboard, Video, Plug, Power, Image as ImageIcon, Lightbulb } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IdealistaForm, type IdealistaListing } from "../publicacion/idealista-form";
 import { IdealistaStatusModal } from "@/components/admin/idealista-status-modal";
 import { IdealistaListingLeadsModal } from "@/components/admin/idealista-listing-leads-modal";
+import { IdealistaAiSuggestionsModal } from "@/components/admin/idealista-ai-suggestions-modal";
 import { IdealistaStateSelector, STATE_LABELS, type StateOption } from "@/components/admin/idealista-state-selector";
 import { cn } from "@/lib/utils";
 
@@ -277,6 +278,7 @@ export function IdealistaClient({
   const [leadsModalTitle, setLeadsModalTitle] = useState("");
   const [onlyWithLeads, setOnlyWithLeads] = useState(false);
   const [sortByLeads, setSortByLeads] = useState(false);
+  const [aiSuggestionsOpen, setAiSuggestionsOpen] = useState(false);
   // Filtro por estado (Publicado/Despublicado/Borrador/Error) — mismos 4
   // valores que IdealistaStateSelector, "" = todos.
   const [statusFilter, setStatusFilter] = useState<StateOption | "">("");
@@ -947,6 +949,14 @@ export function IdealistaClient({
                 {generatingVideos ? <Loader2 size={12} className="animate-spin" /> : <Clapperboard size={12} />}
                 Generar vídeos de todas las inspo
               </button>
+              <button
+                onClick={() => setAiSuggestionsOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold transition hover:bg-gold/20"
+                title="Sugerencias de IA: qué bajar, qué subir de precio y qué publicar según los leads recientes"
+              >
+                <Lightbulb size={12} />
+                Sugerencias IA
+              </button>
             </div>
           </div>
           {generateVideosMsg && (
@@ -1303,6 +1313,12 @@ export function IdealistaClient({
           setLeadsModalListingId(null);
           setLeadsModalTitle("");
         }}
+      />
+
+      {/* Modal de sugerencias de IA sobre fichas guardadas */}
+      <IdealistaAiSuggestionsModal
+        isOpen={aiSuggestionsOpen}
+        onClose={() => setAiSuggestionsOpen(false)}
       />
     </div>
   );

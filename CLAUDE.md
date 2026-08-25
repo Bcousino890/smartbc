@@ -360,6 +360,39 @@ este formulario ve el desplegable vacío (salvo el contacto ya guardado en esa
 ficha, que se sigue mostrando aunque no esté en la lista) y no puede crear uno
 nuevo. No se tocó ese guard: ampliarlo es una decisión de permisos aparte.
 
+## Sugerencias de IA en "Fichas guardadas" (2026-08-25, `lib/services/idealista/ai-suggestions.ts`)
+Botón "Sugerencias IA" en `/admin/idealista`, junto a la cabecera de "Fichas
+guardadas". Cruza tres cosas para sugerir qué bajar de precio, qué
+despublicar y qué publicar en su lugar:
+- Fichas **publicadas** y cuántos días llevan sin ningún lead (o desde que se
+  publicaron, si nunca tuvieron uno).
+- Fichas **en cartera sin publicar** (borrador / despublicada / con error al
+  publicar) — candidatas a publicar si encajan con la demanda reciente.
+- **Demanda reciente**: leads del inbox de Idealista de los últimos 14 días
+  matcheados a fichas propias (`idealista_leads.matched_listing_id` o
+  `matched_property_id`), con la operación y el precio de la ficha a la que
+  llegaron.
+
+Es puro análisis — la IA nunca cambia el estado de ninguna ficha, solo
+devuelve texto para que el equipo decida a mano con los controles que ya
+existen (`IdealistaStateSelector`, etc.).
+
+⚠️ **El proveedor de IA es el mismo de Configuración → IA** (Idealista →
+Configuración), no uno nuevo. Se recomendó `openrouter` con
+`deepseek/deepseek-v4-flash-latest` (barato — del orden de $0.035/$0.10 por
+millón de tokens prompt/completion en agosto 2026 — y con contexto de sobra
+para esto). Como el campo "Modelo de texto" del panel arranca vacío y antes
+no había fallback para proveedores compatibles con OpenAI (solo Anthropic
+tenía uno), `resolveConfig()` en `lib/services/ai/chat.ts` ahora cae a ese
+modelo cuando el proveedor es `openrouter` y no hay modelo guardado — si se
+quiere otro, basta con escribirlo en el panel, sigue teniendo prioridad.
+
+No hay tabla nueva: cada clic en "Sugerencias IA" dispara un análisis fresco
+(`POST /api/admin/idealista/ai-suggestions`, permiso `properties`/`edit`,
+igual que "Generar descripción" o "Analizar fotos"). El modal cachea el
+resultado en memoria del componente — reabrir el modal no vuelve a gastar IA,
+solo el botón "Regenerar" lo hace.
+
 ## Enlaces de portales en la ficha del cliente (`lib/portal-links/**`)
 El paso que faltaba **antes** de la selección: el piso que se ve con el cliente
 en Idealista todavía no es ficha nuestra, así que no cabe en
