@@ -11,11 +11,31 @@ import { PROPERTY_TYPE_MAP } from "@/lib/services/idealista/selectors";
 // que ya existen. Dos presentaciones del mismo análisis comparten los datos
 // (gatherSignals): la lista detallada de /admin/idealista y el saludo corto
 // del Dashboard.
+//
+// Los números de cada sugerencia (leads, días) SIEMPRE vienen calculados
+// aquí, nunca del texto de la IA — el modelo solo elige QUÉ ficha señalar
+// (por su "key") y POR QUÉ en una frase corta. Así ninguna cifra mostrada
+// puede ser una alucinación: si la IA cita una key que no existe, esa
+// sugerencia concreta se descarta en vez de mostrarse con datos inventados.
+
+export type SuggestionAction = "publicar" | "bajar_precio" | "despublicar";
+
+export type SuggestionTarget = {
+  listingId: string;
+  label: string;
+  typeLabel: string;
+  operation: string | null;
+  priceLabel: string;
+  zone: string | null;
+  leadsTotal: number;
+  daysSinceLastLead: number | null;
+};
 
 export type ListingSuggestion = {
-  priority: "alta" | "media" | "baja";
-  text: string;
-  reference_code?: string | null;
+  action: SuggestionAction;
+  reason: string;
+  target: SuggestionTarget;
+  replacement: SuggestionTarget | null;
 };
 
 export type SuggestionsResult =
@@ -66,7 +86,7 @@ function fmtPrice(operation: string | null, price: number | null, rentalPrice: n
 }
 
 function label(l: ListingRow): string {
-  return l.reference_code || l.inspo_title || `ficha ${l.id.slice(0, 8)}`;
+  return l.reference_code || l.inspo_title || `ficha-${l.id.slice(0, 8)}`;
 }
 
 function typeLabel(l: ListingRow): string {
@@ -86,6 +106,7 @@ type Signals = {
   idleLines: string;
   demandLines: string;
   todayCount: number;
+  byKey: Map<string, SuggestionTarget>;
 };
 
 async function gatherSignals(): Promise<{ ok: true; signals: Signals } | { ok: false; error: string }> {
@@ -144,20 +165,38 @@ async function gatherSignals(): Promise<{ ok: true; signals: Signals } | { ok: f
     leadCount.set(listingId, (leadCount.get(listingId) ?? 0) + 1);
   }
 
+  // Un solo lugar donde se calculan los números reales de cada ficha (leads,
+  // días desde el último) — tanto el texto para el prompt como la resolución
+  // de las keys que devuelva la IA leen de aquí, nunca de la respuesta del
+  // modelo.
+  const byKey = new Map<string, SuggestionTarget>();
+  for (const l of rows) {
+    const last = lastLeadAt.get(l.id) ?? null;
+    byKey.set(label(l), {
+      listingId: l.id,
+      label: label(l),
+      typeLabel: typeLabel(l),
+      operation: l.operation,
+      priceLabel: fmtPrice(l.operation, l.price, l.total_rental_price),
+      zone: l.address_city,
+      leadsTotal: leadCount.get(l.id) ?? 0,
+      daysSinceLastLead: last ? daysAgo(last) : null,
+    });
+  }
+
   const publishedLines = published
     .map((l) => {
-      const last = lastLeadAt.get(l.id) ?? null;
-      const since = last ? daysAgo(last) : daysAgo(l.published_at) ?? daysAgo(l.created_at);
-      const total = leadCount.get(l.id) ?? 0;
-      return `- ${label(l)} | ${typeLabel(l)} | ${l.operation === "sale" ? "venta" : "alquiler"} | ${fmtPrice(l.operation, l.price, l.total_rental_price)} | ${l.address_city ?? "zona sin indicar"} | ${total} lead(s) en los últimos ${LEAD_LOOKBACK_DAYS} días | último lead: ${last ? `hace ${since} días` : `nunca (publicada hace ${since ?? "?"} días)`}`;
+      const t = byKey.get(label(l))!;
+      const sincePublished = daysAgo(l.published_at) ?? daysAgo(l.created_at);
+      return `- key: ${t.label} | ${t.typeLabel} | ${t.operation === "sale" ? "venta" : "alquiler"} | ${t.priceLabel} | ${t.zone ?? "zona sin indicar"} | ${t.leadsTotal} lead(s) en los últimos ${LEAD_LOOKBACK_DAYS} días | último lead: ${t.daysSinceLastLead != null ? `hace ${t.daysSinceLastLead} días` : `nunca (publicada hace ${sincePublished ?? "?"} días)`}`;
     })
     .join("\n");
 
   const idleLines = idle
-    .map(
-      (l) =>
-        `- ${label(l)} | ${typeLabel(l)} | ${l.operation === "sale" ? "venta" : "alquiler"} | ${fmtPrice(l.operation, l.price, l.total_rental_price)} | ${l.address_city ?? "zona sin indicar"} | estado: ${IDLE_STATE_LABEL[l.idealista_state ?? ""] ?? l.idealista_state}`,
-    )
+    .map((l) => {
+      const t = byKey.get(label(l))!;
+      return `- key: ${t.label} | ${t.typeLabel} | ${t.operation === "sale" ? "venta" : "alquiler"} | ${t.priceLabel} | ${t.zone ?? "zona sin indicar"} | estado: ${IDLE_STATE_LABEL[l.idealista_state ?? ""] ?? l.idealista_state}`;
+    })
     .join("\n");
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -185,23 +224,27 @@ async function gatherSignals(): Promise<{ ok: true; signals: Signals } | { ok: f
       idleLines,
       demandLines,
       todayCount,
+      byKey,
     },
   };
 }
 
+const VALID_ACTIONS = new Set<SuggestionAction>(["publicar", "bajar_precio", "despublicar"]);
+
 export async function generateListingSuggestions(): Promise<SuggestionsResult> {
   const gathered = await gatherSignals();
   if (!gathered.ok) return gathered;
-  const { publishedCount, idleCount, publishedLines, idleLines, demandLines } = gathered.signals;
+  const { publishedCount, idleCount, publishedLines, idleLines, demandLines, byKey } = gathered.signals;
 
   const system = `Eres un asesor comercial senior de una inmobiliaria premium en España, especializado en decidir qué mantener publicado en Idealista, qué retirar y qué publicar a continuación según la demanda real (leads recibidos).
 
-Con los datos de abajo, da sugerencias CONCRETAS y ACCIONABLES en español, con el criterio de un buen director comercial:
-- Una ficha PUBLICADA que lleva muchos días sin ningún lead es candidata a bajar de precio o despublicar. Si hay algo en cartera (borrador/despublicada/con error) que encaje con la demanda reciente, sugiere publicarla en su lugar.
-- Si una ficha en cartera coincide en operación/precio/zona con lo que más demanda tuvo recientemente, sugiere publicarla.
-- Si es útil, resume cuántos leads llegaron recientemente por operación (venta/alquiler) y en qué rango de precio, para dar contexto de mercado.
-- No inventes datos que no estén abajo. Si una categoría no tiene datos (p. ej. no hay nada en cartera), simplemente no la menciones.
-- Máximo 6 sugerencias, ordenadas por prioridad. Cada una en 1-2 frases, como un mensaje directo al equipo comercial, citando siempre la referencia de la ficha cuando exista.
+Con los datos de abajo, identifica hasta 6 acciones CONCRETAS, cada una sobre UNA sola ficha:
+- "bajar_precio" o "despublicar": una ficha PUBLICADA que lleva muchos días sin ningún lead (o muy pocos frente a otras). Si hay algo en cartera que podría publicarse en su lugar, indícalo en replacement_key.
+- "publicar": una ficha EN CARTERA cuya operación/precio/zona coincide con la demanda reciente. Si sustituye a una ficha publicada de bajo rendimiento, indícalo en replacement_key.
+- target_key es SIEMPRE la ficha sobre la que hay que actuar (la que se publicaría, bajaría de precio o despublicaría). Debe ser EXACTAMENTE uno de los valores que aparecen tras "key:" en las listas de abajo, copiado tal cual — nunca inventes uno.
+- replacement_key es opcional: la otra ficha relacionada, si la sugerencia compara dos. Si no aplica, usa null.
+- "reason" es una frase breve con el POR QUÉ (zona, precio, tipo de demanda) — NO repitas cifras de leads o días, esas ya se muestran aparte automáticamente.
+- No inventes datos que no estén abajo. Si una categoría no tiene datos suficientes, no sugieras nada de esa categoría.
 
 FICHAS PUBLICADAS ACTUALMENTE (${publishedCount}):
 ${publishedLines || "(ninguna)"}
@@ -216,7 +259,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
 {
   "summary": "<1-2 frases con el diagnóstico general>",
   "suggestions": [
-    { "priority": "alta" | "media" | "baja", "text": "<sugerencia concreta en español>", "reference_code": "<referencia de la ficha si aplica, si no null>" }
+    { "action": "bajar_precio" | "despublicar" | "publicar", "target_key": "<key exacta>", "replacement_key": "<key exacta o null>", "reason": "<frase breve>" }
   ]
 }`;
 
@@ -228,13 +271,26 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
     });
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error(`Respuesta IA sin JSON: ${raw.slice(0, 200)}`);
-    const parsed = JSON.parse(match[0]) as { summary?: string; suggestions?: ListingSuggestion[] };
-    return {
-      ok: true,
-      summary: parsed.summary ?? "",
-      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-      generatedAt: new Date().toISOString(),
+    const parsed = JSON.parse(match[0]) as {
+      summary?: string;
+      suggestions?: Array<{ action?: string; target_key?: string | null; replacement_key?: string | null; reason?: string }>;
     };
+
+    const suggestions: ListingSuggestion[] = [];
+    for (const item of parsed.suggestions ?? []) {
+      if (!item.action || !VALID_ACTIONS.has(item.action as SuggestionAction)) continue;
+      const target = item.target_key ? byKey.get(item.target_key) : undefined;
+      if (!target) continue; // key inventada, mal copiada o vacía — se descarta en vez de mostrar datos inventados
+      const replacement = item.replacement_key ? byKey.get(item.replacement_key) ?? null : null;
+      suggestions.push({
+        action: item.action as SuggestionAction,
+        reason: typeof item.reason === "string" ? item.reason : "",
+        target,
+        replacement,
+      });
+    }
+
+    return { ok: true, summary: parsed.summary ?? "", suggestions, generatedAt: new Date().toISOString() };
   } catch (err) {
     if (err instanceof AINotConfiguredError) return { ok: false, error: err.message };
     console.error("[idealista-ai-suggestions]", err);
@@ -242,7 +298,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni explicación adicional:
   }
 }
 
-// Saldo corto para el saludo del Dashboard — mismo análisis que
+// Saludo corto para el Dashboard — mismo análisis que
 // generateListingSuggestions() pero condensado en un único párrafo de
 // prosa, sin viñetas. El texto NUNCA incluye el saludo ("Hola...") ni un
 // nombre: quien llama antepone eso, porque el resultado se cachea de forma

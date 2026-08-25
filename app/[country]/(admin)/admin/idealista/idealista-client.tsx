@@ -417,6 +417,21 @@ export function IdealistaClient({
     setError(null);
   }
 
+  // "Abrir ficha" desde una sugerencia de IA: mismo camino que el botón
+  // Editar de cada fila de "Fichas guardadas" — cierra el modal y abre el
+  // editor de esa ficha directamente, sin que el usuario tenga que
+  // buscarla en la lista.
+  function openListingEditor(listingId: string) {
+    const listing = listings.find((l) => l.id === listingId);
+    if (!listing) return;
+    setAiSuggestionsOpen(false);
+    if (listing.is_inspo) {
+      setEditingInspoId(listing.id);
+    } else {
+      setSelectedPropertyId(listing.property_id!);
+    }
+  }
+
   // Siembra una inspo desde un link externo: extrae datos + re-aloja fotos
   // limpias, y abre el formulario relleno para revisar antes de guardar.
   // Si el servidor detecta que ya existe una ficha del mismo anuncio (409),
@@ -1319,6 +1334,7 @@ export function IdealistaClient({
       <IdealistaAiSuggestionsModal
         isOpen={aiSuggestionsOpen}
         onClose={() => setAiSuggestionsOpen(false)}
+        onNavigate={openListingEditor}
       />
     </div>
   );

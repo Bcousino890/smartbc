@@ -393,6 +393,22 @@ igual que "Generar descripción" o "Analizar fotos"). El modal cachea el
 resultado en memoria del componente — reabrir el modal no vuelve a gastar IA,
 solo el botón "Regenerar" lo hace.
 
+⚠️ **Las cifras de cada sugerencia (leads, días desde el último) nunca salen
+del texto de la IA.** El modelo solo elige QUÉ ficha señalar — devuelve una
+"key" (la misma referencia que se le mostró) — y por qué, en una frase
+corta; `generateListingSuggestions()` resuelve esa key contra los datos ya
+calculados en `gatherSignals()` y adjunta los números reales. Si la IA cita
+una key que no existe (inventada o mal copiada), esa sugerencia se descarta
+en vez de mostrarse con datos inventados. Cada tarjeta tiene un botón "Abrir
+ficha" que llama a `onNavigate(listingId)` — en `idealista-client.tsx` eso
+es `openListingEditor()`, el mismo camino que el botón Editar de cada fila
+(`setEditingInspoId` o `setSelectedPropertyId` según si es inspo), así que
+lleva directo al editor de esa ficha en vez de dejar que el equipo la
+busque en la lista. No se usan etiquetas de "prioridad" (alta/media/baja):
+el primer intento las tenía y no aportaban nada accionable frente a ver
+directamente cuántos leads tiene la ficha y hace cuántos días fue el
+último.
+
 ### El mismo análisis, como saludo en el Dashboard (`dashboard-greeting.ts`)
 El Dashboard (`/{country}/admin`, solo España) muestra una tarjeta "Hola
 {nombre}, ..." con un párrafo corto generado por IA — mismos datos que
