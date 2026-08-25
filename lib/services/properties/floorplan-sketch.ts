@@ -27,7 +27,6 @@ const CANVAS_H = 1400;
 const INK = "#2a1f10";
 const INK_SOFT = "#6b5d47";
 const CREAM = "#fbf8f3";
-const PANEL = "#f2ead9";
 const GOLD = "#c9a24b";
 const FOOTER_BG = "#241a0c";
 const FOOTER_TEXT = "#f4ead9";
@@ -214,65 +213,141 @@ function windowTicks(x: number, yCenter: number): string {
           <line x1="${x - 7}" y1="${yCenter + gap}" x2="${x + 7}" y2="${yCenter + gap}" stroke="${INK}" stroke-width="2.2" />`;
 }
 
-// Apila las habitaciones de una zona en una sola columna, a lo ancho
-// completo y SIN huecos entre ellas — paredes compartidas de verdad — con la
-// altura de cada caja proporcional a su peso (tamaño relativo). `corridorSide`
-// dice qué borde vertical da al pasillo (ahí van los huecos de puerta) y cuál
-// es el muro exterior (ahí van las ventanas). No es un plano real: es
-// deliberadamente una maqueta simple (una columna, cajas apiladas) en vez de
-// un packing 2D, para que nunca se solapen ni queden huecos raros, y como los
-// pesos suman exactamente `h` no hay riesgo de que una fila se salga del
-// bloque aunque haya muchas habitaciones.
-function renderZoneColumn(
-  rooms: RoomSlot[],
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  corridorSide: "left" | "right",
+// Dibuja UNA habitación dentro de su celda (icono + etiqueta + nota), y
+// opcionalmente el muro con hueco de puerta (doorWallX) y/o la marca de
+// ventana (windowWallX) en los bordes verticales de esa celda. Sacar esto a
+// una función propia es lo que permite reutilizar exactamente la misma
+// lógica tanto en una columna simple (una habitación = todo el ancho) como
+// en una rejilla de a pares (dos habitaciones comparten fila) sin duplicar
+// el dibujo del mobiliario/etiqueta.
+function renderRoomCell(
+  room: RoomSlot,
+  cellX: number,
+  cellY: number,
+  cellW: number,
+  cellH: number,
+  doorWallX: number | null,
+  doorDir: 1 | -1,
+  windowWallX: number | null,
 ): string {
+  const centerX = cellX + cellW / 2;
+  const centerY = cellY + cellH / 2;
+  const iconScale = Math.min(1.15, Math.max(0.42, Math.min(cellW, cellH) / 150));
+  const hasNote = room.note.length > 0;
+  const labelY = cellY + cellH - (hasNote ? 32 : 17);
+
+  let doorPart = "";
+  if (doorWallX != null) {
+    const gapHalf = 15;
+    if (cellH > gapHalf * 2 + 40) {
+      const gapCenterY = Math.min(Math.max(centerY, cellY + gapHalf + 12), cellY + cellH - gapHalf - 12);
+      doorPart = `<line x1="${doorWallX}" y1="${cellY}" x2="${doorWallX}" y2="${gapCenterY - gapHalf}" stroke="${INK}" stroke-width="${WALL_MID}" />
+                  <line x1="${doorWallX}" y1="${gapCenterY + gapHalf}" x2="${doorWallX}" y2="${cellY + cellH}" stroke="${INK}" stroke-width="${WALL_MID}" />
+                  ${doorway(doorWallX, gapCenterY, gapHalf, doorDir)}`;
+    } else {
+      doorPart = `<line x1="${doorWallX}" y1="${cellY}" x2="${doorWallX}" y2="${cellY + cellH}" stroke="${INK}" stroke-width="${WALL_MID}" />`;
+    }
+  }
+
+  const showWindow = windowWallX != null && room.id !== "entrada" && !room.id.startsWith("bano") && cellH > 65;
+
+  return `
+    <g>
+      ${doorPart}
+      ${showWindow ? windowTicks(windowWallX as number, centerY) : ""}
+      <g transform="translate(${centerX} ${centerY - 15}) scale(${iconScale.toFixed(2)})">${iconForRoom(room)}</g>
+      <text x="${centerX}" y="${labelY}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
+            font-size="16" font-weight="600" letter-spacing="0.2" fill="${INK}">${escapeXml(room.label)}</text>
+      ${hasNote ? `<text x="${centerX}" y="${labelY + 17}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
+            font-size="11.5" fill="${INK_SOFT}" font-style="italic">${escapeXml(room.note)}</text>` : ""}
+    </g>`;
+}
+
+// Apila las habitaciones de una zona en una sola columna a lo ancho
+// completo, sin huecos entre ellas — paredes compartidas de verdad — con la
+// altura de cada caja proporcional a su peso. Buena para pocas habitaciones
+// (2-3): a ese ancho, la proporción sigue pareciendo una habitación real.
+// Con más, ver renderPairedGrid.
+function renderSingleColumn(rooms: RoomSlot[], x: number, y: number, w: number, h: number, corridorSide: "left" | "right"): string {
   const totalWeight = rooms.reduce((sum, r) => sum + SIZE_WEIGHT[r.size], 0) || 1;
+  const corridorX = corridorSide === "right" ? x + w : x;
+  const exteriorX = corridorSide === "right" ? x : x + w;
+  const doorDir: 1 | -1 = corridorSide === "right" ? -1 : 1;
   let cursorY = y;
   const parts: string[] = [];
+
+  rooms.forEach((room, i) => {
+    const boxH = (SIZE_WEIGHT[room.size] / totalWeight) * h;
+    if (i > 0) parts.push(`<line x1="${x}" y1="${cursorY}" x2="${x + w}" y2="${cursorY}" stroke="${INK}" stroke-width="${WALL_THIN}" />`);
+    parts.push(renderRoomCell(room, x, cursorY, w, boxH, corridorX, doorDir, exteriorX));
+    cursorY += boxH;
+  });
+  return parts.join("\n");
+}
+
+// Intercala baños con el resto (dormitorios) antes de emparejar en filas,
+// para que en cada pareja el baño tienda a caer del lado interior (sin
+// ventana — normal en un baño con ventilación forzada) y el dormitorio del
+// lado exterior (con ventana — lo contrario sería dejar un dormitorio
+// interior sin ventana pudiendo evitarlo). Con más dormitorios que baños
+// (el caso normal) esto le da ventana a todos los dormitorios que entren en
+// pareja; el resto puede quedar en la fila impar final, que siempre tiene
+// ventana propia por ir a ancho completo.
+function orderForPairing(rooms: RoomSlot[]): RoomSlot[] {
+  const bathrooms = rooms.filter((r) => r.id.startsWith("bano"));
+  const others = rooms.filter((r) => !r.id.startsWith("bano"));
+  const ordered: RoomSlot[] = [];
+  for (let i = 0; i < Math.max(bathrooms.length, others.length); i++) {
+    if (bathrooms[i]) ordered.push(bathrooms[i]);
+    if (others[i]) ordered.push(others[i]);
+  }
+  return ordered;
+}
+
+// A partir de 4 habitaciones, apilarlas todas a ancho completo las deja
+// larguísimas y angostas (un baño de 400×110 no se parece a ningún baño
+// real). En vez de eso, dos por fila: la mitad que da al pasillo tiene la
+// puerta, la mitad interior tiene la ventana (queda lejos del muro exterior
+// y por eso NO se le dibuja puerta al pasillo — sería una habitación sin
+// entrada propia, y aquí preferimos omitirla antes que inventar un acceso
+// que no sabemos que existe). Fila impar al final: una sola habitación a
+// ancho completo, con puerta y ventana como en la columna simple.
+function renderPairedGrid(rooms: RoomSlot[], x: number, y: number, w: number, h: number, corridorSide: "left" | "right"): string {
+  const ordered = orderForPairing(rooms);
+  const rows: RoomSlot[][] = [];
+  for (let i = 0; i < ordered.length; i += 2) rows.push(ordered.slice(i, i + 2));
+
+  const rowWeight = (row: RoomSlot[]) => row.reduce((s, r) => s + SIZE_WEIGHT[r.size], 0);
+  const totalWeight = rows.reduce((s, row) => s + rowWeight(row), 0) || 1;
 
   const corridorX = corridorSide === "right" ? x + w : x;
   const exteriorX = corridorSide === "right" ? x : x + w;
   const doorDir: 1 | -1 = corridorSide === "right" ? -1 : 1;
+  const halfW = w / 2;
+  const corridorCellX = corridorSide === "right" ? x + halfW : x;
+  const interiorCellX = corridorSide === "right" ? x : x + halfW;
 
-  rooms.forEach((room, i) => {
-    const boxH = (SIZE_WEIGHT[room.size] / totalWeight) * h;
-    const centerX = x + w / 2;
-    const centerY = cursorY + boxH / 2;
-    const iconScale = Math.min(1.15, Math.max(0.55, Math.min(w, boxH) / 150));
-    const hasNote = room.note.length > 0;
-    const labelY = cursorY + boxH - (hasNote ? 34 : 18);
+  let cursorY = y;
+  const parts: string[] = [];
 
-    const gapHalf = 15;
-    const hasDoorGap = boxH > gapHalf * 2 + 40;
-    const gapCenterY = Math.min(Math.max(centerY, cursorY + gapHalf + 12), cursorY + boxH - gapHalf - 12);
+  rows.forEach((row, rowIndex) => {
+    const rowH = (rowWeight(row) / totalWeight) * h;
+    if (rowIndex > 0) parts.push(`<line x1="${x}" y1="${cursorY}" x2="${x + w}" y2="${cursorY}" stroke="${INK}" stroke-width="${WALL_THIN}" />`);
 
-    const midWall = hasDoorGap
-      ? `<line x1="${corridorX}" y1="${cursorY}" x2="${corridorX}" y2="${gapCenterY - gapHalf}" stroke="${INK}" stroke-width="${WALL_MID}" />
-         <line x1="${corridorX}" y1="${gapCenterY + gapHalf}" x2="${corridorX}" y2="${cursorY + boxH}" stroke="${INK}" stroke-width="${WALL_MID}" />
-         ${doorway(corridorX, gapCenterY, gapHalf, doorDir)}`
-      : `<line x1="${corridorX}" y1="${cursorY}" x2="${corridorX}" y2="${cursorY + boxH}" stroke="${INK}" stroke-width="${WALL_MID}" />`;
-
-    const showWindow = room.id !== "entrada" && !room.id.startsWith("bano") && boxH > 70;
-
-    parts.push(`
-      <g>
-        ${i > 0 ? `<line x1="${x}" y1="${cursorY}" x2="${x + w}" y2="${cursorY}" stroke="${INK}" stroke-width="${WALL_THIN}" />` : ""}
-        ${midWall}
-        ${showWindow ? windowTicks(exteriorX, centerY) : ""}
-        <g transform="translate(${centerX} ${centerY - 16}) scale(${iconScale.toFixed(2)})">${iconForRoom(room)}</g>
-        <text x="${centerX}" y="${labelY}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
-              font-size="17" font-weight="600" letter-spacing="0.3" fill="${INK}">${escapeXml(room.label)}</text>
-        ${hasNote ? `<text x="${centerX}" y="${labelY + 19}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
-              font-size="12.5" fill="${INK_SOFT}" font-style="italic">${escapeXml(room.note)}</text>` : ""}
-      </g>`);
-    cursorY += boxH;
+    if (row.length === 1) {
+      parts.push(renderRoomCell(row[0], x, cursorY, w, rowH, corridorX, doorDir, exteriorX));
+    } else {
+      parts.push(`<line x1="${x + halfW}" y1="${cursorY}" x2="${x + halfW}" y2="${cursorY + rowH}" stroke="${INK}" stroke-width="${WALL_THIN}" />`);
+      parts.push(renderRoomCell(row[0], corridorCellX, cursorY, halfW, rowH, corridorX, doorDir, null));
+      parts.push(renderRoomCell(row[1], interiorCellX, cursorY, halfW, rowH, null, doorDir, exteriorX));
+    }
+    cursorY += rowH;
   });
   return parts.join("\n");
+}
+
+function renderZone(rooms: RoomSlot[], x: number, y: number, w: number, h: number, corridorSide: "left" | "right"): string {
+  return rooms.length > 3 ? renderPairedGrid(rooms, x, y, w, h, corridorSide) : renderSingleColumn(rooms, x, y, w, h, corridorSide);
 }
 
 // Franja de circulación entre las dos zonas — sin esto, dos columnas
@@ -334,9 +409,9 @@ function renderFloorPlanSvg(
   <text x="${pad}" y="${bodyY - 10}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="${INK_SOFT}">ZONA DE DÍA</text>
   <text x="${nocheX}" y="${bodyY - 10}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="${INK_SOFT}">ZONA DE NOCHE</text>
 
-  ${renderZoneColumn(dia, pad, bodyY, diaW, bodyH, "right")}
+  ${renderZone(dia, pad, bodyY, diaW, bodyH, "right")}
   ${renderCorridor(corridorX, bodyY, corridorW, bodyH)}
-  ${renderZoneColumn(noche, nocheX, bodyY, nocheW, bodyH, "left")}
+  ${renderZone(noche, nocheX, bodyY, nocheW, bodyH, "left")}
 
   <!-- Perímetro exterior por encima de todo lo demás: un solo trazo grueso
        alrededor de toda la vivienda, en vez de un borde por columna, para
