@@ -181,6 +181,35 @@ root@…` y `ssh root@…` son dos prefijos distintos.
   3. `docker compose up -d storage` (reinicia el contenedor)
   4. O usa YouTube/Vimeo + enlace (que ya funciona en SmartLinks)
 
+### Distribución aproximada por IA (2026-08-25, `lib/services/properties/floorplan-sketch.ts`)
+Botón "Generar distribución (IA)" junto a "Subir plano" en la ficha de cada
+propiedad. **No es un plano medido** — es un dibujo esquemático (cajas por
+habitación, agrupadas en "zona de día"/"zona de noche") a partir de las fotos
+ya subidas + los dormitorios/baños/m² ya conocidos de la ficha.
+
+⚠️ **Por qué no es un plano real, y por qué no se intentó que lo fuera:** de
+fotos sueltas (sin 360°, LiDAR o muchas fotos superpuestas por habitación —
+que es lo que este negocio tiene) no se puede recuperar ni la escala (cuántos
+metros mide algo) ni la conexión entre habitaciones (qué pared comparten). No
+es una limitación de la herramienta, es que esa información nunca quedó
+capturada en la foto. Por eso el número de dormitorios/baños **siempre** sale
+de `properties`, nunca lo cuenta la IA — la IA solo aporta juicio cualitativo
+(tamaño relativo, una nota de lo que ve) para las habitaciones que YA sabemos
+que existen, y nunca puede agregar ni quitar espacios de esa lista fija
+(`buildRoomSlots()`). Si cita un id que no está en la lista, se ignora.
+- El aviso "DISTRIBUCIÓN APROXIMADA — NO A ESCALA" va **incrustado en el
+  propio PNG** (franja inferior), no en un texto aparte que se pueda perder
+  al subir la imagen a Idealista u otro portal.
+- Se guarda como un plano más (`property_media` `type='plan'`, mismo bucket
+  `properties-photos` que `uploadPropertyPlan`) — aparece en la misma
+  cuadrícula de "Planos", se puede borrar igual que cualquier otro.
+- Requiere al menos una foto ya subida; si la ficha no tiene fotos, el botón
+  no llama a la IA y avisa que hace falta subir alguna primero.
+- Si la IA falla por algo puntual (red, proveedor caído) el dibujo se genera
+  igual con tamaños por defecto ("mediano") y sin notas — solo si la IA no
+  está configurada en absoluto se corta con un error, para no generar algo
+  que aparente venir de las fotos sin haberlas mirado.
+
 ## Vídeos automáticos de propiedad (`lib/services/video/**`)
 Genera un vídeo tipo Ken Burns (zoom + paneo + transiciones) con las fotos de
 la propiedad, el logo de la agencia y música de fondo.

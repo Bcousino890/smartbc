@@ -42,6 +42,7 @@ import {
   uploadPropertyVideo,
   deletePropertyMedia,
   deleteProperty,
+  generateApproximateFloorPlanAction,
   type MediaItem,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
@@ -183,6 +184,7 @@ export function PropertyEditView({
   const [planError, setPlanError] = useState<string | null>(null);
   const [uploadingPlan, setUploadingPlan] = useState(false);
   const planInputRef = useRef<HTMLInputElement>(null);
+  const [generatingAiPlan, setGeneratingAiPlan] = useState(false);
 
   // Estado del form. Inicializamos con los valores actuales.
   const [title, setTitle] = useState(property.title);
@@ -382,6 +384,25 @@ export function PropertyEditView({
     } finally {
       setUploadingPlan(false);
       if (planInputRef.current) planInputRef.current.value = "";
+    }
+  }
+
+  // Dibujo esquemático APROXIMADO (no un plano medido) generado con IA a
+  // partir de las fotos ya subidas + dormitorios/baños/m² ya conocidos de la
+  // ficha. Ver lib/services/properties/floorplan-sketch.ts para el porqué de
+  // esa limitación — no hay forma de sacar un plano con medidas reales solo
+  // de fotos sueltas.
+  async function handleGenerateAiPlan() {
+    setPlanError(null);
+    setGeneratingAiPlan(true);
+    try {
+      const res = await generateApproximateFloorPlanAction(property.slug);
+      if (res.ok) setPlans((p) => [...p, res.item]);
+      else setPlanError(res.error);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "No se pudo generar la distribución.");
+    } finally {
+      setGeneratingAiPlan(false);
     }
   }
 
@@ -1550,19 +1571,42 @@ export function PropertyEditView({
             onChange={handlePlanUpload}
             className="hidden"
           />
-          <button
-            type="button"
-            onClick={() => planInputRef.current?.click()}
-            disabled={uploadingPlan}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
-          >
-            {uploadingPlan ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Plus size={13} strokeWidth={1.75} />
-            )}
-            Subir plano
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => planInputRef.current?.click()}
+              disabled={uploadingPlan}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+            >
+              {uploadingPlan ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Plus size={13} strokeWidth={1.75} />
+              )}
+              Subir plano
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerateAiPlan}
+              disabled={generatingAiPlan || property.photos.length === 0}
+              title={
+                property.photos.length === 0
+                  ? "Sube al menos una foto primero"
+                  : "Distribución orientativa a partir de las fotos — no es un plano medido"
+              }
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-4 py-2 text-xs font-medium text-gold transition hover:bg-gold/20 disabled:opacity-50"
+            >
+              {generatingAiPlan ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} strokeWidth={1.75} />
+              )}
+              Generar distribución (IA)
+            </button>
+          </div>
+          <p className="mt-1.5 text-xs text-ink/40">
+            La distribución generada con IA es orientativa a partir de las fotos — no sustituye un plano medido.
+          </p>
           {planError && (
             <p className="mt-1 text-xs text-rose-700">{planError}</p>
           )}

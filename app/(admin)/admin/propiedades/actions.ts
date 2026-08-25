@@ -8,6 +8,7 @@ import { checkPermission } from "@/lib/auth/guard";
 import { shareSlug } from "@/lib/share-slug";
 import { randomToken } from "@/lib/tokens";
 import type { Operation, StayType } from "@/lib/types";
+import { generateApproximateFloorPlan } from "@/lib/services/properties/floorplan-sketch";
 
 export type CreatePropertyInput = {
   title: string;
@@ -1034,6 +1035,72 @@ export async function uploadPropertyPlan(
 
   if (error) {
     console.error("[uploadPropertyPlan] insert error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return {
+    ok: true,
+    item: { id: data.id, url: data.url, file_name: data.file_name, type: "plan", storage_path: data.storage_path },
+  };
+}
+
+export type GenerateFloorPlanResult = { ok: true; item: MediaItem } | { ok: false; error: string };
+
+// Dibujo esquemático APROXIMADO (no un plano medido) a partir de las fotos ya
+// subidas a la ficha + los dormitorios/baños/m² ya conocidos — ver
+// lib/services/properties/floorplan-sketch.ts para el porqué de esa
+// limitación. Se guarda como un plano más (property_media type='plan'),
+// mismo storage y misma tabla que uploadPropertyPlan.
+export async function generateApproximateFloorPlanAction(
+  slug: string,
+): Promise<GenerateFloorPlanResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!slug) return { ok: false, error: "slug_required" };
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propLookup.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const sketch = await generateApproximateFloorPlan(prop.id);
+  if (!sketch.ok) return { ok: false, error: sketch.error };
+
+  const storagePath = `${prop.id}/plan/${Date.now()}-distribucion-aproximada-ia.png`;
+  const admin = createAdminClient();
+  const { error: uploadErr } = await (admin as any).storage
+    .from("properties-photos")
+    .upload(storagePath, sketch.pngBuffer, { contentType: "image/png", upsert: false });
+  if (uploadErr) {
+    console.error("[generateApproximateFloorPlanAction] storage error:", uploadErr);
+    return { ok: false, error: uploadErr.message };
+  }
+
+  const { data: urlData } = (admin as any).storage.from("properties-photos").getPublicUrl(storagePath);
+  const publicUrl = urlData.publicUrl;
+
+  const { data, error } = await (admin as any)
+    .from("property_media")
+    .insert({
+      property_id: prop.id,
+      type: "plan",
+      file_name: "Distribución aproximada (IA).png",
+      storage_path: storagePath,
+      url: publicUrl,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[generateApproximateFloorPlanAction] insert error:", error);
     return { ok: false, error: error.message };
   }
 
