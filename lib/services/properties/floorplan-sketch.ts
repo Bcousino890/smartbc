@@ -22,14 +22,15 @@ export type FloorPlanSketchResult = { ok: true; pngBuffer: Buffer } | { ok: fals
 
 const MAX_VISION_PHOTOS = 8;
 const CANVAS_W = 1000;
-const CANVAS_H = 1360;
+const CANVAS_H = 1400;
 
 const INK = "#2a1f10";
 const INK_SOFT = "#6b5d47";
 const CREAM = "#fbf8f3";
 const PANEL = "#f2ead9";
-const WARN_BG = "#b45309";
-const WARN_TEXT = "#fff7ed";
+const GOLD = "#c9a24b";
+const FOOTER_BG = "#241a0c";
+const FOOTER_TEXT = "#f4ead9";
 
 type SizeImpression = "pequeño" | "mediano" | "grande";
 const SIZE_WEIGHT: Record<SizeImpression, number> = { "pequeño": 0.72, mediano: 1, grande: 1.4 };
@@ -114,31 +115,133 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// Apila las habitaciones de una zona en una sola columna, con la altura de
-// cada caja proporcional a su peso (tamaño relativo). No es un plano real —
-// es deliberadamente una maqueta simple (una columna, cajas apiladas) en vez
-// de un packing 2D, para que nunca se solapen ni queden huecos raros.
+// Pictogramas estilo plano arquitectónico, en coordenadas locales centradas
+// en (0,0) — se posicionan con un <g transform="translate(...) scale(...)">
+// al dibujar cada habitación. Trazo fino, sin relleno, como los símbolos de
+// mobiliario de un plano real — es lo que más cambia la sensación de
+// "boceto" a "ficha técnica".
+const ICON_STROKE = `stroke="${INK}" stroke-width="1.7" fill="none" stroke-linejoin="round" stroke-linecap="round"`;
+
+function bedIcon(): string {
+  return `<g ${ICON_STROKE}>
+    <rect x="-38" y="-46" width="76" height="92" rx="6" />
+    <line x1="-38" y1="-26" x2="38" y2="-26" />
+    <rect x="-30" y="-40" width="26" height="20" rx="5" />
+    <rect x="4" y="-40" width="26" height="20" rx="5" />
+    <line x1="-38" y1="20" x2="38" y2="20" />
+  </g>`;
+}
+
+function sofaIcon(): string {
+  return `<g ${ICON_STROKE}>
+    <rect x="-46" y="-17" width="92" height="36" rx="8" />
+    <rect x="-54" y="-21" width="17" height="44" rx="5" />
+    <rect x="37" y="-21" width="17" height="44" rx="5" />
+    <line x1="-29" y1="-9" x2="29" y2="-9" />
+    <rect x="-16" y="30" width="32" height="14" rx="2" />
+  </g>`;
+}
+
+function kitchenIcon(): string {
+  return `<g ${ICON_STROKE}>
+    <rect x="-48" y="-16" width="96" height="26" rx="3" />
+    <circle cx="-28" cy="-3" r="6.5" />
+    <circle cx="-6" cy="-3" r="6.5" />
+    <rect x="16" y="-11" width="27" height="15" rx="2" />
+    <line x1="16" y1="-3.5" x2="43" y2="-3.5" />
+  </g>`;
+}
+
+function bathIcon(): string {
+  return `<g ${ICON_STROKE}>
+    <rect x="-12" y="-46" width="24" height="10" rx="2" />
+    <ellipse cx="0" cy="-22" rx="15" ry="18" />
+    <rect x="-24" y="18" width="30" height="16" rx="3" />
+    <path d="M -24 26 a 7 7 0 0 0 7 8" />
+  </g>`;
+}
+
+function doorIcon(): string {
+  return `<g ${ICON_STROKE}>
+    <rect x="-22" y="-30" width="16" height="16" rx="2" />
+    <circle cx="-12" cy="-10" r="1.6" fill="${INK}" stroke="none" />
+  </g>`;
+}
+
+const ROOM_ICON: Record<string, () => string> = {
+  entrada: doorIcon,
+  salon: sofaIcon,
+  cocina: kitchenIcon,
+};
+
+function iconForRoom(room: RoomSlot): string {
+  if (room.id.startsWith("dormitorio")) return bedIcon();
+  if (room.id.startsWith("bano")) return bathIcon();
+  return (ROOM_ICON[room.id] ?? doorIcon)();
+}
+
+// Arco de apertura de puerta en la esquina superior izquierda de cada
+// habitación — el símbolo más reconocible de un plano arquitectónico real.
+function doorSwing(x: number, y: number): string {
+  const r = 26;
+  return `<g stroke="${INK}" stroke-width="1.3" fill="none">
+    <line x1="${x}" y1="${y}" x2="${x}" y2="${y + r}" />
+    <path d="M ${x} ${y} A ${r} ${r} 0 0 1 ${x + r} ${y + r}" stroke-dasharray="2.5 3" />
+  </g>`;
+}
+
+// Apila las habitaciones de una zona en una sola columna, a lo ancho
+// completo y SIN huecos entre ellas — como paredes compartidas de verdad —
+// con la altura de cada caja proporcional a su peso (tamaño relativo). No es
+// un plano real: es deliberadamente una maqueta simple (una columna, cajas
+// apiladas) en vez de un packing 2D, para que nunca se solapen ni queden
+// huecos raros, y como los pesos suman exactamente `h` no hay riesgo de que
+// una fila se salga del bloque aunque haya muchas habitaciones.
 function renderZoneColumn(rooms: RoomSlot[], x: number, y: number, w: number, h: number): string {
   const totalWeight = rooms.reduce((sum, r) => sum + SIZE_WEIGHT[r.size], 0) || 1;
-  const gap = 10;
-  const availableH = h - gap * (rooms.length - 1);
   let cursorY = y;
-  const parts: string[] = [];
+  const parts: string[] = [`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${INK}" stroke-width="3.5" />`];
 
-  for (const room of rooms) {
-    const boxH = Math.max(70, (SIZE_WEIGHT[room.size] / totalWeight) * availableH);
+  rooms.forEach((room, i) => {
+    const boxH = (SIZE_WEIGHT[room.size] / totalWeight) * h;
+    const centerX = x + w / 2;
+    const centerY = cursorY + boxH / 2;
+    const iconScale = Math.min(1.15, Math.max(0.55, Math.min(w, boxH) / 150));
+    const hasNote = room.note.length > 0;
+    const labelY = cursorY + boxH - (hasNote ? 34 : 18);
+
     parts.push(`
       <g>
-        <rect x="${x}" y="${cursorY}" width="${w}" height="${boxH}" rx="10"
-              fill="${PANEL}" stroke="${INK}" stroke-width="2.5" />
-        <text x="${x + 18}" y="${cursorY + 30}" font-family="Georgia, 'Times New Roman', serif"
-              font-size="20" fill="${INK}">${escapeXml(room.label)}</text>
-        ${room.note ? `<text x="${x + 18}" y="${cursorY + 54}" font-family="-apple-system, Helvetica, Arial, sans-serif"
-              font-size="13" fill="${INK_SOFT}" font-style="italic">${escapeXml(room.note)}</text>` : ""}
+        ${i > 0 ? `<line x1="${x}" y1="${cursorY}" x2="${x + w}" y2="${cursorY}" stroke="${INK}" stroke-width="1.5" />` : ""}
+        <g transform="translate(${centerX} ${centerY - 16}) scale(${iconScale.toFixed(2)})">${iconForRoom(room)}</g>
+        <text x="${centerX}" y="${labelY}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
+              font-size="17" font-weight="600" letter-spacing="0.3" fill="${INK}">${escapeXml(room.label)}</text>
+        ${hasNote ? `<text x="${centerX}" y="${labelY + 19}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif"
+              font-size="12.5" fill="${INK_SOFT}" font-style="italic">${escapeXml(room.note)}</text>` : ""}
+        ${doorSwing(x + 14, cursorY + 14)}
       </g>`);
-    cursorY += boxH + gap;
-  }
+    cursorY += boxH;
+  });
   return parts.join("\n");
+}
+
+// Franja de circulación entre las dos zonas — sin esto, dos columnas
+// separadas leen como dos habitaciones flotando en el vacío en vez de una
+// vivienda conectada.
+function renderCorridor(x: number, y: number, w: number, h: number): string {
+  const hatchGap = 22;
+  const hatches: string[] = [];
+  for (let hy = y + hatchGap; hy < y + h; hy += hatchGap) {
+    hatches.push(`<line x1="${x}" y1="${hy}" x2="${x + w}" y2="${hy - w}" stroke="${INK}" stroke-width="0.6" opacity="0.22" />`);
+  }
+  return `<g>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${CREAM}" stroke="${INK}" stroke-width="3.5" />
+    <clipPath id="corridorClip"><rect x="${x}" y="${y}" width="${w}" height="${h}" /></clipPath>
+    <g clip-path="url(#corridorClip)">${hatches.join("")}</g>
+    <text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="middle"
+          font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="600"
+          letter-spacing="2" fill="${INK_SOFT}" transform="rotate(-90 ${x + w / 2} ${y + h / 2})">PASILLO</text>
+  </g>`;
 }
 
 function renderFloorPlanSvg(
@@ -148,39 +251,46 @@ function renderFloorPlanSvg(
   const dia = slots.filter((s) => s.zone === "dia");
   const noche = slots.filter((s) => s.zone === "noche");
 
-  const headerH = 92;
-  const footerH = 96;
-  const pad = 32;
-  const gapCols = 24;
-  const bodyY = headerH + pad;
-  const bodyH = CANVAS_H - headerH - footerH - pad * 2;
+  const headerH = 108;
+  const footerH = 88;
+  const pad = 40;
+  const corridorW = 62;
+  const bodyY = headerH + 24;
+  const bodyH = CANVAS_H - headerH - footerH - 24 - pad;
 
   // Cada columna ocupa un ancho proporcional a cuántas habitaciones tiene,
   // no un 50/50 fijo — así un piso de 4 dormitorios no queda con la zona de
   // noche apretada en la mitad del espacio que la zona de día de 3 salas.
   const totalRooms = dia.length + noche.length || 1;
-  const bodyW = CANVAS_W - pad * 2 - gapCols;
-  const diaW = Math.max(260, Math.round((dia.length / totalRooms) * bodyW));
-  const nocheW = bodyW - diaW;
+  const usableW = CANVAS_W - pad * 2 - corridorW;
+  const diaW = Math.max(260, Math.round((dia.length / totalRooms) * usableW));
+  const nocheW = usableW - diaW;
+  const corridorX = pad + diaW;
+  const nocheX = corridorX + corridorW;
 
   const squareMetersLabel =
-    opts.squareMeters != null ? `${new Intl.NumberFormat("es-ES").format(opts.squareMeters)} m² (referencia, según ficha)` : "";
+    opts.squareMeters != null ? `Superficie total: ${new Intl.NumberFormat("es-ES").format(opts.squareMeters)} m² (según ficha)` : "";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS_W}" height="${CANVAS_H}" viewBox="0 0 ${CANVAS_W} ${CANVAS_H}">
   <rect width="${CANVAS_W}" height="${CANVAS_H}" fill="${CREAM}" />
 
-  <text x="${pad}" y="46" font-family="Georgia, 'Times New Roman', serif" font-size="30" fill="${INK}">${escapeXml(opts.title || "Distribución de la propiedad")}</text>
-  <text x="${pad}" y="72" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="14" fill="${INK_SOFT}">${escapeXml(squareMetersLabel)}</text>
+  <text x="${pad}" y="42" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700"
+        letter-spacing="2.5" fill="${GOLD}">DISTRIBUCIÓN DE ESPACIOS</text>
+  <text x="${pad}" y="74" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="${INK}">${escapeXml(opts.title || "Propiedad")}</text>
+  <text x="${pad}" y="98" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13.5" fill="${INK_SOFT}">${escapeXml(squareMetersLabel)}</text>
+  <line x1="${pad}" y1="${headerH}" x2="${CANVAS_W - pad}" y2="${headerH}" stroke="${INK}" stroke-width="1" opacity="0.15" />
 
-  <text x="${pad}" y="${bodyY - 12}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="1.5" fill="${INK_SOFT}">ZONA DE DÍA</text>
-  <text x="${pad + diaW + gapCols}" y="${bodyY - 12}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="1.5" fill="${INK_SOFT}">ZONA DE NOCHE</text>
+  <text x="${pad}" y="${bodyY - 10}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="${INK_SOFT}">ZONA DE DÍA</text>
+  <text x="${nocheX}" y="${bodyY - 10}" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="${INK_SOFT}">ZONA DE NOCHE</text>
 
   ${renderZoneColumn(dia, pad, bodyY, diaW, bodyH)}
-  ${renderZoneColumn(noche, pad + diaW + gapCols, bodyY, nocheW, bodyH)}
+  ${renderCorridor(corridorX, bodyY, corridorW, bodyH)}
+  ${renderZoneColumn(noche, nocheX, bodyY, nocheW, bodyH)}
 
-  <rect x="0" y="${CANVAS_H - footerH}" width="${CANVAS_W}" height="${footerH}" fill="${WARN_BG}" />
-  <text x="${CANVAS_W / 2}" y="${CANVAS_H - footerH / 2 - 8}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="${WARN_TEXT}">DISTRIBUCIÓN APROXIMADA — NO A ESCALA</text>
-  <text x="${CANVAS_W / 2}" y="${CANVAS_H - footerH / 2 + 16}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12.5" fill="${WARN_TEXT}">Generado por IA a partir de las fotos de la ficha — no sustituye un plano medido</text>
+  <rect x="0" y="${CANVAS_H - footerH}" width="${CANVAS_W}" height="${footerH}" fill="${FOOTER_BG}" />
+  <rect x="0" y="${CANVAS_H - footerH}" width="${CANVAS_W}" height="3" fill="${GOLD}" />
+  <text x="${CANVAS_W / 2}" y="${CANVAS_H - footerH / 2 - 6}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" letter-spacing="0.5" fill="${FOOTER_TEXT}">DISTRIBUCIÓN APROXIMADA — NO A ESCALA</text>
+  <text x="${CANVAS_W / 2}" y="${CANVAS_H - footerH / 2 + 16}" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" fill="${FOOTER_TEXT}" opacity="0.75">Generado por IA a partir de las fotos de la ficha — no sustituye un plano medido</text>
 </svg>`;
 }
 
