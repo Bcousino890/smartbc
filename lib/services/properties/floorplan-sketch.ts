@@ -114,6 +114,20 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// El título de la ficha es texto libre y a veces incluye el número exacto
+// del portal ("Calle de Fortuny, 23" / "...Fortuny 23, 4ºB") — este dibujo
+// puede acabar en manos de un cliente antes de cerrar nada, así que nunca
+// debe delatar la dirección exacta. Corta desde la primera coma seguida de
+// un número (cubre "calle, número" y "calle, número, piso"), y si no hay
+// coma pero el título termina en un número de portal (con o sin piso/letra
+// pegados), corta eso también. Deja intacto cualquier texto sin números.
+function sanitizeAddressForDisplay(title: string): string {
+  return title
+    .replace(/,\s*\d.*$/, "")
+    .replace(/\s+\d+\s*[a-záéíóúñ]{0,3}\.?\s*$/i, "")
+    .trim();
+}
+
 // Jerarquía de muros como en un plano CAD real: perímetro exterior grueso,
 // partición mayor (columna↔pasillo, con hueco de puerta) media, división
 // entre habitaciones de una misma columna fina. Esa jerarquía de grosores es
@@ -461,7 +475,7 @@ export async function generateApproximateFloorPlan(propertyId: string): Promise<
   }
 
   const svg = renderFloorPlanSvg(slots, {
-    title: (property.title as string) ?? "",
+    title: sanitizeAddressForDisplay((property.title as string) ?? ""),
     squareMeters: (property.square_meters as number | null) ?? null,
   });
 
