@@ -16,9 +16,12 @@ import { sendNewListingsDigestEmail, buildUnsubscribeUrl } from "@/lib/email/pro
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const WEEKLY_MS = 7 * 24 * 60 * 60 * 1000;
+
 type ClientPrefsRow = {
   client_id: string;
   new_listing_alerts_last_sent_at: string | null;
+  new_listing_alerts_frequency: "immediate" | "weekly";
   profiles: { email: string | null; full_name: string | null; country: string | null } | null;
 };
 
@@ -31,7 +34,9 @@ export async function POST(req: Request) {
 
   const { data, error } = await db
     .from("client_preferences")
-    .select("client_id, new_listing_alerts_last_sent_at, profiles!inner(email, full_name, country)")
+    .select(
+      "client_id, new_listing_alerts_last_sent_at, new_listing_alerts_frequency, profiles!inner(email, full_name, country)",
+    )
     .eq("new_listing_alerts_enabled", true);
 
   if (error) {
@@ -50,6 +55,14 @@ export async function POST(req: Request) {
     checked++;
     const email = row.profiles?.email;
     if (!email) continue;
+
+    // Cliente en modo "semanal" (pedido desde el enlace de baja, ver
+    // app/api/public/property-alerts/unsubscribe): esta pasada del cron no
+    // le toca todavía si no pasó una semana desde el último envío.
+    if (row.new_listing_alerts_frequency === "weekly" && row.new_listing_alerts_last_sent_at) {
+      const elapsed = Date.now() - new Date(row.new_listing_alerts_last_sent_at).getTime();
+      if (elapsed < WEEKLY_MS) continue;
+    }
 
     try {
       const result = await getSuggestedProperties(row.client_id, {

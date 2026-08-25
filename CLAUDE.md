@@ -143,7 +143,12 @@ root@…` y `ssh root@…` son dos prefijos distintos.
   por propiedad) y trae enlace de baja de un clic sin login
   (`app/api/public/property-alerts/unsubscribe`, HMAC con
   `EMAIL_ENCRYPTION_KEY`, no expira — a diferencia de `password_reset_tokens`
-  no hace falta tabla ni limpieza).
+  no hace falta tabla ni limpieza). Ese enlace no da de baja directamente:
+  lleva a una página con dos opciones — "recibir menos seguido" (pasa
+  `client_preferences.new_listing_alerts_frequency` a `weekly`, migración
+  0156) o baja total. En `weekly` el cron sigue corriendo todos los días
+  pero se salta al cliente hasta que pasen 7 días desde
+  `new_listing_alerts_last_sent_at` — no hay un cron semanal aparte.
   ⚠️ **Igual que el cron de vídeos, el código no alcanza — hay que añadir la
   entrada al crontab del VPS a mano** (`0 9 * * * curl -s -X POST -H
   "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/property-alerts`);
