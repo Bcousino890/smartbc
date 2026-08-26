@@ -3,10 +3,12 @@ import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { requireSession } from "@/lib/db/auth-helpers";
 import {
-  getDocumentTypes,
+  getDocumentTypeById,
   getApplicationById,
   insertDocument,
 } from "@/lib/db/queries/property-applications";
+import { analyzeApplicationDocument } from "@/lib/property-applications/ai-analysis";
+import { recalculateApplicationScore } from "@/lib/property-applications/scoring-engine";
 
 const BUCKET = "property-application-documents";
 
@@ -35,13 +37,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verificar que el usuario puede acceder a esta solicitud
-    const application = await getApplicationById(applicationId);
+    // Verificar que el usuario puede acceder a esta solicitud. El rol
+    // 'owner' es staff y faltaba en la lista; para staff se lee con el
+    // cliente admin (las RLS de la sesión pueden no cubrir su rol).
+    const isStaff = ["owner", "admin", "advisor", "agent_admin", "agent_senior"].includes(auth.role);
+    const application = await getApplicationById(applicationId, isStaff);
     if (!application) {
       return Response.json({ error: "Solicitud no encontrada" }, { status: 404 });
     }
 
-    const isStaff = ["admin", "advisor", "agent_admin", "agent_senior"].includes(auth.role);
     const isOwner = application.client_id === auth.userId;
     const isCoApplicant = coApplicantId === auth.userId;
 
@@ -49,11 +53,19 @@ export async function POST(req: Request) {
       return Response.json({ error: "Sin permiso para esta solicitud" }, { status: 403 });
     }
 
-    // Obtener tipo de documento para validaciones
-    const docTypes = await getDocumentTypes(application.country, application.operation);
-    const docType = docTypes.find((t) => t.id === documentTypeId);
+    // Obtener tipo de documento para validaciones. Se busca por id (no por
+    // la lista del país de la solicitud) para permitir documentación de
+    // otro país — p.ej. nóminas chilenas en CLP para una solicitud
+    // española; la IA detecta la moneda y el scoring la convierte a EUR.
+    const docType = await getDocumentTypeById(documentTypeId);
     if (!docType) {
       return Response.json({ error: "Tipo de documento no válido" }, { status: 400 });
+    }
+    if (docType.operation !== application.operation) {
+      return Response.json(
+        { error: "El tipo de documento no corresponde a esta operación (alquiler/compra)" },
+        { status: 400 }
+      );
     }
 
     // Validar tamaño
@@ -94,27 +106,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: { publicUrl } } = adminSupabase.storage
-      .from(BUCKET)
-      .getPublicUrl(storagePath);
-
-    // Insertar en BD
+    // El bucket es privado — no hay URL pública. La visualización siempre
+    // pasa por una URL firmada generada bajo demanda (ver attachSignedUrls
+    // en lib/db/queries/property-applications.ts). file_url guarda el path
+    // como referencia legible, no un enlace directo.
     const document = await insertDocument({
       property_application_id: applicationId,
       document_type_id: documentTypeId,
       co_applicant_id: coApplicantId ?? undefined,
       file_name: file.name,
       storage_path: storagePath,
-      file_url: publicUrl,
+      file_url: storagePath,
       file_size: file.size,
       mime_type: file.type || undefined,
+    }, isStaff);
+
+    // Recalculamos ya la completitud documental (rápido, sin IA) y
+    // lanzamos el análisis IA en segundo plano — no bloquea la respuesta
+    // de subida. El servidor es un proceso Node persistente (PM2), no
+    // serverless, así que el trabajo continúa tras devolver la respuesta.
+    await recalculateApplicationScore(applicationId);
+    void analyzeApplicationDocument(document.id).catch((err) => {
+      console.error("[upload-doc] Error en análisis IA:", err);
     });
 
     return Response.json({
       ok: true,
       document_id: document.id,
-      file_url: publicUrl,
-      analysis_status: "pending",
+      analysis_status: "processing",
     });
   } catch (err) {
     console.error("[upload-doc] Error:", err);

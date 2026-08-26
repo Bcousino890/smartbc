@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/errors/403_client_software_active.json",
+  "title": "403 Account inactive or not associated to software",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message",
+    "success"
+  ],
+  "properties": {
+    "message": {
+      "type": "string",
+      "default": "Client has not an active account or does not belong to this software",
+      "required": true,
+      "description": "The message content for the response"
+    },
+    "success": {
+      "type": "boolean",
+      "default": false,
+      "required": true,
+      "description": "Indicates whether or not the request was successful"
+    }
+  }
+}

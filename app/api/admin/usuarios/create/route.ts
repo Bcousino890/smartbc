@@ -1,6 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { logPermissionEvent } from "@/lib/db/queries/audit";
+import { createInvitedUser } from "@/lib/email/password-reset";
 
 export async function POST(req: Request) {
   let body: {
@@ -11,6 +13,18 @@ export async function POST(req: Request) {
     role: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
     password?: string;
     assignedAdvisorId?: string;
+    // Opcional: país del nuevo perfil ('es' | 'cl'). Si se omite, se
+    // mantiene el default histórico de la tabla ('es') — así los árboles
+    // raíz y España no cambian de comportamiento. El árbol de Chile envía
+    // siempre 'cl'.
+    country?: "es" | "cl";
+    // Usuarios que trabajan en ambos países (ej. algunos asesores/agentes)
+    // pueden alternar entre /es/admin y /cl/admin igual que un admin.
+    multiCountry?: boolean;
+    // Conjunto de países con acceso ('es' | 'cl'). Si viene, tiene prioridad:
+    // se escribe `countries`, `country` = default (body.country ?? countries[0])
+    // y `multi_country` se deriva (countries.length > 1).
+    countries?: string[];
   };
 
   try {
@@ -27,6 +41,9 @@ export async function POST(req: Request) {
     role: roleInput,
     password,
     assignedAdvisorId,
+    country,
+    multiCountry,
+    countries,
   } = body;
 
   const role = roleInput;
@@ -85,21 +102,26 @@ export async function POST(req: Request) {
   // Crear usuario en auth
   let userId: string = "";
   let authError: string | null = null;
+  let clientEmailSent: boolean | undefined;
+  let clientTempPassword: string | undefined;
 
   if (role === "client") {
-    // Clientes reciben email de invitación (sin contraseña)
-    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: {
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-      },
+    // Cliente: cuenta ya confirmada (el acceso no depende de que llegue el
+    // correo) + enlace de fijar contraseña por AWS SES, en vez del mailer
+    // propio de Supabase Auth/GoTrue.
+    const inviteResult = await createInvitedUser({
+      email,
+      firstName,
+      lastName,
+      userMetadata: { phone },
     });
 
-    if (error) {
-      authError = error.message;
+    if (!inviteResult.ok) {
+      authError = inviteResult.error;
     } else {
-      userId = data.user?.id || "";
+      userId = inviteResult.userId;
+      clientEmailSent = inviteResult.emailSent;
+      clientTempPassword = inviteResult.emailSent ? undefined : inviteResult.tempPassword;
     }
   } else {
     // Staff (owner, admin, advisor, agent_*): crear con contraseña confirmada
@@ -139,18 +161,65 @@ export async function POST(req: Request) {
     email,
   };
 
-  if (role === "client") {
-    profileUpdate.assigned_advisor_id = assignedAdvisorId || null;
-    if (phone) {
-      profileUpdate.phone = phone;
+  // Modelo multi-país (nuevo): si viene `countries`, tiene prioridad sobre
+  // country/multiCountry. Se valida ⊆ {'es','cl'} y no vacío.
+  let hasCountries = false;
+  if (countries !== undefined) {
+    const valid =
+      Array.isArray(countries) &&
+      countries.length > 0 &&
+      countries.every((c) => c === "es" || c === "cl");
+    if (!valid) {
+      return Response.json(
+        { error: "countries debe ser un array no vacío de 'es' | 'cl'" },
+        { status: 400 }
+      );
+    }
+    const unique = Array.from(new Set(countries));
+    profileUpdate.countries = unique;
+    // País por defecto/landing: el enviado explícitamente o el primero del set.
+    profileUpdate.country =
+      country === "es" || country === "cl" ? country : unique[0];
+    // multi_country se deriva del tamaño del set (retrocompat).
+    profileUpdate.multi_country = unique.length > 1;
+    hasCountries = true;
+  } else {
+    if (country === "es" || country === "cl") {
+      profileUpdate.country = country;
+    }
+    if (staffRoles.includes(role) && multiCountry !== undefined) {
+      profileUpdate.multi_country = !!multiCountry;
     }
   }
 
+  if (role === "client") {
+    profileUpdate.assigned_advisor_id = assignedAdvisorId || null;
+  }
+
+  // El teléfono también para staff: el formulario lo pide a todos y es lo que
+  // ve el cliente en la ficha de asesor de una colección de visitas.
+  if (phone) {
+    profileUpdate.phone = phone;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: profileError } = await (supabase as any)
+  let { error: profileError } = await (supabase as any)
     .from("profiles")
     .update(profileUpdate)
     .eq("id", userId);
+
+  // Escritura defensiva: si la columna `countries` aún no existe en el VPS, el
+  // UPDATE falla. Reintentamos sin ella conservando country + multi_country
+  // (derivados), para no bloquear la creación del usuario.
+  if (profileError && hasCountries) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    const { countries: _omitCountries, ...fallbackUpdate } = profileUpdate;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ error: profileError } = await (supabase as any)
+      .from("profiles")
+      .update(fallbackUpdate)
+      .eq("id", userId));
+  }
 
   if (profileError) {
     return Response.json(
@@ -159,10 +228,26 @@ export async function POST(req: Request) {
     );
   }
 
+  // Auditoría (best-effort): registra la creación del usuario con su rol y país.
+  await logPermissionEvent({
+    actorId: currentProfile.id,
+    targetUserId: userId,
+    eventType: "user_created",
+    country:
+      typeof profileUpdate.country === "string" ? profileUpdate.country : null,
+    newValue: {
+      role,
+      country: profileUpdate.country ?? null,
+      countries: profileUpdate.countries ?? null,
+    },
+  });
+
   return Response.json({
     ok: true,
     userId,
     role,
     email,
+    ...(clientEmailSent !== undefined ? { emailSent: clientEmailSent } : {}),
+    ...(clientTempPassword ? { tempPassword: clientTempPassword } : {}),
   });
 }

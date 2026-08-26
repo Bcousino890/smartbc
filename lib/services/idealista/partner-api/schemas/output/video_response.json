@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/video_response.json",
+  "title": "Property video response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "message":{
+      "type":"string",
+      "default": "Successful Operation",
+      "description":"The message content for the response"
+    },
+    "success":{
+      "type":"boolean",
+      "default": false,
+      "description":"Indicates whether or not the request was successful"
+    },
+    "video": {
+      "$ref": "../video/video_output.json"
+    }
+  }
+}

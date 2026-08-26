@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/garage.json",
+  "title": "Garage features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "garageCapacity"
+  ],
+  "properties": {
+    "areaConstructed": {
+      "$ref": "features.json#/garageAreaConstructed"
+    },
+    "garageCapacity": {
+      "$ref": "features.json#/garageCapacity"
+    },
+    "securityAlarm": {
+      "$ref": "features.json#/securityAlarm"
+    },
+    "securityCamera": {
+      "$ref": "features.json#/securityCamera"
+    },
+    "liftAvailable": {
+      "$ref": "features.json#/liftAvailable"
+    },
+    "parkingAutomaticDoor": {
+      "$ref": "features.json#/parkingAutomaticDoor"
+    },
+    "parkingPlaceCovered": {
+      "$ref": "features.json#/parkingPlaceCovered"
+    },
+    "parkingType": {
+      "$ref": "features.json#/parkingType"
+    },
+    "securityPersonnel": {
+      "$ref": "features.json#/securityPersonnel"
+    },
+    "priceCommunity": {
+      "$ref": "features.json#/priceCommunity"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    },
+    "serviceCharges": {
+      "$ref": "features.json#/serviceCharges"
+    }
+  }
+}

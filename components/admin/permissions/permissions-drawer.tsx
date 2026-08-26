@@ -3,6 +3,8 @@
 import {
   AlertCircle,
   Check,
+  ChevronDown,
+  History,
   Loader2,
   RotateCcw,
   ShieldCheck,
@@ -49,6 +51,72 @@ const ROLE_LABEL: Record<InternalUserRole, string> = {
   captadora:    "Captadora",
 };
 
+const COUNTRY_FLAG: Record<string, string> = { es: "🇪🇸", cl: "🇨🇱" };
+const COUNTRY_NAME: Record<string, string> = { es: "España", cl: "Chile" };
+
+// ── Historial de auditoría ───────────────────────────────────────────────────
+interface AuditEntry {
+  id: string;
+  eventType: string;
+  resource: string | null;
+  action: string | null;
+  country: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  createdAt: string;
+  actor: { id: string | null; name: string | null; email: string | null };
+}
+
+// Etiqueta legible en español para cada tipo de evento.
+const EVENT_LABEL: Record<string, string> = {
+  role_changed: "Cambio de rol",
+  country_changed: "Cambio de país",
+  permissions_updated: "Permisos actualizados",
+  user_created: "Usuario creado",
+};
+
+/** Fecha relativa breve en español (ej. "hace 5 min", "hace 2 d"). */
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diffSec = Math.round((Date.now() - then) / 1000);
+  if (diffSec < 60) return "hace un momento";
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const diffHour = Math.round(diffMin / 60);
+  if (diffHour < 24) return `hace ${diffHour} h`;
+  const diffDay = Math.round(diffHour / 24);
+  if (diffDay < 30) return `hace ${diffDay} d`;
+  return new Date(iso).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Nombre visible del actor de una entrada. */
+function actorName(actor: AuditEntry["actor"]): string {
+  return actor.name?.trim() || actor.email?.trim() || "Sistema";
+}
+
+/** Resumen breve de contexto (país / recurso·acción) para una entrada. */
+function entryDetail(entry: AuditEntry): string | null {
+  const parts: string[] = [];
+  if (entry.country) parts.push(COUNTRY_NAME[entry.country] ?? entry.country);
+  if (entry.resource) {
+    parts.push(entry.action ? `${entry.resource}·${entry.action}` : entry.resource);
+  }
+  // Cambio de rol: mostramos old → new si están disponibles.
+  if (entry.eventType === "role_changed") {
+    const nv = entry.newValue as { role?: string } | null;
+    const ov = entry.oldValue as { role?: string } | null;
+    if (ov?.role || nv?.role) {
+      parts.push(`${ov?.role ?? "—"} → ${nv?.role ?? "—"}`);
+    }
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
+
 type PermValue = true | false | "override_true" | "override_false";
 type PermMatrix = Record<string, Record<string, PermValue>>;
 
@@ -68,6 +136,7 @@ interface PermissionsDrawerProps {
 function buildStates(
   perms: PermMatrix,
   role: string,
+  roleDefaults?: PermMatrix,
 ): { effective: CellState; defaults: DefaultState } {
   const effective = {} as CellState;
   const defaults = {} as DefaultState;
@@ -77,10 +146,15 @@ function buildStates(
     for (const action of PERMISSION_ACTIONS) {
       const raw = perms[resource]?.[action];
       const effectiveOn = raw === true || raw === "override_true";
-      // Role default is computed independently so the "modificado" chip is
-      // accurate even if a stored override happens to match the role default.
       effective[resource][action] = effectiveOn;
-      defaults[resource][action] = canAccess(role, resource, action);
+      // La base "modificado"/"restablecer" viene del servidor
+      // (`roleDefaults`, ver resolveBaseMatrix): es la única fuente correcta
+      // cuando el usuario tiene rol personalizado o rol por país, que
+      // `canAccess(role, ...)` (estático, solo el rol de perfil) no conoce.
+      // Fallback a canAccess si el endpoint aún no envía roleDefaults.
+      const fromServer = roleDefaults?.[resource]?.[action];
+      defaults[resource][action] =
+        typeof fromServer === "boolean" ? fromServer : canAccess(role, resource, action);
     }
   }
   return { effective, defaults };
@@ -100,6 +174,30 @@ export function PermissionsDrawer({
   const [effective, setEffective] = useState<CellState | null>(null);
   const [defaults, setDefaults] = useState<DefaultState | null>(null);
 
+  // ── Historial de auditoría ─────────────────────────────────────────────────
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [auditState, setAuditState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  // Se incrementa tras guardar para refrescar el historial.
+  const [historyReload, setHistoryReload] = useState(0);
+
+  // ── Dimensión país ───────────────────────────────────────────────────────
+  // Solo relevante si el usuario objetivo tiene más de un país. En ese caso los
+  // permisos se gestionan por país (GET/POST con ?country= / { country }).
+  const countries = useMemo(() => {
+    const list =
+      user.countries ??
+      (user.multiCountry ? ["es", "cl"] : user.country ? [user.country] : []);
+    return list.filter((c) => c === "es" || c === "cl");
+  }, [user.countries, user.multiCountry, user.country]);
+  const isMultiCountry = countries.length > 1;
+  const [activeCountry, setActiveCountry] = useState<string>(
+    () =>
+      (user.country && (countries as readonly string[]).includes(user.country)
+        ? user.country
+        : countries[0]) ?? "es",
+  );
+
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -109,7 +207,12 @@ export function PermissionsDrawer({
     setLoadState("loading");
     (async () => {
       try {
-        const res = await fetch(`/api/admin/usuarios/${user.id}/permissions`);
+        // Multi-país: se pide el set de overrides del país activo. Un solo país
+        // conserva el comportamiento global (sin parámetro country).
+        const url = isMultiCountry
+          ? `/api/admin/usuarios/${user.id}/permissions?country=${activeCountry}`
+          : `/api/admin/usuarios/${user.id}/permissions`;
+        const res = await fetch(url);
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) {
@@ -118,7 +221,11 @@ export function PermissionsDrawer({
           return;
         }
         const role: string = data.role ?? user.roleKey;
-        const { effective: eff, defaults: def } = buildStates(data.permissions ?? {}, role);
+        const { effective: eff, defaults: def } = buildStates(
+          data.permissions ?? {},
+          role,
+          data.roleDefaults,
+        );
         setEffective(eff);
         setDefaults(def);
         setLoadState("ready");
@@ -131,7 +238,37 @@ export function PermissionsDrawer({
     return () => {
       cancelled = true;
     };
-  }, [user.id]);
+  }, [user.id, activeCountry, isMultiCountry]);
+
+  // ── Fetch del historial de auditoría ────────────────────────────────────────
+  // Perezoso: solo se pide cuando la sección está abierta. Se refresca al
+  // guardar (historyReload) y al cambiar de usuario.
+  useEffect(() => {
+    if (!historyOpen) return;
+    let cancelled = false;
+    setAuditState("loading");
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/usuarios/${user.id}/permissions/audit`,
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setAuditState("error");
+          return;
+        }
+        setAuditEntries(Array.isArray(data.entries) ? data.entries : []);
+        setAuditState("ready");
+      } catch {
+        if (cancelled) return;
+        setAuditState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [historyOpen, user.id, historyReload]);
 
   // ── ESC to close + focus management ──────────────────────────────────────────
   useEffect(() => {
@@ -228,7 +365,10 @@ export function PermissionsDrawer({
       const res = await fetch(`/api/admin/usuarios/${user.id}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides }),
+        // Multi-país: se persiste el país activo junto a sus overrides.
+        body: JSON.stringify(
+          isMultiCountry ? { overrides, country: activeCountry } : { overrides },
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -240,12 +380,14 @@ export function PermissionsDrawer({
       // effective stays as edited. Mark success.
       setSaveState("success");
       onSaved?.();
+      // Refresca el historial para reflejar el evento recién registrado.
+      setHistoryReload((n) => n + 1);
       setTimeout(() => setSaveState("idle"), 2500);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Error de red");
       setSaveState("error");
     }
-  }, [canEdit, overrides, user.id, onSaved]);
+  }, [canEdit, overrides, user.id, onSaved, isMultiCountry, activeCountry]);
 
   // ── Global master state ──────────────────────────────────────────────────────
   const allOn = useMemo(() => {
@@ -276,7 +418,7 @@ export function PermissionsDrawer({
               <ShieldCheck size={20} strokeWidth={1.75} className="text-blue-500" />
             </span>
             <div className="min-w-0">
-              <h2 className="font-serif text-lg font-semibold leading-tight text-ink">
+              <h2 className="crm-section-title leading-tight text-ink">
                 Permisos
               </h2>
               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -285,7 +427,7 @@ export function PermissionsDrawer({
                 </span>
                 <span
                   className={cn(
-                    "inline-block rounded-md border px-2 py-0.5 text-[10px] font-medium",
+                    "inline-block rounded-md border px-2 py-0.5 text-xs font-medium",
                     ROLE_BADGE[user.roleKey],
                   )}
                 >
@@ -304,6 +446,42 @@ export function PermissionsDrawer({
             <X size={18} strokeWidth={2} />
           </button>
         </div>
+
+        {/* Conmutador de país (solo si el usuario tiene más de un país) */}
+        {isMultiCountry && (
+          <div className="flex items-center gap-2 border-b border-ink/10 bg-cream-50/60 px-5 py-2.5 sm:px-6">
+            <span className="crm-label-sm text-ink/50">
+              Permisos por país
+            </span>
+            <div className="ml-auto inline-flex rounded-xl border border-ink/10 bg-white/70 p-0.5">
+              {countries.map((c) => {
+                const active = c === activeCountry;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      if (c !== activeCountry) {
+                        setActiveCountry(c);
+                        setSaveState("idle");
+                      }
+                    }}
+                    aria-pressed={active}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                      active
+                        ? "bg-ink text-cream-50"
+                        : "text-ink/60 hover:text-ink",
+                    )}
+                  >
+                    <span>{COUNTRY_FLAG[c] ?? c}</span>
+                    <span>{COUNTRY_NAME[c] ?? c}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         {loadState === "loading" && (
@@ -334,7 +512,7 @@ export function PermissionsDrawer({
           <>
             <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
               {/* Intro note */}
-              <p className="rounded-xl border border-gold/20 bg-gold/5 px-3.5 py-3 text-[13px] leading-relaxed text-ink/70">
+              <p className="rounded-xl border border-gold/20 bg-gold/5 px-3.5 py-3 text-sm leading-relaxed text-ink/70">
                 El rol{" "}
                 <span className="font-medium text-ink">
                   {ROLE_LABEL[user.roleKey] ?? user.roleKey}
@@ -342,7 +520,7 @@ export function PermissionsDrawer({
                 concede unos permisos base. Los interruptores de abajo son{" "}
                 <span className="font-medium text-ink">excepciones por usuario</span>{" "}
                 que se aplican sobre ese rol. Las celdas que difieren del rol se marcan como{" "}
-                <span className="rounded bg-gold/20 px-1 py-px text-[11px] font-medium text-ink">
+                <span className="rounded bg-gold/20 px-1 py-px text-xs font-medium text-ink">
                   modificado
                 </span>
                 .
@@ -354,7 +532,7 @@ export function PermissionsDrawer({
                   <p className="text-sm font-semibold text-ink">
                     Seleccionar todos los permisos
                   </p>
-                  <p className="text-[12px] text-ink/55">
+                  <p className="text-xs text-ink/55">
                     Activa o desactiva cada permiso de cada sección.
                   </p>
                 </div>
@@ -380,15 +558,15 @@ export function PermissionsDrawer({
                       {/* Group header / master toggle */}
                       <div className="flex items-center justify-between gap-3 border-b border-ink/8 bg-cream-50/60 px-4 py-3">
                         <div className="min-w-0">
-                          <h3 className="font-serif text-[15px] font-semibold text-ink">
+                          <h3 className="text-base font-bold text-ink">
                             {RESOURCE_LABELS[resource]}
                           </h3>
-                          <p className="text-[12px] text-ink/55">
+                          <p className="text-xs text-ink/55">
                             {RESOURCE_DESCRIPTIONS[resource]}
                           </p>
                         </div>
                         <label className="flex shrink-0 items-center gap-2">
-                          <span className="hidden text-[11px] font-medium text-ink/55 sm:inline">
+                          <span className="hidden text-xs font-medium text-ink/55 sm:inline">
                             Seleccionar todo
                           </span>
                           <Toggle
@@ -413,18 +591,18 @@ export function PermissionsDrawer({
                             >
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[13px] font-medium text-ink">
+                                  <span className="text-sm font-medium text-ink">
                                     {ACTION_LABELS[action]}
                                   </span>
                                   {modified && (
-                                    <span className="rounded bg-gold/20 px-1.5 py-px text-[10px] font-medium text-ink/80">
+                                    <span className="rounded bg-gold/20 px-1.5 py-px text-xs font-medium text-ink/80">
                                       modificado
                                     </span>
                                   )}
                                   {!modified && (
                                     <span
                                       className={cn(
-                                        "rounded px-1.5 py-px text-[10px] font-medium",
+                                        "rounded px-1.5 py-px text-xs font-medium",
                                         def
                                           ? "bg-emerald-50 text-emerald-600"
                                           : "bg-ink/5 text-ink/45",
@@ -434,7 +612,7 @@ export function PermissionsDrawer({
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-0.5 text-[12px] text-ink/55">
+                                <p className="mt-0.5 text-xs text-ink/55">
                                   {ACTION_DESCRIPTIONS[action]}
                                 </p>
                               </div>
@@ -453,17 +631,105 @@ export function PermissionsDrawer({
                   );
                 })}
               </div>
+
+              {/* Historial de auditoría (colapsable) */}
+              <div className="mt-4 overflow-hidden rounded-2xl border border-ink/10 bg-white/55">
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen((o) => !o)}
+                  aria-expanded={historyOpen}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-cream-50/60"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink/5">
+                      <History size={16} strokeWidth={1.75} className="text-ink/55" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-bold text-ink">
+                        Historial
+                      </h3>
+                      <p className="text-xs text-ink/55">
+                        Cambios de permisos, rol y país de este usuario.
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown
+                    size={18}
+                    strokeWidth={2}
+                    className={cn(
+                      "shrink-0 text-ink/40 transition-transform",
+                      historyOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+
+                {historyOpen && (
+                  <div className="border-t border-ink/8 px-4 py-3">
+                    {auditState === "loading" && (
+                      <div className="flex items-center gap-2 py-3 text-sm text-ink/55">
+                        <Loader2 size={15} className="animate-spin text-gold" />
+                        Cargando historial…
+                      </div>
+                    )}
+
+                    {auditState === "error" && (
+                      <p className="py-3 text-sm text-ink/55">
+                        No se pudo cargar el historial.
+                      </p>
+                    )}
+
+                    {auditState === "ready" && auditEntries.length === 0 && (
+                      <p className="py-3 text-sm text-ink/55">
+                        Sin cambios registrados todavía.
+                      </p>
+                    )}
+
+                    {auditState === "ready" && auditEntries.length > 0 && (
+                      <ul className="space-y-2.5">
+                        {auditEntries.map((entry) => {
+                          const detail = entryDetail(entry);
+                          return (
+                            <li
+                              key={entry.id}
+                              className="flex items-start gap-3 rounded-xl border border-ink/8 bg-cream-50/50 px-3 py-2.5"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="text-sm font-medium text-ink">
+                                    {EVENT_LABEL[entry.eventType] ?? entry.eventType}
+                                  </span>
+                                  {detail && (
+                                    <span className="rounded bg-ink/5 px-1.5 py-px text-xs font-medium text-ink/60">
+                                      {detail}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-xs text-ink/55">
+                                  {actorName(entry.actor)}
+                                </p>
+                              </div>
+                              <span className="shrink-0 whitespace-nowrap text-xs text-ink/45">
+                                {formatRelative(entry.createdAt)}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Footer */}
             <div className="border-t border-ink/10 bg-cream-50 px-5 py-3.5 sm:px-6">
               {saveState === "error" && (
-                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
                   <AlertCircle size={14} /> {saveError}
                 </p>
               )}
               {saveState === "success" && (
-                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] text-emerald-700">
+                <p className="mb-2.5 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   <Check size={14} /> Permisos guardados correctamente.
                 </p>
               )}
@@ -472,14 +738,14 @@ export function PermissionsDrawer({
                   type="button"
                   onClick={resetToRole}
                   disabled={!canEdit || overrideCount === 0 || saveState === "saving"}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-ink/10 px-3.5 py-2.5 text-[13px] font-medium text-ink/65 transition hover:border-ink/20 hover:text-ink disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-ink/10 px-3.5 py-2.5 text-sm font-medium text-ink/65 transition hover:border-ink/20 hover:text-ink disabled:opacity-40"
                 >
                   <RotateCcw size={14} strokeWidth={1.75} />
                   <span className="hidden sm:inline">Restablecer a valores del rol</span>
                   <span className="sm:hidden">Restablecer</span>
                 </button>
                 <div className="flex items-center gap-2">
-                  <span className="hidden text-[12px] text-ink/55 sm:inline">
+                  <span className="hidden text-xs text-ink/55 sm:inline">
                     {overrideCount === 0
                       ? "Sin excepciones"
                       : `${overrideCount} ${overrideCount === 1 ? "excepción" : "excepciones"}`}
@@ -488,7 +754,7 @@ export function PermissionsDrawer({
                     type="button"
                     onClick={handleSave}
                     disabled={!canEdit || saveState === "saving"}
-                    className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-[13px] font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
+                    className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/80 disabled:opacity-40"
                   >
                     {saveState === "saving" ? (
                       <Loader2 size={15} className="animate-spin" />

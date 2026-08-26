@@ -8,6 +8,7 @@ import type {
   ClientWithRelations,
   VisitRequestWithRelations,
 } from "../row-types";
+import { resolveViewScope, getAssignedClientIds } from "./view-scope";
 
 export type {
   ClientPreferencesRow,
@@ -16,21 +17,42 @@ export type {
   VisitRequestWithRelations,
 };
 
-export async function getClients(): Promise<ClientWithRelations[]> {
+// `country` aísla el listado por país ('es' | 'cl') vía `profiles.country`.
+// Sin argumento se mantiene el comportamiento histórico (todos los clientes),
+// que usan el árbol raíz y España. El árbol de Chile pasa 'cl'.
+export async function getClients(country?: string): Promise<ClientWithRelations[]> {
   const supabase = await createClient();
 
+  // Scope de datos (own/team/all) para el recurso "clientes". Un cliente es
+  // "propio" si su `assigned_advisor_id` es el usuario actual. team ≈ own
+  // (sin modelo formal de equipos, ver ViewRestriction).
+  const { restriction, userId } = await resolveViewScope("clientes");
+  if (restriction === "none") return []; // p.ej. captadora: no ve clientes
+  // own_only / team / assigned_only → filtra por asesor asignado. Si por lo
+  // que sea no hay userId, NO filtramos (preferimos mostrar de más a ocultar).
+  const advisorFilter =
+    restriction !== "all" && userId ? userId : null;
+
   // Try full query with joins first (session client, respects RLS)
-  const { data, error } = await supabase
+  // ⚠️ `visit_requests` tiene DOS claves ajenas a `profiles` (client_id y
+  // assigned_to), así que PostgREST no sabe por cuál embeber y devolvía
+  // PGRST201. La consulta caía SIEMPRE al plan B —un `select("*")` pelado— y
+  // por eso el listado se pintaba sin preferencias, sin etiquetas y con los
+  // contadores a cero: no era que faltaran los datos, es que nunca llegaban.
+  // `getClientById` ya nombraba la relación; esta se había quedado atrás.
+  let fullQ = supabase
     .from("profiles")
     .select(`
       *,
       client_preferences(*),
       client_tag_assignments!client_tag_assignments_client_id_fkey(tag_id, client_tags(id, name, category, color)),
       favorites(count),
-      visit_requests(count)
+      visit_requests!visit_requests_client_id_fkey(count)
     `)
-    .eq("role", "client")
-    .order("created_at", { ascending: false });
+    .eq("role", "client");
+  if (country) fullQ = fullQ.eq("country", country);
+  if (advisorFilter) fullQ = fullQ.eq("assigned_advisor_id", advisorFilter);
+  const { data, error } = await fullQ.order("created_at", { ascending: false });
 
   if (!error && data && data.length > 0) {
     return data as unknown as ClientWithRelations[];
@@ -40,10 +62,13 @@ export async function getClients(): Promise<ClientWithRelations[]> {
   if (error) {
     console.error("getClients full query failed, using fallback:", error.message);
   }
-  const { data: fallback, error: fallbackErr } = await supabase
+  let fallbackQ = supabase
     .from("profiles")
     .select("*")
-    .eq("role", "client")
+    .eq("role", "client");
+  if (country) fallbackQ = fallbackQ.eq("country", country);
+  if (advisorFilter) fallbackQ = fallbackQ.eq("assigned_advisor_id", advisorFilter);
+  const { data: fallback, error: fallbackErr } = await fallbackQ
     .order("created_at", { ascending: false });
 
   if (!fallbackErr && fallback && fallback.length > 0) {
@@ -54,10 +79,15 @@ export async function getClients(): Promise<ClientWithRelations[]> {
   // logged-in user's role isn't recognised by is_staff() yet.
   try {
     const admin = createAdminClient();
-    const { data: adminData, error: adminErr } = await admin
+    let adminQ = admin
       .from("profiles")
       .select("*")
-      .eq("role", "client")
+      .eq("role", "client");
+    if (country) adminQ = adminQ.eq("country", country);
+    // IMPORTANTE: el fallback admin salta las RLS, así que hay que reaplicar el
+    // scope aquí o un rol restringido vería toda la base vía service role.
+    if (advisorFilter) adminQ = adminQ.eq("assigned_advisor_id", advisorFilter);
+    const { data: adminData, error: adminErr } = await adminQ
       .order("created_at", { ascending: false });
     if (!adminErr) {
       return (adminData ?? []) as unknown as ClientWithRelations[];
@@ -70,15 +100,32 @@ export async function getClients(): Promise<ClientWithRelations[]> {
   return [];
 }
 
-export async function getVisitRequests(): Promise<VisitRequestWithRelations[]> {
+// `country` filtra por `visit_requests.country` ('es' | 'cl'); sin argumento
+// se mantiene el comportamiento histórico (raíz y España). Chile pasa 'cl'.
+export async function getVisitRequests(country?: string): Promise<VisitRequestWithRelations[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // Scope de datos para "solicitudes". `visit_requests` no tiene columna de
+  // propietario propia: el dueño efectivo es el asesor asignado al cliente de
+  // la visita, así que restringimos por `client_id` ∈ (clientes del asesor).
+  const { restriction, userId } = await resolveViewScope("solicitudes");
+  if (restriction === "none") return [];
+  let clientIds: string[] | null = null;
+  if (restriction !== "all" && userId) {
+    clientIds = await getAssignedClientIds(userId, country);
+    if (clientIds.length === 0) return []; // sin cartera → sin solicitudes
+  }
+
+  let query = supabase
     .from("visit_requests")
     .select(`
       *,
       profiles!visit_requests_client_id_fkey(id, full_name, email),
       properties(id, slug, title, external_id)
-    `)
+    `);
+  if (country) query = query.eq("country", country);
+  if (clientIds) query = query.in("client_id", clientIds);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -86,14 +133,19 @@ export async function getVisitRequests(): Promise<VisitRequestWithRelations[]> {
   return (data ?? []) as unknown as VisitRequestWithRelations[];
 }
 
-export async function getVisitRequestsStats() {
+export async function getVisitRequestsStats(country?: string) {
   const supabase = await createClient();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const base = () => {
+    let q = supabase.from("visit_requests").select("*", { count: "exact", head: true });
+    if (country) q = q.eq("country", country);
+    return q;
+  };
   const [total, pending, confirmed, thisWeek] = await Promise.all([
-    supabase.from("visit_requests").select("*", { count: "exact", head: true }),
-    supabase.from("visit_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("visit_requests").select("*", { count: "exact", head: true }).eq("status", "confirmed"),
-    supabase.from("visit_requests").select("*", { count: "exact", head: true }).gte("created_at", sevenDaysAgo),
+    base(),
+    base().eq("status", "pending"),
+    base().eq("status", "confirmed"),
+    base().gte("created_at", sevenDaysAgo),
   ]);
 
   return {
@@ -205,13 +257,36 @@ export async function getAllProfiles(): Promise<ProfileRow[]> {
   }
 }
 
-export async function getClientStats() {
+// `country` aísla los KPIs por país; sin argumento, comportamiento histórico
+// (raíz y España). client_tag_assignments no tiene columna country: se filtra
+// vía join con el profile del cliente (igual que property_shares en dashboard).
+export async function getClientStats(country?: string) {
   const supabase = await createClient();
-  const [total, withTags, visits] = await Promise.all([
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "client"),
-    supabase.from("client_tag_assignments").select("client_id", { count: "exact", head: true }),
-    supabase.from("visit_requests").select("*", { count: "exact", head: true }),
-  ]);
+
+  let totalQ = supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("role", "client");
+  if (country) totalQ = totalQ.eq("country", country);
+
+  const withTagsQ = country
+    ? supabase
+        .from("client_tag_assignments")
+        .select(
+          "client_id, profiles!client_tag_assignments_client_id_fkey!inner(country)",
+          { count: "exact", head: true },
+        )
+        .eq("profiles.country", country)
+    : supabase
+        .from("client_tag_assignments")
+        .select("client_id", { count: "exact", head: true });
+
+  let visitsQ = supabase
+    .from("visit_requests")
+    .select("*", { count: "exact", head: true });
+  if (country) visitsQ = visitsQ.eq("country", country);
+
+  const [total, withTags, visits] = await Promise.all([totalQ, withTagsQ, visitsQ]);
 
   return {
     totalClients: total.count ?? 0,
@@ -226,12 +301,16 @@ export async function getClientById(id: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
+    // `client_tag_assignments` y `visit_requests` tienen DOS claves ajenas a
+    // `profiles` (client_id y assigned_by / assigned_to), así que PostgREST no
+    // puede deducir por cuál embeber y responde PGRST201. Hay que nombrar la
+    // relación explícitamente, igual que ya hace getClients() más arriba.
     .select(`
       *,
       client_preferences(*),
-      client_tag_assignments(tag_id, client_tags(id, name, category, color)),
+      client_tag_assignments!client_tag_assignments_client_id_fkey(tag_id, client_tags(id, name, category, color)),
       favorites(property_id, properties(slug, title)),
-      visit_requests(id, property_id, requested_at, status, properties(slug, title))
+      visit_requests!visit_requests_client_id_fkey(id, property_id, requested_at, status, properties(slug, title))
     `)
     .eq("id", id)
     .eq("role", "client")
@@ -253,6 +332,12 @@ export type ContactRequestRow = {
   created_at: string;
 };
 
+// NOTA país: `contact_requests` NO tiene columna `country` (solo
+// `country_interest`, un texto libre del formulario público que expresa
+// interés — "España", "Chile", "Ambos"… — no la procedencia del dato), así
+// que el listado se mantiene GLOBAL en los tres árboles admin. Si algún día
+// se quiere aislar, habría que añadir la columna `country` en una migración
+// y fijarla en /api/portal/contact según el sitio de origen.
 export async function getContactRequests(): Promise<ContactRequestRow[]> {
   const admin = createAdminClient() as any;
   const { data, error } = await admin

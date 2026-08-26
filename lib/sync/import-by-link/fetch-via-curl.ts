@@ -22,7 +22,7 @@ const MAX_BUFFER = 12 * 1024 * 1024; // 12 MB — fichas Idealista pesan ~250KB
 
 export type CurlFetchResult =
   | { ok: true; html: string }
-  | { ok: false; status: number; reason: string };
+  | { ok: false; status: number; reason: string; body?: string };
 
 export type CurlFetchOptions = {
   timeoutSec?: number;
@@ -39,6 +39,9 @@ export type CurlFetchOptions = {
   // Los endpoints AJAX devuelven JSON corto (<200 chars); con esto no se
   // rechaza el body por "HTML vacío".
   allowSmallBody?: boolean;
+  // Devolver el cuerpo también en respuestas 4xx/5xx (en `body`). Necesario
+  // para capturar el reto DataDome, que viene en el cuerpo del 403.
+  returnBodyOnError?: boolean;
 };
 
 async function curlOnce(
@@ -48,6 +51,7 @@ async function curlOnce(
   proxyUrl?: string,
   headers?: string[],
   allowSmallBody?: boolean,
+  returnBodyOnError?: boolean,
 ): Promise<CurlFetchResult> {
   const args = [
     "-sS",
@@ -83,7 +87,9 @@ async function curlOnce(
       10,
     );
     if (code < 200 || code >= 300) {
-      return { ok: false, status: code, reason: `HTTP ${code}` };
+      return returnBodyOnError
+        ? { ok: false, status: code, reason: `HTTP ${code}`, body: html }
+        : { ok: false, status: code, reason: `HTTP ${code}` };
     }
     const minLength = allowSmallBody ? 2 : 200;
     if (!html || html.length < minLength) {
@@ -117,6 +123,7 @@ export async function fetchViaCurl(
       options?.proxyUrl,
       options?.headers,
       options?.allowSmallBody,
+      options?.returnBodyOnError,
     );
     if (last.ok) return last;
     // Reintentar solo en errores transitorios (TLS/red), no en 403/404.
@@ -148,10 +155,9 @@ export type MultiAjaxResult = {
   pageHtml: string | null;
 };
 
-// Like fetchAjaxWithCookieJar but loads the page only ONCE and tries all
-// ajaxUrls in sequence reusing the same cookie jar. Much faster than calling
-// fetchAjaxWithCookieJar separately for each endpoint (avoids N page loads).
-// Also returns the page HTML so callers can inspect it (e.g. for DataDome auth).
+// Loads the page ONCE and tries all ajaxUrls in sequence reusing the same
+// cookie jar (avoids N page loads for N endpoints). Also returns the page
+// HTML so callers can inspect it (e.g. for DataDome auth).
 export async function fetchMultipleAjaxWithCookieJar(
   pageUrl: string,
   ajaxUrls: string[],
@@ -227,86 +233,3 @@ export async function fetchMultipleAjaxWithCookieJar(
   }
 }
 
-export async function fetchAjaxWithCookieJar(
-  pageUrl: string,
-  ajaxUrl: string,
-  userAgent: string,
-  options?: {
-    proxyUrl?: string;
-    ajaxHeaders?: string[];
-    timeoutSec?: number;
-  },
-): Promise<CookieJarFetchResult> {
-  const timeoutSec = options?.timeoutSec ?? 20;
-  const dir = await mkdtemp(join(tmpdir(), "idealista-jar-"));
-  const jar = join(dir, "cookies.txt");
-
-  const proxyArgs = options?.proxyUrl
-    ? ["--proxytunnel", "-x", options.proxyUrl]
-    : [];
-
-  try {
-    // Paso 1: cargar la ficha para obtener las cookies (incl. DataDome).
-    // Descartamos el cuerpo (-o /dev/null); solo nos interesa el jar.
-    await execFileAsync(
-      "curl",
-      [
-        "-sS",
-        "-L",
-        "-A",
-        userAgent,
-        "--max-time",
-        String(timeoutSec),
-        "-c",
-        jar,
-        "-o",
-        "/dev/null",
-        ...proxyArgs,
-        pageUrl,
-      ],
-      { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
-    ).catch(() => null); // si falla, intentamos el AJAX igual (jar vacío)
-
-    // Paso 2: llamar al AJAX reutilizando (y refrescando) el jar.
-    const headerArgs: string[] = [];
-    for (const h of options?.ajaxHeaders ?? []) headerArgs.push("-H", h);
-
-    const { stdout } = await execFileAsync(
-      "curl",
-      [
-        "-sS",
-        "-L",
-        "-A",
-        userAgent,
-        "--max-time",
-        String(timeoutSec),
-        "-b",
-        jar,
-        "-c",
-        jar,
-        "-w",
-        "\\n__HTTP_CODE__:%{http_code}",
-        ...headerArgs,
-        ...proxyArgs,
-        ajaxUrl,
-      ],
-      { maxBuffer: MAX_BUFFER, timeout: (timeoutSec + 5) * 1000 },
-    );
-
-    const marker = stdout.lastIndexOf("\n__HTTP_CODE__:");
-    const body = marker === -1 ? stdout : stdout.slice(0, marker);
-    const status =
-      marker === -1
-        ? 0
-        : Number.parseInt(
-            stdout.slice(marker + "\n__HTTP_CODE__:".length).trim(),
-            10,
-          );
-    return { ok: status >= 200 && status < 300, status, body };
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : "error curl";
-    return { ok: false, status: 0, body: "", reason };
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-}

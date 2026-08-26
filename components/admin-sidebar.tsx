@@ -11,6 +11,7 @@ import {
   Home,
   LayoutDashboard,
   LogOut,
+  Magnet,
   Menu,
   MessageSquare,
   Radio,
@@ -22,6 +23,7 @@ import {
   UserCog,
   Users,
   X,
+  Plug,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -49,22 +51,32 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
-  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "agencias",     onlyCountry: "es" },
   { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
-  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares"  },
-  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "properties"    },
+  // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
+  // Estado del scraper y sus frecuencias vive plegado dentro de esta misma
+  // página ("Configuración scraper Idealista"), no como entrada aparte.
+  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
+  // Antes apuntaba a "properties": el toggle "Publicación" del panel de
+  // permisos no controlaba este enlace ni coincidía con el recurso que ya
+  // usan las rutas /api/admin/publicacion/* (requirePermission("publicacion", ...)).
+  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "publicacion"   },
   { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "captaciones",  onlyCountry: "cl" },
-  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "properties",   onlyCountry: "es" },
+  // Idealista es la integración de publicación con ese portal → mismo
+  // recurso que /admin/publicacion (antes "properties", desalineado).
+  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "publicacion",  onlyCountry: "es" },
   { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
   { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
   { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "solicitudes"   },
+  { href: "/admin/leads",              labelKey: "admin.nav.leads",              icon: Magnet,        permissionResource: "solicitudes"   },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
-  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "properties",   onlyCountry: "es" },
+  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "sindicacion",  onlyCountry: "es" },
   { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
-  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "configuracion", onlyCountry: "es" },
+  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "diagnostico",  onlyCountry: "es" },
   { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
+  { href: "/admin/integraciones",      labelKey: "admin.nav.integraciones",      icon: Plug,          permissionResource: "configuracion" },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 
@@ -176,7 +188,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
               href="/es/admin"
               title="España"
               className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
                 country === "es"
                   ? "border-gold/60 bg-gold/15 text-gold"
                   : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
@@ -189,7 +201,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
               href="/cl/admin"
               title="Chile"
               className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
                 country === "cl"
                   ? "border-gold/60 bg-gold/15 text-gold"
                   : "border-cream-50/10 text-cream-50/40 hover:border-cream-50/20 hover:text-cream-50/70"
@@ -201,7 +213,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
           </div>
         )}
 
-        <p className="mt-7 px-6 text-[10px] font-semibold tracking-[0.18em] text-gold/85">
+        <p className="crm-label-sm mt-7 px-6 text-gold/85">
           {t("admin.section.label")}
         </p>
 
@@ -221,7 +233,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                     href={href}
                     onClick={closeMobile}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                      "crm-nav flex items-center gap-3 rounded-lg px-3 py-2.5 transition",
                       active
                         ? "bg-cream-50/8 text-gold"
                         : "text-cream-50/70 hover:bg-cream-50/5 hover:text-cream-50",
@@ -231,17 +243,17 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
                     <Icon size={17} strokeWidth={1.75} />
                     <span className="flex-1">{t(labelKey)}</span>
                     {isCalendario && pendingVisits > 0 && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-[10px] font-semibold text-ink">
+                      <span className="crm-number flex h-5 min-w-5 items-center justify-center rounded-full bg-gold/90 px-1 text-xs text-ink">
                         {pendingVisits}
                       </span>
                     )}
                     {isMensajes && unreadMessages > 0 && (
-                      <span className="ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                      <span className="crm-number ml-auto rounded-full bg-rose-600 px-1.5 py-0.5 text-xs text-white min-w-[18px] text-center">
                         {unreadMessages > 99 ? "99+" : unreadMessages}
                       </span>
                     )}
                     {isCaptaciones && unreadNotifications > 0 && (
-                      <span className="ml-auto rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px] text-center">
+                      <span className="crm-number ml-auto rounded-full bg-emerald-600 px-1.5 py-0.5 text-xs text-white min-w-[18px] text-center">
                         {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </span>
                     )}
@@ -254,14 +266,14 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
         <div className="m-3 rounded-xl border border-cream-50/10 p-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 font-serif text-[11px] font-medium text-cream-50">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream-50/10 text-xs font-bold text-cream-50">
               {user.initials}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold leading-tight">
+              <p className="truncate text-sm font-bold leading-tight">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="mt-0.5 truncate text-[10px] text-cream-50/55">
+              <p className="crm-meta mt-0.5 truncate text-cream-50/55">
                 {t(user.roleKey)}
               </p>
             </div>
@@ -269,7 +281,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
           <form action={signOutAction} className="mt-3">
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-[11px] text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
+              className="crm-meta flex w-full items-center justify-center gap-2 rounded-lg border border-cream-50/15 py-2 text-cream-50/70 transition hover:bg-cream-50/5 hover:text-cream-50"
             >
               <LogOut size={13} strokeWidth={1.75} />
               <span>{t("sidebar.logout")}</span>

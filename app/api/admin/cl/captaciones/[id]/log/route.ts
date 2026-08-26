@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
+import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
+import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function POST(
   request: NextRequest,
@@ -9,30 +12,33 @@ export async function POST(
   try {
     const { id } = await params;
     const profile = await getCurrentProfile();
-    if (!profile || profile.role !== "captadora") {
-      return NextResponse.json({ error: "Only captadoras can log attempts" }, { status: 403 });
+    if (!profile) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
     const body = await request.json();
     const db = createAdminClient() as any;
 
-    // Verify ownership
     const { data: captacion } = await db
       .from("captaciones")
-      .select("assigned_to")
+      .select("assigned_to, created_by, title, status, pipeline_id, stage_id")
       .eq("id", id)
       .single();
 
-    if (!captacion || captacion.assigned_to !== profile.id) {
-      return NextResponse.json({ error: "Not assigned to you" }, { status: 403 });
+    if (!captacion) {
+      return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
     }
 
-    // Obtener info de la captacion para notificaciones
-    const { data: captacionInfo } = await db
-      .from("captaciones")
-      .select("created_by, title")
-      .eq("id", id)
-      .single();
+    // Pueden registrar intentos: quien tiene la captación asignada, quien la
+    // creó y cualquiera con permiso efectivo de edición en captaciones. Misma
+    // regla exacta que usa la UI para enseñar el botón "+ Registrar Intento".
+    const actor = await getCaptacionActor(profile);
+    if (!actorCanWorkCaptacion(actor, captacion)) {
+      return NextResponse.json(
+        { error: "No tienes permiso para registrar intentos en esta captación" },
+        { status: 403 }
+      );
+    }
 
     const { data, error } = await db
       .from("captacion_logs")
@@ -53,27 +59,53 @@ export async function POST(
 
     if (error) throw error;
 
-    // Actualizar last_contact_attempt_at en la captacion
-    await db
+    // Actualizar seguimiento en la captación. Si aún está en la etapa de
+    // entrada o de asignación (no se ha empezado a trabajar), avanza a la
+    // primera etapa de trabajo en curso del pipeline; en cualquier otra
+    // etapa (revisión, confirmada, etc.) no se pisa.
+    const captacionUpdates: any = {
+      last_contact_attempt_at: new Date().toISOString(),
+      ...panelChange(),
+    };
+    if (captacion.pipeline_id) {
+      const stages = await getStagesForPipeline(captacion.pipeline_id);
+      const currentStage = stages.find((s) => s.id === captacion.stage_id);
+      if (currentStage && (currentStage.stage_type === "draft" || currentStage.stage_type === "assign")) {
+        const workingStage = pickWorkingStage(stages);
+        if (workingStage) captacionUpdates.stage_id = workingStage.id;
+      }
+    }
+    // Próximo paso agendado (ej: "volver a llamar el viernes en la mañana")
+    if (body.next_action_at !== undefined) {
+      captacionUpdates.next_action_at = body.next_action_at || null;
+      captacionUpdates.next_action_note = body.next_action_note || null;
+    }
+    // El intento ya quedó guardado; si la actualización de seguimiento falla
+    // (ej: una migración pendiente en el VPS) se registra pero no se aborta,
+    // para no perder el intento recién creado.
+    const { error: updateError } = await db
       .from("captaciones")
-      .update({
-        last_contact_attempt_at: new Date().toISOString(),
-        status: "contacting",
-        updated_at: new Date().toISOString(),
-      })
+      .update(captacionUpdates)
       .eq("id", id);
+    if (updateError) {
+      console.error("[captaciones log] update captacion:", updateError);
+    }
 
-    // Notificar al agente del intento de contacto
-    if (captacionInfo?.created_by) {
-      const propertyTitle = captacionInfo.title || "Captación";
-      const resultLabel = getResultLabel(body.result);
-      const attemptTypeLabel = getAttemptTypeLabel(body.attempt_type);
-
-      await db.from("crm_notifications").insert({
-        user_id: captacionInfo.created_by,
+    // Notificar al resto del equipo de la captación (creador y asignado,
+    // excepto quien registró el intento)
+    const propertyTitle = captacion.title || "Captación";
+    const resultLabel = getResultLabel(body.result);
+    const attemptTypeLabel = getAttemptTypeLabel(body.attempt_type);
+    const notifyIds = [captacion.created_by, captacion.assigned_to].filter(
+      (uid: string | null, i: number, arr: (string | null)[]) =>
+        uid && uid !== profile.id && arr.indexOf(uid) === i
+    );
+    for (const uid of notifyIds) {
+      const { error: notifyError } = await db.from("crm_notifications").insert({
+        user_id: uid,
         type: "captacion_contact_attempt",
         title: `${attemptTypeLabel}: ${resultLabel}`,
-        body: `${profile.full_name || "Captadora"} contactó sobre ${propertyTitle} - ${resultLabel}`,
+        body: `${profile.full_name || "Alguien"} registró un intento en ${propertyTitle} - ${resultLabel}`,
         link: `/cl/admin/captaciones/${id}`,
         data: {
           captacion_id: id,
@@ -81,6 +113,9 @@ export async function POST(
           result: body.result,
         },
       });
+      if (notifyError) {
+        console.error("[captaciones log] notificación:", notifyError);
+      }
     }
 
     return NextResponse.json(data);
@@ -96,7 +131,7 @@ export async function POST(
 function getAttemptTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     call: "Llamada",
-    visit: "Visita",
+    visit: "Visita presencial",
     message: "Mensaje",
     whatsapp: "WhatsApp",
   };
@@ -112,6 +147,11 @@ function getResultLabel(result: string): string {
     call_back: "Llamar después",
     wrong_number: "Número incorrecto",
     busy: "Ocupado",
+    owner_found: "Dueño ubicado",
+    visit_scheduled: "Visita agendada",
+    no_owner_data: "Sin datos del dueño",
+    left_note: "Se dejó nota/carta",
+    nobody_home: "No había nadie",
   };
   return labels[result] || result;
 }

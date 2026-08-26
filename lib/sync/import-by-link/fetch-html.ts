@@ -3,6 +3,7 @@ import { ProxyAgent } from "undici";
 import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
 import { fetchHtmlWithWayback } from "./fetch-with-wayback";
 import { fetchViaCurl } from "./fetch-via-curl";
+import { getFreshResidentialProxyUrl } from "../proxy-config";
 import type { ImportExtractError } from "./types";
 
 // Hosts donde merece la pena intentar el fallback final de Wayback Machine
@@ -45,7 +46,15 @@ const DEFAULT_HEADERS: HeadersInit = {
 };
 
 const TIMEOUT_MS = 20_000;
-const PROXY_URL = process.env.SMARTPROXY_URL;
+// El proxy residencial se resuelve en tiempo de ejecución vía getProxyUrl()
+// (fuente de verdad: app_settings.scraping.proxyUrl en /admin/configuracion,
+// con fallback a PROXY_URL/EVOMI_PROXY_URL). Antes se leía SMARTPROXY_URL
+// directamente aquí, pero la migración multi-proveedor (Smartproxy agotado →
+// Evomi → Geonode) dejó esa variable huérfana: el import-by-link seguía saliendo
+// por el Smartproxy sin GB → Idealista devolvía página parcial sin el JSON de
+// multimedia → el extractor caía al fallback DOM y solo captaba 1 foto.
+// SMARTPROXY_URL se mantiene como último fallback para no romper entornos que
+// aún dependan de ella.
 
 // User-Agent del bot de WhatsApp. DataDome (el anti-bot de Idealista) lo
 // tiene en whitelist porque en España se comparten masivamente links de
@@ -81,6 +90,33 @@ function isAntibotRedirect(originalUrl: string, finalUrl: string): boolean {
   return !inputIds.some((id) => finalUrl.includes(id));
 }
 
+// Airbnb responde a veces (depende del dominio pedido y de la geo del servidor)
+// una interstitial de ~900 bytes en vez de la ficha: un <form> POST a
+// /v2/domain_switch/handoff que solo se envía con JavaScript. Ese HTML no lleva
+// datos ni fotos, y como pesa >200 bytes pasaba nuestro filtro y el extractor
+// devolvía una ficha vacía. Un navegador terminaría en el MISMO anuncio bajo el
+// dominio local, así que reconstruimos ese destino (host del form + redirect_path
+// del payload) y reintentamos una vez.
+function domainSwitchTarget(html: string): string | null {
+  if (html.length > 5_000 || !html.includes("domain_switch/handoff")) return null;
+  const origin = html.match(
+    /action="(https?:\/\/[^"]+?)\/v2\/domain_switch\/handoff"/i,
+  )?.[1];
+  const payload = html.match(/name="payload"\s+value="([^"]+)"/i)?.[1];
+  if (!origin || !payload) return null;
+  try {
+    // El payload es `<base64url(JSON)>.<firma>`.
+    const claims = JSON.parse(
+      Buffer.from(payload.split(".")[0], "base64url").toString("utf8"),
+    ) as { redirect_path?: string; redirect_query_raw?: string };
+    if (!claims.redirect_path) return null;
+    const query = claims.redirect_query_raw ? `?${claims.redirect_query_raw}` : "";
+    return `${origin}${claims.redirect_path}${query}`;
+  } catch {
+    return null;
+  }
+}
+
 export type FetchHtmlResult =
   | { ok: true; html: string; finalUrl: string }
   | { ok: false; error: ImportExtractError };
@@ -93,6 +129,8 @@ async function tryFetch(
   // ve UA de WhatsApp junto a headers de navegador (Sec-Fetch-*, Accept
   // text/html, Upgrade-Insecure-Requests…). WhatsApp manda un set mínimo.
   customHeaders?: Record<string, string>,
+  // Reintentos ya consumidos siguiendo interstitials (domain_switch de Airbnb).
+  hops = 0,
 ): Promise<FetchHtmlResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -116,12 +154,17 @@ async function tryFetch(
           },
         };
       }
+      // 404/410 no es un fallo nuestro: el anuncio ya no está publicado. Se
+      // dice con palabras para que el admin no lo confunda con un bloqueo.
+      const gone = res.status === 404 || res.status === 410;
       return {
         ok: false,
         error: {
           kind: "fetch_failed",
           status: res.status,
-          reason: `HTTP ${res.status} ${res.statusText}`,
+          reason: gone
+            ? "el anuncio ya no existe en el portal (retirado, vendido o alquilado)"
+            : `HTTP ${res.status} ${res.statusText}`,
         },
       };
     }
@@ -139,6 +182,14 @@ async function tryFetch(
     }
 
     const html = await res.text();
+
+    // Interstitial de cambio de dominio (Airbnb): seguimos el destino real.
+    const switchTo = hops < 1 ? domainSwitchTarget(html) : null;
+    if (switchTo && switchTo !== url) {
+      console.log(`[fetch-html] Interstitial de dominio → ${switchTo}`);
+      return tryFetch(switchTo, dispatcher, customHeaders, hops + 1);
+    }
+
     if (!html || html.length < 200) {
       return {
         ok: false,
@@ -218,6 +269,15 @@ async function maybeTryWayback(
 export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
   console.log(`[fetch-html] Iniciando para ${url}`);
 
+  // Proxy residencial con SESIÓN STICKY: una IP residencial anclada para toda la
+  // secuencia de fetch de este anuncio (curl → undici → Playwright). Geonode y
+  // Evomi requieren modificadores en usuario/contraseña + puerto sticky; la URL
+  // BASE cruda (getProxyUrl) no conecta → ERR_TUNNEL_CONNECTION_FAILED. Este
+  // helper aplica el formato correcto del proveedor (igual que el scraping de
+  // teléfonos, que sí pasa DataDome). Fallback legacy a SMARTPROXY_URL.
+  const proxyUrl =
+    (await getFreshResidentialProxyUrl(3)) ?? process.env.SMARTPROXY_URL;
+
   // Intento 0 (solo Idealista): fetch directo con el UA de WhatsApp, que
   // DataDome deja pasar. Es lo más rápido y fiable — evita proxy/Playwright/
   // Wayback por completo cuando funciona (que es casi siempre).
@@ -226,7 +286,7 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     // Vía curl (no fetch/undici): DataDome valida el TLS fingerprint además
     // del UA. El JA3 de curl + UA WhatsApp pasa; el de undici no.
     const curlResult = await fetchViaCurl(url, WHATSAPP_UA, {
-      proxyUrl: PROXY_URL,
+      proxyUrl,
     });
     if (curlResult.ok) {
       console.log(`[fetch-html] ✓ UA WhatsApp (curl) exitoso`);
@@ -235,6 +295,23 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     console.log(
       `[fetch-html] ✗ UA WhatsApp (curl) falló: ${curlResult.reason}`,
     );
+    // 404/410 con el UA de WhatsApp = el anuncio NO EXISTE. Es un veredicto
+    // fiable: este intento es justo el que SÍ pasa DataDome, así que un 404
+    // suyo es del portal, no del anti-bot. Sin este corte, la cadena seguía
+    // con navegador/proxy/Playwright —que sí comen 403— y acababa acusando al
+    // anti-bot de un anuncio simplemente retirado, además de gastar GB de
+    // proxy y un arranque de navegador para nada.
+    if (curlResult.status === 404 || curlResult.status === 410) {
+      return {
+        ok: false,
+        error: {
+          kind: "fetch_failed",
+          status: curlResult.status,
+          reason:
+            "el anuncio ya no existe en el portal (retirado, vendido o alquilado)",
+        },
+      };
+    }
   }
 
   // Intento 1: fetch directo (sin proxy)
@@ -249,11 +326,11 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
 
   // Si recibe 403/429 y tenemos proxy, reintentar con proxy
   const isBlocked =
-    directResult.error.kind === "blocked" && PROXY_URL;
+    directResult.error.kind === "blocked" && proxyUrl;
   if (isBlocked) {
     try {
-      console.log(`[fetch-html] Intento 2: proxy Smartproxy`);
-      const proxyAgent = new ProxyAgent(PROXY_URL);
+      console.log(`[fetch-html] Intento 2: proxy residencial`);
+      const proxyAgent = new ProxyAgent(proxyUrl);
       const proxyResult = await tryFetch(url, proxyAgent);
       if (proxyResult.ok) {
         console.log(`[fetch-html] ✓ Proxy Smartproxy exitoso`);

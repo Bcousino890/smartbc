@@ -59,7 +59,7 @@ function Toggle({
           type="button"
           onClick={() => onChange(opt.value)}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
             value === opt.value
               ? "bg-ink text-cream-50 shadow-sm"
               : "text-ink/65 hover:text-ink",
@@ -93,6 +93,16 @@ function CopyButton({ text }: { text: string }) {
 
 export function CreateApplicationModal({ onClose, onCreated }: Props) {
   const [step, setStep] = useState<Step>("client");
+
+  // Cerrar con Escape (excepto en la pantalla de credenciales: hay que
+  // asegurarse de que el equipo guarda la contraseña generada antes)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && step !== "credentials") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose, step]);
 
   // Step 1: client search
   const [clientQuery, setClientQuery] = useState("");
@@ -264,12 +274,15 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
     : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && step !== "credentials") onClose(); }}
+    >
       <div className="relative w-full max-w-lg rounded-2xl bg-cream-50 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4">
           <div>
-            <h2 className="font-serif text-lg text-ink">Nueva Solicitud de Documentación</h2>
+            <h2 className="crm-section-title text-ink">Nueva Solicitud de Documentación</h2>
             <p className="text-xs text-ink/50">{stepLabel}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-ink/40 transition hover:bg-ink/5 hover:text-ink">
@@ -298,7 +311,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
               </div>
               <div className="space-y-2 rounded-xl border border-ink/10 bg-white p-4 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-ink/50">Email</span>
+                  <span className="crm-label-sm text-ink/50">Email</span>
                   {selectedClient.email.includes("@interno.smartbc.local") ? (
                     <span className="text-xs italic text-ink/40">Sin email — acceso solo por contraseña</span>
                   ) : (
@@ -310,14 +323,14 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                 </div>
                 <div className="border-t border-ink/5" />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-ink/50">Contraseña</span>
+                  <span className="crm-label-sm text-ink/50">Contraseña</span>
                   <div className="flex items-center gap-1">
                     <span className="font-mono text-ink">{generatedPassword}</span>
                     <CopyButton text={generatedPassword ?? ""} />
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-ink/40">El usuario puede cambiar su contraseña desde el portal una vez que inicie sesión.</p>
+              <p className="text-xs text-ink/40">El usuario puede cambiar su contraseña desde el portal una vez que inicie sesión.</p>
               <div className="flex justify-end">
                 <button
                   onClick={() => setStep("details")}
@@ -368,7 +381,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                             <p className="truncate text-xs text-ink/45">{c.email}</p>
                           </div>
                           <span className={cn(
-                            "ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                            "ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
                             c.role === "client" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                           )}>
                             {c.role === "client" ? "Cliente" : "Propietario"}
@@ -381,7 +394,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   {/* Property matches — shown alongside or when no client found */}
                   {propertyMatchResults.length > 0 && (
                     <div className="rounded-xl border border-ink/10 bg-white shadow-sm">
-                      <p className="border-b border-ink/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink/40">
+                      <p className="border-b border-ink/5 px-4 py-2 crm-label-sm text-ink/40">
                         Propiedades encontradas — click para pre-seleccionar
                       </p>
                       {propertyMatchResults.map((p) => (
@@ -407,10 +420,10 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                             <div className="flex items-center gap-2">
                               <p className="truncate text-sm text-ink">{p.title}</p>
                               {p.bc_reference && (
-                                <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{p.bc_reference}</span>
+                                <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-xs text-ink/60">{p.bc_reference}</span>
                               )}
                             </div>
-                            {p.address && <p className="truncate text-[11px] text-ink/40">{p.address}</p>}
+                            {p.address && <p className="truncate text-xs text-ink/40">{p.address}</p>}
                           </div>
                           {selectedProperty?.id === p.id && <Check size={13} className="shrink-0 text-green-600" />}
                         </button>
@@ -453,11 +466,11 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                       <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
                         <Home size={13} className="shrink-0 text-amber-500" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-medium text-amber-700">Propiedad pre-seleccionada</p>
+                          <p className="text-xs font-medium text-amber-700">Propiedad pre-seleccionada</p>
                           <div className="flex items-center gap-1.5">
                             <p className="truncate text-xs text-ink/70">{selectedProperty.title}</p>
                             {selectedProperty.bc_reference && (
-                              <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 font-mono text-[10px] text-amber-800">{selectedProperty.bc_reference}</span>
+                              <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 font-mono text-xs text-amber-800">{selectedProperty.bc_reference}</span>
                             )}
                           </div>
                         </div>
@@ -495,7 +508,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className={cn(
-                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      "rounded-full px-2.5 py-1 text-xs font-semibold",
                       newRole === "client" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                     )}>
                       {newRole === "client" ? "Nuevo cliente" : "Nuevo propietario"}
@@ -525,7 +538,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="mb-1 block text-[11px] font-medium text-ink/60">Nombre *</label>
+                      <label className="mb-1 block text-xs font-medium text-ink/60">Nombre *</label>
                       <input
                         autoFocus
                         type="text"
@@ -536,7 +549,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-[11px] font-medium text-ink/60">Apellido</label>
+                      <label className="mb-1 block text-xs font-medium text-ink/60">Apellido</label>
                       <input
                         type="text"
                         value={newLastName}
@@ -548,7 +561,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-[11px] font-medium text-ink/60">Email</label>
+                    <label className="mb-1 block text-xs font-medium text-ink/60">Email</label>
                     <div className="relative">
                       <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
                       <input
@@ -562,7 +575,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-[11px] font-medium text-ink/60">Teléfono</label>
+                    <label className="mb-1 block text-xs font-medium text-ink/60">Teléfono</label>
                     <div className="relative">
                       <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
                       <input
@@ -619,7 +632,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-ink">{selectedClient.full_name ?? selectedClient.email}</p>
-                    <p className="truncate text-[11px] text-ink/40">{selectedClient.email}</p>
+                    <p className="truncate text-xs text-ink/40">{selectedClient.email}</p>
                   </div>
                   <button
                     onClick={() => { setStep("client"); setSelectedClient(null); setGeneratedPassword(null); }}
@@ -632,7 +645,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
               {/* Country */}
               <div>
-                <label className="mb-1.5 block text-[11px] font-medium text-ink/60">País</label>
+                <label className="mb-1.5 block text-xs font-medium text-ink/60">País</label>
                 <Toggle
                   value={country}
                   onChange={(v) => setCountry(v as "ES" | "CL")}
@@ -645,7 +658,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
               {/* Operation */}
               <div>
-                <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Tipo de operación</label>
+                <label className="mb-1.5 block text-xs font-medium text-ink/60">Tipo de operación</label>
                 <Toggle
                   value={operation}
                   onChange={(v) => setOperation(v as "rent" | "sale")}
@@ -658,7 +671,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
 
               {/* Property (optional) */}
               <div>
-                <label className="mb-1.5 block text-[11px] font-medium text-ink/60">Propiedad (opcional)</label>
+                <label className="mb-1.5 block text-xs font-medium text-ink/60">Propiedad (opcional)</label>
                 {selectedProperty ? (
                   <div className="flex items-center gap-2 rounded-xl border border-ink/10 bg-white/60 px-4 py-2.5">
                     <Home size={14} className="shrink-0 text-ink/40" />
@@ -666,7 +679,7 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm text-ink">{selectedProperty.title}</p>
                         {selectedProperty.bc_reference && (
-                          <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{selectedProperty.bc_reference}</span>
+                          <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-xs text-ink/60">{selectedProperty.bc_reference}</span>
                         )}
                       </div>
                     </div>
@@ -702,10 +715,10 @@ export function CreateApplicationModal({ onClose, onCreated }: Props) {
                               <div className="flex items-center gap-2">
                                 <p className="truncate text-sm text-ink">{p.title}</p>
                                 {p.bc_reference && (
-                                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] text-ink/60">{p.bc_reference}</span>
+                                  <span className="shrink-0 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-xs text-ink/60">{p.bc_reference}</span>
                                 )}
                               </div>
-                              {p.address && <p className="truncate text-[11px] text-ink/40">{p.address}</p>}
+                              {p.address && <p className="truncate text-xs text-ink/40">{p.address}</p>}
                             </div>
                           </button>
                         ))}

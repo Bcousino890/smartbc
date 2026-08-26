@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
+import { useCurrency, type DisplayCurrency } from "./CurrencyProvider";
+import { setSiteLanguage, useSiteLanguage } from "./GoogleTranslate";
+
+const CURRENCIES: DisplayCurrency[] = ["EUR", "CLP", "USD"];
 
 const nav = [
   { href: "/web/propiedades", label: "Propiedades" },
@@ -17,6 +21,8 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const onHome = pathname === "/web" || pathname === "/web/";
+  const { displayCurrency, setDisplayCurrency } = useCurrency();
+  const lang = useSiteLanguage();
 
   return (
     <header
@@ -26,13 +32,10 @@ export function SiteHeader() {
     >
       <div className="container-luxe flex items-center justify-between py-5">
         <Link href="/web" className="flex items-center py-1" aria-label="Benjamín Cousiño Propiedades">
-          <Image
+          <img
             src="/logo.png"
             alt="Benjamín Cousiño Propiedades"
-            width={280}
-            height={60}
             className="h-9 w-auto"
-            priority
           />
         </Link>
 
@@ -51,15 +54,38 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden lg:flex items-center gap-6">
-          <div className="flex items-center gap-3 text-[11px] tracking-[0.2em] uppercase text-gray-400">
-            <span>EUR</span><span className="text-gold">·</span>
-            <span>CLP</span><span className="text-gold">·</span>
-            <span>USD</span>
+          <div className="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase">
+            {CURRENCIES.map((c, i) => (
+              <span key={c} className="flex items-center gap-2">
+                {i > 0 && <span className="text-gold">·</span>}
+                <button
+                  onClick={() => setDisplayCurrency(displayCurrency === c ? "NATIVE" : c)}
+                  className={displayCurrency === c ? "text-navy font-medium" : "text-gray-400 hover:text-navy transition-colors"}
+                  aria-pressed={displayCurrency === c}
+                  aria-label={`Mostrar precios en ${c}`}
+                >
+                  {c}
+                </button>
+              </span>
+            ))}
           </div>
           <div className="h-4 w-px bg-stone-200" />
-          <div className="flex items-center gap-3 text-[11px] tracking-[0.2em] uppercase text-gray-400">
-            <span className="text-navy">ES</span><span className="text-gold">·</span>
-            <span>EN</span>
+          <div className="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase">
+            <button
+              onClick={() => setSiteLanguage("es")}
+              className={lang === "es" ? "text-navy font-medium" : "text-gray-400 hover:text-navy transition-colors"}
+              aria-pressed={lang === "es"}
+            >
+              ES
+            </button>
+            <span className="text-gold">·</span>
+            <button
+              onClick={() => setSiteLanguage("en")}
+              className={lang === "en" ? "text-navy font-medium" : "text-gray-400 hover:text-navy transition-colors"}
+              aria-pressed={lang === "en"}
+            >
+              EN
+            </button>
           </div>
           <Link href="/web/contacto" className="text-[11px] tracking-[0.28em] uppercase text-navy border border-navy/30 px-5 py-2 hover:bg-navy hover:text-cream transition-colors">
             Acceder

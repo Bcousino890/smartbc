@@ -1,4 +1,5 @@
 import "server-only";
+import { requirePermission } from "@/lib/auth/guard";
 
 export const runtime = "nodejs";
 
@@ -6,6 +7,10 @@ export const runtime = "nodejs";
 // API del cliente, construye el payload según la especificación de Idealista
 // para importación masiva y lo envía. La clave nunca se persiste en servidor.
 export async function POST(req: Request) {
+  // Gate de autorización: publicar en Idealista requiere publicacion/create.
+  const gate = await requirePermission("publicacion", "create");
+  if (!gate.ok) return gate.response;
+
   let body: { property: Record<string, unknown>; apiKey: string };
 
   try {

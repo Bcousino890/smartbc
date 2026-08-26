@@ -1,13 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { featuredProperties } from "@/lib/portal-properties";
 import type { Property } from "@/lib/portal-properties";
+import { getCountryConfig, isCountry } from "@/lib/country-config";
 
-function formatPrice(price: number, country: string): string {
-  if (country === "cl") {
-    return `USD ${Number(price).toLocaleString("en-US")}`;
-  }
-  return `€ ${Number(price).toLocaleString("es-ES")}`;
+function formatPrice(price: number, country: string, currency: string | null, operation: string | null): string {
+  const config = getCountryConfig(isCountry(country) ? country : "es");
+  return config.formatPrice(price, currency, operation);
 }
 
 function ensureAbsoluteUrl(url: string): string {
@@ -21,20 +19,33 @@ export async function fetchPortalProperties(): Promise<Property[]> {
   try {
     const admin = createAdminClient();
     const selectStr =
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)";
 
+    // ── EL CONTRATO DE PUBLICACIÓN ──
+    // status disponible/reservada + no archivada + published_web = true.
+    // Hasta la migración 0143 el interruptor `published_web` se guardaba y no
+    // lo leía nadie: 687 propiedades públicas de hecho y 3 de derecho. Ahora
+    // manda el interruptor (con backfill único de lo que ya era visible), y
+    // despublicar desde el panel FUNCIONA. Los SmartLinks, el shortlist y el
+    // Private Book no pasan por aquí: siguen viendo la propiedad.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (admin as any)
       .from("properties")
       .select(selectStr)
       .in("status", ["available", "reserved"])
       .is("archived_at", null)
+      .eq("published_web", true)
       .order("id", { ascending: false })
       .limit(1000);
 
-    if (error || !data || (data as unknown[]).length === 0) {
-      return featuredProperties;
+    if (error) {
+      // Nunca datos de demostración en producción: ante un fallo real, el
+      // catálogo se queda vacío y el error queda en el log. Enseñar pisos
+      // inventados a un comprador es peor que enseñar ninguno.
+      console.error("[fetchPortalProperties]", error.message ?? error);
+      return [];
     }
+    if (!data) return [];
 
     return (data as unknown[]).map((raw) => {
       const p = raw as Record<string, unknown>;
@@ -67,6 +78,10 @@ export async function fetchPortalProperties(): Promise<Property[]> {
         .filter((m) => m.type === "video" && m.url)
         .map((m) => ({ url: ensureAbsoluteUrl(m.url), title: m.file_name || "Video" }));
 
+      // Moneda nativa efectiva: España siempre está en euros; en Chile es la
+      // que tenga cargada la propiedad (uf/usd/clp), por defecto clp.
+      const nativeCurrency = countryCode === "es" ? "eur" : ((p.currency as string | null) ?? "clp");
+
       return {
         id: p.slug as string,
         ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
@@ -74,8 +89,9 @@ export async function fetchPortalProperties(): Promise<Property[]> {
         zone: p.zone as string,
         city,
         country: countryLabel as "España" | "Chile",
-        price: formatPrice(Number(p.price), countryCode),
+        price: formatPrice(Number(p.price), countryCode, (p.currency as string | null) ?? null, p.operation as string | null),
         priceNum: Number(p.price),
+        currency: nativeCurrency,
         operation: ((p.operation as string) === "sale" ? "Venta" : "Alquiler") as "Venta" | "Alquiler",
         type: "Apartamento" as const,
         beds: Number(p.bedrooms),
@@ -94,7 +110,10 @@ export async function fetchPortalProperties(): Promise<Property[]> {
         videos,
       };
     });
-  } catch {
-    return featuredProperties;
+  } catch (e) {
+    // Mismo criterio que arriba: ante una excepción, catálogo vacío y error al
+    // log — jamás propiedades de demostración en la web pública.
+    console.error("[fetchPortalProperties] threw:", e);
+    return [];
   }
 }

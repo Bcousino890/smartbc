@@ -6,7 +6,12 @@ import {
   resolveLegacySlug,
 } from "@/lib/db/queries/properties";
 import { getOrComputePropertyCoords } from "@/lib/geo/geocode";
+import { getStoryExperiencePublic } from "@/lib/db/queries/story";
+import { findNearbyUniversities } from "@/lib/geo/universities-nearby";
+import { currentMapProvider } from "@/lib/services/location/provider";
+import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 import { PublicPropertyView } from "./public-property-view";
+import { CollectionReturnBar } from "@/components/public/collection-return-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -23,15 +28,21 @@ function formatPriceForOg(price: number, isRent: boolean): string {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ op?: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const { op } = await searchParams;
   const row = (await getPropertyBySlugPublic(slug)) as
     | {
         title: string;
+        title_rent: string | null;
         operation: "rent" | "sale";
+        operations: string[] | null;
         price: number;
+        rent_price: number | null;
         zone: string;
         bedrooms: number;
         bathrooms: number;
@@ -46,9 +57,22 @@ export async function generateMetadata({
     return { title: "Propiedad no disponible · Benjamín Cousiño Propiedades" };
   }
 
-  const isRent = row.operation === "rent";
-  const price = formatPriceForOg(Number(row.price), isRent);
-  const title = `${row.title} · ${price}`;
+  // Propiedad dual: `?op=rent` pide explícitamente la variante de alquiler
+  // (título/precio propios). Fuera de eso, se mantiene la operación
+  // "principal" de siempre (venta cuando aplica, si no alquiler).
+  const isDual =
+    Array.isArray(row.operations) &&
+    row.operations.includes("sale") &&
+    row.operations.includes("rent");
+  const isRent = isDual && op === "rent" ? true : row.operation === "rent";
+  const effectivePrice =
+    isDual && isRent && row.rent_price != null
+      ? Number(row.rent_price)
+      : Number(row.price);
+  const effectiveTitle =
+    isDual && isRent && row.title_rent ? row.title_rent : row.title;
+  const price = formatPriceForOg(effectivePrice, isRent);
+  const title = `${effectiveTitle} · ${price}`;
   const description = [
     `${row.bedrooms} hab · ${row.bathrooms} baños`,
     row.square_meters ? `${row.square_meters} m²` : null,
@@ -62,7 +86,10 @@ export async function generateMetadata({
   // como JPEG 1200×630 (formato más compatible que WebP para WhatsApp,
   // Twitter, Slack, etc.). El endpoint cachea por 24h.
   const ogImage = `${PORTAL_URL}/og/property/${slug}`;
-  const canonical = `${PORTAL_URL}/compartir/${slug}`;
+  const canonical =
+    isDual && isRent
+      ? `${PORTAL_URL}/compartir/${slug}?op=rent`
+      : `${PORTAL_URL}/compartir/${slug}`;
 
   return {
     title,
@@ -82,7 +109,7 @@ export async function generateMetadata({
           width: 1200,
           height: 630,
           type: "image/jpeg",
-          alt: row.title,
+          alt: effectiveTitle,
         },
       ],
     },
@@ -97,10 +124,13 @@ export async function generateMetadata({
 
 export default async function PublicSharePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ op?: string }>;
 }) {
   const { slug } = await params;
+  const { op } = await searchParams;
   // Bypasa RLS con service role (visitante no autenticado).
   const row = (await getPropertyBySlugPublic(slug)) as
     | (Parameters<typeof propertyRowToClientProperty>[0] & {
@@ -121,7 +151,7 @@ export default async function PublicSharePage({
     // nuevo para no romper SmartLinks ya enviados a clientes.
     const newSlug = await resolveLegacySlug(slug);
     if (newSlug && newSlug !== slug) {
-      redirect(`/compartir/${newSlug}`);
+      redirect(`/compartir/${newSlug}${op ? `?op=${op}` : ""}`);
     }
     notFound();
   }
@@ -137,7 +167,12 @@ export default async function PublicSharePage({
     cachedLng: row.longitude,
   });
 
-  const property = propertyRowToClientProperty(row);
+  // `?op=rent` pide la variante de alquiler cuando la propiedad es dual
+  // (venta + alquiler) — ver propertyRowToClientProperty.
+  const property = propertyRowToClientProperty(
+    row,
+    op === "rent" ? "rent" : op === "sale" ? "sale" : undefined,
+  );
   // Si geocoding devolvió coords pero el adapter aún no las tenía
   // (porque acabamos de cachearlas), las ponemos aquí.
   if (coords) {
@@ -146,15 +181,67 @@ export default async function PublicSharePage({
   }
 
   // Videos y planos subidos desde /admin/publicacion (tabla property_media).
-  const media = row.property_media ?? [];
+  // SmartLink 2.0: los vídeos viajan CON su metadata (source/format/medidas)
+  // para que el renderer decida hero vs signature vs contenedor vertical.
+  const media = (row.property_media ?? []) as Array<{
+    url: string;
+    file_name?: string | null;
+    type?: string | null;
+    source?: string | null;
+    format?: string | null;
+    width?: number | null;
+    height?: number | null;
+    duration_seconds?: number | null;
+    poster_url?: string | null;
+    has_watermark?: boolean | null;
+  }>;
   const videos = media
     .filter((m) => m.type === "video" && m.url)
-    .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
+    .map((m) => ({
+      url: m.url,
+      file_name: m.file_name ?? null,
+      source: m.source ?? null,
+      format: m.format ?? null,
+      width: m.width ?? null,
+      height: m.height ?? null,
+      durationSeconds: m.duration_seconds != null ? Number(m.duration_seconds) : null,
+      posterUrl: m.poster_url ?? null,
+      hasWatermark: m.has_watermark ?? null,
+    }));
   const plans = media
     .filter((m) => m.type === "plan" && m.url)
     .map((m) => ({ url: m.url, file_name: m.file_name ?? null }));
 
+  // Story aprobado (o null → fallback determinista) y capa curada de barrio.
+  // Ambos tolerantes a fallos: sin migración 0144 el SmartLink no se cae.
+  const [experience, neighborhood] = await Promise.all([
+    getStoryExperiencePublic(row.id),
+    getNeighborhoodPublic({
+      zone: row.zone,
+      subzone: (row as { subzone?: string | null }).subzone ?? null,
+      lat: property.latitude ?? null,
+      lng: property.longitude ?? null,
+    }),
+  ]);
+
   return (
-    <PublicPropertyView property={property} videos={videos} plans={plans} />
+    <>
+      <CollectionReturnBar />
+      <PublicPropertyView
+        property={property}
+        videos={videos}
+        plans={plans}
+        story={experience.blocks}
+        prelude={experience.prelude}
+        preludeHeadline={experience.preludeHeadline}
+        universities={findNearbyUniversities({
+          lat: property.latitude ?? null,
+          lng: property.longitude ?? null,
+        })}
+        mapProvider={currentMapProvider().provider}
+        experienceState={experience.state}
+        neighborhood={neighborhood}
+      />
+    </>
   );
 }

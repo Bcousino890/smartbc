@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/description/description.json",
+  "title": "Description Object",
+  "type": "object",
+  "required":["language","text"],
+  "additionalProperties": false,
+  "dependencies": {
+    "text": ["language"]
+  },
+  "properties": {
+    "language": {
+      "description": "Language ISO code (https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes). Currently we accept the following values: es (Spanish), it (Italian), pt (Portuguese), en (English), de (German), fr (French), ru (Russian), zh (Chinese), ca (Catalan), fi (Finnish), nl (Dutch), pl (Polish), ro (Romanian), sv (Swedish), da (Danish), nb (Norwegian), el (Greek), uk (Ukraine)",
+      "enum": [
+        "es",
+        "it",
+        "pt",
+        "en",
+        "de",
+        "fr",
+        "ru",
+        "zh",
+        "ca",
+        "fi",
+        "nl",
+        "pl",
+        "ro",
+        "sv",
+        "da",
+        "nb",
+        "el",
+        "uk"
+      ]
+    },
+    "text": {
+      "title": "description text",
+      "$ref": "../rules.json#/stringTo4000"
+    }
+  }
+}

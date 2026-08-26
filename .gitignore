@@ -12,7 +12,11 @@
 /coverage
 
 # next.js
-/.next/
+# Un patrón, no una lista: el despliegue crea .next.new/.old/.prev/.failed y
+# cualquier QA visual compila en el suyo (NEXT_BUILD_DIR). Enumerarlos uno a
+# uno dejaba el siguiente sin ignorar, y un build de 50 MB acababa en
+# `git status` pidiendo que se commiteara.
+/.next*/
 /out/
 
 # production
@@ -45,3 +49,9 @@ next-env.d.ts
 
 # Claude Code local settings
 .claude/
+
+# Bundles esbuild para ejecutar en el VPS: artefactos derivados, se
+# regeneran desde su .mts (ver handoff). Un bundle viejo en el repo puede
+# ejecutar logica de gate obsoleta contra produccion: nunca se versionan.
+scripts/*.bundle.mjs
+scripts/*.bundle.cjs

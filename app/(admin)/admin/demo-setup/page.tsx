@@ -1,16 +1,8 @@
-import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { DemoSetupClient } from "./demo-setup-client";
+import { redirect } from "next/navigation";
+import { getCurrentProfile } from "@/lib/db/queries/session";
 
-export const dynamic = "force-dynamic";
-
-export default function DemoSetupPage() {
-  return (
-    <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col px-6 pb-10 lg:px-10">
-      <AdminPageHeader
-        titleKey="Demo Setup"
-        subtitleKey="Crear clientes y solicitudes de documentación de demostración"
-      />
-      <DemoSetupClient />
-    </div>
-  );
+export default async function DemoSetupRedirect() {
+  const profile = await getCurrentProfile();
+  const country = (profile as any)?.country === "cl" ? "cl" : "es";
+  redirect(`/${country}/admin/demo-setup`);
 }

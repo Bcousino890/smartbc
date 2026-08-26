@@ -72,17 +72,17 @@ export function FeedsTable({
     <section className="rounded-2xl border border-gold/15 bg-cream-50/80 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.25)] backdrop-blur-sm md:p-6">
       <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
         <div>
-          <h2 className="font-serif text-xl font-medium text-ink">
+          <h2 className="crm-section-title text-ink">
             {t("sindicacion.feeds.title")}
           </h2>
-          <p className="mt-0.5 text-[12px] text-ink/55">
+          <p className="mt-0.5 text-xs text-ink/55">
             {t("sindicacion.feeds.subtitle")}
           </p>
         </div>
         <button
           type="button"
           onClick={onCreateClick}
-          className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft"
+          className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
         >
           <Plus size={14} strokeWidth={1.75} className="text-gold" />
           <span>{t("sindicacion.new.button")}</span>
@@ -92,7 +92,7 @@ export function FeedsTable({
       <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[860px] border-separate border-spacing-y-1.5 text-left text-sm">
           <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+            <tr className="crm-table-header text-ink/50">
               <th className="px-4 pb-2">{t("sindicacion.table.agency")}</th>
               <th className="px-4 pb-2">{t("sindicacion.table.scraper")}</th>
               <th className="px-4 pb-2">{t("sindicacion.table.health")}</th>
@@ -177,23 +177,23 @@ function FeedRow({ feed }: { feed: FeedRowVM }) {
       <tr className={cn("bg-white/55 transition", !feed.active && "opacity-60")}>
         <td className="rounded-l-xl px-4 py-3">
           <p className="font-medium text-ink">{feed.agencyName}</p>
-          <p className="text-[11px] text-ink/55">{feed.agencySlug}</p>
+          <p className="text-xs text-ink/55">{feed.agencySlug}</p>
         </td>
         <td className="px-4 py-3">
-          <span className="inline-flex items-center rounded-md border border-ink/10 bg-white/85 px-2 py-1 font-mono text-[11px] text-ink/75">
+          <span className="inline-flex items-center rounded-md border border-ink/10 bg-white/85 px-2 py-1 font-mono text-xs text-ink/75">
             {feed.scraperKey}
           </span>
         </td>
         <td className="px-4 py-3">
           {isRunning ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-[11px] font-medium text-gold-dark">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold-dark">
               <Loader2 size={11} className="animate-spin" />
               {t("sindicacion.status.running")}
             </span>
           ) : (
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
                 badge.bgClass,
                 badge.textClass,
               )}
@@ -207,17 +207,17 @@ function FeedRow({ feed }: { feed: FeedRowVM }) {
             </span>
           )}
           {feed.lastError && feed.health !== "healthy" && !isRunning && (
-            <p className="mt-1 max-w-[220px] truncate text-[10px] text-rose-600/85">
+            <p className="mt-1 max-w-[220px] truncate text-xs text-rose-600/85">
               {feed.lastError}
             </p>
           )}
         </td>
-        <td className="px-4 py-3 text-[12px] text-ink/65">
+        <td className="px-4 py-3 text-xs text-ink/65">
           {feed.lastRunMinutesAgo == null
             ? t("sindicacion.table.neverRun")
             : formatRelativeMinutes(feed.lastRunMinutesAgo, t)}
         </td>
-        <td className="px-4 py-3 text-[12px] text-ink/65">
+        <td className="px-4 py-3 text-xs text-ink/65">
           {t("sindicacion.table.everyHours", { n: feed.frequencyHours })}
         </td>
         <td className="rounded-r-xl px-4 py-3">
@@ -226,7 +226,7 @@ function FeedRow({ feed }: { feed: FeedRowVM }) {
               type="button"
               onClick={runSync}
               disabled={blocked}
-              className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-[11px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
               title={
                 isRunning
                   ? t("sindicacion.actions.alreadyRunning")
@@ -272,7 +272,7 @@ function FeedRow({ feed }: { feed: FeedRowVM }) {
       {flash && (
         <tr>
           <td colSpan={6} className="px-4 pb-3">
-            <div className="rounded-lg border border-gold/25 bg-white/75 px-3 py-2 text-[12px] text-ink/75">
+            <div className="rounded-lg border border-gold/25 bg-white/75 px-3 py-2 text-xs text-ink/75">
               {flash}
             </div>
           </td>

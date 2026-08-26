@@ -1,0 +1,17 @@
+Sonda de deploy de smartbc.
+
+Para qué sirve: Next sirve `public/` leyendo del disco en cada petición (no hay
+`output: standalone`), así que este fichero aparece en
+https://portal.bcousinoprop.com/deploy-probe.txt en cuanto el VPS hace el
+`git reset --hard origin/main` del auto-deploy, SIN necesidad de reconstruir ni
+reiniciar nada.
+
+Sirve para distinguir dos averías que se ven igual desde fuera (la web no se
+actualiza):
+  - la sonda SÍ aparece  -> el cron baja el código; lo que falla es el build o
+    el reinicio de PM2. Mirar /var/log/smartbc-autodeploy.log y usar el botón de
+    /admin/configuracion (dispara scripts/rebuild-restart.sh).
+  - la sonda NO aparece  -> el cron no corre o no puede hacer fetch (clave SSH
+    /root/.ssh/github_pull). Hay que entrar por SSH al VPS.
+
+probe: 2026-08-10 rebuild-sin-ssh

@@ -39,7 +39,7 @@ function Toggle({
             onClick={() => !disabled && onChange(opt.value)}
             disabled={disabled}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
               active ? "bg-ink text-cream-50 shadow-sm" : "text-ink/65 hover:text-ink",
               disabled && "cursor-not-allowed opacity-60",
             )}
@@ -62,7 +62,7 @@ function FilterRow({
 }) {
   return (
     <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-      <span className="text-[11px] font-medium text-ink/60">{label}</span>
+      <span className="text-xs font-medium text-ink/60">{label}</span>
       {children}
     </div>
   );
@@ -84,7 +84,7 @@ function NumberInput({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[12px] text-ink focus-within:border-gold/55">
+    <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-xs text-ink focus-within:border-gold/55">
       {icon && <span className="text-gold">{icon}</span>}
       <input
         type="number"
@@ -225,7 +225,7 @@ export function CreateClientDialog() {
       <div className="mx-auto w-full max-w-xl rounded-2xl border border-gold/15 bg-cream-50/97 p-7 shadow-2xl">
         {/* Header */}
         <div className="mb-5">
-          <h2 className="font-serif text-xl font-semibold text-ink">Nuevo cliente</h2>
+          <h2 className="crm-section-title text-ink">Nuevo cliente</h2>
           <p className="mt-1 text-xs text-ink/55">Crea un nuevo cliente con sus preferencias de búsqueda</p>
         </div>
 
@@ -315,7 +315,7 @@ export function CreateClientDialog() {
                   value={form.sector}
                   onChange={(e) => patch("sector", e.target.value)}
                   disabled={isPending}
-                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] text-ink focus:border-gold/55 focus:outline-none disabled:opacity-60"
+                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none disabled:opacity-60"
                 >
                   <option value="Madrid">Madrid</option>
                 </select>
@@ -409,7 +409,7 @@ export function CreateClientDialog() {
                   type="text"
                   value={form.universities}
                   onChange={(e) => patch("universities", e.target.value)}
-                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[12px] placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-xs placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
                   disabled={isPending}
                   placeholder="Ej: UAM, IE, CUNEF"
                 />
@@ -445,7 +445,7 @@ export function CreateClientDialog() {
                       }
                     }}
                     className={cn(
-                      "rounded-full border px-3 py-1 text-[12px] font-medium transition",
+                      "rounded-full border px-3 py-1 text-xs font-medium transition",
                       active
                         ? "border-ink bg-ink text-cream-50"
                         : "border-ink/15 bg-white/70 text-ink/70 hover:border-ink/30 hover:text-ink",
@@ -461,13 +461,13 @@ export function CreateClientDialog() {
             {/* Subzonas */}
             {form.preferredZones.length > 0 && (
               <div className="mt-4 space-y-4 rounded-xl border border-gold/15 bg-white/40 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/50">Subzonas (opcional)</p>
+                <p className="crm-label-sm text-ink/50">Subzonas (opcional)</p>
                 {form.preferredZones.map((zone) => {
                   const subs = MADRID_ZONES_WITH_SUBZONES[zone] ?? [];
                   if (!subs.length) return null;
                   return (
                     <div key={zone}>
-                      <p className="mb-2 text-[12px] font-semibold text-ink/80">{zone}</p>
+                      <p className="mb-2 text-xs font-semibold text-ink/80">{zone}</p>
                       <div className="flex flex-wrap gap-2">
                         {subs.map((sub) => {
                           const subActive = (form.selectedSubzones[zone] ?? []).includes(sub);
@@ -486,7 +486,7 @@ export function CreateClientDialog() {
                                 });
                               }}
                               className={cn(
-                                "rounded-full border px-2.5 py-0.5 text-[11px] transition",
+                                "rounded-full border px-2.5 py-0.5 text-xs transition",
                                 subActive
                                   ? "border-gold/50 bg-gold/15 text-ink"
                                   : "border-ink/10 bg-white text-ink/60 hover:border-ink/20 hover:text-ink/80",
@@ -552,7 +552,7 @@ export function CreateClientDialog() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/50">
+    <p className="crm-label-sm text-ink/50">
       {children}
     </p>
   );
@@ -560,7 +560,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="mb-1 block text-[11px] font-medium text-ink/65">
+    <label className="mb-1 block text-xs font-medium text-ink/65">
       {children}
     </label>
   );

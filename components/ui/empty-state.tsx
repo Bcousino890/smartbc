@@ -20,8 +20,8 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-semibold text-ink/75">{title}</h3>
-      {description && <p className="mt-1 max-w-sm text-[12px] text-ink/45">{description}</p>}
+      <h3 className="text-sm font-bold text-ink/75">{title}</h3>
+      {description && <p className="mt-1 max-w-sm text-sm text-ink/45">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );

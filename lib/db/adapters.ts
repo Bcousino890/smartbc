@@ -18,7 +18,7 @@ import type {
   VisitRequest,
   VisitRequestStatus,
 } from "@/lib/types";
-import { extractFloor } from "@/lib/floor";
+import { resolveFloor } from "@/lib/floor";
 import type {
   Database,
   PropertyStatus,
@@ -149,9 +149,31 @@ const PROFILE_TYPE_BY_TAG: Record<string, ClientProfileType> = {
   Estudiante: "student",
   Trabajador: "worker",
   Empresa: "company",
+  Familia: "family",
+  Inversor: "investor",
 };
 
-export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
+/**
+ * Señales que la fila de `profiles` no lleva encima y que, sin ellas, esta
+ * función se inventaba: el asesor, lo que el cliente ha mirado y su última
+ * señal de vida. Quien las sepa las pasa; quien no, obtiene `null` y la ficha
+ * dice "sin dato" en vez de un cero con pinta de medida.
+ */
+export type AdminClientSignals = {
+  advisorName?: string | null;
+  propertiesViewed?: number | null;
+  messages?: number | null;
+  /** Marca más reciente de actividad real, venga de donde venga. */
+  lastActivityAt?: string | null;
+};
+
+/** Ventana con la que se considera vivo a un cliente. */
+const ACTIVE_WINDOW_DAYS = 90;
+
+export function clientRowToAdminClient(
+  row: ClientWithRelations,
+  signals: AdminClientSignals = {},
+): AdminClient {
   const tags = row.client_tag_assignments?.map((a) => a.client_tags) ?? [];
   const fullName = row.full_name?.trim() || row.email;
   const [firstName, ...rest] = fullName.split(/\s+/);
@@ -169,6 +191,27 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
   const favoritesCount = row.favorites?.[0]?.count ?? 0;
   const visitsCount = row.visit_requests?.[0]?.count ?? 0;
 
+  // La prioridad SÍ tiene origen: las etiquetas de categoría `priority` (VIP).
+  // Antes era la constante "normal", así que la estrella no aparecía nunca por
+  // mucho que alguien etiquetara al cliente.
+  const priority: ClientPriority = tags.some(
+    (t) => t?.category === "priority",
+  )
+    ? "high"
+    : "normal";
+
+  // Tampoco hay columna de estado, pero sí hay actividad datable. "Activo" es
+  // una definición explícita —movimiento en los últimos 90 días— y no una
+  // constante: antes los siete clientes salían activos, incluidos los que
+  // nadie había tocado desde su alta.
+  const lastSignal = signals.lastActivityAt ?? row.updated_at ?? row.created_at;
+  const status: ClientStatus =
+    lastSignal &&
+    Date.now() - new Date(lastSignal).getTime() <
+      ACTIVE_WINDOW_DAYS * 86_400_000
+      ? "active"
+      : "inactive";
+
   return {
     id: row.id,
     firstName: firstName ?? "",
@@ -181,7 +224,9 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     operation,
     stayType,
     preferredZone: prefs?.zones?.[0] ?? "—",
-    sector: "Madrid",
+    // No existe columna de sector para un cliente: lo que había aquí era la
+    // cadena "Madrid" para todo el mundo, Chile incluido.
+    sector: "",
     budgetMin: Number(prefs?.min_price ?? 0),
     budgetMax: Number(prefs?.max_price ?? 0),
     occupants: prefs?.occupants ?? 1,
@@ -189,17 +234,17 @@ export function clientRowToAdminClient(row: ClientWithRelations): AdminClient {
     workers: prefs?.workers ?? 1,
     pets: prefs?.pets ?? false,
     universities: (prefs as any)?.universities ?? undefined,
-    lastAccessText: undefined,
-    status: "active" as ClientStatus,
-    assignedAdvisor: "—",
+    lastAccessText: signals.lastActivityAt ?? undefined,
+    status,
+    assignedAdvisor: signals.advisorName ?? "",
     activity: {
-      propertiesViewed: 0,
+      propertiesViewed: signals.propertiesViewed ?? 0,
       favorites: favoritesCount,
       visitsRequested: visitsCount,
-      messages: 0,
+      messages: signals.messages ?? 0,
     },
     internalNotes: prefs?.notes ? [prefs.notes] : [],
-    priority: "normal" as ClientPriority,
+    priority,
   };
 }
 
@@ -224,6 +269,7 @@ export function visitRequestRowToLegacy(
   const clientName = row.profiles?.full_name?.trim() || row.profiles?.email || "—";
   return {
     id: row.id,
+    clientId: row.client_id,
     clientName,
     clientInitials: deriveInitials(clientName),
     clientEmail: row.profiles?.email,
@@ -249,6 +295,7 @@ export function profileRowToInternalUser(
     firstName: firstName ?? "",
     lastName: rest.join(" "),
     email: row.email,
+    phone: row.phone ?? undefined,
     initials: deriveInitials(display),
     roleKey: (["owner", "admin", "advisor", "client", "viewer", "agent_junior", "agent_senior", "agent_admin"].includes(row.role ?? "")
       ? row.role
@@ -256,6 +303,15 @@ export function profileRowToInternalUser(
     status: "active",
     joinedLabel: DATE_FORMATTER.format(new Date(row.created_at)),
     country: row.country ?? "es",
+    multiCountry: row.multi_country ?? false,
+    // `countries` puede no existir todavía como columna en el VPS: se lee de
+    // forma defensiva y se deriva de multi_country/country si falta.
+    countries:
+      (row as { countries?: string[] | null }).countries ??
+      (row.multi_country ? ["es", "cl"] : [row.country ?? "es"]),
+    // `custom_role_id` puede no existir todavía como columna en el VPS
+    // (migración 0090 pendiente): lectura defensiva.
+    customRoleId: (row as { custom_role_id?: string | null }).custom_role_id ?? null,
   };
 }
 
@@ -264,8 +320,8 @@ export function profileRowToInternalUser(
 // descriptivo basado en tipo + zona para evitar mostrar "Titulo" al cliente.
 const GENERIC_TITLE_RE = /^(t[ií]tulos?|titles?|propiedad|sin t[ií]tulo|untitled|—|-)$/i;
 
-function displayPropertyTitle(row: PropertyRow): string {
-  const raw = row.title?.trim() ?? "";
+function displayPropertyTitle(row: PropertyRow, titleOverride?: string): string {
+  const raw = (titleOverride ?? row.title)?.trim() ?? "";
   if (raw && !GENERIC_TITLE_RE.test(raw)) return raw;
   const typ = row.property_type?.trim();
   const typeLabel =
@@ -303,7 +359,26 @@ export function propertyRowToClientProperty(
     agencies?: { name: string; slug: string } | null;
     property_photos?: Array<{ url: string; is_cover: boolean; position: number }>;
   },
+  // Propiedad dual (venta + alquiler): permite pedir explícitamente la
+  // variante de alquiler (título, precio y operación de esa variante) vía
+  // `?op=rent` en el SmartLink/PDF. Se ignora si la propiedad no es dual.
+  opOverride?: "rent" | "sale",
 ): Property {
+  const isDual =
+    Array.isArray(row.operations) &&
+    row.operations.includes("sale") &&
+    row.operations.includes("rent");
+  const effectiveOp: "rent" | "sale" =
+    isDual && opOverride ? opOverride : row.operation;
+  const effectivePrice =
+    isDual && effectiveOp === "rent" && row.rent_price != null
+      ? Number(row.rent_price)
+      : Number(row.price);
+  const effectiveTitleRaw =
+    isDual && effectiveOp === "rent" && row.title_rent
+      ? row.title_rent
+      : row.title;
+
   const sortedPhotos = dedupePhotosByUrl(
     row.property_photos
       ?.slice()
@@ -327,19 +402,81 @@ export function propertyRowToClientProperty(
   const photoUrls = sortedPhotos.map(
     (_, i) => `/p/${row.slug}/${i}?v=${orderHash}`,
   );
-  const cover = photoUrls[0];
+  // Marca de agua de otro portal (0152). NULL todavía sin analizar → se trata
+  // como limpia: el dato sirve para PREFERIR una foto, nunca para esconderla.
+  const photoWatermarked = sortedPhotos.map(
+    (p) => (p as { ai_watermark?: boolean | null }).ai_watermark === true,
+  );
+  // ── Elección de portada ──
+  // La portada es lo PRIMERO que se ve, así que además de la composición
+  // (posición 0 = la elegida por el equipo) pesan dos cosas técnicas: que no
+  // lleve el logo de otro portal y que tenga resolución para el hueco que va
+  // a ocupar. Una foto preciosa de 850px pierde contra su equivalente de
+  // 1600 cuando el hero pide 2880. No se reordena la galería (sus índices son
+  // públicos y se comparten): solo cambia cuál se usa de portada.
+  const dimsOf = (i: number) =>
+    (sortedPhotos[i] as { source_width?: number | null } | undefined)?.source_width ?? null;
+  const coverIdx = (() => {
+    const w0 = dimsOf(0);
+    const clean0 = !photoWatermarked[0];
+    // "Corta" = no llega ni al ancho que pide el hero a 1× en un portátil
+    // (1440 CSS px). Por debajo de eso merece la pena mirar si hay algo
+    // claramente mejor entre las primeras.
+    const SHORT = 1440;
+    const needsBetter = !clean0 || (w0 != null && w0 < SHORT);
+    if (!needsBetter) return 0;
+    let best = 0;
+    let bestScore = -Infinity;
+    for (let i = 0; i < Math.min(sortedPhotos.length, 8); i++) {
+      const w = dimsOf(i);
+      // Sin dato de ancho no se penaliza (NULL es "no sé", no "pequeña").
+      const resolution = w == null ? SHORT : w;
+      const score =
+        resolution -
+        (photoWatermarked[i] ? 4000 : 0) - // una marca de agua pesa más que cualquier píxel
+        i * 40; // a igualdad, respeta el orden editorial
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    return best;
+  })();
+  const cover = photoUrls[coverIdx];
+  // Dimensiones reales de la portada (0153). El hero las necesita para no
+  // ofrecer en su `srcset` anchos que la fotografía no tiene: prometer 2560px
+  // de una foto de 850 no añade un solo detalle y engaña al navegador.
+  const coverMeta = sortedPhotos[coverIdx] as
+    | { source_width?: number | null; source_height?: number | null }
+    | undefined;
+  // SmartLink 2.0: clase de estancia por foto, alineada con photoUrls. El
+  // override humano manda; SOLO cruza el nombre de la clase (nada de hashes,
+  // modelo ni confianza — el umbral de uso se aplica aquí, server-side).
+  const photoClasses = sortedPhotos.map((p) => {
+    const meta = p as {
+      class_override?: string | null;
+      ai_class?: string | null;
+      ai_confidence?: number | null;
+    };
+    if (meta.class_override) return meta.class_override;
+    if (!meta.ai_class) return null;
+    // "LA FINCA" es el capítulo donde una foto mal clasificada más canta: una
+    // calle cualquiera presentada como el edificio. Por eso la fachada exige
+    // más certeza que el resto de clases; si no llega, el capítulo se queda
+    // sin foto, que es la degradación correcta.
+    const floor = meta.ai_class === "facade_building" ? 0.85 : 0.75;
+    return (meta.ai_confidence ?? 0) >= floor ? meta.ai_class : null;
+  });
   return {
     id: row.slug,
-    title: displayPropertyTitle(row),
+    title: displayPropertyTitle(row, effectiveTitleRaw),
     zone: row.zone,
     subzone: row.subzone ?? null,
     city: "Madrid",
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters ?? 0,
-    price: Number(row.price),
+    price: effectivePrice,
     stayType: row.stay === "short" ? "corta" : "larga",
-    operation: row.operation === "rent" ? "alquiler" : "venta",
+    operation: effectiveOp === "rent" ? "alquiler" : "venta",
+    hasBothOperations: isDual,
     image: cover ?? undefined,
     description: row.description ?? undefined,
     photos: photoUrls,
@@ -351,8 +488,13 @@ export function propertyRowToClientProperty(
     ),
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
+    photoClasses,
+    photoWatermarked,
+    coverWidth: coverMeta?.source_width ?? null,
+    coverHeight: coverMeta?.source_height ?? null,
     bcReference: row.bc_reference ?? null,
-    floor: extractFloor(
+    floor: resolveFloor(
+      (row as { floor_override?: string | null }).floor_override,
       [...(row.features ?? []), ...(row.features_manual ?? [])],
       row.title,
       row.description,
@@ -383,6 +525,10 @@ export function propertyRowToAdminProperty(
     agencyId: row.agencies?.slug ?? "",
     agencyName: row.agencies?.name ?? "—",
     operation: row.operation === "rent" ? "alquiler" : "venta",
+    isDualOperation:
+      Array.isArray(row.operations) &&
+      row.operations.includes("sale") &&
+      row.operations.includes("rent"),
     stayType:
       row.stay === "short" ? "corta" : row.stay === "long" ? "larga" : null,
     status: PROPERTY_STATUS_MAP[row.status],
@@ -390,7 +536,9 @@ export function propertyRowToAdminProperty(
     bathrooms: row.bathrooms,
     squareMeters: row.square_meters ?? 0,
     price: Number(row.price),
-    floor: extractFloor(
+    currency: (row as any).currency ?? null,
+    floor: resolveFloor(
+      (row as { floor_override?: string | null }).floor_override,
       [...(row.features ?? []), ...(row.features_manual ?? [])],
       row.title,
       row.description,

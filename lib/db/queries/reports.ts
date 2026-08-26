@@ -10,7 +10,11 @@ export type ReportsStatsData = {
   byOperation: Record<string, number>;
 };
 
-export async function getReportsStats(): Promise<ReportsStatsData> {
+// `country` aísla los reportes por país ('es' | 'cl'). Sin argumento se
+// mantiene el comportamiento histórico (todo el CRM) que usan el árbol raíz
+// y España; Chile pasa 'cl'. property_shares no tiene columna country, así
+// que se filtra vía join con properties (igual que en getDashboardData).
+export async function getReportsStats(country?: string): Promise<ReportsStatsData> {
   const supabase = createAdminClient();
 
   const now = new Date();
@@ -20,32 +24,47 @@ export async function getReportsStats(): Promise<ReportsStatsData> {
     1,
   ).toISOString();
 
+  let propertiesQ = supabase
+    .from("properties")
+    .select("*", { count: "exact", head: true })
+    .is("archived_at", null);
+  if (country) propertiesQ = propertiesQ.eq("country", country);
+
+  let clientsQ = supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("role", "client");
+  if (country) clientsQ = clientsQ.eq("country", country);
+
+  let visitsQ = supabase
+    .from("visit_requests")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", startOfMonth);
+  if (country) visitsQ = visitsQ.eq("country", country);
+
+  const linksQ = country
+    ? supabase
+        .from("property_shares")
+        .select("opens_count, properties!inner(country)")
+        .eq("properties.country", country)
+    : supabase.from("property_shares").select("opens_count");
+
+  let byZoneQ = supabase
+    .from("properties")
+    .select("zone")
+    .is("archived_at", null)
+    .not("zone", "is", null);
+  if (country) byZoneQ = byZoneQ.eq("country", country);
+
+  let byOperationQ = supabase
+    .from("properties")
+    .select("operation")
+    .is("archived_at", null)
+    .not("operation", "is", null);
+  if (country) byOperationQ = byOperationQ.eq("country", country);
+
   const [properties, clients, visits, links, byZone, byOperation] =
-    await Promise.all([
-      supabase
-        .from("properties")
-        .select("*", { count: "exact", head: true })
-        .is("archived_at", null),
-      supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("role", "client"),
-      supabase
-        .from("visit_requests")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", startOfMonth),
-      supabase.from("property_shares").select("opens_count"),
-      supabase
-        .from("properties")
-        .select("zone")
-        .is("archived_at", null)
-        .not("zone", "is", null),
-      supabase
-        .from("properties")
-        .select("operation")
-        .is("archived_at", null)
-        .not("operation", "is", null),
-    ]);
+    await Promise.all([propertiesQ, clientsQ, visitsQ, linksQ, byZoneQ, byOperationQ]);
 
   const totalOpens = (
     (links.data ?? []) as Array<{ opens_count: number | null }>

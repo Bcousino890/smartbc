@@ -1,43 +1,60 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 
-export async function getDashboardData() {
+// `country` aísla los KPIs por país ('es' | 'cl'). Sin argumento se mantiene
+// el comportamiento histórico (todo el CRM junto) que usan el árbol raíz y
+// España. El dashboard de Chile pasa 'cl' para no mezclar el catálogo español.
+export async function getDashboardData(country?: string) {
   const db = createAdminClient() as any;
 
-  const [props, clients, visits, shares, recentProps, recentVisits] =
-    await Promise.all([
-      db
-        .from("properties")
-        .select("*", { count: "exact", head: true })
-        .is("archived_at", null)
-        .eq("status", "available"),
-      db
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("role", "client"),
-      db
-        .from("visit_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending"),
-      db
+  let propsQ = db
+    .from("properties")
+    .select("*", { count: "exact", head: true })
+    .is("archived_at", null)
+    .eq("status", "available");
+  if (country) propsQ = propsQ.eq("country", country);
+
+  let clientsQ = db
+    .from("profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("role", "client");
+  if (country) clientsQ = clientsQ.eq("country", country);
+
+  let visitsQ = db
+    .from("visit_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pending");
+  if (country) visitsQ = visitsQ.eq("country", country);
+
+  // property_shares no tiene columna country: se filtra vía la propiedad.
+  let sharesQ = country
+    ? db
         .from("property_shares")
-        .select("*", { count: "exact", head: true }),
-      db
-        .from("properties")
-        .select(
-          "id,slug,title,zone,price,operation,status,bc_reference,cover_photo_url"
-        )
-        .is("archived_at", null)
-        .order("created_at", { ascending: false })
-        .limit(5),
-      db
-        .from("visit_requests")
-        .select(
-          "id,created_at,status,profiles!visit_requests_client_id_fkey(full_name,email),properties(title,bc_reference)"
-        )
-        .order("created_at", { ascending: false })
-        .limit(5),
-    ]);
+        .select("id, properties!inner(country)", { count: "exact", head: true })
+        .eq("properties.country", country)
+    : db.from("property_shares").select("*", { count: "exact", head: true });
+
+  let recentPropsQ = db
+    .from("properties")
+    .select(
+      "id,slug,title,zone,commune,price,currency,operation,status,bc_reference,cover_photo_url"
+    )
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (country) recentPropsQ = recentPropsQ.eq("country", country);
+
+  let recentVisitsQ = db
+    .from("visit_requests")
+    .select(
+      "id,created_at,status,profiles!visit_requests_client_id_fkey(full_name,email),properties(title,bc_reference)"
+    )
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (country) recentVisitsQ = recentVisitsQ.eq("country", country);
+
+  const [props, clients, visits, shares, recentProps, recentVisits] =
+    await Promise.all([propsQ, clientsQ, visitsQ, sharesQ, recentPropsQ, recentVisitsQ]);
 
   return {
     kpis: {
@@ -51,7 +68,9 @@ export async function getDashboardData() {
       slug: string;
       title: string;
       zone: string | null;
+      commune: string | null;
       price: number | null;
+      currency: string | null;
       operation: string | null;
       status: string | null;
       bc_reference: string | null;

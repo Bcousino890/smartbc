@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               key={t.id}
               style={{ animation: "toast-slide-in 0.3s ease forwards" }}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg text-sm font-medium",
+                "flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg text-sm",
                 COLORS[t.type]
               )}
             >

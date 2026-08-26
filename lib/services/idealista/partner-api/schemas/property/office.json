@@ -1,0 +1,227 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/office.json",
+  "title": "Office features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "areaConstructed",
+    "conservation",
+    "officeBuilding",
+    "roomsSplitted",
+    "conditionedAirType",
+    "energyCertificateRating",
+    "liftNumber",
+    "parkingSpacesNumber"
+  ],
+  "properties": {
+    "areaConstructed": {
+      "$ref": "../rules.json#/integer1to999999"
+    },
+    "securitySystem": {
+      "$ref": "features.json#/securitySystem"
+    },
+    "accessControl": {
+      "$ref": "features.json#/accessControl"
+    },
+    "areaUsable": {
+      "$ref": "features.json#/areaUsable"
+    },
+    "bathroomInside": {
+      "$ref": "features.json#/bathroomInside"
+    },
+    "bathroomNumber": {
+      "$ref": "features.json#/bathroomNumber"
+    },
+    "bathroomType": {
+      "$ref": "features.json#/bathroomType"
+    },
+    "builtYear": {
+      "$ref": "features.json#/builtYear"
+    },
+    "buildingAdapted": {
+      "$ref": "features.json#/buildingAdapted"
+    },
+    "conditionedAirType": {
+      "$ref": "features.json#/conditionedAirType"
+    },
+    "conservation": {
+      "$ref": "features.json#/conservation"
+    },
+    "doorman": {
+      "$ref": "features.json#/doorman"
+    },
+    "emergencyExit": {
+      "$ref": "features.json#/emergencyExit"
+    },
+    "emergencyLights": {
+      "$ref": "features.json#/emergencyLights"
+    },
+    "energyCertificateRating": {
+      "$ref": "features.json#/energyCertificateRating"
+    },
+    "energyCertificatePerformance": {
+      "$ref": "features.json#/energyCertificatePerformance"
+    },
+    "energyCertificateLaw": {
+      "$ref": "features.json#/energyCertificateLaw"
+    },
+    "energyCertificateEmissionsRating": {
+      "$ref": "features.json#/energyCertificateEmissionsRating"
+    },
+    "energyCertificateEmissionsValue": {
+      "$ref": "features.json#/energyCertificateEmissionsValue"
+    },
+    "energyCertificationDate": {
+      "$ref": "features.json#/energyCertificationDate"
+    },
+    "energyCertificationAdemeCode": {
+      "$ref": "features.json#/energyCertificationAdemeCode"
+    },
+    "equippedKitchen": {
+      "$ref": "features.json#/equippedKitchen"
+    },
+    "extinguishers": {
+      "$ref": "features.json#/extinguishers"
+    },
+    "fireDetectors": {
+      "$ref": "features.json#/fireDetectors"
+    },
+    "fireDoors": {
+      "$ref": "features.json#/fireDoors"
+    },
+    "floorsBuilding": {
+      "$ref": "features.json#/floorsBuilding"
+    },
+    "floorsProperty": {
+      "$ref": "features.json#/floorsProperty"
+    },
+    "heating": {
+      "$ref": "features.json#/heating"
+    },
+    "hotWater": {
+      "$ref": "features.json#/hotWater"
+    },
+    "liftNumber": {
+      "$ref": "features.json#/liftNumber"
+    },
+    "officeBuilding": {
+      "$ref": "features.json#/officeBuilding"
+    },
+    "orientationEast": {
+      "$ref": "features.json#/orientationEast"
+    },
+    "orientationNorth": {
+      "$ref": "features.json#/orientationNorth"
+    },
+    "orientationSouth": {
+      "$ref": "features.json#/orientationSouth"
+    },
+    "orientationWest": {
+      "$ref": "features.json#/orientationWest"
+    },
+    "parkingSpacesNumber": {
+      "$ref": "features.json#/parkingSpacesNumber"
+    },
+    "roomsSplitted": {
+      "$ref": "features.json#/roomsSplitted"
+    },
+    "securityDoor": {
+      "$ref": "features.json#/securityDoor"
+    },
+    "sprinklers": {
+      "$ref": "features.json#/sprinklers"
+    },
+    "suspendedCeiling": {
+      "$ref": "features.json#/suspendedCeiling"
+    },
+    "suspendedFloor": {
+      "$ref": "features.json#/suspendedFloor"
+    },
+    "storage": {
+      "$ref": "features.json#/storage"
+    },
+    "windowsDouble": {
+      "$ref": "features.json#/windowsDouble"
+    },
+    "windowsLocation": {
+      "$ref": "features.json#/windowsLocation"
+    },
+    "priceCommunity": {
+      "$ref": "features.json#/priceCommunity"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "areaTradableMinimum": {
+      "$ref": "features.json#/areaTradableMinimum"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "type": {
+      "$ref": "features.json#/officeType"
+    },
+    "sharedArea": {
+      "$ref": "features.json#/sharedArea"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    },
+    "serviceCharges": {
+      "$ref": "features.json#/serviceCharges"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "coworking"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "areaConstructed": {
+            "$ref": "../rules.json#/integer1to15"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "areaConstructed": {
+            "$ref": "features.json#/officeAreaConstructed"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/building.json",
+  "title": "Building features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "areaConstructed",
+    "energyCertificateRating",
+    "floorsBuilding",
+    "conservation",
+    "parkingSpacesNumber"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "classificationChalet"
+      ]
+    },
+    {
+      "required": [
+        "classificationCommercial"
+      ]
+    },
+    {
+      "required": [
+        "classificationHotel"
+      ]
+    },
+    {
+      "required": [
+        "classificationIndustrial"
+      ]
+    },
+    {
+      "required": [
+        "classificationOffice"
+      ]
+    },
+    {
+      "required": [
+        "classificationOther"
+      ]
+    }
+  ],
+  "properties": {
+    "areaConstructed": {
+      "$ref": "features.json#/buildingAreaConstructed"
+    },
+    "areaTradableMinimum": {
+      "description": "Only allowed for rent operation",
+      "$ref": "features.json#/buildingAreaTradableMinimum"
+    },
+    "builtYear": {
+      "$ref": "features.json#/builtYear"
+    },
+    "classificationChalet": {
+      "$ref": "features.json#/classificationChalet"
+    },
+    "classificationCommercial": {
+      "$ref": "features.json#/classificationCommercial"
+    },
+    "classificationHotel": {
+      "$ref": "features.json#/classificationHotel"
+    },
+    "classificationIndustrial": {
+      "$ref": "features.json#/classificationIndustrial"
+    },
+    "classificationOffice": {
+      "$ref": "features.json#/classificationOffice"
+    },
+    "classificationOther": {
+      "$ref": "features.json#/classificationOther"
+    },
+    "conservation": {
+      "$ref": "features.json#/conservation"
+    },
+    "energyCertificateRating": {
+      "$ref": "features.json#/energyCertificateRating"
+    },
+    "energyCertificatePerformance": {
+      "$ref": "features.json#/energyCertificatePerformance"
+    },
+    "energyCertificateLaw": {
+      "$ref": "features.json#/energyCertificateLaw"
+    },
+    "energyCertificateEmissionsRating": {
+      "$ref": "features.json#/energyCertificateEmissionsRating"
+    },
+    "energyCertificateEmissionsValue": {
+      "$ref": "features.json#/energyCertificateEmissionsValue"
+    },
+    "floorsBuilding": {
+      "$ref": "features.json#/floorsBuilding"
+    },
+    "liftNumber": {
+      "$ref": "features.json#/liftNumber"
+    },
+    "parkingSpacesNumber": {
+      "$ref": "features.json#/parkingSpacesNumber"
+    },
+    "propertyTenants": {
+      "description": "Only allowed and mandatory for sale operation, it must not be send if is rent operation",
+      "$ref": "features.json#/propertyTenants"
+    },
+    "securityPersonnel": {
+      "description": "Only allowed for rent operation",
+      "$ref": "features.json#/securityPersonnel"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "garden": {
+      "$ref": "features.json#/garden"
+    },
+    "gardenType": {
+      "$ref": "features.json#/gardenType"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "builtProperties": {
+      "description": "Number of houses in a residential building. Only allowed if classificationChalet is true",
+      "$ref": "features.json#/builtProperties"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    },
+    "energyCertificationDate": {
+      "$ref": "features.json#/energyCertificationDate"
+    },
+    "energyCertificationAdemeCode": {
+      "$ref": "features.json#/energyCertificationAdemeCode"
+    }
+  }
+}

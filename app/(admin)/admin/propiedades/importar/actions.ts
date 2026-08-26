@@ -2,13 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
+import { assertPermission } from "@/lib/auth/guard";
 import { createClient } from "@/lib/db/server";
 import { extractFromUrl } from "@/lib/sync/import-by-link";
+import { linkPropertyToPortalLink } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
 import { insertImportedProperty } from "@/lib/sync/import-by-link/insert";
 import type {
   ImportExtractError,
   ImportPreview,
 } from "@/lib/sync/import-by-link/types";
+import type { Country } from "@/lib/country-config";
 
 export type PreviewByLinkResult =
   | { ok: true; preview: ImportPreview }
@@ -17,6 +20,7 @@ export type PreviewByLinkResult =
 export async function previewByLink(
   url: string,
 ): Promise<PreviewByLinkResult> {
+  await assertPermission("properties", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return { ok: false, error: auth.error, kind: "auth" };
@@ -58,6 +62,17 @@ export async function previewByLink(
 export type ConfirmByLinkInput = {
   preview: ImportPreview;
   agencySlug: string;
+  // País del catálogo donde se guarda la propiedad importada. Opcional para
+  // no romper llamadores existentes; sin él, `insertImportedProperty` usa el
+  // default de la BD ('es').
+  country?: Country;
+  /**
+   * Enlace de portal del que sale esta importación (bloque "Enlaces de
+   * portales" de una ficha de cliente). Si viene, al terminar se vincula la
+   * ficha creada al enlace y la propiedad entra en la selección del cliente:
+   * es lo que cierra el círculo enlace → ficha → itinerario → colección.
+   */
+  portalLinkId?: string;
   overrides: {
     title: string;
     description: string | null;
@@ -78,17 +93,24 @@ export type ConfirmByLinkInput = {
 };
 
 export type ConfirmByLinkResult =
-  | { ok: true; slug: string; photosProcessed: number }
+  | {
+      ok: true;
+      slug: string;
+      photosProcessed: number;
+      /** Solo cuando venía `portalLinkId`. false si el vínculo no pudo hacerse. */
+      linkedToClient?: boolean;
+    }
   | { ok: false; error: string };
 
 export async function confirmByLink(
   input: ConfirmByLinkInput,
 ): Promise<ConfirmByLinkResult> {
+  await assertPermission("properties", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
 
-  const { preview, agencySlug, overrides } = input;
+  const { preview, agencySlug, overrides, country, portalLinkId } = input;
 
   // Validaciones mínimas — la UI ya filtra, esto es defensa en profundidad.
   if (!overrides.title.trim()) return { ok: false, error: "title_required" };
@@ -119,6 +141,7 @@ export async function confirmByLink(
     preview: { ...preview, photos: filteredPhotos },
     agencyId: agency.id,
     agencySlug,
+    ...(country ? { country } : {}),
     overrides: {
       title: overrides.title.trim(),
       description: overrides.description?.trim() || null,
@@ -138,9 +161,21 @@ export async function confirmByLink(
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath("/admin/propiedades");
+  if (country) revalidatePath(`/${country}/admin/propiedades`);
+
+  // Vincular con el enlace de portal del que venía. Si falla (permisos del
+  // módulo, enlace ya borrado), la propiedad YA está creada: se avisa en la
+  // respuesta en vez de deshacer una importación buena.
+  let linkedToClient: boolean | undefined;
+  if (portalLinkId) {
+    const linkRes = await linkPropertyToPortalLink(portalLinkId, result.propertyId);
+    linkedToClient = linkRes.ok;
+  }
+
   return {
     ok: true,
     slug: result.slug,
     photosProcessed: result.photosProcessed,
+    ...(linkedToClient === undefined ? {} : { linkedToClient }),
   };
 }

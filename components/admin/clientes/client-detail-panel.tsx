@@ -106,7 +106,7 @@ export function ClientDetailPanel({
   if (!client) {
     return (
       <aside className="flex flex-col items-center justify-center rounded-2xl border border-gold/15 bg-cream-50/85 p-8 text-center shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
-        <p className="font-serif text-lg text-ink">
+        <p className="crm-section-title text-ink">
           {t("clientes.detail.empty.title")}
         </p>
         <p className="mt-2 max-w-xs text-sm text-ink/60">
@@ -217,12 +217,12 @@ function ClientHeader({ client }: { client: AdminClient }) {
           {client.avatarInitials}
         </span>
         <div className="min-w-0">
-          <h2 className="truncate font-serif text-xl font-semibold text-ink">
+          <h2 className="truncate crm-section-title text-ink">
             {client.firstName} {client.lastName}
           </h2>
           <span
             className={cn(
-              "mt-1 inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+              "mt-1 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium",
               isActive
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                 : "border-ink/15 bg-ink/5 text-ink/55",
@@ -245,7 +245,7 @@ function ClientHeader({ client }: { client: AdminClient }) {
 
 function ContactInfo({ client }: { client: AdminClient }) {
   return (
-    <ul className="mt-4 grid grid-cols-1 gap-2 text-[12px] text-ink/70 sm:grid-cols-3">
+    <ul className="mt-4 grid grid-cols-1 gap-2 text-xs text-ink/70 sm:grid-cols-3">
       <li className="flex items-center gap-1.5 truncate">
         <Mail size={13} strokeWidth={1.75} className="text-gold" />
         <span className="truncate">{client.email}</span>
@@ -274,7 +274,7 @@ function ActivityBlock({ client }: { client: AdminClient }) {
     : (a.lastConnectionText ?? "—");
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+      <p className="crm-label-sm text-ink/55">
         {t("clientes.detail.activity.title")}
       </p>
       <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
@@ -343,10 +343,10 @@ function ActivityItem({
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-gold">
         {icon}
       </span>
-      <span className="font-serif text-base font-semibold text-ink">
+      <span className="text-base font-bold text-ink">
         {value}
       </span>
-      <span className="text-[10px] leading-tight text-ink/55">{t(labelKey)}</span>
+      <span className="text-xs leading-tight text-ink/55">{t(labelKey)}</span>
     </li>
   );
 }
@@ -366,7 +366,7 @@ function CustomFiltersBlock({
 
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+      <p className="crm-label-sm text-ink/55">
         {t("clientes.detail.filters.title")}
       </p>
 
@@ -475,7 +475,7 @@ function CustomFiltersBlock({
         </FilterRow>
       </div>
 
-      <p className="mt-3 flex items-start gap-2 rounded-lg border border-gold/30 bg-cream-100/60 p-2.5 text-[11px] leading-snug text-ink/70">
+      <p className="mt-3 flex items-start gap-2 rounded-lg border border-gold/30 bg-cream-100/60 p-2.5 text-xs leading-snug text-ink/70">
         <Info size={13} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold" />
         <span>{t("clientes.detail.filters.notice")}</span>
       </p>
@@ -516,7 +516,7 @@ function InternalNotesBlock({ client }: { client: AdminClient }) {
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
       <header className="flex items-center justify-between">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+        <p className="crm-label-sm text-ink/55">
           {t("clientes.detail.notes.title")}
         </p>
         <button
@@ -530,11 +530,11 @@ function InternalNotesBlock({ client }: { client: AdminClient }) {
 
       <div className="mt-3 rounded-xl border border-gold/15 bg-white/55 p-3">
         {client.internalNotes.length === 0 ? (
-          <p className="text-[12px] text-ink/55">
+          <p className="text-xs text-ink/55">
             {t("clientes.detail.notes.empty")}
           </p>
         ) : (
-          <ul className="list-disc space-y-1.5 pl-5 text-[13px] text-ink/75">
+          <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink/75">
             {client.internalNotes.map((note, i) => (
               <li key={i}>{note}</li>
             ))}
@@ -543,7 +543,7 @@ function InternalNotesBlock({ client }: { client: AdminClient }) {
 
         <p
           className={cn(
-            "mt-3 flex items-center gap-1.5 text-[12px] font-semibold",
+            "mt-3 flex items-center gap-1.5 text-xs font-semibold",
             client.priority === "high" ? "text-amber-700" : "text-ink/55",
           )}
         >
@@ -590,7 +590,7 @@ function ActionsRow({
           onClick={onReset}
           disabled={!isDirty || isPending}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-[13px] font-medium text-ink transition",
+            "flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-sm font-medium text-ink transition",
             "hover:border-gold/55 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
@@ -602,7 +602,7 @@ function ActionsRow({
           onClick={onSave}
           disabled={!isDirty || isPending}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[13px] font-medium text-cream-50 transition",
+            "flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-cream-50 transition",
             "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
@@ -616,19 +616,19 @@ function ActionsRow({
       </div>
 
       {feedback === "saved" && (
-        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[12px] font-medium text-emerald-700">
+        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700">
           <Check size={13} strokeWidth={2} />
           <span>{t("clientes.detail.actions.saved")}</span>
         </p>
       )}
       {feedback === "error" && (
-        <p className="mt-2.5 text-center text-[12px] font-medium text-red-600">
+        <p className="mt-2.5 text-center text-xs font-medium text-red-600">
           {t("clientes.detail.actions.error")}
           {errorMsg ? ` · ${errorMsg}` : ""}
         </p>
       )}
       {feedback === "idle" && isDirty && (
-        <p className="mt-2.5 text-center text-[11px] text-ink/55">
+        <p className="mt-2.5 text-center text-xs text-ink/55">
           {t("clientes.detail.actions.unsaved")}
         </p>
       )}
@@ -645,7 +645,7 @@ function FilterRow({
 }) {
   return (
     <div className="grid grid-cols-[80px_1fr] items-center gap-3">
-      <span className="text-[11px] font-medium text-ink/60">{label}</span>
+      <span className="text-xs font-medium text-ink/60">{label}</span>
       {children}
     </div>
   );
@@ -670,7 +670,7 @@ function Toggle({
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
               active
                 ? "bg-ink text-cream-50 shadow-sm"
                 : "text-ink/65 hover:text-ink",
@@ -700,7 +700,7 @@ function NumberInput({
   suffix?: string;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-[12px] text-ink focus-within:border-gold/55">
+    <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-xs text-ink focus-within:border-gold/55">
       {icon && <span className="text-gold">{icon}</span>}
       <input
         type="number"
@@ -730,7 +730,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] text-ink focus:border-gold/55 focus:outline-none"
+      className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>

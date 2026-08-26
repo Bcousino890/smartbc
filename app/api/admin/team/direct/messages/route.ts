@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function GET(req: Request) {
   const profile = await getCurrentProfile();
@@ -82,10 +83,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role === "client") {
-    return Response.json({ error: "No autorizado" }, { status: 401 });
-  }
+  // Gate de autorización: enviar mensajes directos requiere mensajes/create.
+  const gate = await requirePermission("mensajes", "create");
+  if (!gate.ok) return gate.response;
+  const profile = gate.profile;
 
   let body: { conversationId?: string; recipientId?: string; content: string };
   try {

@@ -13,6 +13,10 @@ APP_DIR=/path/a/smartbc
 # Verificación de teléfonos en particulares - cada 2 días a las 00:00 UTC
 0 0 */2 * * $APP_DIR/scripts/verify-particulares-phones.sh missing 100 >> $APP_DIR/logs/cron-verify-phones.log 2>&1
 
+# Limpieza del log de la API pública - cada día a las 03:30 UTC
+# Purga api_requests de más de 90 días e idempotencias de más de 24 h.
+30 3 * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3137/api/cron/api-cleanup >> $APP_DIR/logs/cron-api-cleanup.log 2>&1
+
 # Notas:
 # 1. Reemplaza /path/a/smartbc con la ruta real del proyecto en el VPS
 # 2. Reemplaza tu-secret-aqui con el valor real de CRON_SECRET

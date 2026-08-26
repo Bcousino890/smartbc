@@ -1,8 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { requirePermission } from "@/lib/auth/guard";
 
 export async function POST(req: Request) {
   try {
+    // Gate de autorización: eliminar media de una publicación requiere publicacion/edit.
+    const gate = await requirePermission("publicacion", "edit");
+    if (!gate.ok) return gate.response;
+
     const { mediaId } = await req.json();
 
     if (!mediaId) {

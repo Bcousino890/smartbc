@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/property_modify.json",
+  "title": "Property Object",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "address",
+    "contactId",
+    "features",
+    "operation"
+  ],
+  "properties": {
+    "propertyId": {
+      "title": "idealista Property identifier",
+      "description": "PropertyId. This field is deprecated and won't be used anymore in idealista",
+      "type": "integer",
+      "deprecated": true
+    },
+    "type": {
+      "title": "property types",
+      "description": "Typology availability",
+      "enum": [
+        "flat",
+        "house",
+        "countryhouse",
+        "garage",
+        "office",
+        "commercial",
+        "land",
+        "storage",
+        "building",
+        "room"
+      ]
+    },
+    "address": {
+      "title": "Property address",
+      "$ref": "address.json#"
+    },
+    "reference": {
+      "title": "Property reference",
+      "description": "Internal reference of the property in the customer system. It's not necessary for this reference to be unique",
+      "type": "string",
+      "pattern": "^.{0,50}$"
+    },
+    "casaCode": {
+      "title": "Property casa code",
+      "description": "Only for Italy. Id sending by the software in field listingId for Casa.it portal",
+      "type": "string",
+      "pattern": "^.{0,50}$"
+    },
+    "contactId": {
+      "title": "Property contact identifier",
+      "description": "The id of a contact previously created. It will be the user contact data that will be displayed in the detail of the property",
+      "type": "number",
+      "$ref": "../rules.json#/integer1to999999999"
+    },
+    "features": {
+      "title": "Property type",
+      "oneOf": [
+        {
+          "$ref": "flat.json#"
+        },
+        {
+          "$ref": "house.json#"
+        },
+        {
+          "$ref": "countryHouse.json#"
+        },
+        {
+          "$ref": "garage.json#"
+        },
+        {
+          "$ref": "office.json#"
+        },
+        {
+          "$ref": "commercial.json#"
+        },
+        {
+          "$ref": "land.json#"
+        },
+        {
+          "$ref": "storage.json#"
+        },
+        {
+          "$ref": "building.json#"
+        },
+        {
+          "$ref": "room.json#"
+        }
+      ]
+    },
+    "operation": {
+      "title": "Property operation",
+      "$ref": "operation.json#"
+    },
+    "descriptions": {
+      "title": "Property descriptions",
+      "$ref": "../description/description_array.json#"
+    },
+    "additionalLink": {
+      "title": "Property URL",
+      "$ref": "../rules.json#/additionalLinkFormat"
+    },
+    "scope": {
+      "title": "Property visibility",
+      "$ref": "../rules.json#/enumPropertyVisibility"
+    }
+  }
+}

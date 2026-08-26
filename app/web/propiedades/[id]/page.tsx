@@ -4,11 +4,13 @@ import { notFound } from "next/navigation";
 import { ArrowRight, Heart, MapPin } from "lucide-react";
 import { createAdminClient } from "@/lib/db/admin";
 import type { Property } from "@/lib/portal-properties";
+import { getCountryConfig, isCountry } from "@/lib/country-config";
 import { PropertyCard } from "../../_components/PropertyCard";
 import { PropertyGallery } from "../../_components/PropertyGallery";
 import { PropertyVideos } from "../../_components/PropertyVideos";
 import { CampusDistance } from "../../_components/CampusDistance";
 import { PropertyLocationMap } from "../../_components/PropertyLocationMap";
+import { Price } from "../../_components/Price";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -19,11 +21,14 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .eq("slug", slug)
     .in("status", ["available", "reserved"])
     .is("archived_at", null)
+    // Mismo contrato que el catálogo: despublicada = 404 en la web pública.
+    // El SmartLink de la propiedad (/compartir, /c) NO pasa por aquí.
+    .eq("published_web", true)
     .maybeSingle();
 
   if (!data) return null;
@@ -50,10 +55,12 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const office = countryCode === "es" ? "Madrid" : "Santiago";
   const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
   const priceNum = Number(p.price);
-  const priceStr =
-    countryCode === "cl"
-      ? `USD ${priceNum.toLocaleString("en-US")}`
-      : `€ ${priceNum.toLocaleString("es-ES")}`;
+  const priceStr = getCountryConfig(isCountry(countryCode) ? countryCode : "es").formatPrice(
+    priceNum,
+    (p.currency as string | null) ?? null,
+    p.operation as string | null,
+  );
+  const nativeCurrency = countryCode === "es" ? "eur" : ((p.currency as string | null) ?? "clp");
 
   return {
     id: p.slug as string,
@@ -64,6 +71,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
     country: countryCode === "es" ? "España" : "Chile",
     price: priceStr,
     priceNum,
+    currency: nativeCurrency,
     operation: (p.operation as string) === "sale" ? "Venta" : "Alquiler",
     type: "Apartamento",
     beds: Number(p.bedrooms),
@@ -78,6 +86,8 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
       ...((p.features_manual as string[]) ?? []),
     ],
     address: (p.address as string | null) ?? (p.zone as string),
+    latitude: p.latitude != null ? Number(p.latitude) : null,
+    longitude: p.longitude != null ? Number(p.longitude) : null,
     office: office as "Madrid" | "Santiago",
     phone,
   };
@@ -89,7 +99,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
   const { data } = await (admin as any)
     .from("properties")
     .select(
-      "id, slug, bc_reference, property_reference, title, zone, address, country, price, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, property_photos(url, is_cover, position), property_media(url, type, file_name)",
+      "id, slug, bc_reference, property_reference, title, zone, address, country, price, currency, operation, bedrooms, bathrooms, square_meters, description, features, features_manual, cover_photo_url, latitude, longitude, property_photos(url, is_cover, position), property_media(url, type, file_name)",
     )
     .in("status", ["available", "reserved"])
     .is("archived_at", null)
@@ -121,10 +131,12 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
     const office = countryCode === "es" ? "Madrid" : "Santiago";
     const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
     const priceNum = Number(p.price);
-    const priceStr =
-      countryCode === "cl"
-        ? `USD ${priceNum.toLocaleString("en-US")}`
-        : `€ ${priceNum.toLocaleString("es-ES")}`;
+    const priceStr = getCountryConfig(isCountry(countryCode) ? countryCode : "es").formatPrice(
+      priceNum,
+      (p.currency as string | null) ?? null,
+      p.operation as string | null,
+    );
+    const nativeCurrency = countryCode === "es" ? "eur" : ((p.currency as string | null) ?? "clp");
     return {
       id: p.slug as string,
       ref: (p.bc_reference as string | null) ?? (p.property_reference as string),
@@ -134,6 +146,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
       country: countryCode === "es" ? "España" : "Chile",
       price: priceStr,
       priceNum,
+      currency: nativeCurrency,
       operation: (p.operation as string) === "sale" ? "Venta" : "Alquiler",
       type: "Apartamento",
       beds: Number(p.bedrooms),
@@ -188,12 +201,14 @@ export default async function PropertyDetail({ params }: Props) {
           <h1 className="mt-4 font-display text-5xl md:text-7xl text-navy leading-tight">{p.title}</h1>
           <div className="mt-6 flex items-end justify-between gap-6 flex-wrap pb-6 border-b border-stone-200">
             <div>
-              <p className="font-display text-4xl text-navy">{p.price}</p>
+              <p className="font-display text-4xl text-navy">
+                <Price amount={p.priceNum} currency={p.currency} operation={p.operation} />
+              </p>
               <p className="mt-1 text-[11px] tracking-[0.24em] uppercase text-gray-400">{p.operation}</p>
             </div>
             <p className="text-sm text-gray-500 flex items-center gap-2">
               <MapPin size={14} className="text-gold" />
-              {p.address}, {p.city}, {p.country}
+              {p.zone}, {p.city}, {p.country}
             </p>
           </div>
 
@@ -234,10 +249,21 @@ export default async function PropertyDetail({ params }: Props) {
 
           <section className="mt-16">
             <h2 className="font-display text-3xl text-navy">Ubicación</h2>
-            <PropertyLocationMap address={p.address} city={p.city} country={p.country} />
+            <PropertyLocationMap
+              zone={p.zone}
+              city={p.city}
+              country={p.country}
+              latitude={p.latitude}
+              longitude={p.longitude}
+            />
           </section>
 
-          <CampusDistance city={p.city} address={p.address} />
+          <CampusDistance
+            city={p.city}
+            zone={p.zone}
+            latitude={p.latitude}
+            longitude={p.longitude}
+          />
         </article>
 
         {/* SIDEBAR */}

@@ -16,6 +16,25 @@ import {
  * IMPORTANTE: Ukio tiene una tarifa de gestión de 1000 EUR fijos que se agrega
  * al precio mensual. Se almacena en rawAttributes para mostrar al admin.
  */
+// Recoge las URLs de la galería de fotos de Ukio (servidas desde Sanity CDN) a
+// partir del HTML renderizado. Devuelve las imágenes ÚNICAS que aparecen ≥2
+// veces (las de la galería se renderizan a varios tamaños/posiciones; el umbral
+// descarta miniaturas sueltas de carruseles de "pisos similares"). Conserva el
+// orden de primera aparición.
+function collectUkioGallery(html: string): string[] {
+  const re =
+    /https:\/\/cdn\.sanity\.io\/images\/[A-Za-z0-9]+\/production\/[A-Za-z0-9]+-\d+x\d+\.(?:jpe?g|png|webp)/gi;
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const m of html.matchAll(re)) {
+    const url = m[0];
+    if (!counts.has(url)) order.push(url);
+    counts.set(url, (counts.get(url) ?? 0) + 1);
+  }
+  const gallery = order.filter((url) => (counts.get(url) ?? 0) >= 2);
+  return gallery.slice(0, 40); // tope de seguridad
+}
+
 function sanitizeUkioUrl(url: string): string {
   // Elimina referencias a "ukio" del URL manteniendo la estructura
   // Ejemplo: quitar parámetros de tracking o partes identificables de ukio
@@ -47,6 +66,8 @@ export function extractUkio(
   let squareMeters: number | null = null;
   let zone: string | null = null;
   let address: string | null = null;
+  let latitude: number | null = null;
+  let longitude: number | null = null;
   const features: string[] = [];
   const photos: Array<{ url: string; alt?: string }> = [];
   const rawAttributes: Record<string, string | number | null> = {
@@ -98,7 +119,18 @@ export function extractUkio(
       }
     }
 
-    // Habitaciones
+    // Coordenadas (Ukio expone geo.latitude/longitude como strings)
+    if (ld.geo && typeof ld.geo === "object") {
+      const geo = ld.geo as Record<string, unknown>;
+      const lat = typeof geo.latitude === "string" ? parseFloat(geo.latitude) : geo.latitude;
+      const lng = typeof geo.longitude === "string" ? parseFloat(geo.longitude) : geo.longitude;
+      if (typeof lat === "number" && Number.isFinite(lat)) latitude = lat;
+      if (typeof lng === "number" && Number.isFinite(lng)) longitude = lng;
+    }
+
+    // Habitaciones: OJO, `numberOfRooms` de Ukio es el total de estancias
+    // (incluye salón), no dormitorios. Los dormitorios reales se derivan de la
+    // descripción ("piso de 2 habitaciones") más abajo; esto es solo el respaldo.
     if (typeof ld.numberOfRooms === "number") {
       bedrooms = ld.numberOfRooms;
     } else if (typeof ld.numberOfRooms === "string") {
@@ -173,6 +205,15 @@ export function extractUkio(
     description = getMeta($, "og:description") || getMeta($, "description");
   }
 
+  // Dormitorios reales: la descripción/título de Ukio indican los dormitorios
+  // ("apartamento de 2 habitaciones"), a diferencia de numberOfRooms (estancias
+  // totales, incluye salón). Preferimos este número cuando aparece.
+  {
+    const bedText = `${title ?? ""} ${description ?? ""}`;
+    const m = bedText.match(/(\d+)\s*(?:habitaci|dormitori|bedroom)/i);
+    if (m) bedrooms = parseInt(m[1], 10);
+  }
+
   // Fallback: precio desde selectores CSS típicos de Ukio
   if (!price) {
     // Buscar en elementos que contengan el precio
@@ -228,6 +269,18 @@ export function extractUkio(
     const addrText = $('[data-testid*="address"]').first().text() ||
       $(".address").first().text() || null;
     if (addrText) address = addrText.trim();
+  }
+
+  // Galería real: el JSON-LD de Ukio solo trae UNA imagen "hero" (a menudo un
+  // banner temático, no una foto del piso). Las fotos reales de la vivienda se
+  // sirven desde Sanity CDN y están en el HTML renderizado. Las recogemos todas
+  // (deduplicadas) y sustituyen a la hero. Filtro de seguridad: solo imágenes
+  // que aparecen ≥2 veces (las de galería se renderizan a varios tamaños; así se
+  // descartan miniaturas sueltas de carruseles de "pisos similares").
+  const galleryUrls = collectUkioGallery($.html());
+  if (galleryUrls.length > 0) {
+    photos.length = 0;
+    for (const url of galleryUrls) photos.push({ url });
   }
 
   // Fotos: fallback desde atributos og:image o <img>
@@ -288,8 +341,8 @@ export function extractUkio(
     zone,
     address,
     features,
-    latitude: null,
-    longitude: null,
+    latitude,
+    longitude,
     photos,
     rawAttributes,
     warnings,

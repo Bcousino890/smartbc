@@ -11,8 +11,14 @@ function generatePassword(length = 12): string {
 
 export async function POST(req: Request) {
   const profile = await getCurrentProfile();
-  const isStaff = profile && ["admin", "owner", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(profile.role);
-  if (!isStaff) {
+  // Mismo modelo de autorización que /api/admin/usuarios/create: solo
+  // owner/admin/agent_admin pueden crear staff con rol arbitrario; los
+  // asesores/agentes solo pueden crear clientes. Antes bastaba con ser staff
+  // (incluido agent_junior), lo que permitía escalar creando cuentas con
+  // cualquier rol. El chequeo por rol concreto se hace tras parsear el body.
+  const isOwnerOrAdmin = !!profile && ["owner", "admin", "agent_admin"].includes(profile.role);
+  const isAdvisorOrAgent = !!profile && ["advisor", "agent_senior", "agent_junior"].includes(profile.role);
+  if (!isOwnerOrAdmin && !isAdvisorOrAgent) {
     return Response.json({ error: "No autorizado" }, { status: 403 });
   }
 
@@ -30,6 +36,13 @@ export async function POST(req: Request) {
     const validRoles = ["client", "owner", "advisor", "agent_junior", "agent_senior"];
     if (!validRoles.includes(role)) {
       return Response.json({ error: "Rol inválido" }, { status: 400 });
+    }
+    // Asesores/agentes solo pueden crear clientes (no escalar a staff).
+    if (!isOwnerOrAdmin && role !== "client") {
+      return Response.json(
+        { error: "Los asesores y agentes solo pueden crear clientes" },
+        { status: 403 },
+      );
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

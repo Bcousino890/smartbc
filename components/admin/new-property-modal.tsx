@@ -8,7 +8,8 @@ import {
   uploadPropertyPhoto,
 } from "@/app/(admin)/admin/propiedades/actions";
 import { Modal } from "@/components/ui/modal";
-import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO } from "@/lib/mock-properties";
+import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO, sectorsForCommune } from "@/lib/mock-properties";
+import { propertyFeaturesForCountry } from "@/lib/property-features";
 import { useT } from "@/lib/i18n/provider";
 import type { Operation, StayType } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -64,11 +65,15 @@ export function NewPropertyModal({
   const [squareMeters, setSquareMeters] = useState<number>(0);
   const [coveredAreaM2, setCoveredAreaM2] = useState<number>(0);
   const [parkingLots, setParkingLots] = useState<number>(0);
+  const [floors, setFloors] = useState<number>(0);
+  const [isCondominium, setIsCondominium] = useState(false);
+  const [constructionYear, setConstructionYear] = useState<number>(0);
   const [externalReference, setExternalReference] = useState("");
   const [description, setDescription] = useState("");
   // Chile / ML VIS fields
   const [address, setAddress] = useState("");
   const [commune, setCommune] = useState("");
+  const [sector, setSector] = useState("");
   const [region, setRegion] = useState<string>(CHILE_REGIONS[0]);
   const [propertyType, setPropertyType] = useState<string>(PROPERTY_TYPE_OPTIONS[0].value);
   const [currency, setCurrency] = useState<string>(CURRENCY_OPTIONS_CL[0].value);
@@ -76,6 +81,34 @@ export function NewPropertyModal({
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Características: mismo campo `features_manual` que se edita después en la
+  // ficha de la propiedad, para que lo marcado al crear no se pierda/duplique.
+  const [features, setFeatures] = useState<string[]>([]);
+  const [newFeature, setNewFeature] = useState("");
+  const checklistFeatures = propertyFeaturesForCountry(country);
+
+  const toggleFeature = (f: string) => {
+    setFeatures((prev) =>
+      prev.some((x) => x.toLowerCase() === f.toLowerCase())
+        ? prev.filter((x) => x.toLowerCase() !== f.toLowerCase())
+        : [...prev, f],
+    );
+  };
+
+  const addManualFeature = () => {
+    const f = newFeature.trim();
+    if (!f) return;
+    if (features.some((x) => x.toLowerCase() === f.toLowerCase())) {
+      setNewFeature("");
+      return;
+    }
+    setFeatures((prev) => [...prev, f]);
+    setNewFeature("");
+  };
+
+  const removeFeature = (f: string) => {
+    setFeatures((prev) => prev.filter((x) => x !== f));
+  };
 
   useEffect(() => {
     if (!open) {
@@ -90,13 +123,19 @@ export function NewPropertyModal({
       setSquareMeters(0);
       setCoveredAreaM2(0);
       setParkingLots(0);
+      setFloors(0);
+      setIsCondominium(false);
+      setConstructionYear(0);
       setExternalReference("");
       setDescription("");
       setAddress("");
       setCommune("");
+      setSector("");
       setRegion(CHILE_REGIONS[0]);
       setPropertyType(PROPERTY_TYPE_OPTIONS[0].value);
       setCurrency(CURRENCY_OPTIONS_CL[0].value);
+      setFeatures([]);
+      setNewFeature("");
       setFeedback({ kind: "idle" });
       setUploadingPhotos(false);
       setDragActive(false);
@@ -137,8 +176,7 @@ export function NewPropertyModal({
     title.trim().length > 0 &&
     agencySlug.length > 0 &&
     price > 0 &&
-    !isPending &&
-    (!isCL || commune.trim().length > 0);
+    !isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,58 +184,73 @@ export function NewPropertyModal({
     setFeedback({ kind: "idle" });
 
     startTransition(async () => {
-      const result = await createProperty({
-        title: title.trim(),
-        agencySlug,
-        operation,
-        stayType: operation === "alquiler" ? stayType : undefined,
-        price,
-        bedrooms,
-        bathrooms,
-        squareMeters: squareMeters || undefined,
-        coveredAreaM2: isCL && coveredAreaM2 > 0 ? coveredAreaM2 : undefined,
-        parkingLots: isCL && parkingLots > 0 ? parkingLots : undefined,
-        zone: isCL ? (commune.trim() || region) : zone,
-        address: isCL ? address.trim() || undefined : undefined,
-        commune: isCL ? commune.trim() || undefined : undefined,
-        region: isCL ? region : undefined,
-        propertyType: isCL ? propertyType : undefined,
-        currency: isCL ? currency : undefined,
-        description: description.trim() || undefined,
-        externalReference: externalReference.trim() || undefined,
-      });
-      if (!result.ok) {
-        setFeedback({ kind: "error", msg: humanError(t, result.error) });
-        return;
-      }
-
-      // La propiedad ya existe: subimos las fotos con su slug. uploadPropertyPhoto
-      // necesita el slug para resolver el property_id, por eso no se puede subir
-      // antes de crearla. La primera foto se marca como portada (is_cover).
-      let photoError = false;
-      if (photos.length > 0) {
-        setUploadingPhotos(true);
-        for (let i = 0; i < photos.length; i++) {
-          const fd = new FormData();
-          fd.set("slug", result.slug);
-          fd.set("file", photos[i].file);
-          fd.set("isCover", i === 0 ? "true" : "false");
-          const up = await uploadPropertyPhoto(fd);
-          if (!up.ok) photoError = true;
+      try {
+        const result = await createProperty({
+          title: title.trim(),
+          agencySlug,
+          operation,
+          stayType: operation === "alquiler" ? stayType : undefined,
+          price,
+          bedrooms,
+          bathrooms,
+          squareMeters: squareMeters || undefined,
+          coveredAreaM2: isCL && coveredAreaM2 > 0 ? coveredAreaM2 : undefined,
+          parkingLots: isCL && parkingLots > 0 ? parkingLots : undefined,
+          floors: isCL && floors > 0 ? floors : undefined,
+          isCondominium: isCL ? isCondominium : undefined,
+          constructionYear: isCL && constructionYear > 0 ? constructionYear : undefined,
+          zone: isCL ? (commune.trim() || region) : zone,
+          address: isCL ? address.trim() || undefined : undefined,
+          commune: isCL ? commune.trim() || undefined : undefined,
+          sector: isCL ? sector.trim() || undefined : undefined,
+          region: isCL ? region : undefined,
+          propertyType: isCL ? propertyType : undefined,
+          currency: isCL ? currency : undefined,
+          country,
+          description: description.trim() || undefined,
+          externalReference: externalReference.trim() || undefined,
+          featuresManual: features.length > 0 ? features : undefined,
+        });
+        if (!result.ok) {
+          setFeedback({ kind: "error", msg: humanError(t, result.error) });
+          return;
         }
-        setUploadingPhotos(false);
-      }
 
-      if (photoError) {
-        // La propiedad se creó igualmente; dejamos el modal abierto avisando para
-        // que el admin pueda reintentar las fotos restantes desde su ficha.
-        setFeedback({ kind: "error", msg: t("adminProps.new.photos.uploadFailed") });
+        // La propiedad ya existe: subimos las fotos con su slug. uploadPropertyPhoto
+        // necesita el slug para resolver el property_id, por eso no se puede subir
+        // antes de crearla. La primera foto se marca como portada (is_cover).
+        let photoError = false;
+        if (photos.length > 0) {
+          setUploadingPhotos(true);
+          for (let i = 0; i < photos.length; i++) {
+            const fd = new FormData();
+            fd.set("slug", result.slug);
+            fd.set("file", photos[i].file);
+            fd.set("isCover", i === 0 ? "true" : "false");
+            fd.set("country", country);
+            const up = await uploadPropertyPhoto(fd);
+            if (!up.ok) photoError = true;
+          }
+          setUploadingPhotos(false);
+        }
+
+        if (photoError) {
+          // La propiedad se creó igualmente; dejamos el modal abierto avisando para
+          // que el admin pueda reintentar las fotos restantes desde su ficha.
+          setFeedback({ kind: "error", msg: t("adminProps.new.photos.uploadFailed") });
+          router.refresh();
+          return;
+        }
+
+        onClose();
         router.refresh();
-        return;
+      } catch (err) {
+        // assertPermission lanza en vez de devolver { ok:false }; sin este catch
+        // el error quedaba silencioso y el botón "no hacía nada" para el usuario.
+        setUploadingPhotos(false);
+        const msg = err instanceof Error ? err.message : String(err);
+        setFeedback({ kind: "error", msg });
       }
-
-      onClose();
-      router.refresh();
     });
   };
 
@@ -212,7 +265,7 @@ export function NewPropertyModal({
     >
       {isCL && (
         <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3">
-          <p className="text-[11px] font-semibold text-gold-dark">
+          <p className="text-xs font-semibold text-gold-dark">
             ★ = Campo requerido por PortalInmobiliario.com
           </p>
         </div>
@@ -227,21 +280,21 @@ export function NewPropertyModal({
               placeholder={isCL ? `${title.length}/60 caracteres` : undefined}
             />
             {isCL && title.length > 50 && (
-              <p className={cn("mt-1 text-[10px]", title.length >= 60 ? "text-red-600" : "text-amber-600")}>
+              <p className={cn("mt-1 text-xs", title.length >= 60 ? "text-red-600" : "text-amber-600")}>
                 {title.length}/60 caracteres
               </p>
             )}
           </Field>
           <Field label={t("adminProps.new.field.agency")} required>
             {agencies.length === 0 ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700">
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                 {t("adminProps.new.error.noAgencies")}
               </p>
             ) : (
               <select
                 value={agencySlug}
                 onChange={(e) => setAgencySlug(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {agencies.map((a) => (
                   <option key={a.slug} value={a.slug}>
@@ -256,7 +309,7 @@ export function NewPropertyModal({
               <select
                 value={propertyType}
                 onChange={(e) => setPropertyType(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {PROPERTY_TYPE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -278,7 +331,7 @@ export function NewPropertyModal({
             <select
               value={operation}
               onChange={(e) => setOperation(e.target.value as Operation)}
-              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+              className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             >
               <option value="alquiler">{isCL ? "Arriendo" : t("filters.operation.rent")}</option>
               <option value="venta">{isCL ? "Venta" : t("filters.operation.sale")}</option>
@@ -289,7 +342,7 @@ export function NewPropertyModal({
               <select
                 value={stayType}
                 onChange={(e) => setStayType(e.target.value as StayType)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 <option value="larga">{t("filters.stay.long")}</option>
                 <option value="corta">{t("filters.stay.short")}</option>
@@ -301,7 +354,7 @@ export function NewPropertyModal({
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {CURRENCY_OPTIONS_CL.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -341,6 +394,23 @@ export function NewPropertyModal({
               <Field label="Estacionamientos">
                 <NumberInput value={parkingLots} onChange={setParkingLots} min={0} />
               </Field>
+              <Field label="N.º de pisos">
+                <NumberInput value={floors} onChange={setFloors} min={0} />
+              </Field>
+              <Field label="Año de construcción">
+                <NumberInput value={constructionYear} onChange={setConstructionYear} min={1800} />
+              </Field>
+              <Field label="¿Está en condominio?">
+                <div className="flex h-[38px] items-center gap-1.5 rounded-lg border border-ink/10 bg-white/70 px-3">
+                  <input
+                    type="checkbox"
+                    checked={isCondominium}
+                    onChange={(e) => setIsCondominium(e.target.checked)}
+                    className="h-4 w-4 rounded border-ink/20 text-gold focus:ring-gold/40"
+                  />
+                  <span className="text-sm text-ink/75">Sí</span>
+                </div>
+              </Field>
             </>
           )}
         </Section>
@@ -352,7 +422,7 @@ export function NewPropertyModal({
                 <select
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                  className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
                 >
                   {CHILE_REGIONS.map((r) => (
                     <option key={r} value={r}>{r}</option>
@@ -366,11 +436,26 @@ export function NewPropertyModal({
                   value={commune}
                   onChange={(e) => setCommune(e.target.value)}
                   placeholder="Ej: Las Condes, Providencia…"
-                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
                 />
                 <datalist id="cl-communes">
                   {CHILE_COMMUNES_SANTIAGO.map((c) => (
                     <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Sector / subzona">
+                <input
+                  type="text"
+                  list="cl-sectors"
+                  value={sector}
+                  onChange={(e) => setSector(e.target.value)}
+                  placeholder="Ej. Chicureo, Huinganal, Los Trapenses…"
+                  className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+                />
+                <datalist id="cl-sectors">
+                  {sectorsForCommune(commune).map((s) => (
+                    <option key={s} value={s} />
                   ))}
                 </datalist>
               </Field>
@@ -383,7 +468,7 @@ export function NewPropertyModal({
               <select
                 value={zone}
                 onChange={(e) => setZone(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
               >
                 {MADRID_ZONES.map((z) => (
                   <option key={z} value={z}>{z}</option>
@@ -399,10 +484,82 @@ export function NewPropertyModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
               placeholder={isCL ? "Describe la propiedad en detalle (requerido por PortalInmobiliario)" : t("adminProps.new.field.description.placeholder")}
             />
           </Field>
+        </Section>
+
+        <Section title="Características">
+          <div className="sm:col-span-3">
+            <div className="flex flex-wrap gap-1.5">
+              {checklistFeatures.map((f) => {
+                const active = features.some((x) => x.toLowerCase() === f.toLowerCase());
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => toggleFeature(f)}
+                    aria-pressed={active}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition",
+                      active
+                        ? "border-gold/50 bg-gold/15 text-ink"
+                        : "border-ink/12 bg-white/50 text-ink/60 hover:border-gold/40 hover:text-ink",
+                    )}
+                  >
+                    {active && <Check size={11} strokeWidth={2.5} className="text-gold-dark" />}
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+            {features.filter((f) => !checklistFeatures.some((c) => c.toLowerCase() === f.toLowerCase())).length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {features
+                  .filter((f) => !checklistFeatures.some((c) => c.toLowerCase() === f.toLowerCase()))
+                  .map((f) => (
+                    <span
+                      key={f}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs text-ink"
+                    >
+                      {f}
+                      <button
+                        type="button"
+                        onClick={() => removeFeature(f)}
+                        className="text-ink/55 hover:text-rose-700"
+                        aria-label={`Quitar ${f}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+              </div>
+            )}
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={newFeature}
+                onChange={(e) => setNewFeature(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addManualFeature();
+                  }
+                }}
+                placeholder="Otra característica…"
+                className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={addManualFeature}
+                disabled={!newFeature.trim()}
+                className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-xs font-medium text-ink/75 transition hover:border-gold/55 hover:text-ink disabled:opacity-50"
+              >
+                Añadir
+              </button>
+            </div>
+          </div>
         </Section>
 
         <Section title={`${t("adminProps.new.section.photos")}${isCL ? " (mín. 4 ★)" : ""}`}>
@@ -428,10 +585,10 @@ export function NewPropertyModal({
               )}
             >
               <ImagePlus size={20} strokeWidth={1.75} className="text-gold-dark" />
-              <span className="text-[12px] font-medium text-ink/70">
+              <span className="text-xs font-medium text-ink/70">
                 {t("adminProps.new.photos.add")}
               </span>
-              <span className="text-[11px] text-ink/45">
+              <span className="text-xs text-ink/45">
                 {t("adminProps.new.photos.hint")}
               </span>
             </button>
@@ -448,7 +605,7 @@ export function NewPropertyModal({
             />
             {photos.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px] text-ink/45">
+                <p className="text-xs text-ink/45">
                   {t("adminProps.new.photos.count", { n: photos.length })}
                 </p>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -465,7 +622,7 @@ export function NewPropertyModal({
                         className="h-full w-full object-cover"
                       />
                       {i === 0 && (
-                        <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-md bg-ink/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-cream-50">
+                        <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-md bg-ink/80 px-1.5 py-0.5 crm-label-sm text-cream-50">
                           <Star size={9} strokeWidth={2} className="text-gold" />
                           {t("adminProps.new.photos.cover")}
                         </span>
@@ -487,7 +644,7 @@ export function NewPropertyModal({
         </Section>
 
         {feedback.kind === "error" && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
             {feedback.msg}
           </p>
         )}
@@ -497,7 +654,7 @@ export function NewPropertyModal({
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-[13px] font-medium text-ink/70 transition hover:border-ink/30 hover:text-ink disabled:opacity-50"
+            className="rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-medium text-ink/70 transition hover:border-ink/30 hover:text-ink disabled:opacity-50"
           >
             {t("common.cancel")}
           </button>
@@ -505,7 +662,7 @@ export function NewPropertyModal({
             type="submit"
             disabled={!canSubmit}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-cream-50 transition",
+              "inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition",
               "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
@@ -552,7 +709,7 @@ function Section({
 }) {
   return (
     <section className="mt-5 space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+      <p className="crm-label-sm text-ink/45">
         {title}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{children}</div>
@@ -572,7 +729,7 @@ function Field({
   wide?: boolean;
 }) {
   return (
-    <label className={cn("block text-[12px] font-medium text-ink/65", wide && "sm:col-span-3")}>
+    <label className={cn("block text-xs font-medium text-ink/65", wide && "sm:col-span-3")}>
       <span>
         {label}
         {required && <span className="ml-1 text-gold-dark">*</span>}
@@ -601,7 +758,7 @@ function TextInput({
       placeholder={placeholder}
       // biome-ignore lint/a11y/noAutofocus: campo principal del modal
       autoFocus={autoFocus}
-      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
     />
   );
 }
@@ -624,7 +781,7 @@ function NumberInput({
         const n = Number(e.target.value);
         onChange(Number.isFinite(n) ? n : 0);
       }}
-      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[13px] text-ink focus:border-gold/55 focus:outline-none"
+      className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
     />
   );
 }

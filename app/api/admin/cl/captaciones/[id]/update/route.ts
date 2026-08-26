@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
-import { canAccess } from "@/lib/permissions";
+import { getCaptacionEditableFields } from "@/lib/permissions";
+import { getCaptacionActor, actorCanWorkCaptacion } from "@/lib/db/queries/captacion-access";
+import { getStagesForPipeline, pickWorkingStage } from "@/lib/captaciones/pipeline";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function POST(
   request: NextRequest,
@@ -15,13 +17,10 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    // Verificar permiso base: ¿tiene "edit" en captaciones?
-    if (!canAccess(profile.role, "captaciones", "edit")) {
-      return NextResponse.json(
-        { error: "No tienes permisos para editar captaciones" },
-        { status: 403 }
-      );
-    }
+    // Permisos EFECTIVOS (rol por país + rol personalizado + excepciones del
+    // usuario). Antes se miraba `profile.role` a pelo, así que un rol de Chile
+    // o un rol personalizado con permiso de edición recibía 403 al guardar.
+    const actor = await getCaptacionActor(profile);
 
     const body = await request.json();
     const db = createAdminClient() as any;
@@ -29,7 +28,7 @@ export async function POST(
     // Obtener la captación
     const { data: captacion } = await db
       .from("captaciones")
-      .select("assigned_to, created_by, title, owner_confirmed, status")
+      .select("assigned_to, created_by, title, owner_confirmed, status, pipeline_id, stage_id")
       .eq("id", id)
       .single();
 
@@ -37,43 +36,45 @@ export async function POST(
       return NextResponse.json({ error: "Captación no encontrada" }, { status: 404 });
     }
 
-    // Obtener permisos granulares del rol
-    const editPerms = getCaptacionEditPermissions(profile.role);
+    // Etapas del pipeline de esta captación (para las auto-transiciones de
+    // abajo: confirmar/desconfirmar dueño, primeros datos preliminares)
+    const stages = captacion.pipeline_id ? await getStagesForPipeline(captacion.pipeline_id) : [];
+    const currentStage = stages.find((s) => s.id === captacion.stage_id) || null;
 
-    // Validar acceso a la captación: creador, asignado (captadora), o admin
-    const isAdmin = profile.role === "admin" || profile.role === "agent_admin";
-    const isCaptadora = profile.role === "captadora" && captacion.assigned_to === profile.id;
-    const isCreator = profile.id === captacion.created_by;
-
-    if (!isAdmin && !isCaptadora && !isCreator) {
+    // Validar acceso a ESTA captación: asignado, creador o permiso de edición.
+    if (!actorCanWorkCaptacion(actor, captacion)) {
       return NextResponse.json({ error: "No tienes acceso a esta captación" }, { status: 403 });
     }
 
-    // Validar restricciones de campos editables por rol
-    const fieldRestrictions = editPerms.fields;
+    // Restricciones de campos por rol efectivo (ficha y estado siguen siendo
+    // de los roles con mando; los datos del dueño los edita quien trabaja la
+    // captación).
+    const isAdmin = actor.isAdmin;
+    const fieldRestrictions = getCaptacionEditableFields(actor.role);
+    const canEditPropertyFields = isAdmin || fieldRestrictions.canEditPropertyFields;
+    const canEditStatusField = isAdmin || fieldRestrictions.canEditStatus;
 
     // Detectar qué tipo de campos intenta editar
+    // (commune se excluye: la captadora la corrige desde la pestaña Ubicación)
     const isEditingPropertyFields = [
       "title", "price", "currency", "bedrooms", "bathrooms",
-      "square_meters", "region", "commune", "zone", "subzone"
+      "square_meters", "region", "zone", "subzone"
     ].some(field => field in body && body[field] !== undefined);
 
     const isEditingStatus = "status" in body && body.status !== undefined;
 
-    // Captadora solo puede editar owner fields
-    if (isCaptadora && !isAdmin) {
-      if (isEditingPropertyFields) {
-        return NextResponse.json(
-          { error: "Solo puedes editar los datos del propietario" },
-          { status: 403 }
-        );
-      }
-      if (isEditingStatus) {
-        return NextResponse.json(
-          { error: "No puedes cambiar el estado de la captación" },
-          { status: 403 }
-        );
-      }
+    // Quien no tiene mando sobre la ficha solo edita los datos del dueño
+    if (isEditingPropertyFields && !canEditPropertyFields) {
+      return NextResponse.json(
+        { error: "Solo puedes editar los datos del propietario" },
+        { status: 403 }
+      );
+    }
+    if (isEditingStatus && !canEditStatusField) {
+      return NextResponse.json(
+        { error: "No puedes cambiar el estado de la captación" },
+        { status: 403 }
+      );
     }
 
     const wasConfirmed = captacion.owner_confirmed;
@@ -81,7 +82,7 @@ export async function POST(
 
     // Construir objeto de actualización dinámicamente
     const updates: any = {
-      updated_at: new Date().toISOString(),
+      ...panelChange(),
     };
 
     // Campos que anyone puede editar
@@ -92,12 +93,14 @@ export async function POST(
     if (body.notes !== undefined) updates.notes = body.notes || null;
     if (body.owner_confirmed !== undefined) updates.owner_confirmed = nowConfirmed;
     if (body.property_type !== undefined) updates.property_type = body.property_type || null;
+    if (body.rol_propiedad !== undefined) updates.rol_propiedad = body.rol_propiedad || null;
+    if (body.commune !== undefined) updates.commune = body.commune || null;
     if (body.address_verified !== undefined) updates.address_verified = body.address_verified || false;
     if (body.latitude !== undefined && body.latitude !== null) updates.latitude = body.latitude;
     if (body.longitude !== undefined && body.longitude !== null) updates.longitude = body.longitude;
 
-    // Campos que solo admin puede editar
-    if (isAdmin) {
+    // Campos de la ficha: solo quien tiene mando sobre ella
+    if (canEditPropertyFields) {
       if (body.title !== undefined) updates.title = body.title || null;
       if (body.price !== undefined) updates.price = body.price || null;
       if (body.currency !== undefined) updates.currency = body.currency || null;
@@ -105,23 +108,28 @@ export async function POST(
       if (body.bathrooms !== undefined) updates.bathrooms = body.bathrooms || null;
       if (body.square_meters !== undefined) updates.square_meters = body.square_meters || null;
       if (body.region !== undefined) updates.region = body.region || null;
-      if (body.commune !== undefined) updates.commune = body.commune || null;
       if (body.zone !== undefined) updates.zone = body.zone || null;
     }
 
-    // Auto-actualizar status si se marca como confirmado
-    if (nowConfirmed && captacion.status !== "confirmed") {
-      updates.status = "confirmed";
+    // Auto-mover de etapa si se marca/desmarca como confirmado
+    const isCurrentlyConfirmed = currentStage?.stage_type === "confirmed";
+    if (nowConfirmed && !isCurrentlyConfirmed) {
+      const confirmedStage = stages.find((s) => s.stage_type === "confirmed");
+      if (confirmedStage) updates.stage_id = confirmedStage.id;
       updates.completed_at = new Date().toISOString();
-    } else if (!nowConfirmed && captacion.status === "confirmed") {
-      // Si desmarca, volver a preliminary_data
-      updates.status = "preliminary_data";
+    } else if (!nowConfirmed && isCurrentlyConfirmed) {
+      // Si desmarca, vuelve a la primera etapa de trabajo en curso
+      const workingStage = pickWorkingStage(stages);
+      if (workingStage) updates.stage_id = workingStage.id;
       updates.completed_at = null;
     }
 
-    // Cambiar status a preliminary_data si se está llenando datos por primera vez
-    if (isCaptadora && captacion.status === "assigned" && (body.owner_phone || body.owner_name)) {
-      updates.status = "preliminary_data";
+    // Al llenar los primeros datos del dueño desde la etapa de asignación,
+    // avanza a la primera etapa de trabajo en curso del pipeline (lo haga
+    // quien lo haga: el trabajo ya empezó, igual que al registrar un intento)
+    if (currentStage?.stage_type === "assign" && (body.owner_phone || body.owner_name)) {
+      const workingStage = pickWorkingStage(stages);
+      if (workingStage) updates.stage_id = workingStage.id;
     }
 
     const { data, error } = await db
@@ -144,17 +152,24 @@ export async function POST(
         link: `/cl/admin/captaciones/${id}`,
         data: { captacion_id: id },
       });
-    } else if (isCaptadora && (body.owner_phone || body.owner_name || body.owner_contact || body.address_real) && captacion.status === "assigned") {
-      // Notificar al agente que se agregaron datos preliminares
+    } else if (body.owner_phone || body.owner_name || body.owner_contact || body.address_real) {
+      // Datos del propietario actualizados: avisar al ejecutivo (creador) y
+      // al asignado para que ya pueda llamar — excepto a quien editó.
       const propertyTitle = captacion.title || "Captación";
-      await db.from("crm_notifications").insert({
-        user_id: captacion.created_by,
-        type: "captacion_preliminary_data_added",
-        title: "Datos agregados",
-        body: `Se agregaron datos preliminares para ${propertyTitle}`,
-        link: `/cl/admin/captaciones/${id}`,
-        data: { captacion_id: id },
-      });
+      const notifyIds = [captacion.created_by, captacion.assigned_to].filter(
+        (uid: string | null, i: number, arr: (string | null)[]) =>
+          uid && uid !== profile.id && arr.indexOf(uid) === i
+      );
+      for (const uid of notifyIds) {
+        await db.from("crm_notifications").insert({
+          user_id: uid,
+          type: "captacion_owner_updated",
+          title: "📞 Propietario actualizado",
+          body: `Ya tienes el propietario actualizado de la captación: ${propertyTitle}`,
+          link: `/cl/admin/captaciones/${id}`,
+          data: { captacion_id: id },
+        });
+      }
     }
 
     return NextResponse.json(data);

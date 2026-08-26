@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/output/video_output.json",
+  "title": "Property video",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "videoId": {
+      "$ref": "../rules.json#/videoId"
+    },
+    "order": {
+      "title": "video order",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "url": {
+      "title": "video url",
+      "$ref": "../rules.json#/videoUrlFormat"
+    },
+    "state": {
+      "title": "video state",
+      "enum": [
+        "processed",
+        "pending_to_process",
+        "error_download"
+      ]
+    }
+  }
+}

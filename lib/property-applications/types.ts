@@ -65,6 +65,10 @@ export type AiDocumentAnalysis = {
   currency_detected?: string;
   income_amount?: number;
   income_currency?: string;
+  // Explicación breve y presentable para el propietario de qué es este
+  // documento y qué confirma sobre el candidato (tono profesional, sin
+  // datos crudos sensibles). null si el análisis fue un fallback sin IA.
+  owner_explanation?: string | null;
 };
 
 export type PropertyApplicationDocument = {
@@ -154,6 +158,11 @@ export type PropertyApplicationWithDetails = PropertyApplication & {
 export type PropertyApplicationDocumentWithType = PropertyApplicationDocument & {
   document_type?: PropertyApplicationDocumentType;
   annotations?: PropertyApplicationDocumentAnnotation[];
+  // URL firmada de corta duración (bucket privado). Se genera en el
+  // servidor en cada lectura y sustituye a file_url para visualizar/abrir
+  // el archivo — null si aún no se ha podido generar (p.ej. falta el
+  // objeto en storage).
+  signed_url?: string | null;
 };
 
 // Tipos para checklist de cliente (solo lo necesario por privacidad)

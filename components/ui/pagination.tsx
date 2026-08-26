@@ -78,7 +78,9 @@ function NumBtn({
       type="button"
       onClick={() => onClick(n)}
       className={cn(
-        "h-9 min-w-9 rounded-lg border px-2 text-sm font-medium transition",
+        // Legacy (text-sm font-medium) para el portal cliente; dentro del CRM
+        // manda el token crm-number por especificidad de .crm-root.
+        "crm-number h-9 min-w-9 rounded-lg border px-2 text-sm font-medium transition",
         active
           ? "border-ink bg-ink text-cream-50"
           : "border-ink/15 bg-white text-ink/70 hover:border-gold/50 hover:text-ink",

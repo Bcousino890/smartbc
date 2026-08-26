@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCaptacionEditPermissions } from "@/lib/db/queries/permissions";
+import { getCaptacionActor } from "@/lib/db/queries/captacion-access";
+import { getCaptacionEditableFields, STAFF_ROLES } from "@/lib/permissions";
+import { applyCaptacionAssignment } from "@/lib/captaciones/assign";
 
 export async function POST(
   request: NextRequest,
@@ -16,8 +18,8 @@ export async function POST(
     }
 
     // Verificar permiso granular: solo quien puede asignar captadora
-    const editPerms = getCaptacionEditPermissions(profile.role);
-    if (!editPerms.fields.canAssignCaptadora) {
+    const actor = await getCaptacionActor(profile);
+    if (!actor.isAdmin && !getCaptacionEditableFields(actor.role).canAssignCaptadora) {
       return NextResponse.json(
         { error: "No tienes permisos para asignar captaciones" },
         { status: 403 }
@@ -39,7 +41,7 @@ export async function POST(
     // Obtener captacion para validación
     const { data: captacion, error: fetchError } = await db
       .from("captaciones")
-      .select("id, title, status, created_by, assigned_to")
+      .select("id, title, pipeline_id, stage_id, created_by, assigned_to")
       .eq("id", id)
       .single();
 
@@ -50,58 +52,57 @@ export async function POST(
       );
     }
 
-    // Validar que la captadora existe
+    // Validar que el usuario existe y es staff. Antes solo se podía asignar
+    // a captadoras; ahora cualquier ejecutivo/admin puede recibir la
+    // captación para llamar. No se filtra por country: ese campo del
+    // perfil no siempre está seteado a 'cl' aunque el usuario trabaje en
+    // captaciones (default histórico 'es'), y filtrar por él dejaba la
+    // lista de asignables vacía.
+    //
+    // El filtro de rol se hace en JS, NO con .in("role", [...]) en la query:
+    // pasar literales del enum `user_role` a Postgres hace fallar la consulta
+    // entera con "invalid input value for enum user_role" cuando algún valor
+    // no existe todavía en el enum de la BD (mismo bug que dejaba vacío el
+    // selector "Asignar a"). Así la asignación funciona aunque el enum esté
+    // desincronizado.
     const { data: captadora, error: captadoraError } = await db
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, role")
       .eq("id", captadora_id)
-      .eq("role", "captadora")
       .single();
 
-    if (captadoraError || !captadora) {
+    const staffRoles = new Set<string>(STAFF_ROLES as readonly string[]);
+    if (captadoraError || !captadora || !staffRoles.has(captadora.role)) {
+      if (captadoraError) console.error("[captaciones assign] lookup error:", captadoraError);
       return NextResponse.json(
-        { error: "Captadora no encontrada" },
+        { error: "Usuario no encontrado" },
         { status: 404 }
       );
     }
 
-    // Actualizar captacion: asignar y cambiar estado a "assigned"
-    const { data: updated, error: updateError } = await db
-      .from("captaciones")
-      .update({
-        assigned_to: captadora_id,
-        assigned_at: new Date().toISOString(),
-        status: "assigned",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select()
-      .single();
+    // Una captación ya convertida a propiedad no se reasigna: reabrir su
+    // workflow no tiene efecto (la propiedad real ya existe aparte).
+    if (captacion.stage_id) {
+      const { data: currentStage } = await db
+        .from("captacion_pipeline_stages")
+        .select("stage_type")
+        .eq("id", captacion.stage_id)
+        .single();
+      if (currentStage?.stage_type === "converted") {
+        return NextResponse.json(
+          { error: "Esta captación ya fue convertida a propiedad, no se puede reasignar" },
+          { status: 400 }
+        );
+      }
+    }
 
-    if (updateError) throw updateError;
-
-    // Registrar en log de captacion
-    await db.from("captacion_logs").insert({
-      captacion_id: id,
-      created_by: profile.id,
-      attempt_type: "assignment",
-      result: "assigned",
-      notes: `Asignada a ${captadora.full_name}`,
-    });
-
-    // Enviar notificación a la captadora
-    const propertyTitle = captacion.title || "Captación";
-    await db.from("crm_notifications").insert({
-      user_id: captadora_id,
-      type: "captacion_assigned",
-      title: "Nueva captación asignada",
-      body: `${profile.full_name || "Admin"} te asignó una captación: ${propertyTitle}`,
-      link: `/cl/admin/captaciones/${id}`,
-      data: {
-        captacion_id: id,
-        assigned_by: profile.id,
-        assigned_by_name: profile.full_name,
-      },
+    // La asignación (mover a la etapa "assign", log y notificación) vive en un
+    // helper compartido para que el reparto automático se comporte idéntico.
+    const updated = await applyCaptacionAssignment(db, {
+      captacion: { id, title: captacion.title, pipeline_id: captacion.pipeline_id },
+      assigneeId: captadora_id,
+      assigneeName: captadora.full_name,
+      assignedBy: { id: profile.id, full_name: profile.full_name },
     });
 
     return NextResponse.json({

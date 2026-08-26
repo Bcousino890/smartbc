@@ -8,7 +8,7 @@
 
 set -e
 
-VPS_HOST="178.105.176.3"
+VPS_HOST="178.105.185.125"
 VPS_USER="root"
 REPO="bcousino890/smartbc"
 

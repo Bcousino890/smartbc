@@ -1,8 +1,9 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { logPermissionEvent } from "@/lib/db/queries/audit";
+import { resolveBaseMatrix } from "@/lib/db/queries/permissions";
 import {
-  canAccess,
   PERMISSION_ACTIONS,
   PERMISSION_RESOURCES,
 } from "@/lib/permissions";
@@ -14,8 +15,13 @@ const ACTIONS = PERMISSION_ACTIONS;
 
 type PermValue = true | false | "override_true" | "override_false";
 
+// Normaliza el query param `?country=` a 'es' | 'cl' | null (null = todos).
+function parseCountryParam(value: string | null): "es" | "cl" | null {
+  return value === "es" || value === "cl" ? value : null;
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: userId } = await params;
@@ -34,6 +40,12 @@ export async function GET(
     return Response.json({ error: "Sin acceso" }, { status: 403 });
   }
 
+  // País activo opcional. Si viene, devolvemos los overrides de ese país + los
+  // globales (country NULL); si no, comportamiento actual (todos).
+  const country = parseCountryParam(
+    new URL(req.url).searchParams.get("country"),
+  );
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
 
@@ -50,19 +62,52 @@ export async function GET(
 
   const role: string = profile.role;
 
-  // Fetch per-user overrides
-  const { data: overrides, error: overridesErr } = await db
+  // Matriz base: rol personalizado (custom_roles) o rol por país si aplica,
+  // si no el rol tal cual — ver resolveBaseMatrix() para el orden de
+  // precedencia. Defensivo: si las tablas de la migración 0090 no existen
+  // aún en el VPS, equivale a canAccess(role, ...) de siempre.
+  const { matrix: roleMatrix, isCustomRole } = await resolveBaseMatrix(
+    userId,
+    role,
+    country ?? undefined,
+  );
+
+  // Fetch per-user overrides. Si se filtra por país incluimos también la
+  // columna `country` para poder aplicar globales + país.
+  let overridesQuery = db
     .from("user_permission_overrides")
-    .select("resource, action, allowed")
+    .select(country ? "resource, action, allowed, country" : "resource, action, allowed")
     .eq("user_id", userId);
+
+  // Con país: globales (country IS NULL) + los del país indicado.
+  if (country) {
+    overridesQuery = overridesQuery.or(`country.is.null,country.eq.${country}`);
+  }
+
+  const { data: overrides, error: overridesErr } = await overridesQuery;
 
   if (overridesErr) {
     return Response.json({ error: overridesErr.message }, { status: 500 });
   }
 
-  // Build override lookup: { resource: { action: boolean } }
+  // Build override lookup: { resource: { action: boolean } }.
+  // En modo país, aplicamos primero los globales (country NULL) y luego los del
+  // país activo, de modo que los específicos de país ganen sobre los globales.
+  const rows = (overrides ?? []) as Array<{
+    resource: string;
+    action: string;
+    allowed: boolean;
+    country?: string | null;
+  }>;
+  const orderedRows = country
+    ? [
+        ...rows.filter((r) => r.country === null || r.country === undefined),
+        ...rows.filter((r) => r.country === country),
+      ]
+    : rows;
+
   const overrideMap: Record<string, Record<string, boolean>> = {};
-  for (const row of overrides ?? []) {
+  for (const row of orderedRows) {
     if (!overrideMap[row.resource]) overrideMap[row.resource] = {};
     overrideMap[row.resource][row.action] = row.allowed;
   }
@@ -72,7 +117,7 @@ export async function GET(
   for (const resource of RESOURCES) {
     permissions[resource] = {};
     for (const action of ACTIONS) {
-      const roleDefault = canAccess(role, resource, action);
+      const roleDefault = roleMatrix[resource][action];
       const hasOverride =
         overrideMap[resource] !== undefined &&
         overrideMap[resource][action] !== undefined;
@@ -88,7 +133,12 @@ export async function GET(
     }
   }
 
-  return Response.json({ role, permissions });
+  // `roleDefaults` = la matriz base real (rol / rol por país / rol
+  // personalizado), SIN overrides. La UI la usa como referencia para el
+  // badge "modificado" y para "Restablecer a valores del rol" — si usara
+  // canAccess(role,...) en cliente (solo estático) daría una base incorrecta
+  // para usuarios con rol personalizado o rol por país.
+  return Response.json({ role, permissions, isCustomRole, roleDefaults: roleMatrix });
 }
 
 export async function POST(
@@ -110,7 +160,10 @@ export async function POST(
     );
   }
 
-  let body: { overrides: { resource: string; action: string; allowed: boolean }[] };
+  let body: {
+    overrides: { resource: string; action: string; allowed: boolean }[];
+    country?: "es" | "cl" | null;
+  };
   try {
     body = await req.json();
   } catch {
@@ -121,26 +174,40 @@ export async function POST(
     return Response.json({ error: "overrides debe ser un array" }, { status: 400 });
   }
 
+  // País del subconjunto a guardar.
+  //   null (o ausente) = overrides GLOBALES (comportamiento actual)
+  //   'es' | 'cl'      = overrides sólo de ese país
+  const country = parseCountryParam(body.country ?? null);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
 
-  // Delete all existing overrides for this user
-  const { error: deleteErr } = await db
+  // Borra sólo el subconjunto del país indicado. `.is`/`.eq` en la columna
+  // `country` implementa el "IS NOT DISTINCT FROM" del valor recibido:
+  //   - country NULL → borra sólo las filas globales (country IS NULL)
+  //   - country 'es' → borra sólo las filas de 'es'
+  let deleteQuery = db
     .from("user_permission_overrides")
     .delete()
     .eq("user_id", userId);
+  deleteQuery = country
+    ? deleteQuery.eq("country", country)
+    : deleteQuery.is("country", null);
+
+  const { error: deleteErr } = await deleteQuery;
 
   if (deleteErr) {
     return Response.json({ error: deleteErr.message }, { status: 500 });
   }
 
-  // Insert new overrides (if any)
+  // Insert new overrides (if any), etiquetando cada fila con el país del subset.
   if (body.overrides.length > 0) {
     const rows = body.overrides.map((o) => ({
       user_id: userId,
       resource: o.resource,
       action: o.action,
       allowed: o.allowed,
+      country,
       created_by: currentProfile.id,
     }));
 
@@ -152,6 +219,20 @@ export async function POST(
       return Response.json({ error: insertErr.message }, { status: 500 });
     }
   }
+
+  // Auditoría (best-effort): registra que se actualizaron los overrides de este
+  // usuario, con el país afectado (si vino) y un resumen del conjunto guardado.
+  await logPermissionEvent({
+    actorId: currentProfile.id,
+    targetUserId: userId,
+    eventType: "permissions_updated",
+    country,
+    newValue: {
+      country,
+      overrideCount: body.overrides.length,
+      overrides: body.overrides,
+    },
+  });
 
   return Response.json({ ok: true });
 }

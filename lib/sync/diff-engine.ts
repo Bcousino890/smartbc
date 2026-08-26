@@ -9,6 +9,7 @@ import type {
   SyncResult,
 } from "./types";
 import { downloadAndWatermark } from "./watermark";
+import { enqueueAfterSync } from "@/lib/services/video/queue";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -113,7 +114,7 @@ async function insertProperty(
   normalized: NormalizedProperty,
   counters: SyncCounters,
   rehost: boolean,
-): Promise<void> {
+): Promise<string> {
   const { urls, processed } = await processPhotos(agencySlug, normalized, rehost);
   counters.photosProcessed += processed;
   const coverUrl = urls[0] ?? null;
@@ -175,6 +176,8 @@ async function insertProperty(
     const photosRes = await photosTbl.insert(photoRows);
     if (photosRes.error) throw new Error(photosRes.error.message);
   }
+
+  return inserted.data.id;
 }
 
 // IMPORTANTE: este UPDATE solo toca los campos que vienen del scraper.
@@ -336,13 +339,16 @@ export async function runSyncForFeed(params: {
 
       const seenExternal = new Set<string>();
       let partialError = false;
+      // Propiedades tocadas en este sync: al terminar se les encola el vídeo
+      // (la cola descarta sola las que ya lo tienen al día).
+      const touchedPropertyIds: string[] = [];
 
       for (const normalized of normalizedList) {
         seenExternal.add(normalized.external_id);
         const existing = existingByExternal.get(normalized.external_id);
         try {
           if (!existing) {
-            await insertProperty(
+            const newId = await insertProperty(
               supabase,
               params.agencyId,
               params.agencySlug,
@@ -350,9 +356,11 @@ export async function runSyncForFeed(params: {
               counters,
               params.scraper.rehostPhotos !== false,
             );
+            touchedPropertyIds.push(newId);
             counters.inserted++;
           } else if (needsUpdate(existing, normalized)) {
             await updateExistingProperty(supabase, existing, normalized);
+            touchedPropertyIds.push(existing.id);
             counters.updated++;
           } else {
             counters.skipped++;
@@ -391,6 +399,16 @@ export async function runSyncForFeed(params: {
       }
 
       if (partialError) status = "partial";
+
+      // Encolado del vídeo automático. Va en su propio try/catch y NUNCA
+      // altera el resultado del sync: un problema con los vídeos no puede
+      // marcar como fallida una sincronización de propiedades que fue bien.
+      // El render en sí lo hace el cron /api/cron/property-videos, no aquí.
+      try {
+        await enqueueAfterSync(touchedPropertyIds);
+      } catch (err) {
+        console.error("[sync] no se pudieron encolar los vídeos:", err);
+      }
     }
   }
 

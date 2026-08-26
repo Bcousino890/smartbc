@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Plus, Loader2, AlertCircle, CheckCircle2, X } from "lucide-react";
-import { createNewClient } from "@/app/cl/(admin)/admin/clientes/actions";
+import { createNewClient } from "@/app/(admin)/admin/clientes/actions";
 import type { Operation, ClientProfileType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LocationMultiselect, CHILE_REGIONS, COMMUNES_BY_REGION, SECTORS_BY_COMMUNE } from "./location-multiselect";
@@ -172,7 +172,7 @@ export function CreateClientDialogCL() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-cream-50/95 shadow-2xl backdrop-blur-sm">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-gold/15 px-6 py-4">
-              <h2 className="font-serif text-xl font-semibold text-ink">Nuevo cliente Chile</h2>
+              <h2 className="crm-section-title text-ink">Nuevo cliente Chile</h2>
               <button
                 onClick={() => setOpen(false)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-ink/45 transition hover:bg-white/60 hover:text-ink"
@@ -185,7 +185,7 @@ export function CreateClientDialogCL() {
             <div className="space-y-5 p-6">
               {/* Datos personales */}
               <section>
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+                <p className="mb-3 crm-label-sm text-ink/55">
                   Datos personales
                 </p>
                 <div className="space-y-3">
@@ -224,7 +224,7 @@ export function CreateClientDialogCL() {
 
               {/* Perfil */}
               <section>
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+                <p className="mb-3 crm-label-sm text-ink/55">
                   Perfil
                 </p>
                 <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
@@ -234,7 +234,7 @@ export function CreateClientDialogCL() {
                       type="button"
                       onClick={() => patch("profileType", type)}
                       className={cn(
-                        "flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium capitalize transition",
+                        "flex-1 rounded-md px-3 py-1.5 text-xs font-medium capitalize transition",
                         form.profileType === type
                           ? "bg-ink text-cream-50 shadow-sm"
                           : "text-ink/65 hover:text-ink",
@@ -248,13 +248,13 @@ export function CreateClientDialogCL() {
 
               {/* Preferencias búsqueda */}
               <section>
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+                <p className="mb-3 crm-label-sm text-ink/55">
                   Preferencias de búsqueda
                 </p>
                 <div className="space-y-3">
                   {/* Operación */}
                   <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                    <span className="text-[11px] font-medium text-ink/60">Operación</span>
+                    <span className="text-xs font-medium text-ink/60">Operación</span>
                     <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
                       {(["alquiler", "venta"] as const).map((op) => (
                         <button
@@ -262,7 +262,7 @@ export function CreateClientDialogCL() {
                           type="button"
                           onClick={() => patch("operation", op)}
                           className={cn(
-                            "flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium capitalize transition",
+                            "flex-1 rounded-md px-3 py-1.5 text-xs font-medium capitalize transition",
                             form.operation === op
                               ? "bg-ink text-cream-50 shadow-sm"
                               : "text-ink/65 hover:text-ink",
@@ -276,7 +276,7 @@ export function CreateClientDialogCL() {
 
                   {/* Moneda */}
                   <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                    <span className="text-[11px] font-medium text-ink/60">Moneda</span>
+                    <span className="text-xs font-medium text-ink/60">Moneda</span>
                     <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
                       {(["CLP", "UF"] as const).map((cur) => (
                         <button
@@ -284,7 +284,7 @@ export function CreateClientDialogCL() {
                           type="button"
                           onClick={() => patch("currencyPreference", cur)}
                           className={cn(
-                            "flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                            "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
                             form.currencyPreference === cur
                               ? "bg-ink text-cream-50 shadow-sm"
                               : "text-ink/65 hover:text-ink",
@@ -298,28 +298,28 @@ export function CreateClientDialogCL() {
 
                   {/* Presupuesto */}
                   <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                    <span className="text-[11px] font-medium text-ink/60">Presupuesto</span>
+                    <span className="text-xs font-medium text-ink/60">Presupuesto</span>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="number"
                         placeholder={form.currencyPreference === "CLP" ? "Mín $" : "Mín UF"}
                         value={form.budgetMin || ""}
                         onChange={(e) => patch("budgetMin", parseInt(e.target.value) || 0)}
-                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                       />
                       <input
                         type="number"
                         placeholder={form.currencyPreference === "CLP" ? "Máx $" : "Máx UF"}
                         value={form.budgetMax || ""}
                         onChange={(e) => patch("budgetMax", parseInt(e.target.value) || 0)}
-                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                        className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                       />
                     </div>
                   </div>
 
                   {/* Ubicación en cascada */}
                   <div className="rounded-xl border border-gold/15 bg-white/40 p-3 space-y-3">
-                    <p className="text-[11px] font-medium text-ink/55">Ubicación (Chile)</p>
+                    <p className="text-xs font-medium text-ink/55">Ubicación (Chile)</p>
 
                     <LocationMultiselect
                       label="Regiones"
@@ -382,7 +382,7 @@ export function CreateClientDialogCL() {
                       placeholder="Dorms mín"
                       value={form.minBedrooms || ""}
                       onChange={(e) => patch("minBedrooms", parseInt(e.target.value) || 0)}
-                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                     />
                     <input
                       type="number"
@@ -390,7 +390,7 @@ export function CreateClientDialogCL() {
                       placeholder="Baños mín"
                       value={form.minBathrooms || ""}
                       onChange={(e) => patch("minBathrooms", parseInt(e.target.value) || 0)}
-                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                     />
                     <input
                       type="number"
@@ -398,7 +398,7 @@ export function CreateClientDialogCL() {
                       placeholder="m² mín"
                       value={form.minSquareMeters || ""}
                       onChange={(e) => patch("minSquareMeters", parseInt(e.target.value) || 0)}
-                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -406,14 +406,14 @@ export function CreateClientDialogCL() {
 
               {/* Características arquitectónicas */}
               <section>
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55">
+                <p className="mb-3 crm-label-sm text-ink/55">
                   Características arquitectónicas
                 </p>
                 <div className="space-y-3">
                   {/* Dorm servicio y Condominio */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="mb-1.5 text-[10px] font-medium text-ink/60">Dorm. servicio</p>
+                      <p className="mb-1.5 text-xs font-medium text-ink/60">Dorm. servicio</p>
                       <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
                         {([undefined, true, false] as const).map((val) => (
                           <button
@@ -421,7 +421,7 @@ export function CreateClientDialogCL() {
                             type="button"
                             onClick={() => patch("requiresServiceBedroom", val)}
                             className={cn(
-                              "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition",
+                              "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition",
                               form.requiresServiceBedroom === val
                                 ? "bg-ink text-cream-50 shadow-sm"
                                 : "text-ink/65 hover:text-ink",
@@ -433,7 +433,7 @@ export function CreateClientDialogCL() {
                       </div>
                     </div>
                     <div>
-                      <p className="mb-1.5 text-[10px] font-medium text-ink/60">Condominio</p>
+                      <p className="mb-1.5 text-xs font-medium text-ink/60">Condominio</p>
                       <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
                         {([undefined, true, false] as const).map((val) => (
                           <button
@@ -441,7 +441,7 @@ export function CreateClientDialogCL() {
                             type="button"
                             onClick={() => patch("prefersCondominium", val)}
                             className={cn(
-                              "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition",
+                              "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition",
                               form.prefersCondominium === val
                                 ? "bg-ink text-cream-50 shadow-sm"
                                 : "text-ink/65 hover:text-ink",
@@ -462,7 +462,7 @@ export function CreateClientDialogCL() {
                       placeholder="Estac. mín"
                       value={form.minParkingSpaces || ""}
                       onChange={(e) => patch("minParkingSpaces", parseInt(e.target.value) || 0)}
-                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                     />
                     <input
                       type="number"
@@ -470,13 +470,13 @@ export function CreateClientDialogCL() {
                       placeholder="Pisos mín"
                       value={form.minFloors || ""}
                       onChange={(e) => patch("minFloors", parseInt(e.target.value) || 0)}
-                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-[12px] focus:border-gold/55 focus:outline-none"
+                      className="rounded-lg border border-ink/10 bg-white/70 px-2.5 py-2 text-xs focus:border-gold/55 focus:outline-none"
                     />
                   </div>
 
                   {/* Tipo de propiedad */}
                   <div>
-                    <p className="mb-1.5 text-[10px] font-medium text-ink/60">Tipo de propiedad</p>
+                    <p className="mb-1.5 text-xs font-medium text-ink/60">Tipo de propiedad</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(["Mediterránea", "Chilena", "Inglesa", "Moderna", "Neoclásica", "Colonial", "Contemporánea"] as const).map((type) => (
                         <button
@@ -489,7 +489,7 @@ export function CreateClientDialogCL() {
                             patch("preferredArchitecturalTypes", updated);
                           }}
                           className={cn(
-                            "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
+                            "rounded-md px-2.5 py-1 text-xs font-medium transition",
                             form.preferredArchitecturalTypes.includes(type)
                               ? "bg-ink text-cream-50 shadow-sm"
                               : "border border-ink/20 text-ink/70 hover:border-ink/40 hover:text-ink",
@@ -503,7 +503,7 @@ export function CreateClientDialogCL() {
 
                   {/* Orientación */}
                   <div>
-                    <p className="mb-1.5 text-[10px] font-medium text-ink/60">Orientación preferida</p>
+                    <p className="mb-1.5 text-xs font-medium text-ink/60">Orientación preferida</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(["Norte", "Sur", "Oriente", "Poniente", "Nor-Oriente", "Nor-Poniente", "Sur-Oriente", "Sur-Poniente"] as const).map((ori) => (
                         <button
@@ -516,7 +516,7 @@ export function CreateClientDialogCL() {
                             patch("preferredOrientations", updated);
                           }}
                           className={cn(
-                            "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
+                            "rounded-md px-2.5 py-1 text-xs font-medium transition",
                             form.preferredOrientations.includes(ori)
                               ? "bg-ink text-cream-50 shadow-sm"
                               : "border border-ink/20 text-ink/70 hover:border-ink/40 hover:text-ink",
@@ -533,7 +533,7 @@ export function CreateClientDialogCL() {
                     placeholder="Notas internas (observaciones especiales)…"
                     value={form.notes}
                     onChange={(e) => patch("notes", e.target.value)}
-                    className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-[12px] focus:border-gold/55 focus:outline-none resize-none"
+                    className="w-full rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-xs focus:border-gold/55 focus:outline-none resize-none"
                     rows={2}
                   />
 
@@ -549,14 +549,14 @@ export function CreateClientDialogCL() {
               {feedback === "error" && errorMsg && (
                 <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3">
                   <AlertCircle size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-red-600" />
-                  <p className="text-[13px] text-red-700">{errorMsg}</p>
+                  <p className="text-sm text-red-700">{errorMsg}</p>
                 </div>
               )}
 
               {feedback === "success" && (
                 <div className="flex items-center gap-2 justify-center rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                   <CheckCircle2 size={16} strokeWidth={2} className="text-emerald-600" />
-                  <p className="text-[13px] font-medium text-emerald-700">Cliente creado exitosamente</p>
+                  <p className="text-sm font-medium text-emerald-700">Cliente creado exitosamente</p>
                 </div>
               )}
             </div>
@@ -566,14 +566,14 @@ export function CreateClientDialogCL() {
               <button
                 onClick={() => setOpen(false)}
                 disabled={isPending}
-                className="rounded-lg border border-gold/30 bg-white/80 px-4 py-2 text-[13px] font-medium text-ink transition hover:border-gold/55 hover:bg-white disabled:opacity-50"
+                className="rounded-lg border border-gold/30 bg-white/80 px-4 py-2 text-sm font-medium text-ink transition hover:border-gold/55 hover:bg-white disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreate}
                 disabled={isPending || feedback === "success"}
-                className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
               >
                 {isPending && <Loader2 size={14} className="animate-spin" />}
                 <span>{isPending ? "Creando..." : "Crear cliente"}</span>

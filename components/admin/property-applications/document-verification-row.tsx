@@ -9,13 +9,18 @@ import {
   Clock,
   ExternalLink,
   MessageSquare,
+  Sparkles,
   XCircle,
 } from "lucide-react";
-import type { PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
+import type { ApplicationCountry, PropertyApplicationDocumentWithType } from "@/lib/property-applications/types";
 
 type Props = {
   document: PropertyApplicationDocumentWithType;
   onVerified: () => void;
+  // País de la solicitud: si el tipo del documento pertenece a otro país
+  // (documentación extranjera, p.ej. nóminas chilenas para alquilar en
+  // España), se muestra una insignia con su bandera.
+  applicationCountry?: ApplicationCountry;
 };
 
 const STATUS_COLORS = {
@@ -25,7 +30,7 @@ const STATUS_COLORS = {
   needs_correction: "border-amber-200 bg-amber-50/30",
 };
 
-export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
+export function DocumentVerificationRow({ document: doc, onVerified, applicationCountry }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAnnotation, setShowAnnotation] = useState(false);
@@ -33,6 +38,27 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
   const [annotationText, setAnnotationText] = useState("");
   const [annotationType, setAnnotationType] = useState<"info" | "warning" | "error">("warning");
   const [notes, setNotes] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+
+  async function handleReanalyze() {
+    setError(null);
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/property-application-documents/${doc.id}/analyze`, {
+        method: "POST",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Error al analizar el documento");
+        return;
+      }
+      onVerified();
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   const docType = doc.document_type;
   const analysis = doc.ai_analysis;
@@ -93,22 +119,39 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
               {docType?.display_name ?? "Documento"}
             </p>
             {!docType?.is_required && (
-              <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-[10px] text-ink/50">Opcional</span>
+              <span className="rounded-full bg-ink/8 px-1.5 py-0.5 text-xs text-ink/50">Opcional</span>
+            )}
+            {docType?.country && applicationCountry && docType.country !== applicationCountry && (
+              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+                {docType.country === "CL" ? "🇨🇱 Doc. de Chile" : "🇪🇸 Doc. de España"}
+              </span>
             )}
           </div>
-          <p className="mt-0.5 text-[11px] text-ink/50">{doc.file_name}</p>
+          <p className="mt-0.5 text-xs text-ink/50">{doc.file_name}</p>
 
           {/* Análisis IA */}
-          {analysis && (
-            <div className="mt-2">
+          <div className="mt-2 flex items-center gap-3">
+            {analysis && (
               <button
                 onClick={() => setShowAiAnalysis(!showAiAnalysis)}
-                className="flex items-center gap-1 text-[11px] font-medium text-ink/60 transition hover:text-ink"
+                className="flex items-center gap-1 text-xs font-medium text-ink/60 transition hover:text-ink"
               >
                 Análisis IA
                 {showAiAnalysis ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </button>
+            )}
+            <button
+              onClick={handleReanalyze}
+              disabled={analyzing}
+              className="flex items-center gap-1 text-xs font-medium text-ink/40 transition hover:text-ink disabled:opacity-50"
+            >
+              <Sparkles size={11} />
+              {analyzing ? "Analizando..." : analysis ? "Reanalizar con IA" : "Analizar con IA"}
+            </button>
+          </div>
 
+          {analysis && (
+            <div className="mt-1">
               {showAiAnalysis && (
                 <div className="mt-2 rounded-lg bg-white/60 p-3 text-xs">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -144,7 +187,30 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
                         </span>
                       </div>
                     )}
+                    {analysis.extracted_data?.name && (
+                      <div className="col-span-2">
+                        <span className="text-ink/40">Titular del documento:</span>{" "}
+                        <span className="font-medium text-ink">{analysis.extracted_data.name}</span>
+                      </div>
+                    )}
+                    {analysis.extracted_data?.document_number && (
+                      <div>
+                        <span className="text-ink/40">Nº documento:</span>{" "}
+                        <span className="font-medium text-ink">{analysis.extracted_data.document_number}</span>
+                      </div>
+                    )}
+                    {analysis.extracted_data?.employer && (
+                      <div>
+                        <span className="text-ink/40">Empleador:</span>{" "}
+                        <span className="font-medium text-ink">{analysis.extracted_data.employer}</span>
+                      </div>
+                    )}
                   </div>
+                  {analysis.owner_explanation && (
+                    <p className="mt-2 rounded-md bg-gold/10 px-2 py-1.5 text-ink/70">
+                      <span className="font-medium">Para el propietario:</span> {analysis.owner_explanation}
+                    </p>
+                  )}
                   {analysis.warnings.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {analysis.warnings.map((w, i) => (
@@ -201,7 +267,7 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
               <div>
                 <button
                   onClick={() => setShowAnnotation(!showAnnotation)}
-                  className="flex items-center gap-1.5 text-[11px] text-ink/50 transition hover:text-ink"
+                  className="flex items-center gap-1.5 text-xs text-ink/50 transition hover:text-ink"
                 >
                   <MessageSquare size={11} />
                   {showAnnotation ? "Cancelar anotación" : "Añadir anotación al cliente"}
@@ -235,10 +301,10 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
         <div className="flex shrink-0 flex-col items-end gap-2">
           {/* Ver documento */}
           <a
-            href={doc.file_url}
+            href={doc.signed_url ?? doc.file_url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 transition hover:text-ink"
+            className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-ink/60 transition hover:text-ink"
           >
             <ExternalLink size={11} />
             Ver doc
@@ -249,7 +315,7 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
             <button
               onClick={() => handleVerify("verified")}
               disabled={loading}
-              className="flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
             >
               <CheckCircle size={11} />
               {loading ? "..." : "Verificar"}
@@ -260,10 +326,21 @@ export function DocumentVerificationRow({ document: doc, onVerified }: Props) {
             <button
               onClick={() => handleVerify("needs_correction")}
               disabled={loading}
-              className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
             >
               <AlertCircle size={11} />
               Corregir
+            </button>
+          )}
+
+          {doc.status !== "rejected" && (
+            <button
+              onClick={() => handleVerify("rejected")}
+              disabled={loading}
+              className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+            >
+              <XCircle size={11} />
+              Rechazar
             </button>
           )}
         </div>

@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
 import { createAdminClient } from "@/lib/db/admin";
+import { checkPermission } from "@/lib/auth/guard";
 import { shareSlug } from "@/lib/share-slug";
+import { randomToken } from "@/lib/tokens";
 import type { Operation, StayType } from "@/lib/types";
+import { generateApproximateFloorPlan } from "@/lib/services/properties/floorplan-sketch";
 
 export type CreatePropertyInput = {
   title: string;
@@ -19,14 +22,26 @@ export type CreatePropertyInput = {
   squareMeters?: number;
   coveredAreaM2?: number;
   parkingLots?: number;
+  floors?: number;
+  isCondominium?: boolean;
+  constructionYear?: number;
   zone: string;
   address?: string;
   commune?: string;
+  // Sector/subzona dentro de la comuna (ej. Chicureo dentro de Colina).
+  sector?: string;
   region?: string;
   propertyType?: string;
   currency?: string;
   description?: string;
   externalReference?: string;
+  // País del catálogo ('es' | 'cl'). Sin esto, las propiedades creadas desde
+  // el admin de Chile quedaban con el default 'es' y nunca aparecían en
+  // Publicación CL ni en Portal Inmobiliario.
+  country?: string;
+  // Características marcadas al crear (checklist + texto libre). Mismo campo
+  // que edita updateProperty después — así lo elegido al crear no se pierde.
+  featuresManual?: string[];
 };
 
 export type CreatePropertyResult =
@@ -45,6 +60,8 @@ function normalizeSlug(raw: string): string {
 export async function createProperty(
   input: CreatePropertyInput,
 ): Promise<CreatePropertyResult> {
+  const gate = await checkPermission("properties", "create", { country: input.country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -99,13 +116,19 @@ export async function createProperty(
       square_meters: input.squareMeters ?? null,
       covered_area_m2: input.coveredAreaM2 ?? null,
       parking_lots: input.parkingLots ?? null,
+      floors: input.floors ?? null,
+      is_condominium: input.isCondominium ?? null,
+      construction_year: input.constructionYear ?? null,
       zone: input.zone.trim(),
       address: input.address?.trim() || null,
       commune: input.commune?.trim() || null,
+      sector: input.sector?.trim() || null,
       region: input.region?.trim() || null,
       property_type: input.propertyType || null,
       currency: input.currency || null,
+      country: input.country === "cl" ? "cl" : "es",
       description: input.description?.trim() || null,
+      features_manual: input.featuresManual?.filter((f) => f.trim().length > 0) ?? [],
     })
     .select("id, slug")
     .maybeSingle();
@@ -116,6 +139,8 @@ export async function createProperty(
   if (!insertResult.data) return { ok: false, error: "insert_no_row" };
 
   revalidatePath("/admin/propiedades");
+  revalidatePath("/cl/admin/propiedades");
+  revalidatePath("/es/admin/propiedades");
   revalidatePath(`/admin/agencias/${input.agencySlug}`);
   return { ok: true, slug: insertResult.data.slug, id: insertResult.data.id };
 }
@@ -133,6 +158,9 @@ export type UploadPropertyPhotoResult =
 export async function uploadPropertyPhoto(
   formData: FormData,
 ): Promise<UploadPropertyPhotoResult> {
+  const country = String(formData.get("country") ?? "") || undefined;
+  const gate = await checkPermission("properties", "edit", { country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -162,6 +190,20 @@ export async function uploadPropertyPhoto(
   const path = `${propRow.id}/${Date.now()}-${safeName}`;
 
   const arrayBuffer = await file.arrayBuffer();
+  // Dimensiones REALES de lo que se sube (0153). Sin esto, una fotografía
+  // nueva y buenísima entra sin medir y el hero no puede preferirla sobre la
+  // pequeña que ya había: la reevaluación de la portada dejaría de ser
+  // automática justo cuando más falta hace.
+  let sourceWidth: number | null = null;
+  let sourceHeight: number | null = null;
+  try {
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(Buffer.from(arrayBuffer), { failOn: "none" }).metadata();
+    sourceWidth = meta.width ?? null;
+    sourceHeight = meta.height ?? null;
+  } catch {
+    // Formato que sharp no entiende: se sube igual y ya se medirá luego.
+  }
   const uploadResult = await supabase.storage
     .from("properties-photos")
     .upload(path, arrayBuffer, {
@@ -170,6 +212,7 @@ export async function uploadPropertyPhoto(
     });
 
   if (uploadResult.error) {
+    console.error("[uploadPropertyPhoto] storage error:", uploadResult.error);
     return { ok: false, error: uploadResult.error.message };
   }
 
@@ -200,8 +243,11 @@ export async function uploadPropertyPhoto(
     url: publicUrl,
     position: lastPos,
     is_cover: isCover,
+    source_width: sourceWidth,
+    source_height: sourceHeight,
   });
   if (photoInsert.error) {
+    console.error("[uploadPropertyPhoto] insert error:", photoInsert.error);
     return { ok: false, error: photoInsert.error.message };
   }
 
@@ -222,6 +268,10 @@ export async function uploadPropertyPhoto(
 
   revalidatePath("/admin/propiedades");
   revalidatePath(`/admin/propiedades/${slug}`);
+  if (country) {
+    revalidatePath(`/${country}/admin/propiedades`);
+    revalidatePath(`/${country}/admin/propiedades/${slug}`);
+  }
   return { ok: true, url: publicUrl };
 }
 
@@ -233,7 +283,10 @@ export type ReorderPhotosResult = { ok: true } | { ok: false; error: string };
 export async function reorderPropertyPhotos(
   slug: string,
   orderedUrls: string[],
+  country?: string,
 ): Promise<ReorderPhotosResult> {
+  const gate = await checkPermission("properties", "edit", { country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -275,12 +328,17 @@ export async function reorderPropertyPhotos(
 
   revalidatePath("/admin/propiedades");
   revalidatePath(`/admin/propiedades/${slug}`);
+  if (country) {
+    revalidatePath(`/${country}/admin/propiedades`);
+    revalidatePath(`/${country}/admin/propiedades/${slug}`);
+  }
   return { ok: true };
 }
 
 export type DeletePropertyPhotoInput = {
   slug: string;
   photoUrl: string;
+  country?: string;
 };
 
 export type DeletePropertyPhotoResult =
@@ -290,6 +348,8 @@ export type DeletePropertyPhotoResult =
 export async function deletePropertyPhoto(
   input: DeletePropertyPhotoInput,
 ): Promise<DeletePropertyPhotoResult> {
+  const gate = await checkPermission("properties", "edit", { country: input.country });
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -339,6 +399,119 @@ export async function deletePropertyPhoto(
   }
 
   revalidatePath("/admin/propiedades");
+  revalidatePath(`/admin/propiedades/${input.slug}`);
+  if (input.country) {
+    revalidatePath(`/${input.country}/admin/propiedades`);
+    revalidatePath(`/${input.country}/admin/propiedades/${input.slug}`);
+  }
+  return { ok: true };
+}
+
+export type DeletePropertyResult = { ok: true } | { ok: false; error: string };
+
+// Borra una propiedad por completo: sus fotos del bucket, sus filas hijas (que
+// caen por ON DELETE CASCADE) y la fila de la propiedad. Requiere permiso
+// `properties.delete`. Las captaciones que la habían convertido se desvinculan
+// y vuelven a "confirmada" para poder re-convertirlas.
+export async function deleteProperty(
+  slug: string,
+  country?: string,
+): Promise<DeletePropertyResult> {
+  const gate = await checkPermission("properties", "delete", { country });
+  if (!gate.ok) return gate;
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id, cover_photo_url")
+    .eq("slug", slug)
+    .maybeSingle();
+  const propRow = propLookup.data as
+    | { id: string; cover_photo_url: string | null }
+    | null;
+  if (!propRow) return { ok: false, error: "property_not_found" };
+
+  const admin = createAdminClient() as any;
+
+  // Rutas de storage de las fotos: las filas de property_photos caen por
+  // ON DELETE CASCADE, pero los archivos del bucket no, así que se borran a
+  // mano — DESPUÉS de que la fila muera, nunca antes.
+  //
+  // ⚠️ Orden aprendido a base de un incidente real (BC-1397, 2026-08-21):
+  // esta acción borraba primero los archivos del bucket y LUEGO intentaba
+  // borrar la fila; cuando el DELETE falló por una FK, la propiedad quedó
+  // viva con sus 36 fotos destruidas. Lo destructivo e irreversible va
+  // siempre al final, cuando ya nada puede fallar.
+  const marker = "/properties-photos/";
+  const { data: photoRows } = await admin
+    .from("property_photos")
+    .select("url")
+    .eq("property_id", propRow.id);
+  const paths: string[] = [];
+  const addPath = (url: string | null) => {
+    if (!url) return;
+    const idx = url.indexOf(marker);
+    if (idx === -1) return;
+    const p = url.slice(idx + marker.length);
+    if (p && !paths.includes(p)) paths.push(p);
+  };
+  for (const r of (photoRows || []) as { url: string }[]) addPath(r.url);
+  addPath(propRow.cover_photo_url);
+
+  // Desvincular captaciones que apuntaban a esta propiedad y devolverlas a
+  // "confirmada" (converted_to_property_id tiene FK sin cascade, hay que
+  // limpiarlo antes de borrar).
+  const { data: linkedCaptaciones } = await admin
+    .from("captaciones")
+    .select("id, pipeline_id")
+    .eq("converted_to_property_id", propRow.id);
+  for (const cap of (linkedCaptaciones || []) as {
+    id: string;
+    pipeline_id: string | null;
+  }[]) {
+    let confirmedStageId: string | null = null;
+    if (cap.pipeline_id) {
+      const { data: st } = await admin
+        .from("captacion_pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", cap.pipeline_id)
+        .eq("stage_type", "confirmed")
+        .limit(1)
+        .maybeSingle();
+      confirmedStageId = st?.id ?? null;
+    }
+    await admin
+      .from("captaciones")
+      .update({
+        converted_to_property_id: null,
+        status: "confirmed",
+        completed_at: null,
+        ...(confirmedStageId ? { stage_id: confirmedStageId } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", cap.id);
+  }
+
+  const { error: delErr } = await admin
+    .from("properties")
+    .delete()
+    .eq("id", propRow.id);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  // La fila ya no existe: ahora sí, limpiar el bucket (best-effort — un fallo
+  // aquí deja archivos huérfanos, nunca una propiedad sin fotos).
+  if (paths.length > 0) {
+    try {
+      await admin.storage.from("properties-photos").remove(paths);
+    } catch {
+      /* huérfanos tolerables */
+    }
+  }
+
+  revalidatePath("/admin/propiedades");
+  if (country) revalidatePath(`/${country}/admin/propiedades`);
   return { ok: true };
 }
 
@@ -348,16 +521,37 @@ export type UpdatePropertyInput = {
   // estos se sobrescriben en el siguiente sync. Para manuales son definitivos.
   // `null` (donde aplica) significa "limpiar el campo".
   title?: string;
+  // Título específico de la variante de alquiler cuando la propiedad tiene
+  // ambas operaciones activas. Si es null/vacío, la vista de alquiler cae a
+  // `title`. Se ignora cuando la propiedad no es dual.
+  titleRent?: string | null;
   description?: string | null;
   price?: number;
   operation?: "rent" | "sale";
+  // Operaciones activas de la propiedad. Si incluye ambas ("sale" y "rent"),
+  // `operation` se guarda como "sale" (principal, para no romper el resto
+  // del código que asume una sola operación) y `rentPrice` guarda el precio
+  // de alquiler por separado (price sigue siendo el de venta).
+  operations?: ("rent" | "sale")[];
+  rentPrice?: number | null;
   stay?: "short" | "long" | null;
   availableFrom?: string | null;
   bedrooms?: number;
   bathrooms?: number;
   squareMeters?: number | null;
+  coveredAreaM2?: number | null;
+  parkingLots?: number | null;
+  floors?: number | null;
+  isCondominium?: boolean | null;
+  constructionYear?: number | null;
+  // Sector/subzona dentro de la comuna (ej. Chicureo dentro de Colina).
+  sector?: string | null;
   zone?: string;
   address?: string | null;
+  // Coordenadas fijadas a mano en el mapa del editor. Tienen prioridad sobre el
+  // geocoding automático (útil para importaciones sin coords o direcciones vagas).
+  latitude?: number | null;
+  longitude?: number | null;
   status?: "available" | "reserved" | "sold" | "archived";
   features?: string[];
   // Features añadidas a mano por BC. Se preservan en sync (no se sobreescriben).
@@ -378,6 +572,8 @@ export type UpdatePropertyResult =
 export async function updateProperty(
   input: UpdatePropertyInput,
 ): Promise<UpdatePropertyResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -388,9 +584,19 @@ export async function updateProperty(
   // Permitimos null explícito para limpiar un campo opcional.
   const payload: Record<string, unknown> = {};
   if (input.title !== undefined) payload.title = input.title.trim();
+  if (input.titleRent !== undefined)
+    payload.title_rent = input.titleRent?.trim() || null;
   if (input.description !== undefined)
     payload.description = input.description?.trim() || null;
   if (input.operation !== undefined) payload.operation = input.operation;
+  if (input.operations !== undefined) {
+    payload.operations = input.operations;
+    // "sale" manda como operación principal cuando hay ambas, para que el
+    // resto del código (que solo mira `operation`) siga viendo la propiedad
+    // como "en venta" y no deje de mostrarla en listados de venta.
+    payload.operation = input.operations.includes("sale") ? "sale" : "rent";
+  }
+  if (input.rentPrice !== undefined) payload.rent_price = input.rentPrice;
   if (input.stay !== undefined) payload.stay = input.stay;
   if (input.availableFrom !== undefined)
     payload.available_from = input.availableFrom || null;
@@ -399,6 +605,12 @@ export async function updateProperty(
   if (input.bathrooms !== undefined) payload.bathrooms = input.bathrooms;
   if (input.squareMeters !== undefined)
     payload.square_meters = input.squareMeters;
+  if (input.coveredAreaM2 !== undefined) payload.covered_area_m2 = input.coveredAreaM2;
+  if (input.parkingLots !== undefined) payload.parking_lots = input.parkingLots;
+  if (input.floors !== undefined) payload.floors = input.floors;
+  if (input.isCondominium !== undefined) payload.is_condominium = input.isCondominium;
+  if (input.constructionYear !== undefined) payload.construction_year = input.constructionYear;
+  if (input.sector !== undefined) payload.sector = input.sector?.trim() || null;
   if (input.zone !== undefined) {
     payload.zone = input.zone.trim();
     // Si cambia la zona, invalidamos las coords cacheadas para que el
@@ -445,6 +657,21 @@ export async function updateProperty(
   if (input.internalNotes !== undefined)
     payload.internal_notes = input.internalNotes?.trim() || null;
   if (input.publishedWeb !== undefined) payload.published_web = input.publishedWeb;
+
+  // Coordenadas manuales AL FINAL: si el admin fijó un punto en el mapa, gana
+  // sobre el `null` que ponen los bloques de address/zone de arriba. Marcamos
+  // geocoded_at para que el SmartLink las trate como válidas y no re-geocodifique.
+  if (input.latitude !== undefined && input.longitude !== undefined) {
+    if (input.latitude != null && input.longitude != null) {
+      payload.latitude = input.latitude;
+      payload.longitude = input.longitude;
+      payload.geocoded_at = new Date().toISOString();
+    } else {
+      payload.latitude = null;
+      payload.longitude = null;
+      payload.geocoded_at = null;
+    }
+  }
 
   if (Object.keys(payload).length === 0) {
     return { ok: false, error: "nothing_to_update" };
@@ -495,18 +722,6 @@ export type ShareSummary = {
   last_opened_at: string | null;
 };
 
-function randomToken(len = 28): string {
-  // Token URL-safe (base64url sin padding). 28 chars ≈ 168 bits, suficiente.
-  const arr = new Uint8Array(len);
-  crypto.getRandomValues(arr);
-  return Buffer.from(arr)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-    .slice(0, len);
-}
-
 export type CreateShareResult =
   | { ok: true; token: string }
   | { ok: false; error: string };
@@ -515,6 +730,8 @@ export async function createShareLink(
   slug: string,
   label: string | null,
 ): Promise<CreateShareResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -552,6 +769,8 @@ export async function deleteShareLink(
   shareId: string,
   slug: string,
 ): Promise<DeleteShareResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -573,6 +792,10 @@ export async function deleteShareLink(
 export async function archiveProperty(
   input: ArchivePropertyInput,
 ): Promise<ArchivePropertyResult> {
+  // Archivar = borrado lógico (status archived, reversible). Se trata como
+  // edición para alinearlo con el mismo cambio vía updateProperty(status).
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -617,6 +840,8 @@ export async function addPropertyVideo(
   slug: string,
   videoUrl: string,
 ): Promise<AddVideoResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -662,6 +887,8 @@ export async function addPropertyVideo(
 export async function uploadPropertyVideo(
   formData: FormData,
 ): Promise<UploadVideoResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -753,6 +980,8 @@ export async function uploadPropertyVideo(
 export async function uploadPropertyPlan(
   formData: FormData,
 ): Promise<UploadPlanResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -816,11 +1045,79 @@ export async function uploadPropertyPlan(
   };
 }
 
+export type GenerateFloorPlanResult = { ok: true; item: MediaItem } | { ok: false; error: string };
+
+// Dibujo esquemático APROXIMADO (no un plano medido) a partir de las fotos ya
+// subidas a la ficha + los dormitorios/baños/m² ya conocidos — ver
+// lib/services/properties/floorplan-sketch.ts para el porqué de esa
+// limitación. Se guarda como un plano más (property_media type='plan'),
+// mismo storage y misma tabla que uploadPropertyPlan.
+export async function generateApproximateFloorPlanAction(
+  slug: string,
+): Promise<GenerateFloorPlanResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth;
+
+  if (!slug) return { ok: false, error: "slug_required" };
+
+  const propLookup = await supabase
+    .from("properties")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  const prop = propLookup.data as { id: string } | null;
+  if (!prop) return { ok: false, error: "property_not_found" };
+
+  const sketch = await generateApproximateFloorPlan(prop.id);
+  if (!sketch.ok) return { ok: false, error: sketch.error };
+
+  const storagePath = `${prop.id}/plan/${Date.now()}-distribucion-aproximada-ia.png`;
+  const admin = createAdminClient();
+  const { error: uploadErr } = await (admin as any).storage
+    .from("properties-photos")
+    .upload(storagePath, sketch.pngBuffer, { contentType: "image/png", upsert: false });
+  if (uploadErr) {
+    console.error("[generateApproximateFloorPlanAction] storage error:", uploadErr);
+    return { ok: false, error: uploadErr.message };
+  }
+
+  const { data: urlData } = (admin as any).storage.from("properties-photos").getPublicUrl(storagePath);
+  const publicUrl = urlData.publicUrl;
+
+  const { data, error } = await (admin as any)
+    .from("property_media")
+    .insert({
+      property_id: prop.id,
+      type: "plan",
+      file_name: "Distribución aproximada (IA).png",
+      storage_path: storagePath,
+      url: publicUrl,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[generateApproximateFloorPlanAction] insert error:", error);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/admin/propiedades/${slug}`);
+  return {
+    ok: true,
+    item: { id: data.id, url: data.url, file_name: data.file_name, type: "plan", storage_path: data.storage_path },
+  };
+}
+
 export async function deletePropertyMedia(
   slug: string,
   mediaId: string,
   storagePath: string,
 ): Promise<DeleteMediaResult> {
+  const gate = await checkPermission("properties", "edit");
+  if (!gate.ok) return gate;
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;

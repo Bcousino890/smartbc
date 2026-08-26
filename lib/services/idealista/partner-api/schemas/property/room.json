@@ -1,0 +1,198 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/room.json",
+  "title": "Room features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "areaConstructed",
+    "tenantNumber",
+    "rooms",
+    "bathroomNumber",
+    "smokingAllowed",
+    "couplesAllowed",
+    "liftAvailable",
+    "bedType",
+    "minimalStay",
+    "availableFrom",
+    "occupiedNow",
+    "petsAllowed"
+  ],
+  "properties": {
+    "type": {
+      "$ref": "features.json#/roomType"
+    },
+    "priceCommunity": {
+      "$ref": "features.json#/priceCommunity"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "areaConstructed": {
+      "$ref": "features.json#/roomAreaConstructed"
+    },
+    "tenantNumber": {
+      "$ref": "features.json#/tenantNumber"
+    },
+    "rooms": {
+      "$ref": "features.json#/propertyRooms"
+    },
+    "bathroomNumber": {
+      "$ref": "features.json#/roomBathroomNumber"
+    },
+    "smokingAllowed": {
+      "$ref": "features.json#/smokingAllowed"
+    },
+    "petsAllowed": {
+      "$ref": "features.json#/petsAllowedForRooms"
+    },
+    "minTenantAge": {
+      "$ref": "features.json#/minTenantAge"
+    },
+    "maxTenantAge": {
+      "$ref": "features.json#/maxTenantAge"
+    },
+    "couplesAllowed": {
+      "$ref": "features.json#/couplesAllowed"
+    },
+    "liftAvailable": {
+      "$ref": "features.json#/liftAvailable"
+    },
+    "bedType": {
+      "$ref": "features.json#/bedType"
+    },
+    "minimalStay": {
+      "$ref": "features.json#/minimalStay"
+    },
+    "windowView": {
+      "$ref": "features.json#/windowView"
+    },
+    "ownerLiving": {
+      "$ref": "features.json#/ownerLiving"
+    },
+    "availableFrom": {
+      "$ref": "features.json#/availableFrom"
+    },
+    "tenantGender": {
+      "$ref": "features.json#/tenantGender"
+    },
+    "conditionedAir": {
+      "$ref": "features.json#/conditionedAir"
+    },
+    "internetAvailable": {
+      "$ref": "features.json#/internetAvailable"
+    },
+    "houseKeeper": {
+      "$ref": "features.json#/houseKeeper"
+    },
+    "heatingType": {
+      "$ref": "features.json#/heatingType"
+    },
+    "furnished": {
+      "$ref": "features.json#/furnished"
+    },
+    "cupboard": {
+      "$ref": "features.json#/cupboard"
+    },
+    "privateBathroom": {
+      "$ref": "features.json#/privateBathroom"
+    },
+    "genderPreference": {
+      "$ref": "features.json#/genderPreference"
+    },
+    "occupation": {
+      "$ref": "features.json#/occupation"
+    },
+    "lgtbFriendly": {
+      "$ref": "features.json#/lgtbFriendly"
+    },
+    "childrenAllowed": {
+      "$ref": "features.json#/childrenAllowed"
+    },
+    "isInTopFloor": {
+      "$ref": "features.json#/isInTopFloor"
+    },
+    "occupiedNow": {
+      "$ref": "features.json#/occupiedNow"
+    },
+    "tenantWorkers": {
+      "$ref": "features.json#/tenantWorkers"
+    },
+    "tenantStudents": {
+      "$ref": "features.json#/tenantStudents"
+    },
+    "minAge": {
+      "$ref": "features.json#/minAge"
+    },
+    "maxAge": {
+      "$ref": "features.json#/maxAge"
+    },
+    "equippedKitchen": {
+      "$ref": "features.json#/equippedKitchen"
+    },
+    "terrace": {
+      "$ref": "features.json#/terrace"
+    },
+    "doorman": {
+      "$ref": "features.json#/doorman"
+    },
+    "exteriorAccessibility": {
+      "$ref": "features.json#/exteriorAccessibility"
+    },
+    "interiorAccessibility": {
+      "$ref": "features.json#/interiorAccessibility"
+    },
+    "lifeStyle": {
+      "$ref": "features.json#/lifeStyle"
+    },
+    "pool": {
+      "$ref": "features.json#/pool"
+    },
+    "garden": {
+      "$ref": "features.json#/garden"
+    },
+    "windowsLocation": {
+      "$ref": "features.json#/windowsLocationByRoom"
+    },
+    "couplesCosts": {
+      "$ref": "features.json#/couplesCosts"
+    },
+    "roomArea": {
+      "$ref": "features.json#/roomArea"
+    },
+    "hasDesk": {
+      "$ref": "features.json#/hasDesk"
+    },
+    "hasRoomAirConditioning": {
+      "$ref": "features.json#/hasRoomAirConditioning"
+    },
+    "hasWashingMachine": {
+      "$ref": "features.json#/hasWashingMachine"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    },
+    "rentControl": {
+      "$ref": "features.json#/rentControl"
+    },
+    "maxReferenceRent": {
+      "$ref": "features.json#/maxReferenceRent"
+    },
+    "baseRent": {
+      "$ref": "features.json#/baseRent"
+    },
+    "additionalRentCharges": {
+      "$ref": "features.json#/additionalRentCharges"
+    },
+    "serviceCharges": {
+      "$ref": "features.json#/serviceCharges"
+    }
+  }
+}

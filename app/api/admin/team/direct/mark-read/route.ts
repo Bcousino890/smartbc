@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requirePermission } from "@/lib/auth/guard";
 
 /**
  * POST /api/admin/team/direct/mark-read
@@ -8,10 +8,10 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
  * Upserts the user's read timestamp for the given conversation.
  */
 export async function POST(req: Request) {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role === "client") {
-    return Response.json({ error: "No autorizado" }, { status: 401 });
-  }
+  // Gate de autorización: marcar como leído actúa sobre mensajes existentes → mensajes/edit.
+  const gate = await requirePermission("mensajes", "edit");
+  if (!gate.ok) return gate.response;
+  const profile = gate.profile;
 
   let body: { conversationId?: string };
   try {

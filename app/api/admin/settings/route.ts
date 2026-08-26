@@ -27,23 +27,28 @@ export async function POST(req: Request) {
   const body = await req.json();
   const db = createAdminClient() as any;
 
-  for (let [key, value] of Object.entries(body)) {
-    // If the app_key field contains a full Smartproxy URL, extract just the key
-    if (key === "scraping.smartproxy.app_key" && typeof value === "string" && value.includes("app_key=")) {
+  for (const [key, value] of Object.entries(body)) {
+    // Si se guarda scraping.proxyConfigs, extraer el config activo y ponerlo en scraping.proxyUrl
+    if (key === "scraping.proxyConfigs" && typeof value === "string") {
       try {
-        const u = new URL(value);
-        const extracted = u.searchParams.get("app_key");
-        if (extracted) value = extracted;
-      } catch {
-        // Not a URL, use as-is
+        const configs = JSON.parse(value);
+        const activeConfig = configs.find((c: any) => c.enabled);
+        if (activeConfig && activeConfig.url) {
+          await db
+            .from("app_settings")
+            .upsert({ key: "scraping.proxyUrl", value: activeConfig.url }, { onConflict: "key" });
+        }
+      } catch (e) {
+        console.error("Failed to parse proxyConfigs:", e);
       }
     }
+
     await db
       .from("app_settings")
       .upsert({ key, value }, { onConflict: "key" });
   }
 
-  if ("scraping.proxyUrl" in body) {
+  if ("scraping.proxyUrl" in body || "scraping.proxyConfigs" in body) {
     invalidateProxyCache();
   }
 

@@ -1,0 +1,1860 @@
+{
+  "resolved": [
+    {
+      "hood": "castellana",
+      "name": "Museo Lázaro Galdiano",
+      "category": "cultura",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.436964,
+      "lng": -3.685764,
+      "km": 0.18,
+      "osm": "way/135087935",
+      "query": "Museo Lázaro Galdiano, Madrid"
+    },
+    {
+      "hood": "castellana",
+      "name": "Mercado de la Paz",
+      "category": "gastronomia",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.42718,
+      "lng": -3.685755,
+      "km": 1.13,
+      "osm": "way/330451579",
+      "query": "Mercado de la Paz, Calle de Ayala, Madrid"
+    },
+    {
+      "hood": "castellana",
+      "name": "Calle Serrano",
+      "category": "compras",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.427925,
+      "lng": -3.687378,
+      "km": 1.03,
+      "osm": "way/43405582",
+      "query": "Calle de Serrano, Madrid",
+      "bounds": {
+        "minLat": 40.4253904,
+        "minLng": -3.6878644,
+        "maxLat": 40.430462,
+        "maxLng": -3.6869094
+      },
+      "extentKm": 0.56
+    },
+    {
+      "hood": "castellana",
+      "name": "Fundación Juan March",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.431274,
+      "lng": -3.681445,
+      "km": 0.86,
+      "osm": "way/320458766",
+      "query": "Fundación Juan March, Madrid"
+    },
+    {
+      "hood": "castellana",
+      "name": "Metro Gregorio Marañón",
+      "category": "transporte",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.437994,
+      "lng": -3.691213,
+      "km": 0.29,
+      "osm": "node/5304690736",
+      "query": "station:Gregorio Marañón"
+    },
+    {
+      "hood": "castellana",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 2.51,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "lista",
+      "name": "Metro Lista",
+      "category": "transporte",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.429397,
+      "lng": -3.675399,
+      "km": 0.49,
+      "osm": "node/5302296733",
+      "query": "station:Lista"
+    },
+    {
+      "hood": "lista",
+      "name": "Mercado de la Paz",
+      "category": "gastronomia",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.42718,
+      "lng": -3.685755,
+      "km": 0.77,
+      "osm": "way/330451579",
+      "query": "Mercado de la Paz, Calle de Ayala, Madrid"
+    },
+    {
+      "hood": "lista",
+      "name": "Calle Serrano",
+      "category": "compras",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.427925,
+      "lng": -3.687378,
+      "km": 0.82,
+      "osm": "way/43405582",
+      "query": "Calle de Serrano, Madrid",
+      "bounds": {
+        "minLat": 40.4253904,
+        "minLng": -3.6878644,
+        "maxLat": 40.430462,
+        "maxLng": -3.6869094
+      },
+      "extentKm": 0.56
+    },
+    {
+      "hood": "lista",
+      "name": "Museo Lázaro Galdiano",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.436964,
+      "lng": -3.685764,
+      "km": 0.72,
+      "osm": "way/135087935",
+      "query": "Museo Lázaro Galdiano, Madrid"
+    },
+    {
+      "hood": "lista",
+      "name": "Colegio Nuestra Señora del Pilar",
+      "category": "educacion",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.428271,
+      "lng": -3.680787,
+      "km": 0.47,
+      "osm": "way/4651596",
+      "query": "Colegio Nuestra Señora del Pilar, Madrid"
+    },
+    {
+      "hood": "lista",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 1.96,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "goya",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 1.3,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "goya",
+      "name": "Metro Goya",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.424699,
+      "lng": -3.6762,
+      "km": 0.1,
+      "osm": "node/5302296734",
+      "query": "station:Goya"
+    },
+    {
+      "hood": "goya",
+      "name": "Movistar Arena",
+      "category": "deporte",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.423862,
+      "lng": -3.671788,
+      "km": 0.45,
+      "osm": "way/15808330",
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
+    },
+    {
+      "hood": "goya",
+      "name": "El Corte Inglés de Goya",
+      "category": "compras",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.424335,
+      "lng": -3.674757,
+      "km": 0.2,
+      "osm": "way/264533053",
+      "query": "El Corte Inglés, Calle de Goya, Madrid"
+    },
+    {
+      "hood": "goya",
+      "name": "Mercado de la Paz",
+      "category": "gastronomia",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.42718,
+      "lng": -3.685755,
+      "km": 0.8,
+      "osm": "way/330451579",
+      "query": "Mercado de la Paz, Calle de Ayala, Madrid"
+    },
+    {
+      "hood": "goya",
+      "name": "Fábrica Nacional de Moneda y Timbre",
+      "category": "cultura",
+      "priority": 60,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.422692,
+      "lng": -3.672149,
+      "km": 0.49,
+      "osm": "relation/13971053",
+      "query": "Fábrica Nacional de Moneda y Timbre, Madrid",
+      "bounds": {
+        "minLat": 40.4222192,
+        "minLng": -3.6726747,
+        "maxLat": 40.423154,
+        "maxLng": -3.6690805
+      },
+      "extentKm": 0.3
+    },
+    {
+      "hood": "fuente-del-berro",
+      "name": "Parque de la Fuente del Berro",
+      "category": "parque",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.425506,
+      "lng": -3.660724,
+      "km": 0.47,
+      "osm": "way/210814085",
+      "query": "Parque de la Quinta de la Fuente del Berro, Madrid",
+      "bounds": {
+        "minLat": 40.4213684,
+        "minLng": -3.6630129,
+        "maxLat": 40.4295508,
+        "maxLng": -3.659651
+      },
+      "extentKm": 0.91
+    },
+    {
+      "hood": "fuente-del-berro",
+      "name": "Metro O'Donnell",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.422202,
+      "lng": -3.669063,
+      "km": 0.45,
+      "osm": "node/5305486982",
+      "query": "station:O'Donnell"
+    },
+    {
+      "hood": "fuente-del-berro",
+      "name": "Plaza de Toros de Las Ventas",
+      "category": "cultura",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.432332,
+      "lng": -3.663344,
+      "km": 0.78,
+      "osm": "way/23321768",
+      "query": "Plaza de toros de Las Ventas, Madrid",
+      "bounds": {
+        "minLat": 40.4314797,
+        "minLng": -3.6644091,
+        "maxLat": 40.4331606,
+        "maxLng": -3.6624659
+      },
+      "extentKm": 0.19
+    },
+    {
+      "hood": "fuente-del-berro",
+      "name": "Movistar Arena",
+      "category": "deporte",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.423862,
+      "lng": -3.671788,
+      "km": 0.51,
+      "osm": "way/15808330",
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
+    },
+    {
+      "hood": "fuente-del-berro",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 1.87,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "guindalera",
+      "name": "Plaza de Toros de Las Ventas",
+      "category": "cultura",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.432332,
+      "lng": -3.663344,
+      "km": 0.78,
+      "osm": "way/23321768",
+      "query": "Plaza de toros de Las Ventas, Madrid",
+      "bounds": {
+        "minLat": 40.4314797,
+        "minLng": -3.6644091,
+        "maxLat": 40.4331606,
+        "maxLng": -3.6624659
+      },
+      "extentKm": 0.19
+    },
+    {
+      "hood": "guindalera",
+      "name": "Metro Cartagena",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.439394,
+      "lng": -3.671796,
+      "km": 0.3,
+      "osm": "node/5304690734",
+      "query": "station:Cartagena"
+    },
+    {
+      "hood": "guindalera",
+      "name": "Parque de la Fuente del Berro",
+      "category": "parque",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.425506,
+      "lng": -3.660724,
+      "km": 1.55,
+      "osm": "way/210814085",
+      "query": "Parque de la Quinta de la Fuente del Berro, Madrid",
+      "bounds": {
+        "minLat": 40.4213684,
+        "minLng": -3.6630129,
+        "maxLat": 40.4295508,
+        "maxLng": -3.659651
+      },
+      "extentKm": 0.91
+    },
+    {
+      "hood": "guindalera",
+      "name": "Metro Diego de León",
+      "category": "transporte",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.434474,
+      "lng": -3.67472,
+      "km": 0.64,
+      "osm": "node/5302296732",
+      "query": "station:Diego de León"
+    },
+    {
+      "hood": "guindalera",
+      "name": "Hospital Universitario Gregorio Marañón",
+      "category": "salud",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.419688,
+      "lng": -3.671136,
+      "km": 2.05,
+      "osm": "way/262480721",
+      "query": "Hospital General Universitario Gregorio Marañón, Madrid",
+      "bounds": {
+        "minLat": 40.4180817,
+        "minLng": -3.6730115,
+        "maxLat": 40.4212394,
+        "maxLng": -3.6693353
+      },
+      "extentKm": 0.35
+    },
+    {
+      "hood": "el-viso",
+      "name": "Metro República Argentina",
+      "category": "transporte",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.444318,
+      "lng": -3.684639,
+      "km": 0.02,
+      "osm": "node/5305486981",
+      "query": "station:República Argentina"
+    },
+    {
+      "hood": "el-viso",
+      "name": "Auditorio Nacional de Música",
+      "category": "cultura",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.445983,
+      "lng": -3.677678,
+      "km": 0.61,
+      "osm": "way/27125344",
+      "query": "Auditorio Nacional de Música, Madrid",
+      "bounds": {
+        "minLat": 40.4454678,
+        "minLng": -3.6780185,
+        "maxLat": 40.4466055,
+        "maxLng": -3.6773238
+      },
+      "extentKm": 0.13
+    },
+    {
+      "hood": "el-viso",
+      "name": "Museo Lázaro Galdiano",
+      "category": "cultura",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.436964,
+      "lng": -3.685764,
+      "km": 0.81,
+      "osm": "way/135087935",
+      "query": "Museo Lázaro Galdiano, Madrid"
+    },
+    {
+      "hood": "el-viso",
+      "name": "Mercado de Chamartín",
+      "category": "gastronomia",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.457431,
+      "lng": -3.678244,
+      "km": 1.56,
+      "osm": "way/154807360",
+      "query": "Mercado de Chamartín"
+    },
+    {
+      "hood": "el-viso",
+      "name": "Estadio Santiago Bernabéu",
+      "category": "deporte",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.453044,
+      "lng": -3.688197,
+      "km": 1.03,
+      "osm": "way/1507411898",
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
+    },
+    {
+      "hood": "el-viso",
+      "name": "Parque de Berlín",
+      "category": "parque",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.450502,
+      "lng": -3.67563,
+      "km": 1.03,
+      "osm": "way/11476987",
+      "query": "Parque de Berlín, Madrid",
+      "bounds": {
+        "minLat": 40.4493174,
+        "minLng": -3.6773738,
+        "maxLat": 40.4515201,
+        "maxLng": -3.674146
+      },
+      "extentKm": 0.27
+    },
+    {
+      "hood": "hispanoamerica",
+      "name": "Estadio Santiago Bernabéu",
+      "category": "deporte",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.453044,
+      "lng": -3.688197,
+      "km": 0.97,
+      "osm": "way/1507411898",
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
+    },
+    {
+      "hood": "hispanoamerica",
+      "name": "Auditorio Nacional de Música",
+      "category": "cultura",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.445983,
+      "lng": -3.677678,
+      "km": 1.08,
+      "osm": "way/27125344",
+      "query": "Auditorio Nacional de Música, Madrid",
+      "bounds": {
+        "minLat": 40.4454678,
+        "minLng": -3.6780185,
+        "maxLat": 40.4466055,
+        "maxLng": -3.6773238
+      },
+      "extentKm": 0.13
+    },
+    {
+      "hood": "hispanoamerica",
+      "name": "Parque de Berlín",
+      "category": "parque",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.450502,
+      "lng": -3.67563,
+      "km": 0.6,
+      "osm": "way/11476987",
+      "query": "Parque de Berlín, Madrid",
+      "bounds": {
+        "minLat": 40.4493174,
+        "minLng": -3.6773738,
+        "maxLat": 40.4515201,
+        "maxLng": -3.674146
+      },
+      "extentKm": 0.27
+    },
+    {
+      "hood": "hispanoamerica",
+      "name": "Mercado de Chamartín",
+      "category": "gastronomia",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.457431,
+      "lng": -3.678244,
+      "km": 0.21,
+      "osm": "way/154807360",
+      "query": "Mercado de Chamartín"
+    },
+    {
+      "hood": "hispanoamerica",
+      "name": "Metro Concha Espina",
+      "category": "transporte",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.451329,
+      "lng": -3.677608,
+      "km": 0.49,
+      "osm": "node/5307477096",
+      "query": "station:Concha Espina"
+    },
+    {
+      "hood": "hispanoamerica",
+      "name": "Estación de Chamartín",
+      "category": "transporte",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.472057,
+      "lng": -3.682262,
+      "km": 1.87,
+      "osm": "node/9821007500",
+      "query": "station:Madrid-Chamartín-Clara Campoamor"
+    },
+    {
+      "hood": "nueva-espana",
+      "name": "Parque de Berlín",
+      "category": "parque",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.450502,
+      "lng": -3.67563,
+      "km": 1.37,
+      "osm": "way/11476987",
+      "query": "Parque de Berlín, Madrid",
+      "bounds": {
+        "minLat": 40.4493174,
+        "minLng": -3.6773738,
+        "maxLat": 40.4515201,
+        "maxLng": -3.674146
+      },
+      "extentKm": 0.27
+    },
+    {
+      "hood": "nueva-espana",
+      "name": "Metro Colombia",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.457116,
+      "lng": -3.676961,
+      "km": 0.63,
+      "osm": "node/5302030275",
+      "query": "station:Colombia"
+    },
+    {
+      "hood": "nueva-espana",
+      "name": "Mercado de Chamartín",
+      "category": "gastronomia",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.457431,
+      "lng": -3.678244,
+      "km": 0.58,
+      "osm": "way/154807360",
+      "query": "Mercado de Chamartín"
+    },
+    {
+      "hood": "nueva-espana",
+      "name": "Auditorio Nacional de Música",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.445983,
+      "lng": -3.677678,
+      "km": 1.85,
+      "osm": "way/27125344",
+      "query": "Auditorio Nacional de Música, Madrid",
+      "bounds": {
+        "minLat": 40.4454678,
+        "minLng": -3.6780185,
+        "maxLat": 40.4466055,
+        "maxLng": -3.6773238
+      },
+      "extentKm": 0.13
+    },
+    {
+      "hood": "nueva-espana",
+      "name": "Estadio Santiago Bernabéu",
+      "category": "deporte",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.453044,
+      "lng": -3.688197,
+      "km": 1.32,
+      "osm": "way/1507411898",
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
+    },
+    {
+      "hood": "nueva-espana",
+      "name": "Estación de Chamartín",
+      "category": "transporte",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.472057,
+      "lng": -3.682262,
+      "km": 1.09,
+      "osm": "node/9821007500",
+      "query": "station:Madrid-Chamartín-Clara Campoamor"
+    },
+    {
+      "hood": "castillejos",
+      "name": "Metro Cuzco",
+      "category": "transporte",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.459484,
+      "lng": -3.690017,
+      "km": 0.28,
+      "osm": "node/5310126820",
+      "query": "station:Cuzco"
+    },
+    {
+      "hood": "castillejos",
+      "name": "Estadio Santiago Bernabéu",
+      "category": "deporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.453044,
+      "lng": -3.688197,
+      "km": 0.96,
+      "osm": "way/1507411898",
+      "query": "Estadio Santiago Bernabéu, Madrid",
+      "bounds": {
+        "minLat": 40.4520252,
+        "minLng": -3.6896611,
+        "maxLat": 40.4540635,
+        "maxLng": -3.6867628
+      },
+      "extentKm": 0.25
+    },
+    {
+      "hood": "castillejos",
+      "name": "Mercado de Maravillas",
+      "category": "gastronomia",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.449154,
+      "lng": -3.702888,
+      "km": 1.58,
+      "osm": "way/30625862",
+      "query": "Mercado Maravillas Bravo Murillo",
+      "bounds": {
+        "minLat": 40.4485102,
+        "minLng": -3.7035007,
+        "maxLat": 40.4498519,
+        "maxLng": -3.7022273
+      },
+      "extentKm": 0.15
+    },
+    {
+      "hood": "castillejos",
+      "name": "Nuevos Ministerios",
+      "category": "transporte",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.445842,
+      "lng": -3.691699,
+      "km": 1.69,
+      "osm": "node/4998670036",
+      "query": "station:Nuevos Ministerios"
+    },
+    {
+      "hood": "castillejos",
+      "name": "Mercado de Chamartín",
+      "category": "gastronomia",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.457431,
+      "lng": -3.678244,
+      "km": 1.28,
+      "osm": "way/154807360",
+      "query": "Mercado de Chamartín"
+    },
+    {
+      "hood": "trafalgar",
+      "name": "Plaza de Olavide",
+      "category": "gastronomia",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.432771,
+      "lng": -3.701034,
+      "km": 0.12,
+      "osm": "way/992735167",
+      "query": "Plaza de Olavide, Madrid"
+    },
+    {
+      "hood": "trafalgar",
+      "name": "Mercado de Barceló",
+      "category": "gastronomia",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.426545,
+      "lng": -3.698786,
+      "km": 0.6,
+      "osm": "way/309097672",
+      "query": "Mercado de Barceló, Madrid"
+    },
+    {
+      "hood": "trafalgar",
+      "name": "Museo Sorolla",
+      "category": "cultura",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.435393,
+      "lng": -3.692512,
+      "km": 0.78,
+      "osm": "node/1719813601",
+      "query": "Museo Sorolla, Madrid"
+    },
+    {
+      "hood": "trafalgar",
+      "name": "Metro Quevedo",
+      "category": "transporte",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.433181,
+      "lng": -3.704493,
+      "km": 0.38,
+      "osm": "node/5303271995",
+      "query": "station:Quevedo"
+    },
+    {
+      "hood": "trafalgar",
+      "name": "Andén 0 · Estación de Chamberí",
+      "category": "cultura",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.432259,
+      "lng": -3.69773,
+      "km": 0.23,
+      "osm": "node/936505939",
+      "query": "Estación de Chamberí, Madrid"
+    },
+    {
+      "hood": "trafalgar",
+      "name": "Gran Vía",
+      "category": "compras",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.420733,
+      "lng": -3.706657,
+      "km": 1.34,
+      "osm": "way/519453589",
+      "query": "Gran Vía, Madrid"
+    },
+    {
+      "hood": "rios-rosas",
+      "name": "Metro Ríos Rosas",
+      "category": "transporte",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.441594,
+      "lng": -3.701592,
+      "km": 0.19,
+      "osm": "node/5299314588",
+      "query": "station:Ríos Rosas"
+    },
+    {
+      "hood": "rios-rosas",
+      "name": "Nuevos Ministerios",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.445842,
+      "lng": -3.691699,
+      "km": 0.78,
+      "osm": "node/4998670036",
+      "query": "station:Nuevos Ministerios"
+    },
+    {
+      "hood": "rios-rosas",
+      "name": "Museo Geominero",
+      "category": "cultura",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.442136,
+      "lng": -3.700327,
+      "km": 0.06,
+      "osm": "node/4409398566",
+      "query": "Museo Geominero, Madrid"
+    },
+    {
+      "hood": "rios-rosas",
+      "name": "Depósito del Canal de Isabel II",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.439477,
+      "lng": -3.70136,
+      "km": 0.35,
+      "osm": "way/48238313",
+      "query": "Canal de Isabel II, Santa Engracia, Madrid"
+    },
+    {
+      "hood": "rios-rosas",
+      "name": "Plaza de Olavide",
+      "category": "gastronomia",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.432771,
+      "lng": -3.701034,
+      "km": 1.07,
+      "osm": "way/992735167",
+      "query": "Plaza de Olavide, Madrid"
+    },
+    {
+      "hood": "rios-rosas",
+      "name": "Museo Sorolla",
+      "category": "cultura",
+      "priority": 60,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.435393,
+      "lng": -3.692512,
+      "km": 0.97,
+      "osm": "node/1719813601",
+      "query": "Museo Sorolla, Madrid"
+    },
+    {
+      "hood": "malasana",
+      "name": "Plaza del Dos de Mayo",
+      "category": "otro",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.426968,
+      "lng": -3.704092,
+      "km": 0.11,
+      "osm": "way/4110831",
+      "query": "Plaza del Dos de Mayo, Madrid"
+    },
+    {
+      "hood": "malasana",
+      "name": "Mercado de San Ildefonso",
+      "category": "gastronomia",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.424183,
+      "lng": -3.700876,
+      "km": 0.35,
+      "osm": "way/332194825",
+      "query": "Mercado de San Ildefonso, Madrid"
+    },
+    {
+      "hood": "malasana",
+      "name": "Metro Tribunal",
+      "category": "transporte",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.426242,
+      "lng": -3.701094,
+      "km": 0.27,
+      "osm": "node/5299314583",
+      "query": "station:Tribunal"
+    },
+    {
+      "hood": "malasana",
+      "name": "Museo de Historia de Madrid",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.42579,
+      "lng": -3.70076,
+      "km": 0.3,
+      "osm": "node/12921081474",
+      "query": "Museo de Historia de Madrid"
+    },
+    {
+      "hood": "malasana",
+      "name": "Centro Cultural Conde Duque",
+      "category": "cultura",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.427015,
+      "lng": -3.710837,
+      "km": 0.56,
+      "osm": "node/1439703535",
+      "query": "Centro Cultural Conde Duque"
+    },
+    {
+      "hood": "malasana",
+      "name": "Gran Vía",
+      "category": "compras",
+      "priority": 60,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.420733,
+      "lng": -3.706657,
+      "km": 0.62,
+      "osm": "way/519453589",
+      "query": "Gran Vía, Madrid"
+    },
+    {
+      "hood": "chueca",
+      "name": "Mercado de San Antón",
+      "category": "gastronomia",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.421941,
+      "lng": -3.697583,
+      "km": 0.11,
+      "osm": "way/161858028",
+      "query": "Mercado de San Antón, Madrid"
+    },
+    {
+      "hood": "chueca",
+      "name": "Plaza de Chueca",
+      "category": "otro",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.422713,
+      "lng": -3.69761,
+      "km": 0.05,
+      "osm": "way/4291307",
+      "query": "Plaza de Chueca, Madrid"
+    },
+    {
+      "hood": "chueca",
+      "name": "Metro Chueca",
+      "category": "transporte",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.42267,
+      "lng": -3.697674,
+      "km": 0.05,
+      "osm": "node/5303127354",
+      "query": "station:Chueca"
+    },
+    {
+      "hood": "chueca",
+      "name": "Museo Arqueológico Nacional",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.423429,
+      "lng": -3.688889,
+      "km": 0.7,
+      "osm": "node/255288522",
+      "query": "Museo Arqueológico Nacional, Madrid"
+    },
+    {
+      "hood": "chueca",
+      "name": "Biblioteca Nacional de España",
+      "category": "cultura",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.423728,
+      "lng": -3.689904,
+      "km": 0.62,
+      "osm": "node/167386167",
+      "query": "Biblioteca Nacional de España, Madrid"
+    },
+    {
+      "hood": "chueca",
+      "name": "Gran Vía",
+      "category": "compras",
+      "priority": 60,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.420733,
+      "lng": -3.706657,
+      "km": 0.84,
+      "osm": "way/519453589",
+      "query": "Gran Vía, Madrid"
+    },
+    {
+      "hood": "lavapies",
+      "name": "Metro Lavapiés",
+      "category": "transporte",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.408454,
+      "lng": -3.700661,
+      "km": 0.04,
+      "osm": "node/5303173543",
+      "query": "station:Lavapiés"
+    },
+    {
+      "hood": "lavapies",
+      "name": "Mercado de San Fernando",
+      "category": "gastronomia",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.40767,
+      "lng": -3.703667,
+      "km": 0.27,
+      "osm": "way/48761409",
+      "query": "Mercado de San Fernando, Madrid"
+    },
+    {
+      "hood": "lavapies",
+      "name": "Museo Reina Sofía",
+      "category": "cultura",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.408049,
+      "lng": -3.694422,
+      "km": 0.55,
+      "osm": "way/991444051",
+      "query": "Museo Reina Sofía, Madrid",
+      "bounds": {
+        "minLat": 40.4071605,
+        "minLng": -3.696041,
+        "maxLat": 40.4089286,
+        "maxLng": -3.693149
+      },
+      "extentKm": 0.25
+    },
+    {
+      "hood": "lavapies",
+      "name": "La Casa Encendida",
+      "category": "cultura",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.40607,
+      "lng": -3.699885,
+      "km": 0.31,
+      "osm": "way/48761444",
+      "query": "La Casa Encendida, Madrid"
+    },
+    {
+      "hood": "lavapies",
+      "name": "Tabacalera",
+      "category": "cultura",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.406324,
+      "lng": -3.703056,
+      "km": 0.34,
+      "osm": "relation/3421762",
+      "query": "Tabacalera, Madrid",
+      "bounds": {
+        "minLat": 40.4057005,
+        "minLng": -3.7034316,
+        "maxLat": 40.4069352,
+        "maxLng": -3.7021129
+      },
+      "extentKm": 0.14
+    },
+    {
+      "hood": "lavapies",
+      "name": "Estación de Atocha",
+      "category": "transporte",
+      "priority": 60,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.405684,
+      "lng": -3.690019,
+      "km": 0.98,
+      "osm": "node/7499028216",
+      "query": "station:Madrid-Puerta de Atocha-Almudena Grandes"
+    },
+    {
+      "hood": "ibiza",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 0.81,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "ibiza",
+      "name": "Metro Ibiza",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.418366,
+      "lng": -3.678137,
+      "km": 0.23,
+      "osm": "node/5307477095",
+      "query": "station:Ibiza"
+    },
+    {
+      "hood": "ibiza",
+      "name": "Puerta de Alcalá",
+      "category": "cultura",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.419984,
+      "lng": -3.688726,
+      "km": 1.09,
+      "osm": "way/174805987",
+      "query": "Puerta de Alcalá, Madrid"
+    },
+    {
+      "hood": "ibiza",
+      "name": "Movistar Arena",
+      "category": "deporte",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.423862,
+      "lng": -3.671788,
+      "km": 0.59,
+      "osm": "way/15808330",
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
+    },
+    {
+      "hood": "ibiza",
+      "name": "Museo del Prado",
+      "category": "cultura",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.413792,
+      "lng": -3.692041,
+      "km": 1.51,
+      "osm": "relation/7726080",
+      "query": "Museo del Prado, Madrid",
+      "bounds": {
+        "minLat": 40.4128535,
+        "minLng": -3.6927472,
+        "maxLat": 40.4147856,
+        "maxLng": -3.6904926
+      },
+      "extentKm": 0.22
+    },
+    {
+      "hood": "nino-jesus",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 0.91,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "nino-jesus",
+      "name": "Hospital Infantil Niño Jesús",
+      "category": "salud",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414852,
+      "lng": -3.677356,
+      "km": 0.48,
+      "osm": "node/1439705598",
+      "query": "Hospital Niño Jesús, Madrid"
+    },
+    {
+      "hood": "nino-jesus",
+      "name": "Metro Sainz de Baranda",
+      "category": "transporte",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414396,
+      "lng": -3.669673,
+      "km": 0.42,
+      "osm": "node/5305486983",
+      "query": "station:Sainz de Baranda"
+    },
+    {
+      "hood": "nino-jesus",
+      "name": "Real Jardín Botánico",
+      "category": "parque",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.412366,
+      "lng": -3.692145,
+      "km": 1.6,
+      "osm": "node/9871956508",
+      "query": "Real Jardín Botánico, Madrid"
+    },
+    {
+      "hood": "nino-jesus",
+      "name": "Estación de Atocha",
+      "category": "transporte",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.405684,
+      "lng": -3.690019,
+      "km": 1.57,
+      "osm": "node/7499028216",
+      "query": "station:Madrid-Puerta de Atocha-Almudena Grandes"
+    },
+    {
+      "hood": "estrella",
+      "name": "Parque del Retiro",
+      "category": "parque",
+      "priority": 10,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414946,
+      "lng": -3.683285,
+      "km": 1.44,
+      "osm": "relation/13616929",
+      "query": "Parque del Retiro, Madrid",
+      "bounds": {
+        "minLat": 40.4082704,
+        "minLng": -3.6888201,
+        "maxLat": 40.4214566,
+        "maxLng": -3.6766055
+      },
+      "extentKm": 1.47
+    },
+    {
+      "hood": "estrella",
+      "name": "Metro Sainz de Baranda",
+      "category": "transporte",
+      "priority": 20,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.414396,
+      "lng": -3.669673,
+      "km": 0.33,
+      "osm": "node/5305486983",
+      "query": "station:Sainz de Baranda"
+    },
+    {
+      "hood": "estrella",
+      "name": "Hospital Universitario Gregorio Marañón",
+      "category": "salud",
+      "priority": 30,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.419688,
+      "lng": -3.671136,
+      "km": 0.59,
+      "osm": "way/262480721",
+      "query": "Hospital General Universitario Gregorio Marañón, Madrid",
+      "bounds": {
+        "minLat": 40.4180817,
+        "minLng": -3.6730115,
+        "maxLat": 40.4212394,
+        "maxLng": -3.6693353
+      },
+      "extentKm": 0.35
+    },
+    {
+      "hood": "estrella",
+      "name": "Movistar Arena",
+      "category": "deporte",
+      "priority": 40,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.423862,
+      "lng": -3.671788,
+      "km": 1,
+      "osm": "way/15808330",
+      "query": "Movistar Arena, Madrid",
+      "bounds": {
+        "minLat": 40.4232247,
+        "minLng": -3.6725058,
+        "maxLat": 40.4244785,
+        "maxLng": -3.6711108
+      },
+      "extentKm": 0.14
+    },
+    {
+      "hood": "estrella",
+      "name": "Metro O'Donnell",
+      "category": "transporte",
+      "priority": 50,
+      "modes": [
+        "walk"
+      ],
+      "lat": 40.422202,
+      "lng": -3.669063,
+      "km": 0.74,
+      "osm": "node/5305486982",
+      "query": "station:O'Donnell"
+    },
+    {
+      "hood": "somosaguas",
+      "name": "Campus de Somosaguas (UCM)",
+      "category": "educacion",
+      "priority": 10,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.433444,
+      "lng": -3.795142,
+      "km": 3.24,
+      "osm": "node/5311950999",
+      "query": "Campus de Somosaguas"
+    },
+    {
+      "hood": "somosaguas",
+      "name": "Casa de Campo",
+      "category": "parque",
+      "priority": 20,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.424191,
+      "lng": -3.755858,
+      "km": 3.19,
+      "osm": "relation/1946885",
+      "query": "Casa de Campo, Madrid",
+      "bounds": {
+        "minLat": 40.3992357,
+        "minLng": -3.7813887,
+        "maxLat": 40.449071,
+        "maxLng": -3.7227618
+      },
+      "extentKm": 5.55
+    },
+    {
+      "hood": "somosaguas",
+      "name": "Club de Campo Villa de Madrid",
+      "category": "deporte",
+      "priority": 30,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.447448,
+      "lng": -3.745398,
+      "km": 5.72,
+      "osm": "relation/14612",
+      "query": "Club de Campo Villa de Madrid",
+      "bounds": {
+        "minLat": 40.4454132,
+        "minLng": -3.7477803,
+        "maxLat": 40.4505663,
+        "maxLng": -3.7430987
+      },
+      "extentKm": 0.57
+    },
+    {
+      "hood": "somosaguas",
+      "name": "Estación de Pozuelo (Cercanías)",
+      "category": "transporte",
+      "priority": 40,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.447408,
+      "lng": -3.800061,
+      "km": 4.84,
+      "osm": "node/5318415084",
+      "query": "station:Pozuelo"
+    },
+    {
+      "hood": "somosaguas",
+      "name": "Zoco de Pozuelo",
+      "category": "compras",
+      "priority": 50,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.419663,
+      "lng": -3.797476,
+      "km": 1.92,
+      "osm": "way/28327068",
+      "query": "Zoco de Pozuelo",
+      "bounds": {
+        "minLat": 40.4192191,
+        "minLng": -3.7981957,
+        "maxLat": 40.4200564,
+        "maxLng": -3.7967555
+      },
+      "extentKm": 0.12
+    },
+    {
+      "hood": "prado-de-somosaguas",
+      "name": "Campus de Somosaguas (UCM)",
+      "category": "educacion",
+      "priority": 10,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.433444,
+      "lng": -3.795142,
+      "km": 3.02,
+      "osm": "node/5311950999",
+      "query": "Campus de Somosaguas"
+    },
+    {
+      "hood": "prado-de-somosaguas",
+      "name": "Zoco de Pozuelo",
+      "category": "compras",
+      "priority": 20,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.419663,
+      "lng": -3.797476,
+      "km": 1.49,
+      "osm": "way/28327068",
+      "query": "Zoco de Pozuelo",
+      "bounds": {
+        "minLat": 40.4192191,
+        "minLng": -3.7981957,
+        "maxLat": 40.4200564,
+        "maxLng": -3.7967555
+      },
+      "extentKm": 0.12
+    },
+    {
+      "hood": "prado-de-somosaguas",
+      "name": "Estación de Pozuelo (Cercanías)",
+      "category": "transporte",
+      "priority": 30,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.447408,
+      "lng": -3.800061,
+      "km": 4.58,
+      "osm": "node/5318415084",
+      "query": "station:Pozuelo"
+    },
+    {
+      "hood": "prado-de-somosaguas",
+      "name": "Casa de Campo",
+      "category": "parque",
+      "priority": 50,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.424191,
+      "lng": -3.755858,
+      "km": 4,
+      "osm": "relation/1946885",
+      "query": "Casa de Campo, Madrid",
+      "bounds": {
+        "minLat": 40.3992357,
+        "minLng": -3.7813887,
+        "maxLat": 40.449071,
+        "maxLng": -3.7227618
+      },
+      "extentKm": 5.55
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Centro Comercial Espacio Torrelodones",
+      "category": "compras",
+      "priority": 10,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.569194,
+      "lng": -3.921166,
+      "km": 1,
+      "osm": "node/1994670507",
+      "query": "Espacio Torrelodones, Torrelodones"
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Hospital HM Torrelodones",
+      "category": "salud",
+      "priority": 20,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.570555,
+      "lng": -3.926011,
+      "km": 0.63,
+      "osm": "way/143437105",
+      "query": "Hospital de Madrid Torrelodones"
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Parque Pradogrande",
+      "category": "parque",
+      "priority": 40,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.578187,
+      "lng": -3.952231,
+      "km": 1.95,
+      "osm": "node/1590221261",
+      "query": "Parque Pradogrande, Torrelodones"
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Parque JH",
+      "category": "parque",
+      "priority": 50,
+      "modes": [
+        "walk",
+        "drive"
+      ],
+      "lat": 40.57656,
+      "lng": -3.92531,
+      "km": 0.36,
+      "osm": "way/643098137",
+      "query": "Parque JH, Torrelodones",
+      "bounds": {
+        "minLat": 40.5757166,
+        "minLng": -3.9262004,
+        "maxLat": 40.57737,
+        "maxLng": -3.9242609
+      },
+      "extentKm": 0.18
+    },
+    {
+      "hood": "torrelodones",
+      "name": "Casino Gran Madrid",
+      "category": "otro",
+      "priority": 60,
+      "modes": [
+        "drive"
+      ],
+      "lat": 40.565656,
+      "lng": -3.914338,
+      "km": 1.69,
+      "osm": "way/550627000",
+      "query": "Casino Gran Madrid, Torrelodones",
+      "bounds": {
+        "minLat": 40.5649683,
+        "minLng": -3.9149127,
+        "maxLat": 40.5663438,
+        "maxLng": -3.9137488
+      },
+      "extentKm": 0.15
+    }
+  ],
+  "rejected": [
+    {
+      "hood": "prado-de-somosaguas",
+      "name": "Club de Campo Villa de Madrid",
+      "query": "Club de Campo Villa de Madrid",
+      "reason": "a 6.32 km del centro del barrio (máx 6)",
+      "got": {
+        "lat": 40.4474477,
+        "lng": -3.7453981,
+        "osm": "relation/14612"
+      }
+    }
+  ]
+}

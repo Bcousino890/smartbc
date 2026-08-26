@@ -23,6 +23,8 @@ export async function getProperties(filters: PropertyFilters = {}, limit = 50) {
 
   if (!filters.includeUnavailable) query = query.eq("status", "available");
 
+  if (filters.country) query = query.eq("country", filters.country);
+
   if (filters.operation) query = query.eq("operation", filters.operation);
   if (filters.stay) query = query.eq("stay", filters.stay);
   if (filters.zones?.length) query = query.in("zone", filters.zones);
@@ -101,7 +103,7 @@ export async function getPropertyBySlugPublic(slug: string) {
     try {
       const { data: media, error } = await (supabase as any)
         .from("property_media")
-        .select("id, url, file_name, type, storage_path")
+        .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
         .eq("property_id", row.id)
         .in("type", ["video", "plan"]);
       return { ...row, property_media: error ? [] : (media ?? []) };
@@ -128,7 +130,9 @@ export async function getPropertyBySlugForAdmin(slug: string) {
   const { data, error } = await supabase
     .from("properties")
     .select(
-      "*, property_photos(url, alt, position, is_cover), agencies(id, name, slug, logo_url)",
+      // `source_width` viaja para poder avisar en la ficha cuando la portada
+      // no da la resolución que pide el SmartLink (LOW_RES_SOURCE).
+      "*, property_photos(url, alt, position, is_cover, source_width, source_height), agencies(id, name, slug, logo_url)",
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -139,7 +143,7 @@ export async function getPropertyBySlugForAdmin(slug: string) {
   // Cargar videos y planos de property_media
   const { data: media } = await (supabase as any)
     .from("property_media")
-    .select("id, url, file_name, type, storage_path")
+    .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url")
     .eq("property_id", (data as any).id)
     .in("type", ["video", "plan"]);
 

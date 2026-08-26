@@ -31,7 +31,7 @@ export function PageFooter({ textKey, variant = "stacked", className }: Props) {
           "mt-10 flex flex-col items-center border-t border-gold/15 pt-5"
         }
       >
-        <div className="flex items-center gap-2 text-[12px] text-ink/55">
+        <div className="flex items-center gap-2 text-xs text-ink/55">
           <ShieldCheck size={14} strokeWidth={1.5} className="text-gold" />
           <span>{t(textKey)}</span>
         </div>

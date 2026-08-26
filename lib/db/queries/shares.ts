@@ -72,6 +72,10 @@ export async function getPropertyByShareToken(
   shareId: string;
   property: Record<string, unknown>;
 } | null> {
+  // NOTA: además de la propiedad y sus fotos, se cargan vídeos y planos
+  // (property_media). Antes no se hacía, así que el SmartLink con tracking
+  // enseñaba menos que el enlace estable /compartir/[slug] — y es justo el
+  // enlace al que apuntan las Viewing Collections.
   const supabase = createAdminClient();
 
   const shareRes = await supabase
@@ -98,7 +102,33 @@ export async function getPropertyByShareToken(
   if (propRes.error) throw new Error(propRes.error.message);
   if (!propRes.data) return null;
 
-  return { shareId: share.id, property: propRes.data };
+  // Tolerante a fallos, igual que getPropertyBySlugPublic: si property_media
+  // no existe (migración 0016 sin aplicar) devolvemos lista vacía en lugar de
+  // tumbar el SmartLink entero.
+  let media: Array<{
+    url: string;
+    file_name: string | null;
+    type: string | null;
+  }> = [];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("property_media")
+      .select("id, url, file_name, type, storage_path, source, format, width, height, duration_seconds, poster_url, has_watermark")
+      .eq("property_id", share.property_id)
+      .in("type", ["video", "plan"]);
+    if (!error) media = data ?? [];
+  } catch {
+    media = [];
+  }
+
+  return {
+    shareId: share.id,
+    property: {
+      ...(propRes.data as Record<string, unknown>),
+      property_media: media,
+    },
+  };
 }
 
 // Registrar una apertura. Llamado desde /c/[token] tras resolver el

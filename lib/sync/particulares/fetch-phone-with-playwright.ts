@@ -9,8 +9,12 @@ export type PlaywrightPhoneResult = {
   error?: string;
 };
 
+// Chrome 131: debe coincidir con el UA que CapSolver exige (fuerza >= Chrome
+// 124), porque el cid del reto DataDome queda ligado al UA de la navegación; si
+// el browser navega con Chrome 120 pero CapSolver resuelve con 131, DataDome
+// rechaza con "userAgent does not match".
 const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 const PHONE_ENDPOINTS = [
   "/contact-phones",
@@ -18,6 +22,29 @@ const PHONE_ENDPOINTS = [
   "adContactInfoForDetail",
   "adContactInfoForMobileDevices",
 ];
+
+// Extrae la URL del reto DataDome (geo.captcha-delivery.com/captcha/?...) de la
+// página bloqueada. CapSolver la necesita como `captchaUrl` para resolver el
+// slider; sin ella no puede (pasarle la URL de la ficha no sirve). La buscamos
+// en los iframes cargados y, si no, en el HTML renderizado.
+async function extractDatadomeCaptchaUrl(page: Page): Promise<string | null> {
+  try {
+    for (const frame of page.frames()) {
+      const url = frame.url();
+      if (url && url.includes("geo.captcha-delivery.com")) return url;
+    }
+  } catch {
+    // ignorar
+  }
+  try {
+    const html = await page.content();
+    const m = html.match(/https?:\/\/geo\.captcha-delivery\.com\/captcha\/[^"'\s<>]+/);
+    if (m?.[0]) return m[0].replace(/&amp;/g, "&");
+  } catch {
+    // ignorar
+  }
+  return null;
+}
 
 function parsePhoneFromAjaxBody(text: string): { phone: string | null; contactName: string | null } {
   try {
@@ -77,18 +104,31 @@ export async function fetchIdealistaPhoneViaPlaywright(
     chromium = pwChromium as unknown as typeof chromium;
     console.log(`[playwright-phone] Using playwright-extra + stealth`);
 
-    // For Playwright we prefer the static residential proxy (eu.smartproxy.net)
-    // because it uses real ISP IPs. The dynamic IP-list API returns datacenter
-    // IPs (Hetzner) that DataDome flags even with a perfect browser fingerprint.
-    const rawProxyUrl = options?.proxyUrl ?? process.env.SMARTPROXY_URL;
-    const residentialProxyUrl = process.env.SMARTPROXY_RESIDENTIAL_URL
-      ?? (rawProxyUrl?.includes("smartproxy.net") && rawProxyUrl.includes("@") ? rawProxyUrl : undefined)
-      ?? rawProxyUrl;
+    // Sticky session: TODO el flujo de este adId (navegación del browser +
+    // los reintentos de CapSolver más abajo) debe salir por la MISMA IP
+    // residencial. El navegador abre varias conexiones al proxy durante la
+    // carga (documento + XHR de "Ver teléfono"); sin anclar la sesión, cada
+    // conexión puede salir por una IP distinta si el endpoint es rotativo, y
+    // DataDome rechaza la cookie emitida para otra IP con bloqueo duro. Y si
+    // CapSolver resolviera el reto usando una IP DISTINTA a la que navegó el
+    // browser, el token tampoco sería válido para esa sesión.
+    //
+    // Sesión sticky vía `getFreshResidentialProxyUrl` (genera un sessionId
+    // nuevo y lo ancla según el proveedor detectado — ver proxy-config.ts).
+    // life=3: la sesión de Playwright (navegación + posible CapSolver) es algo
+    // más larga que el flujo curl puro; un poco de margen extra.
+    let stickyProxyUrl: string | undefined;
+    try {
+      const { getFreshResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
+      stickyProxyUrl = await getFreshResidentialProxyUrl(3);
+    } catch {
+      stickyProxyUrl = options?.proxyUrl;
+    }
 
     let proxyConfig: { server: string; username?: string; password?: string } | undefined;
-    if (residentialProxyUrl) {
+    if (stickyProxyUrl) {
       try {
-        const u = new URL(residentialProxyUrl);
+        const u = new URL(stickyProxyUrl);
         proxyConfig = {
           server: `${u.protocol}//${u.host}`,
           username: decodeURIComponent(u.username) || undefined,
@@ -193,11 +233,17 @@ export async function fetchIdealistaPhoneViaPlaywright(
       // Try CapSolver to solve DataDome CAPTCHA
       console.log(`[playwright-phone] Attempting DataDome CAPTCHA solution via CapSolver...`);
       const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
-      const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
 
       try {
-        const proxyUrl = await getResidentialProxyUrl();
-        const solverResult = await solveDatadomeWithCapSolver(pageUrl, BROWSER_UA, { proxyUrl });
+        // Reutilizar la MISMA IP sticky que navegó el browser — CapSolver
+        // debe resolver el reto desde la misma IP que verá la cookie aplicada,
+        // si no, el token no será válido para esta sesión.
+        const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
+        console.log(`[playwright-phone] DataDome captchaUrl: ${captchaUrl.slice(0, 80)}`);
+        const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
+          proxyUrl: stickyProxyUrl,
+          websiteURL: pageUrl,
+        });
 
         if (solverResult.token) {
           // Use token as cookie. DataDome typically uses "dd" or similar cookie name
@@ -313,11 +359,14 @@ export async function fetchIdealistaPhoneViaPlaywright(
     if (!phoneFromAjax && !clicked) {
       console.log(`[playwright-phone] AJAX blocked or not available. Attempting CapSolver to resolve CAPTCHA...`);
       const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
-      const { getResidentialProxyUrl } = await import("@/lib/sync/proxy-config");
 
       try {
-        const proxyUrl = await getResidentialProxyUrl();
-        const solverResult = await solveDatadomeWithCapSolver(pageUrl, BROWSER_UA, { proxyUrl });
+        // Misma IP sticky que el resto del flujo (ver comentario más arriba).
+        const captchaUrl = (await extractDatadomeCaptchaUrl(page)) ?? pageUrl;
+        const solverResult = await solveDatadomeWithCapSolver(captchaUrl, BROWSER_UA, {
+          proxyUrl: stickyProxyUrl,
+          websiteURL: pageUrl,
+        });
 
         if (solverResult.token) {
           console.log(`[playwright-phone] CAPTCHA solved, applying token and retrying AJAX...`);

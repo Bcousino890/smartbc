@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
+import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
+import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
+import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
   const { id, contactId } = await params;
+  // Gate de autorización: quien trabaja la captación edita sus contactos.
+  const gate = await requireCaptacionWork(id);
+  if (!gate.ok) return gate.response;
+
   try {
     const body = await request.json();
-    const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
+    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones, rut } = body;
 
     // Validaciones
     if (contact_type && !["owner", "spouse", "family", "other"].includes(contact_type)) {
@@ -49,6 +57,18 @@ export async function PUT(
     if (email !== undefined) updateData.email = email;
     if (has_whatsapp !== undefined) updateData.has_whatsapp = has_whatsapp;
     if (relationship !== undefined) updateData.relationship = relationship;
+    if (rut !== undefined) updateData.rut = rut || null;
+    if (extra_phones !== undefined) {
+      const extraPhonesResult = parseExtraPhones(extra_phones);
+      if (extraPhonesResult.error) {
+        return NextResponse.json({ error: extraPhonesResult.error }, { status: 400 });
+      }
+      updateData.extra_phones = extraPhonesResult.phones;
+    }
+
+    // Sella el contacto como tocado por una persona: a partir de aquí ninguna
+    // sincronización con mode=sync puede retirarlo, lo creara quien lo creara.
+    updateData.updated_by_user_at = new Date().toISOString();
 
     const { data, error } = await db
       .from("captacion_contacts")
@@ -66,6 +86,11 @@ export async function PUT(
       );
     }
 
+    // Avisar al ejecutivo: los datos del propietario cambiaron
+    await notifyOwnerUpdated(db, id, gate.profile.id);
+
+    await stampPanelChange(db, id);
+
     return NextResponse.json(data);
   } catch (error) {
     console.error("PUT /contacts/[contactId] error:", error);
@@ -81,6 +106,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
   const { id, contactId } = await params;
+  // Gate de autorización: además de trabajar la captación, eliminar un contacto
+  // exige el permiso efectivo `captaciones.delete`.
+  const gate = await requireCaptacionWork(id);
+  if (!gate.ok) return gate.response;
+  if (!(gate.actor.effective.captaciones?.delete ?? false)) {
+    return NextResponse.json(
+      { error: "No tienes permiso para eliminar contactos" },
+      { status: 403 },
+    );
+  }
+
   try {
     const db = createAdminClient() as any;
     const { error } = await db
@@ -90,6 +126,8 @@ export async function DELETE(
       .eq("captacion_id", id);
 
     if (error) throw error;
+
+    await stampPanelChange(db, id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

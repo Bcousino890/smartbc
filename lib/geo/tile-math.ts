@@ -1,0 +1,232 @@
+// Matemática de "slippy map" (esquema de teselas estándar de OSM).
+//
+// La usa el mapa en estado BLOQUEADO del módulo de ubicación: en vez de
+// incrustar el visor del proveedor (que capturaba la rueda del ratón y no se
+// puede estilar), componemos nosotros el mosaico de teselas como imágenes.
+// Resultado: cartografía preciosa desde el primer frame, cero JS de mapa
+// hasta que el cliente pulsa "Explorar mapa", y ningún gesto secuestrado.
+//
+// Puro y determinista: sin DOM, sin red. Cubierto por test:smartlink.
+
+export const TILE_SIZE = 256;
+
+/** Coordenada de tesela FRACCIONAL: la parte decimal posiciona el mosaico. */
+export function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: number } {
+  const n = 2 ** zoom;
+  const latRad = (lat * Math.PI) / 180;
+  const x = ((lng + 180) / 360) * n;
+  const y = ((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2) * n;
+  return { x, y };
+}
+
+/** Píxel absoluto del mundo a este zoom (origen arriba-izquierda). */
+export function latLngToWorldPixel(lat: number, lng: number, zoom: number): { x: number; y: number } {
+  const t = latLngToTile(lat, lng, zoom);
+  return { x: t.x * TILE_SIZE, y: t.y * TILE_SIZE };
+}
+
+export type TilePlacement = { z: number; x: number; y: number; left: number; top: number };
+export type MosaicPoint = { left: number; top: number };
+
+export type Mosaic = {
+  tiles: TilePlacement[];
+  /** Convierte lat/lng a píxel dentro del contenedor (marker, POIs). */
+  project: (lat: number, lng: number) => MosaicPoint;
+};
+
+/**
+ * Teselas necesarias para cubrir un contenedor de `width`×`height` centrado
+ * en `lat`/`lng`, con su posición exacta en píxeles.
+ *
+ * Se añade un anillo extra alrededor para que no aparezca borde en blanco
+ * mientras cargan, y las teselas fuera del rango válido del zoom se descartan
+ * (en los bordes del mundo `y` puede salirse; `x` se envuelve).
+ */
+export function buildMosaic(params: {
+  lat: number;
+  lng: number;
+  zoom: number;
+  width: number;
+  height: number;
+}): Mosaic {
+  const { lat, lng, zoom, width, height } = params;
+  const z = Math.max(0, Math.min(19, Math.round(zoom)));
+  const n = 2 ** z;
+
+  const center = latLngToWorldPixel(lat, lng, z);
+  // Píxel del mundo que cae en la esquina superior izquierda del contenedor.
+  const originX = center.x - width / 2;
+  const originY = center.y - height / 2;
+
+  const firstX = Math.floor(originX / TILE_SIZE);
+  const firstY = Math.floor(originY / TILE_SIZE);
+  const lastX = Math.floor((originX + width) / TILE_SIZE);
+  const lastY = Math.floor((originY + height) / TILE_SIZE);
+
+  const tiles: TilePlacement[] = [];
+  for (let ty = firstY; ty <= lastY; ty++) {
+    if (ty < 0 || ty >= n) continue; // fuera del mundo por arriba/abajo
+    for (let tx = firstX; tx <= lastX; tx++) {
+      // Envolvemos en longitud para no pedir teselas inexistentes.
+      const wrappedX = ((tx % n) + n) % n;
+      tiles.push({
+        z,
+        x: wrappedX,
+        y: ty,
+        left: tx * TILE_SIZE - originX,
+        top: ty * TILE_SIZE - originY,
+      });
+    }
+  }
+
+  return {
+    tiles,
+    project(pLat: number, pLng: number) {
+      const p = latLngToWorldPixel(pLat, pLng, z);
+      return { left: p.x - originX, top: p.y - originY };
+    },
+  };
+}
+
+/** Inversa de latLngToWorldPixel: píxel del mundo → coordenada. */
+export function worldPixelToLatLng(x: number, y: number, zoom: number): { lat: number; lng: number } {
+  const n = 2 ** zoom;
+  const lng = (x / (TILE_SIZE * n)) * 360 - 180;
+  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / (TILE_SIZE * n)))) * 180) / Math.PI;
+  return { lat, lng };
+}
+
+/**
+ * Encuadre que mete DOS puntos en el lienzo con margen: lo usa DESTINATION
+ * FOCUS para que vivienda y destino se vean los dos, sin que ninguno quede
+ * pegado a un borde.
+ *
+ * Es matemática pura, así que el encuadre funciona TAMBIÉN con el mapa
+ * bloqueado: seleccionar un destino no obliga a desbloquear los gestos.
+ * `maxZoom` evita acercarse tanto que se pierda el contexto de ciudad cuando
+ * los dos puntos están casi encima.
+ */
+export function fitTwoPoints(params: {
+  a: { lat: number; lng: number };
+  b: { lat: number; lng: number };
+  width: number;
+  height: number;
+  padding: number;
+  maxZoom?: number;
+  minZoom?: number;
+}): { lat: number; lng: number; zoom: number } {
+  return fitPoints({ ...params, points: [params.a, params.b] });
+}
+
+/**
+ * Encuadre de N puntos. Lo usa el OVERVIEW para enmarcar la vivienda JUNTO A
+ * sus destinos más cercanos: si el mapa no los abarca, las cápsulas de POI no
+ * caben en el lienzo y el cliente pierde el contexto de lifestyle que el
+ * módulo promete sin bajar a la lista.
+ */
+export function fitPoints(params: {
+  points: Array<{ lat: number; lng: number }>;
+  width: number;
+  height: number;
+  padding: number;
+  maxZoom?: number;
+  minZoom?: number;
+}): { lat: number; lng: number; zoom: number } {
+  const { points, width, height, padding } = params;
+  const maxZoom = params.maxZoom ?? 17;
+  const minZoom = params.minZoom ?? 11;
+  if (points.length === 0) return { lat: 0, lng: 0, zoom: minZoom };
+
+  const px = points.map((p) => latLngToWorldPixel(p.lat, p.lng, 0));
+  const pa = { x: Math.min(...px.map((p) => p.x)), y: Math.min(...px.map((p) => p.y)) };
+  const pb = { x: Math.max(...px.map((p) => p.x)), y: Math.max(...px.map((p) => p.y)) };
+  const dx = pb.x - pa.x;
+  const dy = pb.y - pa.y;
+
+  const usableW = Math.max(32, width - padding * 2);
+  const usableH = Math.max(32, height - padding * 2);
+  // 2^z · d <= usable  →  z <= log2(usable / d). Un eje sin separación no
+  // restringe (Infinity), y el clamp final acota los dos casos extremos.
+  const zx = dx > 0.0001 ? Math.log2(usableW / dx) : Infinity;
+  const zy = dy > 0.0001 ? Math.log2(usableH / dy) : Infinity;
+  const raw = Math.min(zx, zy);
+
+  // La pirámide de teselas solo admite zoom entero, y redondear hacia abajo
+  // pierde un nivel COMPLETO: el doble de escala, con dos puntos diminutos en
+  // medio de media ciudad. Se prueba primero el nivel más ajustado y solo se
+  // baja si de verdad no caben con un margen mínimo digno.
+  const MIN_MARGIN = Math.max(24, Math.min(width, height) * 0.1);
+  const tight = Math.ceil(raw);
+  const fitsAt = (z: number) =>
+    dx * 2 ** z <= width - MIN_MARGIN * 2 && dy * 2 ** z <= height - MIN_MARGIN * 2;
+  const chosen = fitsAt(tight) ? tight : Math.floor(raw);
+  const zoom = Math.max(minZoom, Math.min(maxZoom, chosen));
+
+  const mid = worldPixelToLatLng((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, 0);
+  return { lat: mid.lat, lng: mid.lng, zoom };
+}
+
+/**
+ * Desplaza el centro de una vista N píxeles en vertical.
+ *
+ * Lo usa DESTINATION FOCUS para RESERVAR una banda libre arriba donde vive la
+ * ficha contextual: en móvil la ficha ocupa casi todo el ancho, así que no hay
+ * escape horizontal posible y la única forma de que no tape un marcador es que
+ * el encuadre deje ese hueco. Mover el centro al norte baja el contenido.
+ */
+export function shiftViewVertically(
+  view: { lat: number; lng: number; zoom: number },
+  pixels: number,
+): { lat: number; lng: number; zoom: number } {
+  const wp = latLngToWorldPixel(view.lat, view.lng, view.zoom);
+  const moved = worldPixelToLatLng(wp.x, wp.y + pixels, view.zoom);
+  return { lat: moved.lat, lng: moved.lng, zoom: view.zoom };
+}
+
+/**
+ * Garantiza que un punto (la vivienda) quede DENTRO de un margen de seguridad
+ * del lienzo, desplazando el centro lo justo. Encuadrar la vivienda con sus
+ * destinos puede empujarla contra un borde cuando todos caen al mismo lado, y
+ * en móvil el medallón acababa cortado por el canto (visto en el chalet de
+ * Pozuelo). El zoom NO se toca: solo se recentra.
+ */
+export function clampPointInView(
+  view: { lat: number; lng: number; zoom: number },
+  point: { lat: number; lng: number },
+  width: number,
+  height: number,
+  inset: number,
+): { lat: number; lng: number; zoom: number } {
+  const c = latLngToWorldPixel(view.lat, view.lng, view.zoom);
+  const p = latLngToWorldPixel(point.lat, point.lng, view.zoom);
+  // Posición del punto dentro del contenedor con el centro actual.
+  const x = p.x - c.x + width / 2;
+  const y = p.y - c.y + height / 2;
+  // Si el margen pedido no cabe, se centra el punto y ya está.
+  const maxInsetX = width / 2;
+  const maxInsetY = height / 2;
+  const ix = Math.min(inset, maxInsetX);
+  const iy = Math.min(inset, maxInsetY);
+  let dx = 0;
+  let dy = 0;
+  if (x < ix) dx = x - ix;
+  else if (x > width - ix) dx = x - (width - ix);
+  if (y < iy) dy = y - iy;
+  else if (y > height - iy) dy = y - (height - iy);
+  if (dx === 0 && dy === 0) return view;
+  const moved = worldPixelToLatLng(c.x + dx, c.y + dy, view.zoom);
+  return { lat: moved.lat, lng: moved.lng, zoom: view.zoom };
+}
+
+/**
+ * Zoom que encuadra al inmueble CON su barrio alrededor, no solo su portal.
+ * Se ajusta al ancho disponible para que móvil y escritorio muestren una
+ * extensión comparable de ciudad (§7C del brief: contexto de barrio, no
+ * huella del edificio ni vista de región).
+ */
+export function contextZoomForWidth(widthPx: number, lat: number): number {
+  const TARGET_SPAN_M = 1400; // ~15 min a pie de lado a lado
+  const metersPerPixelAtZ0 = 156543.03392 * Math.cos((lat * Math.PI) / 180);
+  const needed = Math.log2((metersPerPixelAtZ0 * widthPx) / TARGET_SPAN_M);
+  return Math.max(13, Math.min(17, Math.round(needed)));
+}

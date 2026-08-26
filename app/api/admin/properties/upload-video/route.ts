@@ -1,16 +1,15 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { requirePermission } from "@/lib/auth/guard";
 
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 const ALLOWED_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
 export async function POST(req: Request) {
   try {
-    const profile = await getCurrentProfile();
-    if (!profile) {
-      return Response.json({ error: "No autorizado" }, { status: 401 });
-    }
+    // Gate de autorización: subir vídeo a una propiedad requiere properties/edit.
+    const gate = await requirePermission("properties", "edit");
+    if (!gate.ok) return gate.response;
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;

@@ -70,6 +70,9 @@ export type Property = {
   price: number;
   stayType: StayType;
   operation: Operation;
+  // true si la propiedad está en venta Y alquiler a la vez. El SmartLink
+  // público usa esto para conservar `?op=` al compartir/reenviar el enlace.
+  hasBothOperations?: boolean;
   badge?: PropertyBadge;
   image?: string;
   description?: string;
@@ -100,6 +103,14 @@ export type Property = {
   // Nº de planta deducido de features/título/descripción (ver lib/floor.ts).
   // null si el anuncio no lo menciona. Ático = ATICO_FLOOR.
   floor?: number | null;
+  // SmartLink 2.0: clase de estancia por foto (alineada 1:1 con `photos`).
+  // Solo el nombre de la clase — nada más de la metadata IA cruza al cliente.
+  photoClasses?: Array<string | null>;
+  /** Alineado con `photos`: true si la foto lleva marca de agua de un portal. */
+  photoWatermarked?: boolean[];
+  /** Dimensiones reales de la portada, para acotar el `srcset` del hero. */
+  coverWidth?: number | null;
+  coverHeight?: number | null;
 };
 
 export type Filters = {
@@ -273,7 +284,12 @@ export type AgencyDetail = Agency & {
 };
 
 // Admin / Clients view
-export type ClientProfileType = "student" | "worker" | "company";
+export type ClientProfileType =
+  | "student"
+  | "worker"
+  | "company"
+  | "family"
+  | "investor";
 export type ClientStatus = "active" | "inactive";
 export type ClientPriority = "normal" | "high";
 
@@ -352,6 +368,8 @@ export type AdminProperty = {
   agencyId: string;
   agencyName: string;
   operation: Operation;
+  // true si la propiedad está publicada como venta Y alquiler a la vez.
+  isDualOperation?: boolean;
   // Tipo de estancia para alquileres: "larga" / "corta". null en ventas.
   stayType?: "larga" | "corta" | null;
   status: AdminPropertyStatus;
@@ -359,6 +377,9 @@ export type AdminProperty = {
   bathrooms: number;
   squareMeters: number;
   price: number;
+  // Moneda de la ficha: 'eur' (España) o 'clp'/'uf'/'usd' (Chile). Filas
+  // antiguas y mocks no la informan → cada vista asume la de su país.
+  currency?: string | null;
   // Nº de planta deducido de features/título/descripción (ver lib/floor.ts).
   // Opcional: los mocks legacy no lo informan.
   floor?: number | null;
@@ -385,6 +406,8 @@ export type VisitRequestStatus =
 
 export type VisitRequest = {
   id: string;
+  /** id del profile del cliente — permite saltar a su ficha/Viewing Collections. */
+  clientId?: string;
   clientName: string;
   clientInitials: string;
   clientEmail?: string;
@@ -450,9 +473,25 @@ export type InternalUser = {
   initials: string;
   roleKey: InternalUserRole;
   status: InternalUserStatus;
+  // Teléfono del perfil. Es lo que ve el cliente en la ficha del asesor al
+  // final de una colección de visitas, así que el formulario de edición tiene
+  // que precargarlo: si no, guardar cualquier otro cambio lo borraba.
+  phone?: string;
   lastLoginText?: string;
   joinedLabel: string;
   country?: string;
+  multiCountry?: boolean;
+  // Conjunto de países con acceso ('es' | 'cl'). Reemplaza al flag binario
+  // `multiCountry` (que se deriva: countries.length > 1). `country` sigue
+  // siendo el país por defecto/landing. Opcional para retrocompat.
+  countries?: string[];
+  // Rol efectivo por país, cuando difiere del rol global (roleKey). Ej.
+  // { cl: "agent_senior" } para un usuario "agent_junior" en España pero
+  // senior en Chile. Sin entrada para un país = usa roleKey.
+  countryRoles?: Record<string, string>;
+  // Rol personalizado asignado (custom_roles.id), si tiene uno. Cuando está
+  // definido, la matriz de permisos real viene de esa entidad, no de roleKey.
+  customRoleId?: string | null;
 };
 
 // Admin / Configuración

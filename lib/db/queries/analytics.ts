@@ -5,6 +5,8 @@ export type PageViewRow = {
   id: string;
   property_id: string | null;
   share_id: string | null;
+  collection_share_id: string | null;
+  shortlist_id?: string | null;
   page_type: string;
   page_path: string;
   session_id: string;
@@ -398,41 +400,55 @@ export async function getShareAnalytics(
 // ---------------------------------------------------------------------------
 // insertPageView
 // ---------------------------------------------------------------------------
+/**
+ * Registra una visita de página y devuelve su id.
+ *
+ * ⚠️ La versión anterior llamaba a `.insert(payload, { select: "id" })`. Esa no
+ * es la firma de supabase-js: el segundo argumento admite `count`, no `select`,
+ * así que la fila SÍ se insertaba pero la respuesta no traía datos y la función
+ * lanzaba "no row returned" → el endpoint devolvía 500 y el navegador nunca
+ * recibía el `pageViewId`. Sin ese id, `flush()` del tracker descarta la cola:
+ * las visitas se contaban pero NINGÚN evento granular (photo_view, stop_view,
+ * share_click…) llegaba a guardarse.
+ *
+ * Detectado en el QA de producción de Viewing Collections. La forma correcta es
+ * encadenar `.select().single()`.
+ */
 export async function insertPageView(
   data: Omit<PageViewRow, "id" | "created_at">,
 ): Promise<{ id: string }> {
   const supabase = createAdminClient();
-  const insertTbl = supabase.from("page_views") as unknown as {
-    insert: (
-      payload: Record<string, unknown>,
-      opts: { select: string },
-    ) => Promise<{
-      data: Array<{ id: string }> | null;
-      error: { message: string } | null;
-    }>;
-  };
-  const res = await insertTbl.insert(
-    {
+  const extra = data as unknown as Record<string, unknown>;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: row, error } = await (supabase as any)
+    .from("page_views")
+    .insert({
       property_id: data.property_id,
+      // Estado de experiencia del SmartLink (0147). Nullable: los llamadores
+      // que no lo mandan siguen funcionando igual.
+      experience_state: extra["experience_state"] ?? null,
       share_id: data.share_id,
+      collection_share_id: data.collection_share_id ?? null,
+      shortlist_id: data.shortlist_id ?? null,
       page_type: data.page_type,
       page_path: data.page_path,
-      referrer: (data as unknown as Record<string, unknown>)["referrer"] ?? null,
+      referrer: extra["referrer"] ?? null,
       session_id: data.session_id,
       ip: data.ip,
-      user_agent: (data as unknown as Record<string, unknown>)["user_agent"] ?? null,
+      user_agent: extra["user_agent"] ?? null,
       device_type: data.device_type,
       browser: data.browser,
-      os: (data as unknown as Record<string, unknown>)["os"] ?? null,
+      os: extra["os"] ?? null,
       country_code: data.country_code,
       country_name: data.country_name,
       city: data.city,
-    },
-    { select: "id" },
-  );
-  if (res.error) throw new Error(res.error.message);
-  const row = (res.data ?? [])[0];
-  if (!row) throw new Error("insertPageView: no row returned");
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  if (!row?.id) throw new Error("insertPageView: no row returned");
   return { id: row.id };
 }
 
@@ -456,4 +472,35 @@ export async function insertPageEvent(data: {
     data: data.data ?? null,
   });
   if (res.error) throw new Error(res.error.message);
+}
+
+// ---------------------------------------------------------------------------
+// resolveCollectionShareId
+// ---------------------------------------------------------------------------
+/**
+ * Traduce el token público de una Viewing Collection a su `share_id` interno.
+ *
+ * Existe para que la página pública no tenga que pasar el UUID del share como
+ * prop a un Client Component: todo lo que se pasa como prop viaja en el payload
+ * RSC y quedaba visible en el HTML. El token, en cambio, ya está en la URL.
+ *
+ * Devuelve null si el token no existe: el tracking nunca debe romper la
+ * petición ni revelar si un token es válido.
+ */
+export async function resolveCollectionShareId(
+  token: string,
+): Promise<string | null> {
+  if (!token || token.length < 16) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createAdminClient() as any;
+    const { data } = await supabase
+      .from("viewing_collection_shares")
+      .select("id")
+      .eq("token", token)
+      .maybeSingle();
+    return data?.id ?? null;
+  } catch {
+    return null;
+  }
 }

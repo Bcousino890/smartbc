@@ -1,7 +1,8 @@
 import "server-only";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { extname } from "node:path";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { canAccess } from "@/lib/permissions";
+import { createAdminClient } from "@/lib/db/admin";
 
 export const maxDuration = 30;
 
@@ -13,7 +14,7 @@ export async function POST(req: Request) {
   if (!profile) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!canAccess(profile.role, "properties", "edit")) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -39,13 +40,29 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // Subir al bucket de Supabase Storage (properties-photos), NO al filesystem
+    // local: Next.js en producción no sirve archivos escritos en public/ en
+    // runtime, así que /uploads/... daba 404 (imágenes rotas "?") y además se
+    // perdían en cada deploy. El bucket es público y persiste.
     const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const uploadDir = join(process.cwd(), "public", "uploads", "idealista");
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(join(uploadDir, safeName), buffer);
+    const path = `idealista/${safeName}`;
+    const supabase = createAdminClient();
+    const { error: uploadErr } = await supabase.storage
+      .from("properties-photos")
+      .upload(path, buffer, {
+        contentType: file.type || (isImage ? "image/jpeg" : "video/mp4"),
+        upsert: false,
+      });
+    if (uploadErr) {
+      console.error("Upload media storage error:", uploadErr);
+      return Response.json({ error: uploadErr.message }, { status: 500 });
+    }
+    const { data: pub } = supabase.storage
+      .from("properties-photos")
+      .getPublicUrl(path);
 
     return Response.json({
-      url: `/uploads/idealista/${safeName}`,
+      url: pub.publicUrl,
       type: isImage ? "image" : "video",
       name: file.name,
     });

@@ -117,7 +117,7 @@ export function NewFeedModal({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-ink/55">
+            <p className="mt-1 text-xs text-ink/55">
               {t("sindicacion.new.scraperHelp")}
             </p>
           </Field>
@@ -147,7 +147,7 @@ export function NewFeedModal({
           </Field>
 
           {error && (
-            <p className="rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-[12px] text-rose-700">
+            <p className="rounded-lg border border-rose-200 bg-rose-50/85 px-3 py-2 text-xs text-rose-700">
               {t("sindicacion.toast.error", { error })}
             </p>
           )}
@@ -157,14 +157,14 @@ export function NewFeedModal({
               type="button"
               onClick={onClose}
               disabled={pending}
-              className="rounded-lg border border-ink/15 bg-white/85 px-4 py-2 text-[12px] font-medium text-ink/75 transition hover:bg-white"
+              className="rounded-lg border border-ink/15 bg-white/85 px-4 py-2 text-xs font-medium text-ink/75 transition hover:bg-white"
             >
               {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[12px] font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
             >
               {pending ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -188,7 +188,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5 text-[12px] font-medium text-ink/80">
+    <label className="flex flex-col gap-1.5 text-xs font-medium text-ink/80">
       <span>{label}</span>
       {children}
     </label>

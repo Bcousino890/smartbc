@@ -16,6 +16,7 @@ import {
   parsePriceString,
 } from "../parse-utils";
 import { detectAdvertiserFromHtml, fetchIdealistaPhoneViaAjax } from "../../particulares/idealista-advertiser-detector";
+import { extractPhoneFromText } from "../../particulares/phone-from-text";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos que refleja el JSON embebido de Idealista. Basado en el schema real de
@@ -660,6 +661,25 @@ export async function extractIdealista(
     embedded?.propertyCode ??
     sourceUrl.match(/\/inmueble\/(\d+)/)?.[1] ??
     null;
+
+  // Fuente adicional (barata y fiable): muchos particulares escriben su teléfono
+  // en la descripción/título para saltarse el "chat only". Ese texto ya lo
+  // tenemos (UA WhatsApp pasa DataDome), así que lo minamos ANTES del fallback
+  // AJAX (que gasta proxy/CapSolver/Playwright). Solo si no hallamos teléfono.
+  if (!advertiserInfo.phone) {
+    const refDigits = ajaxAdId ? ajaxAdId.slice(-9) : null;
+    const textPhone =
+      extractPhoneFromText(preview.description, refDigits).phone ??
+      extractPhoneFromText(preview.title, refDigits).phone;
+    if (textPhone) {
+      console.log(`[idealista-extractor] ✓ Teléfono en descripción/título: ${textPhone}`);
+      advertiserInfo = {
+        ...advertiserInfo,
+        phone: textPhone,
+        phone_confidence: "medium",
+      };
+    }
+  }
 
   if (!advertiserInfo.phone && ajaxAdId) {
     const idSource = embedded?.propertyCode ? "propertyCode" : "URL";

@@ -15,6 +15,7 @@ export type ImportPortal =
   | "urbantechome"
   | "yaencontre"
   | "ukio"
+  | "airbnb"
   | "generic";
 
 export type ImportPhoto = {
@@ -57,6 +58,9 @@ export type ImportPreview = {
   // plano de la vivienda y vídeo. null/undefined = no detectado.
   floorPlanUrl?: string | null;
   videoUrl?: string | null;
+  // Vídeos detectados en la ficha (YouTube/Vimeo/og:video/mp4/JSON-LD). Se
+  // guardan como enlace directo, sin re-alojar. Vacío = ninguno detectado.
+  videos?: string[];
 };
 
 export type ImportExtractError =

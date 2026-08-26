@@ -118,6 +118,7 @@ export async function sendPasswordResetEmail(
     to: userEmail,
     subject: "Recupera tu contraseña - Benjamín Cousiño Propiedades",
     html: renderEmailLayout({
+      eyebrow: "Restablecer contraseña",
       title: "Recupera tu contraseña",
       bodyHtml: `
         <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>
@@ -143,6 +144,7 @@ export async function sendInvitationEmail(
     to: userEmail,
     subject: "Bienvenido a Benjamín Cousiño Propiedades - Configura tu cuenta",
     html: renderEmailLayout({
+      eyebrow: "Nueva cuenta",
       title: "Configura tu cuenta",
       bodyHtml: `
         <p style="margin: 0 0 14px 0;">Hola <strong>${escapeHtml(userName)}</strong>,</p>
@@ -155,4 +157,65 @@ export async function sendInvitationEmail(
   });
 
   return result;
+}
+
+/**
+ * Create a user that's confirmed immediately (account access never depends
+ * on any invitation email arriving — same pattern as the staff/no-email
+ * client creation routes) and best-effort send a "set your password" link
+ * through the app's own AWS SES config (lib/email/send-email.ts).
+ *
+ * Replaces `supabase.auth.admin.inviteUserByEmail()`, which sends through
+ * Supabase Auth/GoTrue's own separate mailer instead of the AWS SES region
+ * configured in /admin/configuracion — so invites and password resets used
+ * to go out through two different, independently-configured mail paths.
+ */
+export async function createInvitedUser(params: {
+  email: string;
+  firstName: string;
+  lastName?: string;
+  userMetadata?: Record<string, unknown>;
+  expiresInHours?: number;
+}): Promise<
+  | { ok: true; userId: string; emailSent: boolean; tempPassword: string }
+  | { ok: false; error: string }
+> {
+  const { email, firstName, lastName = "", userMetadata = {}, expiresInHours = 24 * 7 } = params;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+  const tempPassword = randomBytes(12)
+    .toString("base64")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 16);
+
+  const { data, error } = await db.auth.admin.createUser({
+    email,
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: {
+      full_name: `${firstName} ${lastName}`.trim(),
+      first_name: firstName,
+      last_name: lastName,
+      ...userMetadata,
+    },
+  });
+
+  if (error || !data?.user) {
+    return { ok: false, error: error?.message || "Error creando usuario" };
+  }
+
+  const userId = data.user.id as string;
+
+  let emailSent = false;
+  const tokenData = await createPasswordResetToken(userId, expiresInHours);
+  if (tokenData) {
+    const appUrl =
+      process.env.NEXT_PUBLIC_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const inviteUrl = `${appUrl}/auth/reset-password?token=${tokenData.token}`;
+    const sendResult = await sendInvitationEmail(email, firstName || email, inviteUrl);
+    emailSent = sendResult.success;
+  }
+
+  return { ok: true, userId, emailSent, tempPassword };
 }

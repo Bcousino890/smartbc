@@ -47,6 +47,29 @@ export function isIdealistaImageUrl(url: string): boolean {
 // normalizar el segmento de perfil entero a uno conocido.
 const SAFE_PROFILE = "WEB_DETAIL_TOP-L-L";
 
+// Perfil grande. `WEB_DETAIL_TOP-L-L` es el que SIEMPRE responde, y por eso se
+// eligió, pero da 850px: para un hero a ancho completo en una pantalla retina
+// eso es media resolución (medido: BC-1421 y BC-1422 llegaban a 850 mientras
+// el resto del catálogo llegaba a 1600). No se cambia el perfil a ciegas —
+// hacerlo fue lo que provocó 404 en su día— sino que la descarga PRUEBA el
+// grande y se queda con el pequeño si no existe.
+const LARGE_PROFILE = "WEB_DETAIL_TOP-XL-L";
+
+/**
+ * Candidatos de URL para la MISMA foto, de mayor a menor resolución. La
+ * descarga los prueba en orden y se queda con el primero que responda una
+ * imagen válida; así la mejora no depende de que un perfil concreto exista
+ * para siempre en el CDN de Idealista.
+ */
+export function idealistaSourceCandidates(url: string): string[] {
+  if (!isIdealistaImageUrl(url)) return [url];
+  const blurRe = /(\/blur\/)[^/]+(\/\d+\/)/;
+  if (!blurRe.test(url)) return [url];
+  const large = url.replace(blurRe, `$1${LARGE_PROFILE}$2`);
+  const safe = url.replace(blurRe, `$1${SAFE_PROFILE}$2`);
+  return large === safe ? [safe] : [large, safe];
+}
+
 /**
  * Normaliza la URL de imagen del CDN de Idealista a un perfil de tamaño que
  * existe seguro. El perfil es el segmento entre `/blur/` y `/<n>/`

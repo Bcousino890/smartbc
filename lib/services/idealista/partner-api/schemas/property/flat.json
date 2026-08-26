@@ -1,0 +1,261 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/property/flat.json",
+  "title": "Flat features",
+  "type": "object",
+  "additionalProperties": false,
+  "dependencies": {
+    "parkingIncludedInPrice": [
+      "parkingAvailable"
+    ],
+    "parkingPrice": [
+      "parkingAvailable",
+      "parkingIncludedInPrice"
+    ]
+  },
+  "required": [
+    "areaConstructed",
+    "bathroomNumber",
+    "energyCertificateRating",
+    "conservation",
+    "liftAvailable",
+    "rooms"
+  ],
+  "properties": {
+    "areaConstructed": {
+      "$ref": "features.json#/housingAreaConstructed"
+    },
+    "areaUsable": {
+      "$ref": "features.json#/areaUsable"
+    },
+    "balcony": {
+      "$ref": "features.json#/balcony"
+    },
+    "bathroomNumber": {
+      "$ref": "features.json#/housingBathroomNumber"
+    },
+    "builtYear": {
+      "$ref": "features.json#/builtYear"
+    },
+    "conditionedAir": {
+      "$ref": "features.json#/conditionedAir"
+    },
+    "conservation": {
+      "$ref": "features.json#/conservation"
+    },
+    "doorman": {
+      "title": "doorman",
+      "description": "Doorman availability. This field is deprecated and won't be used anymore in idealista",
+      "type": "boolean",
+      "deprecated": true
+    },
+    "equipment": {
+      "$ref": "features.json#/equipment"
+    },
+    "energyCertificatePerformance": {
+      "$ref": "features.json#/energyCertificatePerformance"
+    },
+    "energyCertificateLaw": {
+      "$ref": "features.json#/energyCertificateLaw"
+    },
+    "energyCertificateRating": {
+      "$ref": "features.json#/energyCertificateRating"
+    },
+    "energyCertificateEmissionsRating": {
+      "$ref": "features.json#/energyCertificateEmissionsRating"
+    },
+    "energyCertificateEmissionsValue": {
+      "$ref": "features.json#/energyCertificateEmissionsValue"
+    },
+    "energyCertificationDate": {
+      "$ref": "features.json#/energyCertificationDate"
+    },
+    "energyCertificationAdemeCode": {
+      "$ref": "features.json#/energyCertificationAdemeCode"
+    },
+    "isInTopFloor": {
+      "$ref": "features.json#/isInTopFloor"
+    },
+    "garden": {
+      "$ref": "features.json#/garden"
+    },
+    "handicappedAdaptedAccess": {
+      "$ref": "features.json#/handicappedAdaptedAccess"
+    },
+    "handicappedAdaptedUse": {
+      "$ref": "features.json#/handicappedAdaptedUse"
+    },
+    "liftAvailable": {
+      "$ref": "features.json#/liftAvailable"
+    },
+    "orientationNorth": {
+      "$ref": "features.json#/orientationNorth"
+    },
+    "orientationSouth": {
+      "$ref": "features.json#/orientationSouth"
+    },
+    "orientationWest": {
+      "$ref": "features.json#/orientationWest"
+    },
+    "orientationEast": {
+      "$ref": "features.json#/orientationEast"
+    },
+    "parkingAvailable": {
+      "$ref": "features.json#/parkingAvailable"
+    },
+    "parkingIncludedInPrice": {
+      "$ref": "features.json#/parkingIncludedInPrice"
+    },
+    "parkingPrice": {
+      "$ref": "features.json#/parkingPrice"
+    },
+    "penthouse": {
+      "$ref": "features.json#/penthouse"
+    },
+    "petsAllowed": {
+      "$ref": "features.json#/petsAllowed"
+    },
+    "tenantNumber": {
+      "$ref": "features.json#/tenantNumberForHousing"
+    },
+    "recommendedForChildren": {
+      "$ref": "features.json#/recommendedForChildren"
+    },
+    "pool": {
+      "$ref": "features.json#/pool"
+    },
+    "rooms": {
+      "description": "</br> * In Italy rooms must be at least 1. </br> * If you choose studio = true, rooms must be 0 (ES, PT, FR) or 1 (IT)",
+      "$ref": "features.json#/flatRooms"
+    },
+    "storage": {
+      "$ref": "features.json#/storage"
+    },
+    "studio": {
+      "$ref": "features.json#/studio"
+    },
+    "duplex": {
+      "$ref": "features.json#/duplex"
+    },
+    "triplex": {
+      "$ref": "features.json#/triplex"
+    },
+    "terrace": {
+      "$ref": "features.json#/terrace"
+    },
+    "wardrobes": {
+      "$ref": "features.json#/wardrobes"
+    },
+    "windowsLocation": {
+      "$ref": "features.json#/windowsLocation"
+    },
+    "heatingType": {
+      "$ref": "features.json#/heatingType"
+    },
+    "priceCommunity": {
+      "$ref": "features.json#/priceCommunity"
+    },
+    "depositMonths": {
+      "$ref": "features.json#/depositMonths"
+    },
+    "priceReferenceIndex": {
+      "$ref": "features.json#/priceReferenceIndex"
+    },
+    "isAuction": {
+      "$ref": "features.json#/isAuction"
+    },
+    "minAuctionBidIncrement": {
+      "$ref": "features.json#/minAuctionBidIncrement"
+    },
+    "auctionDeposit": {
+      "$ref": "features.json#/auctionDeposit"
+    },
+    "auctionDate": {
+      "$ref": "features.json#/auctionDate"
+    },
+    "auctionTribunal": {
+      "$ref": "features.json#/auctionTribunal"
+    },
+    "currentOccupation": {
+      "$ref": "features.json#/currentOccupation"
+    },
+    "gardenType": {
+      "$ref": "features.json#/gardenType"
+    },
+    "parkingSpaceCapacity": {
+      "$ref": "features.json#/parkingSpaceCapacity"
+    },
+    "parkingSpaceArea": {
+      "$ref": "features.json#/parkingSpaceArea"
+    },
+    "outdoorParkingSpaceAvailable": {
+      "$ref": "features.json#/outdoorParkingSpaceAvailable"
+    },
+    "outdoorParkingSpaceType": {
+      "$ref": "features.json#/outdoorParkingSpaceType"
+    },
+    "outdoorParkingSpaceNumber": {
+      "$ref": "features.json#/outdoorParkingSpaceNumber"
+    },
+    "hiddenPrice": {
+      "$ref": "features.json#/hiddenPrice"
+    },
+    "residential": {
+      "$ref": "features.json#/residential"
+    },
+    "seasonalRental": {
+      "$ref": "features.json#/seasonalRental"
+    },
+    "shortTerm": {
+      "$ref": "features.json#/shortTerm"
+    },
+    "shortTermLicense": {
+      "$ref": "features.json#/shortTermLicense"
+    },
+    "shortTermLicenseNational": {
+      "$ref": "features.json#/shortTermLicenseNational"
+    },
+    "lowSeasonPrice": {
+      "$ref": "features.json#/lowSeasonPrice"
+    },
+    "highSeasonPrice": {
+      "$ref": "features.json#/highSeasonPrice"
+    },
+    "residentOnly": {
+      "$ref": "features.json#/residentOnly"
+    },
+    "cadastralReference": {
+      "$ref": "features.json#/cadastralReference"
+    },
+    "fee": {
+      "$ref": "features.json#/fee"
+    },
+    "feePayerType": {
+      "$ref": "features.json#/feePayerType"
+    },
+    "monthlyFee": {
+      "$ref": "features.json#/monthlyFee"
+    },
+    "bareFree": {
+      "$ref": "features.json#/bareFree"
+    },
+    "rentControl": {
+      "$ref": "features.json#/rentControl"
+    },
+    "maxReferenceRent": {
+      "$ref": "features.json#/maxReferenceRent"
+    },
+    "baseRent": {
+      "$ref": "features.json#/baseRent"
+    },
+    "additionalRentCharges": {
+      "$ref": "features.json#/additionalRentCharges"
+    },
+    "bedroomNumber": {
+      "$ref": "features.json#/bedroomNumber"
+    },
+    "serviceCharges": {
+      "$ref": "features.json#/serviceCharges"
+    }
+  }
+}

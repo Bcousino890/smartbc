@@ -17,6 +17,15 @@ export default async function AdminLayout({
   if (!profile) redirect("/login");
   if (!isStaffRole(profile.role)) redirect("/inicio");
 
+  // El árbol raíz /admin es el legado de España. Igual que hace el layout de
+  // /es/admin, los usuarios de Chile (no multi-país) van a su dashboard: sin
+  // esto un usuario CL que caía en /admin veía el catálogo de España.
+  const canSwitchCountry = profile.role === "admin";
+  const userCountry = (profile as any).country ?? "es";
+  if (!canSwitchCountry && userCountry === "cl") {
+    redirect("/cl/admin");
+  }
+
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
 
   // Permisos efectivos = defaults del rol + excepciones por usuario
@@ -91,7 +100,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="relative min-h-screen bg-cream-50">
+    <div className="crm-root relative min-h-screen bg-cream-50">
       {/* Soft warm background */}
       <div
         aria-hidden="true"

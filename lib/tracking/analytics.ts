@@ -4,6 +4,10 @@ export class AnalyticsTracker {
   private static instance: AnalyticsTracker
 
   private pageViewId: string | null = null
+  // Clave de la última init (pageType|path): evita duplicar el page_view si
+  // el componente vuelve a montar en la MISMA página (StrictMode, remontajes
+  // de árbol). Una navegación real cambia el path y sí vuelve a contar.
+  private lastInitKey: string | null = null
   private sessionId: string
   private eventQueue: Array<{ eventType: string; data?: unknown }> = []
   private flushTimer: ReturnType<typeof setInterval> | null = null
@@ -30,8 +34,18 @@ export class AnalyticsTracker {
   init(params: {
     pageType: string
     propertyId?: string
+    /** Slug público de la propiedad. Las páginas públicas no conocen el UUID
+     *  (el DTO expone id=slug); el servidor lo resuelve a property_id. */
+    propertySlug?: string
     shareId?: string
+    collectionToken?: string
+    shortlistToken?: string
+    /** Estado de experiencia del SmartLink (complete|partial|sparse|facts_led). */
+    experienceState?: string
   }): void {
+    const key = `${params.pageType}|${window.location.pathname}`
+    if (this.lastInitKey === key) return
+    this.lastInitKey = key
     this.pageViewId = null
     this.timeOnPageStart = Date.now()
     void this.sendPageView(params)
@@ -40,7 +54,11 @@ export class AnalyticsTracker {
   private async sendPageView(params: {
     pageType: string
     propertyId?: string
+    propertySlug?: string
     shareId?: string
+    collectionToken?: string
+    shortlistToken?: string
+    experienceState?: string
   }): Promise<void> {
     try {
       const res = await fetch("/api/tracking/page-view", {
@@ -49,7 +67,11 @@ export class AnalyticsTracker {
         body: JSON.stringify({
           pageType: params.pageType,
           propertyId: params.propertyId ?? null,
+          propertySlug: params.propertySlug ?? null,
           shareId: params.shareId ?? null,
+          experienceState: params.experienceState ?? null,
+          collectionToken: params.collectionToken ?? null,
+          shortlistToken: params.shortlistToken ?? null,
           sessionId: this.sessionId,
           referrer: document.referrer,
           pagePath: window.location.pathname,
@@ -96,6 +118,15 @@ export class AnalyticsTracker {
     this.enqueue({ eventType: "visit_request" })
   }
 
+  /**
+   * Evento genérico. Lo usa la Viewing Collection para collection_open,
+   * stop_view, stop_expand y share_click sin necesitar un método por evento.
+   * El CHECK de page_events.event_type descarta cualquier valor no permitido.
+   */
+  trackEvent(eventType: string, data?: unknown): void {
+    this.enqueue({ eventType, data })
+  }
+
   private enqueue(event: { eventType: string; data?: unknown }): void {
     this.eventQueue.push(event)
     if (this.eventQueue.length >= 10) {
@@ -104,8 +135,17 @@ export class AnalyticsTracker {
   }
 
   flush(): void {
-    if (!this.pageViewId || this.eventQueue.length === 0) {
-      this.eventQueue = []
+    if (this.eventQueue.length === 0) return
+    // Sin pageViewId todavía, la cola se CONSERVA. Antes se vaciaba, y por eso
+    // se perdían los eventos encolados mientras el POST del page-view estaba
+    // en vuelo — justo el caso de `collection_open`, que se encola en el mismo
+    // tick del montaje. Se limita el tamaño para que una página cuyo page-view
+    // nunca llega no acumule memoria sin fin.
+    if (!this.pageViewId) {
+      const MAX_PENDING = 50
+      if (this.eventQueue.length > MAX_PENDING) {
+        this.eventQueue = this.eventQueue.slice(-MAX_PENDING)
+      }
       return
     }
     const events = [...this.eventQueue]

@@ -1,9 +1,14 @@
 import "server-only";
+import { requirePermission } from "@/lib/auth/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
+  // Gate de autorización: disparar el refresco/scrape de particulares requiere particulares/edit.
+  const gate = await requirePermission("particulares", "edit");
+  if (!gate.ok) return gate.response;
+
   const apiUrl = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : process.env.API_URL || "http://localhost:3000";

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { normalizePhone, isValidPhoneChile } from "@/lib/phone-utils";
+import { parseExtraPhones } from "@/lib/captaciones/extra-phones";
+import { notifyOwnerUpdated } from "@/lib/captaciones/notify-owner-updated";
+import { requireCaptacionWork } from "@/lib/db/queries/captacion-access";
+import { panelChange, stampPanelChange } from "@/lib/captaciones/panel-change";
 
 export async function GET(
   request: NextRequest,
@@ -32,9 +36,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // Gate de autorización: quien trabaja la captación (asignado, creador o con
+  // permiso de edición) puede añadir contactos del propietario.
+  const gate = await requireCaptacionWork(id);
+  if (!gate.ok) return gate.response;
+
   try {
     const body = await request.json();
-    const { contact_type, contact_name, phone, email, has_whatsapp, relationship } = body;
+    const { contact_type, contact_name, phone, email, has_whatsapp, relationship, extra_phones, rut } = body;
 
     // Validaciones
     if (!contact_type || !["owner", "spouse", "family", "other"].includes(contact_type)) {
@@ -63,6 +72,11 @@ export async function POST(
       }
     }
 
+    const extraPhonesResult = parseExtraPhones(extra_phones);
+    if (extraPhonesResult.error) {
+      return NextResponse.json({ error: extraPhonesResult.error }, { status: 400 });
+    }
+
     const db = createAdminClient() as any;
     const { data, error } = await db
       .from("captacion_contacts")
@@ -74,11 +88,20 @@ export async function POST(
         email: email || null,
         has_whatsapp: has_whatsapp || false,
         relationship: relationship || null,
+        extra_phones: extraPhonesResult.phones,
+        rut: rut || null,
+        updated_by_user_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Avisar al ejecutivo: ya tiene datos del propietario para llamar
+    await notifyOwnerUpdated(db, id, gate.profile.id);
+    // Un contacto añadido a mano es trabajo del equipo: se sella la captación
+    // padre para que las integraciones lo vean al sondear ?changed_by=panel.
+    await stampPanelChange(db, id);
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {

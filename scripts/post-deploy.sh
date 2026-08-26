@@ -49,6 +49,18 @@ done
 echo "✅ $MIGRATION_COUNT migraciones procesadas ($ERROR_COUNT mensajes de advertencia)"
 echo ""
 
+# Recargar el schema cache de PostgREST: sin esto, la API de Supabase no "ve"
+# tablas/columnas nuevas creadas por las migraciones hasta reiniciar el
+# contenedor rest (error PGRST205 "Could not find the table ... in the schema
+# cache" → 500 en las rutas que las usan).
+echo "🔄 Recargando schema cache de PostgREST..."
+if echo "NOTIFY pgrst, 'reload schema';" | $DB_CMD > /dev/null 2>&1; then
+  echo "✅ Schema cache recargado"
+else
+  echo "⚠️  No se pudo recargar el schema — si la API no ve tablas nuevas, reinicia el contenedor rest: docker restart supabase-rest"
+fi
+echo ""
+
 # Instalar dependencias si es necesario
 if [ -f "package.json" ]; then
   echo "📦 Verificando dependencias..."
@@ -63,15 +75,61 @@ if [ -f "node_modules/.bin/playwright" ]; then
   node_modules/.bin/playwright install chromium --with-deps 2>&1 | tail -3 || echo "⚠️  Chromium install falló (la extracción de teléfonos usará solo curl)"
 fi
 
-# Build de Next.js
-if [ -f "next.config.js" ] || [ -f "next.config.mjs" ]; then
-  echo "🔨 Compilando Next.js..."
-  if npm run build; then
-    echo "✅ Build exitoso"
+# ffmpeg: motor de los vídeos automáticos de propiedad. No se instala desde
+# aquí (requiere root y el deploy no debería tocar paquetes del sistema), solo
+# se avisa: sin él la generación de vídeos queda desactivada y el panel lo
+# indica, pero el resto de la aplicación funciona igual.
+echo "🎬 Verificando ffmpeg (vídeos de propiedad)..."
+FFMPEG_BIN_PATH="$(command -v ffmpeg 2>/dev/null || true)"
+FFPROBE_BIN_PATH="$(command -v ffprobe 2>/dev/null || true)"
+
+if [ -n "$FFMPEG_BIN_PATH" ] && [ -n "$FFPROBE_BIN_PATH" ]; then
+  echo "✅ $(ffmpeg -version 2>/dev/null | head -1 | cut -c1-60)"
+  echo "    ffmpeg:  $FFMPEG_BIN_PATH"
+  echo "    ffprobe: $FFPROBE_BIN_PATH"
+  # Aviso clave: que ESTE script lo encuentre no significa que lo encuentre el
+  # proceso de Next. El demonio de PM2 conserva el entorno con el que arrancó,
+  # así que un `pm2 restart` a secas puede seguir viendo el PATH viejo.
+  echo "    ℹ️  Si el panel sigue diciendo que falta: pm2 restart smartbc-main --update-env"
+  echo "        y comprueba /api/admin/video/ffmpeg-health"
+elif [ -n "$FFMPEG_BIN_PATH" ]; then
+  echo "⚠️  Está ffmpeg ($FFMPEG_BIN_PATH) pero NO ffprobe — hacen falta los dos."
+  echo "    El paquete 'ffmpeg' de apt trae ambos: apt install --reinstall ffmpeg"
+else
+  echo "⚠️  ffmpeg no está instalado — los vídeos automáticos no se generarán."
+  echo "    Instálalo con: sudo apt update && sudo apt install -y ffmpeg"
+  echo "    PATH de este script: $PATH"
+  # Puede estar instalado fuera del PATH del cron; lo decimos en vez de mentir.
+  for d in /usr/bin /usr/local/bin /snap/bin /opt/ffmpeg/bin; do
+    [ -x "$d/ffmpeg" ] && echo "    ⚠️  Pero SÍ existe en $d/ffmpeg (problema de PATH, no de instalación)."
+  done
+  echo "    Y sube FILE_SIZE_LIMIT del contenedor 'storage' a 500MB (ver CLAUDE.md)."
+fi
+echo ""
+
+# Rebuild de Next.js + reinicio de la app.
+#
+# Este bloque estaba MUERTO: comprobaba next.config.js/.mjs y el proyecto usa
+# next.config.ts, así que nunca compilaba. El botón de /admin/configuracion solo
+# aplicaba migraciones y no había forma de reconstruir producción sin SSH.
+#
+# Se lanza DESACOPLADO (setsid + nohup) por dos razones:
+#  - el build tarda minutos y la petición HTTP del botón moriría antes;
+#  - al terminar reinicia PM2, que mata al proceso Next desde el que se ejecuta
+#    este script: si el build fuese hijo suyo, se cortaría a medias.
+# Con SKIP_REBUILD=1 se salta (útil si solo quieres aplicar migraciones).
+if [ -z "${SKIP_REBUILD:-}" ] && ls next.config.* >/dev/null 2>&1; then
+  echo "🔨 Lanzando rebuild atómico + reinicio en segundo plano..."
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup bash scripts/rebuild-restart.sh >/dev/null 2>&1 &
   else
-    echo "❌ Error en build - revisa los logs arriba"
-    exit 1
+    nohup bash scripts/rebuild-restart.sh >/dev/null 2>&1 &
   fi
+  disown 2>/dev/null || true
+  echo "   Log del rebuild: /tmp/smartbc-rebuild.log"
+  echo "   Tarda unos minutos. Al terminar la web se reinicia (dará error unos"
+  echo "   segundos) y quedará con el código más reciente."
+  echo "   Si el build falla, producción NO se toca: sigue como está."
 fi
 
 

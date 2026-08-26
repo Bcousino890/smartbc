@@ -5,6 +5,7 @@ import {
   createApplication,
   getApplicationsForAdmin,
 } from "@/lib/db/queries/property-applications";
+import { isStaffRole } from "@/lib/permissions";
 import type { ApplicationCountry, ApplicationOperation } from "@/lib/property-applications/types";
 
 export async function GET(req: Request) {
@@ -13,7 +14,7 @@ export async function GET(req: Request) {
     const auth = await requireSession(supabase);
     if (!auth.ok) return Response.json({ error: "No autorizado" }, { status: 401 });
 
-    const isStaff = ["admin", "advisor", "agent_admin", "agent_senior", "agent_junior"].includes(auth.role);
+    const isStaff = isStaffRole(auth.role);
     if (!isStaff) return Response.json({ error: "Sin permiso" }, { status: 403 });
 
     const url = new URL(req.url);

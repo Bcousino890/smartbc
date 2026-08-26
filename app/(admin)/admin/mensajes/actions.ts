@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { createClient } from "@/lib/db/server";
+import { assertPermission } from "@/lib/auth/guard";
 
 export type ReplyToConversationInput = {
   conversationId: string;
@@ -16,6 +17,7 @@ export type ReplyToConversationResult =
 export async function replyToConversation(
   input: ReplyToConversationInput,
 ): Promise<ReplyToConversationResult> {
+  await assertPermission("mensajes", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;
@@ -65,6 +67,8 @@ export async function replyToConversation(
     .eq("id", input.conversationId);
 
   revalidatePath("/admin/mensajes");
+  revalidatePath("/es/admin/mensajes");
+  revalidatePath("/cl/admin/mensajes");
   revalidatePath("/mensajes");
   return { ok: true, id: inserted.data.id };
 }

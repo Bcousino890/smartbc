@@ -1,6 +1,7 @@
 "use server";
 
 import { requireStaff } from "@/lib/db/auth-helpers";
+import { assertPermission } from "@/lib/auth/guard";
 import { createClient } from "@/lib/db/server";
 
 export type ImportFromUrlInput = {
@@ -36,6 +37,7 @@ function detectSource(rawUrl: string): { host: string } | null {
 export async function importPropertyFromUrl(
   input: ImportFromUrlInput,
 ): Promise<ImportFromUrlResult> {
+  await assertPermission("properties", "create");
   const supabase = await createClient();
   const auth = await requireStaff(supabase);
   if (!auth.ok) return auth;

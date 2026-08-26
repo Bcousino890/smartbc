@@ -52,6 +52,14 @@ function acceptPhoneCandidate(
   const phone = normalizeSpanishPhone(raw);
   if (!phone) return null;
   if (excludeReference && phone.slice(-9) === excludeReference) return null;
+  // Descartar números NO geográficos españoles que nunca son de un anunciante
+  // particular: 90x/80x (gratuitos 900/800, tarificación especial 901/902/803/
+  // 806/807/905…). En las fichas de Idealista aparecen sus propios teléfonos
+  // institucionales (p.ej. 900 423 525, atención al cliente) y colarían como
+  // falso teléfono del particular. Los móviles (6/7) y fijos geográficos
+  // (91, 93, 95, 98…) sí se aceptan.
+  const national = phone.slice(-9);
+  if (/^(?:90|80)/.test(national)) return null;
   return phone;
 }
 
@@ -81,11 +89,19 @@ export function extractPhoneWithConfidence(
   // estático pero oculto visualmente con CSS (clase hidden-contact-phones).
   // El número canónico está en href="tel:+34XXXXXXXXX" de los enlaces de llamada.
   //
-  // Patrón A: clase hidden-contact-phones-formatted-phone con href tel:
-  // <a class="icon-phone-outline hidden-contact-phones-formatted-phone _mobilePhone" href="tel:+34696165042">
-  pm = html.match(/hidden-contact-phones-formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
+  // Patrón A: clase (hidden-contact-phones-formatted-phone | *_formatted-phone)
+  // con href tel:. ⚠️ Idealista alterna el separador entre guion y guion bajo:
+  //   <a class="… hidden-contact-phones-formatted-phone _mobilePhone" href="tel:…">  (antiguo)
+  //   <a class="… hidden-contact-phones_formatted-phone _mobilePhone" href="tel:…">  (actual)
+  // Aceptamos AMBOS ([-_]) para no perder el teléfono que ya viene en el HTML.
+  pm = html.match(/hidden-contact-phones[-_]formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
   if (!pm) {
-    pm = html.match(/href=["']tel:([+\d][\d\s\-]{6,})["'][^>]*hidden-contact-phones-formatted-phone/);
+    pm = html.match(/href=["']tel:([+\d][\d\s\-]{6,})["'][^>]*hidden-contact-phones[-_]formatted-phone/);
+  }
+  if (!pm) {
+    // Variante genérica: cualquier clase que termine en `formatted-phone` (móvil
+    // o fijo) enlazada a un tel:. Cubre futuros renombrados de la clase.
+    pm = html.match(/formatted-phone[^>]*href=["']tel:([+\d][\d\s\-]{6,})["']/);
   }
   if (pm?.[1]) {
     const phone = acceptPhoneCandidate(pm[1], excludeReference);
@@ -369,7 +385,20 @@ export function detectAdvertiserFromHtml(html: string): AdvertiserCheckResult {
 // curl + UA de WhatsApp pasa DataDome; el fetch de Node es rechazado con 403).
 
 const WHATSAPP_UA_FOR_AJAX = "WhatsApp/2.23.20.0";
-const BROWSER_UA_FOR_PAGE = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+// ⚠️ DEBE coincidir EXACTAMENTE con el DEFAULT_UA de solve-datadome-with-capsolver.
+// El reto DataDome (cid) queda ligado al UA con el que se hizo la petición a
+// /contact-phones. CapSolver rechaza UAs < Chrome 124 y los fuerza a Chrome 131;
+// si las peticiones reales usaran Chrome 120, el cid iría con Chrome 120 pero
+// CapSolver resolvería con Chrome 131 → "userAgent does not match" y el slider
+// nunca se resuelve. Usamos el MISMO Chrome 131 en todo el flujo.
+const BROWSER_UA_FOR_PAGE = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+// Lifetime de la IP sticky del flujo de teléfono. Debe cubrir TODO el flujo con
+// margen: pasada inicial + regenerar reto + CapSolver (hasta ~60s resolviendo) +
+// reintento de contact-phones. Si la IP rota mientras CapSolver resuelve, éste
+// carga el captcha desde una IP distinta a la del cid → "proxy ip has been
+// blocked". 2 min se quedaba corto; 5 min da margen de sobra.
+const PHONE_STICKY_LIFETIME_MIN = 5;
 
 function idealistaPhoneEndpoints(adId: string): string[] {
   return [
@@ -393,6 +422,57 @@ export type AjaxPhoneResult = {
   // Diagnóstico (solo se rellena en modo debug): qué devolvió cada endpoint.
   debug?: Array<{ endpoint: string; status: number; bodySnippet: string }>;
 };
+
+// ─── Reto DataDome: extraer la URL del captcha RESOLUBLE (t=fe) ───────────────
+// Cuando un endpoint AJAX (p.ej. /contact-phones) está protegido, DataDome
+// devuelve HTTP 403 con el reto en el cuerpo. Hay dos formatos:
+//   1) JSON: {"url":"https://geo.captcha-delivery.com/captcha/?...&t=fe&..."}
+//   2) HTML interstitial con  var dd={'cid':'...','hsh':'...','t':'fe','s':N,
+//      'e':'...','host':'geo.captcha-delivery.com','cookie':'...'}
+// De ambos reconstruimos la URL del captcha que CapSolver necesita como
+// `captchaUrl`. IMPORTANTE: solo t=fe es resoluble (slider). t=bv es bloqueo
+// duro (IP baneada) y no tiene solución — lo detectamos para no gastar saldo.
+export function extractDatadomeChallengeUrl(
+  body: string,
+): { url: string | null; type: string | null } {
+  if (!body) return { url: null, type: null };
+
+  // Formato 1: JSON {"url":"...geo.captcha-delivery.com..."}
+  const jsonUrl = body.match(/"url"\s*:\s*"(https:\/\/geo\.captcha-delivery\.com\/captcha\/[^"]+)"/);
+  if (jsonUrl?.[1]) {
+    const url = jsonUrl[1].replace(/\\\//g, "/");
+    const t = url.match(/[?&]t=([a-z]+)/)?.[1] ?? null;
+    return { url, type: t };
+  }
+
+  // Formato 2: HTML interstitial con `var dd={...}`.
+  const ddBlock = body.match(/var\s+dd\s*=\s*\{([^}]+)\}/);
+  if (ddBlock?.[1]) {
+    const dd = ddBlock[1];
+    const get = (k: string) => dd.match(new RegExp(`'${k}'\\s*:\\s*'([^']*)'`))?.[1]
+      ?? dd.match(new RegExp(`'${k}'\\s*:\\s*(\\d+)`))?.[1]
+      ?? null;
+    const cid = get("cid");
+    const hsh = get("hsh");
+    const t = get("t");
+    const s = get("s");
+    const e = get("e");
+    const cookie = get("cookie");
+    const host = get("host") ?? "geo.captcha-delivery.com";
+    if (cid && hsh && t) {
+      const url =
+        `https://${host}/captcha/?initialCid=${encodeURIComponent(cid)}` +
+        `&hash=${encodeURIComponent(hsh)}` +
+        (cookie ? `&cid=${encodeURIComponent(cookie)}` : "") +
+        `&t=${t}` +
+        (s ? `&s=${s}` : "") +
+        (e ? `&e=${encodeURIComponent(e)}` : "");
+      return { url, type: t };
+    }
+  }
+
+  return { url: null, type: null };
+}
 
 // ─── DataDome pre-auth ───────────────────────────────────────────────────────
 // When the browser loads an Idealista listing, DataDome's JS snippet POSTs
@@ -439,7 +519,10 @@ async function fetchDataDomeCookie(
         "-H", `Referer: https://www.idealista.com/inmueble/${adId}/`,
         "-H", "Accept: */*",
         "-H", "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
-        "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        // UA moderno y CONSISTENTE con el reintento de contact-phones y con
+        // CapSolver (Chrome 131): DataDome liga la cookie al UA, y un UA viejo
+        // (Chrome 120, 2023) sube la probabilidad de bloqueo duro (t=bv).
+        "-A", BROWSER_UA_FOR_PAGE,
         "--data", body,
         "--max-time", "12",
         ...proxyArgs,
@@ -588,6 +671,34 @@ export async function fetchIdealistaPhoneViaAjax(
   const debug: AjaxPhoneResult["debug"] = options?.debug ? [] : undefined;
   const endpoints = idealistaPhoneEndpoints(adId);
 
+  // ⚠️ CRÍTICO: anclar UNA sola IP para TODO el flujo de esta búsqueda.
+  // fetchMultipleAjaxWithCookieJar y las llamadas posteriores (pre-auth
+  // DataDome, comment.ajax) hacen procesos `curl` SEPARADOS — cada uno es una
+  // conexión nueva al proxy. Si cada conexión sale por una IP distinta,
+  // DataDome rechaza con bloqueo DURO en cuanto la cookie de la IP-A llega
+  // desde la IP-B.
+  //
+  // Proveedor: Evomi (docs.evomi.com). El ancla de sesión se hace añadiendo
+  // `_session-<id>_lifetime-<min>` al PASSWORD de la URL (confirmado en su
+  // documentación oficial — ver withStickySession en proxy-config.ts). El
+  // sessionId NO puede ser solo el adId: si un mismo anuncio se reintenta
+  // varias veces (retries del cron, o el panel de test manual), usar siempre
+  // el mismo sessionId ancla SIEMPRE la misma IP — y si esa IP quedó marcada
+  // por DataDome en un intento anterior, el anuncio queda "quemado" para
+  // siempre. Componente aleatorio por invocación: misma IP dentro de ESTA
+  // llamada, IP distinta en cada reintento.
+  let phoneProxyUrl = options?.proxyUrl;
+  try {
+    const { getResidentialProxyUrl, withStickySession } = await import("@/lib/sync/proxy-config");
+    const residential = await getResidentialProxyUrl();
+    if (residential) {
+      const sessionId = `${adId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      phoneProxyUrl = withStickySession(residential, sessionId, PHONE_STICKY_LIFETIME_MIN);
+    }
+  } catch {
+    // Sin proxy residencial disponible → usar el proxy recibido tal cual.
+  }
+
   console.log(`[idealista-phone-ajax] Iniciando búsqueda de teléfono para adId=${adId} (${endpoints.length} endpoints)`);
 
   // Load the page once, then try all AJAX endpoints reusing the same cookie jar.
@@ -598,8 +709,13 @@ export async function fetchIdealistaPhoneViaAjax(
     endpoints,
     WHATSAPP_UA_FOR_AJAX,
     {
-      proxyUrl: options?.proxyUrl,
-      pageUserAgent: BROWSER_UA_FOR_PAGE, // Use real browser UA to fetch DataDome scripts
+      proxyUrl: phoneProxyUrl,
+      // ⚠️ La carga de página DEBE usar el UA de WhatsApp: DataDome deja pasar
+      // ese UA (whitelist de previews de enlaces) y devuelve el HTML completo
+      // (~175KB) con la clave DataDome (window.ddjskey) y las cookies. Con UA de
+      // Chrome, DataDome responde una página de bloqueo (~773 chars) sin clave
+      // ni cookies, y todo el flujo posterior (pre-auth, contact-phones) muere.
+      pageUserAgent: WHATSAPP_UA_FOR_AJAX,
       timeoutSec: 30,
       ajaxHeaders: [
         "X-Requested-With: XMLHttpRequest",
@@ -635,6 +751,7 @@ export async function fetchIdealistaPhoneViaAjax(
     /phoneNumber\s*:\s*"([+\d][\d\s\-]{6,18})"/,
     /phone\s*:\s*"([+\d][\d\s\-]{6,18})"/,
   ];
+
 
   for (let i = 0; i < responses.length; i++) {
     const res = responses[i];
@@ -702,6 +819,220 @@ export async function fetchIdealistaPhoneViaAjax(
         debug.push({ endpoint: "pageHtml-browser-ua", status: 0, bodySnippet: `no phone, htmlLen=${pageHtml.length}` });
       }
     }
+
+    // Fuente adicional: teléfono escrito por el particular en la descripción del
+    // anuncio (truco habitual para saltarse el "chat only"). Se mina del mismo
+    // HTML ya descargado — sin coste de request extra.
+    const { extractPhoneFromText, extractPhoneFromHtmlDescription } = await import("./phone-from-text");
+    const descPhone = extractPhoneFromHtmlDescription(pageHtml, adId.slice(-9));
+    if (descPhone.phone) {
+      console.log(`[idealista-phone-ajax] ✓ ÉXITO vía descripción: adId=${adId}, phone=${descPhone.phone}`);
+      if (debug) {
+        debug.push({ endpoint: "descripcion-texto", status: 200, bodySnippet: `phone=${descPhone.phone}` });
+      }
+      return { phone: descPhone.phone, phone_confidence: "high", contact_name: null, debug };
+    }
+
+    // Fuente adicional: el COMENTARIO del anunciante. Idealista NO lo incrusta en
+    // el HTML de la ficha — lo carga aparte vía /ajax/comment.ajax (protegido por
+    // DataDome). Lo pedimos con el mismo cookie-jar/proxy que ya pasó DataDome al
+    // cargar la página, y minamos el texto: muchos particulares escriben ahí su
+    // móvil ("interesados llamar al 6XX…") para saltarse el chat-only.
+    try {
+      const commentUrl = `https://www.idealista.com/ajax/comment.ajax?adId=${adId}`;
+      const commentRes = await fetchViaCurl(commentUrl, BROWSER_UA_FOR_PAGE, {
+        proxyUrl: phoneProxyUrl,
+        allowSmallBody: true,
+        timeoutSec: 15,
+        headers: [
+          "X-Requested-With: XMLHttpRequest",
+          "Accept: application/json, text/javascript, */*; q=0.01",
+          `Referer: ${pageUrl}`,
+          "Accept-Language: es-ES,es;q=0.9",
+        ],
+      });
+      if (commentRes.ok && commentRes.html) {
+        const { htmlToText } = await import("./phone-from-text");
+        const commentPhone = extractPhoneFromText(htmlToText(commentRes.html), adId.slice(-9));
+        if (commentPhone.phone) {
+          console.log(`[idealista-phone-ajax] ✓ ÉXITO vía comentario: adId=${adId}, phone=${commentPhone.phone}`);
+          if (debug) {
+            debug.push({ endpoint: "comment.ajax-texto", status: 200, bodySnippet: `phone=${commentPhone.phone}` });
+          }
+          return { phone: commentPhone.phone, phone_confidence: "high", contact_name: null, debug };
+        }
+        if (debug) {
+          debug.push({ endpoint: "comment.ajax-texto", status: 200, bodySnippet: `sin teléfono en comentario (${commentRes.html.length} chars)` });
+        }
+      } else if (debug) {
+        const reason = commentRes.ok ? "vacío" : commentRes.reason;
+        debug.push({ endpoint: "comment.ajax-texto", status: commentRes.ok ? 0 : commentRes.status, bodySnippet: reason });
+      }
+    } catch (commentErr) {
+      const msg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+      if (debug) debug.push({ endpoint: "comment.ajax-error", status: 0, bodySnippet: msg });
+    }
+  }
+
+  // ─── Step 1c: resolver el reto DataDome de /contact-phones con CapSolver ─────
+  // Este es el camino que DE VERDAD funciona (verificado contra Idealista):
+  //   1. /contact-phones responde 403 con el reto en el cuerpo. Para el endpoint
+  //      AJAX el reto es t=fe (SLIDER RESOLUBLE), a diferencia de la navegación
+  //      de página completa que da t=bv (bloqueo duro irresoluble).
+  //   2. Extraemos la URL del captcha (geo.captcha-delivery.com/captcha/?...t=fe)
+  //      del cuerpo del 403.
+  //   3. CapSolver la resuelve usando el MISMO proxy sticky (misma IP) → devuelve
+  //      la cookie datadome válida para esa IP.
+  //   4. Reintentamos /contact-phones con esa cookie desde la misma IP → teléfono.
+  //
+  // El pool de proxy residencial es COMPARTIDO: una fracción de sus IPs puede
+  // estar marcada por DataDome (bloqueo duro t=bv) en un momento dado — esto
+  // es esperable y confirmado por el propio proveedor (Smartproxy no garantiza
+  // IPs "limpias" en un pool residencial rotativo). Por eso NO nos rendimos al
+  // primer t=bv: reintentamos con una IP sticky NUEVA (barato: solo llamadas
+  // curl, sin gastar CapSolver) hasta CHALLENGE_RETRIES veces antes de caer al
+  // fallback de Playwright.
+  // El diagnóstico proxy-health probó que solo una fracción de las IPs frescas
+  // da el slider resoluble (t=fe); las demás dan bloqueo duro (t=bv). Por eso
+  // reintentamos con IPs NUEVAS de verdad hasta encontrar una t=fe, y ADEMÁS
+  // rotamos el país en cada intento (el proveedor soporta targeting por país):
+  // la reputación ante DataDome varía mucho por pool/país, así que probar
+  // varios sube la probabilidad de dar con un pool limpio. El formato del
+  // modificador de país lo aplica proxy-config según el proveedor detectado.
+  const { withStickySessionForce, COUNTRY_ROTATION } = await import("@/lib/sync/proxy-config");
+  const CHALLENGE_RETRIES = Math.max(5, COUNTRY_ROTATION.length);
+  for (let attempt = 0; attempt < CHALLENGE_RETRIES; attempt++) {
+    // A partir del segundo intento, forzar una sesión NUEVA (IP nueva de
+    // verdad) con un país distinto de la rotación — withStickySessionForce
+    // reemplaza la sesión/país anclados aunque la URL ya traiga uno del intento
+    // anterior.
+    let attemptProxyUrl = phoneProxyUrl;
+    if (attempt > 0 && phoneProxyUrl) {
+      const retrySessionId = `${adId}-retry${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const country = COUNTRY_ROTATION[attempt % COUNTRY_ROTATION.length];
+      attemptProxyUrl = withStickySessionForce(phoneProxyUrl, retrySessionId, PHONE_STICKY_LIFETIME_MIN, country);
+    }
+
+    // Reto DataDome de /contact-phones para esta IP. Estrategia GANADORA
+    // (verificada en proxy-health): UA Chrome CONSISTENTE en carga de página +
+    // contact-phones, compartiendo cookie-jar (la mezcla UA WhatsApp+Chrome da
+    // t=bv). Por eso cargamos la ficha con Chrome y llamamos a contact-phones
+    // con Chrome reutilizando el mismo jar, todo por la misma IP del intento.
+    //
+    // ⚠️ SIEMPRE regeneramos el reto con Chrome (BROWSER_UA_FOR_PAGE), incluso
+    // en el intento 0. NO reutilizamos el reto de la pasada inicial (que usa UA
+    // de WhatsApp): el cid del reto queda ligado al UA que hizo la petición, y
+    // CapSolver resuelve con Chrome 131 → si el cid fuera de WhatsApp daría
+    // "userAgent does not match" y el slider nunca se resolvería.
+    let body403: string | null = null;
+    if (!body403) {
+      try {
+        const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+        const { results: cpResults } = await fetchMultipleAjaxWithCookieJar(
+          pageUrl,
+          [cpUrl],
+          BROWSER_UA_FOR_PAGE,
+          {
+            proxyUrl: attemptProxyUrl,
+            pageUserAgent: BROWSER_UA_FOR_PAGE, // Chrome consistente (carga + AJAX)
+            timeoutSec: 25,
+            ajaxHeaders: [
+              "X-Requested-With: XMLHttpRequest",
+              "Accept: application/json, text/javascript, */*; q=0.01",
+              `Referer: ${pageUrl}`,
+              "Accept-Language: es-ES,es;q=0.9",
+            ],
+          },
+        );
+        body403 = cpResults[0]?.body ?? null;
+      } catch { /* seguimos */ }
+    }
+
+    const challenge = body403 ? extractDatadomeChallengeUrl(body403) : { url: null, type: null };
+    console.log(`[idealista-phone-ajax] Intento ${attempt + 1}/${CHALLENGE_RETRIES} — reto DataDome: type=${challenge.type ?? "?"} url=${challenge.url ? "sí" : "no"}`);
+    if (debug) {
+      debug.push({ endpoint: `datadome-challenge-attempt${attempt + 1}`, status: 0, bodySnippet: `type=${challenge.type ?? "none"} url=${challenge.url ? challenge.url.slice(0, 60) : "none"}` });
+    }
+
+    if (challenge.url && challenge.type === "fe") {
+      // t=fe → slider resoluble. Llamar a CapSolver con el MISMO proxy sticky
+      // de este intento.
+      try {
+        const { solveDatadomeWithCapSolver } = await import("./solve-datadome-with-capsolver");
+        console.log(`[idealista-phone-ajax] Resolviendo slider DataDome con CapSolver...`);
+        const solved = await solveDatadomeWithCapSolver(challenge.url, BROWSER_UA_FOR_PAGE, {
+          proxyUrl: attemptProxyUrl,
+          websiteURL: pageUrl,
+        });
+        const ddCookieValue = solved.cookie
+          ? (solved.cookie.startsWith("datadome=") ? solved.cookie.split(";")[0] : `datadome=${solved.cookie.split(";")[0]}`)
+          : (solved.token ? `datadome=${solved.token}` : null);
+
+        if (ddCookieValue) {
+          console.log(`[idealista-phone-ajax] CapSolver resolvió, reintentando contact-phones con cookie...`);
+          const cpUrl = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
+          const cpRes = await fetchViaCurl(cpUrl, BROWSER_UA_FOR_PAGE, {
+            proxyUrl: attemptProxyUrl,
+            allowSmallBody: true,
+            returnBodyOnError: true,
+            timeoutSec: 15,
+            headers: [
+              `Cookie: ${ddCookieValue}`,
+              "X-Requested-With: XMLHttpRequest",
+              "Accept: application/json, text/javascript, */*; q=0.01",
+              `Referer: ${pageUrl}`,
+              "Accept-Language: es-ES,es;q=0.9",
+            ],
+          });
+          const solvedBody = "html" in cpRes ? cpRes.html : cpRes.body;
+          if (solvedBody) {
+            const structured = parseStructuredAjaxPhone(solvedBody, adId.slice(-9));
+            let phone = structured.phone;
+            let contact_name = structured.contact_name;
+            if (!phone) {
+              for (const pattern of phonePatterns) {
+                const m = solvedBody.match(pattern);
+                if (m?.[1]) { phone = acceptPhoneCandidate(m[1], adId.slice(-9)); if (phone) break; }
+              }
+              contact_name = solvedBody.match(/"contactName"\s*:\s*"([^"]{2,60})"/)?.[1]?.trim() ?? null;
+            }
+            if (phone) {
+              console.log(`[idealista-phone-ajax] ✓ ÉXITO vía CapSolver+contact-phones (intento ${attempt + 1}): ${phone}`);
+              if (debug) debug.push({ endpoint: "capsolver-contact-phones", status: 200, bodySnippet: `phone=${phone}` });
+              return { phone, phone_confidence: "high", contact_name, debug };
+            }
+            // CapSolver resolvió el slider pero el anuncio de verdad no tiene
+            // teléfono (chat-only real) — no reintentar más, no es un problema
+            // de IP.
+            if (debug) debug.push({ endpoint: "capsolver-contact-phones", status: 200, bodySnippet: `sin teléfono: ${solvedBody.slice(0, 120)}` });
+            console.log(`[idealista-phone-ajax] CapSolver OK pero contact-phones sin teléfono: ${solvedBody.slice(0, 120)}`);
+            break;
+          } else if (debug) {
+            debug.push({ endpoint: "capsolver-contact-phones", status: 0, bodySnippet: "reintento sin cuerpo" });
+          }
+        } else {
+          console.log(`[idealista-phone-ajax] CapSolver no devolvió cookie: ${solved.error}`);
+          if (debug) debug.push({ endpoint: "capsolver-error", status: 0, bodySnippet: solved.error ?? "sin cookie" });
+        }
+      } catch (csErr) {
+        const msg = csErr instanceof Error ? csErr.message : String(csErr);
+        console.log(`[idealista-phone-ajax] Error CapSolver slider: ${msg}`);
+        if (debug) debug.push({ endpoint: "capsolver-error", status: 0, bodySnippet: msg });
+      }
+      // t=fe pero sin cookie/teléfono tras CapSolver: no es un problema de IP
+      // baneada, así que no tiene sentido rotar IP — salir del bucle.
+      break;
+    } else if (challenge.type === "bv") {
+      // Bloqueo duro: esta IP concreta está baneada por DataDome. Reintentar
+      // con una IP sticky nueva (barato) en la siguiente vuelta del bucle.
+      console.log(`[idealista-phone-ajax] ⛔ Intento ${attempt + 1}: bloqueo DURO (t=bv) — IP baneada, rotando a IP nueva`);
+      if (debug) debug.push({ endpoint: `datadome-hard-block-attempt${attempt + 1}`, status: 0, bodySnippet: "t=bv — rotando IP" });
+      continue;
+    } else {
+      // Ni t=fe ni t=bv: no hay reto (posible error de red) — no rotar IP,
+      // salir para no gastar reintentos en algo que no es un problema de IP.
+      break;
+    }
   }
 
   // ─── Step 2: DataDome pre-auth ───────────────────────────────────────────────
@@ -714,7 +1045,12 @@ export async function fetchIdealistaPhoneViaAjax(
   if (pageHtml) {
     console.log(`[idealista-phone-ajax] Paso 2: Buscando DataDome auth code en HTML (${pageHtml.length} chars)...`);
     // Try multiple patterns for the auth code location
-    let authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    // La clave DataDome del sitio se expone como `window.ddjskey = 'AC81...'`
+    // en el HTML de Idealista. Es el `auth` que espera dd.idealista.com/is/.
+    let authMatch = pageHtml.match(/ddjskey\s*=\s*['"]([A-Za-z0-9_-]{10,})['"]/);
+    if (!authMatch) {
+      authMatch = pageHtml.match(/dd\.idealista\.com\/tags\.js\?[^"']*auth=([A-Za-z0-9_-]{10,})/);
+    }
     if (!authMatch) {
       authMatch = pageHtml.match(/auth=([A-Za-z0-9_-]{10,})/);
     }
@@ -729,15 +1065,18 @@ export async function fetchIdealistaPhoneViaAjax(
         debug.push({ endpoint: "datadome-auth", status: 0, bodySnippet: `auth=${ddAuth.slice(0, 20)}...` });
       }
 
-      const ddCookie = await fetchDataDomeCookie(ddAuth, adId, options?.proxyUrl);
+      const ddCookie = await fetchDataDomeCookie(ddAuth, adId, phoneProxyUrl);
       if (ddCookie) {
         console.log(`[idealista-phone-ajax] Cookie DataDome obtenida: ${ddCookie.slice(0, 40)}...`);
         // Retry the primary phone endpoint with the validated DataDome cookie.
         const primaryEndpoint = `https://www.idealista.com/es/ajax/ads/${adId}/contact-phones`;
         console.log(`[idealista-phone-ajax] Reintentando /contact-phones con cookie DataDome...`);
         try {
-          const ddRes = await fetchViaCurl(primaryEndpoint, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", {
-            proxyUrl: options?.proxyUrl,
+          // Mismo UA (Chrome 131) con el que se pidió la cookie DataDome arriba:
+          // DataDome valida la cookie contra el UA de la petición, así que deben
+          // coincidir o rechaza el contact-phones aunque la cookie sea válida.
+          const ddRes = await fetchViaCurl(primaryEndpoint, BROWSER_UA_FOR_PAGE, {
+            proxyUrl: phoneProxyUrl,
             headers: [
               `Cookie: ${ddCookie}`,
               "X-Requested-With: XMLHttpRequest",
@@ -812,7 +1151,16 @@ export async function fetchIdealistaPhoneViaAjax(
     }
   }
 
-  console.log(`[idealista-phone-ajax] DataDome pre-auth fallido. Intentando Playwright...`);
+  // NOTA: antes se saltaba Playwright si `curl` recibía bloqueo duro (t=bv),
+  // asumiendo que el veredicto es puramente por reputación de IP y que un
+  // browser real en la MISMA IP recibiría el mismo bloqueo. Esa asunción no
+  // está verificada: DataDome también fingerprint-ea el cliente TLS/HTTP a
+  // nivel de handshake (JA3), y `curl` tiene una huella claramente distinta a
+  // la de Chrome real. `fetchIdealistaPhoneViaPlaywright` navega con Chromium
+  // real (playwright-extra + stealth), así que puede recibir un veredicto
+  // DISTINTO al de curl en la misma IP. Se prueba siempre; el coste (~60s) ya
+  // se paga cuando el resto de rutas fallan.
+  console.log(`[idealista-phone-ajax] DataDome pre-auth fallido. Intentando Playwright (independiente del veredicto de curl)...`);
 
   try {
     const { fetchIdealistaPhoneViaPlaywright } = await import(

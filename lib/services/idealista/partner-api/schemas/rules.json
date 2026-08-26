@@ -1,0 +1,461 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://localhost:8080/api-reference/jsonschemas/rules.json",
+  "title": "schema rules",
+  "description": "version6 schema rules",
+  "dateFormatNoHours": {
+    "type": "string",
+    "pattern": "^20[0-9][0-9]-(0[1-9]|1[0-2])-(([0-2][0-9])|(3[0-1]))$"
+  },
+  "enumOperationType": {
+    "enum": [
+      "rent",
+      "sale"
+    ]
+  },
+  "enumNewDevelopmentOperationType": {
+    "enum": [
+      "rent",
+      "sale",
+      "rentToOwn"
+    ]
+  },
+  "enumPropertyStatus": {
+    "enum": [
+      "active",
+      "inactive",
+      "pending",
+      "dropped_by_quality"
+    ]
+  },
+  "enumDropByQualityReason": {
+    "enum": [
+      "closed_operation",
+      "reserved",
+      "rented",
+      "vacation_rental",
+      "short_term_rental",
+      "wrong_typology",
+      "wrong_operation",
+      "incomplete_or_wrong_address",
+      "missing_certificate",
+      "timeshare",
+      "demand_type_ad",
+      "generic_ad",
+      "pending_activation_no_contact",
+      "wrong_phone",
+      "other",
+      "issue_no_contact",
+      "preventive_removal",
+      "out_of_country",
+      "sold",
+      "duplicate",
+      "wrong_transfer",
+      "inconsistent_information",
+      "wrong_property_clonation"
+    ]
+  },
+  "enumPropertyVisibility": {
+    "enum": [
+      "idealista",
+      "microsite"
+    ],
+    "description": "If the visibility is 'idealista', you can find the property using the idealista's search engine; 'microsite', the property is only published on the real estate agency microsite."
+  },
+  "enumHighlightType": {
+    "enum": [
+      "visual",
+      "premium",
+      "top",
+      "sprint",
+      "premium_international",
+      "top_international",
+      "fvp",
+      "sprint_international"
+    ]
+  },
+  "enumHighlightTag": {
+    "enum": [
+      "urgent",
+      "full_financing",
+      "negotiable",
+      "profitability",
+      "approved_project",
+      "bare_ownership",
+      "renovated",
+      "passivhaus",
+      "breeam",
+      "bright",
+      "co_ownership",
+      "exchange",
+      "sea_views",
+      "views",
+      "beachfront",
+      "investors",
+      "rent_to_own",
+      "customizable",
+      "license_granted",
+      "open_house",
+      "exclusive",
+      "none"
+    ]
+  },
+  "feedkey": {
+    "type": "string",
+    "pattern": "^ilc([a-z]|[0-9]){40}$"
+  },
+  "integer11to999999": {
+    "type": "integer",
+    "minimum": 11,
+    "maximum": 999999
+  },
+  "integer1to10": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 10
+  },
+  "integer1to9": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 9
+  },
+  "integer1to6": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 6
+  },
+  "integer2to99": {
+    "type": "integer",
+    "minimum": 2,
+    "maximum": 99
+  },
+  "integer1to22": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 22
+  },
+  "integer1to50": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 50
+  },
+  "integer1to99": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 99
+  },
+  "integer1to100": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 100
+  },
+  "integer1to1000": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 1000
+  },
+  "integer1to15": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 15
+  },
+  "integer1to999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999
+  },
+  "integer1to9999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 9999
+  },
+  "integer1to99999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 99999
+  },
+  "integer1to999999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999
+  },
+  "integer1to99999999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 99999999
+  },
+  "integer1to999999999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "pageNumber1to99999999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 99999999
+  },
+  "totalPage1to99999999": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 99999999
+  },
+  "videoId": {
+    "title": "idealista Video identifier",
+    "description": "idealista video identifier. It is used to find, modify or delete a video",
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "propertyId": {
+    "title": "idealista Property identifier",
+    "description": "idealista property identifier. It is used to find, modify or delete a property. It is also used for accessing the property on the idealista website using the following url: https://www.idealista.[com|it|pt]/{propertyId}",
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "newDevelopmentPropertyId": {
+    "title": "New Development identifier (idealista Property identifier)",
+    "description": "idealista new development property identifier. It is used to find, modify or delete a new development property",
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "newDevelopmentId": {
+    "title": "idealista New Development identifier related to the typology",
+    "description": "idealista new development identifier. It is used to find, modify or delete a new development",
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "imageId": {
+    "title": "Idealista Image Property identifier",
+    "description": "It must be unique for each image and unchanging over time.",
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "integer0to999999": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 999999
+  },
+  "maxPublishedAds": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 999999
+  },
+  "integer0to9": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 9
+  },
+  "integer0to99": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 99
+  },
+  "integer0to100": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 100
+  },
+  "integer0to99999": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 99999
+  },
+  "integer18to99": {
+    "type": "integer",
+    "minimum": 18,
+    "maximum": 99
+  },
+  "number0to9": {
+    "type": "number",
+    "minimum": 0,
+    "maximum": 9
+  },
+  "numberGreaterThan0to9": {
+    "type": "number",
+    "exclusiveMinimum": 0,
+    "maximum": 9
+  },
+  "number0to6": {
+    "type": "number",
+    "minimum": 0,
+    "maximum": 6
+  },
+  "number1to12": {
+    "type": "number",
+    "minimum": 1,
+    "maximum": 12
+  },
+  "number0to99": {
+    "type": "number",
+    "minimum": 0,
+    "maximum": 99
+  },
+  "number0to999": {
+    "type": "number",
+    "exclusiveMinimum": 0,
+    "maximum": 999
+  },
+  "number0to10000": {
+    "type": "number",
+    "minimum": 0.01,
+    "maximum": 9999.99,
+    "multipleOf": 0.01
+  },
+  "number1to99": {
+    "type": "number",
+    "minimum": 1,
+    "maximum": 99
+  },
+  "number1to999": {
+    "type": "number",
+    "minimum": 1,
+    "maximum": 999
+  },
+  "number1to9999": {
+    "type": "number",
+    "minimum": 1,
+    "maximum": 9999
+  },
+  "number1to99999999": {
+    "type": "number",
+    "minimum": 1,
+    "maximum": 99999999
+  },
+  "number1to6": {
+    "type": "number",
+    "minimum": 1,
+    "maximum": 6
+  },
+  "operationPrice": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "phoneFormat": {
+    "type": "string",
+    "pattern": "^[0-9]{5,12}$"
+  },
+  "phonePrefixFormat": {
+    "type": "string",
+    "pattern": "^[1-9][0-9]{0,2}$"
+  },
+  "stringTo4": {
+    "type": "string",
+    "pattern": "^.{0,4}$"
+  },
+  "stringTo10": {
+    "type": "string",
+    "pattern": "^.{0,10}$"
+  },
+  "stringTo20": {
+    "type": "string",
+    "pattern": "^.{0,20}$"
+  },
+  "stringTo25": {
+    "type": "string",
+    "pattern": "^.{0,25}$"
+  },
+  "stringTo32": {
+    "type": "string",
+    "pattern": "^.{0,32}$"
+  },
+  "stringTo50": {
+    "type": "string",
+    "pattern": "^.{0,50}$"
+  },
+  "stringTo60": {
+    "type": "string",
+    "pattern": "^.{0,60}$"
+  },
+  "stringTo100": {
+    "type": "string",
+    "pattern": "^.{0,100}$"
+  },
+  "stringTo150": {
+    "type": "string",
+    "pattern": "^.{0,150}$"
+  },
+  "stringTo200": {
+    "type": "string",
+    "pattern": "^.{0,200}$"
+  },
+  "stringTo255": {
+    "type": "string",
+    "pattern": "^.{0,255}$"
+  },
+  "stringTo400": {
+    "type": "string",
+    "pattern": "^.{0,400}$"
+  },
+  "stringTo500": {
+    "type": "string",
+    "pattern": "^.{0,500}$"
+  },
+  "stringTo4000": {
+    "type": "string",
+    "pattern": "^[\\s\\S]{0,4000}$"
+  },
+  "webhookUrlFormat": {
+    "$ref": "rules.json#/stringTo4000",
+    "description": "This field must contain a valid url. It should be encoded if special chars are contained."
+  },
+  "imageUrlFormat": {
+    "$ref": "rules.json#/stringTo400",
+    "description": "This field must contain a valid url. It should be encoded if special chars are contained."
+  },
+  "videoUrlFormat": {
+    "$ref": "rules.json#/stringTo400",
+    "description": "This field must contain a valid url. It should be encoded if special chars are contained."
+  },
+  "additionalLinkFormat": {
+    "$ref": "rules.json#/stringTo500",
+    "description": "This field must contain a valid link. It should be encoded if special chars are contained."
+  },
+  "availableFromFromat": {
+    "type": "string",
+    "pattern": "^[0-9]{4}-(0[1-9]|1[012])$"
+  },
+  "virtualTourUrl": {
+    "type": "string",
+    "pattern": "^(?!\\s*$).{0,500}$"
+  },
+  "emailFormat": {
+    "type": "string",
+    "pattern": "^[a-zA-Z0-9_!#$%&’*+/=?`{|}~^.-]+@[a-zA-Z0-9.-]+$"
+  },
+  "agentEmailFormat": {
+    "type": "string",
+    "pattern": "^[a-zA-Z0-9_!#$%&’*+/=?`{|}~^.-]+@[a-zA-Z0-9.-]+$",
+    "description": "It will only be displayed when a contact is an agent."
+  },
+  "transferEndContractDateFormat": {
+    "type": "string",
+    "pattern": "^[0-9]{4}-(0[1-9]|1[012])$"
+  },
+  "decimals0to100": {
+    "type": "number",
+    "multipleOf": 0.01,
+    "minimum": 0.01,
+    "maximum": 99.99
+  },
+  "isSelfConsumptionHighlight": {
+    "type": "boolean"
+  },
+  "highlightId": {
+    "title": "Highlight identifier",
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 999999999
+  },
+  "enumVhsStatus": {
+    "description": "The status of the virtual home staging",
+    "enum": [
+      "processed",
+      "pending_to_process"
+    ]
+  }
+}

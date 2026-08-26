@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { createAdminClient } from "@/lib/db/admin";
 import { scrapeCaptacionUrl } from "@/lib/sync/portalinmobiliario/scraper-captacion";
+import { persistCaptacionPhotos } from "@/lib/captaciones/persist-photos";
 import { canAccess } from "@/lib/permissions";
+import { getDefaultPipeline, getStagesForPipeline } from "@/lib/captaciones/pipeline";
+import { autoDistributeNewCaptacion } from "@/lib/captaciones/auto-distribution";
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +24,26 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const db = createAdminClient() as any;
+
+    // Pipeline de la captación nueva: el que venga en el body (si el agente
+    // eligió uno en el selector) o el pipeline default del país.
+    let pipelineId: string | null = null;
+    let draftStageId: string | null = null;
+    if (body.pipeline_id) {
+      const stages = await getStagesForPipeline(body.pipeline_id).catch(() => []);
+      const draftStage = stages.find((s) => s.stage_type === "draft");
+      if (draftStage) {
+        pipelineId = body.pipeline_id;
+        draftStageId = draftStage.id;
+      }
+    }
+    if (!pipelineId) {
+      const defaultPipeline = await getDefaultPipeline("cl").catch(() => null);
+      if (defaultPipeline) {
+        pipelineId = defaultPipeline.pipeline.id;
+        draftStageId = defaultPipeline.stages.find((s) => s.stage_type === "draft")?.id ?? null;
+      }
+    }
 
     // Create the captacion first (with whatever data the agent provided)
     const { data: captacion, error } = await db
@@ -42,12 +65,34 @@ export async function POST(request: Request) {
         zone: body.zone || null,
         notes: body.notes || null,
         status: "draft",
+        pipeline_id: pipelineId,
+        stage_id: draftStageId,
         scrape_status: "pending",
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Reparto automático: si el admin lo activó, la captación se asigna sola
+    // al usuario del pool con menos carga. No crítico: si falla, se crea igual
+    // sin asignar y el admin la reparte a mano.
+    let created = captacion;
+    try {
+      const assigned = await autoDistributeNewCaptacion(
+        db,
+        {
+          id: captacion.id,
+          title: captacion.title,
+          pipeline_id: captacion.pipeline_id,
+          assigned_to: captacion.assigned_to,
+        },
+        { id: profile.id, full_name: profile.full_name }
+      );
+      if (assigned) created = assigned;
+    } catch (e) {
+      console.error("[captaciones create auto-distribution]", e);
+    }
 
     // Auto-scrape in background (fire-and-forget, don't block response)
     if (body.source_url) {
@@ -56,7 +101,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(captacion);
+    return NextResponse.json(created);
   } catch (err) {
     console.error("[captaciones create]", err);
     return NextResponse.json(
@@ -82,6 +127,7 @@ async function scrapeAndUpdate(captacionId: string, url: string) {
         bedrooms: scraped.bedrooms || undefined,
         bathrooms: scraped.bathrooms || undefined,
         square_meters: scraped.square_meters || undefined,
+        useful_square_meters: scraped.useful_square_meters || undefined,
         region: scraped.region || undefined,
         commune: scraped.commune || undefined,
         zone: scraped.zone || undefined,
@@ -89,6 +135,12 @@ async function scrapeAndUpdate(captacionId: string, url: string) {
         latitude: scraped.latitude,
         longitude: scraped.longitude,
         cover_photo_url: scraped.cover_photo_url || undefined,
+        features: scraped.features,
+        broker_name: scraped.broker_name,
+        external_reference: scraped.external_reference,
+        operation: scraped.operation,
+        portal_publication_number: scraped.portal_publication_number,
+        published_ago: scraped.published_ago,
         scrape_status: "scraped",
         scraped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -96,12 +148,21 @@ async function scrapeAndUpdate(captacionId: string, url: string) {
       .eq("id", captacionId);
 
     if (scraped.photo_urls.length > 0) {
-      const photos = scraped.photo_urls.slice(0, 30).map((photoUrl, i) => ({
-        captacion_id: captacionId,
-        url: photoUrl,
-        position: i,
-      }));
-      await db.from("captacion_photos").insert(photos);
+      // Descarga y persiste las fotos en el bucket para que no dependan de las
+      // URLs externas del portal (que vencen). Guarda la copia permanente.
+      const rows = await persistCaptacionPhotos(
+        captacionId,
+        scraped.photo_urls.slice(0, 30),
+        db
+      );
+      await db.from("captacion_photos").insert(rows);
+      // Portada = copia persistida de la primera foto.
+      if (rows[0]?.url) {
+        await db
+          .from("captaciones")
+          .update({ cover_photo_url: rows[0].url })
+          .eq("id", captacionId);
+      }
     }
   } catch (err) {
     await db

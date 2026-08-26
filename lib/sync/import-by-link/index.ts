@@ -10,6 +10,8 @@ import { extractIdealista } from "./extractors/idealista";
 import { extractInmoweb } from "./extractors/inmoweb";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
+import { extractAirbnb, normalizeAirbnbUrl } from "./extractors/airbnb";
+import { extractVideos, dedupeVideos } from "./extract-videos";
 import { dedupKey } from "../scrapers/image-utils";
 import { getProxyUrl } from "../proxy-config";
 import type { ImportExtractResult, ImportPreview } from "./types";
@@ -103,31 +105,56 @@ export async function extractFromUrl(
     detected.url = normalizeClikaliaUrl(detected.url);
   }
 
+  // Airbnb: forzamos www.airbnb.es + locale es-ES y tiramos los parámetros del
+  // link (check_in, modal=PHOTO_TOUR…). Pegar un link de www.airbnb.com devuelve
+  // una interstitial JS de cambio de dominio sin datos ni fotos.
+  if (detected.portal === "airbnb") {
+    detected.url = normalizeAirbnbUrl(detected.url);
+  }
+
   const fetched = await fetchHtml(detected.url.toString());
   if (!fetched.ok) return { ok: false, error: fetched.error };
 
   const $ = cheerio.load(fetched.html);
   const finalUrl = fetched.finalUrl;
 
+  let preview: ImportPreview;
   switch (detected.portal) {
     case "idealista":
-      return { ok: true, preview: dedupePreviewPhotos(await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() })) };
+      preview = await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() });
+      break;
     case "fotocasa":
-      return { ok: true, preview: dedupePreviewPhotos(extractFotocasa($, finalUrl)) };
+      preview = extractFotocasa($, finalUrl);
+      break;
     case "inmoweb":
-      return { ok: true, preview: dedupePreviewPhotos(extractInmoweb($, finalUrl)) };
+      preview = extractInmoweb($, finalUrl);
+      break;
     case "clikalia":
-      return { ok: true, preview: dedupePreviewPhotos(extractClikalia($, finalUrl)) };
+      preview = extractClikalia($, finalUrl);
+      break;
     case "yaencontre":
-      return { ok: true, preview: dedupePreviewPhotos(extractYaencontre($, finalUrl)) };
+      preview = extractYaencontre($, finalUrl);
+      break;
     case "ukio":
-      return { ok: true, preview: dedupePreviewPhotos(extractUkio($, finalUrl)) };
+      preview = extractUkio($, finalUrl);
+      break;
+    case "airbnb":
+      preview = extractAirbnb($, finalUrl);
+      break;
     case "mobilia":
     case "generic":
     default:
-      return {
-        ok: true,
-        preview: dedupePreviewPhotos(extractGeneric($, finalUrl, detected.portal)),
-      };
+      preview = extractGeneric($, finalUrl, detected.portal);
   }
+
+  // Vídeos: extractor genérico común a TODOS los portales (YouTube/Vimeo/
+  // og:video/mp4/JSON-LD), fusionado con el `videoUrl` que ya saque el
+  // extractor concreto (Idealista). Enlace directo, sin re-alojar.
+  preview.videos = dedupeVideos([
+    ...(preview.videos ?? []),
+    ...(preview.videoUrl ? [preview.videoUrl] : []),
+    ...extractVideos($),
+  ]);
+
+  return { ok: true, preview: dedupePreviewPhotos(preview) };
 }

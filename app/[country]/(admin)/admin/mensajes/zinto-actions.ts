@@ -1,0 +1,223 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { assertPermission } from "@/lib/auth/guard";
+import {
+  getActiveChannel,
+  sendWhatsAppMessage,
+  ZintoApiError,
+  ZINTO_MAX_MESSAGE_LENGTH,
+} from "@/lib/services/zinto/client";
+import {
+  getConversationById,
+  getConversationMessages,
+  saveMessage,
+  updateConversationLastMessage,
+  markConversationRead,
+  getOrCreateConversation,
+} from "@/lib/db/zinto";
+import {
+  normalizePhoneNumber,
+  isValidPhoneNumber,
+} from "@/lib/services/zinto/client";
+import { getZintoConfig } from "@/lib/services/zinto/config";
+import type { ZintoMessageRecord } from "@/lib/services/zinto/types";
+
+export type SendZintoResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/** Send a WhatsApp message to a conversation's contact via Zinto. */
+export async function sendZintoMessage(
+  conversationId: string,
+  message: string,
+): Promise<SendZintoResult> {
+  await assertPermission("mensajes", "create");
+
+  const body = (message || "").trim();
+  if (!body) return { ok: false, error: "message_required" };
+  if (body.length > ZINTO_MAX_MESSAGE_LENGTH) {
+    return { ok: false, error: "message_too_long" };
+  }
+
+  const conversation = await getConversationById(conversationId);
+  if (!conversation) return { ok: false, error: "conversation_not_found" };
+
+  const config = await getZintoConfig();
+  const channelId = conversation.channel_id || config?.channelId || 4;
+
+  try {
+    const channel = await getActiveChannel(channelId);
+    if (!channel) return { ok: false, error: "channel_inactive" };
+
+    const res = await sendWhatsAppMessage(channelId, conversation.phone_number, body);
+    if (!res.success) return { ok: false, error: "zinto_send_failed" };
+
+    const saved = await saveMessage(
+      conversationId,
+      channel.phoneNumber || "channel",
+      conversation.phone_number,
+      body,
+      "sent",
+      res.data.status || "sent",
+      channelId,
+      res.data.messageId,
+    );
+
+    await updateConversationLastMessage(conversationId, body);
+
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true, id: saved.id };
+  } catch (error) {
+    if (error instanceof ZintoApiError) {
+      return { ok: false, error: error.code || error.message };
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}
+
+/** Fetch the message history for a Zinto conversation (used for polling). */
+export async function getZintoThread(
+  conversationId: string,
+): Promise<ZintoMessageRecord[]> {
+  await assertPermission("mensajes", "view");
+  return getConversationMessages(conversationId, 200, 0);
+}
+
+/** Reset unread counter when the admin opens a conversation. */
+export async function markZintoConversationRead(
+  conversationId: string,
+): Promise<void> {
+  await assertPermission("mensajes", "view");
+  await markConversationRead(conversationId);
+  revalidatePath("/es/admin/mensajes");
+  revalidatePath("/cl/admin/mensajes");
+}
+
+export type StartConversationResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/**
+ * Start a WhatsApp conversation with any phone number (not tied to a lead),
+ * so the admin can message people who aren't in the solicitudes list.
+ */
+export async function startWhatsAppConversation(
+  phone: string,
+  name?: string,
+  country: 'es' | 'cl' = 'es',
+): Promise<StartConversationResult> {
+  await assertPermission("mensajes", "create");
+
+  const normalized = normalizePhoneNumber(phone);
+  if (!isValidPhoneNumber(normalized)) {
+    return { ok: false, error: "invalid_phone" };
+  }
+
+  try {
+    const config = await getZintoConfig();
+    const channelId = country === 'cl' ? (config?.channelIdCl || 50) : (config?.channelIdEs || 4);
+    const conv = await getOrCreateConversation(normalized, normalized, channelId, {
+      contactName: name?.trim() || null,
+    }, country);
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true, id: conv.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}
+
+export type UpdateConversationResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Update the contact name of a WhatsApp conversation (admin only).
+ */
+export async function updateConversationName(
+  conversationId: string,
+  newName: string,
+): Promise<UpdateConversationResult> {
+  await assertPermission("mensajes", "edit");
+
+  try {
+    const supabase = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { error } = await supabase
+      .from("zinto_conversations")
+      .update({ contact_name: newName.trim() || null })
+      .eq("id", conversationId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}
+
+export type DeleteConversationResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Delete a WhatsApp conversation and all its messages (admin only).
+ */
+export async function deleteConversation(
+  conversationId: string,
+): Promise<DeleteConversationResult> {
+  await assertPermission("mensajes", "delete");
+
+  try {
+    const supabase = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Delete messages first (foreign key constraint)
+    const { error: msgError } = await supabase
+      .from("zinto_messages")
+      .delete()
+      .eq("conversation_id", conversationId);
+
+    if (msgError) {
+      return { ok: false, error: msgError.message };
+    }
+
+    // Delete conversation
+    const { error: convError } = await supabase
+      .from("zinto_conversations")
+      .delete()
+      .eq("id", conversationId);
+
+    if (convError) {
+      return { ok: false, error: convError.message };
+    }
+
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}

@@ -11,6 +11,241 @@
   body {
     @apply bg-cream-50 text-ink font-sans;
   }
+
+  /* ==========================================================================
+     CRM · sistema tipográfico EMAAR (solo admin interno)
+     --------------------------------------------------------------------------
+     Stacks centralizados como variables para que el resto del sistema (tokens
+     Tailwind crm-sans/crm-display y las clases .crm-* de abajo) no conozca
+     nunca nombres de fuente concretos.
+
+     OPTIMA_LICENSE_REQUIRED: aún no hay Optima licenciada en el repo. El stack
+     de display cae temporalmente a la Optima del sistema (macOS), Candara
+     (Windows, humanista con terminaciones parecidas) y por último Lato. En
+     cuanto exista `--font-optima` (ver app/layout.tsx), anteponerla aquí:
+       --crm-font-display: var(--font-optima), Optima, Candara, ...
+     Hasta entonces la reproducción del display NO es 100% exacta en Windows.
+     ========================================================================== */
+  :root {
+    --crm-font-sans: var(--font-lato), "Helvetica Neue", Arial, sans-serif;
+    --crm-font-display: Optima, Candara, "Segoe UI", var(--font-lato), sans-serif;
+  }
+
+  /* Raíces del sistema EMAAR. `.crm-root` la ponen los layouts de /admin (ES y
+     [country]) y el login; `.smartlink-root` la pone PublicPropertyView, que
+     comparten /compartir/[slug] y /c/[token] (SmartLinks). Ambas fijan Lato
+     como familia por defecto de su árbol sin tocar el body global (Inter) ni
+     las demás superficies públicas (/web, /v, /s, portal cliente). Los tokens
+     .crm-* de abajo solo actúan bajo una de las dos raíces, y beben de las
+     mismas variables: cuando llegue la Optima licenciada, CRM y SmartLinks la
+     heredan del mismo punto central. */
+  .crm-root,
+  .smartlink-root {
+    font-family: var(--crm-font-sans);
+  }
+}
+
+@layer components {
+  /* ==========================================================================
+     Tokens semánticos CRM (sistema EMAAR medido en el benchmark v1.0)
+     --------------------------------------------------------------------------
+     Regla absoluta: Optima (display) SIEMPRE 400 / uppercase / tracking normal
+     y NUNCA por debajo de 22px. Lato solo caras reales 300/400/700.
+     Suelo de accesibilidad 60+: contenido operativo ≥14px, labels ≥12px.
+     ========================================================================== */
+
+  /* Display mayor — uso excepcional (portadas, momentos hero del admin). */
+  .crm-root .crm-display,
+  .smartlink-root .crm-display {
+    font-family: var(--crm-font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: normal;
+    font-size: 28px;
+    line-height: 1.25;
+  }
+  @screen md {
+    .crm-root .crm-display,
+    .smartlink-root .crm-display {
+      font-size: 46px;
+    }
+  }
+
+  /* Título de página canónico (EMAAR H2 section). */
+  .crm-root .crm-page-title,
+  .smartlink-root .crm-page-title {
+    font-family: var(--crm-font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: normal;
+    font-size: 30px;
+    line-height: 1.15;
+  }
+  @screen md {
+    .crm-root .crm-page-title,
+    .smartlink-root .crm-page-title {
+      font-size: 36px;
+      line-height: 1.11;
+    }
+  }
+
+  /* Título de sección / card / modal (EMAAR card title). */
+  .crm-root .crm-section-title,
+  .smartlink-root .crm-section-title {
+    font-family: var(--crm-font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: normal;
+    font-size: 22px;
+    line-height: 1.35;
+  }
+  @screen md {
+    .crm-root .crm-section-title,
+    .smartlink-root .crm-section-title {
+      font-size: 24px;
+    }
+  }
+
+  /* Cuerpo operativo. Suelo 14px en todos los viewports (adaptación 60+
+     deliberada: NO se reproduce el body móvil de 12px de EMAAR). */
+  .crm-root .crm-body,
+  .smartlink-root .crm-body {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.43;
+  }
+
+  .crm-root .crm-body-strong,
+  .smartlink-root .crm-body-strong {
+    font-family: var(--crm-font-sans);
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.43;
+  }
+
+  /* Navegación (sidebar): gramática EMAAR con suelo de legibilidad 14px y
+     tracking contenido (el 0.10em/12px del nav marketing de EMAAR no se
+     replica a propósito — ver sprint §5). */
+  .crm-root .crm-nav,
+  .smartlink-root .crm-nav {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.43;
+    letter-spacing: 0.02em;
+  }
+
+  /* Eyebrow / label de alto nivel (EMAAR eyebrow). */
+  .crm-root .crm-label,
+  .smartlink-root .crm-label {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.43;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* Label denso (campos de formulario, cabeceras de panel). Suelo 12px. */
+  .crm-root .crm-label-sm,
+  .smartlink-root .crm-label-sm {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.34;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Metadata / caption. */
+  .crm-root .crm-meta,
+  .smartlink-root .crm-meta {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.34;
+  }
+
+  .crm-root .crm-caption,
+  .smartlink-root .crm-caption {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.34;
+  }
+
+  /* Cabecera de tabla (mapeado del nav/footer link de EMAAR). Nunca Optima. */
+  .crm-root .crm-table-header,
+  .smartlink-root .crm-table-header {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.34;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Cuerpo de tabla — 14px mínimo, sin excepciones (sprint §8). */
+  .crm-root .crm-table-body,
+  .smartlink-root .crm-table-body {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.43;
+  }
+
+  /* Precios y números operativos: Lato + tabular-nums. Nota: la cara de Lato
+     desplegada no trae cifras tabulares reales; el feature se declara igual
+     (inofensivo si no existe) y la limitación queda documentada en el handoff.
+     Prohibido meter Optima en tablas para "arreglar" esto. */
+  .crm-root .crm-price,
+  .smartlink-root .crm-price {
+    font-family: var(--crm-font-sans);
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.43;
+    letter-spacing: normal;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .crm-root .crm-number,
+  .smartlink-root .crm-number {
+    font-family: var(--crm-font-sans);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Botón (EMAAR primary button, literal). */
+  .crm-root .crm-button,
+  .smartlink-root .crm-button {
+    font-family: var(--crm-font-sans);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.34;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Texto editable — 16px (sprint §9: los valores importantes no son microtexto). */
+  .crm-root .crm-input,
+  .smartlink-root .crm-input {
+    font-family: var(--crm-font-sans);
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* Badge (EMAAR utility). El color/semántica de estado no se toca. */
+  .crm-root .crm-badge,
+  .smartlink-root .crm-badge {
+    font-family: var(--crm-font-sans);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.34;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
 }
 
 @layer utilities {
@@ -28,4 +263,843 @@
   .pointer-events-none {
     -webkit-touch-callout: none;
   }
+}
+
+/* Transición del vídeo principal del SmartLink al seleccionar una miniatura. */
+@keyframes heroFade {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================================================================
+   Viewing Collection · capa editorial
+   ----------------------------------------------------------------------------
+   Motion contenido: reveals suaves al entrar en viewport y transiciones de
+   capítulo. Nada de scroll hijacking ni efectos llamativos — en una
+   publicación de lujo el movimiento sirve al ritmo de lectura, no al revés.
+   Todo se desactiva con prefers-reduced-motion.
+   ========================================================================== */
+
+@layer utilities {
+  /* Reveal al entrar en viewport. El elemento parte oculto y lo activa el
+     IntersectionObserver añadiendo .is-revealed. Sin JS (o con JS caído) el
+     fallback de abajo lo deja visible: nunca se queda contenido invisible. */
+  .vc-reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+
+  .vc-reveal.is-revealed {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Escalonado dentro de un bloque. */
+  .vc-reveal-d1 { transition-delay: 90ms; }
+  .vc-reveal-d2 { transition-delay: 180ms; }
+  .vc-reveal-d3 { transition-delay: 270ms; }
+  .vc-reveal-d4 { transition-delay: 360ms; }
+
+  /* Zoom lentísimo de la fotografía de portada: da vida sin distraer. */
+  .vc-kenburns {
+    animation: vcKenburns 24s ease-out forwards;
+  }
+
+  /* Interlineado apretado para los títulos display grandes. */
+  .vc-tight {
+    line-height: 0.94;
+  }
+
+  /* Tracking amplio para las etiquetas en versalitas. */
+  .vc-tracked {
+    letter-spacing: 0.28em;
+  }
+
+  .vc-tracked-sm {
+    letter-spacing: 0.18em;
+  }
+
+  /* Cifras alineadas en columnas (horarios, precios). */
+  .vc-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@keyframes vcKenburns {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes vcFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* La portada anima al montar, no al hacer scroll: es lo primero que se ve. */
+.vc-cover-in {
+  animation: vcFadeUp 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vc-cover-in-d1 { animation-delay: 200ms; }
+.vc-cover-in-d2 { animation-delay: 380ms; }
+.vc-cover-in-d3 { animation-delay: 560ms; }
+.vc-cover-in-d4 { animation-delay: 760ms; }
+
+/* Subrayado que crece desde la izquierda al pasar el cursor. */
+.vc-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vc-underline:hover,
+.vc-underline:focus-visible {
+  background-size: 100% 1px;
+}
+
+/* Foco visible y sobrio en toda la colección. */
+.vc-focus:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-reveal,
+  .vc-reveal.is-revealed {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .vc-kenburns,
+  .vc-cover-in {
+    animation: none;
+  }
+
+  .vc-underline {
+    transition: none;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   Private Book · paso de página
+   ----------------------------------------------------------------------------
+   Al avanzar, la hoja actual gira sutilmente sobre el lomo (izquierdo en LTR)
+   y revela la siguiente, que se asienta debajo. Al retroceder, la hoja
+   anterior vuelve a posarse encima. Rotación contenida (≤16°, portada 24°),
+   perspectiva moderada y una sombra de giro que pasa sobre la página nueva:
+   la sensación es de superficie sobre superficie, no de tarjeta flotante.
+
+   Todo transforms + opacity (composición en GPU). prefers-reduced-motion lo
+   degrada a un fundido corto sin perspectiva.
+   ========================================================================== */
+
+.vc-book-stage {
+  perspective: 2400px;
+  perspective-origin: 50% 45%;
+}
+
+/* Curva "masa ligera": arranque suave, giro fluido, aterrizaje blando. */
+:root {
+  --vc-turn-ease: cubic-bezier(0.45, 0.05, 0.15, 1);
+}
+
+/* ── Hoja SALIENTE al avanzar (gira y se retira) ── */
+@keyframes vcSheetOutNext {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: rotateY(-16deg) translateX(-7%); opacity: 0; }
+}
+.vc-sheet-out-next {
+  transform-origin: left center;
+  animation: vcSheetOutNext 700ms var(--vc-turn-ease) both;
+  will-change: transform, opacity;
+}
+.vc-sheet-out-next.vc-rtl {
+  transform-origin: right center;
+  animation-name: vcSheetOutNextRtl;
+}
+@keyframes vcSheetOutNextRtl {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: rotateY(16deg) translateX(7%); opacity: 0; }
+}
+
+/* Portada: apertura más marcada — el momento distintivo del libro. */
+.vc-sheet-out-cover {
+  transform-origin: left center;
+  animation: vcSheetOutCover 850ms var(--vc-turn-ease) both;
+  will-change: transform, opacity;
+}
+@keyframes vcSheetOutCover {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  65%  { opacity: 1; }
+  100% { transform: rotateY(-24deg) translateX(-10%); opacity: 0; }
+}
+.vc-sheet-out-cover.vc-rtl {
+  transform-origin: right center;
+  animation-name: vcSheetOutCoverRtl;
+}
+@keyframes vcSheetOutCoverRtl {
+  0%   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+  65%  { opacity: 1; }
+  100% { transform: rotateY(24deg) translateX(10%); opacity: 0; }
+}
+
+/* ── Hoja ENTRANTE al retroceder (vuelve a posarse encima) ── */
+@keyframes vcSheetInPrev {
+  0%   { transform: rotateY(-16deg) translateX(-7%); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: rotateY(0deg) translateX(0); opacity: 1; }
+}
+.vc-sheet-in-prev {
+  transform-origin: left center;
+  animation: vcSheetInPrev 700ms var(--vc-turn-ease) both;
+  will-change: transform, opacity;
+}
+.vc-sheet-in-prev.vc-rtl {
+  transform-origin: right center;
+  animation-name: vcSheetInPrevRtl;
+}
+@keyframes vcSheetInPrevRtl {
+  0%   { transform: rotateY(16deg) translateX(7%); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: rotateY(0deg) translateX(0); opacity: 1; }
+}
+
+/* ── Página que queda DEBAJO: se asienta ──
+   Sin filter: animar brightness re-rasteriza la fotografía entera y produce
+   un pestañeo visible. El oscurecido lo pone la sombra de giro (opacidad). */
+@keyframes vcSheetSettle {
+  from { transform: scale(0.988) translateX(0.8%); }
+  to   { transform: none; }
+}
+.vc-sheet-settle {
+  animation: vcSheetSettle 700ms var(--vc-turn-ease) both;
+  will-change: transform;
+}
+.vc-sheet-settle.vc-rtl {
+  animation-name: vcSheetSettleRtl;
+}
+@keyframes vcSheetSettleRtl {
+  from { transform: scale(0.988) translateX(-0.8%); }
+  to   { transform: none; }
+}
+
+/* Al retroceder, la página que queda debajo se atenúa desde el lomo mientras
+   la hoja se posa — opacidad pura, por lo mismo que arriba. */
+@keyframes vcUnderShade {
+  0%   { opacity: 0; }
+  45%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+.vc-under-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(
+    to right,
+    rgba(10, 10, 10, 0.16),
+    rgba(10, 10, 10, 0.05) 30%,
+    transparent 55%
+  );
+  animation: vcUnderShade 700ms var(--vc-turn-ease) both;
+}
+.vc-under-shade.vc-rtl {
+  background: linear-gradient(
+    to left,
+    rgba(10, 10, 10, 0.16),
+    rgba(10, 10, 10, 0.05) 30%,
+    transparent 55%
+  );
+}
+
+/* ── Sombra de giro: pasa sobre la página revelada, desde el lomo ── */
+@keyframes vcTurnShade {
+  0%   { opacity: 0.28; }
+  100% { opacity: 0; }
+}
+.vc-turn-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(
+    to right,
+    rgba(10, 10, 10, 0.38),
+    rgba(10, 10, 10, 0.1) 22%,
+    transparent 45%
+  );
+  animation: vcTurnShade 700ms var(--vc-turn-ease) both;
+}
+.vc-turn-shade.vc-rtl {
+  background: linear-gradient(
+    to left,
+    rgba(10, 10, 10, 0.38),
+    rgba(10, 10, 10, 0.1) 22%,
+    transparent 45%
+  );
+}
+
+/* Canto de la hoja durante el giro: 1px marfil + sombra interior sutil.
+   Nunca visible en reposo. */
+.vc-sheet-edge {
+  box-shadow:
+    inset -1px 0 0 rgba(251, 248, 243, 0.55),
+    12px 0 40px -18px rgba(10, 10, 10, 0.45);
+}
+.vc-sheet-edge.vc-rtl {
+  box-shadow:
+    inset 1px 0 0 rgba(251, 248, 243, 0.55),
+    -12px 0 40px -18px rgba(10, 10, 10, 0.45);
+}
+
+/* ── Private Gallery Mode ──
+   Entrada de la galería y de cada lámina: fundido corto y nada más. La galería
+   no compite con el giro de página; es una capa quieta sobre tinta. */
+@keyframes vcGalleryIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.vc-gallery {
+  animation: vcGalleryIn 260ms ease-out both;
+}
+@keyframes vcPlateIn {
+  from { opacity: 0; transform: scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+.vc-plate {
+  animation: vcPlateIn 380ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vc-gallery,
+  .vc-plate {
+    animation: none !important;
+  }
+}
+
+/* Entrada inicial del libro (primer montaje, sin giro). */
+@keyframes vcPageIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.vc-page-in {
+  animation: vcPageIn 400ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-book-stage { perspective: none; }
+  .vc-sheet-out-next,
+  .vc-sheet-out-cover,
+  .vc-sheet-in-prev,
+  .vc-sheet-settle,
+  .vc-page-in {
+    animation: none !important;
+  }
+  .vc-sheet-out-next,
+  .vc-sheet-out-cover {
+    opacity: 0;
+  }
+  /* Sin animación las sombras quedarían clavadas a plena opacidad. */
+  .vc-turn-shade,
+  .vc-under-shade {
+    display: none;
+  }
+  .vc-sheet-edge {
+    box-shadow: none;
+  }
+}
+
+/* ==========================================================================
+   PRIVATE CLIENT SHORTLIST · movimiento
+   Cuando una residencia cambia de grupo tiene que LLEGAR a su sitio, no
+   aparecer de golpe: si no, el cliente pierde de vista cuál acaba de mover.
+   Solo transform y opacity, y nada si el sistema pide menos movimiento.
+   ========================================================================== */
+@keyframes vcShortlistSettle {
+  /* Solo opacidad: el desplazamiento a la sección nueva lo hace el FLIP
+     (hooks/use-flip-layout.ts). Animar los dos a la vez daba un doble
+     movimiento que se leía como un salto. */
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.vc-shortlist-item {
+  animation: vcShortlistSettle 360ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-shortlist-item {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   SMARTLINK 2.0 · Luxury Location Module — cartografía y motion.
+
+   El mapa en estado bloqueado es un mosaico de teselas OSM compuesto por
+   nosotros (lib/geo/tile-math.ts). Su paleta se consigue con UN tratamiento
+   de color declarado aquí como token, no con valores sueltos por el
+   componente: así "el color del mapa" se ajusta en un sitio.
+
+   Objetivo del tratamiento (§6 del brief): tierra en perla cálida, parques
+   en salvia desaturado PERO visibles, agua en azul mineral apagado, viales
+   principales en champán en vez del rosa/amarillo chillón del estilo OSM
+   estándar. Ni escala de grises (frío, parece un mapa desactivado) ni beige
+   plano (los parques desaparecen).
+   ========================================================================== */
+.smartlink-root {
+  /* saturate: apaga el rosa de autovías y el amarillo de secundarias, y baja
+     el verde a salvia sin matarlo.  sepia: empuja la tierra a perla cálida.
+     hue-rotate leve: verdes hacia oliva, azules hacia mineral. */
+  --bcp-map-treatment: saturate(0.78) sepia(0.12) brightness(1.02)
+    contrast(0.97) hue-rotate(-5deg);
+  /* Velo cálido por encima: une la composición con el crema del SmartLink. */
+  --bcp-map-wash: rgba(196, 162, 106, 0.07);
+  /* Lienzo bajo las teselas. Con loading="lazy" el mosaico entra al
+     acercarse; hasta entonces se ve ESTE papel, no un hueco blanco. */
+  --bcp-map-canvas: #efe9dd;
+}
+
+.bcp-map-stage { background-color: var(--bcp-map-canvas); }
+
+.bcp-map-tiles {
+  filter: var(--bcp-map-treatment);
+  /* Las teselas son imágenes: JAMÁS capturan rueda, arrastre ni gesto táctil.
+     Esta línea es la que garantiza que pasar el ratón por encima del mapa no
+     secuestre el scroll de la página (§D del brief). */
+  pointer-events: none;
+  user-select: none;
+}
+
+.bcp-map-wash {
+  background: var(--bcp-map-wash);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* Marcador BCP: aparece una vez, sin pulso infinito. */
+@keyframes bcpMarkerIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes bcpHaloOnce {
+  0%   { opacity: 0.5; transform: translate(-50%, -50%) scale(0.7); }
+  70%  { opacity: 0;   transform: translate(-50%, -50%) scale(2.1); }
+  100% { opacity: 0;   transform: translate(-50%, -50%) scale(2.1); }
+}
+.bcp-marker { animation: bcpMarkerIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bcp-marker-halo { animation: bcpHaloOnce 1600ms ease-out 320ms both; }
+
+/* Entrada escalonada muy contenida de los nodos de conectividad y destinos. */
+@keyframes bcpRise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bcp-rise { animation: bcpRise 460ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bcp-marker,
+  .bcp-marker-halo,
+  .bcp-rise {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* El marcador se posiciona con transform: sin animación necesita su
+     desplazamiento base o se dibujaría descolocado. */
+  .bcp-marker { transform: translate(-50%, -50%) !important; }
+  .bcp-marker-halo { display: none !important; }
+}
+
+/* Leaflet solo existe en modo explorar; sus controles se integran en la
+   composición en vez de dominarla. La atribución se mantiene SIEMPRE
+   (obligación de licencia), solo se hace discreta. */
+.bcp-map-live .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 10px;
+  color: rgba(40, 28, 10, 0.62);
+  padding: 1px 6px;
+}
+.bcp-map-live .leaflet-control-attribution a { color: rgba(40, 28, 10, 0.75); }
+.bcp-map-live .leaflet-control-zoom a {
+  border: 0;
+  color: #2c2113;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 6px 18px -10px rgba(40, 28, 10, 0.5);
+}
+.bcp-map-live .leaflet-tile-pane { filter: var(--bcp-map-treatment); }
+
+/* DESTINATION FOCUS · la línea vivienda → destino se dibuja sola, una vez.
+   Es una recta a propósito: representa proximidad, NO una ruta por calles. */
+@keyframes bcpDrawConnection {
+  from { stroke-dashoffset: 480; opacity: 0; }
+  to   { stroke-dashoffset: 0;   opacity: 1; }
+}
+.bcp-connection {
+  animation: bcpDrawConnection 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Con un destino enfocado el mapa base cede MUY poco contraste para que
+   destaquen vivienda, conexión y destino. Sigue siendo el mapa de color
+   aprobado: ni gris, ni oscurecido. */
+.bcp-map-stage[data-focus="true"] .bcp-map-tiles {
+  filter: var(--bcp-map-treatment) saturate(0.88) contrast(0.96);
+  transition: filter 420ms ease-out;
+}
+.bcp-map-tiles { transition: filter 420ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bcp-connection { animation: none !important; stroke-dashoffset: 0 !important; opacity: 1 !important; }
+  .bcp-map-stage[data-focus="true"] .bcp-map-tiles,
+  .bcp-map-tiles { transition: none !important; }
+}
+
+/* ==========================================================================
+   LUXURY LOCATION MODULE · composición del overview.
+   Paleta aprobada intacta: ivory / warm stone / champagne / sage / charcoal.
+   ========================================================================== */
+
+/* ÁREA DE FOCO de la vivienda. Herramienta de COMPOSICIÓN para anclar la
+   mirada — NO es una isócrona ni un radio de viaje: por eso no lleva ninguna
+   cifra dentro y su borde es casi imperceptible. */
+.bcp-focus-area {
+  background: radial-gradient(
+    circle,
+    rgba(196, 162, 106, 0.3) 0%,
+    rgba(196, 162, 106, 0.17) 48%,
+    rgba(196, 162, 106, 0.06) 74%,
+    rgba(196, 162, 106, 0) 100%
+  );
+  box-shadow: inset 0 0 0 1px rgba(176, 139, 79, 0.26);
+  animation: bcpFocusAreaIn 900ms ease-out both;
+}
+@keyframes bcpFocusAreaIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Cápsulas de POI flotando sobre el mapa. */
+@keyframes bcpCapsuleIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+.bcp-capsule { animation: bcpCapsuleIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Marcador del destino: entra con escala/fade, sin rebote. */
+@keyframes bcpDestIn {
+  from { opacity: 0; transform: scale(0.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.bcp-dest { animation: bcpDestIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Ficha contextual del destino. */
+@keyframes bcpCardIn      { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bcpCardInCenter {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes bcpCardInCenterUp {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.bcp-context-card[data-align="center"] { animation-name: bcpCardInCenter; }
+.bcp-context-card[data-align="center"][data-side="bottom"] { animation-name: bcpCardInCenterUp; }
+.bcp-context-card { animation: bcpCardIn 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes bcpSheetIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Vivienda y POIs dentro del mapa VIVO (Leaflet), con el mismo lenguaje que
+   el overview: la marca no cambia al explorar. */
+.bcp-live-home {
+  /* Leaflet da al icono un contenedor de 0×0: sin `position:absolute` y
+     `width:max-content` el pill se queda sin ancho y el texto colapsa — se
+     veía como una mancha oscura en vez del marcador de marca. */
+  position: absolute; left: 0; top: 0; width: max-content;
+  display: flex; align-items: center; gap: 8px;
+  transform: translate(-50%, -50%);
+  background: #0a0a0a; color: #fbf8f3;
+  border-radius: 9999px; padding: 5px 12px 5px 8px;
+  box-shadow: 0 12px 30px -10px rgba(10, 10, 10, 0.95);
+  box-shadow: 0 12px 30px -10px rgba(10, 10, 10, 0.95), 0 0 0 1px rgba(212, 175, 127, 0.6);
+  white-space: nowrap; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.bcp-live-home-dot { width: 10px; height: 10px; border-radius: 9999px; background: #d4af7f; }
+/* FICHA CONTEXTUAL en móvil: tarjeta inferior DENTRO del mapa.
+   Anclar una ficha de 300px sobre un marcador en 390px de ancho no cabe, así
+   que en móvil ocupa el borde inferior del escenario del mapa —no del
+   viewport— dejando mapa visible por encima. */
+@media (max-width: 767px) {
+  .smartlink-root .bcp-context-card--mobile-sheet {
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 3.25rem;
+    width: auto;
+    /* La animación de entrada de escritorio lleva el translateX(-50%) de la
+       ficha centrada horneado en sus keyframes: si no se sustituye, en móvil
+       empuja la tarjeta media pantalla a la izquierda y se sale del mapa.
+       Aquí entra desde abajo, que es lo que corresponde a una tarjeta
+       inferior. */
+    animation-name: bcpSheetIn;
+    transform: none;
+  }
+}
+
+/* INDICADOR DE VIAJE del rail de conectividad.
+   Cápsula marfil con filo champán y glifo carbón: el modo de viaje, no un
+   vehículo ilustrado. Vive en el rail (tiempo), nunca sobre el mapa
+   (geografía). Sin rebote, sin rotación, sin 3D. */
+.bcp-travel-indicator {
+  transition: opacity .3s ease;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #fbf8f3;
+  color: #3b332a;
+  border: 1px solid rgba(200, 168, 106, 0.8);
+  box-shadow: 0 4px 14px -6px rgba(40, 28, 10, 0.5);
+}
+/* En reposo espera al comienzo del hilo, discreto: está, pero no reclama
+   atención hasta que hay un destino elegido. */
+.bcp-travel-indicator[data-resting="true"] { opacity: 0.45; }
+
+/* El rail en móvil hace scroll y el nodo activo se centra solo. */
+.bcp-rail-scroll { scroll-snap-type: x proximity; }
+.bcp-rail-scroll > ul > li { scroll-snap-align: center; }
+
+/* ── BCP RESIDENCE MARKER ───────────────────────────────────────────────
+   Medallón, no chapa de sistema. Disco carbón + aro champán fino + detalle
+   marfil dentro. Es el ancla geográfica de la experiencia (DAMAC) y tiene
+   que reconocerse sin rótulo (EMAAR), con la contención de una casa
+   madrileña: ni pin rojo, ni emoji, ni píldora enorme. */
+.bcp-residence {
+  position: absolute;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  width: max-content; pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.bcp-residence-medal {
+  display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 9999px;
+  background: #2c2113; color: #f6f0e4;
+  box-shadow:
+    0 0 0 1.5px #c8a86a,          /* aro champán */
+    0 0 0 4.5px rgba(246, 240, 228, 0.9), /* respiro marfil */
+    0 10px 22px -10px rgba(40, 28, 10, 0.75);
+}
+.bcp-residence-caption {
+  font-family: var(--crm-font-sans);
+  font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase;
+  color: #2c2113;
+  background: rgba(251, 248, 243, 0.94);
+  border-radius: 9999px; padding: 2px 9px;
+  box-shadow: 0 4px 12px -8px rgba(40, 28, 10, 0.6);
+}
+/* Foco: halo, nunca rebote. */
+.bcp-residence.is-focus .bcp-residence-medal {
+  box-shadow:
+    0 0 0 1.5px #c8a86a,
+    0 0 0 4.5px rgba(246, 240, 228, 0.9),
+    0 0 0 12px rgba(200, 168, 106, 0.16),
+    0 10px 22px -10px rgba(40, 28, 10, 0.75);
+}
+
+/* ── POI CURADO POR BCP ──
+   Cápsula marfil con glifo carbón y borde champán fino. Misma familia para
+   todas las categorías: cambia el glifo, nunca el color — el champán se
+   reserva a la selección. */
+.bcp-poi {
+  display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 9999px;
+  background: #fbf8f3; color: #3b332a;
+  border: 1px solid rgba(200, 168, 106, 0.75);
+  box-shadow: 0 6px 16px -8px rgba(40, 28, 10, 0.6);
+  cursor: pointer;
+}
+.bcp-poi:hover { border-color: #c8a86a; background: #fffdf9; }
+/* Universidad: doble aro, distinción aprobada en el sprint anterior. */
+.bcp-poi-uni { box-shadow: 0 0 0 2.5px rgba(251, 248, 243, 0.95), 0 0 0 3.5px rgba(200, 168, 106, 0.55), 0 6px 16px -8px rgba(40, 28, 10, 0.6); }
+/* Atenuado: hay un destino de fuera en foco y lo curado deja paso. */
+.bcp-poi.is-dimmed { opacity: 0.28; }
+
+/* Seleccionado: el champán toma el mando. */
+.bcp-poi.is-active {
+  background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
+  box-shadow: 0 0 0 5px rgba(138, 109, 59, 0.18), 0 10px 24px -8px rgba(40, 28, 10, 0.75);
+  transform: scale(1.12);
+}
+.bcp-poi-uni.is-active { box-shadow: 0 0 0 2.5px #fbf8f3, 0 0 0 5px rgba(138, 109, 59, 0.5), 0 10px 24px -8px rgba(40, 28, 10, 0.75); }
+
+/* PLACA DEL DESTINO · modo curado.
+   Marfil, carbón, filo champán y una punta que la ancla a la coordenada. Es
+   una etiqueta de lugar, no una ficha: el tiempo lo cuenta el rail. */
+/* Contenedor del marcador-placa: MapLibre lo coloca en la coordenada y
+   nosotros solo apilamos rótulo y ancla alrededor de ese punto. */
+.bcp-plaque-marker {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+}
+.bcp-plaque-marker .bcp-plaque {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bcp-plaque-marker .bcp-plaque-anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.bcp-plaque-name { white-space: nowrap; }
+
+.bcp-plaque {
+  bottom: 16px;
+  width: max-content;
+  max-width: 15rem;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  background: #fbf8f3;
+  color: #2c2113;
+  font-family: var(--crm-font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+  border: 1px solid rgba(200, 168, 106, 0.85);
+  box-shadow: 0 6px 16px -10px rgba(40, 28, 10, 0.55);
+}
+.bcp-plaque::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 7px;
+  height: 7px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #fbf8f3;
+  border-right: 1px solid rgba(200, 168, 106, 0.85);
+  border-bottom: 1px solid rgba(200, 168, 106, 0.85);
+}
+/* El ancla: punto lleno en champán sobre la coordenada exacta. */
+.bcp-plaque-anchor {
+  width: 11px;
+  height: 11px;
+  border-radius: 9999px;
+  background: #8a6d3b;
+  box-shadow: 0 0 0 3px rgba(251, 248, 243, 0.95), 0 0 0 6px rgba(138, 109, 59, 0.16);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bcp-plaque { animation: bcpPlaqueIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .bcp-plaque-anchor { animation: bcpPlaqueIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+@keyframes bcpPlaqueIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; }
+}
+
+/* Resultado de BÚSQUEDA seleccionado: la lupa lo delata como algo que trajo
+   el cliente; el champán, como lo elegido ahora mismo. */
+.bcp-place-search.is-active {
+  background: #8a6d3b; color: #fbf8f3; border-color: #fbf8f3;
+  box-shadow: 0 0 0 5px rgba(138, 109, 59, 0.18), 0 10px 24px -8px rgba(40, 28, 10, 0.75);
+}
+
+/* Lugar DESCUBIERTO en el basemap: neutro y claramente distinto de lo
+   curado — nunca se insinúa que BCP lo recomienda. */
+.bcp-place {
+  display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  background: #fbf8f3; color: #2c2113;
+  border: 2px solid #2c2113;
+  box-shadow: 0 8px 20px -6px rgba(40, 28, 10, 0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bcp-poi { transition: transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bcp-focus-area, .bcp-dest, .bcp-context-card, .bcp-capsule {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  .bcp-capsule { transform: translate(-50%, -50%) !important; }
+  .bcp-context-card[data-align="center"] { transform: translate(-50%, 0) !important; }
+  .bcp-dest { transform: none !important; }
+}
+
+/* PROPERTY PRELUDE · apertura editorial: cuerpo mayor que el copy de
+   capítulo, interlineado generoso, sin artificios. Luxury = contención. */
+/* PROPERTY PRELUDE v2 · EDITORIAL OPENING SPREAD.
+   Banda completa entre Key Facts y el primer capítulo: presencia horizontal
+   (~1136px) pero medida de lectura contenida (~720px) en la columna derecha.
+   Sin card, sin borde, sin sombra — el mismo lienzo ivory del SmartLink. El
+   aire de abajo es parte de la composición: separa el prólogo del capítulo 01
+   sin necesidad de un divisor gráfico. */
+.smartlink-root .bcp-prelude-spread {
+  padding-bottom: 0.5rem;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude-spread { padding-bottom: 2.5rem; }
+}
+
+/* Titular editorial. Optima del sistema de display: 400, versal y tracking
+   normal, como el resto de títulos del SmartLink (regla absoluta del sistema
+   tipográfico — el Prelude no inventa una voz nueva, usa la de la casa). */
+.smartlink-root .bcp-prelude-headline {
+  font-family: var(--crm-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  font-size: 1.65rem;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude-headline { font-size: 2.15rem; line-height: 1.18; }
+}
+@media (min-width: 1024px) {
+  .smartlink-root .bcp-prelude-headline { font-size: 2.3rem; }
+}
+
+.smartlink-root .bcp-prelude {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  letter-spacing: 0.005em;
+}
+@media (min-width: 768px) {
+  .smartlink-root .bcp-prelude { font-size: 1.22rem; line-height: 1.85; }
 }

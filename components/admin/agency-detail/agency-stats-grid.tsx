@@ -146,19 +146,19 @@ function SaveBar({
   return (
     <div className="flex flex-wrap items-center justify-end gap-2.5 rounded-xl border border-gold/20 bg-cream-50/85 px-4 py-2.5 backdrop-blur-sm">
       {feedback === "saved" && (
-        <span className="flex items-center gap-1.5 text-[12px] font-medium text-emerald-700">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
           <Check size={14} strokeWidth={2} />
           <span>{t("agency.commission.saved")}</span>
         </span>
       )}
       {feedback === "error" && (
-        <span className="text-[12px] font-medium text-red-600">
+        <span className="text-xs font-medium text-red-600">
           {t("agency.commission.error")}
           {errorMsg ? ` · ${errorMsg}` : ""}
         </span>
       )}
       {feedback === "idle" && isDirty && (
-        <span className="text-[12px] text-ink/60">
+        <span className="text-xs text-ink/60">
           {t("agency.commission.unsaved")}
         </span>
       )}
@@ -168,7 +168,7 @@ function SaveBar({
           onClick={onReset}
           disabled={isPending || !isDirty}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white/80 px-3 py-1.5 text-[12px] font-medium text-ink/70 transition",
+            "inline-flex items-center gap-1.5 rounded-lg border border-ink/15 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink/70 transition",
             "hover:border-ink/30 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
@@ -180,7 +180,7 @@ function SaveBar({
           onClick={onSave}
           disabled={isPending || !isDirty}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg bg-ink px-3.5 py-1.5 text-[12px] font-medium text-cream-50 transition",
+            "inline-flex items-center gap-1.5 rounded-lg bg-ink px-3.5 py-1.5 text-xs font-medium text-cream-50 transition",
             "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
@@ -220,7 +220,7 @@ function RentMinPriceSelect({
     <select
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full appearance-none rounded-lg border border-gold/25 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/75 focus:border-gold/55 focus:outline-none"
+      className="w-full appearance-none rounded-lg border border-gold/25 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-ink/75 focus:border-gold/55 focus:outline-none"
     >
       {allOptions.map((v) => (
         <option key={v} value={v}>
@@ -249,13 +249,13 @@ function SaleAgreedSelect({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-ink/45">
+      <p className="crm-label-sm text-ink/45">
         {label}
       </p>
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full appearance-none rounded-lg border border-gold/25 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-ink/75 focus:border-gold/55 focus:outline-none"
+        className="w-full appearance-none rounded-lg border border-gold/25 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-ink/75 focus:border-gold/55 focus:outline-none"
       >
         {allOptions.map((v) =>
           v <= 0 ? (
@@ -273,7 +273,7 @@ function SaleAgreedSelect({
         )}
       </select>
       {value > 0 && (
-        <p className="text-[10px] text-ink/45">
+        <p className="text-xs text-ink/45">
           {t("agency.stats.agreedSale.effectiveHint", {
             agreed: formatPct(value),
             effective: formatPct(effectivePct),
