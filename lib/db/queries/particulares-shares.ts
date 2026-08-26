@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { randomToken } from "@/lib/tokens";
+import { sanitizeParticularDescriptionForSharing } from "@/lib/services/particulares/sanitize-description";
 
 /**
  * Enlaces temporales de UN particular para compartir fuera del equipo
@@ -24,6 +25,23 @@ export async function createParticularShareLink(params: {
   const { particularId, createdBy, ttlDays = 7 } = params;
   const supabase = createAdminClient();
 
+  // Limpiamos la descripción UNA VEZ, al crear el enlace (no en cada
+  // visita): quita teléfono/email/"particular, sin agencias" antes de que
+  // el texto sea visible fuera del equipo — ver
+  // lib/services/particulares/sanitize-description.ts y migración 0157.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const partRes = await (supabase as any)
+    .from("particulares")
+    .select("description")
+    .eq("id", particularId)
+    .maybeSingle();
+  const rawDescription = (
+    partRes.data as { description: string | null } | null
+  )?.description;
+  const sanitizedDescription = rawDescription
+    ? await sanitizeParticularDescriptionForSharing(rawDescription)
+    : null;
+
   const token = randomToken();
   const expiresAt = new Date(
     Date.now() + ttlDays * 24 * 60 * 60 * 1000,
@@ -37,6 +55,7 @@ export async function createParticularShareLink(params: {
       token,
       created_by: createdBy,
       expires_at: expiresAt,
+      sanitized_description: sanitizedDescription,
     });
   if (error) throw new Error(error.message);
 
@@ -63,7 +82,7 @@ export async function getParticularByShareToken(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const shareRes = await (supabase as any)
     .from("particulares_share_links")
-    .select("id, particular_id, expires_at")
+    .select("id, particular_id, expires_at, sanitized_description")
     .eq("token", token)
     .maybeSingle();
   if (shareRes.error) throw new Error(shareRes.error.message);
@@ -71,6 +90,7 @@ export async function getParticularByShareToken(
     id: string;
     particular_id: string;
     expires_at: string | null;
+    sanitized_description: string | null;
   } | null;
   if (!share) return null;
   if (share.expires_at && new Date(share.expires_at) < new Date()) return null;
@@ -84,9 +104,17 @@ export async function getParticularByShareToken(
   if (partRes.error) throw new Error(partRes.error.message);
   if (!partRes.data) return null;
 
+  const particular = partRes.data as Record<string, unknown>;
+  // sanitized_description gana siempre que exista: es la que ya pasó por
+  // sanitizeParticularDescriptionForSharing al crear el enlace. NULL solo en
+  // enlaces creados antes de la migración 0157 — ahí cae a la cruda.
+  if (share.sanitized_description) {
+    particular.description = share.sanitized_description;
+  }
+
   return {
     shareId: share.id,
-    particular: partRes.data as Record<string, unknown>,
+    particular,
   };
 }
 

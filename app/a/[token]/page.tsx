@@ -6,6 +6,7 @@ import {
   recordParticularShareOpen,
 } from "@/lib/db/queries/particulares-shares";
 import { ParticularHero } from "./particular-hero";
+import { LanguageSelect } from "./language-select";
 
 // Enlace temporal de UN particular (anuncio scrapeado, no ficha nuestra).
 // Completamente aparte de /c (SmartLinks de `properties`) y /v (Viewing
@@ -119,13 +120,16 @@ export default async function ParticularSharePage({
             priority
             className="h-auto w-[140px] select-none"
           />
-          <a
-            href={`mailto:${BC_CONTACT_EMAIL}`}
-            className="hidden items-center gap-2 rounded-lg border border-ink/15 bg-white/80 px-3 py-2 crm-button text-ink/70 transition hover:border-gold/55 hover:text-ink md:inline-flex"
-          >
-            <Mail size={13} strokeWidth={1.75} className="text-gold" />
-            <span>{BC_CONTACT_EMAIL}</span>
-          </a>
+          <div className="flex items-center gap-2">
+            <LanguageSelect />
+            <a
+              href={`mailto:${BC_CONTACT_EMAIL}`}
+              className="hidden items-center gap-2 rounded-lg border border-ink/15 bg-white/80 px-3 py-2 crm-button text-ink/70 transition hover:border-gold/55 hover:text-ink md:inline-flex"
+            >
+              <Mail size={13} strokeWidth={1.75} className="text-gold" />
+              <span>{BC_CONTACT_EMAIL}</span>
+            </a>
+          </div>
         </div>
       </header>
 

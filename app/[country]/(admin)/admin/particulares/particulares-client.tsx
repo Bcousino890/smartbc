@@ -323,6 +323,10 @@ function ShareLinkAction({ particularId }: { particularId: string }) {
             })}
             . Cualquiera con el enlace puede verlo, sin iniciar sesión.
           </p>
+          <p className="text-[11px] text-ink/40">
+            La descripción se limpia con IA antes de publicarla (sin
+            teléfono, email ni menciones de "particular"/"sin agencias").
+          </p>
         </div>
       )}
       {error && (
