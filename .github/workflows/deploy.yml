@@ -8,6 +8,10 @@ name: Deploy to VPS (manual)
 #
 # Para usarlo hace falta el secret VPS_SSH_KEY (clave privada autorizada en el
 # VPS). El cron NO lo necesita.
+#
+# ⚠️ VPS_HOST tenía la IP muerta (178.105.176.3, ni ping — ver CLAUDE.md).
+# Corregida a la real el 2026-08-26. Con la IP vieja este workflow fallaba
+# en el primer paso SSH, siempre, sin excepción.
 
 on:
   workflow_dispatch: {}
@@ -17,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VPS_HOST: 178.105.176.3
+  VPS_HOST: 178.105.185.125
   VPS_USER: root
   VPS_PATH: /opt/smartbc-app
   PM2_APP: smartbc-portal
