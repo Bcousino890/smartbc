@@ -74,8 +74,16 @@ const PUBLIC_PARTICULAR_COLUMNS =
 // auth) — se usa en /a/[token]. Devuelve null si el token no existe o si
 // el enlace ya caducó (mismo criterio que getPropertyByShareToken en
 // lib/db/queries/shares.ts).
+//
+// `sanitizeIfMissing`: para enlaces SIN descripción limpia guardada (los
+// creados antes de la migración 0157), la limpia al vuelo y la persiste,
+// de modo que el texto crudo del portal ("particular", "sin agencias",
+// teléfono…) no llegue a nadie ni siquiera en esos enlaces antiguos. Solo
+// lo pide el render de la página; generateMetadata no lo necesita (no usa
+// la descripción) y así no se paga la IA dos veces por visita.
 export async function getParticularByShareToken(
   token: string,
+  opts: { sanitizeIfMissing?: boolean } = {},
 ): Promise<{ shareId: string; particular: Record<string, unknown> } | null> {
   const supabase = createAdminClient();
 
@@ -105,11 +113,34 @@ export async function getParticularByShareToken(
   if (!partRes.data) return null;
 
   const particular = partRes.data as Record<string, unknown>;
-  // sanitized_description gana siempre que exista: es la que ya pasó por
-  // sanitizeParticularDescriptionForSharing al crear el enlace. NULL solo en
-  // enlaces creados antes de la migración 0157 — ahí cae a la cruda.
+
   if (share.sanitized_description) {
+    // Camino normal: la descripción ya se limpió al crear el enlace.
     particular.description = share.sanitized_description;
+  } else if (opts.sanitizeIfMissing) {
+    // Enlace anterior a la migración 0157 (o creado cuando la columna aún
+    // no existía): se limpia AHORA y se guarda, así la próxima visita ya
+    // no paga la IA. Nunca se sirve el texto crudo del portal: el
+    // destinatario está fuera del equipo y ese texto suele traer teléfono
+    // y "particular / sin agencias".
+    const raw = typeof particular.description === "string" ? particular.description : null;
+    if (raw && raw.trim()) {
+      // No lanza nunca: si la IA falla o no está configurada, cae al
+      // limpiado por regex (ver sanitize-description.ts).
+      const cleaned = await sanitizeParticularDescriptionForSharing(raw);
+      particular.description = cleaned;
+      // Persistir es best-effort: si falla, la página se sirve igual de
+      // limpia y simplemente se reintentará en la siguiente visita.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from("particulares_share_links")
+          .update({ sanitized_description: cleaned })
+          .eq("id", share.id);
+      } catch (err) {
+        console.error("[particulares] No se pudo guardar la descripción limpia:", err);
+      }
+    }
   }
 
   return {

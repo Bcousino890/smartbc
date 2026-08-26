@@ -73,7 +73,10 @@ export default async function ParticularSharePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const resolved = await getParticularByShareToken(token);
+  // sanitizeIfMissing: los enlaces creados antes de la migración 0157 no
+  // tienen descripción limpia guardada; se limpia y se persiste aquí, en el
+  // render, para que tampoco ellos enseñen el texto crudo del portal.
+  const resolved = await getParticularByShareToken(token, { sanitizeIfMissing: true });
 
   if (!resolved) {
     return <UnavailableView />;
