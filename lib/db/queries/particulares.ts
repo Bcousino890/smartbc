@@ -137,6 +137,27 @@ export type ParticularesFilters = {
   currentUserId?: string;
   advertiser?: "particular" | "professional" | "unknown" | "";
   sort?: ParticularesSort;
+  /** €/m² — detecta el sobrevalorado (no alquila → propietario receptivo en
+   *  unas semanas) y el chollo. Columna `price_per_m2` (migración 0158). */
+  pricePerM2Min?: number;
+  pricePerM2Max?: number;
+  /** Bajada de precio MÍNIMA en % (`price_drop_pct`). 0 = "cualquier bajada"
+   *  (solo exige que el campo tenga valor). Quien ya bajó el precio es quien
+   *  más escucha una propuesta de gestión. */
+  priceDropMinPct?: number;
+  /** Antigüedad en cartera: solo anuncios detectados hace MÁS de N días.
+   *  Ojo: `created_at` es cuándo lo detectamos NOSOTROS, no cuándo lo
+   *  publicó el portal (ese dato no se guarda en `particulares`), así que
+   *  es un suelo, no la antigüedad real del anuncio. */
+  minDaysListed?: number;
+  /** Ascensor (`has_lift`). "no" incluye solo los que dicen explícitamente
+   *  que no lo tienen; los que no traen el dato quedan fuera de ambos. */
+  lift?: "yes" | "no" | "";
+  /** Estado del inmueble. `condition` es texto libre del portal, así que se
+   *  compara con ILIKE por familias en vez de con un enum que no controlamos. */
+  condition?: "good" | "to_reform" | "renovated" | "";
+  yearBuiltMin?: number;
+  yearBuiltMax?: number;
 };
 
 /**
@@ -226,6 +247,36 @@ function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress
   else if (f.gestion === "mine") {
     q = f.currentUserId ? q.eq("assigned_to", f.currentUserId) : q.eq("id", IMPOSSIBLE_ID);
   }
+
+  // ── Filtros de ficha técnica (columnas de la migración 0158) ─────────────
+  if (f.pricePerM2Min != null) q = q.gte("price_per_m2", f.pricePerM2Min);
+  if (f.pricePerM2Max != null) q = q.lte("price_per_m2", f.pricePerM2Max);
+
+  if (f.priceDropMinPct != null) {
+    // El scraper guarda la bajada como porcentaje positivo. Con 0 basta con
+    // que EXISTA el dato ("ha bajado alguna vez"); con un umbral, además
+    // tiene que llegar a él.
+    q = q.not("price_drop_pct", "is", null);
+    if (f.priceDropMinPct > 0) q = q.gte("price_drop_pct", f.priceDropMinPct);
+  }
+
+  if (f.minDaysListed != null && f.minDaysListed > 0) {
+    const before = new Date(Date.now() - f.minDaysListed * 24 * 60 * 60 * 1000).toISOString();
+    q = q.lte("created_at", before);
+  }
+
+  if (f.lift === "yes") q = q.eq("has_lift", true);
+  else if (f.lift === "no") q = q.eq("has_lift", false);
+
+  // `condition` es texto libre de Idealista ("Buen estado", "A reformar",
+  // "Casi nuevo"…). Ojo con el solapamiento: "%reformad%" casa "reformado"
+  // pero NO "a reformar", que es justo lo contrario y no debe mezclarse.
+  if (f.condition === "good") q = q.ilike("condition", "%buen%");
+  else if (f.condition === "to_reform") q = q.ilike("condition", "%reformar%");
+  else if (f.condition === "renovated") q = q.or("condition.ilike.%reformad%,condition.ilike.%nuevo%");
+
+  if (f.yearBuiltMin != null) q = q.gte("year_built", f.yearBuiltMin);
+  if (f.yearBuiltMax != null) q = q.lte("year_built", f.yearBuiltMax);
 
   return q;
 }

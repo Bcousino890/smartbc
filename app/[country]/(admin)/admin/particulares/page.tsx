@@ -122,6 +122,17 @@ export default async function AdminParticularesPage({
     currentUserId: currentProfile?.id,
     advertiser: pick(one(sp.advertiser), ["particular", "professional", "unknown"] as const),
     sort: pick(one(sp.sort), ["oldest", "price_desc", "price_asc", "area_desc", "area_asc"] as const),
+    pricePerM2Min: numOrUndef(one(sp.m2Min)),
+    pricePerM2Max: numOrUndef(one(sp.m2Max)),
+    // "0" es un valor VÁLIDO aquí ("cualquier bajada"), así que no vale el
+    // `if (!v)` de numOrUndef… salvo que numOrUndef ya lo trata: "0" es
+    // truthy como string, así que devuelve 0 correctamente.
+    priceDropMinPct: numOrUndef(one(sp.drop)),
+    minDaysListed: numOrUndef(one(sp.dias)),
+    lift: pick(one(sp.ascensor), ["yes", "no"] as const),
+    condition: pick(one(sp.estado), ["good", "to_reform", "renovated"] as const),
+    yearBuiltMin: numOrUndef(one(sp.anioMin)),
+    yearBuiltMax: numOrUndef(one(sp.anioMax)),
   };
   // `floorMin`/`amueblado` NO entran aquí a propósito — ver el comentario de
   // ParticularesFilters en lib/db/queries/particulares.ts.

@@ -1733,6 +1733,22 @@ export function ParticularesClient({
     setFurnished,
     sort,
     setSort,
+    pricePerM2Min,
+    setPricePerM2Min,
+    pricePerM2Max,
+    setPricePerM2Max,
+    priceDrop,
+    setPriceDrop,
+    daysListed,
+    setDaysListed,
+    lift,
+    setLift,
+    condition,
+    setCondition,
+    yearMin,
+    setYearMin,
+    yearMax,
+    setYearMax,
     showRetired,
     setShowRetired,
   } = useParticularesFilters();
@@ -2090,6 +2106,88 @@ export function ParticularesClient({
             <option value="with_phone">Con teléfono</option>
             <option value="no_phone">Sin teléfono</option>
           </select>
+
+          {/* ── Filtros de ficha técnica ──────────────────────────────────
+              Señales de CAPTACIÓN, no de búsqueda para un cliente: quién
+              ya bajó el precio, quién lleva meses sin alquilar y quién está
+              fuera de mercado por €/m². Salen de columnas que rellena el
+              scraper de la ficha (migración 0158); un anuncio sin ficha
+              scrapeada no aparece al usarlos. */}
+          <select
+            value={priceDrop}
+            onChange={(e) => setPriceDrop(e.target.value)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Bajada: cualquiera</option>
+            <option value="0">Ha bajado de precio</option>
+            <option value="5">Bajó ≥ 5%</option>
+            <option value="10">Bajó ≥ 10%</option>
+            <option value="15">Bajó ≥ 15%</option>
+          </select>
+          <select
+            value={daysListed}
+            onChange={(e) => setDaysListed(e.target.value)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            title="Días desde que lo detectamos nosotros (el portal no da la fecha de publicación)"
+          >
+            <option value="">Antigüedad: cualquiera</option>
+            <option value="7">Detectado hace +7 días</option>
+            <option value="15">Detectado hace +15 días</option>
+            <option value="30">Detectado hace +30 días</option>
+            <option value="60">Detectado hace +60 días</option>
+            <option value="90">Detectado hace +90 días</option>
+          </select>
+          <select
+            value={lift}
+            onChange={(e) => setLift(e.target.value as typeof lift)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Ascensor: todos</option>
+            <option value="yes">Con ascensor</option>
+            <option value="no">Sin ascensor</option>
+          </select>
+          <select
+            value={condition}
+            onChange={(e) => setCondition(e.target.value as typeof condition)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Estado: todos</option>
+            <option value="good">Buen estado</option>
+            <option value="renovated">Reformado / nuevo</option>
+            <option value="to_reform">A reformar</option>
+          </select>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={pricePerM2Min}
+            onChange={(e) => setPricePerM2Min(e.target.value)}
+            placeholder="€/m² mín"
+            className="w-[110px] rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <input
+            type="number"
+            inputMode="numeric"
+            value={pricePerM2Max}
+            onChange={(e) => setPricePerM2Max(e.target.value)}
+            placeholder="€/m² máx"
+            className="w-[110px] rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <input
+            type="number"
+            inputMode="numeric"
+            value={yearMin}
+            onChange={(e) => setYearMin(e.target.value)}
+            placeholder="Año desde"
+            className="w-[110px] rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
+          <input
+            type="number"
+            inputMode="numeric"
+            value={yearMax}
+            onChange={(e) => setYearMax(e.target.value)}
+            placeholder="Año hasta"
+            className="w-[110px] rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+          />
           <button
             type="button"
             onClick={handleRefreshPhones}

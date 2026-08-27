@@ -11,6 +11,8 @@ export type FurnishedFilter = "" | "yes" | "no";
 // Debe seguir a ParticularesSort en lib/db/queries/particulares.ts (ese
 // módulo es server-only, no se puede importar desde este "use client").
 export type SortFilter = "" | "oldest" | "price_desc" | "price_asc" | "area_desc" | "area_asc";
+export type LiftFilter = "" | "yes" | "no";
+export type ConditionFilter = "" | "good" | "to_reform" | "renovated";
 
 const OPERATION_VALUES = new Set(["rent", "sale"]);
 const PHONE_VALUES = new Set(["no_phone", "with_phone"]);
@@ -18,6 +20,8 @@ const GESTION_VALUES = new Set(["unmanaged", "contacted", "assigned", "mine"]);
 const ADVERTISER_VALUES = new Set(["particular", "professional", "unknown"]);
 const FURNISHED_VALUES = new Set(["yes", "no"]);
 const SORT_VALUES = new Set(["oldest", "price_desc", "price_asc", "area_desc", "area_asc"]);
+const LIFT_VALUES = new Set(["yes", "no"]);
+const CONDITION_VALUES = new Set(["good", "to_reform", "renovated"]);
 
 function readEnum<T extends string>(
   value: string | null,
@@ -52,6 +56,16 @@ type FilterValues = {
   advertiser: AdvertiserFilter;
   furnished: FurnishedFilter;
   sort: SortFilter;
+  pricePerM2Min: string;
+  pricePerM2Max: string;
+  /** "" | "0" (cualquier bajada) | "5" | "10" | "15" — % mínimo. */
+  priceDrop: string;
+  /** "" | "7" | "15" | "30" | "60" | "90" — detectado hace más de N días. */
+  daysListed: string;
+  lift: LiftFilter;
+  condition: ConditionFilter;
+  yearMin: string;
+  yearMax: string;
   showRetired: boolean;
 };
 
@@ -71,6 +85,14 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   advertiser: "advertiser",
   furnished: "amueblado",
   sort: "sort",
+  pricePerM2Min: "m2Min",
+  pricePerM2Max: "m2Max",
+  priceDrop: "drop",
+  daysListed: "dias",
+  lift: "ascensor",
+  condition: "estado",
+  yearMin: "anioMin",
+  yearMax: "anioMax",
   showRetired: "retired",
 };
 
@@ -81,6 +103,10 @@ const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
   "bedrooms",
   "floorMin",
   "areaMin",
+  "pricePerM2Min",
+  "pricePerM2Max",
+  "yearMin",
+  "yearMax",
 ]);
 
 /**
@@ -124,6 +150,18 @@ export function useParticularesFilters() {
   const [sort, setSort] = useState<SortFilter>(() =>
     readEnum<SortFilter>(searchParams.get(PARAM_KEYS.sort), SORT_VALUES),
   );
+  const [pricePerM2Min, setPricePerM2Min] = useState(() => searchParams.get(PARAM_KEYS.pricePerM2Min) ?? "");
+  const [pricePerM2Max, setPricePerM2Max] = useState(() => searchParams.get(PARAM_KEYS.pricePerM2Max) ?? "");
+  const [priceDrop, setPriceDrop] = useState(() => searchParams.get(PARAM_KEYS.priceDrop) ?? "");
+  const [daysListed, setDaysListed] = useState(() => searchParams.get(PARAM_KEYS.daysListed) ?? "");
+  const [lift, setLift] = useState<LiftFilter>(() =>
+    readEnum<LiftFilter>(searchParams.get(PARAM_KEYS.lift), LIFT_VALUES),
+  );
+  const [condition, setCondition] = useState<ConditionFilter>(() =>
+    readEnum<ConditionFilter>(searchParams.get(PARAM_KEYS.condition), CONDITION_VALUES),
+  );
+  const [yearMin, setYearMin] = useState(() => searchParams.get(PARAM_KEYS.yearMin) ?? "");
+  const [yearMax, setYearMax] = useState(() => searchParams.get(PARAM_KEYS.yearMax) ?? "");
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
 
   // Dibujar una zona y elegir distrito/barrio son dos formas ALTERNATIVAS de
@@ -155,6 +193,14 @@ export function useParticularesFilters() {
     advertiser,
     furnished,
     sort,
+    pricePerM2Min,
+    pricePerM2Max,
+    priceDrop,
+    daysListed,
+    lift,
+    condition,
+    yearMin,
+    yearMax,
     showRetired,
   };
 
@@ -205,6 +251,14 @@ export function useParticularesFilters() {
     advertiser,
     furnished,
     sort,
+    pricePerM2Min,
+    pricePerM2Max,
+    priceDrop,
+    daysListed,
+    lift,
+    condition,
+    yearMin,
+    yearMax,
     showRetired,
   ]);
 
@@ -245,6 +299,22 @@ export function useParticularesFilters() {
     setFurnished,
     sort,
     setSort,
+    pricePerM2Min,
+    setPricePerM2Min,
+    pricePerM2Max,
+    setPricePerM2Max,
+    priceDrop,
+    setPriceDrop,
+    daysListed,
+    setDaysListed,
+    lift,
+    setLift,
+    condition,
+    setCondition,
+    yearMin,
+    setYearMin,
+    yearMax,
+    setYearMax,
     showRetired,
     setShowRetired,
   };
