@@ -4,6 +4,7 @@ import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
 import { matchPropertyByAddress } from "@/lib/services/idealista/lead-property-match";
+import { autoMergeLeadsByPhone } from "@/lib/sales-inbox/auto-merge";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
 // Público a propósito (lo llama la extensión desde idealista.com); la seguridad
@@ -414,11 +415,31 @@ export async function POST(req: Request) {
     );
   }
 
+  // Unificación automática de la misma persona (escribió y además llamó:
+  // Idealista da otro conversation_id a la llamada). Acotada a los teléfonos
+  // de ESTA tanda, no a la tabla entera. Best-effort: si falla, la ingesta
+  // responde OK igual y simplemente quedan los dos leads a la vista, que es
+  // como estaba antes. Ver lib/sales-inbox/merge.ts para la regla y la
+  // segunda revisión por nombre que puede bloquearla.
+  let mergeSummary: { merged: number; blocked: number } = { merged: 0, blocked: 0 };
+  try {
+    const phones = rows
+      .map((r) => (typeof r.phone === "string" ? r.phone : null))
+      .filter((p): p is string => !!p);
+    mergeSummary = await autoMergeLeadsByPhone(phones);
+  } catch (err) {
+    console.error("idealista-leads auto-merge error:", err);
+  }
+
   return Response.json(
     {
       ok: true,
       inserted: results.filter((r) => r.action === "inserted").length,
       updated: results.filter((r) => r.action === "updated").length,
+      // Para que la extensión pueda decir "2 unificados" y, sobre todo, para
+      // que quede rastro en los logs de qué se fusionó y qué se bloqueó.
+      mergedLeads: mergeSummary.merged,
+      mergeBlocked: mergeSummary.blocked,
       results,
     },
     { headers: corsHeaders() },

@@ -39,6 +39,11 @@ jobs:
       - name: Idealista Partner API (payload contra los schemas, offline)
         run: npm run test:idealista
 
+      # La regla que decide si dos leads son la MISMA persona. Un falso
+      # positivo esconde un lead de la bandeja, así que se vigila en CI.
+      - name: Unificación de leads (regla de fusión, offline)
+        run: npm run test:lead-merge
+
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
         env:
