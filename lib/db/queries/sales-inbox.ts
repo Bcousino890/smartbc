@@ -71,6 +71,7 @@ const LIST_COLUMNS = [
   "duplicate_phone",
   "last_activity_at",
   "commercial_state",
+  "avatar_url",
 ].join(", ");
 
 export type InboxScope = {
@@ -134,6 +135,7 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     reasons,
     score: attentionScore(reasons, r.created_at, now),
     lastActivityAt: deriveLastActivityAt(facts) ?? r.last_activity_at ?? null,
+    avatarUrl: r.avatar_url ?? null,
   };
 }
 
@@ -576,6 +578,9 @@ export type LeadDetail = {
   linkedClient: LeadClientRef | null;
   /** Otros leads de la misma persona (mismo teléfono). */
   duplicates: Array<{ id: string; createdAt: string; propertyTitle: string | null }>;
+  /** Foto de perfil del contacto en Idealista (`idealista_leads.avatar_url`,
+   *  migración 0083; la expone la vista desde la 0159). NULL = sin foto. */
+  avatarUrl: string | null;
 };
 
 /** El hilo de Idealista de una conversación. Las llamadas perdidas usan CALL_. */
@@ -678,6 +683,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
     property,
     linkedClient,
     duplicates,
+    avatarUrl: row.avatar_url ?? null,
   };
 }
 

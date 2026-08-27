@@ -79,6 +79,22 @@ export function LeadRow({
           />
         )}
 
+        {/* Foto de perfil sacada del inbox de Idealista. Pequeña (22px) y
+            sin ocupar línea propia: la fila se adelgazó a cuatro líneas a
+            propósito (ver cabecera del archivo) y una cara ayuda a
+            reconocer al contacto sin costar altura. Quien no tiene foto no
+            deja hueco: Idealista pinta iniciales y aquí no se sustituye por
+            un icono genérico que solo añadiría ruido. */}
+        {lead.avatarUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={lead.avatarUrl}
+            alt=""
+            loading="lazy"
+            className="mt-0.5 h-[22px] w-[22px] shrink-0 rounded-full object-cover"
+          />
+        )}
+
         <button
           type="button"
           onClick={onOpen}

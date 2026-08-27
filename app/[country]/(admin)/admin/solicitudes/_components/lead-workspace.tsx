@@ -102,7 +102,23 @@ export function LeadWorkspace({
       {/* ── Cabecera ── */}
       <header className="shrink-0 border-b border-ink/10 bg-cream-50/50 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          {/* La foto va DENTRO del bloque de identidad, no como tercer hijo
+              del flex: con justify-between, un tercer hijo empujaría el
+              nombre al centro en vez de dejarlo pegado a la foto. */}
+          <div className="flex min-w-0 items-start gap-3">
+            {/* Foto de perfil que la extensión saca del inbox de Idealista.
+                Solo se pinta si existe: quien no tiene foto sale con
+                iniciales en Idealista, y un icono genérico aquí no aportaría
+                nada. */}
+            {lead.avatarUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={lead.avatarUrl}
+                alt=""
+                className="mt-0.5 h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-ink/10"
+              />
+            )}
+            <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="truncate text-[22px] font-bold leading-tight text-ink">
                 {lead.name?.trim() || t("inbox.row.noName")}
@@ -124,6 +140,7 @@ export function LeadWorkspace({
                 </Pill>
               )}
               {lead.leadType && <Pill tone="neutral">{t(`inbox.type.${lead.leadType}`)}</Pill>}
+            </div>
             </div>
           </div>
 

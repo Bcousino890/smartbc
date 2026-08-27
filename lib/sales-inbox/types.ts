@@ -151,6 +151,11 @@ export type LeadListItem = {
   /** Cuanto más alto, antes en la cola. */
   score: number;
   lastActivityAt: string | null;
+  /** Foto de perfil que la extensión saca del inbox de Idealista
+   *  (`idealista_leads.avatar_url`, migración 0083). NULL cuando el
+   *  contacto no tiene foto: ahí Idealista pinta iniciales y nosotros
+   *  también. */
+  avatarUrl: string | null;
 };
 
 export type LeadSource = "idealista" | "web" | "visit_request";
