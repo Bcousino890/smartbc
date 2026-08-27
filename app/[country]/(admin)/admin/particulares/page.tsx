@@ -85,16 +85,32 @@ export default async function AdminParticularesPage({
   // el mismo criterio que ve el desplegable en vez de reimplementar
   // normalizeZone() en SQL.
   const zoneCounts = await zoneCountsPromise;
-  const zoneDistrictRaw = zoneParam.startsWith("d:")
-    ? (zoneCounts.zoneGroups.find((g) => g.district === zoneParam.slice(2))?.zones.map((z) => z.name) ?? [])
+  // El desplegable de zona es MULTI-selección: el parámetro puede traer
+  // varias entradas separadas por "|" ("d:Salamanca|z:Lista"). Se usa "|" y
+  // no "," porque algún distrito lleva coma en el nombre. Un valor de una
+  // sola entrada (o el legado sin prefijo) sigue funcionando igual: split
+  // devuelve un array de uno.
+  const zoneSelections = zoneParam.split("|").map((s) => s.trim()).filter(Boolean);
+  const zoneNames = zoneSelections.length
+    ? [
+        ...new Set(
+          zoneSelections.flatMap((sel) => {
+            if (sel.startsWith("d:")) {
+              // Distrito → todos sus barrios, con el mismo criterio que el desplegable.
+              return zoneCounts.zoneGroups.find((g) => g.district === sel.slice(2))?.zones.map((z) => z.name) ?? [];
+            }
+            // "z:<barrio>" o valor legado sin prefijo: coincidencia exacta.
+            return [sel.startsWith("z:") ? sel.slice(2) : sel];
+          }),
+        ),
+      ]
     : undefined;
   const idsInZone = drawnPolygons.length > 0 ? await idsInZonePromise : undefined;
 
   const filters: ParticularesFilters = {
     search: one(sp.q),
     operation: pick(one(sp.operation), ["rent", "sale"] as const),
-    zone: zoneParam,
-    zoneDistrictRaw,
+    zoneNames,
     idsInZone,
     priceMin: numOrUndef(one(sp.priceMin)),
     priceMax: numOrUndef(one(sp.priceMax)),
@@ -105,6 +121,7 @@ export default async function AdminParticularesPage({
     gestion: pick(one(sp.gestion), ["unmanaged", "contacted", "assigned", "mine"] as const),
     currentUserId: currentProfile?.id,
     advertiser: pick(one(sp.advertiser), ["particular", "professional", "unknown"] as const),
+    sort: pick(one(sp.sort), ["oldest", "price_desc", "price_asc", "area_desc", "area_asc"] as const),
   };
   // `floorMin`/`amueblado` NO entran aquí a propósito — ver el comentario de
   // ParticularesFilters en lib/db/queries/particulares.ts.

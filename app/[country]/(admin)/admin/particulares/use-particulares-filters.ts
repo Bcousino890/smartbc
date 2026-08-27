@@ -8,12 +8,16 @@ export type PhoneFilterValue = "" | "no_phone" | "with_phone";
 export type GestionFilter = "" | "unmanaged" | "contacted" | "assigned" | "mine";
 export type AdvertiserFilter = "" | "particular" | "professional" | "unknown";
 export type FurnishedFilter = "" | "yes" | "no";
+// Debe seguir a ParticularesSort en lib/db/queries/particulares.ts (ese
+// módulo es server-only, no se puede importar desde este "use client").
+export type SortFilter = "" | "oldest" | "price_desc" | "price_asc" | "area_desc" | "area_asc";
 
 const OPERATION_VALUES = new Set(["rent", "sale"]);
 const PHONE_VALUES = new Set(["no_phone", "with_phone"]);
 const GESTION_VALUES = new Set(["unmanaged", "contacted", "assigned", "mine"]);
 const ADVERTISER_VALUES = new Set(["particular", "professional", "unknown"]);
 const FURNISHED_VALUES = new Set(["yes", "no"]);
+const SORT_VALUES = new Set(["oldest", "price_desc", "price_asc", "area_desc", "area_asc"]);
 
 function readEnum<T extends string>(
   value: string | null,
@@ -47,6 +51,7 @@ type FilterValues = {
   gestion: GestionFilter;
   advertiser: AdvertiserFilter;
   furnished: FurnishedFilter;
+  sort: SortFilter;
   showRetired: boolean;
 };
 
@@ -65,6 +70,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   gestion: "gestion",
   advertiser: "advertiser",
   furnished: "amueblado",
+  sort: "sort",
   showRetired: "retired",
 };
 
@@ -115,6 +121,9 @@ export function useParticularesFilters() {
   const [furnished, setFurnished] = useState<FurnishedFilter>(() =>
     readEnum<FurnishedFilter>(searchParams.get(PARAM_KEYS.furnished), FURNISHED_VALUES),
   );
+  const [sort, setSort] = useState<SortFilter>(() =>
+    readEnum<SortFilter>(searchParams.get(PARAM_KEYS.sort), SORT_VALUES),
+  );
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
 
   // Dibujar una zona y elegir distrito/barrio son dos formas ALTERNATIVAS de
@@ -145,6 +154,7 @@ export function useParticularesFilters() {
     gestion,
     advertiser,
     furnished,
+    sort,
     showRetired,
   };
 
@@ -194,6 +204,7 @@ export function useParticularesFilters() {
     gestion,
     advertiser,
     furnished,
+    sort,
     showRetired,
   ]);
 
@@ -232,6 +243,8 @@ export function useParticularesFilters() {
     setAdvertiser,
     furnished,
     setFurnished,
+    sort,
+    setSort,
     showRetired,
     setShowRetired,
   };

@@ -58,6 +58,7 @@ import {
   updateParticularPhone,
 } from "./actions";
 import { ANUNCIOS_POR_PAGINA } from "./constants";
+import { prefetchParticularDetail } from "./detail-cache";
 import { useParticularesFilters } from "./use-particulares-filters";
 
 export type StaffOption = { id: string; name: string };
@@ -884,27 +885,20 @@ function ParticularModal({
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  // El listado solo trae la portada. Al abrir el modal se pide la galería
-  // completa, así que hasta que llegue se muestra la portada como única foto.
+  // El listado solo trae la portada. Al abrir el modal hace falta la galería
+  // completa + la ficha técnica; normalmente ya vienen de la caché porque se
+  // prefetchan al pasar el ratón por la tarjeta (ver detail-cache.ts), así
+  // que el modal abre con todo puesto en vez de rellenarse a trozos.
   useEffect(() => {
     let cancelled = false;
     if (currentRow.photos) return;
     (async () => {
-      try {
-        const res = await fetch(
-          `/api/admin/particulares/detail?id=${encodeURIComponent(row.id)}`,
-        );
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (data && typeof data === "object") {
-          // Merge the whole detail payload: photos + the scraped ficha técnica
-          // (precio/m², rebaja, planta, año, estado, energía…). `photos`
-          // defaults to [] server-side, so it's always an array here.
-          setCurrentRow((prev) => ({ ...prev, ...data }));
-        }
-      } catch {
-        // Sin galería/ficha: se queda la portada. No merece romper el modal.
-      }
+      const data = await prefetchParticularDetail(row.id);
+      if (cancelled || !data) return;
+      // Se fusiona el payload entero: fotos + ficha técnica (precio/m²,
+      // rebaja, planta, año, estado, energía…). `photos` sale siempre como
+      // array del servidor.
+      setCurrentRow((prev) => ({ ...prev, ...data }));
     })();
     return () => {
       cancelled = true;
@@ -1737,6 +1731,8 @@ export function ParticularesClient({
     setAdvertiser,
     furnished,
     setFurnished,
+    sort,
+    setSort,
     showRetired,
     setShowRetired,
   } = useParticularesFilters();
@@ -1979,6 +1975,18 @@ export function ParticularesClient({
             <option value="sale">Venta</option>
           </select>
           <ZoneFilter groups={zoneGroups} value={zone} onChange={setZone} />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+          >
+            <option value="">Más recientes primero</option>
+            <option value="oldest">Más antiguos primero</option>
+            <option value="price_desc">Precio: mayor a menor</option>
+            <option value="price_asc">Precio: menor a mayor</option>
+            <option value="area_desc">m²: mayor a menor</option>
+            <option value="area_asc">m²: menor a mayor</option>
+          </select>
           {/* Dibujar zona: alternativa al desplegable de arriba para áreas que
               no coinciden con ningún distrito/barrio (no hay geometría oficial
               de Madrid en este repo — ver lib/zone-polygon.ts). Bloque
@@ -2176,6 +2184,13 @@ export function ParticularesClient({
                   key={r.id}
                   type="button"
                   onClick={() => openParticular(r)}
+                  // Prefetch de la galería + ficha técnica antes del clic: al
+                  // abrir, el modal ya las tiene y no se rellena a trozos.
+                  // `onFocus` cubre el teclado y `onTouchStart` el táctil,
+                  // donde no hay hover (la ficha se usa desde tablet).
+                  onMouseEnter={() => prefetchParticularDetail(r.id)}
+                  onFocus={() => prefetchParticularDetail(r.id)}
+                  onTouchStart={() => prefetchParticularDetail(r.id)}
                   className="group flex flex-col overflow-hidden rounded-xl border border-ink/10 bg-white text-left transition hover:border-gold/50 hover:shadow-[0_12px_30px_-18px_rgba(40,28,10,0.35)]"
                 >
                   <div className="relative aspect-[16/10] w-full overflow-hidden bg-ink/5">

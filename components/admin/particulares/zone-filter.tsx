@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, MapPin, Search, X } from "lucide-react";
+import { Check, ChevronDown, MapPin, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type ZoneFilterEntry = { name: string; total: number; missingPhone: number };
@@ -13,24 +13,35 @@ export type ZoneFilterGroup = {
 
 interface ZoneFilterProps {
   groups: ZoneFilterGroup[];
-  /** "" | "d:<distrito>" | "z:<zona>" — mismo formato que ya usa el filtro. */
+  /** "" | varias entradas "d:<distrito>" / "z:<zona>" separadas por "|". */
   value: string;
   onChange: (value: string) => void;
 }
 
+// Separador de selecciones en la URL. "|" y no "," porque algún distrito
+// lleva coma en el nombre ("Moncloa - Aravaca" no, pero el criterio se
+// mantiene por seguridad); page.tsx parte por el mismo carácter.
+const SEP = "|";
+
+function parse(value: string): string[] {
+  return value.split(SEP).map((s) => s.trim()).filter(Boolean);
+}
+
 /**
- * Selector de zona buscable: reemplaza el <select> nativo (21 distritos ×
- * hasta 8 barrios, sin buscador, había que scrollear a ciegas) por un
- * combobox con filtro de texto y conteos por zona (total + sin teléfono,
- * para priorizar barridos como se hace hoy con el workflow de GitHub
- * Actions). Mantiene el mismo formato de valor "d:"/"z:" que ya consume
- * el resto del filtrado, así que no hace falta tocar esa lógica.
+ * Selector de zona buscable y de MULTI-selección: permite marcar varios
+ * distritos y/o barrios a la vez (buscar en Salamanca + Chamberí en una
+ * sola pasada, como la búsqueda multi-zona de Idealista) en vez de obligar
+ * a repetir la búsqueda zona por zona. Mantiene el formato de valor
+ * "d:"/"z:" que ya consumía el filtrado; lo único nuevo es que pueden ir
+ * varios unidos por "|".
  */
 export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = useMemo(() => new Set(parse(value)), [value]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,15 +74,27 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
   }, [groups, q]);
 
   const label = useMemo(() => {
-    if (!value) return "Zona: todas";
-    if (value.startsWith("d:")) return `Todo ${value.slice(2)}`;
-    if (value.startsWith("z:")) return value.slice(2);
-    return value;
+    const items = parse(value);
+    if (items.length === 0) return "Zona: todas";
+    const pretty = (v: string) =>
+      v.startsWith("d:") ? `Todo ${v.slice(2)}` : v.startsWith("z:") ? v.slice(2) : v;
+    if (items.length === 1) return pretty(items[0]);
+    // Con varias, el primero + contador: el botón tiene ancho acotado y
+    // listarlas todas lo desbordaría.
+    return `${pretty(items[0])} +${items.length - 1}`;
   }, [value]);
 
-  function select(v: string) {
-    onChange(v);
-    setOpen(false);
+  // Marcar/desmarcar sin cerrar el desplegable: elegir varias zonas de una
+  // sentada es justo el caso de uso, cerrar en cada clic lo haría inútil.
+  function toggle(v: string) {
+    const next = new Set(selected);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
+    onChange([...next].join(SEP));
+  }
+
+  function clearAll() {
+    onChange("");
     setQuery("");
   }
 
@@ -98,10 +121,10 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
               placeholder="Buscar distrito o barrio…"
               className="w-full bg-transparent text-sm text-ink placeholder:text-ink/40 focus:outline-none"
             />
-            {value && (
+            {selected.size > 0 && (
               <button
                 type="button"
-                onClick={() => select("")}
+                onClick={clearAll}
                 className="text-ink/40 transition hover:text-ink"
                 aria-label="Quitar filtro de zona"
               >
@@ -110,55 +133,102 @@ export function ZoneFilter({ groups, value, onChange }: ZoneFilterProps) {
             )}
           </div>
 
+          {selected.size > 0 && (
+            <div className="mt-2 flex items-center justify-between px-1">
+              <span className="text-xs text-ink/50">
+                {selected.size} {selected.size === 1 ? "zona" : "zonas"} seleccionada
+                {selected.size === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-xs text-ink/45 underline transition hover:text-ink"
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
+
           <div className="mt-2 max-h-72 overflow-y-auto">
             {filteredGroups.length === 0 && (
               <p className="px-2 py-3 text-center text-sm text-ink/45">Sin resultados</p>
             )}
-            {filteredGroups.map((g) => (
-              <div key={g.district} className="mb-1">
-                <button
-                  type="button"
-                  onClick={() => select(`d:${g.district}`)}
-                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm font-medium transition hover:bg-gold/10 ${
-                    value === `d:${g.district}` ? "bg-gold/15 text-ink" : "text-ink/85"
-                  }`}
-                >
-                  <span className="truncate">{g.district}</span>
-                  <span className="ml-2 flex shrink-0 items-center gap-1 text-xs font-normal text-ink/45">
-                    {g.total}
-                    {g.missingPhone > 0 && (
-                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
-                        {g.missingPhone} sin tel.
-                      </span>
-                    )}
-                  </span>
-                </button>
-                {g.zones.length > 1 &&
-                  g.zones.map((z) => (
-                    <button
-                      key={z.name}
-                      type="button"
-                      onClick={() => select(`z:${z.name}`)}
-                      className={`flex w-full items-center justify-between rounded-md py-1 pl-6 pr-2 text-left text-xs transition hover:bg-gold/10 ${
-                        value === `z:${z.name}` ? "bg-gold/15 text-ink" : "text-ink/65"
-                      }`}
-                    >
-                      <span className="truncate">{z.name}</span>
-                      <span className="ml-2 flex shrink-0 items-center gap-1 text-xs text-ink/40">
-                        {z.total}
-                        {z.missingPhone > 0 && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
-                            {z.missingPhone}
+            {filteredGroups.map((g) => {
+              const districtKey = `d:${g.district}`;
+              const districtOn = selected.has(districtKey);
+              return (
+                <div key={g.district} className="mb-1">
+                  <button
+                    type="button"
+                    onClick={() => toggle(districtKey)}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition hover:bg-gold/10 ${
+                      districtOn ? "bg-gold/15 text-ink" : "text-ink/85"
+                    }`}
+                  >
+                    <Box on={districtOn} />
+                    <span className="truncate">{g.district}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal text-ink/45">
+                      {g.total}
+                      {g.missingPhone > 0 && (
+                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
+                          {g.missingPhone} sin tel.
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  {g.zones.length > 1 &&
+                    g.zones.map((z) => {
+                      const zoneKey = `z:${z.name}`;
+                      // Si el distrito entero está marcado, sus barrios ya
+                      // entran: se muestran marcados y en gris para que no
+                      // parezca que hay que marcarlos uno a uno.
+                      const zoneOn = selected.has(zoneKey) || districtOn;
+                      return (
+                        <button
+                          key={z.name}
+                          type="button"
+                          onClick={() => toggle(zoneKey)}
+                          disabled={districtOn}
+                          className={`flex w-full items-center gap-2 rounded-md py-1 pl-4 pr-2 text-left text-xs transition hover:bg-gold/10 disabled:cursor-default disabled:opacity-55 disabled:hover:bg-transparent ${
+                            selected.has(zoneKey) ? "bg-gold/15 text-ink" : "text-ink/65"
+                          }`}
+                        >
+                          <Box on={zoneOn} small />
+                          <span className="truncate">{z.name}</span>
+                          <span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-ink/40">
+                            {z.total}
+                            {z.missingPhone > 0 && (
+                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700">
+                                {z.missingPhone}
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                    </button>
-                  ))}
-              </div>
-            ))}
+                        </button>
+                      );
+                    })}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Casilla de selección dibujada a mano (no un <input type="checkbox">): va
+// dentro de un <button>, donde un input anidado no sería accesible por
+// teclado de forma independiente y además rompería el click del botón.
+function Box({ on, small }: { on: boolean; small?: boolean }) {
+  const size = small ? "h-3.5 w-3.5" : "h-4 w-4";
+  return (
+    <span
+      aria-hidden
+      className={`flex ${size} shrink-0 items-center justify-center rounded border transition ${
+        on ? "border-gold bg-gold text-ink" : "border-ink/25 bg-white"
+      }`}
+    >
+      {on && <Check size={small ? 9 : 11} strokeWidth={3} />}
+    </span>
   );
 }

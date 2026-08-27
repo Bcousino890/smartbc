@@ -88,17 +88,37 @@ const IMPOSSIBLE_ID = "00000000-0000-0000-0000-000000000000";
  * que SÍ es columna plana (`assigned_to`) y el resto se remata en el
  * cliente tras el enrichment, con el mismo tradeoff que planta/amueblado.
  */
+/** Orden del listado. "" = el de siempre (más reciente primero; en la
+ *  pestaña de retirados, por fecha de baja). El resto los elige el usuario
+ *  desde el desplegable "Ordenar". */
+export type ParticularesSort =
+  | ""
+  | "oldest"
+  | "price_desc"
+  | "price_asc"
+  | "area_desc"
+  | "area_asc";
+
+export const PARTICULARES_SORT_VALUES: readonly ParticularesSort[] = [
+  "",
+  "oldest",
+  "price_desc",
+  "price_asc",
+  "area_desc",
+  "area_asc",
+] as const;
+
 export type ParticularesFilters = {
   search?: string;
   operation?: "rent" | "sale" | "";
-  /** Valor crudo del filtro: "", "d:<distrito>", "z:<zona>", o un valor
-   *  legado sin prefijo (comparación exacta, tal cual llegaba antes). */
-  zone?: string;
-  /** Solo para "d:<distrito>": lista EXACTA de `zone` crudos de ese
-   *  distrito, ya resuelta contra getParticularesZoneCounts() — el mismo
-   *  criterio que ve el desplegable, en vez de reimplementar
-   *  normalizeZone() en SQL. */
-  zoneDistrictRaw?: string[];
+  /** Lista EXACTA de `zone` crudos a incluir, ya resuelta en page.tsx
+   *  contra getParticularesZoneCounts() — el mismo criterio que ve el
+   *  desplegable, en vez de reimplementar normalizeZone() en SQL. Admite
+   *  VARIOS distritos/barrios a la vez (el desplegable es multi-selección):
+   *  page.tsx expande cada "d:<distrito>" a sus barrios y une todo aquí.
+   *  `[]` (definido pero vacío) significa "el usuario filtró por zonas que
+   *  no existen" → cero resultados, distinto de `undefined` = sin filtro. */
+  zoneNames?: string[];
   /** Zona dibujada a mano en el mapa (ver components/admin/particulares/
    *  draw-zone-filter.tsx): lista EXACTA de ids ya resuelta por
    *  getParticularesIdsInPolygons() contra lat/lng. Alternativa a
@@ -116,7 +136,46 @@ export type ParticularesFilters = {
   gestion?: "unmanaged" | "contacted" | "assigned" | "mine" | "";
   currentUserId?: string;
   advertiser?: "particular" | "professional" | "unknown" | "";
+  sort?: ParticularesSort;
 };
+
+/**
+ * Orden del listado. SIEMPRE termina desempatando por `id`: sin eso, dos
+ * anuncios con el mismo precio (o los mismos m²) pueden salir en distinto
+ * orden en dos peticiones, y con paginación server-side eso hace que una
+ * fila aparezca repetida en la página 2 y otra no salga nunca.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyParticularesSort(query: any, sort: ParticularesSort | undefined, showRetired: boolean) {
+  // nullsFirst: false en precio/superficie — un anuncio sin dato no debe
+  // encabezar un "de mayor a menor".
+  const opts = (ascending: boolean) => ({ ascending, nullsFirst: false });
+  let q = query;
+  switch (sort) {
+    case "oldest":
+      q = q.order("created_at", opts(true));
+      break;
+    case "price_desc":
+      q = q.order("price", opts(false));
+      break;
+    case "price_asc":
+      q = q.order("price", opts(true));
+      break;
+    case "area_desc":
+      q = q.order("square_meters", opts(false));
+      break;
+    case "area_asc":
+      q = q.order("square_meters", opts(true));
+      break;
+    default:
+      // El de siempre: en retirados manda la fecha de baja, en activos la de alta.
+      q = showRetired
+        ? q.order("taken_down_at", opts(false))
+        : q.order("created_at", opts(false));
+      break;
+  }
+  return q.order("id", { ascending: false });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress: boolean) {
@@ -140,12 +199,8 @@ function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress
   // otro, pero un `else` deja claro que no se combinan como AND.
   if (f.idsInZone) {
     q = f.idsInZone.length > 0 ? q.in("id", f.idsInZone) : q.eq("id", IMPOSSIBLE_ID);
-  } else if (f.zoneDistrictRaw) {
-    q = f.zoneDistrictRaw.length > 0 ? q.in("zone", f.zoneDistrictRaw) : q.eq("id", IMPOSSIBLE_ID);
-  } else if (f.zone?.startsWith("z:")) {
-    q = q.eq("zone", f.zone.slice(2));
-  } else if (f.zone && !f.zone.startsWith("d:")) {
-    q = q.eq("zone", f.zone);
+  } else if (f.zoneNames) {
+    q = f.zoneNames.length > 0 ? q.in("zone", f.zoneNames) : q.eq("id", IMPOSSIBLE_ID);
   }
 
   if (f.priceMin != null) q = q.gte("price", f.priceMin);
@@ -220,9 +275,7 @@ export async function getParticularesPage(opts?: {
         .select(cols, { count: "exact" })
         .eq("is_active", !showRetired);
       query = applyParticularesFilters(query, opts.filters ?? {}, cols.includes("address"));
-      query = showRetired
-        ? query.order("taken_down_at", { ascending: false, nullsFirst: false })
-        : query.order("created_at", { ascending: false });
+      query = applyParticularesSort(query, opts.filters?.sort, showRetired);
       // try/catch, no solo `res.error`: un `.in("id", idsInZone)` con miles
       // de ids (zona dibujada grande) puede hacer que la petición a
       // PostgREST falle a nivel de red/HTTP (URL demasiado larga) — eso
