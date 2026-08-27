@@ -91,7 +91,12 @@ export function LeadRow({
             src={lead.avatarUrl}
             alt=""
             loading="lazy"
-            className="mt-0.5 h-[22px] w-[22px] shrink-0 rounded-full object-cover"
+            // Abre el lead igual que el resto de la fila: si no, la foto
+            // sería una zona muerta justo en el sitio al que se apunta.
+            // Ampliar la foto se hace en la cabecera del detalle, no aquí:
+            // en la lista lo que se quiere al pulsar es abrir el lead.
+            onClick={onOpen}
+            className="mt-0.5 h-[22px] w-[22px] shrink-0 cursor-pointer rounded-full object-cover"
           />
         )}
 

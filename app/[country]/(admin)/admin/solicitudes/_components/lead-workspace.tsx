@@ -43,6 +43,7 @@ import {
   TextInput,
   type Tone,
 } from "@/components/admin/ui/primitives";
+import { LeadAvatar } from "./lead-avatar";
 import { formatDate, formatDateTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/format";
 import { RelativeTime } from "@/app/[country]/(admin)/admin/clientes/[id]/_components/relative-time";
 import { translateLeadMessage } from "../actions";
@@ -111,11 +112,10 @@ export function LeadWorkspace({
                 iniciales en Idealista, y un icono genérico aquí no aportaría
                 nada. */}
             {lead.avatarUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <LeadAvatar
                 src={lead.avatarUrl}
-                alt=""
-                className="mt-0.5 h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-ink/10"
+                name={lead.name}
+                className="mt-0.5 h-11 w-11 rounded-full object-cover ring-1 ring-ink/10"
               />
             )}
             <div className="min-w-0">
