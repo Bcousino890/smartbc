@@ -17,7 +17,7 @@ export type AuthOk = { ok: true; userId: string; role: string };
 // CAPTADORA_PERMISSIONS, tiene todo en false salvo captaciones). Si agregás
 // un rol nuevo, actualizá ambas listas y pensá en cuál le corresponde.
 const STAFF_ROLES = ["owner", "admin", "advisor", "agent_junior", "agent_senior", "agent_admin"];
-const ADMIN_ROLES = ["owner", "admin", "agent_admin"];
+export const ADMIN_ROLES = ["owner", "admin", "agent_admin"];
 
 export async function requireSession(
   supabase: SupabaseClient,

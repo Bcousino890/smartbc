@@ -5,6 +5,8 @@ import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
 import { matchPropertyByAddress } from "@/lib/services/idealista/lead-property-match";
 import { autoMergeLeadsByPhone } from "@/lib/sales-inbox/auto-merge";
+import { ADMIN_ROLES } from "@/lib/db/auth-helpers";
+import { sendNewLeadsAdminEmail } from "@/lib/email/lead-notification";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
 // Público a propósito (lo llama la extensión desde idealista.com); la seguridad
@@ -429,6 +431,45 @@ export async function POST(req: Request) {
     mergeSummary = await autoMergeLeadsByPhone(phones);
   } catch (err) {
     console.error("idealista-leads auto-merge error:", err);
+  }
+
+  // Aviso a los admins: un único correo por tanda cuando entran clientes
+  // NUEVOS (no actualizaciones de leads ya conocidos) — "Capturar todas"
+  // puede traer decenas de golpe, así que se agrupan en un solo digest en
+  // vez de mandar un correo por lead. Best-effort, mismo patrón que el
+  // auto-merge de arriba: si falla, la ingesta responde OK igual.
+  try {
+    const insertedIds = new Set(
+      results.filter((r) => r.action === "inserted").map((r) => r.conversationId),
+    );
+    if (insertedIds.size > 0) {
+      const newLeads = rows
+        .filter((r) => insertedIds.has(r.conversation_id))
+        .map((r) => ({
+          name: (r.name as string | null) || null,
+          propertyTitle: (r.property_title as string | null) ?? null,
+          propertyPrice: (r.property_price as string | null) ?? null,
+          phone: (r.phone as string | null) ?? null,
+        }));
+      const { data: admins } = await db
+        .from("profiles")
+        .select("email")
+        .in("role", ADMIN_ROLES)
+        .not("email", "is", null);
+      const adminEmails: string[] = [];
+      for (const a of admins ?? []) {
+        const email = (a as any).email as string | null;
+        if (email && !adminEmails.includes(email)) adminEmails.push(email);
+      }
+      const emailResults = await Promise.all(
+        adminEmails.map((email) => sendNewLeadsAdminEmail({ to: email, leads: newLeads, country: "es" })),
+      );
+      emailResults.forEach((r, i) => {
+        if (!r.success) console.error("idealista-leads admin notify error:", adminEmails[i], r.error);
+      });
+    }
+  } catch (err) {
+    console.error("idealista-leads admin notify error:", err);
   }
 
   return Response.json(
