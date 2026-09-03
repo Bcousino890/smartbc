@@ -25,6 +25,16 @@
   // (ver cardDateLabel).
   const TIME_ONLY_RE = /^\d{1,2}:\d{2}$/;
   const DAY_HEADER_RE = /^(hoy|ayer|\d{1,2}\s+[a-zà-ÿ]{3,}\.?)$/i;
+  // Banner promocional que Idealista intercala junto al hilo de mensajes
+  // ("El 70% de los agentes ya usan la app de idealista... Apunta con la
+  // cámara para descargar la app...", con QR) — no lo escribió el contacto,
+  // pero al no llevar ningún atributo que lo distinga de un mensaje real se
+  // colaba como parte de "message" (tanto por el selector primario como por
+  // el respaldo de bloques y por las filas del modo LISTA). Sin anclar a
+  // clases CSS, por la misma regla que el resto del archivo: substring, no
+  // línea exacta, para no depender de la puntuación exacta del banner.
+  const PROMO_BANNER_RE =
+    /agentes ya usan la app de idealista|descargar la app.*responder|apunta con la c[aá]mara/i;
   // El inbox tiene dos tipos de hilo: mensajes (CONVERSATION_) y llamadas
   // perdidas (CALL_). Ambos son leads. La "clave" de un hilo es el id
   // numérico para las conversaciones y "call_<id>" para las llamadas, para
@@ -351,7 +361,9 @@
     const used = new Set(
       [lead.name, lead.phone && lines[phoneIdx], lead.propertyTitle, priceIdx >= 0 ? lines[priceIdx] : null, lead.messageDate].filter(Boolean),
     );
-    const candidates = lines.filter((l) => !used.has(l) && !/^internacional$/i.test(l) && l.length > 15);
+    const candidates = lines.filter(
+      (l) => !used.has(l) && !/^internacional$/i.test(l) && !PROMO_BANNER_RE.test(l) && l.length > 15,
+    );
     if (candidates.length > 0) {
       lead.message = candidates.reduce((a, b) => (b.length > a.length ? b : a), "");
     }
@@ -443,7 +455,8 @@
         const p = el.querySelector("p[data-kiwi-text]") || el.querySelector("p");
         return ((p || el).innerText || "").trim();
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter((t) => !PROMO_BANNER_RE.test(t));
     // Solo se descartan duplicados CONSECUTIVOS (artefactos de render).
     // Un contacto puede mandar exactamente el mismo texto en días distintos
     // (la misma plantilla a cada anuncio que consulta): esos son mensajes
@@ -592,6 +605,7 @@
             !DATE_RE.test(t) &&
             !PRICE_RE.test(t) &&
             !NOISE_RE.test(t) &&
+            !PROMO_BANNER_RE.test(t) &&
             !/^vio el anuncio/i.test(t),
         );
       // Igual que arriba: solo se descartan duplicados consecutivos; el
