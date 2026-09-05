@@ -773,6 +773,18 @@
   // siguiente y repite hasta el final del inbox o hasta que se detenga.
   let autoRun = null; // {captured: n} mientras está activo
 
+  // Verdadero mientras navigatePrev espera a que la URL refleje el click en
+  // "Anterior". El router de más abajo (onUrlChange) sondea location.href
+  // cada 500ms; durante el salto entre conversaciones la URL de Idealista
+  // puede pasar por un instante intermedio que no matchea ninguna
+  // conversación (p.ej. queda en "/inbox" sin id mientras la SPA todavía
+  // está montando la siguiente). Sin este freno, ese poll caía en la rama
+  // "nos fuimos del hilo" y llamaba a removeDetailButton(), que pone
+  // autoRun a null — apagando el recorrido automático desde fuera del
+  // propio bucle a mitad de un salto. Por eso "Capturar todas" avanzaba
+  // exactamente 1 y se detenía solo (mal etiquetado como "fin del inbox").
+  let autoNavInFlight = false;
+
   // Localiza el control de navegación entre conversaciones ("Anterior" /
   // "Reciente") por su texto — sus clases _kiwi-button_* llevan hash de
   // build. No siempre es un <button> (a veces Idealista usa <a> o un
@@ -811,35 +823,51 @@
       const key = threadKeyFromUrl();
       return key && key !== currentId ? key : null;
     };
-    const nav = findNavButton("anterior");
-    if (!nav) return { next: null, reason: 'no encontré el control "Anterior"' };
-    if (nav.disabled) return { next: null, reason: "fin del inbox (Anterior deshabilitado)" };
+    // Espera a que el botón esté realmente listo (no solo presente): Idealista
+    // puede dejarlo deshabilitado un instante mientras termina de montar la
+    // conversación que se acaba de abrir. Rendirse en el primer vistazo hacía
+    // que el recorrido se cortara en falso aunque quedaran más conversaciones.
+    const nav = await waitFor(() => {
+      const btn = findNavButton("anterior");
+      return btn && !btn.disabled ? btn : null;
+    }, 3000);
+    if (!nav) {
+      const anyNav = findNavButton("anterior");
+      return anyNav
+        ? { next: null, reason: "fin del inbox (Anterior deshabilitado)" }
+        : { next: null, reason: 'no encontré el control "Anterior"' };
+    }
     // eslint-disable-next-line no-console
     console.log('[SmartBC] auto: click en <' + nav.tagName.toLowerCase() + '> "' + (nav.textContent || "").trim().slice(0, 30) + '"');
 
-    nav.click();
-    let next = await waitFor(changed, 4000, 150);
-    if (!next) {
-      // Reintento: algunos builds enganchan el click en el <span> hijo.
-      const again = findNavButton("anterior") || nav;
-      const inner = again.querySelector("span") || again;
-      inner.click();
-      next = await waitFor(changed, 8000, 150);
+    autoNavInFlight = true;
+    try {
+      nav.click();
+      let next = await waitFor(changed, 4000, 150);
+      if (!next) {
+        // Reintento: algunos builds enganchan el click en el <span> hijo.
+        const again = findNavButton("anterior") || nav;
+        const inner = again.querySelector("span") || again;
+        inner.click();
+        next = await waitFor(changed, 8000, 150);
+      }
+      if (!next) {
+        // Diagnóstico: si el nombre del contacto SÍ cambió pero la URL no,
+        // el problema es que Idealista navega sin tocar el history (esto
+        // quedaría anotado para poder confirmarlo con evidencia real en vez
+        // de volver a adivinar a ciegas).
+        const nameChanged = contactNameNow() !== beforeName;
+        const reason =
+          "la conversación no cambió al pulsar Anterior (URL sigue en " +
+          (threadKeyFromUrl() || "sin id") +
+          (nameChanged ? "; el nombre del contacto SÍ cambió — Idealista no actualiza la URL al navegar" : "; el contacto tampoco cambió") +
+          ")";
+        return { next: null, reason };
+      }
+      return { next, reason: null };
+    } finally {
+      autoNavInFlight = false;
     }
-    if (!next) {
-      // Diagnóstico: si el nombre del contacto SÍ cambió pero la URL no,
-      // el problema es que Idealista navega sin tocar el history (esto
-      // quedaría anotado para poder confirmarlo con evidencia real en vez
-      // de volver a adivinar a ciegas).
-      const nameChanged = contactNameNow() !== beforeName;
-      const reason =
-        "la conversación no cambió al pulsar Anterior (URL sigue en " +
-        (threadKeyFromUrl() || "sin id") +
-        (nameChanged ? "; el nombre del contacto SÍ cambió — Idealista no actualiza la URL al navegar" : "; el contacto tampoco cambió") +
-        ")";
-      return { next: null, reason };
-    }
-    return { next, reason: null };
   }
 
   async function runAutoCapture(startId) {
@@ -948,6 +976,9 @@
   let lastUrl = null;
 
   function onUrlChange() {
+    // Ver el comentario de autoNavInFlight: no reaccionar a un estado
+    // intermedio de la propia navegación que dispara navigatePrev.
+    if (autoNavInFlight) return;
     const url = location.href;
     const threadKey = threadKeyFromUrl(url);
     if (threadKey) {
