@@ -785,6 +785,41 @@
   // exactamente 1 y se detenía solo (mal etiquetado como "fin del inbox").
   let autoNavInFlight = false;
 
+  // Persistencia mínima para sobrevivir a una recarga completa de página: si
+  // "Anterior" resulta ser una navegación de verdad en vez de un cambio de
+  // ruta dentro de la SPA, TODO el contexto de este script desaparece a
+  // mitad del salto (autoRun, autoNavInFlight, todo) y el recorrido se veía
+  // exactamente como "avanza uno y no sigue", sin ningún error que lo
+  // explicara — el guion se reinicia de cero en la página nueva. Se guarda
+  // el progreso en sessionStorage (sobrevive a la navegación dentro de la
+  // misma pestaña, a diferencia de una variable) justo antes de cada salto;
+  // si al arrancar el script hay progreso pendiente y esta página YA es una
+  // conversación, se retoma desde ahí en vez de perderlo (ver el arranque
+  // del router, al final del archivo).
+  const AUTO_RUN_STORAGE_KEY = "smartbcAutoRunState";
+  function saveAutoRunState(state) {
+    try {
+      sessionStorage.setItem(AUTO_RUN_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      /* sessionStorage no disponible — el peor caso es perder la reanudación */
+    }
+  }
+  function loadAutoRunState() {
+    try {
+      const raw = sessionStorage.getItem(AUTO_RUN_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function clearAutoRunState() {
+    try {
+      sessionStorage.removeItem(AUTO_RUN_STORAGE_KEY);
+    } catch {
+      /* ignorar */
+    }
+  }
+
   // Localiza el control de navegación entre conversaciones ("Anterior" /
   // "Reciente") por su texto — sus clases _kiwi-button_* llevan hash de
   // build. No siempre es un <button> (a veces Idealista usa <a> o un
@@ -870,11 +905,11 @@
     }
   }
 
-  async function runAutoCapture(startId) {
-    autoRun = { captured: 0 };
+  async function runAutoCapture(startId, resumeState) {
+    autoRun = { captured: resumeState?.captured || 0 };
     updateAutoButton();
     let currentId = startId;
-    const visited = new Set();
+    const visited = new Set(resumeState?.visited || []);
     let stopReason = "fin del inbox";
     // El recorrido termina de forma natural cuando ya no hay botón
     // "Anterior" (última consulta del inbox). El tope de 2000 y el set
@@ -883,13 +918,40 @@
       if (visited.has(currentId)) { stopReason = "vuelta al inicio (ciclo)"; break; }
       visited.add(currentId);
 
-      await captureDetail(currentId, true);
+      // Cualquier error de aquí en adelante (extracción, envío al portal,
+      // navegación) se capturaba antes SIN pasar por la limpieza de abajo:
+      // el bucle moría a mitad de camino, el botón se quedaba pegado en
+      // "⏹ Detener (N)" para siempre y no había ninguna pista visible de
+      // qué había pasado — se veía exactamente como "avanza uno y no sigue".
+      // Ahora cualquier fallo detiene el recorrido igual, pero SIEMPRE con
+      // limpieza y con el motivo real en la insignia (sin necesitar la
+      // consola del navegador).
+      try {
+        await captureDetail(currentId, true);
+      } catch (err) {
+        console.error("[SmartBC] auto: error capturando", currentId, err);
+        stopReason = "error al capturar la conversación (" + (err?.message || err) + ")";
+        break;
+      }
       if (!autoRun) { stopReason = "detenido por el usuario"; break; }
       autoRun.captured++;
       updateAutoButton();
       showBadge("Auto: " + autoRun.captured + " capturadas. Pasando a la siguiente…");
 
-      const { next, reason } = await navigatePrev(currentId);
+      // Se guarda ANTES de intentar el salto: si resulta ser una recarga
+      // completa (ver comentario junto a AUTO_RUN_STORAGE_KEY), el arranque
+      // del script en la página nueva retoma el recorrido desde aquí en vez
+      // de quedarse solo con esta primera captura.
+      saveAutoRunState({ captured: autoRun.captured, visited: [...visited] });
+
+      let next, reason;
+      try {
+        ({ next, reason } = await navigatePrev(currentId));
+      } catch (err) {
+        console.error("[SmartBC] auto: error navegando desde", currentId, err);
+        stopReason = "error al pasar a la siguiente conversación (" + (err?.message || err) + ")";
+        break;
+      }
       if (!next) { stopReason = reason; break; }
       // eslint-disable-next-line no-console
       console.log("[SmartBC] auto:", autoRun.captured, "→ siguiente", next);
@@ -898,6 +960,7 @@
     }
     const total = autoRun ? autoRun.captured : 0;
     autoRun = null;
+    clearAutoRunState();
     updateAutoButton();
     // Sin auto-hide: el motivo del fin queda visible para diagnosticar.
     showBadge("✓ Auto terminado: " + total + " capturadas — " + stopReason);
@@ -955,6 +1018,7 @@
     autoBtn.addEventListener("click", () => {
       if (autoRun) {
         autoRun = null; // el bucle lo detecta y se detiene
+        clearAutoRunState();
         updateAutoButton();
         showBadge("Auto detenido", false, 3000);
       } else {
@@ -970,6 +1034,7 @@
     const autoBtn = document.getElementById("smartbc-auto-capture");
     if (autoBtn) autoBtn.remove();
     autoRun = null;
+    clearAutoRunState();
   }
 
   // ── Router SPA ───────────────────────────────────────────────────────────
@@ -993,6 +1058,23 @@
     } else {
       removeListButton();
       removeDetailButton();
+    }
+  }
+
+  // Si quedó un recorrido a medias por una recarga completa de página (ver
+  // el comentario junto a AUTO_RUN_STORAGE_KEY, arriba) y esta página ya es
+  // una conversación, se retoma solo desde aquí en vez de quedarse en
+  // "avanzó uno y no siguió" cada vez que "Anterior" recarga la página.
+  const pendingAutoRun = loadAutoRunState();
+  if (pendingAutoRun) {
+    const key = threadKeyFromUrl();
+    if (key) {
+      lastUrl = location.href; // evita que el poll de abajo duplique el arranque
+      removeListButton();
+      ensureDetailButton(key);
+      runAutoCapture(key, pendingAutoRun);
+    } else {
+      clearAutoRunState(); // no estamos en una conversación: el progreso ya no sirve
     }
   }
 
