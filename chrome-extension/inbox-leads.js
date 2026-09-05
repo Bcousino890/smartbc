@@ -867,8 +867,14 @@
       return btn && !btn.disabled ? btn : null;
     }, 3000);
     if (!nav) {
-      const anyNav = findNavButton("anterior");
-      return anyNav
+      // findNavButton() ya descarta los deshabilitados, así que no sirve
+      // para distinguir "no existe" de "existe pero deshabilitado" — se
+      // busca aquí por texto sin ese filtro, solo para el mensaje.
+      const existsDisabled = [...document.querySelectorAll('button, a, [role="button"]')].some((b) => {
+        const text = (b.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+        return text === "anterior" || text.startsWith("anterior ") || text.endsWith(" anterior");
+      });
+      return existsDisabled
         ? { next: null, reason: "fin del inbox (Anterior deshabilitado)" }
         : { next: null, reason: 'no encontré el control "Anterior"' };
     }
