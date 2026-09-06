@@ -31,8 +31,9 @@ ALTER TABLE idealista_leads
 ALTER TABLE idealista_leads
   ADD CONSTRAINT idealista_leads_merge_not_self CHECK (merged_into_id IS NULL OR merged_into_id <> id);
 
-CREATE OR REPLACE VIEW exige que las columnas ya existentes conserven
--- nombre, orden y tipo, y solo deja AÑADIR al final. Meterla en medio
+-- ⚠️ `merged_count` va AL FINAL de la vista: CREATE OR REPLACE VIEW exige que
+-- las columnas ya existentes conserven nombre, orden y tipo, y solo deja
+-- AÑADIR al final. Meterla en medio
 -- obligaría a un DROP … CASCADE, que se llevaría por delante los permisos
 -- de la vista. El resto de la definición es idéntica a la de 0142.
 --
