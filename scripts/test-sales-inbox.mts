@@ -23,14 +23,18 @@ import {
   deriveFirstContactAt,
   deriveFollowUpState,
   deriveLastActivityAt,
+  deriveOperationFromCards,
+  deriveOperationFromPrice,
   needsAttention,
   type LeadFacts,
 } from "../lib/sales-inbox/derive.ts";
 import {
   FRESH_WINDOW_DAYS,
   isInboxView,
+  isOperationFilter,
   NO_WHATSAPP,
   REASON_PRIORITY,
+  SALE_PRICE_FLOOR,
 } from "../lib/sales-inbox/types.ts";
 
 let failures = 0;
@@ -54,6 +58,7 @@ function lead(over: Partial<LeadFacts> = {}): LeadFacts {
     clientId: null,
     nextActionAt: null,
     matchedPropertyId: "p1",
+    matchedListingId: null,
     name: "Paul",
     phone: "+34 600 000 000",
     whatsapp: { ...NO_WHATSAPP },
@@ -257,6 +262,7 @@ check(
       lead({
         createdAt: ago(60),
         matchedPropertyId: null,
+        matchedListingId: null,
         duplicatePhone: true,
         name: null,
         whatsapp: { ...NO_WHATSAPP, conversationId: "c1", outbound: 1 },
@@ -292,6 +298,62 @@ check("dentro de tres días es más adelante", deriveFollowUpState(ahead(3), NOW
 
 check("las vistas de la bandeja se validan", isInboxView("needs-attention") && !isInboxView("x"));
 
+// ── Venta o alquiler ─────────────────────────────────────────────────────────
+console.log("\n🏷️  VENTA / ALQUILER\n");
+
+// El precio llega tal cual lo pinta Idealista. Solo se contesta cuando es
+// inequívoco; en la duda se calla, porque adivinar contamina un filtro diario.
+check('"2.400 €/mes" es alquiler', deriveOperationFromPrice("2.400 €/mes") === "rent");
+check('"2.400€/ mes" también (espacios sueltos)', deriveOperationFromPrice("2.400€/ mes") === "rent");
+check('"1.500 € /mes" también', deriveOperationFromPrice("1.500 € /mes") === "rent");
+check('"450.000 €" es venta', deriveOperationFromPrice("450.000 €") === "sale");
+check(
+  '"1.900 €" no se adivina: un alquiler sin "/mes" no es una venta',
+  deriveOperationFromPrice("1.900 €") === null,
+);
+check(
+  '"45.000 €" tampoco (puede ser una plaza de garaje)',
+  deriveOperationFromPrice("45.000 €") === null,
+);
+check(
+  `"${SALE_PRICE_FLOOR.toLocaleString("es-ES")} €" es la frontera exacta y sí es venta`,
+  deriveOperationFromPrice(`${SALE_PRICE_FLOOR.toLocaleString("es-ES")} €`) === "sale",
+);
+check(
+  '"1.250,50 €" son 1250, no 125050 (la coma decimal no infla el importe)',
+  deriveOperationFromPrice("1.250,50 €") === null,
+);
+check("sin precio no hay operación", deriveOperationFromPrice(null) === null);
+check("cadena vacía tampoco", deriveOperationFromPrice("") === null);
+check('"—" tampoco (no hay €)', deriveOperationFromPrice("—") === null);
+
+// Un hilo puede preguntar por varios pisos. Si no se ponen de acuerdo, 'mixed'
+// es lo único cierto — y entra en los dos filtros.
+check(
+  "dos tarjetas con operaciones distintas son 'mixed'",
+  deriveOperationFromCards([{ price: "2.400 €/mes" }, { price: "600.000 €" }], null) === "mixed",
+);
+check(
+  "si solo una tarjeta opina, manda ella",
+  deriveOperationFromCards([{ price: "2.400 €/mes" }, { price: "1.900 €" }], null) === "rent",
+);
+check(
+  "sin tarjetas se cae al precio principal",
+  deriveOperationFromCards([], "450.000 €") === "sale",
+);
+check(
+  "con UNA sola tarjeta manda el precio principal, que es el desnormalizado",
+  deriveOperationFromCards([{ price: "1.900 €" }], "450.000 €") === "sale",
+);
+check(
+  "ninguna señal deja la operación sin determinar",
+  deriveOperationFromCards(null, null) === null,
+);
+check(
+  "el filtro de operación se valida",
+  isOperationFilter("sale") && isOperationFilter("unknown") && !isOperationFilter("mixed"),
+);
+
 // ── Paridad SQL ↔ TypeScript ─────────────────────────────────────────────────
 console.log("\n🔗 PARIDAD SQL ↔ TYPESCRIPT\n");
 
@@ -307,7 +369,7 @@ if (!url || !key) {
   );
 } else {
   const res = await fetch(
-    `${url}/rest/v1/lead_inbox_facts?select=id,legacy_status,client_id,wa_conversation_id,wa_outbound,wa_inbound,wa_awaiting_reply,activity_has_touch,activity_answered_call,commercial_state,created_at,next_action_at,matched_property_id,name,phone,assigned_to,duplicate_phone&limit=2000`,
+    `${url}/rest/v1/lead_inbox_facts?select=id,legacy_status,client_id,wa_conversation_id,wa_outbound,wa_inbound,wa_awaiting_reply,activity_has_touch,activity_answered_call,commercial_state,created_at,next_action_at,matched_property_id,matched_listing_id,name,phone,assigned_to,duplicate_phone,property_price,properties,lead_operation,operation_source&limit=2000`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` } },
   );
   if (!res.ok) {
@@ -325,6 +387,7 @@ if (!url || !key) {
         clientId: r.client_id,
         nextActionAt: r.next_action_at,
         matchedPropertyId: r.matched_property_id,
+        matchedListingId: r.matched_listing_id ?? null,
         name: r.name,
         phone: r.phone,
         whatsapp: {
@@ -365,6 +428,77 @@ if (!url || !key) {
         .map(([k, v]) => `${k} ${v}`)
         .join(" · ")}`,
     );
+
+    // ── Venta / alquiler ──
+    //
+    // El TypeScript solo puede recalcular la rama del PRECIO: las otras dos
+    // (ficha de Idealista, ficha propia) necesitan columnas que la lista no
+    // baja. Por eso la paridad se exige donde `operation_source` dice 'price',
+    // que es justo el trozo de regla que está escrito dos veces.
+    let opMismatches = 0;
+    const byOp: Record<string, number> = {};
+    const bySource: Record<string, number> = {};
+    let invariantBroken = 0;
+    const undetermined = new Map<string, number>();
+
+    for (const r of rows) {
+      const key = r.lead_operation ?? "sin determinar";
+      byOp[key] = (byOp[key] ?? 0) + 1;
+      bySource[r.operation_source ?? "—"] = (bySource[r.operation_source ?? "—"] ?? 0) + 1;
+
+      // Si una tiene valor la otra también: si no, hay una rama del CASE que
+      // no cuadra con la otra.
+      if ((r.lead_operation === null) !== (r.operation_source === null)) invariantBroken++;
+
+      if (r.operation_source === "price") {
+        const ts = deriveOperationFromCards(
+          Array.isArray(r.properties) ? r.properties : null,
+          r.property_price,
+        );
+        if (ts !== r.lead_operation) {
+          opMismatches++;
+          if (opMismatches <= 3) {
+            console.log(
+              `     · ${r.id}: SQL=${r.lead_operation} TS=${ts} — "${r.property_price}"`,
+            );
+          }
+        }
+      }
+
+      if (r.lead_operation === null) {
+        const price = (r.property_price ?? "«sin precio»").trim() || "«sin precio»";
+        undetermined.set(price, (undetermined.get(price) ?? 0) + 1);
+      }
+    }
+
+    check(
+      "la vista y derive.ts coinciden en la operación derivada del precio",
+      opMismatches === 0,
+      `${opMismatches} discrepancias`,
+    );
+    check(
+      "lead_operation y operation_source son nulos a la vez, o ninguno",
+      invariantBroken === 0,
+      `${invariantBroken} filas rompen la invariante`,
+    );
+    console.log(
+      `     reparto operación: ${Object.entries(byOp)
+        .map(([k, v]) => `${k} ${v}`)
+        .join(" · ")}`,
+    );
+    console.log(
+      `     por fuente: ${Object.entries(bySource)
+        .map(([k, v]) => `${k} ${v}`)
+        .join(" · ")}`,
+    );
+
+    // El suelo de venta se calibra con esto, no a ojo: son los precios reales
+    // que hoy no se pueden clasificar.
+    const worst = [...undetermined.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    if (worst.length) {
+      console.log("     precios sin determinar más frecuentes:");
+      for (const [price, n] of worst) console.log(`       ${String(n).padStart(4)} × ${price}`);
+    }
   }
 }
 

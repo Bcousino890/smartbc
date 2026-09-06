@@ -7,7 +7,9 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { getCountryConfig, type Country } from "@/lib/country-config";
+import { getIdealistaCoverage } from "@/lib/db/queries/idealista-coverage";
 import { IdealistaClient } from "./idealista-client";
+import { CoverageSection } from "./coverage-section";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,11 @@ export default async function AdminIdealistaPage({
   // directamente (matched_listing_id) — la mayoría de fichas de este negocio
   // son "inspo" con reference_code pero SIN property_id, así que solo el
   // segundo las alcanza.
+  // ¿Está llegando todo al CRM? Va aparte, en su propio módulo, porque
+  // responde a una pregunta distinta de la de esta pantalla (publicar) y no
+  // tiene por qué crecerle dentro.
+  const coverage = await getIdealistaCoverage();
+
   const { data: idealistaLeadMatches } = await supabase
     .from("idealista_leads")
     .select("matched_property_id, matched_listing_id")
@@ -217,6 +224,8 @@ export default async function AdminIdealistaPage({
             que la versión raíz (que compila y funciona en runtime). */}
         <IdealistaClient properties={rows} listings={idealista as any} listingsWithVideo={listingsWithVideo} leadCountsByProperty={leadCountsByProperty} leadCountsByListing={leadCountsByListing} />
       </div>
+
+      <CoverageSection coverage={coverage} country={country} />
 
       <PageFooter textKey="admin.realtime.footer" variant="inline" />
     </div>

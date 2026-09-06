@@ -140,12 +140,18 @@ export type LeadListItem = {
   source: LeadSource;
   createdAt: string;
   propertyTitle: string | null;
+  // Las dos viajan JUNTAS a propósito: mirar solo la primera es lo que hacía
+  // que la bandeja diera por huérfanos a los leads emparejados con un anuncio
+  // de Idealista sin ficha propia, que aquí son la mayoría.
   matchedPropertyId: string | null;
+  matchedListingId: string | null;
   assignedTo: string | null;
   assignedName: string | null;
   clientId: string | null;
   nextActionAt: string | null;
   state: CommercialState;
+  /** Venta, alquiler, las dos, o sin determinar. Derivada; ver `LeadOperation`. */
+  operation: LeadOperation | null;
   whatsapp: WhatsAppFacts;
   reasons: AttentionReason[];
   /** Cuanto más alto, antes en la cola. */
@@ -173,6 +179,49 @@ export function isInboxGrouping(v: unknown): v is InboxGrouping {
   return v === "none" || v === "property";
 }
 
+// ─── Venta o alquiler ────────────────────────────────────────────────────────
+
+/**
+ * Qué operación mira el lead.
+ *
+ * `idealista_leads` NO tiene columna de operación y no la va a tener: el inbox
+ * de Idealista no la da. Se DERIVA, igual que el estado comercial.
+ *
+ * `mixed` no es un apaño: un mismo hilo puede preguntar por varios pisos con
+ * operaciones distintas (`idealista_leads.properties`). Decir "venta" sería
+ * mentir y decir `null` lo escondería de los dos filtros; `mixed` entra en
+ * ambos y no miente en ninguno.
+ *
+ * `null` = **sin determinar**, y es un estado de primera clase, no un hueco:
+ * hoy lo tiene mucha gente y esconderlo sería peor que enseñarlo.
+ */
+export type LeadOperation = "sale" | "rent" | "mixed";
+
+/** De dónde salió la derivación. Sirve para auditarla y para probarla. */
+export type OperationSource = "price" | "listing" | "property";
+
+/** Lo que se puede elegir en la pantalla. */
+export type OperationFilter = "sale" | "rent" | "unknown";
+
+export function isOperationFilter(v: unknown): v is OperationFilter {
+  return v === "sale" || v === "rent" || v === "unknown";
+}
+
+/**
+ * Suelo a partir del cual un importe SIN "/mes" se considera venta.
+ *
+ * Por debajo puede ser un alquiler al que no se le capturó el sufijo, o una
+ * plaza de garaje; por encima no hay alquiler posible en esta cartera.
+ *
+ * Calibrado contra producción el 2026-09-06: de los 27 precios distintos que
+ * hay en `idealista_leads`, el umbral no deja NINGUNO sin clasificar — los
+ * alquileres van de 1.200 a 9.500 €/mes (y todos traen "/mes") y las ventas
+ * empiezan en 530.000 €. Los 28 leads "sin determinar" lo están porque no se
+ * les capturó precio, no por el suelo. Si cambia la cartera se recalibra con
+ * `npm run idealista:cobertura`, que imprime esa distribución; no a ojo.
+ */
+export const SALE_PRICE_FLOOR = 50_000;
+
 /** Filtros de la bandeja. Viajan en la URL y se aplican EN SERVIDOR. */
 export type InboxFilters = {
   view: InboxView;
@@ -184,6 +233,7 @@ export type InboxFilters = {
   leadType?: string;
   international?: boolean;
   unmatchedProperty?: boolean;
+  operation?: OperationFilter;
   page: number;
   pageSize: number;
   sort: InboxSort;
@@ -217,13 +267,21 @@ export const GROUP_PAGE_SIZE = 12;
  * tirando y cuál no.
  */
 export type LeadGroup = {
-  /** `<uuid de la ficha>` o `t:<título del anuncio>` cuando no hay ficha. */
+  /**
+   * `p:<uuid>` (ficha propia) · `l:<uuid>` (anuncio de Idealista sin ficha) ·
+   * `t:<título>` cuando no hay ni lo uno ni lo otro.
+   */
   key: string;
   propertyId: string | null;
+  /** Emparejado a un anuncio de Idealista sin fila en `properties`. */
+  listingId: string | null;
+  /** Slug de la ficha propia: la ruta del panel va por slug, NO por uuid. */
+  slug: string | null;
   title: string | null;
   zone: string | null;
   reference: string | null;
   price: number | null;
+  /** La operación de LA FICHA (no la del lead: ver `LeadListItem.operation`). */
   operation: string | null;
   status: string | null;
   coverUrl: string | null;

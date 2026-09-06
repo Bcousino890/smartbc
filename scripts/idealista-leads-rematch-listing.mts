@@ -29,7 +29,11 @@ async function main() {
     id: l.id,
     street: l.address_street ?? null,
     zone: l.address_city ?? null,
-    price: (l.operation === "rent" ? l.total_rental_price : l.price) ?? null,
+    // Los dos precios, sin mirar `operation`: esa columna tiene DEFAULT 'rent'
+    // desde la migración 0059 y nunca se backfilleó, así que una ficha de
+    // venta mal etiquetada aportaba un precio de alquiler a 0 y dejaba
+    // huérfanos a todos sus leads.
+    prices: [l.price, l.total_rental_price],
   }));
   console.log(`Candidatas (fichas de Idealista): ${candidates.length}`);
 

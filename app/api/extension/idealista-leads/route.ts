@@ -3,7 +3,10 @@ import { createAdminClient } from "@/lib/db/admin";
 import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
-import { matchPropertyByAddress } from "@/lib/services/idealista/lead-property-match";
+import {
+  matchPropertyByAddress,
+  type AddressMatchCandidate,
+} from "@/lib/services/idealista/lead-property-match";
 import { autoMergeLeadsByPhone } from "@/lib/sales-inbox/auto-merge";
 
 // Ingesta de leads del inbox de Idealista enviados por la extensión de Chrome.
@@ -104,6 +107,40 @@ function asProperties(value: unknown): NormalizedProperty[] {
     }))
     .filter((p) => p.title || p.price || p.imageUrl)
     .slice(0, 30);
+}
+
+/**
+ * Empareja mirando TODAS las propiedades del hilo, no solo la principal.
+ *
+ * Un mismo contacto puede preguntar por varios pisos en la misma conversación
+ * (por eso existe `properties`), pero hasta ahora solo se intentaba con
+ * `property_title`: si el piso que sí es ficha nuestra era el segundo de la
+ * lista, el lead se quedaba huérfano y no contaba para ninguna ficha.
+ *
+ * La principal se prueba PRIMERO, así que para un hilo de una sola tarjeta
+ * —el caso normal— el resultado es exactamente el de antes. El emparejamiento
+ * sigue siendo uno solo: gana la primera que case.
+ */
+function matchAnyEnquiry(
+  primaryTitle: string | null,
+  primaryPrice: string | null,
+  cards: NormalizedProperty[],
+  candidates: AddressMatchCandidate[],
+): string | null {
+  if (candidates.length === 0) return null;
+  const seen = new Set<string>();
+  const attempts: Array<[string | null, string | null]> = [[primaryTitle, primaryPrice]];
+  for (const c of cards) attempts.push([c.title, c.price]);
+
+  for (const [title, price] of attempts) {
+    if (!title) continue;
+    const key = `${title}|${price ?? ""}`;
+    if (seen.has(key)) continue; // la principal suele repetirse en las tarjetas
+    seen.add(key);
+    const hit = matchPropertyByAddress(title, price, candidates);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function propertyKey(p: NormalizedProperty): string {
@@ -245,21 +282,29 @@ export async function POST(req: Request) {
   // listings), que tienen su propia dirección/precio independientemente de
   // si están linkeadas a una fila de properties.
   const needsAddressFallback = [...incoming.values()].some(
-    (l) => !l.property_ref && !l.idealista_code && l.property_title,
+    (l) =>
+      !l.property_ref &&
+      !l.idealista_code &&
+      (l.property_title || l.properties.some((p) => p.title)),
   );
-  let addressCandidates: { id: string; street: string | null; zone: string | null; price: number | null }[] = [];
-  let listingAddressCandidates: { id: string; street: string | null; zone: string | null; price: number | null }[] = [];
+  let addressCandidates: AddressMatchCandidate[] = [];
+  let listingAddressCandidates: AddressMatchCandidate[] = [];
   if (needsAddressFallback) {
+    // Aquí había un `.not("bc_reference", "is", null)` que parecía acotar el
+    // catálogo pero no acotaba nada: `bc_reference` es NOT NULL con default
+    // desde la migración 0011, así que la condición se cumplía siempre. Se
+    // quita para que no siga leyéndose como un filtro que no existe.
     const { data: ownProps } = await db
       .from("properties")
-      .select("id, address, zone, price")
-      .not("bc_reference", "is", null)
+      .select("id, address, zone, price, rent_price")
       .is("archived_at", null);
     addressCandidates = (ownProps ?? []).map((p: any) => ({
       id: p.id,
       street: p.address ?? null,
       zone: p.zone ?? null,
-      price: p.price ?? null,
+      // Las dos: una propiedad en venta Y alquiler tiene dos precios, y el
+      // lead solo mira uno.
+      prices: [p.price, p.rent_price],
     }));
 
     const { data: ownListings } = await db
@@ -270,7 +315,11 @@ export async function POST(req: Request) {
       id: l.id,
       street: l.address_street ?? null,
       zone: l.address_city ?? null,
-      price: (l.operation === "rent" ? l.total_rental_price : l.price) ?? null,
+      // Los dos, sin mirar `operation`: esa columna tiene DEFAULT 'rent' desde
+      // la migración 0059 y nunca se backfilleó, así que una ficha de venta
+      // mal etiquetada aportaba un precio de alquiler a 0 y dejaba huérfanos a
+      // todos sus leads. Es el sesgo de venta que se venía notando.
+      prices: [l.price, l.total_rental_price],
     }));
   }
 
@@ -383,9 +432,10 @@ export async function POST(req: Request) {
       existing?.matched_property_id ??
       (ref ? propertyIdByRef.get(ref) : undefined) ??
       (code ? propertyIdByCode.get(code) : undefined) ??
-      matchPropertyByAddress(
+      matchAnyEnquiry(
         merged.property_title as string | null,
         merged.property_price as string | null,
+        mergedProperties,
         addressCandidates,
       );
 
@@ -396,9 +446,10 @@ export async function POST(req: Request) {
       existing?.matched_listing_id ??
       (ref ? listingIdByRef.get(ref) : undefined) ??
       (code ? listingIdByCode.get(code) : undefined) ??
-      matchPropertyByAddress(
+      matchAnyEnquiry(
         merged.property_title as string | null,
         merged.property_price as string | null,
+        mergedProperties,
         listingAddressCandidates,
       );
 

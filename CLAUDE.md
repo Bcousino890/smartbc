@@ -475,6 +475,62 @@ prosa: leads de hoy + como mucho una recomendación sobre una ficha.
   versión vieja cacheada, se sigue mostrando esa en vez de nada.
 - Solo `country === "es"`: el análisis depende de `idealista_listings` /
   `idealista_leads`, que no existen para Chile.
+## Solicitudes / Sales Inbox — venta·alquiler y cobertura
+
+**⚠️ La vista `lead_inbox_facts` está definida ENTERA en CUATRO migraciones:
+0142, 0159, 0160 y 0161. Solo vale la ÚLTIMA.** Cada una la reescribe con
+`CREATE OR REPLACE VIEW` añadiendo columnas al final, que es lo único que
+Postgres permite sin un `DROP … CASCADE` (que se llevaría los permisos).
+
+El despliegue automático no sufre por eso: `scripts/apply-migrations.sh` lleva
+una tabla `schema_migrations` y **solo aplica ficheros nuevos**. Pero
+`scripts/post-deploy.sh` —lo que corre el botón de `/admin/configuracion`—
+**relanza TODAS las migraciones en orden**, y ahí las tres viejas fallan con
+*"cannot drop columns from view"*. No rompe nada (la última en aplicarse es la
+buena), pero el botón sale con errores que **son normales** y hay que saberlo.
+Si añades columnas, hazlo en una migración NUEVA y al final de la lista.
+
+**La operación de un lead se DERIVA, no se guarda.** `idealista_leads` no tiene
+columna de operación porque el inbox de Idealista no la da. Orden de
+precedencia, en `lead_price_operation()` (SQL, migración 0161) y
+`deriveOperationFromPrice()` (`lib/sales-inbox/derive.ts`), vigilado por
+`npm run test:sales-inbox`:
+
+1. El **precio de la tarjeta** (`"2.400 €/mes"` vs `"450.000 €"`) — es lo que el
+   contacto miró, y lo único que traen los leads sin ficha, que son mayoría.
+   Medido contra producción: resuelve 432 de 460 leads él solo.
+2. `idealista_listings.operation` **solo si vale `'sale'`**: `'rent'` ahí es el
+   `DEFAULT` de la 0059 sin backfill, o sea "nadie lo dijo".
+3. `properties.operation`, salvo que sea dual (`operations @> {sale,rent}`).
+
+Valores: `sale | rent | mixed | NULL`. `mixed` es un hilo que pregunta por las
+dos cosas y entra en los dos filtros; `NULL` ("sin determinar") es un estado de
+primera clase y tiene su propio botón.
+
+**Dos columnas de emparejamiento, y hay que mirar LAS DOS.** `matched_property_id`
+(ficha propia) y `matched_listing_id` (anuncio de Idealista sin fila en
+`properties` — las "inspo", que aquí son la mayoría). Mirar solo la primera es
+lo que hacía que la bandeja diera por huérfanos a **202** leads cuando de verdad
+lo eran **102**.
+
+**¿Está llegando todo?** `npm run idealista:cobertura` (solo lee) y la sección
+"Cobertura de contactos" de `/es/admin/idealista`. La extensión ahora cuenta las
+conversaciones que el CRM **confirmó**, no las que visitó —antes sumaba igual
+aunque el envío fallara— y guarda el parte de cada recorrido en
+`idealista_capture_runs` (migración 0162).
+
+### Lo que sabemos del hueco de venta (medido 2026-09-06)
+Los leads de venta quedan huérfanos al 28% frente al 16% de alquiler. **No** es
+por fichas con la operación mal marcada ni por propiedades duales: de las dos
+cosas hay CERO. Son dos casos concretos:
+- 9 leads de *«Calle de Jorge Juan, Goya» a 530.000 €* y la ficha **BC-1493** es
+  esa calle pero a **2.000.000 €** — o es otro piso, o el precio está mal.
+- 1 lead de *«El Monte… Torrelodones» a 1.000.000 €* y **BC-1344** cuesta
+  exactamente eso, pero su dirección cargada es *«Calle Encina 14»*: el anuncio
+  se identifica por la urbanización y la ficha por la calle, así que no hay un
+  token en común y el emparejamiento no puede verlo.
+
+De fondo: 26 fichas de alquiler preparadas frente a 10 de venta.
 
 ## Enlaces de portales en la ficha del cliente (`lib/portal-links/**`)
 El paso que faltaba **antes** de la selección: el piso que se ve con el cliente

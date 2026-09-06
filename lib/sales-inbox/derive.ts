@@ -12,8 +12,10 @@ import {
   ASSIGNED_IDLE_DAYS,
   FRESH_WINDOW_DAYS,
   REASON_PRIORITY,
+  SALE_PRICE_FLOOR,
   type AttentionReason,
   type CommercialState,
+  type LeadOperation,
   type WhatsAppFacts,
 } from "./types";
 
@@ -45,6 +47,8 @@ export type LeadFacts = {
   clientId: string | null;
   nextActionAt: string | null;
   matchedPropertyId: string | null;
+  /** Emparejado a un anuncio de Idealista sin ficha propia (las "inspo"). */
+  matchedListingId: string | null;
   name: string | null;
   phone: string | null;
   whatsapp: WhatsAppFacts;
@@ -169,7 +173,10 @@ export function deriveAttention(
   }
 
   // ── P3 · pistas ──
-  if (!f.matchedPropertyId) out.push("unmatched_property");
+  // Emparejado a un anuncio de Idealista cuenta como emparejado: la mayoría de
+  // esta cartera son fichas "inspo" sin fila en `properties`, y marcarlas como
+  // huérfanas llenaba la pista de ruido hasta volverla inútil.
+  if (!f.matchedPropertyId && !f.matchedListingId) out.push("unmatched_property");
   if (f.duplicatePhone) out.push("possible_duplicate");
   if (!f.name?.trim() || !f.phone?.trim()) out.push("missing_contact");
   if (f.clientCandidate) out.push("client_exists_unlinked");
@@ -198,6 +205,81 @@ export function attentionScore(
   // Un empujón extra por cada motivo adicional del mismo nivel.
   const extra = reasons.filter((r) => REASON_PRIORITY[r] === top).length * 1_000;
   return base + extra + Math.round(age * 10);
+}
+
+// ─── Venta o alquiler ────────────────────────────────────────────────────────
+//
+// ⚠️ Esta regla, como la del estado comercial, está escrita DOS veces: aquí y
+// en `lead_price_operation()` (migración 0155), porque la bandeja necesita
+// poder FILTRAR en SQL sin traerse los leads al navegador. `npm run
+// test:sales-inbox` compara las dos lead a lead contra producción. Si tocas
+// una, toca la otra y ejecuta el test.
+//
+// Asimetría deliberada: aquí solo vive la rama del PRECIO. Las otras dos
+// (ficha de Idealista, ficha propia) necesitan columnas de `idealista_listings`
+// y `properties` que la lista no baja, y replicarlas obligaría a un N+1 por
+// fila. Por eso la vista expone `operation_source`: el test solo exige paridad
+// donde el TypeScript puede opinar.
+
+/**
+ * Venta o alquiler a partir del precio crudo de una tarjeta de Idealista.
+ *
+ * El texto llega tal cual lo pinta el portal —`"2.400 €/mes"`, `"450.000 €"`—
+ * porque la extensión lo captura con un regex acotado
+ * (`chrome-extension/inbox-leads.js`), no como frase libre.
+ *
+ * Solo contesta cuando el precio es **inequívoco**:
+ *
+ *   · lleva "/mes"                  → alquiler (ninguna ficha de venta lo lleva)
+ *   · importe ≥ SALE_PRICE_FLOOR    → venta    (ningún alquiler de esta cartera
+ *                                               llega ahí)
+ *
+ * En medio **calla** y devuelve `null`, para que decida la siguiente señal.
+ * Adivinar aquí contamina un filtro que se usa todos los días.
+ */
+export function deriveOperationFromPrice(
+  price: string | null | undefined,
+): "sale" | "rent" | null {
+  if (!price) return null;
+  const text = price.trim();
+  if (!text) return null;
+
+  if (/\/\s*mes/i.test(text)) return "rent";
+  if (!text.includes("€")) return null;
+
+  // "1.250,50 €" → 1250, no 125050: se corta en el € (nunca se mira lo que
+  // venga detrás) y se tira la parte decimal antes de quitar los puntos de
+  // millar.
+  const digits = text.split("€")[0].split(",")[0].replace(/[^0-9]/g, "");
+  if (!digits) return null;
+
+  return Number(digits) >= SALE_PRICE_FLOOR ? "sale" : null;
+}
+
+/**
+ * La operación de un lead a partir de TODAS las tarjetas que consultó.
+ *
+ * Un hilo puede preguntar por varios pisos (`idealista_leads.properties`). Si
+ * las tarjetas que sí opinan no se ponen de acuerdo, el resultado es `mixed`:
+ * es lo único cierto, y entra en los dos filtros.
+ *
+ * Con una sola tarjeta —el caso normal— se cae a `primaryPrice`, que es el
+ * precio principal ya desnormalizado en la fila.
+ */
+export function deriveOperationFromCards(
+  cards: ReadonlyArray<{ price?: string | null }> | null | undefined,
+  primaryPrice: string | null | undefined,
+): LeadOperation | null {
+  if (Array.isArray(cards) && cards.length > 1) {
+    const opinions = new Set<"sale" | "rent">();
+    for (const c of cards) {
+      const op = deriveOperationFromPrice(c?.price);
+      if (op) opinions.add(op);
+    }
+    if (opinions.size > 1) return "mixed";
+    if (opinions.size === 1) return [...opinions][0];
+  }
+  return deriveOperationFromPrice(primaryPrice);
 }
 
 // ─── Vistas ──────────────────────────────────────────────────────────────────

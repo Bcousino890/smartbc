@@ -236,6 +236,8 @@ export function LeadWorkspace({
 
         <PropertyContext lead={lead} country={country} canEdit={canEdit} onRun={run} busy={busy} />
 
+        <OtherEnquiries lead={lead} />
+
         <ClientSection lead={lead} country={country} canEdit={canEdit} />
 
         {canEdit && <ContactLog lead={lead} onRun={run} busy={busy} />}
@@ -313,6 +315,53 @@ function Enquiry({ lead }: { lead: LeadDetail }) {
 
 // ─── Propiedad ───────────────────────────────────────────────────────────────
 
+/**
+ * Los demás pisos por los que preguntó en el MISMO hilo.
+ *
+ * La ingesta los guarda todos (`idealista_leads.properties`) y `getLeadDetail`
+ * ya los baja, pero la bandeja no los pintaba: se enseñaba solo la tarjeta
+ * principal, así que un contacto que preguntó por tres pisos parecía interesado
+ * en uno. El emparejamiento tampoco los mira, y por eso al lado de cada uno se
+ * dice su precio: es lo que permite ver de un vistazo si el hilo mezcla venta y
+ * alquiler.
+ */
+function OtherEnquiries({ lead }: { lead: LeadDetail }) {
+  const t = useT();
+  if (lead.properties.length <= 1) return null;
+
+  return (
+    <Panel title={t("inbox.otherEnquiries.title")} count={lead.properties.length}>
+      <ul className="space-y-1.5">
+        {lead.properties.map((p, i) => (
+          <li
+            key={`${p.title ?? ""}-${i}`}
+            className="flex items-center gap-2.5 rounded-md border border-ink/8 bg-ink/[0.02] px-2.5 py-1.5"
+          >
+            {p.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={p.imageUrl}
+                alt=""
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+                className="h-9 w-12 shrink-0 rounded object-cover"
+              />
+            )}
+            <span className="min-w-0 flex-1 truncate text-xs text-ink/70">
+              {p.title ?? t("inbox.row.noProperty")}
+            </span>
+            {p.price && (
+              <span className="shrink-0 text-xs tabular-nums text-ink/45">{p.price}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 function PropertyContext({
   lead,
   country,
@@ -332,6 +381,12 @@ function PropertyContext({
 
   if (lead.property) {
     const p = lead.property;
+    // Una ficha propia se abre en /propiedades/[slug]; un anuncio de Idealista
+    // sin ficha propia (las "inspo") vive en /idealista, y hasta ahora la
+    // bandeja lo daba directamente por inexistente.
+    const href = p.slug
+      ? `${config.prefix}/propiedades/${p.slug}`
+      : `${config.prefix}/idealista`;
     return (
       <Panel
         title={t("inbox.property.title")}
@@ -355,7 +410,7 @@ function PropertyContext({
           )}
           <div className="min-w-0 flex-1">
             <Link
-              href={`${config.prefix}/propiedades/${p.slug}`}
+              href={href}
               className="block truncate text-sm font-medium text-ink hover:underline"
             >
               {p.title ?? "—"}
@@ -371,10 +426,13 @@ function PropertyContext({
                   {t(`inbox.property.status.${p.status}`)}
                 </Pill>
               )}
+              {p.source === "listing" && (
+                <Pill tone="info">{t("inbox.property.fromListing")}</Pill>
+              )}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Link
-                href={`${config.prefix}/propiedades/${p.slug}`}
+                href={href}
                 className="inline-flex items-center gap-1 rounded-md border border-ink/15 bg-white px-2.5 py-1 text-xs font-medium text-ink/70 transition hover:border-gold/50"
               >
                 {t("inbox.property.open")}

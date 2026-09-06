@@ -119,7 +119,7 @@ export function LeadGroupBlock({
                 <span>{config.formatPrice(group.price, null, group.operation)}</span>
               )}
               {group.zone && <span>{group.zone}</span>}
-              {!group.propertyId && (
+              {!group.propertyId && !group.listingId && (
                 <Pill tone="warning">{t("inbox.group.noFile")}</Pill>
               )}
             </span>
@@ -135,9 +135,16 @@ export function LeadGroupBlock({
           />
         </button>
 
-        {group.propertyId && (
+        {/* La ficha propia se abre por SLUG: `/propiedades/[slug]` resuelve por
+            `slug`, así que con el uuid este enlace daba 404. Un anuncio de
+            Idealista sin ficha propia se abre donde vive, que es /idealista. */}
+        {(group.slug || group.listingId) && (
           <Link
-            href={`${config.prefix}/propiedades/${group.propertyId}`}
+            href={
+              group.slug
+                ? `${config.prefix}/propiedades/${group.slug}`
+                : `${config.prefix}/idealista`
+            }
             onClick={(e) => e.stopPropagation()}
             aria-label={t("inbox.property.open")}
             className="mt-1 shrink-0 rounded p-1 text-ink/35 transition hover:text-ink"

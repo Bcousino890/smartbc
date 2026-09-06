@@ -15,7 +15,7 @@ async function main() {
 
   const { data: leads, error } = await db
     .from("idealista_leads")
-    .select("id, property_title, property_price, matched_property_id, properties:matched_property_id(address, zone, price)")
+    .select("id, property_title, property_price, matched_property_id, properties:matched_property_id(address, zone, price, rent_price)")
     .not("matched_property_id", "is", null);
   if (error) throw error;
 
@@ -24,12 +24,17 @@ async function main() {
   let kept = 0;
   let reverted = 0;
   for (const lead of leads ?? []) {
-    const prop = lead.properties as unknown as { address: string | null; zone: string | null; price: number | null } | null;
+    const prop = lead.properties as unknown as {
+      address: string | null;
+      zone: string | null;
+      price: number | null;
+      rent_price: number | null;
+    } | null;
     const candidate: AddressMatchCandidate = {
       id: lead.matched_property_id as string,
       street: prop?.address ?? null,
       zone: prop?.zone ?? null,
-      price: prop?.price ?? null,
+      prices: [prop?.price, prop?.rent_price],
     };
     const stillValid = matchPropertyByAddress(lead.property_title, lead.property_price, [candidate]) === candidate.id;
     if (stillValid) {

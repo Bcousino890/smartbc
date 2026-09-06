@@ -47,6 +47,7 @@ TEMPLATES = {
                "stop_view","time_on_page"],
  "clientes.profile.": ["student","worker","company","family","investor"],
  "inbox.group.by.": ["none","property"],
+ "inbox.operation.": ["all","sale","rent","mixed","unknown"],
  "inbox.view.": ["needs-attention","new","follow-up","my-leads","unassigned","all"],
  "inbox.empty.": ["needs-attention","new","follow-up","my-leads","unassigned","all"],
  "inbox.state.": ["new","contacted","engaged","converted","discarded"],

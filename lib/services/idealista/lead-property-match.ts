@@ -76,7 +76,21 @@ export type AddressMatchCandidate = {
   street: string | null;
   /** properties.zone — solo se usa como desempate/boost, nunca solo */
   zone: string | null;
-  price: number | null;
+  /**
+   * Los precios que puede tener esta candidata, en cualquier orden. Son
+   * VARIOS a propósito:
+   *
+   *  · Una propiedad DUAL tiene precio de venta (`price`) y de alquiler
+   *    (`rent_price`). Comparando solo contra el primero, ningún lead de
+   *    alquiler casaba nunca con ella.
+   *  · Una ficha de Idealista marcada 'rent' por el DEFAULT de la migración
+   *    0059 —sin que nadie lo dijera— aporta un `total_rental_price` a 0 y
+   *    esconde su precio de venta real. Mandando los dos, una ficha mal
+   *    etiquetada deja de dejar huérfanos a todos sus leads.
+   *
+   * Los nulos y los ceros se ignoran: un 0 no es un precio, es un hueco.
+   */
+  prices: Array<number | null | undefined>;
 };
 
 /**
@@ -110,10 +124,24 @@ export function matchPropertyByAddress(
     const allStreetTokensMatch = leadStreet.every((t) => candStreet.includes(t));
     if (!allStreetTokensMatch) continue;
 
+    // Basta con que ALGUNO de sus precios cuadre: una propiedad en venta y
+    // alquiler a la vez tiene dos, y el lead solo mira uno. Se queda el más
+    // cercano, que es el que después desempata.
+    //
+    // Ojo: esto NO relaja el criterio de calle, que es lo único que evita los
+    // falsos positivos que ya se pagaron una vez ("Gravina" contra "Hortaleza"
+    // en el mismo barrio). Solo deja de exigir que el lead mire justo el
+    // precio que la ficha considera "el suyo".
     let priceDiff = 0; // sin precio en alguno de los dos lados: no penaliza, no desempata
-    if (leadPriceNum != null && c.price != null) {
-      priceDiff = Math.abs(leadPriceNum - c.price) / c.price;
-      if (priceDiff > 0.08) continue; // 8% de tolerancia (redondeos, cambios de precio)
+    if (leadPriceNum != null) {
+      const usable = c.prices.filter(
+        (p): p is number => typeof p === "number" && Number.isFinite(p) && p > 0,
+      );
+      if (usable.length > 0) {
+        const best = Math.min(...usable.map((p) => Math.abs(leadPriceNum - p) / p));
+        if (best > 0.08) continue; // 8% de tolerancia (redondeos, cambios de precio)
+        priceDiff = best;
+      }
     }
 
     const candZone = new Set(tokenize(c.zone));

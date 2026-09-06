@@ -17,10 +17,11 @@ import { createAdminClient } from "../lib/db/admin.ts";
 import { matchPropertyByAddress, type AddressMatchCandidate } from "../lib/services/idealista/lead-property-match.ts";
 
 async function backfillProperty(db: ReturnType<typeof createAdminClient>) {
+  // Sin `.not("bc_reference", ...)`: era una condición que se cumplía siempre
+  // (NOT NULL con default desde la 0011) y se leía como un filtro real.
   const { data: ownProps, error: propsError } = await db
     .from("properties")
-    .select("id, address, zone, price")
-    .not("bc_reference", "is", null)
+    .select("id, address, zone, price, rent_price")
     .is("archived_at", null);
   if (propsError) throw propsError;
 
@@ -28,7 +29,7 @@ async function backfillProperty(db: ReturnType<typeof createAdminClient>) {
     id: p.id,
     street: p.address ?? null,
     zone: p.zone ?? null,
-    price: p.price ?? null,
+    prices: [p.price, p.rent_price],
   }));
   console.log(`Candidatas (propiedades propias): ${candidates.length}`);
 
@@ -68,7 +69,7 @@ async function backfillListing(db: ReturnType<typeof createAdminClient>) {
     id: l.id,
     street: l.address_street ?? null,
     zone: l.address_city ?? null,
-    price: (l.operation === "rent" ? l.total_rental_price : l.price) ?? null,
+    prices: [l.price, l.total_rental_price],
   }));
   console.log(`Candidatas (fichas de Idealista): ${candidates.length}`);
 

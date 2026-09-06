@@ -23,6 +23,7 @@
     "zinto-integration:smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-smoke.mts",
     "zinto-integration:write-smoke": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-integration-write-smoke.mts",
     "zinto-crm:backfill": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/zinto-crm-backfill.mts",
+    "idealista:cobertura": "node --env-file-if-exists=.env.local --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-coverage.mts",
     "idealista-leads:backfill-match": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-backfill-match.mts",
     "idealista-leads:revalidate-match": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-revalidate-match.mts",
     "idealista-leads:rematch-listing": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/idealista-leads-rematch-listing.mts",

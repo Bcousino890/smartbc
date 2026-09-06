@@ -27,6 +27,7 @@ import type {
   InboxView,
   LeadGroup,
   LeadListItem,
+  OperationFilter,
 } from "@/lib/sales-inbox/types";
 import { COMMERCIAL_STATES, INBOX_VIEWS } from "@/lib/sales-inbox/types";
 import type { StaffRef } from "@/lib/portal-links/types";
@@ -39,6 +40,30 @@ import { LeadGroupBlock } from "./lead-group";
 import { LeadRow } from "./lead-row";
 import { LeadWorkspace } from "./lead-workspace";
 import { bulkAssign, bulkDiscard, bulkSetFollowUp } from "../inbox-actions";
+
+/**
+ * Las claves que cambian QUÉ FILAS hay. Tocar una invalida la página actual
+ * —si estabas en la 5 de 12 y filtras, esa página puede ya no existir— y
+ * también el lead abierto, que puede no estar en el conjunto nuevo.
+ *
+ * ⚠️ Seleccionar un lead NO está aquí, y esa es toda la corrección. La regla
+ * anterior era la contraria ("borra `page` salvo que me la pasen"), y como
+ * abrir un lead manda solo `{ lead }`, cada clic en la lista devolvía a la
+ * página 1. Trabajar la página 4 de la bandeja era imposible.
+ */
+const RESULT_SET_KEYS = new Set([
+  "view",
+  "q",
+  "state",
+  "assigned",
+  "type",
+  "intl",
+  "unmatched",
+  "op",
+  "group",
+  // Reordenar sí cambia qué hay en la página 3, así que también resetea.
+  "sort",
+]);
 
 const COUNT_KEY: Record<InboxView, keyof InboxCounts> = {
   "needs-attention": "needsAttention",
@@ -91,16 +116,29 @@ export function InboxShell({
   const selectedId = params?.get("lead") ?? null;
 
   const setParams = useCallback(
-    (patch: Record<string, string | null>, opts: { keepLead?: boolean } = {}) => {
+    (patch: Record<string, string | null>, opts: { replace?: boolean } = {}) => {
       const qs = new URLSearchParams(params?.toString() ?? "");
       for (const [k, v] of Object.entries(patch)) {
         if (v === null || v === "") qs.delete(k);
         else qs.set(k, v);
       }
-      // Cambiar de vista o de filtro invalida la página y el lead abierto.
-      if (!("page" in patch)) qs.delete("page");
-      if (!opts.keepLead && !("lead" in patch)) qs.delete("lead");
-      startNav(() => router.replace(`?${qs.toString()}`, { scroll: false }));
+      // Solo un cambio de filtro invalida la página y el lead abierto. Abrir un
+      // lead conserva las dos cosas: es la misma bandeja, mirada por dentro.
+      if (Object.keys(patch).some((k) => RESULT_SET_KEYS.has(k))) {
+        qs.delete("page");
+        if (!("lead" in patch)) qs.delete("lead");
+      }
+      // Abrir un lead SÍ merece entrada en el historial: es lo que hace que el
+      // Atrás del navegador devuelva a la lista donde estabas después de
+      // saltar a la ficha del cliente o a la de la propiedad. Filtrar, teclear
+      // en el buscador o recorrer con las flechas, no: con el freno de 350 ms
+      // y una pulsación por fila, el Atrás quedaría inservible.
+      const href = `?${qs.toString()}`;
+      const opensLead = "lead" in patch && patch.lead !== null;
+      startNav(() => {
+        if (opensLead && !opts.replace) router.push(href, { scroll: false });
+        else router.replace(href, { scroll: false });
+      });
     },
     [params, router],
   );
@@ -134,7 +172,8 @@ export function InboxShell({
           ? Math.min(items.length - 1, idx + 1)
           : Math.max(0, idx <= 0 ? 0 : idx - 1);
       const target = items[next];
-      if (target) setParams({ lead: target.id }, { keepLead: true });
+      // Recorrer con el teclado no llena el historial: replace.
+      if (target) setParams({ lead: target.id }, { replace: true });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -145,7 +184,7 @@ export function InboxShell({
 
   const activeFilters = useMemo(
     () =>
-      ["state", "assigned", "type", "intl", "unmatched"].filter((k) => params?.get(k)).length,
+      ["state", "assigned", "type", "intl", "unmatched", "op"].filter((k) => params?.get(k)).length,
     [params],
   );
 
@@ -155,7 +194,7 @@ export function InboxShell({
       <header className="relative shrink-0 border-b border-ink/10 bg-cream-50/70 px-4 pt-3 lg:px-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="crm-page-title text-ink">{t("inbox.title")}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="flex w-full max-w-[240px] items-center gap-2 rounded-md border border-ink/12 bg-white px-2.5 py-1.5 focus-within:border-gold/55 sm:max-w-xs">
               <Search size={13} strokeWidth={1.9} className="shrink-0 text-ink/40" />
               <input
@@ -177,6 +216,31 @@ export function InboxShell({
                 </button>
               )}
             </label>
+            {/* Venta o alquiler es una decisión de trabajo constante, no un
+                filtro que se abre una vez: vive a la vista.
+                "Sin determinar" es un segmento más, y no un residuo, porque de
+                lo contrario el filtro escondería en silencio a más de la mitad
+                de la bandeja — los leads cuyo precio no dice de qué operación
+                se habla. */}
+            <div className="flex items-center gap-0.5 rounded-md border border-ink/12 p-0.5">
+              {([null, "sale", "rent", "unknown"] as (OperationFilter | null)[]).map((o) => {
+                const on = (params?.get("op") ?? null) === o;
+                return (
+                  <button
+                    key={o ?? "all"}
+                    type="button"
+                    onClick={() => setParams({ op: o })}
+                    aria-pressed={on}
+                    className={cn(
+                      "whitespace-nowrap rounded px-2 py-1 text-xs font-medium transition",
+                      on ? "bg-ink text-cream-50" : "text-ink/50 hover:text-ink",
+                    )}
+                  >
+                    {t(`inbox.operation.${o ?? "all"}`)}
+                  </button>
+                );
+              })}
+            </div>
             {/* 332 consultas son 27 pisos: agruparlas cambia por completo
                 cómo se lee la bandeja, así que el conmutador va a la vista, no
                 escondido en los filtros. */}
@@ -384,7 +448,7 @@ export function InboxShell({
                   activeLeadId={selectedId}
                   selected={selected}
                   selectable={canEdit}
-                  onOpen={(id) => setParams({ lead: id }, { keepLead: true })}
+                  onOpen={(id) => setParams({ lead: id })}
                   onToggleSelect={(id, checked) =>
                     setSelected((prev) => {
                       const next = new Set(prev);
@@ -414,7 +478,7 @@ export function InboxShell({
                   selected={selected.has(lead.id)}
                   selectable={canEdit}
                   locale={config.locale}
-                  onOpen={() => setParams({ lead: lead.id }, { keepLead: true })}
+                  onOpen={() => setParams({ lead: lead.id })}
                   onToggleSelect={(checked) =>
                     setSelected((prev) => {
                       const next = new Set(prev);
@@ -465,7 +529,7 @@ export function InboxShell({
             <>
               <button
                 type="button"
-                onClick={() => setParams({ lead: null }, { keepLead: false })}
+                onClick={() => setParams({ lead: null })}
                 className="flex w-full items-center gap-1.5 border-b border-ink/10 px-4 py-2 text-xs text-ink/60 lg:hidden"
               >
                 <ArrowLeft size={14} strokeWidth={1.9} />

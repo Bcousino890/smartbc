@@ -17,6 +17,7 @@ import {
   isInboxGrouping,
   isInboxSort,
   isInboxView,
+  isOperationFilter,
   type InboxFilters,
 } from "@/lib/sales-inbox/types";
 import { getCountryConfig, isCountry, type Country } from "@/lib/country-config";
@@ -87,6 +88,7 @@ export default async function SalesInboxPage({
   const sortParam = one(sp.sort);
   const stateParam = one(sp.state);
   const groupParam = one(sp.group);
+  const opParam = one(sp.op);
   const view = isInboxView(viewParam) ? viewParam : "needs-attention";
   const grouping = isInboxGrouping(groupParam) ? groupParam : "none";
 
@@ -107,6 +109,7 @@ export default async function SalesInboxPage({
     leadType: one(sp.type),
     international: one(sp.intl) === "1" ? true : undefined,
     unmatchedProperty: one(sp.unmatched) === "1",
+    operation: isOperationFilter(opParam) ? opParam : undefined,
     page: Math.max(1, Number(one(sp.page) ?? 1) || 1),
     pageSize: grouping === "property" ? GROUP_PAGE_SIZE : DEFAULT_PAGE_SIZE,
     sort,

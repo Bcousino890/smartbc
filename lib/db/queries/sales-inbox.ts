@@ -34,6 +34,7 @@ import {
   GROUP_PAGE_SIZE,
   type CommercialState,
   type LeadGroup,
+  type LeadOperation,
   type InboxCounts,
   type InboxFilters,
   type LeadListItem,
@@ -53,6 +54,11 @@ const LIST_COLUMNS = [
   "is_international",
   "property_title",
   "matched_property_id",
+  // Un lead puede estar emparejado a una ficha de Idealista SIN fila en
+  // `properties` (las "inspo", que son la mayoría de esta cartera). Sin esta
+  // columna la bandeja los enseñaba a todos como "sin ficha" aunque estuvieran
+  // perfectamente emparejados — y /admin/idealista sí los contaba.
+  "matched_listing_id",
   "assigned_to",
   "client_id",
   "next_action_at",
@@ -72,6 +78,7 @@ const LIST_COLUMNS = [
   "last_activity_at",
   "commercial_state",
   "avatar_url",
+  "lead_operation",
 ].join(", ");
 
 export type InboxScope = {
@@ -88,6 +95,7 @@ function factsOf(r: any): LeadFacts {
     clientId: r.client_id ?? null,
     nextActionAt: r.next_action_at ?? null,
     matchedPropertyId: r.matched_property_id ?? null,
+    matchedListingId: r.matched_listing_id ?? null,
     name: r.name ?? null,
     phone: r.phone ?? null,
     whatsapp: {
@@ -126,11 +134,13 @@ function toListItem(r: any, now: Date, staffNames: Map<string, string>): LeadLis
     createdAt: r.created_at,
     propertyTitle: r.property_title ?? null,
     matchedPropertyId: r.matched_property_id ?? null,
+    matchedListingId: r.matched_listing_id ?? null,
     assignedTo: r.assigned_to ?? null,
     assignedName: r.assigned_to ? (staffNames.get(r.assigned_to) ?? null) : null,
     clientId: r.client_id ?? null,
     nextActionAt: r.next_action_at ?? null,
     state: deriveCommercialState(facts),
+    operation: (r.lead_operation as LeadOperation | null) ?? null,
     whatsapp: facts.whatsapp,
     reasons,
     score: attentionScore(reasons, r.created_at, now),
@@ -155,7 +165,19 @@ function applyFilters(q: any, f: InboxFilters, userId: string | null) {
   if (f.state) q = q.eq("commercial_state", f.state);
   if (f.leadType) q = q.eq("lead_type", f.leadType);
   if (f.international !== undefined) q = q.eq("is_international", f.international);
-  if (f.unmatchedProperty) q = q.is("matched_property_id", null);
+  // "Sin ficha" significa sin NINGUNA de las dos: ni propiedad nuestra ni
+  // anuncio de Idealista. Antes solo miraba la primera y metía en la cola a
+  // leads que sí estaban emparejados.
+  if (f.unmatchedProperty) {
+    q = q.is("matched_property_id", null).is("matched_listing_id", null);
+  }
+
+  // Venta / alquiler. `eq` NO: dejaría fuera los 'mixed' —hilos que preguntan
+  // por las dos cosas— sin avisar de nada. Y "sin determinar" es una elección
+  // explícita, no el residuo de las otras dos.
+  if (f.operation === "unknown") q = q.is("lead_operation", null);
+  else if (f.operation === "sale") q = q.in("lead_operation", ["sale", "mixed"]);
+  else if (f.operation === "rent") q = q.in("lead_operation", ["rent", "mixed"]);
 
   if (f.assignedTo === "me" && userId) q = q.eq("assigned_to", userId);
   else if (f.assignedTo === "none") q = q.is("assigned_to", null);
@@ -343,7 +365,7 @@ async function groupByProperty(
   now: Date,
   staffNames: Map<string, string>,
 ): Promise<InboxPage> {
-  let q = db().from(VIEW).select(LIST_COLUMNS + ", property_title");
+  let q = db().from(VIEW).select(LIST_COLUMNS + ", property_image_url");
   q = applyScope(q, scope);
   q = applyFilters(q, filters, scope.userId);
   if (filters.view === "needs-attention") {
@@ -365,14 +387,18 @@ async function groupByProperty(
     const item = toListItem(r, now, staffNames);
     if (filters.view === "needs-attention" && !needsAttention(item.reasons)) continue;
 
-    // Sin ficha propia se agrupa por el TÍTULO del anuncio: es lo único que
-    // tenemos, y en 190 de 332 casos es lo único que va a haber.
+    // Ficha propia primero; si no, el ANUNCIO de Idealista (las "inspo", que
+    // en esta cartera son la mayoría y antes caían aquí sin agrupar); y solo
+    // como último recurso el título del anuncio, que es lo único que queda
+    // cuando el lead no está emparejado con nada.
     const title = (r.property_title ?? "").trim();
     const key = r.matched_property_id
-      ? String(r.matched_property_id)
-      : title
-        ? `t:${title.toLowerCase()}`
-        : "t:";
+      ? `p:${r.matched_property_id}`
+      : r.matched_listing_id
+        ? `l:${r.matched_listing_id}`
+        : title
+          ? `t:${title.toLowerCase()}`
+          : "t:";
 
     const g = byKey.get(key);
     if (g) {
@@ -385,13 +411,17 @@ async function groupByProperty(
       byKey.set(key, {
         key,
         propertyId: r.matched_property_id ?? null,
+        listingId: r.matched_listing_id ?? null,
+        slug: null,
         title: title || null,
         zone: null,
         reference: null,
         price: null,
         operation: null,
         status: null,
-        coverUrl: null,
+        // La foto del anuncio de Idealista, ya realojada en nuestro bucket por
+        // la ingesta. Si la ficha tiene portada propia, la pisa más abajo.
+        coverUrl: r.property_image_url ?? null,
         leads: [item],
         count: 1,
         lastLeadAt: item.createdAt,
@@ -409,24 +439,56 @@ async function groupByProperty(
   const page = ordered.slice(from, from + GROUP_PAGE_SIZE);
 
   // Solo se piden los datos de las fichas VISIBLES: sin esto sería un N+1
-  // sobre todas las propiedades del listado.
-  const ids = page.map((g) => g.propertyId).filter((x): x is string => Boolean(x));
-  if (ids.length) {
+  // sobre todas las propiedades del listado. Dos consultas porque hay dos
+  // procedencias posibles, no porque haya dos modelos.
+  const propertyIds = page.map((g) => g.propertyId).filter((x): x is string => Boolean(x));
+  const listingIds = page
+    .filter((g) => !g.propertyId)
+    .map((g) => g.listingId)
+    .filter((x): x is string => Boolean(x));
+
+  if (propertyIds.length) {
     const { data: props } = await db()
       .from("properties")
-      .select("id, title, zone, property_reference, price, operation, status, cover_photo_url")
-      .in("id", ids);
+      .select("id, slug, title, zone, property_reference, price, operation, status, cover_photo_url")
+      .in("id", propertyIds);
     const map = new Map<string, any>((props ?? []).map((p: any) => [p.id, p]));
     for (const g of page) {
       const p = g.propertyId ? map.get(g.propertyId) : null;
       if (!p) continue;
+      g.slug = p.slug ?? null;
       g.title = p.title ?? g.title;
       g.zone = p.zone ?? null;
       g.reference = p.property_reference ?? null;
       g.price = p.price === null ? null : Number(p.price);
       g.operation = p.operation ?? null;
       g.status = p.status ?? null;
-      g.coverUrl = p.cover_photo_url ?? null;
+      // Si la ficha no tiene portada se conserva la del anuncio, que ya se
+      // puso al construir el grupo.
+      g.coverUrl = p.cover_photo_url ?? g.coverUrl;
+    }
+  }
+
+  if (listingIds.length) {
+    const { data: listings } = await db()
+      .from("idealista_listings")
+      .select("id, reference_code, inspo_title, address_street, address_city, operation, price, total_rental_price")
+      .in("id", listingIds);
+    const map = new Map<string, any>((listings ?? []).map((l: any) => [l.id, l]));
+    for (const g of page) {
+      const l = g.listingId && !g.propertyId ? map.get(g.listingId) : null;
+      if (!l) continue;
+      g.title = l.inspo_title ?? l.address_street ?? g.title;
+      g.zone = l.address_city ?? null;
+      g.reference = l.reference_code ?? null;
+      // El precio que vale es el de SU operación: en una ficha de alquiler,
+      // `price` está a 0 por construcción (ver inspo-mapper).
+      const raw = l.operation === "rent" ? l.total_rental_price : l.price;
+      g.price = raw === null || raw === undefined ? null : Number(raw);
+      g.operation = l.operation ?? null;
+      // `idealista_state` (draft/published) NO es un estado de propiedad: no se
+      // mete aquí para no inventar una traducción que significa otra cosa.
+      g.status = null;
     }
   }
 
@@ -527,8 +589,15 @@ export type LeadActivityEntry = {
 };
 
 export type LeadPropertyContext = {
+  /**
+   * De dónde sale la ficha. `listing` es un anuncio de Idealista SIN fila en
+   * `properties` (las "inspo"): existe, tiene referencia y precio, y hasta
+   * ahora la bandeja lo enseñaba como "todavía no es ficha nuestra".
+   */
+  source: "property" | "listing";
   id: string;
-  slug: string;
+  /** Solo las fichas propias tienen slug; la ruta del panel va por slug. */
+  slug: string | null;
   title: string | null;
   reference: string | null;
   price: number | null;
@@ -625,7 +694,12 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
   ]);
 
   const [property, linkedClient, duplicates] = await Promise.all([
-    row.matched_property_id ? getPropertyContext(row.matched_property_id) : null,
+    // La ficha propia manda; si no la hay, el anuncio de Idealista.
+    row.matched_property_id
+      ? getPropertyContext(row.matched_property_id)
+      : row.matched_listing_id
+        ? getListingContext(row.matched_listing_id)
+        : null,
     row.client_id ? getClientRef(row.client_id) : null,
     getDuplicates(id, row.phone_digits ?? ""),
   ]);
@@ -696,6 +770,7 @@ async function getPropertyContext(propertyId: string): Promise<LeadPropertyConte
       .maybeSingle();
     if (!data) return null;
     return {
+      source: "property",
       id: data.id,
       slug: data.slug,
       title: data.title ?? null,
@@ -705,6 +780,44 @@ async function getPropertyContext(propertyId: string): Promise<LeadPropertyConte
       status: data.status ?? null,
       zone: data.zone ?? null,
       coverUrl: data.cover_photo_url ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * La ficha cuando el lead está emparejado a un ANUNCIO de Idealista sin fila
+ * en `properties`. En esta cartera es el caso mayoritario: son fichas "inspo",
+ * con referencia BC-xxxx y precio propios, y tratarlas como "sin ficha" hacía
+ * que la bandeja diera por perdidos leads que estaban bien emparejados.
+ */
+async function getListingContext(listingId: string): Promise<LeadPropertyContext | null> {
+  try {
+    const { data } = await db()
+      .from("idealista_listings")
+      .select(
+        "id, reference_code, inspo_title, address_street, address_city, operation, price, total_rental_price",
+      )
+      .eq("id", listingId)
+      .maybeSingle();
+    if (!data) return null;
+    // El precio que vale es el de SU operación: en una ficha de alquiler
+    // `price` está a 0 por construcción (ver inspo-mapper).
+    const raw = data.operation === "rent" ? data.total_rental_price : data.price;
+    return {
+      source: "listing",
+      id: data.id,
+      slug: null,
+      title: data.inspo_title ?? data.address_street ?? null,
+      reference: data.reference_code ?? null,
+      price: raw === null || raw === undefined ? null : Number(raw),
+      operation: data.operation ?? null,
+      // `idealista_state` (draft/published) no es un estado de propiedad: no se
+      // traduce aquí para no darle un significado que no tiene.
+      status: null,
+      zone: data.address_city ?? null,
+      coverUrl: null,
     };
   } catch {
     return null;

@@ -14,6 +14,7 @@
 
   const PORTAL_ORIGIN = "https://portal.bcousinoprop.com";
   const API_URL = PORTAL_ORIGIN + "/api/extension/idealista-leads";
+  const RUNS_URL = PORTAL_ORIGIN + "/api/extension/idealista-capture-runs";
 
   const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/;
   const COUNTRY_RE = /\(([A-Z]{2})\)/;
@@ -245,9 +246,20 @@
   }
 
   // ── Envío al portal ────────────────────────────────────────────────
+  // Devuelve el cuerpo de la respuesta si llegó, o `null` si no.
+  //
+  // ⚠️ Además marca `lastSendFatal` cuando el fallo es de los que NO se
+  // arreglan reintentando (falta el token, o Idealista nos devuelve un 401).
+  // El recorrido automático lo mira para pararse en seco en vez de seguir
+  // tirando doscientas peticiones muertas contra un token caducado — que era
+  // exactamente la forma de perder medio inbox sin enterarse.
+  let lastSendFatal = false;
+
   async function sendLeads(source, leads) {
+    lastSendFatal = false;
     const token = await requireToken();
     if (!token) {
+      lastSendFatal = true;
       showBadge("Falta el token de SmartBC: configúralo en las Opciones de la extensión", true, 8000);
       return null;
     }
@@ -261,6 +273,7 @@
         body: JSON.stringify({ source, leads }),
       });
       if (res.status === 401) {
+        lastSendFatal = true;
         showBadge("Token caducado o inválido: genera uno nuevo en SmartBC y pégalo en Opciones", true, 10000);
         return null;
       }
@@ -279,6 +292,27 @@
     } catch (err) {
       showBadge("No se pudo conectar con el portal: " + err.message, true, 8000);
       return null;
+    }
+  }
+
+  // El parte de un recorrido completo: cuántas llegaron de verdad, cuántas no
+  // y por qué paró. Sin esto, "¿está llegando todo del inbox?" no tiene
+  // respuesta en ninguna pantalla — solo un cartel que se va con la pestaña.
+  //
+  // Silencioso a propósito: si el parte no se puede guardar, no vale la pena
+  // tapar con otro error el resumen que el usuario está leyendo.
+  async function reportRun(run) {
+    try {
+      const token = await requireToken();
+      if (!token) return;
+      await fetch(RUNS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify(run),
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[SmartBC] no se pudo guardar el parte del recorrido:", err);
     }
   }
 
@@ -737,8 +771,14 @@
     );
   }
 
+  // Devuelve "sent" | "failed" | "fatal" | "skipped".
+  //
+  // Antes no devolvía nada, y el recorrido automático sumaba una "capturada"
+  // por cada conversación que visitaba aunque el envío hubiera fallado: el
+  // cartel final decía "150 capturadas" con noventa en el CRM. Ese hueco es la
+  // explicación más directa de "contactaron y no me aparecen".
   async function captureDetail(conversationId, force) {
-    if (!force && sentDetails.has(conversationId)) return;
+    if (!force && sentDetails.has(conversationId)) return "skipped";
     sentDetails.add(conversationId);
 
     // Esperar a que el hilo cargue (hay texto sustancial en pantalla)
@@ -747,17 +787,34 @@
     await scrollThreadToTop(); // cargar los mensajes viejos del hilo
 
     const lead = await extractDetailLead(conversationId);
-    const result = await sendLeads("detail", [lead]);
+    let result = await sendLeads("detail", [lead]);
+
+    // Un reintento antes de darla por perdida: la mayoría de estos fallos son
+    // un corte de red de un segundo. Si es fatal (401, sin token) no se
+    // reintenta: no va a cambiar nada.
+    if (!result && !lastSendFatal) {
+      await sleep(1500);
+      result = await sendLeads("detail", [lead]);
+    }
+
     if (result && result.ok) {
       showBadge("✓ Contacto actualizado en SmartBC", false, 3000);
+      return "sent";
     }
+    // No se queda marcada como enviada: así un reintento posterior en la misma
+    // pestaña vuelve a intentarlo de verdad.
+    sentDetails.delete(conversationId);
+    return lastSendFatal ? "fatal" : "failed";
   }
 
   // ── Modo AUTO: recorre las conversaciones con el botón "Anterior" ────
   // Captura la conversación abierta, pulsa "Anterior" (la navegación
   // propia de Idealista entre conversaciones), espera a que cargue la
   // siguiente y repite hasta el final del inbox o hasta que se detenga.
-  let autoRun = null; // {captured: n} mientras está activo
+  // {sent, failed, failedIds} mientras está activo. Se cuentan las ENVIADAS,
+  // no las visitadas: son cosas distintas y confundirlas es lo que hacía que
+  // el recorrido pareciera completo cuando no lo era.
+  let autoRun = null;
 
   // Localiza el control de navegación entre conversaciones ("Anterior" /
   // "Reciente") por su texto — sus clases _kiwi-button_* llevan hash de
@@ -829,7 +886,8 @@
   }
 
   async function runAutoCapture(startId) {
-    autoRun = { captured: 0 };
+    const startedAt = new Date().toISOString();
+    autoRun = { sent: 0, failed: 0, failedIds: [] };
     updateAutoButton();
     let currentId = startId;
     const visited = new Set();
@@ -841,30 +899,69 @@
       if (visited.has(currentId)) { stopReason = "vuelta al inicio (ciclo)"; break; }
       visited.add(currentId);
 
-      await captureDetail(currentId, true);
+      const outcome = await captureDetail(currentId, true);
       if (!autoRun) { stopReason = "detenido por el usuario"; break; }
-      autoRun.captured++;
+
+      if (outcome === "fatal") {
+        // Seguir sería recorrer el inbox entero tirando peticiones que ya
+        // sabemos que van a fallar, y acabar con un cartel que dice que todo
+        // fue bien. Se para aquí, con la conversación todavía a la vista.
+        autoRun.failed++;
+        autoRun.failedIds.push(currentId);
+        stopReason = "el envío no está autorizado (revisa el token en Opciones)";
+        break;
+      }
+      if (outcome === "sent") {
+        autoRun.sent++;
+      } else {
+        autoRun.failed++;
+        autoRun.failedIds.push(currentId);
+      }
+
       updateAutoButton();
-      showBadge("Auto: " + autoRun.captured + " capturadas. Pasando a la siguiente…");
+      showBadge(
+        "Auto: " + autoRun.sent + " enviadas" +
+        (autoRun.failed ? " · " + autoRun.failed + " fallidas" : "") +
+        ". Pasando a la siguiente…",
+        autoRun.failed > 0,
+      );
 
       const { next, reason } = await navigatePrev(currentId);
       if (!next) { stopReason = reason; break; }
       // eslint-disable-next-line no-console
-      console.log("[SmartBC] auto:", autoRun.captured, "→ siguiente", next);
+      console.log("[SmartBC] auto:", autoRun.sent, "enviadas →", next);
       currentId = next;
       await sleep(600); // pausa suave entre conversaciones
     }
-    const total = autoRun ? autoRun.captured : 0;
+    const sent = autoRun ? autoRun.sent : 0;
+    const failed = autoRun ? autoRun.failed : 0;
+    const failedIds = autoRun ? autoRun.failedIds : [];
     autoRun = null;
     updateAutoButton();
-    // Sin auto-hide: el motivo del fin queda visible para diagnosticar.
-    showBadge("✓ Auto terminado: " + total + " capturadas — " + stopReason);
+
+    // Sin auto-hide: el motivo del fin queda visible para diagnosticar. Y si
+    // se perdió alguna, se dicen CUÁLES: con el id se vuelve a su hilo
+    // (idealista.com/inbox/CONVERSATION_<id>) y se recaptura a mano.
+    let msg = (failed ? "⚠️ " : "✓ ") + "Auto terminado: " + sent + " enviadas";
+    if (failed) msg += " · " + failed + " FALLIDAS";
+    msg += " — " + stopReason;
+    if (failed) {
+      msg += "<br><span style=\'opacity:.75;font-size:11px\'>sin enviar: " +
+        failedIds.slice(0, 12).join(", ") +
+        (failedIds.length > 12 ? " y " + (failedIds.length - 12) + " más" : "") +
+        "</span>";
+      // eslint-disable-next-line no-console
+      console.warn("[SmartBC] conversaciones sin enviar:", failedIds);
+    }
+    showBadge(msg, failed > 0);
+
+    void reportRun({ sent, failed, failedIds, stopReason, startedAt });
   }
 
   function updateAutoButton() {
     const btn = document.getElementById("smartbc-auto-capture");
     if (!btn) return;
-    btn.textContent = autoRun ? "⏹ Detener (" + autoRun.captured + ")" : "⏩ Capturar todas";
+    btn.textContent = autoRun ? "⏹ Detener (" + autoRun.sent + ")" : "⏩ Capturar todas";
     btn.style.background = autoRun ? "#8b1a1a" : "#1a1a1a";
   }
 
