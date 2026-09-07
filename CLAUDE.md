@@ -625,3 +625,50 @@ ficha de un cliente).
 de texto, nunca a clases CSS**. Si un portal cambia su maquetación el campo
 llega vacío pero **el enlace se envía igual**, que es lo único imprescindible
 para llamar. No "arregles" eso metiendo selectores CSS: duran semanas.
+
+## Idioma del scraping y de los enlaces temporales de `particulares` (2026-09-07)
+El CRM entero es en español, así que la ficha scrapeada de un particular
+(`/admin/particulares`) y su enlace temporal (`/a/[token]`) también deben
+serlo por defecto — el selector de idioma de `/a/[token]`
+(`app/a/[token]/language-select.tsx`, Google Translate) sigue ahí para que el
+destinatario cambie de idioma si quiere, pero el estado inicial debe ser
+español.
+
+Dos causas distintas para el mismo síntoma (una ficha apareciendo en inglés),
+y dos arreglos distintos:
+- **Las etiquetas que genera el propio portal** (planta, orientación, "with
+  lift", "Listing updated on…") las decide Idealista según la geo de la IP
+  saliente cuando no se manda `Accept-Language` — con el proxy residencial
+  rotativo eso es una lotería, así que la MISMA ficha podía salir en español
+  o en inglés según qué IP tocara ese scrape. Arreglado en la fuente: el
+  fetch con UA de WhatsApp en `lib/sync/import-by-link/fetch-html.ts` (el que
+  usa casi siempre — ver comentario "Intento 0") y el de los listados de
+  búsqueda en `app/api/cron/particulares/scrape/route.ts` ahora mandan
+  `Accept-Language: es-ES,es;q=0.9`. Esto es válido para fichas nuevas; una ya
+  guardada en inglés se corrige sola en el siguiente re-scrape (el cron
+  actualiza `features`/`description` de los activos en cada pasada).
+- **La descripción libre**, la escribe el propio anunciante en el idioma que
+  eligió (frecuente en zonas como Salamanca/Recoletos, donde muchos
+  particulares redactan en inglés para inquilinos internacionales) — eso no
+  lo arregla ninguna cabecera. Por eso `sanitizeParticularDescriptionForSharing`
+  (`lib/services/particulares/sanitize-description.ts`) ahora TRADUCE a
+  español además de limpiar contacto/"sin agencias" (hasta esta fecha
+  preservaba el idioma original a propósito). Las características
+  (`features`) del enlace temporal se traducen igual, con
+  `translateParticularFeaturesForSharing` — nueva porque antes no se tocaban
+  en absoluto camino al enlace. Ambas se calculan UNA VEZ al crear el enlace
+  (`createParticularShareLink`) y se persisten en
+  `particulares_share_links.sanitized_description` / `sanitized_features`
+  (migraciones 0157/0163); los enlaces creados antes de existir la columna se
+  traducen al vuelo en la primera visita (`sanitizeIfMissing`) igual que ya
+  hacía la descripción. Sin IA configurada o si la traducción de
+  características falla o desalinea el número de elementos, se sirven tal
+  cual — nunca se bloquea la creación del enlace ni se arriesga un dato
+  inventado o descolocado.
+
+⚠️ **No confundir con la "Ficha técnica" del modal de `/admin/particulares`**
+(precio/m², planta, año, estado, orientación, energía — migración 0158): esas
+columnas las rellena "el scraper de la ficha por fuera" (fuera de este repo,
+según el propio comentario de la migración), así que el fix de
+`Accept-Language` de arriba no las toca. Traducirlas requeriría tocar ese
+proceso externo, no este código.

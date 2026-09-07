@@ -702,8 +702,12 @@ async function extractPropertyUrlsFromSearch(
 
       // Vía curl con UA WhatsApp + proxy residencial — pasa DataDome (el TLS
       // de undici no, y la IP del datacenter se quema sin el proxy).
+      // Accept-Language fijo: sin él, Idealista decide el idioma de sus
+      // textos generados por la geo de la IP residencial (rotativa), así que
+      // la misma ficha puede salir en inglés según qué IP tocó ese request.
       const res = await fetchViaCurl(searchUrl, WHATSAPP_UA, {
         proxyUrl: await getProxyUrl(),
+        headers: ["Accept-Language: es-ES,es;q=0.9"],
       });
       if (!res.ok) {
         console.warn(`[cron-particulares] listado ${searchUrl} -> ${res.reason}`);

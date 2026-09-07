@@ -287,6 +287,13 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     // del UA. El JA3 de curl + UA WhatsApp pasa; el de undici no.
     const curlResult = await fetchViaCurl(url, WHATSAPP_UA, {
       proxyUrl,
+      // Sin esto, Idealista decide el idioma de sus textos generados (planta,
+      // orientación, "with lift", "Listing updated on...") por la geo de la
+      // IP saliente — con proxy residencial rotativo eso es una lotería: la
+      // MISMA ficha puede salir en español o en inglés según qué IP tocó. No
+      // afecta a la descripción libre (la escribe el propio anunciante en el
+      // idioma que eligió), solo a las etiquetas que genera el propio portal.
+      headers: ["Accept-Language: es-ES,es;q=0.9"],
     });
     if (curlResult.ok) {
       console.log(`[fetch-html] ✓ UA WhatsApp (curl) exitoso`);
