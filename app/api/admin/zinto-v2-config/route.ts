@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { encryptSecret } from "@/lib/crypto/secret";
+import { parseZintoV2IntegrationId } from "@/lib/services/zinto-v2/config";
 
 async function requireAdmin() {
   const profile = await getCurrentProfile();
@@ -48,6 +49,13 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { apiKey, baseUrl, integrationId, webhookSecret, enabled } = body;
+    const parsedIntegrationId = parseZintoV2IntegrationId(integrationId);
+    if (integrationId != null && integrationId !== "" && !parsedIntegrationId) {
+      return Response.json(
+        { error: "El Integration ID debe ser un UUID válido" },
+        { status: 400 },
+      );
+    }
 
     const supabase = createAdminClient() as any;
     const { data: existing } = await supabase
@@ -61,7 +69,7 @@ export async function POST(req: Request) {
     // /api/admin/zinto-config (v1).
     const row: Record<string, unknown> = {
       base_url_v2: baseUrl || "https://crm.zinto.app/api/v2",
-      integration_id: integrationId ? parseInt(String(integrationId), 10) : null,
+      integration_id: parsedIntegrationId,
       enabled_v2: Boolean(enabled),
     };
 

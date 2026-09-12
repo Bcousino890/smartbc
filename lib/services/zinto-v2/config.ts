@@ -18,11 +18,20 @@ import { decryptSecret } from "@/lib/crypto/secret";
 export interface ZintoV2Config {
   apiKey: string;
   baseUrl: string;
-  integrationId: number | null;
+  integrationId: string | null;
   webhookSecret: string;
   enabled: boolean;
   /** true cuando vino de la BD (no solo del fallback por env). */
   fromDb: boolean;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** El Integration ID de Zinto es un UUID opaco: nunca debe convertirse a número. */
+export function parseZintoV2IntegrationId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const integrationId = value.trim();
+  return UUID_PATTERN.test(integrationId) ? integrationId : null;
 }
 
 export async function getZintoV2Config(): Promise<ZintoV2Config | null> {
@@ -45,7 +54,7 @@ export async function getZintoV2Config(): Promise<ZintoV2Config | null> {
         return {
           apiKey,
           baseUrl: data.base_url_v2 || "https://crm.zinto.app/api/v2",
-          integrationId: data.integration_id ?? null,
+          integrationId: parseZintoV2IntegrationId(data.integration_id),
           webhookSecret,
           enabled: Boolean(data.enabled_v2),
           fromDb: true,
@@ -58,13 +67,11 @@ export async function getZintoV2Config(): Promise<ZintoV2Config | null> {
 
   const apiKey = process.env.ZINTO_V2_API_KEY || "";
   if (!apiKey) return null;
-  const integrationId = process.env.ZINTO_V2_INTEGRATION_ID
-    ? parseInt(process.env.ZINTO_V2_INTEGRATION_ID, 10)
-    : null;
+  const integrationId = parseZintoV2IntegrationId(process.env.ZINTO_V2_INTEGRATION_ID);
   return {
     apiKey,
     baseUrl: process.env.ZINTO_V2_BASE_URL || "https://crm.zinto.app/api/v2",
-    integrationId: Number.isFinite(integrationId) ? integrationId : null,
+    integrationId,
     webhookSecret: process.env.ZINTO_V2_WEBHOOK_SECRET || "",
     enabled: process.env.ZINTO_V2_ENABLED === "true",
     fromDb: false,

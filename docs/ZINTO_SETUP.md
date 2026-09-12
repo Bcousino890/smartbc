@@ -184,10 +184,10 @@ integraciones de Zinto distintas y conviven en el repo:
 
 ### Diferencias de contrato que importan
 
-- **Header nuevo obligatorio:** `X-Zinto-Integration-Id` (entero) en TODA
+- **Header nuevo obligatorio:** `X-Zinto-Integration-Id` (UUID tratado como texto) en TODA
   ruta protegida, además del `Authorization: Bearer`. Se crea/pide en Zinto
-  aparte de la API Key — sin él, cualquier llamada a v2 da 401/403. **Pendiente
-  de conseguir** (no lo teníamos al escribir esto).
+  aparte de la API Key — sin él, cualquier llamada a v2 da 401/403. Hay que
+  copiarlo completo, con sus letras y guiones, sin ninguna conversión numérica.
 - **Formato de teléfono distinto de v1:** v2 espera `recipient` en E.164
   **con** el `+` (`"+56912345678"`), v1 lo espera sin `+` (solo dígitos). Ver
   `normalizeRecipientV2()` en `lib/services/zinto-v2/client.ts` — no reusar
@@ -222,9 +222,8 @@ en vez de aceptar en silencio.
 
 ### Pendiente antes de poder probar en serio
 
-1. Conseguir el **Integration ID** de Zinto (Configuración → Acceso API o
-   donde Zinto lo exponga) y la API Key de v2 (ya la tenemos de producción,
-   confirmar si sirve la misma que v1 o si v2 emite una propia).
+1. Cargar el **Integration ID** de Zinto (Configuración → Acceso API →
+   Integraciones CRM) y la API Key de v2 como valores separados.
 2. Cargarlos en el panel, activar "Activar v2" y usar **"Probar Conexión
    (v2)"** (llama a `GET /health` y, si hay Integration ID, `GET
    /capabilities`) antes de tocar el webhook.

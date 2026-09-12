@@ -240,9 +240,12 @@ export function ZintoV2ConfigClient() {
               Integration ID (X-Zinto-Integration-Id)
             </span>
             <input
-              type="number"
+              type="text"
               value={config.integrationId}
               onChange={(e) => set("integrationId", e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder="Pídelo/créalo en Zinto — sin esto v2 no responde"
               className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             />

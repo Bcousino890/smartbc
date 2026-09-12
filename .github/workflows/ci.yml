@@ -44,6 +44,9 @@ jobs:
       - name: Unificación de leads (regla de fusión, offline)
         run: npm run test:lead-merge
 
+      - name: Zinto v2 (Integration ID UUID, offline)
+        run: npm run test:zinto-v2
+
       - name: Build de Next.js (lo MISMO que corre el VPS al desplegar)
         run: npm run build
         env:
