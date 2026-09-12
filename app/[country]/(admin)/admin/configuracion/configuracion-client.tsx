@@ -18,6 +18,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageFooter } from "@/components/ui/page-footer";
 import { EmailConfigClient } from "./email-config-client";
 import { ZintoConfigClient } from "./zinto-config-client";
+import { ZintoV2ConfigClient } from "./zinto-v2-config-client";
 import { ProxyConfigClient, type ProxyConfig, type ProxyProvider } from "./proxy-config-client";
 import { LogsViewer } from "./logs-viewer";
 import { MigrationsManager } from "./migrations-manager";
@@ -372,6 +373,9 @@ export default function ConfiguracionClient() {
 
         {/* Zinto WhatsApp Configuration */}
         <ZintoConfigClient />
+
+        {/* Zinto API v2 (bidireccional, en paralelo, apagada por flag) */}
+        <ZintoV2ConfigClient />
 
         {/* Save bar */}
         <div className="flex justify-end">

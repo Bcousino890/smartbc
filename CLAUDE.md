@@ -672,3 +672,18 @@ columnas las rellena "el scraper de la ficha por fuera" (fuera de este repo,
 según el propio comentario de la migración), así que el fix de
 `Accept-Language` de arriba no las toca. Traducirlas requeriría tocar ese
 proceso externo, no este código.
+
+## Zinto — TRES integraciones distintas en el repo, no confundir (2026-09-12)
+
+Antes de tocar nada de Zinto, mirar cuál de las tres es:
+
+| | Base URL | Módulo | Estado |
+|---|---|---|---|
+| v1 (WhatsApp + leads/campañas) | `crm.zinto.app/api/v1` | `lib/services/zinto/**` | **En producción hoy** — `/admin/mensajes` manda/recibe de verdad por acá |
+| Integration API (piloto CRM completo: contactos/deals/pipelines/tareas) | `crm.zinto.app/_integration-api` | `lib/services/zinto-integration/**` | Apagado (`ZINTO_INTEGRATION_API_ENABLED`), sin key de producción — no confundir con v2 |
+| v2 (bidireccional oficial, reemplaza el "Flujo" manual de v1) | `crm.zinto.app/api/v2` | `lib/services/zinto-v2/**` | Apagado (`enabled_v2` en `zinto_config`) — en construcción, guía completa en `docs/ZINTO_SETUP.md` sección 9 |
+
+v2 exige un header extra que v1 no tiene (`X-Zinto-Integration-Id`, el id de
+la integración creada en Zinto — no la API Key) y espera el teléfono en E.164
+**con** `+` (v1 lo espera sin `+`). Mientras `enabled_v2` esté en `false`,
+todo el WhatsApp real sigue por v1 sin cambios.
