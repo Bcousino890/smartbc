@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { encryptSecret } from "@/lib/services/zinto/config";
+import { normalizeIntegrationBaseUrl } from "@/lib/services/zinto-integration/config";
 
 async function requireAdmin() {
   const profile = await getCurrentProfile();
@@ -33,6 +34,15 @@ export async function GET() {
         hasApiKey: Boolean(data.api_key_encrypted),
         hasWebhookSecret: Boolean(data.webhook_secret_encrypted),
         hasInboundToken: Boolean(data.inbound_token_encrypted),
+        // Integration API (contrato nuevo). `integrationBaseUrl` se muestra
+        // sólo informativo: vacío significa "derivada de baseUrl".
+        hasIntegrationApiKey: Boolean(data.integration_api_key_encrypted),
+        integrationBaseUrl: data.integration_base_url ?? "",
+        resolvedIntegrationBaseUrl: normalizeIntegrationBaseUrl(
+          data.integration_base_url || data.base_url || "",
+        ),
+        hasIntegrationWebhookSecret: Boolean(data.integration_webhook_secret_encrypted),
+        integrationWebhookId: data.integration_webhook_id ?? null,
       },
     });
   } catch (error) {
@@ -48,7 +58,15 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { apiKey, baseUrl, channelId, webhookSecret, inboundToken } = body;
+    const {
+      apiKey,
+      baseUrl,
+      channelId,
+      webhookSecret,
+      inboundToken,
+      integrationApiKey,
+      integrationBaseUrl,
+    } = body;
 
     const supabase = createAdminClient() as any;
     const { data: existing } = await supabase
@@ -82,6 +100,26 @@ export async function POST(req: Request) {
       const enc = encryptSecret(inboundToken);
       row.inbound_token_encrypted = enc.encrypted;
       row.inbound_token_iv = enc.iv;
+    }
+
+    // Clave propia de la Integration API. Opcional por diseño: lo normal es
+    // que una sola clave sirva para las dos capas, y entonces esto queda a
+    // NULL y el resolver cae a api_key_*. Un string vacío explícito es la
+    // forma de BORRARLA y volver a usar la principal.
+    if (typeof integrationApiKey === "string" && integrationApiKey.trim()) {
+      const enc = encryptSecret(integrationApiKey.trim());
+      row.integration_api_key_encrypted = enc.encrypted;
+      row.integration_api_key_iv = enc.iv;
+    } else if (integrationApiKey === "") {
+      row.integration_api_key_encrypted = null;
+      row.integration_api_key_iv = null;
+    }
+
+    // Override de la URL base. Se normaliza al guardar (sin /api/v1 final),
+    // porque el cliente de integración compone las rutas completas encima.
+    if (typeof integrationBaseUrl === "string") {
+      const normalized = normalizeIntegrationBaseUrl(integrationBaseUrl);
+      row.integration_base_url = normalized || null;
     }
 
     if (existing) {

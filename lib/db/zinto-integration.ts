@@ -123,6 +123,57 @@ export async function markZintoIntegrationEventProcessed(
     .eq("event_id", eventId);
 }
 
+// ---- Health-check stats ----
+// Read-only counters for app/api/admin/zinto/health. Kept here rather than in
+// the service layer so health.ts stays about *interpreting* the numbers.
+
+export interface ZintoIntegrationStats {
+  lastEventAt: string | null;
+  eventsLast24h: number;
+  lastApiCallAt: string | null;
+  lastApiCallStatus: number | null;
+  cachedContacts: number;
+  cacheSyncedAt: string | null;
+}
+
+export async function getZintoIntegrationStats(): Promise<ZintoIntegrationStats> {
+  const db = createAdminClient() as any;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const [lastEvent, recentEvents, lastCall, contacts] = await Promise.all([
+    db
+      .from("zinto_integration_webhook_events")
+      .select("received_at")
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from("zinto_integration_webhook_events")
+      .select("event_id", { count: "exact", head: true })
+      .gte("received_at", since),
+    db
+      .from("zinto_integration_api_log")
+      .select("created_at, status_code")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from("zinto_crm_contacts")
+      .select("synced_at", { count: "exact" })
+      .order("synced_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  return {
+    lastEventAt: lastEvent?.data?.received_at ?? null,
+    eventsLast24h: recentEvents?.count ?? 0,
+    lastApiCallAt: lastCall?.data?.created_at ?? null,
+    lastApiCallStatus: lastCall?.data?.status_code ?? null,
+    cachedContacts: contacts?.count ?? 0,
+    cacheSyncedAt: contacts?.data?.[0]?.synced_at ?? null,
+  };
+}
+
 // ---- API call audit log ----
 export const logZintoIntegrationRequest: RequestLogger = async (entry) => {
   try {

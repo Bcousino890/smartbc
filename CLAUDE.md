@@ -475,6 +475,105 @@ prosa: leads de hoy + como mucho una recomendación sobre una ficha.
   versión vieja cacheada, se sigue mostrando esa en vez de nada.
 - Solo `country === "es"`: el análisis depende de `idealista_listings` /
   `idealista_leads`, que no existen para Chile.
+## WhatsApp / Zinto — tres capas, y sólo una se usa (auditado 2026-09-13)
+
+Conviven **tres** integraciones con Zinto y es fácil tocar la que no es:
+
+1. **Legacy WhatsApp** (`lib/services/zinto/**`, migraciones 0091–0100). Espeja
+   conversaciones y mensajes en tablas propias. Credencial en `zinto_config`.
+   En producción: 61 conversaciones, 49 mensajes — **48 enviados, 1 recibido**,
+   el último el 2026-08-12. `zinto_webhook_deliveries` y `zinto_leads` están
+   **vacías**: el Flujo de mensajes entrantes del panel de Zinto (paso 5 de
+   `docs/ZINTO_ACTIVACION.md`) nunca llegó a configurarse.
+2. **Integration API** (`lib/services/zinto-integration/**`, migraciones
+   0119–0120 y 0163). El contrato completo y bien construido. Se ejecutó
+   **exactamente una vez**: 728 llamadas el 2026-08-15 entre las 02:51 y las
+   02:53, el backfill inicial.
+3. **El iframe** (`zinto-inbox-embed.tsx`, pestaña «Zinto» de `/admin/mensajes`).
+   **Esto es lo que el equipo usa a diario.** No es integración, es una ventana:
+   nada de lo que pasa dentro toca la base de datos del CRM.
+
+### Las trampas (todas costaron tiempo de verdad)
+
+⚠️ **El prefijo `/_integration-api` está MUERTO.** Devuelve **200 con el HTML de
+la SPA** para cualquier ruta — incluidas `/health`, `/ready` y un `/me` sin
+autenticar, que en una API viva serían 401 JSON. La superficie entera responde
+hoy en `https://crm.zinto.app/api/v1`. Y falla de la peor manera: 200+HTML →
+revienta `response.json()` → se clasifica como fallo de red → 3 reintentos →
+*"Network error"*. `client.ts` ahora lo detecta por `content-type` y lanza
+`not_json_response` con el nombre real del problema, sin reintentar.
+
+⚠️ **Una credencial, un sitio: `zinto_config`.** Hasta 2026-09-13 el cliente
+legacy leía la clave de la BD y el nuevo **sólo** de `process.env.ZINTO_API_KEY`.
+Por eso "Probar Conexión" decía que todo iba bien mientras la capa nueva llevaba
+cuatro semanas muerta: **cada botón probaba una credencial distinta**. Ahora
+`resolveZintoIntegrationConfig()` (`server-config.ts`) lee la BD y **la BD gana
+sobre el entorno**. Las variables de entorno son sólo respaldo y para los
+scripts CLI. Si añades un camino nuevo, úsalo — no vuelvas a leer `process.env`.
+
+⚠️ **El doble `/api/v1`.** `zinto_config.base_url` vale
+`https://crm.zinto.app/api/v1` porque el cliente legacy concatena `/messages/send`
+encima. El cliente de integración compone rutas completas (`/api/v1/contacts`),
+así que necesita la base **sin** ese sufijo. Sin normalizar sale
+`/api/v1/api/v1/contacts`, un 404 que parece que Zinto haya retirado el endpoint.
+Lo resuelve `normalizeIntegrationBaseUrl()`, con test propio en
+`npm run test:zinto-integration`.
+
+⚠️ **El sobre de error no es el documentado.** `/api/v1` devuelve
+`{"error":"API_KEY_NOT_FOUND","message":"..."}` (plano), no
+`{"error":{code,message,request_id}}`. Leer sólo `parsed.error.code` degradaba
+**todos** los errores a `internal_error`, y con ello se rompían
+`isTransientError()` y el trato especial del 504 `delivery_timeout`.
+`parseZintoErrorBody()` acepta las dos formas. **Sigue sin confirmarse con Zinto
+si `/api/v1` es el mismo contrato o el antiguo con las mismas rutas.**
+
+⚠️ **Son DOS secretos de webhook distintos.** `zinto_config.webhook_secret_*`
+firma los webhooks legacy de estado de entrega;
+`integration_webhook_secret_*` es el `whsec_` que devuelve **una sola vez**
+`POST /api/v1/webhooks`. No fusionarlos. El botón "Registrar webhook" del panel
+lo crea y lo cifra en el mismo paso justo para que no se pierda por el camino.
+
+⚠️ **El cron de reconciliación NO se activa solo** — misma historia que las
+alertas de propiedades y los vídeos. Hay que añadirlo a mano al crontab del VPS:
+```
+30 3 * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/cron/zinto-sync
+```
+
+⚠️ **Hay columnas en `zinto_config` de producción que NO crea ninguna migración.**
+Descubiertas el 2026-09-13 y **ya rellenas a mano**: `api_key_v2_*`,
+`webhook_secret_v2_*`, `base_url_v2` = `https://crm.zinto.app/api/v2`,
+`enabled_v2 = true` e `integration_id` = `2276cdd0-9c00-47c0-9613-470c6cabdee8`.
+Ningún código del repo las lee. Y **`/api/v2` está vivo**: su `/health`
+devuelve `{"status":"ok","version":"v2"}` y expone la misma superficie que
+`/api/v1` (contacts, deals, tasks, flows, erp… todos 401 sin auth).
+
+Es decir: hay **dos generaciones de la API vivas** y **tres sitios** donde
+puede haber una clave. `resolveZintoIntegrationConfig()` deliberadamente **NO**
+usa las columnas `_v2` — cambiar a dónde apunta producción por inferencia sobre
+columnas que puso otra persona es justo el tipo de cambio silencioso que causó
+esta avería. Lo que sí hace el diagnóstico es **probar cada credencial contra
+cada versión** y decir cuál autentica (`credentialMatrix` en la respuesta del
+health check, y un desplegable en el panel). Decide con ese dato, no de memoria.
+
+La migración `0163` añade columnas `integration_*` propias, distintas de las
+`_v2`. No se borran las `_v2`: hasta saber quién las puso y para qué, tocarlas
+es arriesgado.
+
+### No adivines: pregúntale a la app
+
+`GET /api/admin/zinto/health` (owner/admin, o `Bearer $CRON_SECRET`) separa las
+seis causas que desde el panel se ven idénticas — sin credencial, credencial del
+entorno en vez del panel, URL que no es la API, clave revocada, scopes que
+faltan, webhook sin registrar — y dice qué tocar en cada caso:
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/admin/zinto/health | jq .verdict
+```
+El mismo diagnóstico se ve en `/admin/configuracion` → "Estado de la
+integración". **"Probar Conexión" sólo mira la capa legacy**; no lo uses para
+concluir que la integración funciona.
+
 ## Solicitudes / Sales Inbox — venta·alquiler y cobertura
 
 **⚠️ La vista `lead_inbox_facts` está definida ENTERA en CUATRO migraciones:

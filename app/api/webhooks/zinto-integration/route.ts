@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getZintoIntegrationConfig } from "@/lib/services/zinto-integration/config";
+import { resolveZintoIntegrationConfig } from "@/lib/services/zinto-integration/server-config";
 import { verifyZintoSignature, parseZintoWebhookEvent } from "@/lib/services/zinto-integration/webhook";
 import { recordZintoIntegrationEvent, markZintoIntegrationEventProcessed } from "@/lib/db/zinto-integration";
 import type { WebhookEvent } from "@/lib/services/zinto-integration/types";
@@ -24,7 +24,9 @@ import {
  * turning this on never silently changes legacy webhook behavior.
  */
 export async function POST(req: NextRequest) {
-  const config = getZintoIntegrationConfig();
+  // Config desde la BD (el secreto lo guarda "Registrar webhook" en el panel),
+  // con el entorno como respaldo — ver lib/services/zinto-integration/server-config.ts.
+  const config = await resolveZintoIntegrationConfig();
   if (!config?.enabled) {
     return NextResponse.json({ error: { code: "not_found", message: "Not enabled" } }, { status: 404 });
   }
@@ -97,7 +99,7 @@ async function processZintoIntegrationEvent(event: WebhookEvent): Promise<void> 
     case "tag.detached": {
       const contactId = extractContactId(event.data);
       if (contactId) {
-        const client = ZintoIntegrationApiClient.fromEnv();
+        const client = await ZintoIntegrationApiClient.fromResolvedConfig();
         await syncContactFromApi(client, contactId);
       }
       break;
@@ -124,7 +126,7 @@ async function processZintoIntegrationEvent(event: WebhookEvent): Promise<void> 
         // contact's notes so the cache stays authoritative.
         const contactId = extractContactId(event.data);
         if (contactId) {
-          const client = ZintoIntegrationApiClient.fromEnv();
+          const client = await ZintoIntegrationApiClient.fromResolvedConfig();
           await syncContactFromApi(client, contactId);
         }
       }

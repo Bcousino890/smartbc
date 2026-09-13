@@ -21,6 +21,8 @@ export type ZintoErrorCode =
   | "delivery_timeout"
   | "rate_limit_exceeded"
   | "internal_error"
+  /** Ours, not Zinto's: a 2xx that wasn't JSON — the base URL isn't the API. */
+  | "not_json_response"
   | string; // spec allows new `*_not_found` variants etc.
 
 export interface ZintoErrorBody {
@@ -70,6 +72,9 @@ export class ZintoIntegrationApiError extends Error {
 /** Transient errors safe to retry with backoff, per docs/ERRORS.md + IDEMPOTENCY.md. */
 export function isTransientError(err: unknown): boolean {
   if (!(err instanceof ZintoIntegrationApiError)) return false;
+  // A misconfigured base URL doesn't heal by waiting: retrying just triples
+  // the time it takes to see the real problem.
+  if (err.code === "not_json_response") return false;
   if (err.transportError) return true;
   if (err.status === 500) return true;
   if (err.status === 502 && err.code === "delivery_failed") return true;

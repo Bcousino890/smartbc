@@ -36,10 +36,13 @@ async function expectThrows(name: string, fn: () => Promise<unknown>, matcher: (
 }
 
 const BASE_CONFIG = {
-  apiUrl: "https://crm.zinto.app/_integration-api",
+  // Base SIN sufijo: el cliente compone rutas completas (/api/v1/...) encima.
+  apiUrl: "https://crm.zinto.app",
   apiKey: "pcp_test_key",
   webhookSecret: "whsec_test_secret",
   enabled: true,
+  source: "env" as const,
+  apiVersion: "v1" as const,
 };
 
 type FetchCall = { url: string; init: RequestInit };
@@ -65,8 +68,13 @@ async function run() {
     const calls = mockFetch(() => jsonResponse(200, { data: { scopes: [] }, meta: { request_id: "req_1" } }));
     const client = new ZintoIntegrationApiClient(BASE_CONFIG);
     await client.getMe();
-    check("uses the documented base URL with /_integration-api prefix", calls[0].url.startsWith(BASE_CONFIG.apiUrl));
+    check("uses the configured base URL", calls[0].url.startsWith(BASE_CONFIG.apiUrl));
     check("calls /api/v1/me", calls[0].url.endsWith("/api/v1/me"));
+    check(
+      "no duplica /api/v1 en la ruta final",
+      (calls[0].url.match(/\/api\/v1/g) || []).length === 1,
+      calls[0].url,
+    );
     const headers = calls[0].init.headers as Record<string, string>;
     check("sends Authorization: Bearer <key>", headers["Authorization"] === `Bearer ${BASE_CONFIG.apiKey}`);
   }
@@ -298,6 +306,147 @@ async function run() {
     check("parses `id` for dedupe (event.id, not X-Zinto-Event-Id header)", evt?.id === "evt_dupe_1");
     check("rejects a body with no id/type as unparseable", parseZintoWebhookEvent(JSON.stringify({ foo: "bar" })) === null);
     check("rejects malformed JSON", parseZintoWebhookEvent("not json") === null);
+  }
+
+  console.log("=== Normalización de la URL base (la trampa del /api/v1 duplicado) ===");
+  {
+    const { normalizeIntegrationBaseUrl } = await import("../lib/services/zinto-integration/config.ts");
+    const CANONICAL = "https://crm.zinto.app";
+
+    // Las cuatro formas que existen de verdad en la naturaleza:
+    //   · la buena,
+    //   · con barra final (copiada del navegador),
+    //   · el valor de zinto_config.base_url, que el cliente legacy necesita
+    //     CON /api/v1 y el de integración necesita SIN él,
+    //   · el prefijo muerto que estuvo en el entorno del VPS hasta 2026-09-13.
+    for (const input of [
+      "https://crm.zinto.app",
+      "https://crm.zinto.app/",
+      "https://crm.zinto.app/api/v1",
+      "https://crm.zinto.app/api/v1/",
+      "https://crm.zinto.app/_integration-api",
+      "https://crm.zinto.app/_integration-api/",
+    ]) {
+      check(
+        `normaliza "${input}"`,
+        normalizeIntegrationBaseUrl(input) === CANONICAL,
+        `dio "${normalizeIntegrationBaseUrl(input)}"`,
+      );
+    }
+
+    check(
+      "no recorta un host que sólo se parece al sufijo",
+      normalizeIntegrationBaseUrl("https://api-v1.zinto.app") === "https://api-v1.zinto.app",
+    );
+
+    // /api/v2 existe de verdad en crm.zinto.app y producción tenía guardado
+    // base_url_v2 apuntando ahí, así que la versión hay que LEERLA de la URL,
+    // no asumirla.
+    const { parseIntegrationBaseUrl } = await import("../lib/services/zinto-integration/config.ts");
+    const v2 = parseIntegrationBaseUrl("https://crm.zinto.app/api/v2");
+    check("lee la versión v2 de la URL", v2.baseUrl === CANONICAL && v2.version === "v2");
+    const v1 = parseIntegrationBaseUrl("https://crm.zinto.app/api/v1");
+    check("lee la versión v1 de la URL", v1.baseUrl === CANONICAL && v1.version === "v1");
+    const bare = parseIntegrationBaseUrl("https://crm.zinto.app");
+    check("sin versión en la URL devuelve null (decide quien llama)", bare.version === null);
+
+    // La prueba que importa: la ruta final que sale por el cable.
+    for (const stored of ["https://crm.zinto.app", "https://crm.zinto.app/api/v1"]) {
+      const calls = mockFetch(() => jsonResponse(200, { data: [], meta: { request_id: "r", next_cursor: null, has_more: false } }));
+      const client = new ZintoIntegrationApiClient({
+        ...BASE_CONFIG,
+        apiUrl: normalizeIntegrationBaseUrl(stored),
+      });
+      await client.listContacts();
+      check(
+        `"${stored}" produce /api/v1/contacts una sola vez`,
+        calls[0].url === "https://crm.zinto.app/api/v1/contacts",
+        calls[0].url,
+      );
+    }
+  }
+
+  console.log("=== El cliente respeta la versión de API configurada ===");
+  {
+    for (const version of ["v1", "v2"] as const) {
+      const calls = mockFetch(() => jsonResponse(200, { data: { scopes: [] }, meta: { request_id: "r" } }));
+      const client = new ZintoIntegrationApiClient({ ...BASE_CONFIG, apiVersion: version });
+      await client.getMe();
+      check(
+        `apiVersion "${version}" llama a /api/${version}/me`,
+        calls[0].url === `https://crm.zinto.app/api/${version}/me`,
+        calls[0].url,
+      );
+    }
+
+    {
+      // Config sin apiVersion (fila vieja, o construida a mano): debe caer a
+      // v1, nunca producir "/api/undefined/...".
+      const { apiVersion: _omit, ...withoutVersion } = BASE_CONFIG;
+      const calls = mockFetch(() => jsonResponse(200, { data: {} }));
+      await new ZintoIntegrationApiClient(withoutVersion as never).getMe();
+      check(
+        "sin apiVersion cae a v1 (nunca /api/undefined)",
+        calls[0].url === "https://crm.zinto.app/api/v1/me",
+        calls[0].url,
+      );
+    }
+
+    // Y que la sustitución no toque un /api/v1 que aparezca a media ruta.
+    const calls = mockFetch(() => jsonResponse(200, { data: {} }));
+    const client = new ZintoIntegrationApiClient({ ...BASE_CONFIG, apiVersion: "v2" });
+    await client.getContact("api/v1");
+    check(
+      "sólo sustituye el prefijo, no un /api/v1 dentro del id",
+      calls[0].url === "https://crm.zinto.app/api/v2/contacts/api%2Fv1",
+      calls[0].url,
+    );
+  }
+
+  console.log("=== Sobre de error: el documentado y el que devuelve /api/v1 ===");
+  {
+    const { parseZintoErrorBody } = await import("../lib/services/zinto-integration/client.ts");
+
+    // Forma anidada, la del contrato.
+    const nested = parseZintoErrorBody({
+      error: { code: "insufficient_scope", message: "falta scope", request_id: "req_9" },
+    });
+    check("lee el sobre anidado del contrato", nested.code === "insufficient_scope" && nested.requestId === "req_9");
+
+    // Forma plana, la observada en producción el 2026-09-13.
+    const flat = parseZintoErrorBody({ error: "API_KEY_NOT_FOUND", message: "Invalid API key" });
+    check("lee el sobre PLANO de /api/v1", flat.code === "API_KEY_NOT_FOUND" && flat.message === "Invalid API key");
+
+    check("tolera un cuerpo sin clave error", parseZintoErrorBody({ message: "boom" }).message === "boom");
+    check("tolera basura", Object.keys(parseZintoErrorBody("nope")).length === 0);
+
+    // Y que el código llegue intacto al error tipado: si se degradara a
+    // internal_error, isTransientError() reintentaría una clave revocada.
+    mockFetch(() => jsonResponse(401, { error: "API_KEY_NOT_FOUND", message: "Invalid API key" }));
+    await expectThrows(
+      "un 401 plano conserva su código (no se degrada a internal_error)",
+      () => new ZintoIntegrationApiClient(BASE_CONFIG).getMe(),
+      (err) => err instanceof ZintoIntegrationApiError && err.code === "API_KEY_NOT_FOUND",
+    );
+  }
+
+  console.log("=== Un 200 que no es JSON no puede parecer un fallo de red ===");
+  {
+    // Exactamente lo que devolvía /_integration-api: la SPA con 200.
+    let attempts = 0;
+    (globalThis as any).fetch = async () => {
+      attempts++;
+      return new Response("<!doctype html><html><body>Zinto</body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html; charset=UTF-8" },
+      });
+    };
+    await expectThrows(
+      "detecta HTML con 200 y lo llama por su nombre",
+      () => new ZintoIntegrationApiClient(BASE_CONFIG).getMe(),
+      (err) => err instanceof ZintoIntegrationApiError && err.code === "not_json_response",
+    );
+    check("no lo reintenta (una URL mal no se cura esperando)", attempts === 1, `${attempts} intentos`);
   }
 
   console.log("=== Legacy compatibility via feature flag ===");

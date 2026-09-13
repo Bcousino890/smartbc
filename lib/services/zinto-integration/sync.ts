@@ -98,3 +98,80 @@ export async function backfillAllContacts(
 
   return { synced };
 }
+
+/**
+ * Overlap subtracted from the checkpoint before asking for `updated_since`.
+ * docs/PAGINATION.md asks for a small window so an update that landed exactly
+ * on the boundary of the previous run isn't skipped; duplicates are harmless
+ * because every write below is an upsert keyed by the Zinto id.
+ */
+const SYNC_OVERLAP_MS = 10 * 60 * 1000;
+
+export interface ReconcileResult {
+  synced: number;
+  notesSynced: number;
+  since: string | null;
+  full: boolean;
+}
+
+/**
+ * Nightly reconcile: the webhook is the fast path, this is the truth. Catches
+ * whatever a dropped, duplicated or out-of-order event failed to apply.
+ *
+ * Differs from `backfillAllContacts()` in the two ways that matter for a job
+ * that runs unattended every night:
+ *
+ *   · It asks for `updated_since` instead of walking the whole collection, so
+ *     a quiet night costs one request rather than several hundred.
+ *   · It only fetches notes for contacts that actually changed. The backfill
+ *     paginates notes PER CONTACT — 713 extra requests against a 300/min
+ *     limiter, i.e. the better part of an hour of quota burned to re-read
+ *     notes that nobody touched.
+ *
+ * Falls back to a full walk when there's no checkpoint yet (first run).
+ */
+export async function reconcileContacts(
+  client: ZintoIntegrationApiClient
+): Promise<ReconcileResult> {
+  const checkpoint = await getSyncCheckpoint("contacts");
+  const startedAt = new Date().toISOString();
+
+  const since = checkpoint?.lastSyncedAt
+    ? new Date(Date.parse(checkpoint.lastSyncedAt) - SYNC_OVERLAP_MS).toISOString()
+    : null;
+
+  let synced = 0;
+  let notesSynced = 0;
+
+  for await (const page of client.paginate<Contact>("/api/v1/contacts", {
+    updated_since: since ?? undefined,
+  })) {
+    for (const contact of page.data) {
+      await upsertCachedZintoContact(contactToCacheInput(contact));
+      await upsertZintoIdMapping("contact", contact.id, null, {});
+      synced++;
+
+      for await (const notePage of client.paginate<Note>(
+        `/api/v1/contacts/${encodeURIComponent(contact.id)}/notes`
+      )) {
+        for (const note of notePage.data) {
+          await upsertCachedZintoNote(noteToCacheInput(note));
+          notesSynced++;
+        }
+      }
+    }
+
+    // Cursor is deliberately NOT persisted here: an incremental run is keyed
+    // by time, and a stale cursor from a previous night would make the next
+    // run resume mid-collection. Only the timestamp is a valid checkpoint.
+    await saveSyncCheckpoint("contacts", null, startedAt);
+  }
+
+  // No pages at all (nothing changed) still advances the checkpoint, otherwise
+  // the overlap window grows without bound.
+  if (synced === 0) {
+    await saveSyncCheckpoint("contacts", null, startedAt);
+  }
+
+  return { synced, notesSynced, since, full: since === null };
+}

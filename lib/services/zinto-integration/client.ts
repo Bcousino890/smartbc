@@ -69,6 +69,55 @@ export interface ZintoRequestLog {
 
 export type RequestLogger = (entry: ZintoRequestLog) => void | Promise<void>;
 
+/**
+ * Reads the error body into (code, message, requestId), accepting BOTH shapes
+ * the API has been observed to return.
+ *
+ * The contract documents a nested envelope:
+ *     { "error": { "code": "...", "message": "...", "request_id": "..." } }
+ * but `/api/v1` answers with a flat one:
+ *     { "error": "API_KEY_NOT_FOUND", "message": "Invalid API key" }
+ * Reading only `parsed.error.code` against the flat shape yields `undefined`,
+ * so every error silently degrades to `internal_error` — which in turn breaks
+ * `isTransientError()` and the special handling of a 504 `delivery_timeout`.
+ * Confirmed against production on 2026-09-13; whether the flat shape is
+ * intentional is still an open question with Zinto, so accept both.
+ */
+export function parseZintoErrorBody(parsed: unknown): {
+  code?: string;
+  message?: string;
+  requestId?: string;
+  details?: unknown[];
+} {
+  if (!parsed || typeof parsed !== "object") return {};
+  const body = parsed as Record<string, unknown>;
+  const err = body.error;
+
+  if (typeof err === "string") {
+    return {
+      code: err,
+      message: typeof body.message === "string" ? body.message : undefined,
+      requestId: typeof body.request_id === "string" ? body.request_id : undefined,
+    };
+  }
+
+  if (err && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    return {
+      code: typeof e.code === "string" ? e.code : undefined,
+      message: typeof e.message === "string" ? e.message : undefined,
+      requestId: typeof e.request_id === "string" ? e.request_id : undefined,
+      details: Array.isArray(e.details) ? e.details : undefined,
+    };
+  }
+
+  // No `error` key at all — some gateways answer `{ message: "..." }`.
+  return {
+    message: typeof body.message === "string" ? body.message : undefined,
+    requestId: typeof body.request_id === "string" ? body.request_id : undefined,
+  };
+}
+
 function buildQuery(query?: Record<string, string | number | undefined> | ListParams): string {
   if (!query) return "";
   const params = new URLSearchParams();
@@ -101,6 +150,11 @@ export class ZintoIntegrationApiClient {
     this.logger = logger;
   }
 
+  /**
+   * Env-only construction, for `scripts/*.mts`. Server code should use
+   * `fromResolvedConfig()` instead so it picks up the credential saved in the
+   * admin panel rather than a possibly-stale env var.
+   */
   static fromEnv(logger?: RequestLogger): ZintoIntegrationApiClient {
     const config = getZintoIntegrationConfig();
     if (!config) {
@@ -109,10 +163,53 @@ export class ZintoIntegrationApiClient {
     return new ZintoIntegrationApiClient(config, logger);
   }
 
+  /**
+   * The constructor server-side callers should use: credential and base URL
+   * come from `zinto_config` (the same row the admin panel writes), falling
+   * back to the environment. Audit-logs every call to
+   * `zinto_integration_api_log` unless a different logger is passed.
+   *
+   * Imported lazily so this module stays usable from plain-Node scripts, which
+   * must not pull in the `server-only` database layer.
+   */
+  static async fromResolvedConfig(
+    logger?: RequestLogger
+  ): Promise<ZintoIntegrationApiClient> {
+    const [{ resolveZintoIntegrationConfig }, { logZintoIntegrationRequest }] =
+      await Promise.all([import("./server-config"), import("@/lib/db/zinto-integration")]);
+
+    const config = await resolveZintoIntegrationConfig();
+    if (!config) {
+      throw new ZintoIntegrationApiError(
+        500,
+        "internal_error",
+        "No hay ninguna API key de Zinto configurada (ni en el panel ni en el entorno)."
+      );
+    }
+    return new ZintoIntegrationApiClient(config, logger ?? logZintoIntegrationRequest);
+  }
+
+  /**
+   * Maps a contract path onto the configured API generation.
+   *
+   * Every method below spells its path as `/api/v1/...` because that is how
+   * the contract documents it, which keeps them greppable against
+   * openapi.yaml. Both `/api/v1` and `/api/v2` are live on crm.zinto.app with
+   * the same surface, so the version substitution happens here, once, instead
+   * of being baked into thirty method bodies.
+   */
+  private versioned(path: string): string {
+    // Defensivo: una config vieja (o construida a mano en un test) puede no
+    // traer apiVersion. Sin esta guarda saldría "/api/undefined/contacts", que
+    // es un 404 críptico en vez de un fallback razonable.
+    const version = this.config.apiVersion === "v2" ? "v2" : "v1";
+    return version === "v1" ? path : path.replace(/^\/api\/v1(?=\/|$)/, `/api/${version}`);
+  }
+
   /** Low-level request. Retries only genuinely transient failures (see isTransientError). */
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = "GET", query, body, idempotencyKey, maxRetries = 3 } = options;
-    const url = `${this.config.apiUrl}${path}${buildQuery(query)}`;
+    const url = `${this.config.apiUrl}${this.versioned(path)}${buildQuery(query)}`;
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.config.apiKey}`,
@@ -146,12 +243,11 @@ export class ZintoIntegrationApiClient {
           let parsedRequestId = requestId;
           try {
             const parsed = await response.json();
-            if (parsed?.error) {
-              code = parsed.error.code ?? code;
-              message = parsed.error.message ?? message;
-              details = parsed.error.details;
-              parsedRequestId = parsed.error.request_id ?? parsedRequestId;
-            }
+            const info = parseZintoErrorBody(parsed);
+            code = info.code ?? code;
+            message = info.message ?? message;
+            details = info.details;
+            parsedRequestId = info.requestId ?? parsedRequestId;
           } catch {
             // non-JSON error body; keep generic message
           }
@@ -186,6 +282,25 @@ export class ZintoIntegrationApiClient {
         await this.log(method, path, response.status, requestId);
 
         if (response.status === 204) return undefined as T;
+
+        // A 2xx that isn't JSON means we're not talking to the API at all —
+        // almost always a base URL that now falls through to Zinto's SPA
+        // catch-all, which answers 200 text/html for every path (that is
+        // exactly how `/_integration-api` died in Sept 2026). Without this
+        // check, response.json() throws, the outer catch classifies it as a
+        // network failure, we retry three times and surface "Network error" —
+        // which sends whoever is debugging it looking at the wrong thing.
+        const contentType = response.headers.get("content-type") || "";
+        if (!/\bjson\b/i.test(contentType)) {
+          throw new ZintoIntegrationApiError(
+            response.status,
+            "not_json_response",
+            `La URL base de Zinto no devuelve JSON sino "${contentType || "sin content-type"}". ` +
+              `Casi seguro que ${this.config.apiUrl} ya no es la API (comprueba el valor de "URL base" en Configuración → WhatsApp (Zinto)).`,
+            { requestId }
+          );
+        }
+
         return (await response.json()) as T;
       } catch (err) {
         if (err instanceof ZintoIntegrationApiError) throw err;
