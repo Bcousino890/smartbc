@@ -540,25 +540,29 @@ alertas de propiedades y los vídeos. Hay que añadirlo a mano al crontab del VP
   http://localhost:3000/api/cron/zinto-sync
 ```
 
-⚠️ **Hay columnas en `zinto_config` de producción que NO crea ninguna migración.**
-Descubiertas el 2026-09-13 y **ya rellenas a mano**: `api_key_v2_*`,
-`webhook_secret_v2_*`, `base_url_v2` = `https://crm.zinto.app/api/v2`,
-`enabled_v2 = true` e `integration_id` = `2276cdd0-9c00-47c0-9613-470c6cabdee8`.
-Ningún código del repo las lee. Y **`/api/v2` está vivo**: su `/health`
-devuelve `{"status":"ok","version":"v2"}` y expone la misma superficie que
-`/api/v1` (contacts, deals, tasks, flows, erp… todos 401 sin auth).
+⚠️ **Hay CUATRO capas, no tres: existe además `lib/services/zinto-v2/**`.**
+Añadida en paralelo a este trabajo (migraciones 0164/0165). `/api/v2` es un
+contrato **distinto** de v1, no una versión nueva del mismo:
 
-Es decir: hay **dos generaciones de la API vivas** y **tres sitios** donde
-puede haber una clave. `resolveZintoIntegrationConfig()` deliberadamente **NO**
-usa las columnas `_v2` — cambiar a dónde apunta producción por inferencia sobre
-columnas que puso otra persona es justo el tipo de cambio silencioso que causó
-esta avería. Lo que sí hace el diagnóstico es **probar cada credencial contra
-cada versión** y decir cuál autentica (`credentialMatrix` en la respuesta del
-health check, y un desplegable en el panel). Decide con ese dato, no de memoria.
+- Exige el header **`X-Zinto-Integration-Id`** (un UUID opaco, no un número —
+  eso arregla la 0165) en **toda** ruta protegida, además del Bearer. Sin él,
+  401 aunque la clave sea perfecta. Cualquier herramienta que pruebe v2 sin esa
+  cabecera concluirá "credencial muerta" sobre una credencial que funciona.
+- **Soporta mensajes entrantes de forma nativa** (`message.received`), sin el
+  "Flujo" manual del panel que v1 nunca llegó a tener configurado — que es
+  justo lo que dejó la bandeja en 48 enviados / 1 recibido.
+- Config propia en `lib/services/zinto-v2/config.ts`, columnas `*_v2` de la
+  misma fila singleton, receptor propio en `/api/webhooks/zinto-v2`, y
+  `enabled_v2` como interruptor. En producción ese flag está en **true**.
 
-La migración `0163` añade columnas `integration_*` propias, distintas de las
-`_v2`. No se borran las `_v2`: hasta saber quién las puso y para qué, tocarlas
-es arriesgado.
+Por eso el diagnóstico **no descifra las columnas `_v2` por su cuenta**: pide la
+credencial v2 a `getZintoV2Config()` y manda su cabecera. Si algún día pruebas
+v2 desde otro sitio, hazlo igual o el resultado mentirá.
+
+La migración `0166` añade columnas `integration_*` (de la Integration API,
+`/_integration-api` → `/api/v1`), que son **distintas** de las `*_v2` de la
+0164. Tres juegos de credenciales en la misma fila; el health check dice cuál
+autentica contra qué.
 
 ### No adivines: pregúntale a la app
 

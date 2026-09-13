@@ -172,6 +172,16 @@ export interface ZintoCredentialCandidate {
   version: ZintoApiVersion | null;
   /** True for the one resolveZintoIntegrationConfig() actually returns. */
   isActive: boolean;
+  /**
+   * Cabeceras extra que ese contrato exige además del Bearer. v2 pide
+   * `X-Zinto-Integration-Id` en TODA ruta protegida (ver
+   * lib/services/zinto-v2/client.ts): sin ella responde 401 aunque la clave
+   * sea buena, y la sonda concluiría "credencial muerta" sobre una que
+   * funciona.
+   */
+  headers?: Record<string, string>;
+  /** Motivo por el que este candidato no se puede ni probar. */
+  blocked?: string;
 }
 
 export async function listZintoCredentialCandidates(): Promise<ZintoCredentialCandidate[]> {
@@ -186,6 +196,7 @@ export async function listZintoCredentialCandidates(): Promise<ZintoCredentialCa
     label: string,
     apiKey: string,
     rawBase: string | null | undefined,
+    extra?: { headers?: Record<string, string>; blocked?: string },
   ) => {
     if (!apiKey) return;
     // Deduplicate by key+base: the common case is that the "integration" key
@@ -200,6 +211,8 @@ export async function listZintoCredentialCandidates(): Promise<ZintoCredentialCa
       baseUrl: resolvedBase,
       version,
       isActive: apiKey === activeKey,
+      headers: extra?.headers,
+      blocked: extra?.blocked,
     });
   };
 
@@ -216,12 +229,32 @@ export async function listZintoCredentialCandidates(): Promise<ZintoCredentialCa
       tryDecrypt(row.api_key_encrypted, row.api_key_iv),
       row.base_url,
     );
-    push(
-      "v2",
-      `Clave "_v2" añadida a mano${row.enabled_v2 ? " (enabled_v2=true)" : ""}`,
-      tryDecrypt(row.api_key_v2_encrypted, row.api_key_v2_iv),
-      row.base_url_v2,
-    );
+  }
+
+  // La credencial v2 se lee con SU config oficial (lib/services/zinto-v2),
+  // no descifrando las columnas a mano: es un contrato aparte, con su propio
+  // header obligatorio, y duplicar aquí la lectura sería una cuarta copia de
+  // lo mismo — que es el problema que este módulo existe para terminar.
+  try {
+    const { getZintoV2Config } = await import("@/lib/services/zinto-v2/config");
+    const v2 = await getZintoV2Config();
+    if (v2?.apiKey) {
+      push(
+        "v2",
+        `Clave v2${v2.enabled ? " (activada)" : " (apagada por flag)"}`,
+        v2.apiKey,
+        v2.baseUrl,
+        v2.integrationId
+          ? { headers: { "X-Zinto-Integration-Id": v2.integrationId } }
+          : {
+              blocked:
+                "Falta el Integration ID (UUID) en Configuración → Zinto v2: sin él v2 rechaza toda ruta protegida.",
+            },
+      );
+    }
+  } catch {
+    // El módulo v2 puede no existir en un checkout viejo: no es motivo para
+    // que el diagnóstico entero deje de funcionar.
   }
 
   if (env?.apiKey) {

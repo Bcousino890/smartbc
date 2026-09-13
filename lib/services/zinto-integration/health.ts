@@ -86,9 +86,25 @@ async function probeCredentials(): Promise<CredentialProbe[]> {
     candidates.flatMap((cand) =>
       API_VERSIONS.map(async (version) => {
         const url = `${cand.baseUrl}/api/${version}/me`;
+
+        // Un candidato al que le falta un dato obligatorio no se prueba: un
+        // 401 aquí diría "clave muerta" cuando lo que falta es otra cosa.
+        if (cand.blocked) {
+          probes.push({
+            credential: cand.label,
+            isActive: cand.isActive,
+            version,
+            url,
+            status: "sin probar",
+            authenticated: false,
+            error: cand.blocked,
+          });
+          return;
+        }
+
         try {
           const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${cand.apiKey}` },
+            headers: { Authorization: `Bearer ${cand.apiKey}`, ...(cand.headers ?? {}) },
             signal: AbortSignal.timeout(TIMEOUT_MS),
           });
           const contentType = res.headers.get("content-type") || "";
