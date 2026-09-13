@@ -72,6 +72,20 @@ export interface ZintoHealthReport {
 const API_VERSIONS: Array<"v1" | "v2"> = ["v1", "v2"];
 
 /**
+ * Endpoint de identidad de cada contrato. NO es el mismo:
+ *   · v1 tiene `/me` (empresa + scopes de la clave).
+ *   · v2 NO tiene `/me` — su equivalente es `/capabilities`
+ *     (ver lib/services/zinto-v2/client.ts).
+ * Probar `/me` contra v2 devuelve un 404 servido con el HTML de la web, que
+ * se lee igual que "credencial muerta" cuando en realidad la clave puede
+ * estar perfecta. Confirmado contra producción el 2026-09-13.
+ */
+const IDENTITY_ENDPOINT: Record<"v1" | "v2", string> = {
+  v1: "/me",
+  v2: "/capabilities",
+};
+
+/**
  * Prueba cada credencial guardada contra cada generación de la API.
  *
  * Es una llamada GET /me por combinación (hoy, 3 credenciales x 2 versiones
@@ -85,7 +99,7 @@ async function probeCredentials(): Promise<CredentialProbe[]> {
   await Promise.all(
     candidates.flatMap((cand) =>
       API_VERSIONS.map(async (version) => {
-        const url = `${cand.baseUrl}/api/${version}/me`;
+        const url = `${cand.baseUrl}/api/${version}${IDENTITY_ENDPOINT[version]}`;
 
         // Un candidato al que le falta un dato obligatorio no se prueba: un
         // 401 aquí diría "clave muerta" cuando lo que falta es otra cosa.
@@ -129,8 +143,21 @@ async function probeCredentials(): Promise<CredentialProbe[]> {
               url,
               status: res.status,
               authenticated: true,
-              company: body?.data?.company?.name ?? body?.company?.name ?? undefined,
-              scopeCount: (body?.data?.scopes ?? body?.scopes ?? []).length,
+              // v1 devuelve data.company/data.scopes; v2 /capabilities tiene
+              // su propia forma, así que se leen ambas sin asumir ninguna.
+              company:
+                body?.data?.company?.name ??
+                body?.company?.name ??
+                body?.data?.integration?.name ??
+                body?.integration?.name ??
+                undefined,
+              scopeCount: (
+                body?.data?.scopes ??
+                body?.scopes ??
+                body?.data?.capabilities ??
+                body?.capabilities ??
+                []
+              ).length,
             });
           } else {
             const info = parseZintoErrorBody(body);
