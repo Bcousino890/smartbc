@@ -1,7 +1,10 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { randomToken } from "@/lib/tokens";
-import { sanitizeParticularDescriptionForSharing } from "@/lib/services/particulares/sanitize-description";
+import {
+  sanitizeParticularDescriptionForSharing,
+  translateParticularFeaturesForSharing,
+} from "@/lib/services/particulares/sanitize-description";
 
 /**
  * Enlaces temporales de UN particular para compartir fuera del equipo
@@ -25,22 +28,27 @@ export async function createParticularShareLink(params: {
   const { particularId, createdBy, ttlDays = 7 } = params;
   const supabase = createAdminClient();
 
-  // Limpiamos la descripción UNA VEZ, al crear el enlace (no en cada
-  // visita): quita teléfono/email/"particular, sin agencias" antes de que
-  // el texto sea visible fuera del equipo — ver
-  // lib/services/particulares/sanitize-description.ts y migración 0157.
+  // Limpiamos (y traducimos a español) la descripción y las características
+  // UNA VEZ, al crear el enlace (no en cada visita): quita teléfono/email/
+  // "particular, sin agencias" y traduce el texto si no está ya en español,
+  // antes de que sea visible fuera del equipo — ver
+  // lib/services/particulares/sanitize-description.ts y migraciones 0157/0163.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const partRes = await (supabase as any)
     .from("particulares")
-    .select("description")
+    .select("description, features")
     .eq("id", particularId)
     .maybeSingle();
-  const rawDescription = (
-    partRes.data as { description: string | null } | null
-  )?.description;
-  const sanitizedDescription = rawDescription
-    ? await sanitizeParticularDescriptionForSharing(rawDescription)
+  const rawParticular = partRes.data as
+    | { description: string | null; features: string[] | null }
+    | null;
+  const sanitizedDescription = rawParticular?.description
+    ? await sanitizeParticularDescriptionForSharing(rawParticular.description)
     : null;
+  const sanitizedFeatures =
+    rawParticular?.features && rawParticular.features.length > 0
+      ? await translateParticularFeaturesForSharing(rawParticular.features)
+      : null;
 
   const token = randomToken();
   const expiresAt = new Date(
@@ -56,6 +64,7 @@ export async function createParticularShareLink(params: {
       created_by: createdBy,
       expires_at: expiresAt,
       sanitized_description: sanitizedDescription,
+      sanitized_features: sanitizedFeatures,
     });
   if (error) throw new Error(error.message);
 
@@ -90,7 +99,7 @@ export async function getParticularByShareToken(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const shareRes = await (supabase as any)
     .from("particulares_share_links")
-    .select("id, particular_id, expires_at, sanitized_description")
+    .select("id, particular_id, expires_at, sanitized_description, sanitized_features")
     .eq("token", token)
     .maybeSingle();
   if (shareRes.error) throw new Error(shareRes.error.message);
@@ -99,6 +108,7 @@ export async function getParticularByShareToken(
     particular_id: string;
     expires_at: string | null;
     sanitized_description: string | null;
+    sanitized_features: string[] | null;
   } | null;
   if (!share) return null;
   if (share.expires_at && new Date(share.expires_at) < new Date()) return null;
@@ -139,6 +149,32 @@ export async function getParticularByShareToken(
           .eq("id", share.id);
       } catch (err) {
         console.error("[particulares] No se pudo guardar la descripción limpia:", err);
+      }
+    }
+  }
+
+  if (share.sanitized_features && share.sanitized_features.length > 0) {
+    // Camino normal: las características ya se tradujeron al crear el enlace.
+    particular.features = share.sanitized_features;
+  } else if (opts.sanitizeIfMissing) {
+    // Enlace anterior a la migración 0163: se traducen AHORA y se guardan,
+    // igual que la descripción arriba (mismo criterio: nunca mostrar al
+    // destinatario externo las etiquetas tal cual las devolvió el portal si
+    // podemos evitarlo).
+    const raw = Array.isArray(particular.features)
+      ? (particular.features as unknown[]).filter((f): f is string => typeof f === "string")
+      : [];
+    if (raw.length > 0) {
+      const translated = await translateParticularFeaturesForSharing(raw);
+      particular.features = translated;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from("particulares_share_links")
+          .update({ sanitized_features: translated })
+          .eq("id", share.id);
+      } catch (err) {
+        console.error("[particulares] No se pudieron guardar las características traducidas:", err);
       }
     }
   }
