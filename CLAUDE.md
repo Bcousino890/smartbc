@@ -564,6 +564,42 @@ La migración `0166` añade columnas `integration_*` (de la Integration API,
 0164. Tres juegos de credenciales en la misma fila; el health check dice cuál
 autentica contra qué.
 
+### VERIFICADO 2026-09-13: la única credencial viva es la de **v2**
+
+Ejecutado el health check contra producción. Resultado, sin ambigüedad:
+
+| Credencial | Contra | Resultado |
+|---|---|---|
+| **Clave `_v2`** | `/api/v2/capabilities` | **200 · 18 permisos** ✅ |
+| Clave principal del panel | v1 y v2 | 401 `API_KEY_NOT_FOUND` |
+| `ZINTO_API_KEY` (entorno) | v1 y v2 | 401 `API_KEY_NOT_FOUND` |
+
+O sea: **v1 está muerto** (las tres claves que lo intentan son rechazadas) y el
+camino vivo es el que alguien dejó preparado en las columnas `_v2`. Los 18
+permisos son `appointments:read/write`, `audit:read`, `campaigns:read/write`,
+`channels:read`, `contacts:read/write`, `conversations:read/write`,
+`deals:read/write`, `integrations:manage`, `media:read/upload`,
+`messages:read/send`, `webhooks:manage`.
+
+Dos consecuencias que conviene tener claras antes de planificar nada:
+
+- **v2 cubre la hoja de ruta mejor que v1.** Trae `appointments:*` (agenda
+  nativa, que v1 no tenía → recordatorios), `campaigns:*`, `media:upload`
+  (mandar fotos de propiedades) y mensajes entrantes nativos sin el "Flujo"
+  manual que v1 nunca tuvo configurado.
+- **v2 NO tiene** `notes:*`, `tags:write`, `pipelines:*`, `flows:read` ni
+  `erp:*`, que sí estaban en el contrato v1. Todo lo que dependa de notas o
+  etiquetas de contacto (`zinto-crm-actions.ts`, la caché de notas, el panel
+  de contacto junto al chat de WhatsApp) **no tiene equivalente conocido en
+  v2** — hay que preguntárselo a Zinto antes de darlo por perdido.
+
+⚠️ **Ojo con `/me`: no existe en v2.** Su endpoint de identidad es
+`/capabilities`. Pedirle `/me` devuelve un 404 servido con el HTML de la web,
+que se lee igual que "credencial muerta" — así estuvo un rato este mismo
+diagnóstico diciendo que la clave buena no valía. Sin autenticar da 401 JSON y
+autenticado da 404 HTML: esa diferencia es la pista de que la ruta no existe en
+ese contrato.
+
 ### No adivines: pregúntale a la app
 
 `GET /api/admin/zinto/health` (owner/admin, o `Bearer $CRON_SECRET`) separa las
