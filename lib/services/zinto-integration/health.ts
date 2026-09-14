@@ -48,6 +48,8 @@ export interface CredentialProbe {
   authenticated: boolean;
   company?: string;
   scopeCount?: number;
+  /** Nombres de scopes (v1) o capacidades (v2): es la lista de lo que se puede construir. */
+  grants?: string[];
   error?: string;
 }
 
@@ -151,13 +153,19 @@ async function probeCredentials(): Promise<CredentialProbe[]> {
                 body?.data?.integration?.name ??
                 body?.integration?.name ??
                 undefined,
-              scopeCount: (
-                body?.data?.scopes ??
-                body?.scopes ??
-                body?.data?.capabilities ??
-                body?.capabilities ??
-                []
-              ).length,
+              ...(() => {
+                const raw =
+                  body?.data?.scopes ??
+                  body?.scopes ??
+                  body?.data?.capabilities ??
+                  body?.capabilities ??
+                  [];
+                const grants = (Array.isArray(raw) ? raw : Object.keys(raw ?? {})).map(
+                  (g: unknown) =>
+                    typeof g === "string" ? g : ((g as any)?.name ?? JSON.stringify(g)),
+                );
+                return { scopeCount: grants.length, grants };
+              })(),
             });
           } else {
             const info = parseZintoErrorBody(body);
@@ -543,9 +551,20 @@ function finish(
   const firstWarn = checks.find((c) => c.status === "warn");
   const blocking = firstFail ?? firstWarn;
 
+  // Si lo que la app usa está roto PERO alguna combinación autentica, el
+  // veredicto tiene que llevar ahí. Sin esto decía "la clave está revocada,
+  // pide otra" mientras había una guardada que funcionaba — el diagnóstico
+  // daba la conclusión correcta y el consejo equivocado.
+  const winner = credentialMatrix.find((p) => p.authenticated);
+  const activeWorks = credentialMatrix.some((p) => p.authenticated && p.isActive);
+  const redirect =
+    blocking && winner && !activeWorks
+      ? ` PERO hay una credencial que SÍ funciona: «${winner.credential}» contra ${winner.version} (${winner.scopeCount ?? 0} permisos). La app no la está usando — apúntala en Configuración → WhatsApp (Zinto).`
+      : "";
+
   return {
     verdict: blocking
-      ? `${blocking.label}: ${blocking.detail}${blocking.action ? ` → ${blocking.action}` : ""}`
+      ? `${blocking.label}: ${blocking.detail}${blocking.action ? ` → ${blocking.action}` : ""}${redirect}`
       : "La integración con Zinto está sana: la URL es la API, la clave vale, el webhook está activo y están entrando eventos.",
     ok: !firstFail,
     checkedAt,
