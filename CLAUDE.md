@@ -600,6 +600,44 @@ diagnóstico diciendo que la clave buena no valía. Sin autenticar da 401 JSON y
 autenticado da 404 HTML: esa diferencia es la pista de que la ruta no existe en
 ese contrato.
 
+### El contrato v2 es de EMPUJE — y eso cambia las fases siguientes
+
+Fuente de verdad, pública y sin login: `GET https://crm.zinto.app/api/v2/guide.md`
+y `/api/v2/openapi.json`. La superficie **entera** son siete rutas:
+
+| Método | Ruta | Permiso |
+|---|---|---|
+| `GET` | `/capabilities` | `integrations:manage` |
+| `PUT` | `/contacts/{externalId}` | `contacts:write` |
+| `POST` | `/messages` | `messages:send` |
+| `PUT` | `/appointments/{externalId}` | `appointments:write` |
+| `POST` | `/deals` | `deals:write` |
+| `POST` | `/campaigns/batch` | `campaigns:write` |
+| `POST` | `/sync-jobs` | `integrations:manage` |
+
+Lo que NO hay, y conviene interiorizar antes de planificar: **ni un solo `GET`
+de contactos, conversaciones o mensajes**. v2 no se consulta, se le empuja —
+con NUESTRO id externo como clave (`{externalId}`), que es lo que por fin
+arregla el emparejamiento. Todo lo que venga de vuelta llega por webhook.
+
+⚠️ **Tampoco hay `POST /webhooks`.** La URL del webhook se configura **en Zinto**
+al crear la integración (Configuración → Acceso API → Integraciones CRM). No se
+puede automatizar desde el CRM; cualquier botón que lo prometa está mintiendo.
+
+Consecuencias directas:
+- **"Reconciliar bajando" no existe.** El cron `/api/cron/zinto-sync` fue escrito
+  contra v1 y no tiene traducción a v2: la sincronización de contactos es de
+  empuje (`PUT /contacts/{externalId}`) y está **sin construir**.
+- **La bidireccionalidad ya está casi hecha**: `POST /messages` responde 202 y
+  Zinto devuelve `message.sent/delivered/read/failed` y **`message.received`**
+  por webhook, sin el "Flujo" manual de v1. El receptor
+  `app/api/webhooks/zinto-v2/route.ts` ya escribe en las mismas tablas que usa
+  `/admin/mensajes`.
+- **Recordatorios tienen sitio nativo**: `PUT /appointments/{externalId}`.
+
+Firma del webhook: HMAC-SHA256 sobre `X-Zinto-Timestamp + "." + raw_body`,
+cabecera `X-Zinto-Signature`, dedupe por `X-Zinto-Event-Id`, tolerancia 5 min.
+
 ### No adivines: pregúntale a la app
 
 `GET /api/admin/zinto/health` (owner/admin, o `Bearer $CRON_SECRET`) separa las
