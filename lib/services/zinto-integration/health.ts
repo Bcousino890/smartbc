@@ -334,14 +334,27 @@ async function pulseChecks(
   // ── 6-8. Pulso real: ¿entra y sale algo? ──────────────────────────────────
   const stats = await getZintoIntegrationStats();
 
+  // ⚠️ "Eventos recibidos" leía SIEMPRE stats.lastEventAt (tabla
+  // `zinto_integration_webhook_events`), que solo escribe
+  // app/api/webhooks/zinto-integration/route.ts — el receptor del piloto
+  // "Integration API", apagado y sin key de producción (ver CLAUDE.md). El
+  // receptor de v2 (app/api/webhooks/zinto-v2/route.ts, el que de verdad
+  // recibe tráfico hoy) escribe en `zinto_webhook_deliveries` vía
+  // recordWebhookDelivery — la MISMA tabla que v1, ya expuesta aquí como
+  // stats.lastLegacyDeliveryAt pero nunca conectada a este check. Resultado:
+  // aunque el webhook v2 SÍ estuviera recibiendo eventos, este check iba a
+  // seguir diciendo "nunca" para siempre, porque miraba el log de un módulo
+  // que nunca se activó. Para v2 hay que leer lastLegacyDeliveryAt.
+  const inboundLastAt = contract === "v2" ? stats.lastLegacyDeliveryAt : stats.lastEventAt;
+  const inboundLast24h = contract === "v2" ? stats.legacyDeliveriesLast24h : stats.eventsLast24h;
   checks.push({
     id: "inbound",
     label: "Eventos recibidos",
-    status: stats.lastEventAt ? (stats.eventsLast24h > 0 ? "ok" : "warn") : "fail",
-    detail: stats.lastEventAt
-      ? `Último evento ${ago(stats.lastEventAt)}. ${stats.eventsLast24h} en las últimas 24 h.`
+    status: inboundLastAt ? (inboundLast24h > 0 ? "ok" : "warn") : "fail",
+    detail: inboundLastAt
+      ? `Último evento ${ago(inboundLastAt)}. ${inboundLast24h} en las últimas 24 h.`
       : "Nunca ha llegado un solo evento desde Zinto.",
-    action: stats.lastEventAt
+    action: inboundLastAt
       ? undefined
       : contract === "v2"
         ? "Todo lo configurable desde aquí está en verde, así que lo que falta está del otro lado: comprueba que la integración en Zinto tenga puesta la URL del webhook (arriba) y esté activada. Después responde por WhatsApp para provocar un message.received."
