@@ -20,7 +20,7 @@ import { createAdminClient } from "@/lib/db/admin";
 // distinto.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RELAY_SCRAPE_URL = "https://cp.167.233.48.91.sslip.io/scrape";
+const RELAY_SCRAPE_URL = "https://api.crawio.com/scrape";
 const DEFAULT_TIMEOUT_SEC = 25;
 
 async function readRelayApiKey(): Promise<string | undefined> {
