@@ -45,12 +45,41 @@ function hmacEquals(secret: string, input: string, signatureHex: string): boolea
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/** Base documentada: X-Zinto-Timestamp + "." + raw_body, firmado en X-Zinto-Signature. */
-function verifySignature(secret: string, timestamp: string, rawBody: string, signatureHeader: string): boolean {
+/**
+ * Bases candidatas para la firma, misma lógica de resiliencia que ya usa
+ * app/api/webhooks/zinto/route.ts (v1) — "so a config change never
+ * silently drops events": el 2026-09-15 confirmamos con Zinto que TODOS
+ * los eventos v2 (received/sent/delivered/read por igual) llegaban con
+ * firma inválida pese a que la doc dice `timestamp + "." + raw_body`, así
+ * que ya no asumimos que esa única base es correcta.
+ */
+function candidateInputs(
+  timestamp: string,
+  rawBody: string,
+  payload: unknown,
+): Array<{ label: string; input: string }> {
+  const candidates: Array<{ label: string; input: string }> = [];
+  if (timestamp) candidates.push({ label: "timestamp.body", input: `${timestamp}.${rawBody}` });
+  candidates.push({ label: "body", input: rawBody });
+  try {
+    candidates.push({ label: "JSON.stringify(payload)", input: JSON.stringify(payload) });
+  } catch {
+    // payload no serializable (no debería pasar, ya vino de JSON.parse)
+  }
+  return candidates;
+}
+
+function verifySignature(
+  secret: string,
+  timestamp: string,
+  rawBody: string,
+  payload: unknown,
+  signatureHeader: string,
+): boolean {
   if (!secret) return !IS_PRODUCTION; // fail-closed en producción
   const sig = (signatureHeader || "").replace(/^sha256=/i, "").trim();
-  if (!sig || !timestamp) return false;
-  return hmacEquals(secret, `${timestamp}.${rawBody}`, sig);
+  if (!sig) return false;
+  return candidateInputs(timestamp, rawBody, payload).some((c) => hmacEquals(secret, c.input, sig));
 }
 
 type ReplayResult = "ok" | "stale" | "duplicate";
@@ -118,8 +147,22 @@ export async function POST(req: NextRequest) {
       `[zinto-v2-webhook] intento: event=${eventName || "(vacío)"} tieneTimestamp=${!!timestamp} tieneEventId=${!!eventId} tieneFirma=${!!signature}`,
     );
 
-    if (!verifySignature(webhookSecret, timestamp, rawBody, signature)) {
-      console.log(`[zinto-v2-webhook] ✗ firma inválida (event=${eventName || "(vacío)"})`);
+    if (!verifySignature(webhookSecret, timestamp, rawBody, payload, signature)) {
+      // Diagnóstico seguro: la firma recibida y lo que NOSOTROS calculamos
+      // para cada base candidata son salidas de un hash, no el secreto en
+      // sí (que nunca se loggea) — compararlas a mano es la única forma de
+      // saber, sin acceso al panel de Zinto, si el problema es la base que
+      // se firma, el secreto guardado, o el formato de la cabecera.
+      const sig = (signature || "").replace(/^sha256=/i, "").trim();
+      const attempts = webhookSecret
+        ? candidateInputs(timestamp, rawBody, payload).map((c) => ({
+            base: c.label,
+            computed: crypto.createHmac("sha256", webhookSecret).update(c.input).digest("hex"),
+          }))
+        : "(sin webhookSecret configurado)";
+      console.log(
+        `[zinto-v2-webhook] ✗ firma inválida (event=${eventName || "(vacío)"}). recibida=${sig || "(vacía)"} intentos=${JSON.stringify(attempts)}`,
+      );
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
