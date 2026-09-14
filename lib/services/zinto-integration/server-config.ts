@@ -141,6 +141,18 @@ export async function getRegisteredWebhookId(): Promise<string | null> {
  * email templates already use (lib/email/templates.ts), so the registered
  * webhook and the links we mail out can never disagree about our own hostname.
  */
+export function getV2WebhookUrl(): string {
+  return getPortalOrigin() + "/api/webhooks/zinto-v2";
+}
+
+function getPortalOrigin(): string {
+  return (
+    process.env.NEXT_PUBLIC_PORTAL_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://portal.bcousinoprop.com"
+  ).replace(/\/+$/, "");
+}
+
 export function getIntegrationWebhookUrl(): string {
   const base = (
     process.env.NEXT_PUBLIC_PORTAL_URL ||

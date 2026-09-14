@@ -114,6 +114,13 @@ export function ZintoConfigClient() {
   const [healthLoading, setHealthLoading] = useState(true);
   const [registeringWebhook, setRegisteringWebhook] = useState(false);
 
+  // La URL del webhook v2 la dice el diagnóstico (sabe el origen real del
+  // portal); el cliente no la recompone para no acabar con dos verdades.
+  const webhookUrl =
+    health?.checks
+      .find((c) => c.id === "v2_webhook_url")
+      ?.detail.match(/https?:\/\/\S+/)?.[0] ?? null;
+
   const loadConfig = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/zinto-config");
@@ -403,26 +410,45 @@ export function ZintoConfigClient() {
             </>
           )}
 
-          <div className="mt-4 flex flex-col gap-2 border-t border-ink/8 pt-3 md:flex-row md:items-center md:justify-between">
-            <p className="text-xs text-ink/50">
-              El webhook es lo que trae los mensajes entrantes. Sin él la comunicación es
-              sólo de ida.
-            </p>
-            <button
-              type="button"
-              onClick={handleRegisterWebhook}
-              disabled={registeringWebhook}
-              className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/5 disabled:opacity-50"
-            >
-              {registeringWebhook ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Webhook size={14} />
-              )}
-              <span>
-                {flags.hasIntegrationWebhookSecret ? "Volver a registrar webhook" : "Registrar webhook"}
-              </span>
-            </button>
+          <div className="mt-4 border-t border-ink/8 pt-3">
+            {health?.apiVersion === "v2" ? (
+              /* v2 no tiene endpoint para dar de alta el webhook: la URL se
+                 configura en el panel de Zinto al crear la integración. Un
+                 botón aquí prometería algo que la API no permite. */
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs text-ink/50">
+                  En v2 el webhook <strong>no se registra desde aquí</strong>: se configura en
+                  Zinto → Configuración → Acceso API → Integraciones CRM, apuntando a esta URL.
+                </p>
+                <code className="select-all break-all rounded-lg border border-ink/10 bg-white/70 px-2.5 py-1.5 text-[11px] text-ink/75">
+                  {webhookUrl ?? "…"}
+                </code>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <p className="text-xs text-ink/50">
+                  El webhook es lo que trae los mensajes entrantes. Sin él la comunicación es
+                  sólo de ida.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRegisterWebhook}
+                  disabled={registeringWebhook}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-gold/5 disabled:opacity-50"
+                >
+                  {registeringWebhook ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Webhook size={14} />
+                  )}
+                  <span>
+                    {flags.hasIntegrationWebhookSecret
+                      ? "Volver a registrar webhook"
+                      : "Registrar webhook"}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

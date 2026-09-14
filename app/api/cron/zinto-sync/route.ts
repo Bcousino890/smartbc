@@ -62,6 +62,26 @@ export async function POST(req: Request) {
         : err instanceof Error
           ? err.message
           : "Error desconocido";
+
+    // Credencial de v1 rechazada: medido el 2026-09-13, es el estado normal
+    // hoy. No es un fallo que merezca 500 cada noche en el log — y sobre todo
+    // no se arregla reintentando, porque v2 NO TIENE endpoint de lectura de
+    // contactos: es un contrato de empuje (PUT /contacts/{externalId}), así
+    // que "reconciliar bajando" no existe ahí. Cuando se corte a v2, esta ruta
+    // hay que reescribirla en el otro sentido, no reapuntarla.
+    const credentialDead =
+      err instanceof ZintoIntegrationApiError &&
+      (err.status === 401 || err.code === "API_KEY_NOT_FOUND");
+    if (credentialDead) {
+      return Response.json({
+        ok: false,
+        skipped: "v1_credential_rejected",
+        error: detail,
+        hint: "El contrato v1 no acepta ninguna clave guardada. v2 no ofrece lectura de contactos: la sincronización hacia v2 es de empuje y aún no está construida.",
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+
     console.error("[cron/zinto-sync]", detail);
     return Response.json({ ok: false, error: detail, elapsedMs: Date.now() - startedAt }, { status: 500 });
   }

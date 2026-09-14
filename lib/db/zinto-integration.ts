@@ -134,13 +134,21 @@ export interface ZintoIntegrationStats {
   lastApiCallStatus: number | null;
   cachedContacts: number;
   cacheSyncedAt: string | null;
+  /**
+   * Último webhook procesado por los receptores legacy/v2, que comparten la
+   * tabla de dedupe `zinto_webhook_deliveries`. Es la señal de si están
+   * entrando mensajes de verdad por el camino que hoy está vivo.
+   */
+  lastLegacyDeliveryAt: string | null;
+  legacyDeliveriesLast24h: number;
 }
 
 export async function getZintoIntegrationStats(): Promise<ZintoIntegrationStats> {
   const db = createAdminClient() as any;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const [lastEvent, recentEvents, lastCall, contacts] = await Promise.all([
+  const [lastEvent, recentEvents, lastCall, contacts, lastDelivery, recentDeliveries] =
+    await Promise.all([
     db
       .from("zinto_integration_webhook_events")
       .select("received_at")
@@ -162,6 +170,16 @@ export async function getZintoIntegrationStats(): Promise<ZintoIntegrationStats>
       .select("synced_at", { count: "exact" })
       .order("synced_at", { ascending: false })
       .limit(1),
+    db
+      .from("zinto_webhook_deliveries")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from("zinto_webhook_deliveries")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since),
   ]);
 
   return {
@@ -171,6 +189,8 @@ export async function getZintoIntegrationStats(): Promise<ZintoIntegrationStats>
     lastApiCallStatus: lastCall?.data?.status_code ?? null,
     cachedContacts: contacts?.count ?? 0,
     cacheSyncedAt: contacts?.data?.[0]?.synced_at ?? null,
+    lastLegacyDeliveryAt: lastDelivery?.data?.created_at ?? null,
+    legacyDeliveriesLast24h: recentDeliveries?.count ?? 0,
   };
 }
 

@@ -6,6 +6,7 @@ import {
   getIntegrationWebhookUrl,
   readZintoConfigRow,
   listZintoCredentialCandidates,
+  getV2WebhookUrl,
 } from "./server-config";
 import { parseZintoErrorBody } from "./client";
 import type { IdentityResponse, WebhookEndpoint } from "./types";
@@ -229,12 +230,190 @@ function ago(iso: string | null): string {
   return `hace ${Math.round(hours / 24)} días`;
 }
 
+/**
+ * Comprobaciones propias del contrato v2, que NO es "v1 más nuevo" sino otro
+ * modelo (guía oficial en GET /api/v2/guide.md):
+ *
+ *   · Es de EMPUJE. No existe `GET /contacts` ni `GET /messages`: se hace
+ *     `PUT /contacts/{externalId}` y `POST /messages` con nuestro propio id.
+ *     Por eso aquí no se puede "reconciliar bajando" nada.
+ *   · **El webhook no se registra por API.** No hay `POST /webhooks`: la URL
+ *     se configura en Zinto, al crear la integración (Configuración → Acceso
+ *     API → Integraciones CRM). Cualquier botón que prometa registrarlo desde
+ *     aquí está mintiendo.
+ *   · Los entrantes son nativos (`message.received`), sin el "Flujo" manual
+ *     que v1 necesitaba y que nunca llegó a configurarse.
+ */
+async function diagnoseV2(probe: CredentialProbe): Promise<HealthCheck[]> {
+  const out: HealthCheck[] = [];
+  const row = await readZintoConfigRow();
+
+  out.push({
+    id: "v2_credential",
+    label: "Contrato v2",
+    status: "ok",
+    detail: `La clave v2 autentica contra ${probe.url} con ${probe.scopeCount ?? 0} permisos. Éste es el contrato vivo.`,
+  });
+
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const integrationId = (row?.integration_id ?? "").trim();
+  out.push({
+    id: "v2_integration_id",
+    label: "Integration ID",
+    status: UUID.test(integrationId) ? "ok" : "fail",
+    detail: UUID.test(integrationId)
+      ? "Guardado y con forma de UUID."
+      : integrationId
+        ? `El valor guardado ("${integrationId}") no es un UUID.`
+        : "No hay Integration ID guardado.",
+    action: UUID.test(integrationId)
+      ? undefined
+      : "Cópialo de Zinto → Configuración → Acceso API → Integraciones CRM. Sin él, v2 rechaza toda ruta de recursos (sólo /capabilities funciona sin la cabecera).",
+  });
+
+  const grants = probe.grants ?? [];
+  const missing = ["messages:send", "contacts:write", "conversations:read"].filter(
+    (g) => grants.length > 0 && !grants.includes(g),
+  );
+  out.push({
+    id: "v2_grants",
+    label: "Permisos v2",
+    status: missing.length ? "warn" : "ok",
+    detail: grants.length ? grants.join(", ") : "(no se pudieron leer)",
+    action: missing.length ? `Faltan para la hoja de ruta: ${missing.join(", ")}.` : undefined,
+  });
+
+  out.push({
+    id: "v2_enabled",
+    label: "Interruptor v2",
+    status: row?.enabled_v2 ? "ok" : "fail",
+    detail: row?.enabled_v2
+      ? "enabled_v2 = true: el receptor de v2 acepta eventos."
+      : "enabled_v2 = false: el receptor /api/webhooks/zinto-v2 devuelve 404 y descarta todo lo que llegue.",
+    action: row?.enabled_v2
+      ? undefined
+      : "Actívalo en Configuración → Zinto v2 cuando la URL esté puesta en el panel de Zinto.",
+  });
+
+  out.push({
+    id: "v2_webhook_secret",
+    label: "Secreto del webhook v2",
+    status: row?.webhook_secret_v2_encrypted ? "ok" : "fail",
+    detail: row?.webhook_secret_v2_encrypted
+      ? "Guardado."
+      : "Sin secreto guardado: no se puede verificar la firma de nada que llegue.",
+    action: row?.webhook_secret_v2_encrypted
+      ? undefined
+      : "Cópialo de la tarjeta de la integración en Zinto ('Ver secreto') y pégalo en Configuración → Zinto v2.",
+  });
+
+  // El webhook de v2 NO se da de alta por API: se configura en Zinto.
+  out.push({
+    id: "v2_webhook_url",
+    label: "URL del webhook",
+    status: "skip",
+    detail: `En Zinto (Configuración → Acceso API → Integraciones CRM) la integración debe apuntar a ${getV2WebhookUrl()}`,
+    action:
+      "v2 no tiene endpoint para registrarlo: esto se pone a mano en el panel de Zinto, no desde aquí.",
+  });
+
+  return out;
+}
+
+
+/**
+ * Pulso real de la integración: si entra y sale algo, y si la caché sigue
+ * viva. Compartido por el diagnóstico de v1 y el de v2 — la pregunta "¿está
+ * llegando algo?" no depende del contrato.
+ */
+async function pulseChecks(enabled: boolean): Promise<HealthCheck[]> {
+  const checks: HealthCheck[] = [];
+  // ── 6-8. Pulso real: ¿entra y sale algo? ──────────────────────────────────
+  const stats = await getZintoIntegrationStats();
+
+  checks.push({
+    id: "inbound",
+    label: "Eventos recibidos",
+    status: stats.lastEventAt ? (stats.eventsLast24h > 0 ? "ok" : "warn") : "fail",
+    detail: stats.lastEventAt
+      ? `Último evento ${ago(stats.lastEventAt)}. ${stats.eventsLast24h} en las últimas 24 h.`
+      : "Nunca ha llegado un solo evento desde Zinto.",
+    action: stats.lastEventAt
+      ? undefined
+      : "Es la prueba de que la comunicación entrante no funciona todavía. Registra el webhook y provoca un cambio en un contacto para verificar.",
+  });
+
+  checks.push({
+    id: "outbound",
+    label: "Llamadas salientes",
+    status: stats.lastApiCallAt ? "ok" : "warn",
+    detail: stats.lastApiCallAt
+      ? `Última llamada ${ago(stats.lastApiCallAt)} (HTTP ${stats.lastApiCallStatus}).`
+      : "No hay ninguna llamada registrada.",
+  });
+
+  const cacheStale =
+    !stats.cacheSyncedAt || Date.now() - Date.parse(stats.cacheSyncedAt) > 48 * 60 * 60 * 1000;
+  checks.push({
+    id: "cache",
+    label: "Caché de contactos",
+    status: stats.cachedContacts === 0 ? "fail" : cacheStale ? "warn" : "ok",
+    detail: `${stats.cachedContacts} contactos, sincronizados ${ago(stats.cacheSyncedAt)}.`,
+    action: cacheStale
+      ? "El cron de reconciliación (/api/cron/zinto-sync) no está corriendo. Comprueba la entrada del crontab en el VPS."
+      : undefined,
+  });
+
+  // ── 9. Interruptores ──────────────────────────────────────────────────────
+  
+  const writable = isZintoWriteAllowlisted();
+  checks.push({
+    id: "flags",
+    label: "Interruptores",
+    status: enabled ? (writable ? "ok" : "warn") : "fail",
+    detail: `ZINTO_INTEGRATION_API_ENABLED=${enabled} · ZINTO_WRITE_ALLOWLISTED=${writable}`,
+    action: !enabled
+      ? "Con ENABLED=false el receptor de webhooks devuelve 404 y no procesa nada. Ponlo a true en el .env.local del VPS y reinicia con --update-env."
+      : !writable
+        ? "Con WRITE_ALLOWLISTED=false no se puede escribir en Zinto (notas, tags, contactos). Actívalo cuando Zinto confirme la allowlist."
+        : undefined,
+  });
+
+  return checks;
+}
+
 export async function diagnoseZintoIntegration(): Promise<ZintoHealthReport> {
   const checks: HealthCheck[] = [];
   const checkedAt = new Date().toISOString();
 
   // Se lanza ya: es independiente del resto y así no suma latencia.
   const matrixPromise = probeCredentials().catch(() => [] as CredentialProbe[]);
+
+  // ── 0. El contrato que de verdad está vivo ────────────────────────────────
+  // Medido el 2026-09-13: v1 rechaza todas las claves guardadas y v2 autentica.
+  // Cuando v2 responde, ES el camino, y diagnosticarlo a él es lo útil; los
+  // checks de v1 pasan a ser información sobre un contrato heredado.
+  const earlyMatrix = await matrixPromise;
+  const v2Probe = earlyMatrix.find((p) => p.authenticated && p.version === "v2");
+  if (v2Probe) {
+    checks.push(...(await diagnoseV2(v2Probe)));
+
+    // v1 queda como información, NO como fallo: que un contrato heredado y
+    // sin credencial válida rechace las claves no es el problema a resolver
+    // hoy, y ponerlo en rojo tapa el veredicto que sí importa.
+    const v1Works = earlyMatrix.some((p) => p.authenticated && p.version === "v1");
+    checks.push({
+      id: "v1_legacy",
+      label: "Contrato v1 (heredado)",
+      status: "skip",
+      detail: v1Works
+        ? "También responde."
+        : "Ninguna clave guardada autentica contra v1. Esperable: el camino vivo es v2.",
+    });
+
+    checks.push(...(await pulseChecks(Boolean((await readZintoConfigRow())?.enabled_v2))));
+    return finish(checks, checkedAt, "https://crm.zinto.app", "database", v2Probe.company ?? null, v2Probe.grants ?? [], earlyMatrix, "v2");
+  }
 
   const config = await resolveZintoIntegrationConfig();
 
@@ -449,56 +628,7 @@ export async function diagnoseZintoIntegration(): Promise<ZintoHealthReport> {
     });
   }
 
-  // ── 6-8. Pulso real: ¿entra y sale algo? ──────────────────────────────────
-  const stats = await getZintoIntegrationStats();
-
-  checks.push({
-    id: "inbound",
-    label: "Eventos recibidos",
-    status: stats.lastEventAt ? (stats.eventsLast24h > 0 ? "ok" : "warn") : "fail",
-    detail: stats.lastEventAt
-      ? `Último evento ${ago(stats.lastEventAt)}. ${stats.eventsLast24h} en las últimas 24 h.`
-      : "Nunca ha llegado un solo evento desde Zinto.",
-    action: stats.lastEventAt
-      ? undefined
-      : "Es la prueba de que la comunicación entrante no funciona todavía. Registra el webhook y provoca un cambio en un contacto para verificar.",
-  });
-
-  checks.push({
-    id: "outbound",
-    label: "Llamadas salientes",
-    status: stats.lastApiCallAt ? "ok" : "warn",
-    detail: stats.lastApiCallAt
-      ? `Última llamada ${ago(stats.lastApiCallAt)} (HTTP ${stats.lastApiCallStatus}).`
-      : "No hay ninguna llamada registrada.",
-  });
-
-  const cacheStale =
-    !stats.cacheSyncedAt || Date.now() - Date.parse(stats.cacheSyncedAt) > 48 * 60 * 60 * 1000;
-  checks.push({
-    id: "cache",
-    label: "Caché de contactos",
-    status: stats.cachedContacts === 0 ? "fail" : cacheStale ? "warn" : "ok",
-    detail: `${stats.cachedContacts} contactos, sincronizados ${ago(stats.cacheSyncedAt)}.`,
-    action: cacheStale
-      ? "El cron de reconciliación (/api/cron/zinto-sync) no está corriendo. Comprueba la entrada del crontab en el VPS."
-      : undefined,
-  });
-
-  // ── 9. Interruptores ──────────────────────────────────────────────────────
-  const enabled = config.enabled;
-  const writable = isZintoWriteAllowlisted();
-  checks.push({
-    id: "flags",
-    label: "Interruptores",
-    status: enabled ? (writable ? "ok" : "warn") : "fail",
-    detail: `ZINTO_INTEGRATION_API_ENABLED=${enabled} · ZINTO_WRITE_ALLOWLISTED=${writable}`,
-    action: !enabled
-      ? "Con ENABLED=false el receptor de webhooks devuelve 404 y no procesa nada. Ponlo a true en el .env.local del VPS y reinicia con --update-env."
-      : !writable
-        ? "Con WRITE_ALLOWLISTED=false no se puede escribir en Zinto (notas, tags, contactos). Actívalo cuando Zinto confirme la allowlist."
-        : undefined,
-  });
+  checks.push(...(await pulseChecks(config.enabled)));
 
   // ── 10. Qué credencial vale contra qué versión ────────────────────────────
   const matrix = await matrixPromise;
