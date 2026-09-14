@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
   try {
     const config = await getZintoV2Config();
     if (!config?.enabled) {
+      console.log("[zinto-v2-webhook] rechazado: enabled_v2=false");
       return NextResponse.json({ error: "Zinto v2 no está habilitado" }, { status: 404 });
     }
 
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
     try {
       payload = JSON.parse(rawBody);
     } catch {
+      console.log(`[zinto-v2-webhook] JSON inválido (${rawBody.length} bytes)`);
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
@@ -108,8 +110,16 @@ export async function POST(req: NextRequest) {
     const timestamp = req.headers.get("x-zinto-timestamp") || "";
     eventId = req.headers.get("x-zinto-event-id") || "";
     const signature = req.headers.get("x-zinto-signature") || "";
+    // Nunca se loggea el secreto ni la firma en sí — solo si los headers
+    // que la firma necesita llegaron siquiera. Es la única forma de saber,
+    // sin acceso a Zinto, si "no llega nada" es en realidad "llega pero con
+    // otra forma de cabeceras" (p.ej. sin X-Zinto-Timestamp).
+    console.log(
+      `[zinto-v2-webhook] intento: event=${eventName || "(vacío)"} tieneTimestamp=${!!timestamp} tieneEventId=${!!eventId} tieneFirma=${!!signature}`,
+    );
 
     if (!verifySignature(webhookSecret, timestamp, rawBody, signature)) {
+      console.log(`[zinto-v2-webhook] ✗ firma inválida (event=${eventName || "(vacío)"})`);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
@@ -121,6 +131,15 @@ export async function POST(req: NextRequest) {
     if (eventName === "message.received") {
       const inbound = extractInbound(payload);
       if (!inbound.sender || !inbound.text) {
+        // El OpenAPI de v2 nunca publicó el schema real de este body (ver
+        // comentario de cabecera) — sin esto, un cambio de forma en el
+        // payload real de Zinto queda invisible: pasa la firma, entra
+        // aquí, y desaparece sin dejar rastro salvo este log. Truncado por
+        // las dudas (tamaño de log), no por privacidad — ya vive igual en
+        // zinto_messages en cuanto se guarda bien.
+        console.log(
+          `[zinto-v2-webhook] ✗ message.received sin sender/text extraíble. Claves del payload: ${Object.keys(payload).join(", ")}. Body: ${rawBody.slice(0, 500)}`,
+        );
         return NextResponse.json({ error: "Missing sender or text" }, { status: 400 });
       }
       const fromPhone = inbound.sender.replace(/[^\d]/g, "");
@@ -144,6 +163,7 @@ export async function POST(req: NextRequest) {
       await saveMessage(conversation.id, fromPhone, conversation.phone_number, inbound.text, "received", "delivered", conversation.channel_id);
       await updateConversationLastMessage(conversation.id, inbound.text, true);
 
+      console.log(`[zinto-v2-webhook] ✓ message.received guardado (conversación ${conversation.id})`);
       return NextResponse.json({ status: "received" }, { status: 200 });
     }
 
@@ -153,9 +173,16 @@ export async function POST(req: NextRequest) {
       const status = payload.message?.status || payload.status || "";
       if (externalMessageId && STATUS_VALUES.includes(status)) {
         await updateMessageStatusFromWebhook(externalMessageId, status as "sent" | "delivered" | "read" | "failed");
+        console.log(`[zinto-v2-webhook] ✓ ${eventName} → ${status} (${externalMessageId})`);
+      } else {
+        console.log(
+          `[zinto-v2-webhook] ✗ ${eventName} sin externalMessageId/status reconocible. Claves del payload: ${Object.keys(payload).join(", ")}`,
+        );
       }
       return NextResponse.json({ status: "received" }, { status: 200 });
     }
+
+    console.log(`[zinto-v2-webhook] evento ignorado (fuera de alcance): ${eventName || "(vacío)"}`);
 
     // Evento reconocido por el contrato pero fuera del alcance de esta
     // integración (contacts.*, deals.*, etc. — ver docs/ZINTO_SETUP.md).
