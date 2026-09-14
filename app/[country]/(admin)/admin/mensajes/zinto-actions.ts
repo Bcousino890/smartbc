@@ -22,6 +22,8 @@ import {
 } from "@/lib/services/zinto/client";
 import { getZintoConfig } from "@/lib/services/zinto/config";
 import type { ZintoMessageRecord } from "@/lib/services/zinto/types";
+import { getZintoV2Config } from "@/lib/services/zinto-v2/config";
+import { sendWhatsAppMessageV2, ZintoV2ApiError } from "@/lib/services/zinto-v2/client";
 
 export type SendZintoResult =
   | { ok: true; id: string }
@@ -46,6 +48,46 @@ export async function sendZintoMessage(
   const config = await getZintoConfig();
   const channelId = conversation.channel_id || config?.channelId || 4;
 
+  // Vía preferida: API v2 (bidireccional oficial, POST /messages, scope
+  // messages:send). v1 (lib/services/zinto/client.ts, más abajo) está
+  // confirmado retirado por nuestro lado (CLAUDE.md 2026-09-13: las 3
+  // credenciales que se prueban contra /api/v1 dan API_KEY_NOT_FOUND) y
+  // Zinto no ha logrado explicar por qué rechaza justo la clave viva —
+  // reintentar con v1 cuando v2 falla no tiene sentido, así que v1 queda
+  // SOLO como fallback si v2 no está habilitada (enabled_v2), no si v2
+  // falla al enviar.
+  const v2Config = await getZintoV2Config();
+  if (v2Config?.enabled) {
+    try {
+      const v2Result = await sendWhatsAppMessageV2(channelId, conversation.phone_number, body);
+      const saved = await saveMessage(
+        conversationId,
+        "channel",
+        conversation.phone_number,
+        body,
+        "sent",
+        "sent",
+        channelId,
+        v2Result.externalMessageId,
+      );
+
+      await updateConversationLastMessage(conversationId, body);
+
+      revalidatePath("/es/admin/mensajes");
+      revalidatePath("/cl/admin/mensajes");
+      return { ok: true, id: saved.id };
+    } catch (error) {
+      if (error instanceof ZintoV2ApiError) {
+        return { ok: false, error: error.code || "zinto_v2_send_failed" };
+      }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "zinto_v2_send_failed",
+      };
+    }
+  }
+
+  // Fallback legacy v1 — solo cuando v2 no está habilitada en absoluto.
   try {
     let channel;
     try {
