@@ -4,6 +4,7 @@ import { fetchHtmlWithPlaywright } from "./fetch-with-playwright";
 import { fetchHtmlWithWayback } from "./fetch-with-wayback";
 import { fetchViaCurl } from "./fetch-via-curl";
 import { getFreshResidentialProxyUrl } from "../proxy-config";
+import { fetchViaRelayApi } from "../relay-api";
 import type { ImportExtractError } from "./types";
 
 // Hosts donde merece la pena intentar el fallback final de Wayback Machine
@@ -331,70 +332,87 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
 
   console.log(`[fetch-html] ✗ Fetch directo falló: ${directResult.error.reason}`);
 
-  // Si recibe 403/429 y tenemos proxy, reintentar con proxy
-  const isBlocked =
-    directResult.error.kind === "blocked" && proxyUrl;
-  if (isBlocked) {
-    try {
-      console.log(`[fetch-html] Intento 2: proxy residencial`);
-      const proxyAgent = new ProxyAgent(proxyUrl);
-      const proxyResult = await tryFetch(url, proxyAgent);
-      if (proxyResult.ok) {
-        console.log(`[fetch-html] ✓ Proxy Smartproxy exitoso`);
-        return proxyResult;
-      }
-
-      console.log(`[fetch-html] ✗ Proxy falló: ${proxyResult.error.reason}`);
-
-      // Si el proxy también falla, intentar Playwright como último recurso
-      console.log(`[fetch-html] Intento 3: Playwright (navegador real)`);
-      try {
-        const playwrightResult = await fetchHtmlWithPlaywright(url);
-        if (playwrightResult.ok) {
-          console.log(`[fetch-html] ✓ Playwright exitoso`);
-          return playwrightResult;
-        }
-        console.log(`[fetch-html] ✗ Playwright falló: ${playwrightResult.error.reason}`);
-        // Si Playwright también falla, intentar Wayback (solo Idealista).
-        return maybeTryWayback(
-          url,
-          `Direct: ${directResult.error.reason} | Proxy: ${proxyResult.error.reason} | Playwright: ${playwrightResult.error.reason}`,
-        );
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : "error desconocido";
-        console.log(`[fetch-html] ✗ Playwright error: ${errMsg}`);
-        return maybeTryWayback(
-          url,
-          `Direct: ${directResult.error.reason} | Proxy: ${proxyResult.error.reason} | Playwright: ${errMsg}`,
-        );
-      }
-    } catch (err) {
-      // Error al crear el proxy agent, intentar Playwright
-      const errMsg = err instanceof Error ? err.message : "error desconocido";
-      console.log(`[fetch-html] Error al crear proxy: ${errMsg}. Intentando Playwright...`);
-      try {
-        console.log(`[fetch-html] Intento 3: Playwright (sin proxy disponible)`);
-        const playwrightResult = await fetchHtmlWithPlaywright(url);
-        if (playwrightResult.ok) {
-          console.log(`[fetch-html] ✓ Playwright exitoso (sin proxy)`);
-          return playwrightResult;
-        }
-        console.log(`[fetch-html] ✗ Playwright falló: ${playwrightResult.error.reason}`);
-        return maybeTryWayback(
-          url,
-          `Direct: ${directResult.error.reason} | Proxy error: ${errMsg} | Playwright: ${playwrightResult.error.reason}`,
-        );
-      } catch (playwrightErr) {
-        const pwErrMsg = playwrightErr instanceof Error ? playwrightErr.message : "error desconocido";
-        console.log(`[fetch-html] ✗ Playwright error: ${pwErrMsg}`);
-        return maybeTryWayback(
-          url,
-          `Direct: ${directResult.error.reason} | Proxy error: ${errMsg} | Playwright error: ${pwErrMsg}`,
-        );
-      }
-    }
+  // Si no es bloqueo (404/410/timeout de red), no tiene sentido intentar
+  // proxy/Relay/Playwright — devolver el error original tal cual.
+  if (directResult.error.kind !== "blocked") {
+    return directResult;
   }
 
-  // Si no es bloqueo, devolver error original
-  return directResult;
+  // Intento 1.5: Relay (relay.167.233.48.91.sslip.io) — API de scraping con
+  // JS rendering, anti-bot e IPs residenciales de su lado (ver
+  // lib/sync/relay-api.ts). No depende de nuestro proxy residencial: se
+  // intenta ANTES del proxy legacy (Evomi, bloqueado por DataDome — ver
+  // CLAUDE.md) porque hoy es la vía con más chances de pasar el anti-bot.
+  console.log(`[fetch-html] Intento 1.5: Relay API`);
+  const relayResult = await fetchViaRelayApi(url);
+  if (relayResult.ok) {
+    console.log(`[fetch-html] ✓ Relay API exitoso`);
+    return { ok: true, html: relayResult.html, finalUrl: url };
+  }
+  console.log(`[fetch-html] ✗ Relay API falló: ${relayResult.reason}`);
+
+  const priorReasons = `Direct: ${directResult.error.reason} | ${relayResult.reason}`;
+
+  if (!proxyUrl) {
+    return maybeTryWayback(url, priorReasons);
+  }
+
+  try {
+    console.log(`[fetch-html] Intento 2: proxy residencial`);
+    const proxyAgent = new ProxyAgent(proxyUrl);
+    const proxyResult = await tryFetch(url, proxyAgent);
+    if (proxyResult.ok) {
+      console.log(`[fetch-html] ✓ Proxy Smartproxy exitoso`);
+      return proxyResult;
+    }
+
+    console.log(`[fetch-html] ✗ Proxy falló: ${proxyResult.error.reason}`);
+
+    // Si el proxy también falla, intentar Playwright como último recurso
+    console.log(`[fetch-html] Intento 3: Playwright (navegador real)`);
+    try {
+      const playwrightResult = await fetchHtmlWithPlaywright(url);
+      if (playwrightResult.ok) {
+        console.log(`[fetch-html] ✓ Playwright exitoso`);
+        return playwrightResult;
+      }
+      console.log(`[fetch-html] ✗ Playwright falló: ${playwrightResult.error.reason}`);
+      // Si Playwright también falla, intentar Wayback (solo Idealista).
+      return maybeTryWayback(
+        url,
+        `${priorReasons} | Proxy: ${proxyResult.error.reason} | Playwright: ${playwrightResult.error.reason}`,
+      );
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "error desconocido";
+      console.log(`[fetch-html] ✗ Playwright error: ${errMsg}`);
+      return maybeTryWayback(
+        url,
+        `${priorReasons} | Proxy: ${proxyResult.error.reason} | Playwright: ${errMsg}`,
+      );
+    }
+  } catch (err) {
+    // Error al crear el proxy agent, intentar Playwright
+    const errMsg = err instanceof Error ? err.message : "error desconocido";
+    console.log(`[fetch-html] Error al crear proxy: ${errMsg}. Intentando Playwright...`);
+    try {
+      console.log(`[fetch-html] Intento 3: Playwright (sin proxy disponible)`);
+      const playwrightResult = await fetchHtmlWithPlaywright(url);
+      if (playwrightResult.ok) {
+        console.log(`[fetch-html] ✓ Playwright exitoso (sin proxy)`);
+        return playwrightResult;
+      }
+      console.log(`[fetch-html] ✗ Playwright falló: ${playwrightResult.error.reason}`);
+      return maybeTryWayback(
+        url,
+        `${priorReasons} | Proxy error: ${errMsg} | Playwright: ${playwrightResult.error.reason}`,
+      );
+    } catch (playwrightErr) {
+      const pwErrMsg = playwrightErr instanceof Error ? playwrightErr.message : "error desconocido";
+      console.log(`[fetch-html] ✗ Playwright error: ${pwErrMsg}`);
+      return maybeTryWayback(
+        url,
+        `${priorReasons} | Proxy error: ${errMsg} | Playwright error: ${pwErrMsg}`,
+      );
+    }
+  }
 }
