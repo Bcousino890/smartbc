@@ -326,7 +326,10 @@ async function diagnoseV2(probe: CredentialProbe): Promise<HealthCheck[]> {
  * viva. Compartido por el diagnóstico de v1 y el de v2 — la pregunta "¿está
  * llegando algo?" no depende del contrato.
  */
-async function pulseChecks(enabled: boolean): Promise<HealthCheck[]> {
+async function pulseChecks(
+  enabled: boolean,
+  contract: "v1" | "v2" = "v1",
+): Promise<HealthCheck[]> {
   const checks: HealthCheck[] = [];
   // ── 6-8. Pulso real: ¿entra y sale algo? ──────────────────────────────────
   const stats = await getZintoIntegrationStats();
@@ -340,7 +343,9 @@ async function pulseChecks(enabled: boolean): Promise<HealthCheck[]> {
       : "Nunca ha llegado un solo evento desde Zinto.",
     action: stats.lastEventAt
       ? undefined
-      : "Es la prueba de que la comunicación entrante no funciona todavía. Registra el webhook y provoca un cambio en un contacto para verificar.",
+      : contract === "v2"
+        ? "Todo lo configurable desde aquí está en verde, así que lo que falta está del otro lado: comprueba que la integración en Zinto tenga puesta la URL del webhook (arriba) y esté activada. Después responde por WhatsApp para provocar un message.received."
+        : "Es la prueba de que la comunicación entrante no funciona todavía. Registra el webhook y provoca un cambio en un contacto para verificar.",
   });
 
   checks.push({
@@ -360,7 +365,9 @@ async function pulseChecks(enabled: boolean): Promise<HealthCheck[]> {
     status: stats.cachedContacts === 0 ? "fail" : cacheStale ? "warn" : "ok",
     detail: `${stats.cachedContacts} contactos, sincronizados ${ago(stats.cacheSyncedAt)}.`,
     action: cacheStale
-      ? "El cron de reconciliación (/api/cron/zinto-sync) no está corriendo. Comprueba la entrada del crontab en el VPS."
+      ? contract === "v2"
+        ? "Congelada desde el último backfill de v1. v2 no ofrece lectura de contactos (es de empuje), así que esta caché no se puede refrescar bajando datos: hay que construir la sincronización en el otro sentido."
+        : "El cron de reconciliación (/api/cron/zinto-sync) no está corriendo. Comprueba la entrada del crontab en el VPS."
       : undefined,
   });
 
@@ -397,6 +404,12 @@ export async function diagnoseZintoIntegration(): Promise<ZintoHealthReport> {
   const v2Probe = earlyMatrix.find((p) => p.authenticated && p.version === "v2");
   if (v2Probe) {
     checks.push(...(await diagnoseV2(v2Probe)));
+    // En esta rama v2 ES el contrato en uso. `isActive` se calcula contra el
+    // resolver de v1, así que sin esto el veredicto acabaría diciendo "la app
+    // no está usando la credencial que funciona" justo cuando sí la usa.
+    for (const probe of earlyMatrix) {
+      probe.isActive = probe.authenticated && probe.version === "v2";
+    }
 
     // v1 queda como información, NO como fallo: que un contrato heredado y
     // sin credencial válida rechace las claves no es el problema a resolver
@@ -411,7 +424,9 @@ export async function diagnoseZintoIntegration(): Promise<ZintoHealthReport> {
         : "Ninguna clave guardada autentica contra v1. Esperable: el camino vivo es v2.",
     });
 
-    checks.push(...(await pulseChecks(Boolean((await readZintoConfigRow())?.enabled_v2))));
+    checks.push(
+      ...(await pulseChecks(Boolean((await readZintoConfigRow())?.enabled_v2), "v2")),
+    );
     return finish(checks, checkedAt, "https://crm.zinto.app", "database", v2Probe.company ?? null, v2Probe.grants ?? [], earlyMatrix, "v2");
   }
 
