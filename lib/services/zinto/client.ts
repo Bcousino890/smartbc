@@ -77,7 +77,16 @@ export async function zintoFetch(endpoint: string, options: ZintoFetchOptions = 
     let details: string | undefined;
     try {
       const body = await response.json();
-      if (body?.error) {
+      // El envelope real de /api/v1 es PLANO: {"error":"API_KEY_NOT_FOUND",
+      // "message":"..."} — no {"error":{code,message}} como dice el spec
+      // (mismo hallazgo que zinto-integration/client.ts parseZintoErrorBody,
+      // verificado en producción). Sin este caso, `body.error.code` en un
+      // string da `undefined` y un 401 de credencial muerta queda sin code,
+      // indistinguible de cualquier otro fallo.
+      if (typeof body?.error === 'string') {
+        code = body.error;
+        message = typeof body.message === 'string' ? body.message : message;
+      } else if (body?.error) {
         code = body.error.code;
         message = body.error.message || message;
         details =
@@ -243,17 +252,25 @@ export async function getChannelTemplates(channelId: number): Promise<ZintoTempl
   return zintoFetch(`/channels/${channelId}/templates`, { method: 'GET' });
 }
 
-/** Return the channel if it exists AND is active, otherwise null. */
+/**
+ * Return the channel if it exists AND is active, otherwise null.
+ *
+ * ⚠️ NO traga errores de autenticación/red: antes este catch convertía
+ * CUALQUIER fallo (incluido un 401 de credencial muerta) en "canal
+ * inactivo", que es engañoso — v1 está retirado (verificado 2026-09-13,
+ * ver CLAUDE.md), así que un 401/API_KEY_NOT_FOUND aquí no significa que
+ * el canal de WhatsApp esté apagado en Zinto, significa que esta
+ * credencial v1 ya no autentica. Se deja propagar el ZintoApiError para
+ * que el caller pueda distinguir "canal no encontrado/inactivo" (null) de
+ * "no se pudo ni preguntar" (excepción) en vez de mostrar el mismo mensaje
+ * engañoso para ambos casos.
+ */
 export async function getActiveChannel(channelId: number): Promise<ZintoChannel | null> {
-  try {
-    const response = await getZintoChannels();
-    const channel = (response.data || []).find((c) => Number(c.id) === Number(channelId));
-    // Treat missing/unknown status as active — the real API may omit it.
-    if (channel && channel.status !== 'inactive') {
-      return channel;
-    }
-    return null;
-  } catch {
-    return null;
+  const response = await getZintoChannels();
+  const channel = (response.data || []).find((c) => Number(c.id) === Number(channelId));
+  // Treat missing/unknown status as active — the real API may omit it.
+  if (channel && channel.status !== 'inactive') {
+    return channel;
   }
+  return null;
 }
