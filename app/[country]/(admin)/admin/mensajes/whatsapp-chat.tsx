@@ -632,6 +632,9 @@ function translateError(code: string): string {
     conversation_not_found: "No se encontró la conversación.",
     channel_inactive: "El canal de WhatsApp no está activo en Zinto.",
     zinto_send_failed: "Zinto no pudo enviar el mensaje.",
+    zinto_v1_auth_failed:
+      "No se pudo autenticar con Zinto (API v1) — no es que el canal esté apagado, es la credencial vieja de v1, que Zinto retiró. Hay que migrar el envío a la API v2.",
+    API_KEY_NOT_FOUND: "La credencial de Zinto (v1) fue revocada — hay que migrar el envío a v2.",
     INVALID_PHONE_NUMBER: "El número de teléfono no es válido.",
     RATE_LIMIT_EXCEEDED: "Demasiadas solicitudes. Intenta en un momento.",
     CHANNEL_NOT_FOUND: "El canal de WhatsApp no existe en Zinto.",

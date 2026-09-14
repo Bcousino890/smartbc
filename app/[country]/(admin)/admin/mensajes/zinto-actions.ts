@@ -47,7 +47,18 @@ export async function sendZintoMessage(
   const channelId = conversation.channel_id || config?.channelId || 4;
 
   try {
-    const channel = await getActiveChannel(channelId);
+    let channel;
+    try {
+      channel = await getActiveChannel(channelId);
+    } catch (channelError) {
+      // No confundir con "canal inactivo": esto es que ni siquiera se pudo
+      // preguntar a Zinto (típicamente credencial v1 muerta — ver
+      // CLAUDE.md, "v1 está retirado"). Mensaje distinto a propósito.
+      if (channelError instanceof ZintoApiError) {
+        return { ok: false, error: channelError.code || "zinto_v1_auth_failed" };
+      }
+      return { ok: false, error: "zinto_v1_auth_failed" };
+    }
     if (!channel) return { ok: false, error: "channel_inactive" };
 
     const res = await sendWhatsAppMessage(channelId, conversation.phone_number, body);
