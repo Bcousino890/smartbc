@@ -277,6 +277,16 @@ comparte con la web. Renderiza uno por pasada justo por eso:
   y se gestiona en `/es/admin/idealista/configuracion`.
 - Ajustes en `app_settings.video_generation`; los defaults reales y su
   validación están en `lib/services/video/config.ts`.
+- ⚠️ **Idealista puede rechazar el vídeo como "carrusel de imágenes
+  estáticas"** si el movimiento dentro de cada foto es poco visible (pasó con
+  BC-1343). Las 4 variantes de `MOTIONS` (`render.ts`) combinan zoom +
+  desplazamiento lateral a propósito — nunca zoom puro centrado, que apenas
+  cambia de un fotograma al siguiente. Si vuelve a pasar, sube `MAX_ZOOM`
+  (`config.ts`) antes que tocar el ritmo (`secondsPerPhoto`/
+  `transitionSeconds`), que ya se ajustó a pedido del cliente. Los vídeos ya
+  generados NO se regeneran solos con este cambio (la huella no incluye
+  constantes del motor, solo ajustes de usuario) — hay que darle a "Regenerar
+  vídeo" a mano en los que ya se rechazaron.
 
 
 ## Partner API de Idealista — "API en tiempo real" (`lib/services/idealista/partner-api/**`)

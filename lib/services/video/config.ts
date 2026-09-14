@@ -96,8 +96,17 @@ export const STORAGE_SAFETY_FACTOR = 0.92;
 
 export const FPS = 30;
 
-/** Zoom máximo del efecto Ken Burns (1.15 = 15% de acercamiento). */
-export const MAX_ZOOM = 1.15;
+/**
+ * Zoom máximo del efecto Ken Burns (1.20 = 20% de acercamiento).
+ *
+ * Al 15% con solo zoom centrado (sin desplazamiento) Idealista rechazó un
+ * vídeo como "carrusel de imágenes estáticas": de un fotograma al siguiente
+ * apenas cambiaba nada. Ahora las cuatro variantes de movimiento combinan
+ * zoom y desplazamiento lateral a la vez (ver MOTIONS en render.ts), así que
+ * subir el zoom aquí también hace más visible el desplazamiento (que usa el
+ * hueco que deja el propio zoom).
+ */
+export const MAX_ZOOM = 1.2;
 
 /**
  * Las fotos se preparan a este múltiplo de la resolución de salida para que el
