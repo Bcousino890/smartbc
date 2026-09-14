@@ -40,6 +40,7 @@ export default function ConfiguracionClient() {
   const [proxyConfigs, setProxyConfigs] = useState<ProxyConfig[]>([]);
   const [activeProxyProvider, setActiveProxyProvider] = useState<ProxyProvider>("evomi");
   const [scrapingCapSolverKey, setScrapingCapSolverKey] = useState("");
+  const [scrapingRelayApiKey, setScrapingRelayApiKey] = useState("");
   const [mlClientSecret, setMlClientSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -55,22 +56,42 @@ export default function ConfiguracionClient() {
           ...(data.defaults ? { defaults: data.defaults as AppSettings["defaults"] } : {}),
           ...(data.notifications ? { notifications: data.notifications as AppSettings["notifications"] } : {}),
         }));
-        if (typeof data["scraping.proxyUrl"] === "string") {
-          setScrapingProxyUrl(data["scraping.proxyUrl"]);
+        const liveProxyUrl =
+          typeof data["scraping.proxyUrl"] === "string" ? data["scraping.proxyUrl"] : "";
+        if (liveProxyUrl) {
+          setScrapingProxyUrl(liveProxyUrl);
         }
+        let configsFromStorage: ProxyConfig[] = [];
         if (typeof data["scraping.proxyConfigs"] === "string") {
           try {
             const parsed = JSON.parse(data["scraping.proxyConfigs"] as string);
-            if (Array.isArray(parsed)) {
-              setProxyConfigs(parsed);
-              const active = parsed.find((c: ProxyConfig) => c.enabled);
-              if (active) {
-                setActiveProxyProvider(active.provider);
-              }
-            }
+            if (Array.isArray(parsed)) configsFromStorage = parsed;
           } catch (e) {
             // Ignore parse errors, use defaults
           }
+        }
+        const activeMatchesLive = configsFromStorage.find(
+          (c) => c.enabled && c.url === liveProxyUrl,
+        );
+        if (activeMatchesLive) {
+          setProxyConfigs(configsFromStorage);
+          setActiveProxyProvider(activeMatchesLive.provider);
+        } else if (liveProxyUrl) {
+          // "scraping.proxyUrl" (la clave que de verdad usa el scraping) no
+          // coincide con ninguna tarjeta guardada de este panel — típicamente
+          // porque se cargó a mano o desde una versión vieja del panel. Se
+          // sintetiza una tarjeta "custom" con el valor real para que quede
+          // visible y editable en vez de mostrar el panel vacío mintiendo
+          // que no hay proxy configurado.
+          setProxyConfigs([
+            ...configsFromStorage.filter((c) => c.provider !== "custom"),
+            { provider: "custom", url: liveProxyUrl, enabled: true, notes: "" },
+          ]);
+          setActiveProxyProvider("custom");
+        } else {
+          setProxyConfigs(configsFromStorage);
+          const active = configsFromStorage.find((c) => c.enabled);
+          if (active) setActiveProxyProvider(active.provider);
         }
         if (typeof data["ml.chile.client_secret"] === "string") {
           let secret = data["ml.chile.client_secret"] as string;
@@ -79,6 +100,9 @@ export default function ConfiguracionClient() {
         }
         if (typeof data["scraping.capsolver.api_key"] === "string") {
           setScrapingCapSolverKey(data["scraping.capsolver.api_key"]);
+        }
+        if (typeof data["scraping.relayApiKey"] === "string") {
+          setScrapingRelayApiKey(data["scraping.relayApiKey"]);
         }
       })
       .catch(() => {
@@ -89,6 +113,16 @@ export default function ConfiguracionClient() {
   async function handleSave() {
     setSaving(true);
     try {
+      // "scraping.proxyUrl" es la ÚNICA clave que lee lib/sync/proxy-config.ts
+      // (import-by-link y el scraper de particulares). "scraping.proxyConfigs"
+      // es solo el bookkeeping de las tarjetas de este panel — nunca la lee el
+      // código de scraping. Sin esto, activar/editar una tarjeta de proveedor
+      // no cambiaba nada real: se guardaba en proxyConfigs y scrapingProxyUrl
+      // quedaba congelado en lo que se cargó al abrir la página.
+      const activeConfig = proxyConfigs.find(
+        (c) => c.provider === activeProxyProvider && c.enabled,
+      );
+      const effectiveProxyUrl = activeConfig?.url || scrapingProxyUrl;
       await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,12 +131,14 @@ export default function ConfiguracionClient() {
           branding: settings.branding,
           defaults: settings.defaults,
           notifications: settings.notifications,
-          "scraping.proxyUrl": scrapingProxyUrl,
+          "scraping.proxyUrl": effectiveProxyUrl,
           "scraping.proxyConfigs": JSON.stringify(proxyConfigs),
           "scraping.capsolver.api_key": scrapingCapSolverKey,
+          "scraping.relayApiKey": scrapingRelayApiKey,
           "ml.chile.client_secret": mlClientSecret,
         }),
       });
+      setScrapingProxyUrl(effectiveProxyUrl);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -309,6 +345,18 @@ export default function ConfiguracionClient() {
               value={scrapingCapSolverKey}
               onChange={setScrapingCapSolverKey}
               placeholder="CAP-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            />
+            <p className="text-xs text-ink/55 pt-2">
+              Relay API Key — servicio propio de scraping (relay.167.233.48.91.sslip.io).
+              Se usa para &quot;Importar propiedad por link&quot; antes de caer al proxy de
+              abajo: consíguela en la sección &quot;API Key&quot; del panel de Relay y pégala
+              tal cual (empieza con <code className="font-mono">rk-</code>).
+            </p>
+            <PasswordField
+              label="Relay API Key"
+              value={scrapingRelayApiKey}
+              onChange={setScrapingRelayApiKey}
+              placeholder="rk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             />
             <ProxyConfigClient
               configs={proxyConfigs}

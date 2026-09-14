@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ProxyProvider = "evomi" | "smartproxy" | "geonode" | "decodo";
+export type ProxyProvider = "evomi" | "smartproxy" | "geonode" | "decodo" | "custom";
 
 export interface ProxyConfig {
   provider: ProxyProvider;
@@ -44,7 +44,19 @@ const PROVIDER_INFO: Record<
     hostPlaceholder: "dc.decodo.com",
     portPlaceholder: "10001",
   },
+  custom: {
+    label: "Otro / relay propio",
+    hostPlaceholder: "relay.167.233.48.91.sslip.io",
+    portPlaceholder: "",
+  },
 };
+
+// "custom" (a diferencia de evomi/smartproxy/geonode/decodo) no se edita como
+// host/puerto/usuario/password + buildProxyUrl (siempre http://, sin ruta):
+// un proxy/relay genérico puede llevar https, un puerto no estándar, una
+// ruta como /app/, o no llevar usuario/password en absoluto — autenticado
+// por IP de origen en vez de credencial en la URL, como el relay propio. Ver
+// ProxyDetailModal: para "custom" se pega la URL completa tal cual.
 
 /**
  * Descompone una URL de proxy guardada en sus 4 componentes para editarlos
@@ -168,7 +180,9 @@ export function ProxyConfigClient({
                 <div>
                   <h3 className="font-semibold text-sm">{info.label}</h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    {info.hostPlaceholder}:{info.portPlaceholder}
+                    {info.portPlaceholder
+                      ? `${info.hostPlaceholder}:${info.portPlaceholder}`
+                      : info.hostPlaceholder}
                   </p>
                 </div>
                 {isActive && config && (
@@ -342,15 +356,17 @@ function ProxyDetailModal({
   onUpdate: (updates: Partial<ProxyConfig>) => void;
   onClose: () => void;
 }) {
+  const isCustom = provider === "custom";
   const parsed = parseProxyUrl(config.url);
   const [host, setHost] = useState(parsed.host);
   const [port, setPort] = useState(parsed.port);
   const [username, setUsername] = useState(parsed.username);
   const [password, setPassword] = useState(parsed.password);
+  const [rawUrl, setRawUrl] = useState(config.url || "");
   const [notes, setNotes] = useState(config.notes || "");
   const [showPassword, setShowPassword] = useState(false);
   const info = PROVIDER_INFO[provider];
-  const assembled = buildProxyUrl({ host, port, username, password });
+  const assembled = isCustom ? rawUrl.trim() : buildProxyUrl({ host, port, username, password });
 
   const handleSave = () => {
     onUpdate({ url: assembled, notes });
@@ -364,61 +380,84 @@ function ProxyDetailModal({
         </div>
 
         <div className="p-4 space-y-4">
-          <p className="text-xs text-gray-500">
-            Pega cada dato tal cual lo da el panel del proveedor. El sistema arma la URL
-            (<code className="font-mono">http://usuario:password@host:puerto</code>) automáticamente —
-            no hace falta pegar <code className="font-mono">http://</code> ni el <code className="font-mono">@</code>.
-          </p>
+          {isCustom ? (
+            <>
+              <p className="text-xs text-gray-500">
+                Pega la URL COMPLETA tal cual (con <code className="font-mono">http://</code> o{" "}
+                <code className="font-mono">https://</code>, y usuario:password@ solo si el
+                proxy/relay lo requiere — algunos, como un relay propio autenticado por IP de
+                origen en vez de credencial, no llevan nada de eso).
+              </p>
+              <div>
+                <label className="text-sm font-medium">URL completa</label>
+                <input
+                  type="text"
+                  value={rawUrl}
+                  onChange={(e) => setRawUrl(e.target.value)}
+                  placeholder="https://relay.167.233.48.91.sslip.io"
+                  className="w-full px-3 py-2 border rounded text-sm font-mono"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-gray-500">
+                Pega cada dato tal cual lo da el panel del proveedor. El sistema arma la URL
+                (<code className="font-mono">http://usuario:password@host:puerto</code>) automáticamente —
+                no hace falta pegar <code className="font-mono">http://</code> ni el <code className="font-mono">@</code>.
+              </p>
 
-          <div>
-            <label className="text-sm font-medium">Host</label>
-            <input
-              type="text"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              placeholder={info.hostPlaceholder}
-              className="w-full px-3 py-2 border rounded text-sm font-mono"
-            />
-          </div>
+              <div>
+                <label className="text-sm font-medium">Host</label>
+                <input
+                  type="text"
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder={info.hostPlaceholder}
+                  className="w-full px-3 py-2 border rounded text-sm font-mono"
+                />
+              </div>
 
-          <div>
-            <label className="text-sm font-medium">Puerto</label>
-            <input
-              type="text"
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-              placeholder={info.portPlaceholder}
-              className="w-full px-3 py-2 border rounded text-sm font-mono"
-            />
-          </div>
+              <div>
+                <label className="text-sm font-medium">Puerto</label>
+                <input
+                  type="text"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  placeholder={info.portPlaceholder}
+                  className="w-full px-3 py-2 border rounded text-sm font-mono"
+                />
+              </div>
 
-          <div>
-            <label className="text-sm font-medium">Usuario</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 border rounded text-sm font-mono"
-            />
-          </div>
+              <div>
+                <label className="text-sm font-medium">Usuario</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-3 py-2 border rounded text-sm font-mono"
+                />
+              </div>
 
-          <div>
-            <label className="text-sm font-medium">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border rounded text-sm font-mono"
-              />
-              <button
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
+              <div>
+                <label className="text-sm font-medium">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm font-mono"
+                  />
+                  <button
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
 
           <div>
             <label className="text-sm font-medium">Notes (optional)</label>
@@ -432,10 +471,12 @@ function ProxyDetailModal({
           </div>
 
           <div className="bg-gray-50 p-2 rounded text-xs text-gray-600 space-y-1">
-            <p>
-              <strong>Note:</strong> Solo credenciales base — sin país, sesión ni lifetime. El sistema
-              los añade automáticamente en cada request.
-            </p>
+            {!isCustom && (
+              <p>
+                <strong>Note:</strong> Solo credenciales base — sin país, sesión ni lifetime. El sistema
+                los añade automáticamente en cada request.
+              </p>
+            )}
             {assembled && (
               <p className="font-mono truncate">
                 → {assembled.replace(/:[^:@]+@/, ":***@")}
