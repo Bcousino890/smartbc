@@ -9,12 +9,14 @@ export function LogsViewer() {
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
-  async function loadLogs() {
+  async function loadLogs(q?: string) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/logs");
+      const url = q ? `/api/admin/logs?q=${encodeURIComponent(q)}` : "/api/admin/logs";
+      const res = await fetch(url);
       const data = await res.json();
 
       if (data.ok) {
@@ -33,10 +35,11 @@ export function LogsViewer() {
   useEffect(() => {
     // Auto-load logs when component mounts
     loadLogs();
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(loadLogs, 10000);
+    // Auto-refresh every 10 seconds — respeta el filtro activo, si hay uno.
+    const interval = setInterval(() => loadLogs(query), 10000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const displayLogs = logs.filter((line) => line.trim().length > 0);
 
@@ -55,7 +58,7 @@ export function LogsViewer() {
           Logs del servidor {source && `(${source})`}
         </button>
         <button
-          onClick={loadLogs}
+          onClick={() => loadLogs(query)}
           disabled={loading}
           className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-3 py-1.5 text-sm transition hover:border-gold/40 hover:bg-gold/5 disabled:opacity-60"
         >
@@ -72,6 +75,16 @@ export function LogsViewer() {
 
       {expanded && (
         <div className="space-y-2">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") loadLogs(query);
+            }}
+            placeholder="Filtrar por texto, p. ej. zinto-v2-webhook"
+            className="w-full rounded-lg border border-ink/10 px-3 py-1.5 text-sm font-mono"
+          />
           {displayLogs.length === 0 ? (
             <p className="text-sm text-ink/50 py-4 text-center">No logs available</p>
           ) : (
