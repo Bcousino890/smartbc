@@ -132,7 +132,41 @@ function extractExternalMessageId(payload: ZintoV2WebhookPayload): string {
   );
 }
 
-function extractInbound(payload: ZintoV2WebhookPayload): { sender: string; text: string; name?: string } {
+export type InboundMedia = {
+  url: string;
+  type?: string | null;
+  mime?: string | null;
+  filename?: string | null;
+  caption?: string | null;
+};
+
+/**
+ * Medio entrante (imagen/audio/documento/video). POST /messages de v2 solo
+ * acepta `text` (confirmado contra su OpenAPI público) — nunca vamos a
+ * MANDAR un adjunto por acá, pero un cliente sí puede mandarnos uno por
+ * WhatsApp y que Zinto nos lo empuje. Forma sin confirmar contra un evento
+ * real todavía: sigue el patrón de v1 (message.media.{url,mime_type,
+ * filename}, ver app/api/webhooks/zinto/route.ts) con nombres planos como
+ * respaldo. Si `data.type` no es "text" y ninguna de estas variantes tiene
+ * URL, el caller loggea el objeto completo para ajustar con datos reales.
+ */
+function extractMedia(payload: ZintoV2WebhookPayload): InboundMedia | null {
+  const p = unwrap(payload);
+  const m = p.media;
+  const url = m?.url || p.media_url;
+  if (!url) return null;
+  return {
+    url,
+    type: m?.type || p.media_type || p.type || null,
+    mime: m?.mime_type || m?.mime || p.mime_type || null,
+    filename: m?.filename || p.filename || null,
+    caption: m?.caption || p.caption || null,
+  };
+}
+
+function extractInbound(
+  payload: ZintoV2WebhookPayload,
+): { sender: string; text: string; name?: string; media: InboundMedia | null } {
   const p = unwrap(payload);
   // Zinto confirmó (2026-09-15) que ahora manda `contact.phone` — se busca
   // primero dentro de `data` (donde vive el resto del contenido) y se cae
@@ -141,7 +175,8 @@ function extractInbound(payload: ZintoV2WebhookPayload): { sender: string; text:
   const contact = p.contact || payload.contact;
   const sender = contact?.phone || p.sender || p.from || p.recipient || "";
   const text = p.text || p.content || p.message?.text || p.message?.content || "";
-  return { sender, text, name: contact?.name };
+  const media = extractMedia(payload);
+  return { sender, text, name: contact?.name, media };
 }
 
 export async function POST(req: NextRequest) {
@@ -219,7 +254,8 @@ export async function POST(req: NextRequest) {
     // ---- Mensaje entrante (cliente → CRM) ----
     if (eventName === "message.received") {
       const inbound = extractInbound(payload);
-      if (!inbound.sender || !inbound.text) {
+      const hasContent = Boolean(inbound.text || inbound.media);
+      if (!inbound.sender || !hasContent) {
         // El OpenAPI de v2 nunca publicó el schema real de este body (ver
         // comentario de cabecera) — sin esto, un cambio de forma en el
         // payload real de Zinto queda invisible: pasa la firma, entra
@@ -229,9 +265,9 @@ export async function POST(req: NextRequest) {
         const dataKeys =
           payload.data && typeof payload.data === "object" ? Object.keys(payload.data) : [];
         console.log(
-          `[zinto-v2-webhook] ✗ message.received sin sender/text extraíble. Claves del payload: ${Object.keys(payload).join(", ")} | claves payload.data: ${dataKeys.join(", ")}. Body: ${rawBody.slice(0, 500)}`,
+          `[zinto-v2-webhook] ✗ message.received sin sender ni contenido (ni texto ni media) extraíble. Claves del payload: ${Object.keys(payload).join(", ")} | claves payload.data: ${dataKeys.join(", ")}. Body: ${rawBody.slice(0, 500)}`,
         );
-        return NextResponse.json({ error: "Missing sender or text" }, { status: 400 });
+        return NextResponse.json({ error: "Missing sender or content" }, { status: 400 });
       }
       const fromPhone = inbound.sender.replace(/[^\d]/g, "");
       const p = unwrap(payload);
@@ -259,10 +295,36 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      await saveMessage(conversation.id, fromPhone, conversation.phone_number, inbound.text, "received", "delivered", conversation.channel_id);
-      await updateConversationLastMessage(conversation.id, inbound.text, true);
+      // Los mensajes de solo media no traen texto; mismo placeholder que v1
+      // (ver app/api/webhooks/zinto/route.ts) para que la bandeja muestre algo.
+      const displayText = inbound.text || (inbound.media ? `[${inbound.media.type || "media"}]` : "");
 
-      console.log(`[zinto-v2-webhook] ✓ message.received guardado (conversación ${conversation.id})`);
+      await saveMessage(
+        conversation.id,
+        fromPhone,
+        conversation.phone_number,
+        displayText,
+        "received",
+        "delivered",
+        conversation.channel_id,
+        undefined,
+        inbound.media
+          ? {
+              media: {
+                url: inbound.media.url,
+                type: inbound.media.type,
+                mime: inbound.media.mime,
+                filename: inbound.media.filename,
+                caption: inbound.media.caption,
+              },
+            }
+          : undefined,
+      );
+      await updateConversationLastMessage(conversation.id, displayText, true);
+
+      console.log(
+        `[zinto-v2-webhook] ✓ message.received guardado (conversación ${conversation.id}${inbound.media ? ", con media" : ""})`,
+      );
       return NextResponse.json({ status: "received" }, { status: 200 });
     }
 

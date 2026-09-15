@@ -79,5 +79,18 @@ export interface ZintoV2WebhookPayload {
   channel_type?: string;
   text?: string;
   content?: string;
+  // Medios entrantes (imagen/audio/documento/video): forma sin confirmar
+  // todavía contra un evento real (POST /messages de v2 solo acepta `text`,
+  // así que esto solo puede llegar en un message.received disparado por el
+  // propio WhatsApp del cliente, nunca en algo que nosotros mandemos). Se
+  // sigue el mismo patrón que v1 (message.media.{url,mime_type,filename})
+  // como mejor suposición, con nombres de campo planos como respaldo — ver
+  // el log "media sin extraer" en el receptor si no calza.
+  media?: { url?: string; type?: string; mime_type?: string; mime?: string; filename?: string; caption?: string };
+  media_url?: string;
+  media_type?: string;
+  mime_type?: string;
+  filename?: string;
+  caption?: string;
   [key: string]: unknown;
 }
