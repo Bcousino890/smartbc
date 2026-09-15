@@ -212,14 +212,10 @@ DOS integraciones de Zinto en el repo (el cliente v1 se retiró el
   (`{id, type, occurred_at, company_id, integration_id, origin, data}`) y el
   contenido de `data` para texto; el de media sigue sin confirmar del todo
   (ver más abajo).
-- **Mensajería sin plantillas/media todavía.** El cliente v2
-  (`sendWhatsAppMessageV2`) solo cubre texto — `POST /messages` no acepta
-  adjuntos. Zinto confirmó por escrito (2026-09-15) que es una función
-  pendiente de construir de su lado (envío y recepción de media como una
-  sola pieza), sin fecha comprometida todavía. Tampoco hay envío de
-  plantillas contra v2 (v1 sí lo tenía, `sendWhatsAppTemplate()`, pero ese
-  cliente ya no existe): fuera de la ventana de 24h, el envío falla hasta
-  que se construya.
+- **Mensajería sin plantillas todavía.** No hay envío de plantillas contra
+  v2 (v1 sí lo tenía, `sendWhatsAppTemplate()`, pero ese cliente ya no
+  existe): fuera de la ventana de 24h, el envío falla hasta que se
+  construya. Media sí está soportado (ver más abajo).
 
 ### Cómo está guardado
 
@@ -231,16 +227,25 @@ la única vía de envío/recepción de WhatsApp que queda. Si algún día se
 apaga, el webhook `/api/webhooks/zinto-v2` responde 404 a propósito en vez
 de aceptar en silencio, y no hay ningún fallback al que caer.
 
-### Estado de la recepción de media (2026-09-15)
+### Media (fotos/vídeos/documentos) — en producción desde el 2026-09-15
 
-El receptor (`app/api/webhooks/zinto-v2/route.ts`) ya sabe detectar que un
-mensaje entrante es de media por el campo `type` (confirmado por Zinto:
-plano dentro de `data`, mismo campo que ya usan los mensajes de texto) y lo
-muestra en la bandeja como "📷 Imagen" etc. **Pero Zinto confirmó que hoy no
-manda ningún campo con la URL del archivo** — ni en `message.received` ni en
-ningún otro evento — así que no hay forma de mostrar el archivo en sí
-todavía. En cuanto Zinto lo agregue, solo hace falta rellenar `url` en
-`extractMedia()` de ese mismo archivo.
+Zinto lo confirmó por escrito y lo desplegaron el mismo día — verificado en
+vivo contra `GET /api/v2/openapi.json` antes de escribir código (apareció
+`/media/upload`, `/media`, y `media` en `MessageInput`).
+
+- **Enviar**: `uploadMediaV2()` (`lib/services/zinto-v2/client.ts`) sube el
+  archivo a `POST /media/upload` (multipart, máx. 10 MB) y devuelve
+  `{url, type, filename, size, mimeType}` — esa `url` va en
+  `sendWhatsAppMessageV2(..., { media })`, con `text` opcional (se usa como
+  caption). El botón 📎 en `/admin/mensajes` sube y manda en una sola llamada
+  a `app/api/admin/zinto/media/send/route.ts`.
+- **Recibir**: `data.media.{url, type, mime_type}` en `message.received`
+  (`extractMedia()`, `app/api/webhooks/zinto-v2/route.ts`).
+- ⚠️ **Ambas URLs son endpoints AUTENTICADOS** (Bearer +
+  X-Zinto-Integration-Id, scope `media:read`) — nunca pegarlas directo en un
+  `<img src>`. Todo pasa por el proxy `app/api/admin/zinto/media/route.ts`,
+  que valida el host contra la base de v2 configurada (evita que se vuelva
+  un proxy abierto) y agrega las credenciales del servidor.
 
 ### Antes hacía falta (ya resuelto)
 

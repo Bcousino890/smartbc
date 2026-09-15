@@ -32,13 +32,12 @@ No hace falta activar nada — esto ya está en marcha:
 - **Estado de entrega** (✓/✓✓/leído): mismo receptor, eventos `message.sent`/
   `.delivered`/`.read`/`.failed`.
 
-⚠️ **Media (fotos/vídeos/documentos):** Zinto confirmó por escrito
-(2026-09-15) que hoy **no existe** ningún campo con la URL del archivo, ni en
-envío ni en recepción — es una función pendiente de construir de su lado
-(la están diseñando como una sola pieza, envío + recepción, sin fecha
-comprometida todavía). El código ya sabe detectar que un mensaje entrante es
-de media (por el campo `type`) y lo muestra como "📷 Imagen" etc. en la
-bandeja, pero no puede mostrar el archivo en sí hasta que Zinto mande la URL.
+**Media (fotos/vídeos/documentos):** en producción desde el 2026-09-15. El
+botón 📎 de `/admin/mensajes` sube el archivo (máx. 10 MB) y lo manda por
+WhatsApp; los archivos que mande un cliente aparecen igual en la bandeja. Ver
+`docs/ZINTO_SETUP.md`, sección de media, para el detalle técnico (las URLs
+de Zinto son endpoints autenticados — el navegador nunca les pega
+directo, siempre pasa por `app/api/admin/zinto/media/route.ts`).
 
 **Primer contacto / fuera de la ventana de 24h:** WhatsApp exige una
 **plantilla aprobada** — `sendWhatsAppMessageV2` hoy solo manda texto libre,

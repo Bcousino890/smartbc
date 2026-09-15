@@ -886,12 +886,30 @@ credencial que usa la Integration API cuando no tiene una clave propia —
 `resolveZintoIntegrationConfig()` en
 `lib/services/zinto-integration/server-config.ts` las sigue leyendo.
 
-⚠️ **Media (fotos/vídeos/documentos) no funciona todavía, ni para mandar ni
-para recibir.** Zinto confirmó por escrito (2026-09-15) que `POST /messages`
-es solo texto y que `message.received` no trae ningún campo de URL de
-archivo — es una función que están construyendo (envío + recepción como una
-sola pieza), sin fecha comprometida. El receptor
-(`app/api/webhooks/zinto-v2/route.ts`) ya detecta que un mensaje entrante es
-de media por el campo `type` y lo muestra en la bandeja como "📷 Imagen" sin
-poder mostrar el archivo — en cuanto Zinto mande la URL, solo hay que
-rellenarla en `extractMedia()` de ese archivo.
+### Media (fotos/vídeos/documentos) — en producción desde el 2026-09-15
+
+Zinto lo confirmó por escrito el mismo día y lo desplegaron horas después
+(verificado contra `GET /api/v2/openapi.json` en vivo antes de tocar
+código: `/media/upload` y `/media` aparecen, `MessageInput` ya tiene
+`media`). Tres piezas nuevas:
+
+- **Enviar** (`lib/services/zinto-v2/client.ts`): `uploadMediaV2(file,
+  filename)` → `POST /media/upload` (multipart, máx. 10 MB, devuelve
+  `{url, type, filename, size, mimeType}` — el schema de OpenAPI dice que la
+  respuesta es ese objeto tal cual, pero la guía en prosa lo muestra envuelto
+  en `data`; el cliente acepta las dos formas). Esa `url` va en
+  `sendWhatsAppMessageV2(..., { media: {url, type, filename} })` — con
+  `media`, `text` es opcional y se usa como caption. El botón 📎 del chat
+  (`whatsapp-chat.tsx`) sube y manda en un solo POST a
+  `app/api/admin/zinto/media/send/route.ts` (FormData + fetch, mismo patrón
+  que `documents/upload/route.ts` — nunca un `File` crudo por server action).
+- **Recibir**: `data.media.{url, type, mime_type}` en `message.received`
+  (`extractMedia()`, `app/api/webhooks/zinto-v2/route.ts`).
+- ⚠️ **`data.media.url` (y la que devuelve `/media/upload`) son endpoints
+  AUTENTICADOS** (Bearer + X-Zinto-Integration-Id, scope `media:read`) — un
+  `<img src>` del navegador no puede mandar esos headers. Todo pasa por
+  `app/api/admin/zinto/media/route.ts`, un proxy con sesión de admin que
+  valida que el host de la URL coincida con la base configurada de v2 (para
+  no volverse un proxy abierto) y reenvía con las credenciales del servidor.
+
+Límite: 10 MB por archivo (lo impone Zinto en `/media/upload`).

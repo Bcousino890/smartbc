@@ -134,33 +134,35 @@ function extractExternalMessageId(payload: ZintoV2WebhookPayload): string {
 
 export type InboundMedia = {
   /**
-   * Zinto confirmó por escrito (2026-09-15) que HOY no existe ningún campo
-   * con la URL del archivo en message.received — ni aquí ni en ningún otro
-   * evento: es una función pendiente de construir de su lado (envío y
-   * recepción de media como una sola pieza, sin fecha comprometida todavía).
-   * Por eso esto siempre vale null por ahora; se rellena en cuanto Zinto
-   * mande el campo real, sin tener que tocar nada más de este archivo.
+   * Confirmado en producción (2026-09-15, ya con el soporte de media
+   * desplegado): `data.media.url` es un endpoint AUTENTICADO
+   * (`GET /media?type=...&filename=...`, Bearer + X-Zinto-Integration-Id,
+   * scope media:read) — nunca pegar esta URL directo en un `<img src>` del
+   * navegador. El proxy en app/api/admin/zinto/media/route.ts es lo que la
+   * hace descargable desde el panel.
    */
   url: string | null;
   /** "image" | "video" | "audio" | "document" | ... — el mismo `type` plano
-   * que ya usan los mensajes de texto (confirmado 2026-09-15). */
+   * que ya usan los mensajes de texto. */
   kind: string;
+  mime: string | null;
 };
 
 const TEXT_TYPES = new Set(["", "text"]);
 
 /**
- * Detecta un mensaje entrante de media a partir de `data.type` (confirmado
- * por Zinto: campo plano, no anidado). Nunca aporta una URL — ver el
- * comentario de InboundMedia — sólo sirve para que la bandeja muestre
- * "📷 Imagen" en vez de tratar el mensaje como texto plano cuando en
- * realidad es una foto/vídeo/audio/documento sin adjunto descargable.
+ * Detecta un mensaje entrante de media a partir de `data.type` (el mismo
+ * campo plano que ya usan los mensajes de texto) y lee la URL real de
+ * `data.media` — confirmado en producción el 2026-09-15. Si `type` indica
+ * media pero `data.media` no vino (evento más viejo, o algo cambió del lado
+ * de Zinto), se sigue detectando el mensaje como media pero sin URL, para
+ * no perder la distinción con un mensaje de texto normal.
  */
 function extractMedia(payload: ZintoV2WebhookPayload): InboundMedia | null {
   const p = unwrap(payload);
-  const kind = String(p.type || "").toLowerCase();
+  const kind = String(p.type || p.media?.type || "").toLowerCase();
   if (TEXT_TYPES.has(kind)) return null;
-  return { url: null, kind };
+  return { url: p.media?.url || null, kind, mime: p.media?.mime_type || null };
 }
 
 function extractInbound(
@@ -316,7 +318,7 @@ export async function POST(req: NextRequest) {
         conversation.channel_id,
         inbound.zintoMessageId,
         inbound.media
-          ? { media: { url: inbound.media.url, type: inbound.media.kind } }
+          ? { media: { url: inbound.media.url, type: inbound.media.kind, mime: inbound.media.mime } }
           : undefined,
       );
       await updateConversationLastMessage(conversation.id, displayText, true);

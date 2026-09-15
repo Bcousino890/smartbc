@@ -1,6 +1,11 @@
 import { randomUUID } from "crypto";
 import { getZintoV2Config } from "./config";
-import type { ZintoV2Capabilities, ZintoV2Health } from "./types";
+import type {
+  ZintoV2Capabilities,
+  ZintoV2Health,
+  ZintoV2MessageMediaInput,
+  ZintoV2MediaUploadOutput,
+} from "./types";
 
 /** Igual límite que v1 (Zinto no lo repite por versión, pero WhatsApp es el mismo canal). */
 export const ZINTO_V2_MAX_MESSAGE_LENGTH = 4096;
@@ -121,6 +126,9 @@ export async function getCapabilitiesV2(): Promise<ZintoV2Capabilities> {
 export interface SendMessageV2Options {
   /** Por defecto se genera uno nuevo (también se usa como Idempotency-Key). */
   externalMessageId?: string;
+  /** Adjunto (foto/vídeo/audio/documento) — confirmado en producción
+   * 2026-09-15. Requiere el permiso media:upload además de messages:send. */
+  media?: ZintoV2MessageMediaInput;
 }
 
 export interface SendMessageV2Result {
@@ -130,9 +138,9 @@ export interface SendMessageV2Result {
 
 /**
  * POST /messages — envío bidireccional v2. El teléfono se normaliza a E.164
- * CON "+" (ver `normalizeRecipientV2`, distinto de v1); no hay variante
- * `sendRawMessage` con template/media todavía porque no están en el alcance
- * de esta primera integración (ver docs/ZINTO_SETUP.md).
+ * CON "+" (ver `normalizeRecipientV2`, distinto de v1). Con `opts.media`
+ * manda un adjunto (imagen/vídeo/audio/documento) — `text` pasa a ser el
+ * caption y es opcional, pero el contrato exige texto, media, o ambos.
  *
  * `external_message_id` lo generamos nosotros y lo guardamos como
  * `zinto_message_id` en `zinto_messages` (misma columna que usa v1): así el
@@ -144,10 +152,11 @@ export async function sendWhatsAppMessageV2(
   text: string,
   opts?: SendMessageV2Options,
 ): Promise<SendMessageV2Result> {
-  if (!text) {
+  const media = opts?.media;
+  if (!text && !media) {
     throw new ZintoV2ApiError(400, "El mensaje no puede estar vacío", "INVALID_REQUEST");
   }
-  if (text.length > ZINTO_V2_MAX_MESSAGE_LENGTH) {
+  if (text && text.length > ZINTO_V2_MAX_MESSAGE_LENGTH) {
     throw new ZintoV2ApiError(
       400,
       `El mensaje supera ${ZINTO_V2_MAX_MESSAGE_LENGTH} caracteres`,
@@ -166,10 +175,73 @@ export async function sendWhatsAppMessageV2(
     body: JSON.stringify({
       channelId,
       recipient: normalizedRecipient,
-      text,
+      ...(text ? { text } : {}),
+      ...(media ? { media } : {}),
       external_message_id: externalMessageId,
     }),
   });
 
   return { externalMessageId, raw };
+}
+
+/**
+ * POST /media/upload — sube un archivo (multipart/form-data) y devuelve la
+ * `url` a usar en `sendWhatsAppMessageV2(..., { media })`. Máx. 10 MB por
+ * contrato. NO pasa por `zintoV2Fetch`: ese helper fija
+ * `Content-Type: application/json`, que rompería el multipart (el boundary
+ * lo debe fijar `fetch` solo a partir del `FormData`).
+ */
+export async function uploadMediaV2(
+  file: Blob,
+  filename: string,
+): Promise<ZintoV2MediaUploadOutput> {
+  const config = await getZintoV2Config();
+  if (!config?.apiKey) {
+    throw new ZintoV2ApiError(400, "Zinto v2 no está configurado", "NOT_CONFIGURED");
+  }
+  if (!config.integrationId) {
+    throw new ZintoV2ApiError(
+      400,
+      "Falta X-Zinto-Integration-Id (Integration ID) en la configuración de Zinto v2",
+      "NOT_CONFIGURED",
+    );
+  }
+
+  const form = new FormData();
+  form.append("file", file, filename);
+
+  const url = `${(config.baseUrl || "https://crm.zinto.app/api/v2").replace(/\/+$/, "")}/media/upload`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "X-Zinto-Integration-Id": String(config.integrationId),
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    let code: string | undefined;
+    let message = `Zinto v2 API error (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body?.error) {
+        code = body.error.code;
+        message = body.error.message || message;
+      }
+    } catch {
+      // body no-JSON; nos quedamos con el mensaje genérico
+    }
+    throw new ZintoV2ApiError(response.status, message, code);
+  }
+
+  const body = await response.json();
+  // El schema de OpenAPI dice que la respuesta es el objeto tal cual, pero la
+  // guía en prosa lo muestra envuelto en `data` — se aceptan las dos formas
+  // hasta confirmar contra un upload real (ver types.ts).
+  const data = body?.data ?? body;
+  if (!data?.url) {
+    throw new ZintoV2ApiError(502, "Zinto no devolvió la URL del archivo subido", "INVALID_RESPONSE");
+  }
+  return data as ZintoV2MediaUploadOutput;
 }

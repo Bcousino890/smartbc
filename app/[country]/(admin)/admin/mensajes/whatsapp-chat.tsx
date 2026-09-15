@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Video,
   Music,
+  Paperclip,
 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -30,6 +31,9 @@ import {
   deleteConversation,
 } from "./zinto-actions";
 import { ZintoCrmPanel } from "./zinto-crm-panel";
+
+/** Mismo tope que documenta POST /media/upload de Zinto v2 (10 MB). */
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 export type WhatsAppConversation = {
   id: string;
@@ -104,7 +108,9 @@ export function WhatsAppChat({
   const [showNew, setShowNew] = useState(false);
   const [showEditName, setShowEditName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 
@@ -180,10 +186,37 @@ export function WhatsAppChat({
     e.preventDefault();
     if (!active) return;
     const body = draft.trim();
-    if (!body) return;
+    const file = pendingFile;
+    if (!body && !file) return;
     setError(null);
     setDraft("");
+    setPendingFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
     startTransition(async () => {
+      if (file) {
+        const formData = new FormData();
+        formData.append("conversationId", active.id);
+        formData.append("file", file);
+        formData.append("caption", body);
+        try {
+          const res = await fetch("/api/admin/zinto/media/send", {
+            method: "POST",
+            body: formData,
+          });
+          const result = (await res.json()) as { ok: boolean; error?: string };
+          if (result.ok) {
+            await refreshThread();
+            router.refresh();
+          } else {
+            setError(result.error || "zinto_v2_send_failed");
+          }
+        } catch {
+          setError("zinto_v2_send_failed");
+        }
+        return;
+      }
+
       const result = await sendZintoMessage(active.id, body);
       if (result.ok) {
         await refreshThread();
@@ -192,6 +225,18 @@ export function WhatsAppChat({
         setError(result.error);
       }
     });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setError("file_too_large");
+      e.target.value = "";
+      return;
+    }
+    setError(null);
+    setPendingFile(file);
   };
 
   return (
@@ -329,28 +374,64 @@ export function WhatsAppChat({
 
             <form
               onSubmit={handleSubmit}
-              className="flex items-center gap-2 border-t border-gold/15 bg-cream-50/85 p-3"
+              className="flex flex-col gap-2 border-t border-gold/15 bg-cream-50/85 p-3"
             >
-              <input
-                type="text"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Escribe un mensaje de WhatsApp…"
-                maxLength={4096}
-                className="flex-1 rounded-lg border border-gold/25 bg-white/80 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={draft.trim().length === 0 || isPending}
-                className="flex items-center gap-2 rounded-lg bg-[#128C7E] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0e6f64] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isPending ? (
-                  <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
-                ) : (
-                  <Send size={14} strokeWidth={1.75} />
-                )}
-                <span>Enviar</span>
-              </button>
+              {pendingFile && (
+                <div className="flex items-center gap-2 rounded-lg border border-gold/20 bg-white/70 px-3 py-1.5 text-xs text-ink/70">
+                  <Paperclip size={13} strokeWidth={1.75} className="shrink-0 text-ink/45" />
+                  <span className="min-w-0 flex-1 truncate">{pendingFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="text-ink/45 hover:text-ink"
+                  >
+                    <X size={14} strokeWidth={1.75} />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*,application/pdf,.doc,.docx"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Adjuntar foto, vídeo, audio o documento"
+                  disabled={isPending}
+                  className="flex items-center justify-center rounded-lg p-2 text-ink/50 transition hover:bg-gold/10 hover:text-ink disabled:opacity-50"
+                >
+                  <Paperclip size={18} strokeWidth={1.75} />
+                </button>
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={
+                    pendingFile ? "Añade un texto (opcional)…" : "Escribe un mensaje de WhatsApp…"
+                  }
+                  maxLength={4096}
+                  className="flex-1 rounded-lg border border-gold/25 bg-white/80 px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:border-gold/55 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={(draft.trim().length === 0 && !pendingFile) || isPending}
+                  className="flex items-center gap-2 rounded-lg bg-[#128C7E] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0e6f64] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isPending ? (
+                    <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
+                  ) : (
+                    <Send size={14} strokeWidth={1.75} />
+                  )}
+                  <span>Enviar</span>
+                </button>
+              </div>
             </form>
           </>
         ) : (
@@ -641,13 +722,12 @@ function Bubble({
             filename={mediaFilename}
           />
         )}
-        {/* Zinto confirmó (2026-09-15) que hoy no manda ninguna URL de
-            archivo — sólo el tipo. Sin esto, una foto/audio/documento
-            entrante se vería como si fuera un mensaje de texto cualquiera. */}
+        {/* Fallback para mensajes sin URL de adjunto extraíble (p. ej.
+            recibidos antes de que Zinto agregara el campo, 2026-09-15, o si
+            la extracción falla algún día) — así no se ve como texto plano. */}
         {hasMediaKindOnly && (
           <p className="flex items-center gap-1.5 text-xs italic opacity-75">
-            <MediaKindIcon type={mediaType} /> {mediaKindLabel(mediaType)} (Zinto no manda el
-            archivo todavía)
+            <MediaKindIcon type={mediaType} /> {mediaKindLabel(mediaType)} (sin archivo disponible)
           </p>
         )}
         {caption && (
@@ -702,10 +782,12 @@ function mediaKindLabel(type?: string | null): string {
 }
 
 /**
- * Render de media entrante (foto/vídeo/audio/documento). La URL viene tal
- * cual la manda Zinto en el webhook — sin confirmar todavía si es pública y
- * persistente o si hace falta autenticarse para descargarla (ver el mensaje
- * pendiente a Zinto). Si la imagen/vídeo no carga, ese es el primer sospechoso.
+ * Render de media entrante (foto/vídeo/audio/documento). La `url` que manda
+ * Zinto (confirmado en producción, 2026-09-15) es un endpoint AUTENTICADO
+ * (Bearer + X-Zinto-Integration-Id) — el navegador no puede pegarla directo
+ * en <img src> ni en un link normal, así que todo pasa por
+ * /api/admin/zinto/media (app/api/admin/zinto/media/route.ts), que agrega
+ * las credenciales del lado del servidor.
  */
 function MediaContent({
   url,
@@ -719,13 +801,14 @@ function MediaContent({
   filename?: string | null;
 }) {
   const kind = classifyMedia(type, mime, filename);
+  const proxiedUrl = `/api/admin/zinto/media?url=${encodeURIComponent(url)}`;
 
   if (kind === "image") {
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+      <a href={proxiedUrl} target="_blank" rel="noopener noreferrer" className="block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={url}
+          src={proxiedUrl}
           alt={filename || "Imagen adjunta"}
           className="max-h-72 w-full rounded-lg object-cover"
         />
@@ -737,19 +820,19 @@ function MediaContent({
     return (
       // eslint-disable-next-line jsx-a11y/media-has-caption
       <video controls className="max-h-72 w-full rounded-lg">
-        <source src={url} />
+        <source src={proxiedUrl} />
       </video>
     );
   }
 
   if (kind === "audio") {
     // eslint-disable-next-line jsx-a11y/media-has-caption
-    return <audio controls src={url} className="w-full" />;
+    return <audio controls src={proxiedUrl} className="w-full" />;
   }
 
   return (
     <a
-      href={url}
+      href={proxiedUrl}
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
@@ -787,6 +870,9 @@ function translateError(code: string): string {
     RATE_LIMIT_EXCEEDED: "Demasiadas solicitudes. Intenta en un momento.",
     CHANNEL_NOT_FOUND: "El canal de WhatsApp no existe en Zinto.",
     CHANNEL_INACTIVE: "El canal de WhatsApp no está activo.",
+    file_too_large: "El archivo supera los 10 MB permitidos por Zinto.",
+    missing_file: "No se seleccionó ningún archivo.",
+    INVALID_RESPONSE: "Zinto no devolvió la URL del archivo subido.",
   };
   return map[code] || "No se pudo enviar el mensaje. Inténtalo de nuevo.";
 }
