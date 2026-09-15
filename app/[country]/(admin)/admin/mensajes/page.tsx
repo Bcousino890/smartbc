@@ -146,6 +146,11 @@ export default async function AdminMensajesPage({
         fromClient: m.type === "received",
         time: formatTime(m.created_at),
         status: m.status,
+        mediaUrl: m.media_url ?? null,
+        mediaType: m.media_type ?? null,
+        mediaMime: m.media_mime ?? null,
+        mediaFilename: m.media_filename ?? null,
+        mediaCaption: m.media_caption ?? null,
       }));
     }
   } catch {

@@ -12,6 +12,7 @@ import {
   X,
   Edit2,
   Trash2,
+  FileText,
 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -46,6 +47,11 @@ export type WhatsAppMessage = {
   fromClient: boolean;
   time: string;
   status: string;
+  mediaUrl?: string | null;
+  mediaType?: string | null;
+  mediaMime?: string | null;
+  mediaFilename?: string | null;
+  mediaCaption?: string | null;
 };
 
 function toView(rows: {
@@ -54,6 +60,11 @@ function toView(rows: {
   type: string;
   status: string;
   created_at: string;
+  media_url?: string | null;
+  media_type?: string | null;
+  media_mime?: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
 }[]): WhatsAppMessage[] {
   return rows.map((m) => ({
     id: m.id,
@@ -61,6 +72,11 @@ function toView(rows: {
     fromClient: m.type === "received",
     time: formatTime(m.created_at),
     status: m.status,
+    mediaUrl: m.media_url ?? null,
+    mediaType: m.media_type ?? null,
+    mediaMime: m.media_mime ?? null,
+    mediaFilename: m.media_filename ?? null,
+    mediaCaption: m.media_caption ?? null,
   }));
 }
 
@@ -288,6 +304,10 @@ export function WhatsAppChat({
                       fromClient={m.fromClient}
                       time={m.time}
                       status={m.status}
+                      mediaUrl={m.mediaUrl}
+                      mediaType={m.mediaType}
+                      mediaMime={m.mediaMime}
+                      mediaFilename={m.mediaFilename}
                       showMeta={
                         i === messages.length - 1 ||
                         messages[i + 1].fromClient !== m.fromClient
@@ -578,13 +598,27 @@ function Bubble({
   time,
   status,
   showMeta,
+  mediaUrl,
+  mediaType,
+  mediaMime,
+  mediaFilename,
 }: {
   body: string;
   fromClient: boolean;
   time: string;
   status: string;
   showMeta: boolean;
+  mediaUrl?: string | null;
+  mediaType?: string | null;
+  mediaMime?: string | null;
+  mediaFilename?: string | null;
 }) {
+  // El backend guarda un placeholder tipo "[image]" en el texto cuando el
+  // mensaje entrante no trae caption (ver app/api/webhooks/zinto-v2/route.ts)
+  // — con media ya visible no tiene sentido repetirlo como si fuera texto.
+  const isPlaceholderBody = /^\[.+\]$/.test(body.trim());
+  const caption = mediaUrl && isPlaceholderBody ? null : body;
+
   return (
     <li className={cn("flex flex-col", fromClient ? "items-start" : "items-end")}>
       <div
@@ -595,7 +629,17 @@ function Bubble({
             : "rounded-br-md bg-[#128C7E] text-white",
         )}
       >
-        {body}
+        {mediaUrl && (
+          <MediaContent
+            url={mediaUrl}
+            type={mediaType}
+            mime={mediaMime}
+            filename={mediaFilename}
+          />
+        )}
+        {caption && (
+          <p className={cn("whitespace-pre-wrap", mediaUrl && "mt-2")}>{caption}</p>
+        )}
       </div>
       {showMeta && (
         <span
@@ -609,6 +653,82 @@ function Bubble({
         </span>
       )}
     </li>
+  );
+}
+
+type MediaKind = "image" | "video" | "audio" | "document";
+
+function classifyMedia(
+  type?: string | null,
+  mime?: string | null,
+  filename?: string | null,
+): MediaKind {
+  const hay = `${type || ""} ${mime || ""} ${filename || ""}`.toLowerCase();
+  if (/image|jpe?g|png|gif|webp/.test(hay)) return "image";
+  if (/video|mp4|mov|webm/.test(hay)) return "video";
+  if (/audio|ogg|mpeg3|mp3|opus|voice/.test(hay)) return "audio";
+  return "document";
+}
+
+/**
+ * Render de media entrante (foto/vídeo/audio/documento). La URL viene tal
+ * cual la manda Zinto en el webhook — sin confirmar todavía si es pública y
+ * persistente o si hace falta autenticarse para descargarla (ver el mensaje
+ * pendiente a Zinto). Si la imagen/vídeo no carga, ese es el primer sospechoso.
+ */
+function MediaContent({
+  url,
+  type,
+  mime,
+  filename,
+}: {
+  url: string;
+  type?: string | null;
+  mime?: string | null;
+  filename?: string | null;
+}) {
+  const kind = classifyMedia(type, mime, filename);
+
+  if (kind === "image") {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt={filename || "Imagen adjunta"}
+          className="max-h-72 w-full rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+
+  if (kind === "video") {
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video controls className="max-h-72 w-full rounded-lg">
+        <source src={url} />
+      </video>
+    );
+  }
+
+  if (kind === "audio") {
+    // eslint-disable-next-line jsx-a11y/media-has-caption
+    return <audio controls src={url} className="w-full" />;
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-3 py-2 text-sm underline underline-offset-2",
+        "bg-black/5",
+      )}
+    >
+      <FileText size={16} strokeWidth={1.75} className="shrink-0" />
+      <span className="truncate">{filename || "Archivo adjunto"}</span>
+    </a>
   );
 }
 
