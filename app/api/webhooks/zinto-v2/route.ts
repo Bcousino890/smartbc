@@ -69,6 +69,19 @@ function candidateInputs(
   return candidates;
 }
 
+/**
+ * Recorta el prefijo de versión de la firma. Confirmado en logs de
+ * producción (2026-09-14): Zinto manda `v1=<hex>` — NO `sha256=<hex>` como
+ * asumía el código (y como sí usa v1 en app/api/webhooks/zinto/route.ts).
+ * El propio log de diagnóstico de abajo lo delató: la base
+ * `timestamp.body` YA daba el hash correcto byte a byte, la única
+ * diferencia era este prefijo sin recortar — nunca fue el secreto ni la
+ * base de firma. Se aceptan ambos prefijos por si acaso.
+ */
+function stripSignaturePrefix(raw: string): string {
+  return (raw || "").replace(/^(sha256|v1)=/i, "").trim();
+}
+
 function verifySignature(
   secret: string,
   timestamp: string,
@@ -77,7 +90,7 @@ function verifySignature(
   signatureHeader: string,
 ): boolean {
   if (!secret) return !IS_PRODUCTION; // fail-closed en producción
-  const sig = (signatureHeader || "").replace(/^sha256=/i, "").trim();
+  const sig = stripSignaturePrefix(signatureHeader);
   if (!sig) return false;
   return candidateInputs(timestamp, rawBody, payload).some((c) => hmacEquals(secret, c.input, sig));
 }
@@ -146,6 +159,17 @@ export async function POST(req: NextRequest) {
     console.log(
       `[zinto-v2-webhook] intento: event=${eventName || "(vacío)"} tieneTimestamp=${!!timestamp} tieneEventId=${!!eventId} tieneFirma=${!!signature}`,
     );
+    // event=(vacío) confirmado en producción (2026-09-14): ni el header
+    // x-zinto-event ni payload.event traen el tipo de evento — hay que ver
+    // qué cabeceras/campos manda Zinto de verdad. Se loggea siempre (no solo
+    // en el branch de "evento ignorado") para no necesitar otra ronda de
+    // pruebas: cabeceras completas (nombres, sin valores sensibles salvo la
+    // firma/secreto que ya se excluyen aparte) + claves del payload.
+    if (!eventName) {
+      console.log(
+        `[zinto-v2-webhook] event vacío — headers: ${Array.from(req.headers.keys()).join(", ")} | claves payload: ${Object.keys(payload).join(", ")}`,
+      );
+    }
 
     if (!verifySignature(webhookSecret, timestamp, rawBody, payload, signature)) {
       // Diagnóstico seguro: la firma recibida y lo que NOSOTROS calculamos
@@ -153,7 +177,7 @@ export async function POST(req: NextRequest) {
       // sí (que nunca se loggea) — compararlas a mano es la única forma de
       // saber, sin acceso al panel de Zinto, si el problema es la base que
       // se firma, el secreto guardado, o el formato de la cabecera.
-      const sig = (signature || "").replace(/^sha256=/i, "").trim();
+      const sig = stripSignaturePrefix(signature);
       const attempts = webhookSecret
         ? candidateInputs(timestamp, rawBody, payload).map((c) => ({
             base: c.label,
