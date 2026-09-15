@@ -30,11 +30,33 @@ export interface ZintoV2ErrorBody {
   };
 }
 
+/** Adjunto saliente — confirmado en producción (2026-09-15): POST /media/upload
+ * sube el archivo y devuelve la `url` que va acá. */
+export interface ZintoV2MessageMediaInput {
+  url: string;
+  type: "image" | "video" | "audio" | "document";
+  filename?: string;
+}
+
 export interface ZintoV2MessageInput {
   channelId: number;
   recipient: string;
-  text: string;
+  /** Debe incluirse `text`, `media`, o ambos (con media, text es el caption). */
+  text?: string;
+  media?: ZintoV2MessageMediaInput;
   external_message_id: string;
+}
+
+/** Respuesta de POST /media/upload. El schema de OpenAPI dice que el body es
+ * este objeto tal cual, pero la guía en prosa lo muestra envuelto en `data`
+ * — misma discrepancia spec-vs-prosa que ya vimos con Idealista, así que el
+ * cliente acepta ambas formas hasta confirmar contra un upload real. */
+export interface ZintoV2MediaUploadOutput {
+  url: string;
+  type: "image" | "video" | "audio" | "document";
+  filename: string;
+  size: number;
+  mimeType: string;
 }
 
 /**
@@ -84,15 +106,21 @@ export interface ZintoV2WebhookPayload {
    * message.received de media (imagen/audio/documento/vídeo):
    * `{message_id, conversation_id, direction, type, content, status,
    * created_at, channel_type, channel_id, channel_name, channel_account_id,
-   * contact}` — sin NINGÚN campo de URL/adjunto todavía (función pendiente
-   * de construir de su lado, sin fecha comprometida cuando se preguntó).
-   * `type` es el mismo campo plano que ya usan los mensajes de texto
-   * (`"text"` vs `"image"`/`"video"`/`"audio"`/`"document"`), y `content`
-   * trae el caption, o el nombre del archivo si no hay caption, o un texto
-   * fijo suyo en audio (WhatsApp no permite caption ahí).
+   * contact}`. `type` es el mismo campo plano que ya usan los mensajes de
+   * texto (`"text"` vs `"image"`/`"video"`/`"audio"`/`"document"`), y
+   * `content` trae el caption, o el nombre del archivo si no hay caption, o
+   * un texto fijo suyo en audio (WhatsApp no permite caption ahí).
    */
   message_id?: number | string;
   conversation_id?: number | string;
   direction?: string;
+  /**
+   * Confirmado en producción (2026-09-15, ya con el soporte de media
+   * desplegado): `data.media` en message.received/sent/delivered/read/failed
+   * con adjunto. `url` es un endpoint AUTENTICADO (Bearer + Integration-Id,
+   * scope media:read) — nunca una URL pública para pegar directo en un
+   * <img src>; ver el proxy en app/api/admin/zinto/media/route.ts.
+   */
+  media?: { url?: string; type?: string; mime_type?: string };
   [key: string]: unknown;
 }
