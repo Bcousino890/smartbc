@@ -112,21 +112,31 @@ async function guardReplay(eventId: string, timestamp: string, secret: string): 
   return "ok";
 }
 
+/**
+ * El sobre real anida el contenido en `data` (ver types.ts) — se busca ahí
+ * primero y se cae al nivel superior por si algún evento no usa el sobre.
+ */
+function unwrap(payload: ZintoV2WebhookPayload): ZintoV2WebhookPayload {
+  return payload.data && typeof payload.data === "object" ? payload.data : payload;
+}
+
 function extractExternalMessageId(payload: ZintoV2WebhookPayload): string {
+  const p = unwrap(payload);
   return (
-    payload.external_message_id ||
-    payload.externalMessageId ||
-    payload.message?.external_message_id ||
-    payload.message?.externalMessageId ||
-    payload.message?.id ||
+    p.external_message_id ||
+    p.externalMessageId ||
+    p.message?.external_message_id ||
+    p.message?.externalMessageId ||
+    p.message?.id ||
     ""
   );
 }
 
 function extractInbound(payload: ZintoV2WebhookPayload): { sender: string; text: string; name?: string } {
-  const sender = payload.contact?.phone || payload.sender || payload.from || payload.recipient || "";
-  const text = payload.text || payload.content || payload.message?.text || payload.message?.content || "";
-  return { sender, text, name: payload.contact?.name };
+  const p = unwrap(payload);
+  const sender = p.contact?.phone || p.sender || p.from || p.recipient || "";
+  const text = p.text || p.content || p.message?.text || p.message?.content || "";
+  return { sender, text, name: p.contact?.name };
 }
 
 export async function POST(req: NextRequest) {
@@ -148,7 +158,15 @@ export async function POST(req: NextRequest) {
     }
 
     const webhookSecret = config.webhookSecret || "";
-    const eventName = (req.headers.get("x-zinto-event") || payload.event || "").toLowerCase();
+    // Confirmado en producción (2026-09-15): Zinto NO manda x-zinto-event ni
+    // payload.event — el tipo de evento va en payload.type, dentro del sobre
+    // {id, type, occurred_at, company_id, integration_id, origin, data}.
+    const eventName = (
+      req.headers.get("x-zinto-event") ||
+      payload.type ||
+      payload.event ||
+      ""
+    ).toLowerCase();
     const timestamp = req.headers.get("x-zinto-timestamp") || "";
     eventId = req.headers.get("x-zinto-event-id") || "";
     const signature = req.headers.get("x-zinto-signature") || "";
@@ -159,15 +177,14 @@ export async function POST(req: NextRequest) {
     console.log(
       `[zinto-v2-webhook] intento: event=${eventName || "(vacío)"} tieneTimestamp=${!!timestamp} tieneEventId=${!!eventId} tieneFirma=${!!signature}`,
     );
-    // event=(vacío) confirmado en producción (2026-09-14): ni el header
-    // x-zinto-event ni payload.event traen el tipo de evento — hay que ver
-    // qué cabeceras/campos manda Zinto de verdad. Se loggea siempre (no solo
-    // en el branch de "evento ignorado") para no necesitar otra ronda de
-    // pruebas: cabeceras completas (nombres, sin valores sensibles salvo la
-    // firma/secreto que ya se excluyen aparte) + claves del payload.
+    // Por si el sobre cambia otra vez: si aun así event sigue vacío, loggear
+    // cabeceras + claves del payload Y de payload.data (el contenido real
+    // vive anidado ahí, no en el nivel superior).
     if (!eventName) {
+      const dataKeys =
+        payload.data && typeof payload.data === "object" ? Object.keys(payload.data) : [];
       console.log(
-        `[zinto-v2-webhook] event vacío — headers: ${Array.from(req.headers.keys()).join(", ")} | claves payload: ${Object.keys(payload).join(", ")}`,
+        `[zinto-v2-webhook] event vacío — headers: ${Array.from(req.headers.keys()).join(", ")} | claves payload: ${Object.keys(payload).join(", ")} | claves payload.data: ${dataKeys.join(", ")}`,
       );
     }
 
@@ -204,14 +221,17 @@ export async function POST(req: NextRequest) {
         // aquí, y desaparece sin dejar rastro salvo este log. Truncado por
         // las dudas (tamaño de log), no por privacidad — ya vive igual en
         // zinto_messages en cuanto se guarda bien.
+        const dataKeys =
+          payload.data && typeof payload.data === "object" ? Object.keys(payload.data) : [];
         console.log(
-          `[zinto-v2-webhook] ✗ message.received sin sender/text extraíble. Claves del payload: ${Object.keys(payload).join(", ")}. Body: ${rawBody.slice(0, 500)}`,
+          `[zinto-v2-webhook] ✗ message.received sin sender/text extraíble. Claves del payload: ${Object.keys(payload).join(", ")} | claves payload.data: ${dataKeys.join(", ")}. Body: ${rawBody.slice(0, 500)}`,
         );
         return NextResponse.json({ error: "Missing sender or text" }, { status: 400 });
       }
       const fromPhone = inbound.sender.replace(/[^\d]/g, "");
+      const p = unwrap(payload);
       const incomingChannelId =
-        payload.channel?.id != null ? Number(payload.channel.id) : (payload.channelId ?? payload.channel_id ?? 4);
+        p.channel?.id != null ? Number(p.channel.id) : (p.channelId ?? p.channel_id ?? 4);
       const channelId = Number.isFinite(Number(incomingChannelId)) ? Number(incomingChannelId) : 4;
       // Mismo split ES/#4 vs CL/#50 que v1 (app/api/webhooks/zinto/route.ts).
       const country: "es" | "cl" = channelId === 50 ? "cl" : "es";
@@ -237,13 +257,16 @@ export async function POST(req: NextRequest) {
     // ---- Estado de entrega (mensaje saliente) ----
     if (eventName.startsWith("message.")) {
       const externalMessageId = extractExternalMessageId(payload);
-      const status = payload.message?.status || payload.status || "";
+      const statusPayload = unwrap(payload);
+      const status = statusPayload.message?.status || statusPayload.status || "";
       if (externalMessageId && STATUS_VALUES.includes(status)) {
         await updateMessageStatusFromWebhook(externalMessageId, status as "sent" | "delivered" | "read" | "failed");
         console.log(`[zinto-v2-webhook] ✓ ${eventName} → ${status} (${externalMessageId})`);
       } else {
+        const dataKeys =
+          payload.data && typeof payload.data === "object" ? Object.keys(payload.data) : [];
         console.log(
-          `[zinto-v2-webhook] ✗ ${eventName} sin externalMessageId/status reconocible. Claves del payload: ${Object.keys(payload).join(", ")}`,
+          `[zinto-v2-webhook] ✗ ${eventName} sin externalMessageId/status reconocible. Claves del payload: ${Object.keys(payload).join(", ")} | claves payload.data: ${dataKeys.join(", ")}`,
         );
       }
       return NextResponse.json({ status: "received" }, { status: 200 });
