@@ -13,6 +13,9 @@ import {
   Edit2,
   Trash2,
   FileText,
+  Image as ImageIcon,
+  Video,
+  Music,
 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -618,6 +621,7 @@ function Bubble({
   // — con media ya visible no tiene sentido repetirlo como si fuera texto.
   const isPlaceholderBody = /^\[.+\]$/.test(body.trim());
   const caption = mediaUrl && isPlaceholderBody ? null : body;
+  const hasMediaKindOnly = !mediaUrl && Boolean(mediaType);
 
   return (
     <li className={cn("flex flex-col", fromClient ? "items-start" : "items-end")}>
@@ -637,8 +641,19 @@ function Bubble({
             filename={mediaFilename}
           />
         )}
+        {/* Zinto confirmó (2026-09-15) que hoy no manda ninguna URL de
+            archivo — sólo el tipo. Sin esto, una foto/audio/documento
+            entrante se vería como si fuera un mensaje de texto cualquiera. */}
+        {hasMediaKindOnly && (
+          <p className="flex items-center gap-1.5 text-xs italic opacity-75">
+            <MediaKindIcon type={mediaType} /> {mediaKindLabel(mediaType)} (Zinto no manda el
+            archivo todavía)
+          </p>
+        )}
         {caption && (
-          <p className={cn("whitespace-pre-wrap", mediaUrl && "mt-2")}>{caption}</p>
+          <p className={cn("whitespace-pre-wrap", (mediaUrl || hasMediaKindOnly) && "mt-2")}>
+            {caption}
+          </p>
         )}
       </div>
       {showMeta && (
@@ -668,6 +683,22 @@ function classifyMedia(
   if (/video|mp4|mov|webm/.test(hay)) return "video";
   if (/audio|ogg|mpeg3|mp3|opus|voice/.test(hay)) return "audio";
   return "document";
+}
+
+function MediaKindIcon({ type }: { type?: string | null }) {
+  const kind = classifyMedia(type);
+  if (kind === "image") return <ImageIcon size={13} strokeWidth={1.75} />;
+  if (kind === "video") return <Video size={13} strokeWidth={1.75} />;
+  if (kind === "audio") return <Music size={13} strokeWidth={1.75} />;
+  return <FileText size={13} strokeWidth={1.75} />;
+}
+
+function mediaKindLabel(type?: string | null): string {
+  const kind = classifyMedia(type);
+  if (kind === "image") return "Imagen";
+  if (kind === "video") return "Vídeo";
+  if (kind === "audio") return "Audio";
+  return "Documento";
 }
 
 /**
@@ -750,11 +781,6 @@ function translateError(code: string): string {
     message_required: "El mensaje no puede estar vacío.",
     message_too_long: "El mensaje supera los 4096 caracteres.",
     conversation_not_found: "No se encontró la conversación.",
-    channel_inactive: "El canal de WhatsApp no está activo en Zinto.",
-    zinto_send_failed: "Zinto no pudo enviar el mensaje.",
-    zinto_v1_auth_failed:
-      "No se pudo autenticar con Zinto (API v1) — no es que el canal esté apagado, es la credencial vieja de v1, que Zinto retiró. Hay que migrar el envío a la API v2.",
-    API_KEY_NOT_FOUND: "La credencial de Zinto (v1) fue revocada — hay que migrar el envío a v2.",
     zinto_v2_send_failed: "Zinto (API v2) no pudo enviar el mensaje.",
     NOT_CONFIGURED: "Zinto v2 no está configurado (falta API key o Integration ID).",
     INVALID_PHONE_NUMBER: "El número de teléfono no es válido.",

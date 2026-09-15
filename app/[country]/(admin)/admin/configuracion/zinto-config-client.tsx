@@ -7,7 +7,6 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
-  Plug,
   Activity,
   Webhook,
   MinusCircle,
@@ -19,16 +18,11 @@ import { useState, useEffect, useCallback } from "react";
 interface ZintoConfigState {
   apiKey: string;
   baseUrl: string;
-  channelId: number;
-  webhookSecret: string;
-  inboundToken: string;
   integrationApiKey: string;
 }
 
 interface LoadedFlags {
   hasApiKey: boolean;
-  hasWebhookSecret: boolean;
-  hasInboundToken: boolean;
   hasIntegrationApiKey: boolean;
   hasIntegrationWebhookSecret: boolean;
   resolvedIntegrationBaseUrl: string;
@@ -87,15 +81,10 @@ export function ZintoConfigClient() {
   const [config, setConfig] = useState<ZintoConfigState>({
     apiKey: "",
     baseUrl: "https://crm.zinto.app/api/v1",
-    channelId: 4,
-    webhookSecret: "",
-    inboundToken: "",
     integrationApiKey: "",
   });
   const [flags, setFlags] = useState<LoadedFlags>({
     hasApiKey: false,
-    hasWebhookSecret: false,
-    hasInboundToken: false,
     hasIntegrationApiKey: false,
     hasIntegrationWebhookSecret: false,
     resolvedIntegrationBaseUrl: "",
@@ -104,12 +93,8 @@ export function ZintoConfigClient() {
   const [showSecrets, setShowSecrets] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [channels, setChannels] = useState<
-    { id: number; name: string; type: string; status: string }[] | null
-  >(null);
   const [health, setHealth] = useState<HealthReport | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);
   const [registeringWebhook, setRegisteringWebhook] = useState(false);
@@ -129,12 +114,9 @@ export function ZintoConfigClient() {
         setConfig((prev) => ({
           ...prev,
           baseUrl: data.config.baseUrl ?? prev.baseUrl,
-          channelId: data.config.channelId ?? prev.channelId,
         }));
         setFlags({
           hasApiKey: data.config.hasApiKey,
-          hasWebhookSecret: data.config.hasWebhookSecret,
-          hasInboundToken: data.config.hasInboundToken,
           hasIntegrationApiKey: data.config.hasIntegrationApiKey ?? false,
           hasIntegrationWebhookSecret: data.config.hasIntegrationWebhookSecret ?? false,
           resolvedIntegrationBaseUrl: data.config.resolvedIntegrationBaseUrl ?? "",
@@ -221,8 +203,6 @@ export function ZintoConfigClient() {
       setConfig((prev) => ({
         ...prev,
         apiKey: "",
-        webhookSecret: "",
-        inboundToken: "",
         integrationApiKey: "",
       }));
       // Releer del servidor en vez de adivinar: la URL base se normaliza al
@@ -237,27 +217,6 @@ export function ZintoConfigClient() {
     }
   };
 
-  const handleTest = async () => {
-    setTesting(true);
-    setErrorMessage("");
-    setSuccessMessage("");
-    setChannels(null);
-    try {
-      const res = await fetch("/api/admin/zinto-config/test", { method: "POST" });
-      const data = await res.json();
-      if (!data.ok) {
-        setErrorMessage(data.error || "No se pudo conectar con Zinto");
-        return;
-      }
-      setChannels(data.channels || []);
-      setSuccessMessage(`Conexión correcta · ${data.count} canal(es) encontrado(s).`);
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Error desconocido");
-    } finally {
-      setTesting(false);
-    }
-  };
-
   if (loading) {
     return (
       <section className="rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
@@ -265,7 +224,7 @@ export function ZintoConfigClient() {
           <span className="text-gold">
             <MessageCircle size={16} strokeWidth={1.75} />
           </span>
-          <span>WhatsApp (Zinto)</span>
+          <span>Zinto — Integración CRM (piloto)</span>
         </header>
         <div className="mt-4 flex items-center justify-center py-8">
           <Loader2 size={20} className="animate-spin text-gold" />
@@ -283,7 +242,7 @@ export function ZintoConfigClient() {
         <span className="text-[#128C7E]">
           <MessageCircle size={16} strokeWidth={1.75} />
         </span>
-        <span>WhatsApp (Zinto)</span>
+        <span>Zinto — Integración CRM (piloto)</span>
       </header>
 
       <div className="mt-4 space-y-4">
@@ -300,9 +259,9 @@ export function ZintoConfigClient() {
           </div>
         )}
 
-        {/* Estado real de la integración. Va ARRIBA a propósito: "Probar
-            Conexión" sólo mira la capa legacy, y durante cuatro semanas dijo
-            que todo iba bien mientras la capa nueva estaba muerta. */}
+        {/* Estado real de la integración. Va ARRIBA a propósito: es el único
+            diagnóstico que prueba la URL, la clave, los permisos y el webhook
+            de verdad contra Zinto (v2 y el piloto de integración). */}
         <div className="rounded-xl border border-ink/10 bg-white/70 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 crm-label-sm text-ink/55">
@@ -455,7 +414,7 @@ export function ZintoConfigClient() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-1.5 md:col-span-2">
             <span className="text-xs font-medium text-ink/65">
-              API Key {flags.hasApiKey && <span className="text-green-700">· guardada</span>}
+              API Key principal {flags.hasApiKey && <span className="text-green-700">· guardada</span>}
             </span>
             <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/85 px-3 py-2">
               <input
@@ -473,6 +432,11 @@ export function ZintoConfigClient() {
                 {showSecrets ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            <span className="text-[11px] text-ink/45">
+              La clave de la cuenta de Zinto (empresa bcousinoprop). Sirve como
+              credencial de la API de integración cuando no hay una clave
+              dedicada abajo.
+            </span>
           </label>
 
           <label className="flex flex-col gap-1.5 md:col-span-2">
@@ -519,59 +483,12 @@ export function ZintoConfigClient() {
               </span>
             )}
           </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-ink/65">Channel ID (WhatsApp)</span>
-            <input
-              type="number"
-              value={config.channelId}
-              onChange={(e) => set("channelId", parseInt(e.target.value || "4", 10))}
-              placeholder="4"
-              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-ink/65">
-              Webhook Secret (estado){" "}
-              {flags.hasWebhookSecret && <span className="text-green-700">· guardado</span>}
-            </span>
-            <input
-              type={showSecrets ? "text" : "password"}
-              value={config.webhookSecret}
-              onChange={(e) => set("webhookSecret", e.target.value)}
-              placeholder={secretPlaceholder(flags.hasWebhookSecret)}
-              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-ink/65">
-              Inbound Token (X-Zinto-Token){" "}
-              {flags.hasInboundToken && <span className="text-green-700">· guardado</span>}
-            </span>
-            <input
-              type={showSecrets ? "text" : "password"}
-              value={config.inboundToken}
-              onChange={(e) => set("inboundToken", e.target.value)}
-              placeholder={secretPlaceholder(flags.hasInboundToken)}
-              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
-            />
-          </label>
         </div>
 
         <div className="flex flex-col gap-3 pt-2 md:flex-row md:justify-end md:gap-2">
           <button
-            onClick={handleTest}
-            disabled={testing || saving}
-            className="flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-gold/5 disabled:opacity-50"
-          >
-            {testing ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
-            <span>Probar Conexión</span>
-          </button>
-          <button
             onClick={handleSave}
-            disabled={saving || testing}
+            disabled={saving}
             className="flex items-center justify-center gap-2 rounded-xl bg-[#128C7E] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0e6f64] disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
@@ -579,43 +496,9 @@ export function ZintoConfigClient() {
           </button>
         </div>
 
-        {channels && (
-          <div className="border-t border-ink/8 pt-4">
-            <p className="mb-2 crm-label-sm text-ink/45">
-              Canales de Zinto
-            </p>
-            <div className="space-y-2">
-              {channels.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 p-2.5 text-sm text-ink"
-                >
-                  <span
-                    className={
-                      c.status === "active" ? "text-green-600" : "text-ink/40"
-                    }
-                  >
-                    ●
-                  </span>
-                  <span className="font-medium">#{c.id}</span>
-                  <span>{c.name}</span>
-                  <span className="text-ink/45">({c.type})</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <p className="pt-2 text-xs text-ink/55">
           Las claves se guardan <strong>cifradas</strong> en la base de datos (nunca en git).
-          El <em>Inbound Token</em> debe coincidir con el header <code>X-Zinto-Token</code> del
-          Flujo de Zinto. Guía completa en <code>docs/ZINTO_SETUP.md</code>.
-        </p>
-        <p className="text-xs text-ink/45">
-          <strong>&laquo;Probar Conexión&raquo; sólo comprueba la capa antigua de WhatsApp</strong>{" "}
-          (listar canales). Para saber si la integración completa funciona, mira
-          &laquo;Estado de la integración&raquo; arriba: es lo único que verifica la URL, la
-          clave, los permisos y el webhook por separado.
+          Guía completa en <code>docs/ZINTO_SETUP.md</code>.
         </p>
       </div>
     </section>

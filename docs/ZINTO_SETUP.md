@@ -1,5 +1,14 @@
 # Integración Zinto WhatsApp — Configuración y verificación
 
+> ⚠️ **2026-09-15 — Las secciones 1-8 describen el cliente v1
+> (`lib/services/zinto/**`), RETIRADO del repo** (confirmado muerto desde
+> 2026-09-13, `API_KEY_NOT_FOUND`). El envío/recepción real de WhatsApp hoy
+> va por **v2**, ya en producción — ver la sección 9, reescrita el mismo día
+> con el estado real. Las secciones 1-8 quedan como referencia histórica de
+> cómo funcionaba v1, no como pasos a seguir: el panel "WhatsApp (Zinto)" ya
+> no tiene Channel ID / Webhook Secret / Inbound Token / "Probar Conexión",
+> y `/admin/leads` (leads/campañas de v1) se eliminó junto con el cliente.
+
 Conecta el CRM (smartbc) con Zinto para **enviar y recibir** WhatsApp desde
 `/admin/mensajes` y desde el botón "WhatsApp" en `/admin/solicitudes`.
 
@@ -160,27 +169,25 @@ el header `Idempotency-Key`.
   (solo dígitos, prefijo internacional, sin `+`/espacios/guiones).
 - Rate limits de Zinto: 60/min, 1000/h, 10000/día (HTTP 429).
 
-## 9. API v2 (bidireccional, 2026-09-12) — en paralelo, apagada por flag
+## 9. API v2 (bidireccional) — EN PRODUCCIÓN HOY (reescrito 2026-09-15)
 
-Zinto lanzó una **v2** (`https://crm.zinto.app/api/v2`) con soporte nativo para
-mensajes entrantes (`message.received`) — ya no haría falta el "Flujo" manual
-del punto 3 para que lo que el cliente escribe llegue al CRM. Contrato oficial
-en `_uploads` del chat que armó esta integración: guía (`guía v2.md`), OpenAPI
-3.1 y colección Postman — pedirlos de nuevo a Zinto si hace falta releerlos,
-Zinto los sirve también en caliente desde `GET /api/v2/openapi.json`,
-`/postman.json` y `/guide.md`.
+`https://crm.zinto.app/api/v2` es la integración que de verdad manda/recibe
+WhatsApp hoy. Soporta mensajes entrantes de forma nativa
+(`message.received`) — el "Flujo" manual del punto 3 (v1) ya no existe ni
+hace falta. Contrato oficial, público y sin login:
+`GET /api/v2/openapi.json` y `/guide.md`.
 
 ⚠️ **No es lo mismo que `lib/services/zinto-integration/`** (contrato
-`_integration-api`, un piloto anterior con contactos/deals/pipelines/tareas,
-apagado con `ZINTO_INTEGRATION_API_ENABLED` y sin key de producción
-asignada — ver `docs/api/SMARTBC-INTEGRATION-GUIDE-2026-08-13.md`). Son TRES
-integraciones de Zinto distintas y conviven en el repo:
+`_integration-api`, un piloto de CRM completo con contactos/deals/pipelines/
+tareas, apagado con `ZINTO_INTEGRATION_API_ENABLED` y sin key de producción
+asignada — ver `docs/api/SMARTBC-INTEGRATION-GUIDE-2026-08-13.md`). Quedan
+DOS integraciones de Zinto en el repo (el cliente v1 se retiró el
+2026-09-15):
 
 | | Base URL | Módulo | Estado |
 |---|---|---|---|
-| v1 (WhatsApp + leads/campañas) | `/api/v1` | `lib/services/zinto/**` | **En producción hoy** |
+| **v2 (bidireccional oficial)** | `/api/v2` | `lib/services/zinto-v2/**` | **En producción hoy** — envío y recepción reales |
 | Integration API (piloto CRM completo) | `/_integration-api` | `lib/services/zinto-integration/**` | Apagado, sin key de prod |
-| **v2 (bidireccional oficial)** | `/api/v2` | `lib/services/zinto-v2/**` | Apagado (`enabled_v2`), en construcción |
 
 ### Diferencias de contrato que importan
 
@@ -188,55 +195,68 @@ integraciones de Zinto distintas y conviven en el repo:
   ruta protegida, además del `Authorization: Bearer`. Se crea/pide en Zinto
   aparte de la API Key — sin él, cualquier llamada a v2 da 401/403. Hay que
   copiarlo completo, con sus letras y guiones, sin ninguna conversión numérica.
-- **Formato de teléfono distinto de v1:** v2 espera `recipient` en E.164
-  **con** el `+` (`"+56912345678"`), v1 lo espera sin `+` (solo dígitos). Ver
-  `normalizeRecipientV2()` en `lib/services/zinto-v2/client.ts` — no reusar
-  `normalizePhoneNumber()` de v1 para v2.
+- **Formato de teléfono con `+`:** v2 espera `recipient` en E.164 **con** el
+  `+` (`"+56912345678"`). Ver `normalizeRecipientV2()` en
+  `lib/services/zinto-v2/client.ts` — no confundir con `normalizePhoneNumber()`
+  (`lib/phone.ts`, genérico, sin `+`), que usan otras partes del panel para
+  validar/guardar el número tal cual lo escribe el admin.
 - **No hay `GET /channels` en v2.** El `channelId` sigue siendo el mismo
-  entero que ya usamos (4 = ES, 50 = CL), pero no hay forma de listarlos
-  desde v2 — se siguen confirmando contra v1 o el panel de Zinto.
-- **Dedupe de webhooks por `X-Zinto-Event-Id`**, no `X-Zinto-Delivery-Id`
-  (v1). Reutiliza la misma tabla `zinto_webhook_deliveries` (el nombre de la
-  columna es genérico, `delivery_id`, así que sirve para cualquiera de los
-  dos ids).
+  entero de siempre (4 = ES, 50 = CL), pero no hay forma de listarlos desde
+  v2 — se confirman contra el panel de Zinto.
+- **Dedupe de webhooks por `X-Zinto-Event-Id`.** Misma tabla
+  `zinto_webhook_deliveries` que ya existía (columna genérica `delivery_id`).
 - **El OpenAPI de v2 no publica el schema del body de los webhooks** — solo
   la guía en prosa dice qué eventos llegan (`message.sent/delivered/read/
-  failed/received`). El parser en `app/api/webhooks/zinto-v2/route.ts` prueba
-  varias claves plausibles (`external_message_id` vs `externalMessageId`,
-  anidado en `message` o no); hay que confirmar el payload real contra el
-  sandbox y ajustar si no calza.
+  failed/received`). El parser en `app/api/webhooks/zinto-v2/route.ts` ya
+  confirmó contra producción el envelope real
+  (`{id, type, occurred_at, company_id, integration_id, origin, data}`) y el
+  contenido de `data` para texto; el de media sigue sin confirmar del todo
+  (ver más abajo).
 - **Mensajería sin plantillas/media todavía.** El cliente v2
-  (`sendWhatsAppMessageV2`) solo cubre texto; `/messages` de v2 tampoco
-  documenta variantes de template/media distintas — si hacen falta, revisar
-  si v2 las agregó o si ese caso sigue yendo por v1 hasta el corte completo.
+  (`sendWhatsAppMessageV2`) solo cubre texto — `POST /messages` no acepta
+  adjuntos. Zinto confirmó por escrito (2026-09-15) que es una función
+  pendiente de construir de su lado (envío y recepción de media como una
+  sola pieza), sin fecha comprometida todavía. Tampoco hay envío de
+  plantillas contra v2 (v1 sí lo tenía, `sendWhatsAppTemplate()`, pero ese
+  cliente ya no existe): fuera de la ventana de 24h, el envío falla hasta
+  que se construya.
 
 ### Cómo está guardado
 
-Mismo patrón que v1 y AWS SES: fila singleton en `zinto_config` (columnas
-`*_v2`, migración `0164`), cifradas con `EMAIL_ENCRYPTION_KEY`, editable desde
-`/admin/configuracion` → **"WhatsApp (Zinto) — API v2 (beta)"**. El flag real
-es `enabled_v2` (checkbox "Activar v2" en ese panel): mientras esté apagado,
-todo el envío/recepción sigue por v1 y el webhook de v2
-(`/api/webhooks/zinto-v2`, URL distinta de la de v1) responde 404 a propósito
-en vez de aceptar en silencio.
+Fila singleton en `zinto_config` (columnas `*_v2`, migración `0164`),
+cifradas con `EMAIL_ENCRYPTION_KEY`, editable desde `/admin/configuracion` →
+**"WhatsApp (Zinto) — API v2 (beta)"**. El flag real es `enabled_v2`
+(checkbox "Activar v2" en ese panel) — **en producción está en `true`**: es
+la única vía de envío/recepción de WhatsApp que queda. Si algún día se
+apaga, el webhook `/api/webhooks/zinto-v2` responde 404 a propósito en vez
+de aceptar en silencio, y no hay ningún fallback al que caer.
 
-### Pendiente antes de poder probar en serio
+### Estado de la recepción de media (2026-09-15)
 
-1. Cargar el **Integration ID** de Zinto (Configuración → Acceso API →
-   Integraciones CRM) y la API Key de v2 como valores separados.
-2. Cargarlos en el panel, activar "Activar v2" y usar **"Probar Conexión
-   (v2)"** (llama a `GET /health` y, si hay Integration ID, `GET
-   /capabilities`) antes de tocar el webhook.
-3. Apuntar el webhook de v2 en el panel de Zinto a
-   `https://portal.bcousinoprop.com/api/webhooks/zinto-v2` (URL DISTINTA de
-   la de v1) y verificar un mensaje entrante real antes de considerar migrar
-   el envío saliente de `/admin/mensajes`.
-4. Solo cuando v2 esté verificado de punta a punta: decidir el corte de v1 →
-   v2 (y recién ahí, retirar el "Flujo" manual del panel de Zinto que hoy
-   resuelve lo entrante).
+El receptor (`app/api/webhooks/zinto-v2/route.ts`) ya sabe detectar que un
+mensaje entrante es de media por el campo `type` (confirmado por Zinto:
+plano dentro de `data`, mismo campo que ya usan los mensajes de texto) y lo
+muestra en la bandeja como "📷 Imagen" etc. **Pero Zinto confirmó que hoy no
+manda ningún campo con la URL del archivo** — ni en `message.received` ni en
+ningún otro evento — así que no hay forma de mostrar el archivo en sí
+todavía. En cuanto Zinto lo agregue, solo hace falta rellenar `url` en
+`extractMedia()` de ese mismo archivo.
+
+### Antes hacía falta (ya resuelto)
+
+Lo siguiente ya se hizo y quedó confirmado en producción — se deja como
+registro de qué se verificó, no como pasos pendientes:
+
+1. Integration ID + API Key de v2 cargados en el panel.
+2. Webhook de v2 apuntado en el panel de Zinto a
+   `https://portal.bcousinoprop.com/api/webhooks/zinto-v2` y verificado con
+   un mensaje entrante real.
+3. Envío migrado de v1 a v2 (`sendZintoMessage()` en
+   `app/[country]/(admin)/admin/mensajes/zinto-actions.ts`), y el cliente v1
+   retirado del repo por completo (2026-09-15).
 
 **Fuera de alcance por ahora:** v2 también expone `/contacts`,
-`/campaigns/batch`, `/appointments` y `/deals` (agenda y pipeline, que v1 no
-tenía) — no se conectaron a nada de SmartBC todavía porque no hay un mapeo
-decidido (¿`/appointments` = visitas del CRM? ¿`/deals` = pipeline de
-captaciones?). Si se necesita, es trabajo aparte.
+`/campaigns/batch`, `/appointments` y `/deals` (agenda y pipeline) — no se
+conectaron a nada de SmartBC todavía porque no hay un mapeo decidido
+(¿`/appointments` = visitas del CRM? ¿`/deals` = pipeline de captaciones?).
+Si se necesita, es trabajo aparte.

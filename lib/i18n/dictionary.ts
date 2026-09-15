@@ -340,10 +340,6 @@ const es: Strings = {
   "documentos.title": "Documentos tipo",
   "documentos.subtitle": "Mandatos, órdenes de venta/arriendo y personal shopper listos para rellenar, imprimir y firmar.",
   "admin.nav.mensajes": "Mensajes",
-  "admin.nav.leads": "Leads Zinto",
-  "adminLeads.title": "Leads Zinto",
-  "adminLeads.subtitle":
-    "Leads y campañas sincronizados con Zinto. Revisa lo que entra y lanza sincronizaciones.",
   "admin.nav.sindicacion": "Sindicación",
   "admin.nav.particulares": "Particulares",
   "admin.nav.scraperIdealista": "Scraper Idealista",
@@ -1791,10 +1787,6 @@ const en: Strings = {
   "documentos.title": "Standard documents",
   "documentos.subtitle": "Sale/rental orders and personal shopper mandates ready to fill in, print and sign.",
   "admin.nav.mensajes": "Messages",
-  "admin.nav.leads": "Zinto Leads",
-  "adminLeads.title": "Zinto Leads",
-  "adminLeads.subtitle":
-    "Leads and campaigns synced with Zinto. Review what comes in and launch syncs.",
   "admin.nav.sindicacion": "Syndication",
   "admin.nav.particulares": "Private listings",
   "admin.nav.scraperIdealista": "Idealista scraper",

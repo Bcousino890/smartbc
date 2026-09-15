@@ -1,148 +1,131 @@
-# Activación Zinto ↔ CRM — paso a paso
+# Activación Zinto ↔ CRM — estado actual y cómo activar el resto
 
-Guía operativa para dejar la integración **funcionando de punta a punta** tras el
-merge del código. Referencia técnica completa en `docs/ZINTO_SETUP.md`.
+> **2026-09-15 — reescrito de arriba a abajo.** Esta guía se escribió cuando
+> el envío/recepción real de WhatsApp iba por la API v1 de Zinto
+> (`lib/services/zinto/**`). Ese cliente se **retiró del repo** el
+> 2026-09-15: llevaba semanas confirmado muerto (`API_KEY_NOT_FOUND` en las
+> tres credenciales que se probaron, ver CLAUDE.md 2026-09-13) y el
+> envío/recepción real de WhatsApp **ya funciona de punta a punta por la API
+> v2** (confirmado en producción, conversación bidireccional real). También
+> se retiró con él la sección **"Leads Zinto"** (`/admin/leads`): dependía
+> 100% del cliente v1 y sus tablas estaban a 0 filas en producción. Referencia
+> técnica completa en `docs/ZINTO_SETUP.md`.
 
 > Reparto de responsabilidades:
 > - **SmartBC (nosotros):** desplegar, aplicar migraciones, configurar credenciales.
-> - **Zinto (ellos):** registrar el Flujo/webhook, aprobar plantillas, confirmar números.
+> - **Zinto (ellos):** confirmar el canal, aprobar plantillas, configurar el webhook de v2 en su panel.
 
 ---
 
-## Paso 1 · Desplegar el código (VPS)
+## Lo que YA funciona (API v2, en producción)
 
-El VPS hace auto-deploy por cron (~5 min): `git pull` → `apply-migrations.sh`
-→ `npm run build` → `pm2 restart`. Si el build falla, **no** reinicia (el sitio
-sigue en la versión anterior).
+No hace falta activar nada — esto ya está en marcha:
 
-**Verificar que desplegó:** entra a `/es/admin`; en el sidebar debe aparecer
-**"Leads Zinto"** (icono imán). Si aparece, el build nuevo está activo.
+- **Enviar** (CRM → WhatsApp): `/admin/mensajes?tab=whatsapp`, dentro de la
+  ventana de 24h (texto libre). `sendWhatsAppMessageV2()`
+  (`lib/services/zinto-v2/client.ts`), `POST /messages`.
+- **Recibir** (WhatsApp → CRM): el receptor
+  `app/api/webhooks/zinto-v2/route.ts` ya procesa `message.received` con la
+  firma/envelope reales de Zinto. El webhook se configura **en el panel de
+  Zinto** (Configuración → Acceso API → Integraciones CRM), no desde aquí —
+  v2 no tiene un endpoint para darlo de alta por API.
+- **Estado de entrega** (✓/✓✓/leído): mismo receptor, eventos `message.sent`/
+  `.delivered`/`.read`/`.failed`.
 
-## Paso 2 · Aplicar migraciones
+⚠️ **Media (fotos/vídeos/documentos):** Zinto confirmó por escrito
+(2026-09-15) que hoy **no existe** ningún campo con la URL del archivo, ni en
+envío ni en recepción — es una función pendiente de construir de su lado
+(la están diseñando como una sola pieza, envío + recepción, sin fecha
+comprometida todavía). El código ya sabe detectar que un mensaje entrante es
+de media (por el campo `type`) y lo muestra como "📷 Imagen" etc. en la
+bandeja, pero no puede mostrar el archivo en sí hasta que Zinto mande la URL.
+
+**Primer contacto / fuera de la ventana de 24h:** WhatsApp exige una
+**plantilla aprobada** — `sendWhatsAppMessageV2` hoy solo manda texto libre,
+así que el envío falla fuera de esa ventana hasta que se construya el envío
+de plantillas contra v2 (v1 sí lo tenía, `sendWhatsAppTemplate()`, pero ese
+cliente ya no existe).
+
+**Diagnóstico, no adivines:**
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/admin/zinto/health | jq .verdict
+```
+El mismo diagnóstico se ve en `/admin/configuracion` → "Estado de la
+integración".
+
+---
+
+## Activar el piloto de Integration API (opcional, sigue apagado)
+
+El contrato completo de CRM (contactos/deals/pipelines/tareas,
+`lib/services/zinto-integration/**`) es un piloto **aparte de v2** — apagado
+por flag (`ZINTO_INTEGRATION_API_ENABLED`/`enabled` en `zinto_config`), sin
+key de producción confirmada todavía.
+
+### Paso 1 · Desplegar el código (VPS)
+
+El VPS hace auto-deploy por cron (~1 min, ver CLAUDE.md "Cómo despliega el
+VPS"): compila en `.next.new` → migraciones → intercambio atómico → health
+check.
+
+### Paso 2 · Migraciones
 
 `apply-migrations.sh` aplica solo las nuevas y recarga el schema-cache de
-PostgREST automáticamente. Para forzarlo/confirmarlo desde el panel:
+PostgREST automáticamente. Las relevantes para el piloto: `0119`
+(tablas propias), `0120` (caché de contactos/notas), `0166` (columnas
+`integration_*` en `zinto_config`).
 
-1. `/admin/configuracion` → botón **"Aplicar Migraciones Ahora"**.
-2. Debe aplicar `0096`–`0100`:
-   - `0096` estado `read` en mensajes
-   - `0097` tablas de leads/campañas/sync
-   - `0098` columnas de media
-   - `0099` dedupe de webhooks (`zinto_webhook_deliveries`)
-   - `0100` **arregla la creación de conversaciones** (índice único por `country`)
-3. Comprobación SQL (opcional, en `supabase-db`):
-   ```sql
-   select to_regclass('public.zinto_leads'),
-          to_regclass('public.zinto_webhook_deliveries');
-   -- ambas NOT NULL = tablas creadas
-   ```
+### Paso 3 · Credenciales
 
-## Paso 3 · Credenciales (ya guardadas)
+En `/admin/configuracion` → **"Zinto — Integración CRM (piloto)"**: la
+**API Key principal** (la de la cuenta Zinto, compartida con el fallback del
+piloto) y, si Zinto dio una clave aparte, la **API Key de integración**. La
+URL base normaliza sola cualquier sufijo (`/api/v1`, `/_integration-api`)
+que se le pegue.
 
-En `/admin/configuracion` → **WhatsApp (Zinto)** ya están guardadas (cifradas)
-la API Key, el Webhook Secret y el Inbound Token. **"Probar Conexión"** debe
-decir *"Conexión correcta · N canales"*. Canales reales: **#4 ES**, **#50 CL**,
-**#51 Web**.
+⚠️ No hay botón de "Probar Conexión" en este panel — el único diagnóstico
+real es **"Estado de la integración"**, que prueba de verdad la URL, la
+clave, los permisos y el webhook contra Zinto.
 
-> ⚠️ **"Probar Conexión" sólo comprueba la capa legacy** (listar canales). No
-> dice nada de la Integration API — durante cuatro semanas dio verde mientras
-> la capa nueva estaba muerta, porque cada una usaba una credencial distinta.
-> Para el estado real mira **"Estado de la integración"** en la misma pantalla,
-> o por curl desde el VPS:
-> ```bash
-> curl -s -H "Authorization: Bearer $CRON_SECRET" \
->   http://localhost:3000/api/admin/zinto/health | jq .verdict
-> ```
-> Desde 2026-09-13 la credencial de las **dos** capas sale de `zinto_config`,
-> y la base de datos gana sobre las variables de entorno.
+### Paso 4 · Webhook del piloto
 
-## Paso 4 · Enviar (CRM → WhatsApp)
+`/admin/configuracion` → **"Registrar webhook"**. El botón lo da de alta por
+API y guarda el `whsec_` cifrado en el mismo paso — **ese secreto se
+devuelve una sola vez**, así que si se pierde hay que borrar el endpoint y
+volver a crearlo. Requiere el scope `webhooks:manage`; el health check avisa
+si falta. Receptor: `app/api/webhooks/zinto-integration/route.ts`.
 
-1. `/admin/mensajes?tab=whatsapp` → **Nueva** → número con prefijo (ej.
-   `34612345678`), país, **Abrir chat**. (Con el fix `0100` esto ya no falla.)
-2. Escribe y **envía**.
-   - Dentro de la ventana de 24 h (el cliente ya te escribió): texto libre ✔.
-   - **Primer contacto / fuera de 24 h:** WhatsApp exige **plantilla aprobada**
-     → ver Paso 6. Sin plantilla, Zinto devuelve `MESSAGE_TEMPLATE_REQUIRED`.
+### Paso 5 · Activar el flag
 
-## Paso 5 · Recibir (WhatsApp → CRM) — requiere config en Zinto
-
-Nuestro webhook receptor (ya vivo):
-`POST https://portal.bcousinoprop.com/api/webhooks/zinto`
-
-En el **panel de Zinto** hay que crear/confirmar:
-
-1. **Mensajes entrantes** — Flujo → disparador *"mensaje recibido"* (canal
-   WhatsApp) → nodo **Webhook** a la URL de arriba, con header
-   `X-Zinto-Token: <Inbound Token>` (el mismo valor guardado en el panel).
-2. **Estado de entrega** (✓/✓✓/leído) — webhook de estado a la misma URL,
-   firmado `X-Zinto-Signature` con el Webhook Secret.
-3. **Eventos de leads** (`lead.*`) y **sync** (`sync.job.*`) — suscribir esos
-   eventos a la misma URL (mismo secret).
-
-### Webhook del contrato nuevo (Integration API) — ya no es manual
-
-Los eventos del contrato nuevo (`contact.*`, `note.*`, `tag.*`, `message.*`,
-`deal.*`, `task.*`) van a **otra ruta y con otra firma**:
-`POST https://portal.bcousinoprop.com/api/webhooks/zinto-integration`.
-
-No hay que pedírselo a Zinto ni pegar nada a mano: en `/admin/configuracion` →
-WhatsApp (Zinto) → **"Registrar webhook"**. El botón lo da de alta por API y
-guarda el `whsec_` cifrado en el mismo paso — que es el motivo de que sea un
-botón: **ese secreto se devuelve una sola vez**, y si se pierde por el camino
-hay que borrar el endpoint y volver a crearlo. Requiere el scope
-`webhooks:manage`; el health check avisa si falta.
-
-**Prueba de recepción:** responde desde tu móvil al chat → debe aparecer en la
-pestaña en ~5 s. Si no aparece, el Flujo de Zinto no está apuntando bien.
-
-## Paso 6 · Plantillas de WhatsApp (para primer contacto)
-
-Pedir a Zinto (o crear en Meta Business Manager y sincronizar): una plantilla
-**aprobada** con su `name` exacto, idioma (`es`/`es_ES`/`es_CL`) y el **orden de
-las variables** (`{{1}}`, `{{2}}`…). Listado disponible vía
-`GET /channels/{id}/templates`. El envío usa `sendWhatsAppTemplate()`.
-
-## Paso 7 · Leads / campañas
-
-- Los leads que Zinto empuje por `lead.*` aparecen en **`/admin/leads`**.
-- Desde ahí: **Previsualizar sync** → **Ejecutar** → **Actualizar** estado del job.
+Solo tras confirmar con Zinto que la cuenta está en la allowlist de
+escritura del piloto: `ZINTO_INTEGRATION_API_ENABLED=true` (o el toggle
+correspondiente en `zinto_config`).
 
 ---
 
-## Paso 8 · Cron de reconciliación (a mano en el VPS)
+## Cron de reconciliación (a mano en el VPS)
 
-El webhook es el camino rápido; el cron es la verdad. Sin él, cualquier evento
-perdido se queda perdido y la caché va divergiendo en silencio.
+⚠️ **El código no basta** — igual que el cron de alertas de propiedades y el
+de vídeos, la entrada hay que añadirla a mano con `crontab -e` en el VPS:
 
 ```
 30 3 * * * curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" \
   http://localhost:3000/api/cron/zinto-sync
 ```
 
-⚠️ **El código no basta** — igual que el cron de alertas de propiedades y el de
-vídeos, la entrada hay que añadirla a mano con `crontab -e` en el VPS.
-
----
-
-## Checklist de datos pendientes de Zinto
-
-- [ ] Números E.164 reales de canal **#4 (ES)** y **#50 (CL)**.
-- [ ] Nombre(s) de **plantilla(s) aprobada(s)** + idioma + orden de variables.
-- [ ] Registrar webhook `lead.*` + `sync.*` (y confirmar el de mensajes/estado).
-- [ ] Confirmar scopes de la API key (`campaigns/leads/sync/jobs/webhooks`).
-- [ ] Token de **WebChat** rotado para el canal **#51**.
-- [ ] (Nosotros) pasarles el valor de `X-Zinto-Token`.
+Este cron fue escrito contra v1 y **no tiene traducción directa a v2**: el
+contrato v2 es de empuje puro (sin ningún `GET`), así que "reconciliar
+bajando" no existe ahí — ver CLAUDE.md, sección "El contrato v2 es de
+EMPUJE".
 
 ## Troubleshooting
 
 | Síntoma | Causa probable | Acción |
 |---|---|---|
-| "No se pudo crear la conversación" | Migración `0100` sin aplicar | Paso 2 |
-| `/admin/leads` vacío o 500 | Tablas sin crear o schema-cache viejo | Paso 2 (reaplica; recarga PostgREST) |
-| Envío da `MESSAGE_TEMPLATE_REQUIRED` | Primer contacto fuera de 24 h | Usar plantilla (Paso 6) |
-| No llegan mensajes entrantes | Flujo de Zinto no configurado | Paso 5 (panel Zinto) |
+| Envío da `NOT_CONFIGURED` | v2 no está habilitada (`enabled_v2` en falso) | Activar v2 en `/admin/configuracion` |
+| Envío da `CHANNEL_INACTIVE`/`CHANNEL_NOT_FOUND` | Canal WhatsApp inactivo en Zinto | Confirmar con Zinto el estado del canal |
+| No llegan mensajes entrantes | Webhook v2 no configurado en el panel de Zinto | Zinto → Configuración → Acceso API → Integraciones CRM |
+| Firma inválida en webhook v2 | Secreto distinto entre panel de Zinto y `zinto_config` | Re-registrar/confirmar el secreto |
 | "Network error calling Zinto Integration API" | URL base que ya no es la API | `/api/admin/zinto/health` lo dice; el prefijo `/_integration-api` está muerto |
-| El panel dice OK pero nada funciona | "Probar Conexión" sólo mira la capa legacy | Usa "Estado de la integración" |
-| `API_KEY_NOT_FOUND` | Clave revocada o caducada | Pide una nueva a Zinto y guárdala en el panel |
-| Firma inválida en webhook | Webhook Secret distinto | Igualar secret en panel y `/admin/configuracion` |
+| El piloto de integración da `API_KEY_NOT_FOUND` | Clave revocada o caducada | Pide una nueva a Zinto y guárdala en el panel |

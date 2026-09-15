@@ -133,40 +133,39 @@ function extractExternalMessageId(payload: ZintoV2WebhookPayload): string {
 }
 
 export type InboundMedia = {
-  url: string;
-  type?: string | null;
-  mime?: string | null;
-  filename?: string | null;
-  caption?: string | null;
+  /**
+   * Zinto confirmó por escrito (2026-09-15) que HOY no existe ningún campo
+   * con la URL del archivo en message.received — ni aquí ni en ningún otro
+   * evento: es una función pendiente de construir de su lado (envío y
+   * recepción de media como una sola pieza, sin fecha comprometida todavía).
+   * Por eso esto siempre vale null por ahora; se rellena en cuanto Zinto
+   * mande el campo real, sin tener que tocar nada más de este archivo.
+   */
+  url: string | null;
+  /** "image" | "video" | "audio" | "document" | ... — el mismo `type` plano
+   * que ya usan los mensajes de texto (confirmado 2026-09-15). */
+  kind: string;
 };
 
+const TEXT_TYPES = new Set(["", "text"]);
+
 /**
- * Medio entrante (imagen/audio/documento/video). POST /messages de v2 solo
- * acepta `text` (confirmado contra su OpenAPI público) — nunca vamos a
- * MANDAR un adjunto por acá, pero un cliente sí puede mandarnos uno por
- * WhatsApp y que Zinto nos lo empuje. Forma sin confirmar contra un evento
- * real todavía: sigue el patrón de v1 (message.media.{url,mime_type,
- * filename}, ver app/api/webhooks/zinto/route.ts) con nombres planos como
- * respaldo. Si `data.type` no es "text" y ninguna de estas variantes tiene
- * URL, el caller loggea el objeto completo para ajustar con datos reales.
+ * Detecta un mensaje entrante de media a partir de `data.type` (confirmado
+ * por Zinto: campo plano, no anidado). Nunca aporta una URL — ver el
+ * comentario de InboundMedia — sólo sirve para que la bandeja muestre
+ * "📷 Imagen" en vez de tratar el mensaje como texto plano cuando en
+ * realidad es una foto/vídeo/audio/documento sin adjunto descargable.
  */
 function extractMedia(payload: ZintoV2WebhookPayload): InboundMedia | null {
   const p = unwrap(payload);
-  const m = p.media;
-  const url = m?.url || p.media_url;
-  if (!url) return null;
-  return {
-    url,
-    type: m?.type || p.media_type || p.type || null,
-    mime: m?.mime_type || m?.mime || p.mime_type || null,
-    filename: m?.filename || p.filename || null,
-    caption: m?.caption || p.caption || null,
-  };
+  const kind = String(p.type || "").toLowerCase();
+  if (TEXT_TYPES.has(kind)) return null;
+  return { url: null, kind };
 }
 
 function extractInbound(
   payload: ZintoV2WebhookPayload,
-): { sender: string; text: string; name?: string; media: InboundMedia | null } {
+): { sender: string; text: string; name?: string; zintoMessageId?: string; media: InboundMedia | null } {
   const p = unwrap(payload);
   // Zinto confirmó (2026-09-15) que ahora manda `contact.phone` — se busca
   // primero dentro de `data` (donde vive el resto del contenido) y se cae
@@ -174,9 +173,15 @@ function extractInbound(
   // `data` en vez de adentro.
   const contact = p.contact || payload.contact;
   const sender = contact?.phone || p.sender || p.from || p.recipient || "";
-  const text = p.text || p.content || p.message?.text || p.message?.content || "";
+  // `content` es el campo real confirmado por Zinto (2026-09-15) — para un
+  // mensaje de media es el caption si lo hay, si no el nombre del archivo, y
+  // en audio (que WhatsApp no permite adjuntar caption) un texto fijo suyo.
+  // `text`/`message.*` quedan como respaldo por si algún evento no sigue
+  // este formato.
+  const text = p.content || p.text || p.message?.content || p.message?.text || "";
+  const zintoMessageId = p.message_id != null ? String(p.message_id) : undefined;
   const media = extractMedia(payload);
-  return { sender, text, name: contact?.name, media };
+  return { sender, text, name: contact?.name, zintoMessageId, media };
 }
 
 export async function POST(req: NextRequest) {
@@ -281,7 +286,7 @@ export async function POST(req: NextRequest) {
             ? Number(payload.channel.id)
             : (p.channelId ?? p.channel_id ?? payload.channelId ?? payload.channel_id ?? 4);
       const channelId = Number.isFinite(Number(incomingChannelId)) ? Number(incomingChannelId) : 4;
-      // Mismo split ES/#4 vs CL/#50 que v1 (app/api/webhooks/zinto/route.ts).
+      // Canal WhatsApp por país en esta cuenta (fijo, ver CLAUDE.md): ES=#4, CL=#50.
       const country: "es" | "cl" = channelId === 50 ? "cl" : "es";
 
       let conversation = await findConversationByPhone(fromPhone, country);
@@ -295,9 +300,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Los mensajes de solo media no traen texto; mismo placeholder que v1
-      // (ver app/api/webhooks/zinto/route.ts) para que la bandeja muestre algo.
-      const displayText = inbound.text || (inbound.media ? `[${inbound.media.type || "media"}]` : "");
+      // `content` (ver extractInbound) trae caption/nombre de archivo/texto
+      // fijo para mensajes de media — Zinto confirmó (2026-09-15) que
+      // prácticamente nunca viene vacío. Este placeholder sólo cubre el caso
+      // límite de que venga vacío igual.
+      const displayText = inbound.text || (inbound.media ? `[${inbound.media.kind || "media"}]` : "");
 
       await saveMessage(
         conversation.id,
@@ -307,17 +314,9 @@ export async function POST(req: NextRequest) {
         "received",
         "delivered",
         conversation.channel_id,
-        undefined,
+        inbound.zintoMessageId,
         inbound.media
-          ? {
-              media: {
-                url: inbound.media.url,
-                type: inbound.media.type,
-                mime: inbound.media.mime,
-                filename: inbound.media.filename,
-                caption: inbound.media.caption,
-              },
-            }
+          ? { media: { url: inbound.media.url, type: inbound.media.kind } }
           : undefined,
       );
       await updateConversationLastMessage(conversation.id, displayText, true);

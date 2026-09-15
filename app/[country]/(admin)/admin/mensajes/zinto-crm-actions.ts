@@ -9,7 +9,7 @@ import {
   type CachedZintoContact,
   type CachedZintoNote,
 } from "@/lib/db/zinto-crm-cache";
-import { normalizePhoneNumber } from "@/lib/services/zinto/client";
+import { normalizePhoneNumber } from "@/lib/phone";
 import { getZintoIntegrationConfig, isZintoWriteAllowlisted } from "@/lib/services/zinto-integration/config";
 import { ZintoIntegrationApiClient } from "@/lib/services/zinto-integration/client";
 import { syncContactFromApi } from "@/lib/services/zinto-integration/sync";

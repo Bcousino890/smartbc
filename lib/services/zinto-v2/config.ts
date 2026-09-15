@@ -3,12 +3,13 @@ import { createAdminClient } from "@/lib/db/admin";
 import { decryptSecret } from "@/lib/crypto/secret";
 
 /**
- * Config de la API v2 de Zinto (https://crm.zinto.app/api/v2), en paralelo
- * a lib/services/zinto/config.ts (v1, la que hoy manda/recibe WhatsApp real
- * en producción). Vive en la MISMA fila de `zinto_config` (columnas *_v2,
- * migración 0164) para no duplicar el patrón de credenciales cifradas en
- * panel, pero es un config independiente: v2 exige además el header
- * X-Zinto-Integration-Id, que v1 no tiene.
+ * Config de la API v2 de Zinto (https://crm.zinto.app/api/v2) — la que hoy
+ * manda/recibe WhatsApp real en producción (el cliente v1 se retiró del repo
+ * el 2026-09-15, confirmado muerto). Vive en la MISMA fila de `zinto_config`
+ * (columnas *_v2, migración 0164) para no duplicar el patrón de credenciales
+ * cifradas en panel, pero es un config independiente del piloto de
+ * integración CRM (lib/services/zinto-integration/**): v2 exige además el
+ * header X-Zinto-Integration-Id, que el piloto no tiene.
  *
  * `enabled` es la fuente de verdad de si v2 debe usarse de verdad (panel
  * admin o env ZINTO_V2_ENABLED) — el resto del código nunca debe llamar a
