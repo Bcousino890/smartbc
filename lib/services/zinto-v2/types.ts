@@ -37,9 +37,25 @@ export interface ZintoV2MessageInput {
   external_message_id: string;
 }
 
-/** Forma laxa: el OpenAPI de v2 no publica el schema de los webhooks. */
+/**
+ * Forma laxa: el OpenAPI de v2 no publica el schema de los webhooks.
+ *
+ * Confirmado en producción (2026-09-15): el sobre real es
+ * `{id, type, occurred_at, company_id, integration_id, origin, data}` —
+ * el tipo de evento va en `type` (nunca en un header `x-zinto-event`, que
+ * Zinto no manda), y el contenido real vive anidado en `data`, no en el
+ * nivel superior. `event`/los campos planos de abajo se dejan como
+ * fallback por si algún evento no sigue este sobre.
+ */
 export interface ZintoV2WebhookPayload {
   event?: string;
+  type?: string;
+  id?: string;
+  occurred_at?: string;
+  company_id?: string;
+  integration_id?: string;
+  origin?: string;
+  data?: ZintoV2WebhookPayload;
   channelId?: number;
   channel_id?: number;
   channel?: { id?: number | string };
