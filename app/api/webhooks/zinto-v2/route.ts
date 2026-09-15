@@ -134,9 +134,14 @@ function extractExternalMessageId(payload: ZintoV2WebhookPayload): string {
 
 function extractInbound(payload: ZintoV2WebhookPayload): { sender: string; text: string; name?: string } {
   const p = unwrap(payload);
-  const sender = p.contact?.phone || p.sender || p.from || p.recipient || "";
+  // Zinto confirmó (2026-09-15) que ahora manda `contact.phone` — se busca
+  // primero dentro de `data` (donde vive el resto del contenido) y se cae
+  // al nivel superior del payload por si lo pusieron como hermano de
+  // `data` en vez de adentro.
+  const contact = p.contact || payload.contact;
+  const sender = contact?.phone || p.sender || p.from || p.recipient || "";
   const text = p.text || p.content || p.message?.text || p.message?.content || "";
-  return { sender, text, name: p.contact?.name };
+  return { sender, text, name: contact?.name };
 }
 
 export async function POST(req: NextRequest) {
@@ -230,8 +235,15 @@ export async function POST(req: NextRequest) {
       }
       const fromPhone = inbound.sender.replace(/[^\d]/g, "");
       const p = unwrap(payload);
+      // Zinto confirmó (2026-09-15) `channel_id` (y `channel_type`, sin uso
+      // por ahora) — mismo respaldo data-primero-luego-nivel-superior que
+      // el contacto de arriba.
       const incomingChannelId =
-        p.channel?.id != null ? Number(p.channel.id) : (p.channelId ?? p.channel_id ?? 4);
+        p.channel?.id != null
+          ? Number(p.channel.id)
+          : payload.channel?.id != null
+            ? Number(payload.channel.id)
+            : (p.channelId ?? p.channel_id ?? payload.channelId ?? payload.channel_id ?? 4);
       const channelId = Number.isFinite(Number(incomingChannelId)) ? Number(incomingChannelId) : 4;
       // Mismo split ES/#4 vs CL/#50 que v1 (app/api/webhooks/zinto/route.ts).
       const country: "es" | "cl" = channelId === 50 ? "cl" : "es";
