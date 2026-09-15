@@ -2,7 +2,8 @@
  * Errores de la API pública (`/api/v1`).
  *
  * Un único sobre de error para todos los endpoints, con la misma forma que la
- * app ya consume de terceros (ver ZintoApiError en lib/services/zinto/client.ts):
+ * app ya consume de terceros (ver ZintoV2ApiError en
+ * lib/services/zinto-v2/client.ts):
  *
  *   { "error": { "code", "message", "details?", "request_id" } }
  *

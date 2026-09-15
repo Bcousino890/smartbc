@@ -136,8 +136,8 @@ async function sleep(ms: number): Promise<void> {
  * Client for the Zinto Integration API (contract:
  * docs/api/SMARTBC-INTEGRATION-GUIDE-2026-08-13.md, openapi/openapi.yaml).
  *
- * Deliberately NOT built on top of lib/services/zinto/client.ts (legacy
- * WhatsApp-send client hitting `/api/v1` without the `/_integration-api`
+ * Deliberately NOT built on top of the legacy v1 WhatsApp-send client
+ * (retired 2026-09-15 — it hit `/api/v1` without the `/_integration-api`
  * prefix, with its own reverse-engineered wire format). This is a fresh
  * layer against the documented contract; adapters live on top of it.
  */

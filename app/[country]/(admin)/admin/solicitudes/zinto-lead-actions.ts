@@ -1,9 +1,8 @@
 "use server";
 
 import { assertPermission } from "@/lib/auth/guard";
-import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/services/zinto/client";
+import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { getOrCreateConversation } from "@/lib/db/zinto";
-import { getZintoConfig } from "@/lib/services/zinto/config";
 
 export type OpenWhatsAppResult =
   | { ok: true; id: string }
@@ -35,8 +34,9 @@ export async function openWhatsAppConversation(
   }
 
   try {
-    const config = await getZintoConfig();
-    const conv = await getOrCreateConversation(normalized, normalized, config?.channelId || 4, {
+    // Canal WhatsApp España en esta cuenta (fijo, ver CLAUDE.md) — ya no se
+    // lee de zinto_config, columna del cliente v1 retirado 2026-09-15.
+    const conv = await getOrCreateConversation(normalized, normalized, 4, {
       contactName: lead?.name ?? null,
       contactMessage: lead?.message ?? null,
       propertyTitle: lead?.propertyTitle ?? null,

@@ -1,5 +1,47 @@
 import { createClient } from '@supabase/supabase-js';
-import { ZintoConversation, ZintoMessageRecord } from '@/lib/services/zinto/types';
+
+/** Delivery status a WhatsApp message can be in (incl. 'read'). */
+export type ZintoMessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+
+export interface ZintoConversation {
+  id: string;
+  client_id: string;
+  phone_number: string;
+  channel_id: number;
+  country?: 'es' | 'cl';
+  last_message_at?: string;
+  last_message?: string;
+  unread_count?: number;
+  contact_name?: string | null;
+  contact_message?: string | null;
+  property_title?: string | null;
+  lead_id?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ZintoMessageRecord {
+  id: string;
+  conversation_id: string;
+  from_number: string;
+  to_number: string;
+  message_text: string;
+  type: 'sent' | 'received';
+  status: ZintoMessageStatus;
+  zinto_message_id?: string;
+  zinto_numeric_id?: number;
+  external_provider_id?: string | null;
+  channel_id: number;
+  // Media (image/audio/document); message_text holds the caption/placeholder.
+  media_url?: string | null;
+  media_type?: string | null;
+  media_mime?: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
+  timestamp_sent?: string;
+  created_at: string;
+  updated_at?: string;
+}
 
 function getSupabaseClient() {
   return createClient(

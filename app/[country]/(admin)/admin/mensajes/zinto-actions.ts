@@ -3,27 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { assertPermission } from "@/lib/auth/guard";
 import {
-  getActiveChannel,
-  sendWhatsAppMessage,
-  ZintoApiError,
-  ZINTO_MAX_MESSAGE_LENGTH,
-} from "@/lib/services/zinto/client";
-import {
   getConversationById,
   getConversationMessages,
   saveMessage,
   updateConversationLastMessage,
   markConversationRead,
   getOrCreateConversation,
+  type ZintoMessageRecord,
 } from "@/lib/db/zinto";
-import {
-  normalizePhoneNumber,
-  isValidPhoneNumber,
-} from "@/lib/services/zinto/client";
-import { getZintoConfig } from "@/lib/services/zinto/config";
-import type { ZintoMessageRecord } from "@/lib/services/zinto/types";
+import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { getZintoV2Config } from "@/lib/services/zinto-v2/config";
-import { sendWhatsAppMessageV2, ZintoV2ApiError } from "@/lib/services/zinto-v2/client";
+import {
+  sendWhatsAppMessageV2,
+  ZintoV2ApiError,
+  ZINTO_V2_MAX_MESSAGE_LENGTH,
+} from "@/lib/services/zinto-v2/client";
+
+/** Canal WhatsApp de Zinto por país en esta cuenta — ES=#4, CL=#50 (fijo, ver
+ * CLAUDE.md). Ya no se lee de zinto_config: esas columnas eran del cliente v1
+ * (retirado 2026-09-15), y ni el receptor v2 (route.ts) las consultaba. */
+const DEFAULT_CHANNEL_ID_ES = 4;
+const DEFAULT_CHANNEL_ID_CL = 50;
 
 export type SendZintoResult =
   | { ok: true; id: string }
@@ -38,83 +38,36 @@ export async function sendZintoMessage(
 
   const body = (message || "").trim();
   if (!body) return { ok: false, error: "message_required" };
-  if (body.length > ZINTO_MAX_MESSAGE_LENGTH) {
+  if (body.length > ZINTO_V2_MAX_MESSAGE_LENGTH) {
     return { ok: false, error: "message_too_long" };
   }
 
   const conversation = await getConversationById(conversationId);
   if (!conversation) return { ok: false, error: "conversation_not_found" };
 
-  const config = await getZintoConfig();
-  const channelId = conversation.channel_id || config?.channelId || 4;
+  const channelId = conversation.channel_id || DEFAULT_CHANNEL_ID_ES;
 
-  // Vía preferida: API v2 (bidireccional oficial, POST /messages, scope
-  // messages:send). v1 (lib/services/zinto/client.ts, más abajo) está
-  // confirmado retirado por nuestro lado (CLAUDE.md 2026-09-13: las 3
-  // credenciales que se prueban contra /api/v1 dan API_KEY_NOT_FOUND) y
-  // Zinto no ha logrado explicar por qué rechaza justo la clave viva —
-  // reintentar con v1 cuando v2 falla no tiene sentido, así que v1 queda
-  // SOLO como fallback si v2 no está habilitada (enabled_v2), no si v2
-  // falla al enviar.
+  // v1 (lib/services/zinto/**) se retiró del repo el 2026-09-15: estaba
+  // confirmado muerto (CLAUDE.md 2026-09-13, API_KEY_NOT_FOUND en las 3
+  // credenciales que se probaron) y v2 ya cubre envío + recepción en
+  // producción. Si v2 no está habilitada, no hay a qué volver — se falla
+  // explícito en vez de reintentar contra una API que ya no existe aquí.
   const v2Config = await getZintoV2Config();
-  if (v2Config?.enabled) {
-    try {
-      const v2Result = await sendWhatsAppMessageV2(channelId, conversation.phone_number, body);
-      const saved = await saveMessage(
-        conversationId,
-        "channel",
-        conversation.phone_number,
-        body,
-        "sent",
-        "sent",
-        channelId,
-        v2Result.externalMessageId,
-      );
-
-      await updateConversationLastMessage(conversationId, body);
-
-      revalidatePath("/es/admin/mensajes");
-      revalidatePath("/cl/admin/mensajes");
-      return { ok: true, id: saved.id };
-    } catch (error) {
-      if (error instanceof ZintoV2ApiError) {
-        return { ok: false, error: error.code || "zinto_v2_send_failed" };
-      }
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "zinto_v2_send_failed",
-      };
-    }
+  if (!v2Config?.enabled) {
+    return { ok: false, error: "NOT_CONFIGURED" };
   }
 
-  // Fallback legacy v1 — solo cuando v2 no está habilitada en absoluto.
   try {
-    let channel;
-    try {
-      channel = await getActiveChannel(channelId);
-    } catch (channelError) {
-      // No confundir con "canal inactivo": esto es que ni siquiera se pudo
-      // preguntar a Zinto (típicamente credencial v1 muerta — ver
-      // CLAUDE.md, "v1 está retirado"). Mensaje distinto a propósito.
-      if (channelError instanceof ZintoApiError) {
-        return { ok: false, error: channelError.code || "zinto_v1_auth_failed" };
-      }
-      return { ok: false, error: "zinto_v1_auth_failed" };
-    }
-    if (!channel) return { ok: false, error: "channel_inactive" };
-
-    const res = await sendWhatsAppMessage(channelId, conversation.phone_number, body);
-    if (!res.success) return { ok: false, error: "zinto_send_failed" };
-
+    const v2Result = await sendWhatsAppMessageV2(channelId, conversation.phone_number, body);
     const saved = await saveMessage(
       conversationId,
-      channel.phoneNumber || "channel",
+      "channel",
       conversation.phone_number,
       body,
       "sent",
-      res.data.status || "sent",
+      "sent",
       channelId,
-      res.data.messageId,
+      v2Result.externalMessageId,
     );
 
     await updateConversationLastMessage(conversationId, body);
@@ -123,12 +76,12 @@ export async function sendZintoMessage(
     revalidatePath("/cl/admin/mensajes");
     return { ok: true, id: saved.id };
   } catch (error) {
-    if (error instanceof ZintoApiError) {
-      return { ok: false, error: error.code || error.message };
+    if (error instanceof ZintoV2ApiError) {
+      return { ok: false, error: error.code || "zinto_v2_send_failed" };
     }
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "unknown_error",
+      error: error instanceof Error ? error.message : "zinto_v2_send_failed",
     };
   }
 }
@@ -172,8 +125,7 @@ export async function startWhatsAppConversation(
   }
 
   try {
-    const config = await getZintoConfig();
-    const channelId = country === 'cl' ? (config?.channelIdCl || 50) : (config?.channelIdEs || 4);
+    const channelId = country === 'cl' ? DEFAULT_CHANNEL_ID_CL : DEFAULT_CHANNEL_ID_ES;
     const conv = await getOrCreateConversation(normalized, normalized, channelId, {
       contactName: name?.trim() || null,
     }, country);

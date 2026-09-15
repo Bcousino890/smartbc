@@ -477,6 +477,18 @@ prosa: leads de hoy + como mucho una recomendación sobre una ficha.
   `idealista_leads`, que no existen para Chile.
 ## WhatsApp / Zinto — tres capas, y sólo una se usa (auditado 2026-09-13)
 
+> ⚠️ **2026-09-15 — se retiró la capa 1 (legacy v1).** Estaba confirmada
+> muerta desde el 2026-09-13 (`API_KEY_NOT_FOUND` en las tres credenciales
+> que se probaron) y **v2 ya cubre envío + recepción real en producción**
+> (conversación bidireccional confirmada) — ver "Zinto — TRES integraciones"
+> más abajo, ahora con solo DOS. Se borró `lib/services/zinto/**`, el
+> receptor `app/api/webhooks/zinto/route.ts`, el fallback de v1 en
+> `sendZintoMessage()`, y toda la sección "Leads Zinto" (`/admin/leads`,
+> `lib/db/zinto-leads.ts`) — dependía 100% del cliente v1 y estaba a 0 filas
+> en producción (confirmado en dos auditorías de 2026-08-21). El resto de
+> este bloque queda como registro histórico de cómo llegamos hasta acá, no
+> como estado actual.
+
 Conviven **tres** integraciones con Zinto y es fácil tocar la que no es:
 
 1. **Legacy WhatsApp** (`lib/services/zinto/**`, migraciones 0091–0100). Espeja
@@ -850,17 +862,36 @@ según el propio comentario de la migración), así que el fix de
 `Accept-Language` de arriba no las toca. Traducirlas requeriría tocar ese
 proceso externo, no este código.
 
-## Zinto — TRES integraciones distintas en el repo, no confundir (2026-09-12)
+## Zinto — DOS integraciones distintas en el repo, no confundir (actualizado 2026-09-15)
 
-Antes de tocar nada de Zinto, mirar cuál de las tres es:
+Hasta el 2026-09-15 convivían tres. El cliente **v1 legacy**
+(`lib/services/zinto/**`, `crm.zinto.app/api/v1`) se retiró del repo ese día:
+estaba confirmado muerto desde el 2026-09-13 (`API_KEY_NOT_FOUND`) y v2 ya
+cubre envío + recepción real en producción. Con él se fue también
+`/admin/leads` (leads/campañas de v1, 0 filas en producción) y toda la UI de
+v1 en `/admin/configuracion` (Channel ID, Webhook Secret, Inbound Token,
+"Probar Conexión"). Quedan dos:
 
 | | Base URL | Módulo | Estado |
 |---|---|---|---|
-| v1 (WhatsApp + leads/campañas) | `crm.zinto.app/api/v1` | `lib/services/zinto/**` | **En producción hoy** — `/admin/mensajes` manda/recibe de verdad por acá |
+| **v2 (bidireccional oficial)** | `crm.zinto.app/api/v2` | `lib/services/zinto-v2/**` | **En producción hoy** — `/admin/mensajes` manda/recibe de verdad por acá |
 | Integration API (piloto CRM completo: contactos/deals/pipelines/tareas) | `crm.zinto.app/_integration-api` | `lib/services/zinto-integration/**` | Apagado (`ZINTO_INTEGRATION_API_ENABLED`), sin key de producción — no confundir con v2 |
-| v2 (bidireccional oficial, reemplaza el "Flujo" manual de v1) | `crm.zinto.app/api/v2` | `lib/services/zinto-v2/**` | Apagado (`enabled_v2` en `zinto_config`) — en construcción, guía completa en `docs/ZINTO_SETUP.md` sección 9 |
 
-v2 exige un header extra que v1 no tiene (`X-Zinto-Integration-Id`, el id de
-la integración creada en Zinto — no la API Key) y espera el teléfono en E.164
-**con** `+` (v1 lo espera sin `+`). Mientras `enabled_v2` esté en `false`,
-todo el WhatsApp real sigue por v1 sin cambios.
+v2 exige un header extra (`X-Zinto-Integration-Id`, el id de la integración
+creada en Zinto — no la API Key) y espera el teléfono en E.164 **con** `+`
+(`normalizeRecipientV2()`, distinto del `normalizePhoneNumber()` genérico de
+`lib/phone.ts` que usa el resto del panel). `zinto_config.api_key_encrypted`/
+`base_url` (columnas que antes eran "de v1") siguen vivas: son el fallback de
+credencial que usa la Integration API cuando no tiene una clave propia —
+`resolveZintoIntegrationConfig()` en
+`lib/services/zinto-integration/server-config.ts` las sigue leyendo.
+
+⚠️ **Media (fotos/vídeos/documentos) no funciona todavía, ni para mandar ni
+para recibir.** Zinto confirmó por escrito (2026-09-15) que `POST /messages`
+es solo texto y que `message.received` no trae ningún campo de URL de
+archivo — es una función que están construyendo (envío + recepción como una
+sola pieza), sin fecha comprometida. El receptor
+(`app/api/webhooks/zinto-v2/route.ts`) ya detecta que un mensaje entrante es
+de media por el campo `type` y lo muestra en la bandeja como "📷 Imagen" sin
+poder mostrar el archivo — en cuanto Zinto mande la URL, solo hay que
+rellenarla en `extractMedia()` de ese archivo.

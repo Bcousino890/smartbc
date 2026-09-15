@@ -79,18 +79,20 @@ export interface ZintoV2WebhookPayload {
   channel_type?: string;
   text?: string;
   content?: string;
-  // Medios entrantes (imagen/audio/documento/video): forma sin confirmar
-  // todavía contra un evento real (POST /messages de v2 solo acepta `text`,
-  // así que esto solo puede llegar en un message.received disparado por el
-  // propio WhatsApp del cliente, nunca en algo que nosotros mandemos). Se
-  // sigue el mismo patrón que v1 (message.media.{url,mime_type,filename})
-  // como mejor suposición, con nombres de campo planos como respaldo — ver
-  // el log "media sin extraer" en el receptor si no calza.
-  media?: { url?: string; type?: string; mime_type?: string; mime?: string; filename?: string; caption?: string };
-  media_url?: string;
-  media_type?: string;
-  mime_type?: string;
-  filename?: string;
-  caption?: string;
+  /**
+   * Zinto confirmó por escrito (2026-09-15) el payload real de un
+   * message.received de media (imagen/audio/documento/vídeo):
+   * `{message_id, conversation_id, direction, type, content, status,
+   * created_at, channel_type, channel_id, channel_name, channel_account_id,
+   * contact}` — sin NINGÚN campo de URL/adjunto todavía (función pendiente
+   * de construir de su lado, sin fecha comprometida cuando se preguntó).
+   * `type` es el mismo campo plano que ya usan los mensajes de texto
+   * (`"text"` vs `"image"`/`"video"`/`"audio"`/`"document"`), y `content`
+   * trae el caption, o el nombre del archivo si no hay caption, o un texto
+   * fijo suyo en audio (WhatsApp no permite caption ahí).
+   */
+  message_id?: number | string;
+  conversation_id?: number | string;
+  direction?: string;
   [key: string]: unknown;
 }

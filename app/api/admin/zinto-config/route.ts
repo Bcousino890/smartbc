@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { encryptSecret } from "@/lib/services/zinto/config";
+import { encryptSecret } from "@/lib/crypto/secret";
 import { normalizeIntegrationBaseUrl } from "@/lib/services/zinto-integration/config";
 
 async function requireAdmin() {
@@ -30,10 +30,7 @@ export async function GET() {
       config: {
         id: data.id,
         baseUrl: data.base_url,
-        channelId: data.channel_id,
         hasApiKey: Boolean(data.api_key_encrypted),
-        hasWebhookSecret: Boolean(data.webhook_secret_encrypted),
-        hasInboundToken: Boolean(data.inbound_token_encrypted),
         // Integration API (contrato nuevo). `integrationBaseUrl` se muestra
         // sólo informativo: vacío significa "derivada de baseUrl".
         hasIntegrationApiKey: Boolean(data.integration_api_key_encrypted),
@@ -58,15 +55,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const {
-      apiKey,
-      baseUrl,
-      channelId,
-      webhookSecret,
-      inboundToken,
-      integrationApiKey,
-      integrationBaseUrl,
-    } = body;
+    const { apiKey, baseUrl, integrationApiKey, integrationBaseUrl } = body;
 
     const supabase = createAdminClient() as any;
     const { data: existing } = await supabase
@@ -77,9 +66,13 @@ export async function POST(req: Request) {
 
     // Build the row. Secrets are only (re)written when a new value is provided,
     // so leaving a field blank keeps the previously stored secret.
+    //
+    // `api_key_encrypted`/`base_url` ya no son de un cliente v1 (retirado
+    // 2026-09-15) — resolveZintoIntegrationConfig() (server-config.ts) los
+    // sigue leyendo como fallback de la Integration API cuando no hay una
+    // integration_api_key_* propia, así que se quedan.
     const row: Record<string, unknown> = {
       base_url: baseUrl || "https://crm.zinto.app/api/v1",
-      channel_id: channelId ? parseInt(String(channelId), 10) : 4,
     };
 
     if (apiKey) {
@@ -88,18 +81,6 @@ export async function POST(req: Request) {
       row.api_key_iv = enc.iv;
     } else if (!existing?.api_key_encrypted) {
       return Response.json({ error: "API key is required" }, { status: 400 });
-    }
-
-    if (webhookSecret) {
-      const enc = encryptSecret(webhookSecret);
-      row.webhook_secret_encrypted = enc.encrypted;
-      row.webhook_secret_iv = enc.iv;
-    }
-
-    if (inboundToken) {
-      const enc = encryptSecret(inboundToken);
-      row.inbound_token_encrypted = enc.encrypted;
-      row.inbound_token_iv = enc.iv;
     }
 
     // Clave propia de la Integration API. Opcional por diseño: lo normal es
