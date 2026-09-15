@@ -73,7 +73,10 @@ export interface ZintoV2WebhookPayload {
   recipient?: string;
   from?: string;
   sender?: string;
-  contact?: { phone?: string; name?: string };
+  // Zinto confirmó (2026-09-15) que message.received/sent/delivered/read/
+  // failed ya incluyen contact + channel_type/channel_id dentro de `data`.
+  contact?: { id?: number | string; phone?: string; name?: string; email?: string };
+  channel_type?: string;
   text?: string;
   content?: string;
   [key: string]: unknown;
