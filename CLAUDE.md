@@ -404,6 +404,20 @@ oficial de casos de prueba de Idealista (`scripts/idealista-run-official-testcas
   día), pero habría fallado en cuanto alguien publicara un alquiler con
   gastos de comunidad. El mapper ahora solo lo manda en venta.
 
+**Dos hallazgos más (2026-09-16, re-corriendo `idealista-run-official-testcases.mts`
+contra producción con `IDEALISTA_ENV=prod`) — reales pero que HOY no nos
+afectan, porque `mapper.ts` nunca genera la combinación que los dispara:**
+- **Solar: `accessType` también está PROHIBIDO cuando `roadAccess: false`**
+  ("accessType not allowed when roadAccess is false") — es el reverso del
+  caso ya conocido (`roadAccess: true` exige `accessType`). No nos afecta:
+  el mapper manda ambos siempre juntos (`roadAccess: true` +
+  `accessType: "unknown"`, ver el `case "land"` de arriba), nunca uno sin
+  el otro.
+- **`parkingIncludedInPrice: true` no se admite si `parkingAvailable: false`**
+  ("parking included in price not allowed"). No nos afecta: el mapper no
+  manda `parkingIncludedInPrice` en absoluto hoy (no hay campo en el CRM
+  para eso).
+
 El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
 selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo
 importan para el listado oficial de pruebas, no para `mapper.ts`.

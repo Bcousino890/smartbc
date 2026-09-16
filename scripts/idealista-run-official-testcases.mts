@@ -6,6 +6,11 @@
 //   IDEALISTA_CLIENT_ID=... IDEALISTA_CLIENT_SECRET=... IDEALISTA_FEED_KEY=ilc... \
 //   node --experimental-strip-types scripts/idealista-run-official-testcases.mts
 //
+// IDEALISTA_ENV=prod → apunta a producción en vez del sandbox (por defecto).
+// Útil porque no todas las reglas de negocio no documentadas del sandbox
+// coinciden con las de producción (visto el 2026-09-16: recommendedForChildren
+// y priceCommunity solo se confirmaron publicando contra producción de verdad).
+//
 // No usa el cliente de la app (lib/services/idealista/partner-api/*): son
 // llamadas crudas, deliberadas, para poder forzar también los casos de error
 // (token inválido, feedKey inválido, reglas de negocio que rompen a propósito).
@@ -15,7 +20,10 @@ import { writeFileSync } from "node:fs";
 const CLIENT_ID = process.env.IDEALISTA_CLIENT_ID ?? "";
 const CLIENT_SECRET = process.env.IDEALISTA_CLIENT_SECRET ?? "";
 const FEED_KEY = process.env.IDEALISTA_FEED_KEY ?? "";
-const BASE_URL = "https://partners-sandbox.idealista.com";
+const BASE_URL =
+  process.env.IDEALISTA_ENV === "prod"
+    ? "https://partners.idealista.com"
+    : "https://partners-sandbox.idealista.com";
 const OUT_FILE = process.env.OUT_FILE ?? "/tmp/idealista-testcases-results.json";
 
 if (!CLIENT_ID || !CLIENT_SECRET || !FEED_KEY) {
