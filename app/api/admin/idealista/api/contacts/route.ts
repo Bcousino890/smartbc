@@ -1,6 +1,7 @@
 import "server-only";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { listLocalContacts, syncContacts, upsertContact } from "@/lib/services/idealista/partner-api/reconcile";
+import { getIdealistaApiConfigStatus } from "@/lib/services/idealista/partner-api/config";
 
 // Contactos de Idealista. Un anuncio necesita un contactId existente antes de
 // poder publicarse, así que esto es requisito previo, no un extra.
@@ -22,7 +23,8 @@ export async function GET() {
   if (denied) return denied;
 
   try {
-    return Response.json({ contacts: await listLocalContacts() });
+    const [contacts, status] = await Promise.all([listLocalContacts(), getIdealistaApiConfigStatus()]);
+    return Response.json({ contacts, defaultContactId: status.defaultContactId });
   } catch (err) {
     console.error("[idealista-api/contacts] GET:", err);
     return Response.json({ error: "No se pudieron leer los contactos" }, { status: 500 });

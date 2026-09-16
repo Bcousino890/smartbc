@@ -403,6 +403,26 @@ este formulario ve el desplegable vacío (salvo el contacto ya guardado en esa
 ficha, que se sigue mostrando aunque no esté en la lista) y no puede crear uno
 nuevo. No se tocó ese guard: ampliarlo es una decisión de permisos aparte.
 
+### Contacto por defecto (2026-09-16, migración 0169)
+El paso a producción trajo 45 "Fichas guardadas" sin `contact_id` (nunca hizo
+falta hasta ahora, porque no se publicaba de verdad por API). En vez de
+asignarlo ficha por ficha, `idealista_config.default_contact_id` guarda un
+único contacto que se usa cuando la ficha no trae el suyo propio:
+- `mapper.ts` (`buildPropertyPayload`) cae a `options.defaultContactId` si
+  `row.contact_id` viene vacío — mismo camino para alta y modificación, ya que
+  `buildPropertyUpdatePayload` es un wrapper de la misma función.
+- Se fija desde Configuración → Idealista → "API en tiempo real", sección
+  "Contacto por defecto" (`POST /api/admin/idealista/api/default-contact` →
+  `setDefaultContactId()`). Al guardarlo, además de fijarlo para lo que se
+  publique de ahora en más, hace un backfill de una sola vez: `UPDATE
+  idealista_listings SET contact_id = … WHERE contact_id IS NULL` — así las
+  fichas ya creadas quedan cubiertas sin tocarlas una por una. **Nunca** pisa
+  un contacto ya elegido a propósito en una ficha concreta.
+- `idealista-form.tsx` también precarga este valor en el `<select>` de
+  "Contacto e info interna" cuando la ficha no trae contacto propio, para que
+  se vea de entrada cuál se va a usar al publicar (aunque el fallback real
+  vive en el mapper, no en el formulario).
+
 ## Sugerencias de IA en "Fichas guardadas" (2026-08-25, `lib/services/idealista/ai-suggestions.ts`)
 Botón "Sugerencias IA" en `/admin/idealista`, junto a la cabecera de "Fichas
 guardadas". Cruza tres cosas para sugerir qué bajar de precio, qué

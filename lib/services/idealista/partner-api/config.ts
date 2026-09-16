@@ -27,6 +27,8 @@ export interface IdealistaApiConfig {
    * mantiene un volcado V6 con códigos propios que puedan chocar.
    */
   sendCode: boolean;
+  /** Contacto que se usa cuando una ficha no trae el suyo propio. */
+  defaultContactId: number | null;
 }
 
 export interface IdealistaApiConfigStatus {
@@ -39,6 +41,7 @@ export interface IdealistaApiConfigStatus {
   language: IdealistaLanguage;
   sendCode: boolean;
   hasSecret: boolean;
+  defaultContactId: number | null;
   lastTestAt: string | null;
   lastTestOk: boolean | null;
   lastTestMessage: string | null;
@@ -93,6 +96,7 @@ export async function getIdealistaApiConfig(): Promise<IdealistaApiConfig | null
     country: (row.api_country as IdealistaCountry) || "Spain",
     language: (row.api_language as IdealistaLanguage) || "es",
     sendCode: row.api_send_code !== false,
+    defaultContactId: row.default_contact_id ?? null,
   };
 }
 
@@ -109,6 +113,7 @@ export async function getIdealistaApiConfigStatus(): Promise<IdealistaApiConfigS
     language: (row?.api_language as IdealistaLanguage) || "es",
     sendCode: row?.api_send_code !== false,
     hasSecret: !!row?.api_client_secret_encrypted,
+    defaultContactId: row?.default_contact_id ?? null,
     lastTestAt: row?.api_last_test_at ?? null,
     lastTestOk: row?.api_last_test_ok ?? null,
     lastTestMessage: row?.api_last_test_message ?? null,
@@ -177,4 +182,36 @@ export async function recordApiTestResult(ok: boolean, message: string): Promise
       api_last_test_message: message.slice(0, 500),
     })
     .eq("id", existing.id);
+}
+
+/**
+ * Fija el contacto que se usa cuando una ficha no trae el suyo propio, y de
+ * paso lo aplica a las fichas ya creadas que estén sin contacto — sin esto,
+ * las 45+ fichas guardadas antes de tener un contacto por defecto se
+ * quedarían sin poder publicarse hasta tocarlas una por una a mano.
+ *
+ * Nunca pisa un contacto ya elegido a propósito en una ficha concreta
+ * (`WHERE contact_id IS NULL`).
+ */
+export async function setDefaultContactId(contactId: number): Promise<{ backfilled: number }> {
+  const db = createAdminClient() as any;
+
+  const existing = await loadRow();
+  const { error } = existing
+    ? await db.from("idealista_config").update({ default_contact_id: contactId }).eq("id", existing.id)
+    : await db.from("idealista_config").insert({ default_contact_id: contactId });
+  if (error) {
+    throw new Error(`No se pudo guardar el contacto por defecto: ${error.message}`);
+  }
+
+  const { data, error: backfillError } = await db
+    .from("idealista_listings")
+    .update({ contact_id: String(contactId), updated_at: new Date().toISOString() })
+    .is("contact_id", null)
+    .select("id");
+  if (backfillError) {
+    throw new Error(`Contacto guardado, pero no se pudo aplicar a las fichas existentes: ${backfillError.message}`);
+  }
+
+  return { backfilled: (data ?? []).length };
 }
