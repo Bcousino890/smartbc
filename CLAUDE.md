@@ -376,6 +376,12 @@ oficial de casos de prueba de Idealista (`scripts/idealista-run-official-testcas
   `minTenantAge`+`maxTenantAge` → `ownerLiving` → `windowView`. Solo aparecen
   al corregir el error anterior y volver a probar — no vienen todos en el mismo
   400.
+- **`recommendedForChildren` (piso/casa/casa rural) solo se admite en
+  alquiler** — "recommendedForChildren only allowed for rent operation".
+  `features.json` no distingue por operación, así que un piso en venta con
+  este campo (aunque valga `false`) da 400. Confirmado contra **producción**
+  (no el sandbox) el 2026-09-16, publicando una ficha real. El mapper ahora
+  solo lo manda dentro del bloque de alquiler.
 
 El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
 selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo
