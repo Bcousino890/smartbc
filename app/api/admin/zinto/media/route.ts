@@ -4,18 +4,21 @@ import { assertPermission } from "@/lib/auth/guard";
 import { getZintoV2Config } from "@/lib/services/zinto-v2/config";
 
 /**
- * Proxy para descargar media entrante de WhatsApp desde el navegador.
+ * Proxy para descargar media entrante de WhatsApp desde el navegador —
+ * adjuntos de mensajes Y fotos de perfil, mismo mecanismo para las dos.
  *
- * `data.media.url` que Zinto manda en message.received (confirmado en
- * producción, 2026-09-15) es un endpoint AUTENTICADO
- * (`GET /media?type=...&filename=...`, Bearer + X-Zinto-Integration-Id,
- * scope media:read) — un <img src> del navegador no puede mandar esos
- * headers, así que hace falta este intermediario con sesión de admin en vez
- * de la del cliente de Zinto.
+ * `data.media.url` (mensajes, confirmado 2026-09-15) y `avatarUrl`/
+ * `contact.avatar_url` (fotos de perfil, confirmado 2026-09-16) son
+ * endpoints AUTENTICADOS (`GET /media?type=...&filename=...`, donde `type`
+ * puede ser image/video/audio/document o `profile_pictures` — Bearer +
+ * X-Zinto-Integration-Id, scope media:read) — un <img src> del navegador no
+ * puede mandar esos headers, así que hace falta este intermediario con
+ * sesión de admin en vez de la del cliente de Zinto.
  *
  * `?url=` debe ser exactamente la URL que ya vive en `zinto_messages.media_url`
- * (guardada tal cual la mandó Zinto) — se valida que el host coincida con la
- * base configurada de v2 para no convertir esto en un proxy abierto (SSRF).
+ * o `zinto_conversations.contact_avatar_url` (guardada tal cual la mandó
+ * Zinto) — se valida que el host coincida con la base configurada de v2
+ * para no convertir esto en un proxy abierto (SSRF).
  */
 export async function GET(req: NextRequest) {
   try {

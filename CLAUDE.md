@@ -930,11 +930,25 @@ contacto" en la cabecera del chat) sale de **nuestra propia columna**
 en E.164 como `externalId` — si el push a Zinto falla, el correo igual
 queda guardado en nuestra base.
 
-⚠️ **Pendiente de Zinto, NO implementado todavía:** confirmaron que están
-agregando `avatarUrl` (en la respuesta de `PUT /contacts/{externalId}` y en
-`contact.avatar_url` de los eventos `message.*`) — de solo lectura, solo
-para el canal WhatsApp no oficial (QR; el canal oficial de Meta nunca la
-trae), capturada una sola vez al crear el contacto (no se actualiza si el
-cliente cambia su foto después), y como endpoint autenticado igual que
-`/media`. Avisarán cuando esté en producción — hasta entonces no hay nada
-que leer, no vale la pena tocar código para esto todavía.
+### Foto de perfil del contacto — en producción desde el 2026-09-16
+
+Confirmado en vivo contra `GET /api/v2/openapi.json` (`avatarUrl`,
+`profile_pictures` como valor del `type` de `GET /media`) antes de tocar
+código, mismo hábito que con media. De solo lectura, solo para el canal
+WhatsApp no oficial (QR; el canal oficial de Meta nunca la trae), capturada
+UNA SOLA VEZ por Zinto al crear el contacto (no se actualiza sola si el
+cliente cambia su foto después).
+
+- Llega en `avatarUrl` (respuesta de `PUT /contacts/{externalId}`, sin
+  schema publicado — solo la descripción del endpoint la menciona) o
+  `contact.avatar_url` (eventos `message.received/sent/delivered/read/
+  failed`).
+- `updateConversationAvatarUrl()` (`lib/db/zinto.ts`) la guarda en
+  `zinto_conversations.contact_avatar_url` (migración 0168) — el receptor
+  v2 la captura de `message.received` y `updateConversationEmail()` la
+  captura de la respuesta de su propio `PUT /contacts`.
+- Misma URL autenticada que los adjuntos de mensajes
+  (`GET /media?type=profile_pictures&filename=...`) — pasa por el mismo
+  proxy, `app/api/admin/zinto/media/route.ts`, sin cambios ahí. El
+  componente `ContactAvatar` (`whatsapp-chat.tsx`) la muestra en vez de las
+  iniciales cuando existe.

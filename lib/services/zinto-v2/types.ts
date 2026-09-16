@@ -112,7 +112,10 @@ export interface ZintoV2WebhookPayload {
   sender?: string;
   // Zinto confirmó (2026-09-15) que message.received/sent/delivered/read/
   // failed ya incluyen contact + channel_type/channel_id dentro de `data`.
-  contact?: { id?: number | string; phone?: string; name?: string; email?: string };
+  // `avatar_url` confirmado en producción (2026-09-16): foto de perfil de
+  // WhatsApp del contacto, solo lectura, solo canal no oficial (QR) — ver
+  // CLAUDE.md. Endpoint autenticado, igual que media_url.
+  contact?: { id?: number | string; phone?: string; name?: string; email?: string; avatar_url?: string };
   channel_type?: string;
   text?: string;
   content?: string;

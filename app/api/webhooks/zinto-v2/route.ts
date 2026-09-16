@@ -4,6 +4,7 @@ import {
   updateMessageStatusFromWebhook,
   saveMessage,
   updateConversationLastMessage,
+  updateConversationAvatarUrl,
   findConversationByPhone,
   getOrCreateConversation,
   recordWebhookDelivery,
@@ -167,7 +168,14 @@ function extractMedia(payload: ZintoV2WebhookPayload): InboundMedia | null {
 
 function extractInbound(
   payload: ZintoV2WebhookPayload,
-): { sender: string; text: string; name?: string; zintoMessageId?: string; media: InboundMedia | null } {
+): {
+  sender: string;
+  text: string;
+  name?: string;
+  avatarUrl?: string;
+  zintoMessageId?: string;
+  media: InboundMedia | null;
+} {
   const p = unwrap(payload);
   // Zinto confirmó (2026-09-15) que ahora manda `contact.phone` — se busca
   // primero dentro de `data` (donde vive el resto del contenido) y se cae
@@ -183,7 +191,7 @@ function extractInbound(
   const text = p.content || p.text || p.message?.content || p.message?.text || "";
   const zintoMessageId = p.message_id != null ? String(p.message_id) : undefined;
   const media = extractMedia(payload);
-  return { sender, text, name: contact?.name, zintoMessageId, media };
+  return { sender, text, name: contact?.name, avatarUrl: contact?.avatar_url, zintoMessageId, media };
 }
 
 export async function POST(req: NextRequest) {
@@ -300,6 +308,13 @@ export async function POST(req: NextRequest) {
           { contactName: inbound.name || null },
           country,
         );
+      }
+
+      // Foto de perfil de WhatsApp del contacto (confirmado en producción,
+      // 2026-09-16) — Zinto la manda solo lectura y solo una vez, así que
+      // guardarla es tan simple como "si llegó y es distinta, actualizar".
+      if (inbound.avatarUrl && inbound.avatarUrl !== conversation.contact_avatar_url) {
+        await updateConversationAvatarUrl(conversation.id, inbound.avatarUrl);
       }
 
       // `content` (ver extractInbound) trae caption/nombre de archivo/texto

@@ -7,6 +7,7 @@ import {
   getConversationMessages,
   saveMessage,
   updateConversationLastMessage,
+  updateConversationAvatarUrl,
   markConversationRead,
   getOrCreateConversation,
   type ZintoMessageRecord,
@@ -222,11 +223,20 @@ export async function updateConversationEmail(
         if (conversation && v2Config?.enabled) {
           const externalId = normalizeRecipientV2(conversation.phone_number);
           if (externalId) {
-            await upsertContactV2(externalId, {
+            const result = await upsertContactV2(externalId, {
               email: trimmed,
               phone: externalId,
               name: conversation.contact_name || undefined,
             });
+            // La respuesta de PUT /contacts no tiene schema publicado (solo
+            // la descripción dice "puede incluir avatarUrl") — se acepta
+            // tanto plana como envuelta en `data`, mismo patrón defensivo
+            // que /media/upload.
+            const raw = result as { avatarUrl?: string; data?: { avatarUrl?: string } } | null;
+            const avatarUrl = raw?.avatarUrl || raw?.data?.avatarUrl;
+            if (avatarUrl && avatarUrl !== conversation.contact_avatar_url) {
+              await updateConversationAvatarUrl(conversationId, avatarUrl);
+            }
           }
         }
       } catch {

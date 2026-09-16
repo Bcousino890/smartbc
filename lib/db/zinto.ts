@@ -17,6 +17,12 @@ export interface ZintoConversation {
   // tiene ningún GET de contactos para leerlo de vuelta). Se empuja a Zinto
   // por PUT /contacts/{externalId} al guardar, ver updateConversationEmail().
   contact_email?: string | null;
+  // Foto de perfil de WhatsApp del contacto — SOLO LECTURA del lado de Zinto
+  // (nunca la mandamos). Llega en `avatarUrl` (respuesta de PUT /contacts) o
+  // `contact.avatar_url` (webhooks message.*), confirmado en producción
+  // 2026-09-16. La URL requiere autenticación, igual que media_url — pasa
+  // por el mismo proxy (app/api/admin/zinto/media/route.ts).
+  contact_avatar_url?: string | null;
   contact_message?: string | null;
   property_title?: string | null;
   lead_id?: string | null;
@@ -402,5 +408,26 @@ export async function markConversationRead(conversationId: string): Promise<void
 
   if (error) {
     throw new Error(`Failed to mark conversation read: ${error.message}`);
+  }
+}
+
+/**
+ * Guarda la foto de perfil de WhatsApp que Zinto entregó para este contacto
+ * (ver ZintoConversation.contact_avatar_url). Best-effort por diseño de los
+ * callers: nunca debe tumbar el flujo principal (guardar un mensaje, guardar
+ * un correo) si esto falla, así que no lanza — solo registra el error.
+ */
+export async function updateConversationAvatarUrl(
+  conversationId: string,
+  avatarUrl: string
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('zinto_conversations')
+    .update({ contact_avatar_url: avatarUrl })
+    .eq('id', conversationId);
+
+  if (error) {
+    console.error(`Failed to update conversation avatar: ${error.message}`);
   }
 }
