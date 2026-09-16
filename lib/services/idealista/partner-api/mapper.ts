@@ -113,6 +113,8 @@ export interface MapperOptions {
   language: IdealistaLanguage;
   /** Si mandamos `code` (nuestra referencia) para que el alta sea idempotente. */
   sendCode: boolean;
+  /** Contacto a usar cuando la ficha no trae el suyo propio (`idealista_config.default_contact_id`). */
+  defaultContactId?: number | null;
 }
 
 export interface MappedProperty {
@@ -609,7 +611,7 @@ export function buildPropertyPayload(row: IdealistaListingRow, options: MapperOp
 
   const type = mapPropertyType(row);
 
-  const contactId = Number(row.contact_id ?? "");
+  const contactId = Number(row.contact_id || options.defaultContactId || "");
   if (!Number.isInteger(contactId) || contactId <= 0) {
     errors.push(
       'Falta el contacto de Idealista en la ficha. Selecciónalo o créalo en la sección ' +

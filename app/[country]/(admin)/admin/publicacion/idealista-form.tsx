@@ -787,6 +787,12 @@ export function IdealistaForm({
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d?.contacts)) setContactOptions(d.contacts);
+        // Si la ficha no trae contacto propio, se precarga el que esté fijado
+        // como "Contacto por defecto" en Configuración → Idealista — igual que
+        // el mapper lo aplica solo al publicar, pero visible aquí de entrada.
+        if (d?.defaultContactId) {
+          setForm((prev) => (prev.contactId ? prev : { ...prev, contactId: String(d.defaultContactId) }));
+        }
       })
       .catch(() => {})
       .finally(() => setLoadingContacts(false));

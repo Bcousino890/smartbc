@@ -244,6 +244,7 @@ export async function publishListingViaApi(listingId: string): Promise<PublishOu
     country: config.country,
     language: config.language,
     sendCode: config.sendCode,
+    defaultContactId: config.defaultContactId,
   };
 
   const isUpdate = !!listing.api_property_id;

@@ -15,9 +15,16 @@ interface ConfigStatus {
   scope: "idealista" | "microsite";
   sendCode: boolean;
   hasSecret: boolean;
+  defaultContactId: number | null;
   lastTestAt: string | null;
   lastTestOk: boolean | null;
   lastTestMessage: string | null;
+}
+
+interface ContactOption {
+  contactId: number;
+  name: string;
+  email: string;
 }
 
 interface Orphan {
@@ -46,6 +53,10 @@ export function PartnerApiSection() {
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string; details?: string[] } | null>(null);
   const [orphans, setOrphans] = useState<Orphan[]>([]);
 
+  const [contactOptions, setContactOptions] = useState<ContactOption[]>([]);
+  const [defaultContactId, setDefaultContactId] = useState("");
+  const [savingDefaultContact, setSavingDefaultContact] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/idealista/api/config");
@@ -57,6 +68,7 @@ export function PartnerApiSection() {
       setSandbox(data.sandbox);
       setScope(data.scope);
       setSendCode(data.sendCode);
+      setDefaultContactId(data.defaultContactId ? String(data.defaultContactId) : "");
     } catch {
       /* el panel se queda con los valores vacíos */
     }
@@ -64,7 +76,44 @@ export function PartnerApiSection() {
 
   useEffect(() => {
     void load();
+    fetch("/api/admin/idealista/api/contacts")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data?.contacts)) setContactOptions(data.contacts);
+      })
+      .catch(() => {});
   }, [load]);
+
+  async function saveDefaultContact() {
+    const contactId = Number(defaultContactId);
+    if (!Number.isInteger(contactId) || contactId <= 0) return;
+    setSavingDefaultContact(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/idealista/api/default-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage({ kind: "error", text: body.error ?? `Error ${res.status}` });
+        return;
+      }
+      setMessage({
+        kind: "ok",
+        text:
+          body.backfilled > 0
+            ? `Contacto por defecto guardado. Se aplicó a ${body.backfilled} ficha(s) que no tenían contacto.`
+            : "Contacto por defecto guardado.",
+      });
+      void load();
+    } catch {
+      setMessage({ kind: "error", text: "No se pudo conectar con el servidor." });
+    } finally {
+      setSavingDefaultContact(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -224,6 +273,36 @@ export function PartnerApiSection() {
           <input type="checkbox" checked={sendCode} onChange={(e) => setSendCode(e.target.checked)} className="h-4 w-4 accent-gold" />
           Mandar nuestra referencia como código del anuncio (evita duplicados al republicar)
         </label>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-ink/10 bg-cream-50 p-3">
+        <label className="mb-1 block text-xs font-medium text-ink/70">Contacto por defecto</label>
+        <p className="mb-2 text-xs text-ink/50">
+          Se usa en toda ficha que no tenga su propio contacto asignado — incluidas las ya creadas. Sincronizá o creá el
+          contacto arriba (&quot;Sincronizar contactos&quot; o desde el formulario de cada ficha) antes de elegirlo aquí.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={defaultContactId}
+            onChange={(e) => setDefaultContactId(e.target.value)}
+            className={`${inputCls} max-w-sm`}
+          >
+            <option value="">Sin contacto por defecto</option>
+            {contactOptions.map((c) => (
+              <option key={c.contactId} value={String(c.contactId)}>
+                {c.name} — {c.email} (#{c.contactId})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={saveDefaultContact}
+            disabled={savingDefaultContact || !defaultContactId}
+            className="rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm font-semibold text-ink transition hover:border-gold/40 disabled:opacity-50"
+          >
+            {savingDefaultContact ? "Guardando…" : "Guardar y aplicar a fichas sin contacto"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
