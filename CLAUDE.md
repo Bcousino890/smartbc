@@ -395,6 +395,14 @@ oficial de casos de prueba de Idealista (`scripts/idealista-run-official-testcas
   este campo (aunque valga `false`) da 400. Confirmado contra **producción**
   (no el sandbox) el 2026-09-16, publicando una ficha real. El mapper ahora
   solo lo manda dentro del bloque de alquiler.
+- **`priceCommunity` (cuota de comunidad) es justo al revés: solo se admite en
+  venta** — "community costs not allowed for rent operation". Afecta a
+  piso/casa/garaje/trastero/oficina/local (todo lo que manda este campo).
+  Encontrado el 2026-09-16 probando el fix de `recommendedForChildren` contra
+  **producción** con una ficha de alquiler sintética: nadie lo había pisado
+  todavía en real (0 fichas de alquiler con cuota de comunidad en la BD ese
+  día), pero habría fallado en cuanto alguien publicara un alquiler con
+  gastos de comunidad. El mapper ahora solo lo manda en venta.
 
 El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
 selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo

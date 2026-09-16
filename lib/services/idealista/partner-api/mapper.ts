@@ -415,7 +415,6 @@ function buildFeatures(
     areaConstructed,
     conservation,
     cadastralReference: trimTo(row.cadastral_reference, 20),
-    priceCommunity: toPositiveInt(row.community_fees),
   };
 
   // Confirmado contra el sandbox real: bathroomNumber=0 con conservation="good"
@@ -486,6 +485,11 @@ function buildFeatures(
       housingShared.residential = true;
     }
   } else {
+    // Confirmado contra producción (2026-09-16): `priceCommunity` en una
+    // operación de alquiler da 400 "community costs not allowed for rent
+    // operation" — mismo patrón que `recommendedForChildren` pero al revés
+    // (esta regla de negocio tampoco está en el schema). Solo se manda en venta.
+    housingShared.priceCommunity = toPositiveInt(row.community_fees);
     const occupation = OCCUPATION_MAP[row.sale_exception ?? "none"];
     if (occupation) housingShared.currentOccupation = occupation;
   }
@@ -516,7 +520,8 @@ function buildFeatures(
         // `garageCapacity` es obligatorio y el formulario del CRM no lo pregunta.
         garageCapacity: "unknown",
         liftAvailable: !!row.has_elevator,
-        priceCommunity: toPositiveInt(row.community_fees),
+        // Igual que en housingShared: solo en venta (ver nota más arriba).
+        priceCommunity: isRent ? undefined : toPositiveInt(row.community_fees),
         cadastralReference: trimTo(row.cadastral_reference, 20),
       });
     }
@@ -525,7 +530,7 @@ function buildFeatures(
       if (!areaConstructed) errors.push("Un trastero necesita superficie construida para publicarse en Idealista.");
       return compact<IdealistaFeatures>({
         areaConstructed,
-        priceCommunity: toPositiveInt(row.community_fees),
+        priceCommunity: isRent ? undefined : toPositiveInt(row.community_fees),
         cadastralReference: trimTo(row.cadastral_reference, 20),
       });
     }
@@ -559,6 +564,7 @@ function buildFeatures(
       );
       return compact<IdealistaFeatures>({
         ...common,
+        priceCommunity: isRent ? undefined : toPositiveInt(row.community_fees),
         areaUsable: areaUsable !== areaConstructed ? areaUsable : undefined,
         energyCertificateRating,
         windowsLocation,
@@ -579,6 +585,7 @@ function buildFeatures(
       );
       return compact<IdealistaFeatures>({
         ...common,
+        priceCommunity: isRent ? undefined : toPositiveInt(row.community_fees),
         areaUsable: areaUsable !== areaConstructed ? areaUsable : undefined,
         energyCertificateRating,
         type: "retail",
