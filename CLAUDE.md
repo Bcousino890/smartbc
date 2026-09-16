@@ -51,6 +51,27 @@ durante horas por esto, sin que nadie lo notara hasta revisar el log. Fix:
 `lib/geo/geocode.ts`). Cualquier `fetch` a un servicio externo que corra
 durante generación estática (o en un layout compartido) necesita timeout por
 la misma razón.
+
+⚠️ **Commitear directo en `/opt/smartbc-app` (el checkout que vigila el cron)
+tiene dos trampas (2026-09-16):**
+1. En cuanto se hace `git commit` ahí mismo, `HEAD` local ya queda igual a lo
+   que se va a pushear, así que el cron nunca ve "algo nuevo que traer" y no
+   dispara el build solo — hay que hacer el build/migraciones/swap a mano
+   (los mismos pasos de `vps-autodeploy.sh`) o forzar que el cron lo
+   redetecte.
+2. Si el cron cae justo entre el `commit` y el `push` (su `git fetch` ve el
+   remoto todavía viejo mientras el local ya tiene el commit nuevo), hace
+   `git reset --hard origin/main` y el checkout vuelve un commit para atrás
+   hasta el siguiente tick — no se pierde nada (el commit ya puede estar en
+   GitHub aunque el checkout local no lo refleje un momento), pero
+   confunde si no se sabe qué mirar. Pasó hoy con el commit de docs de este
+   mismo hallazgo: `git log`/`git status` en el checkout no bastan para
+   confirmar qué hay en producción justo después de pushear, hay que mirar
+   `origin/main` (`git fetch && git rev-parse origin/main`) y el log del
+   autodeploy.
+
+Lo normal (commitear en otro sitio y dejar que el cron sea el único que
+toca este checkout) no tiene ninguna de las dos trampas.
 ### Datos del servidor verificados en producción (2026-08-11)
 Comprobados por SSH contra la máquina viva. El repo tenía **cuatro** de estos
 datos mal, y por eso se pierde tanto tiempo: la gente instala o reinicia cosas
