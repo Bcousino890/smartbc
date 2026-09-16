@@ -465,10 +465,14 @@ function buildFeatures(
     orientationSouth: !!row.orientation_south,
     orientationEast: !!row.orientation_east,
     orientationWest: !!row.orientation_west,
-    recommendedForChildren: !!row.children_recommended,
   };
 
   if (isRent) {
+    // Confirmado contra producción (2026-09-16): mandar este campo en una
+    // operación de venta da 400 "recommendedForChildren only allowed for rent
+    // operation" — no está en el schema (flat/house/countryHouse lo admiten
+    // sin distinguir operación), es otra regla de negocio no documentada.
+    housingShared.recommendedForChildren = !!row.children_recommended;
     housingShared.petsAllowed = !!row.pets_allowed;
     // `tenantNumberForHousing` va de 1 a 10.
     const tenants = toPositiveInt(row.max_tenants);
