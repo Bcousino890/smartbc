@@ -5,6 +5,7 @@
 
 export const AGENCY_NAME = "Benjamín Cousiño Propiedades";
 export const AGENCY_OPENING = `${AGENCY_NAME} presenta`;
+export const AGENCY_WEBSITE = "https://www.bcousinoprop.com/";
 
 // Se añade SIEMPRE al final de la descripción de todo anuncio de ALQUILER
 // (nunca en venta: habla de fianza, que no aplica). Centralizado aquí para que

@@ -14,7 +14,7 @@ import type {
   IdealistaPropertyType,
   IdealistaScope,
 } from "./types";
-import { DESCRIPTION_FOOTER } from "../description-style";
+import { AGENCY_WEBSITE, DESCRIPTION_FOOTER } from "../description-style";
 
 // Traducción de una ficha de `idealista_listings` al cuerpo que espera
 // `POST/PUT /v1/properties`.
@@ -171,8 +171,17 @@ const EQUIPMENT_MAP: Record<string, IdealistaEquipment> = {
   empty: "not_equipped",
 };
 
-/** Situación excepcional de venta → `features.json#/currentOccupation`. */
+/**
+ * Situación excepcional de venta → `features.json#/currentOccupation`.
+ * "none" (venta normal, sin excepción) → "free": el enum de España es
+ * free/bare_ownership/tenanted/illegally_occupied, los cuatro. No mandar nada
+ * para el caso normal deja el campo "sin responder" en el panel de Idealista
+ * (confirmado en producción el 2026-09-16, BC-1528) aunque el propio texto
+ * del schema no lo marque como obligatorio para España (solo dice
+ * "Mandatory for France").
+ */
 const OCCUPATION_MAP: Record<string, IdealistaFeatures["currentOccupation"]> = {
+  none: "free",
   "illegally-occupied": "illegally_occupied",
   "rented-with-tenants": "tenanted",
   "bare-ownership": "bare_ownership",
@@ -651,7 +660,10 @@ export function buildPropertyPayload(row: IdealistaListingRow, options: MapperOp
     );
   }
 
-  const externalLink = trimTo(row.external_link, 500);
+  // Sin enlace propio, se manda la web de la agencia: mejor eso que dejar el
+  // campo "Sitio web" vacío en el panel de Idealista (confirmado en
+  // producción, BC-1528, 2026-09-16).
+  const externalLink = trimTo(row.external_link, 500) ?? AGENCY_WEBSITE;
   const reference = trimTo(row.reference_code, 50);
 
   const payload: IdealistaPropertyCreate = compact({

@@ -492,7 +492,24 @@ le pone la marca SOLO si es foto (nunca en planos) y siempre devuelve JPEG
 (`prepareForIdealista` en `brand-watermark.ts`). Público a propósito — lo
 pide el backend de Idealista, sin sesión — pero solo sirve `photo_ids`/
 `plan_ids` YA guardados en esa ficha, nunca una URL por query string, para no
-abrir un proxy de descarga genérico.
+abrir un proxy de descarga genérico. La marca se pone en fotos Y en planos.
+
+### `currentOccupation` sin mandar deja "sin responder" el panel de Idealista (2026-09-16)
+`features.json#/currentOccupation` (solo venta, solo piso/casa/casa rural)
+tiene 4 valores para España: `free`, `bare_ownership`, `tenanted`,
+`illegally_occupied`. `OCCUPATION_MAP` solo cubría las 3 excepciones y omitía
+el campo para una venta normal (`sale_exception: "none"`, el 95% de los
+casos) — el propio texto del schema no lo marca "Mandatory" para España (solo
+para Francia), pero el panel de gestión de Idealista sí lo trata como
+incompleto si no llega nada. Confirmado sobre BC-1528. Fix: `"none": "free"`
+en `OCCUPATION_MAP`.
+
+### "Sitio web" vacío en el panel si la ficha no trae `external_link` (2026-09-16)
+`additionalLink` se omitía sin más si la ficha no traía enlace propio. Ahora
+cae en `AGENCY_WEBSITE` (`https://www.bcousinoprop.com/`,
+`description-style.ts`) en vez de dejarlo vacío. Un enlace propio inválido
+(no `http(s)`) sigue avisando y publicándose sin él, no cae al fallback —
+solo la ausencia total.
 
 ### El error de "falta el contacto" mentía sobre dónde arreglarlo (2026-08-24)
 `mapper.ts` exige `contact_id` (ver arriba) y hasta esta fecha el mensaje decía

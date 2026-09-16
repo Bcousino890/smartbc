@@ -3,8 +3,8 @@ import { createAdminClient } from "@/lib/db/admin";
 import { prepareForIdealista } from "@/lib/services/idealista/brand-watermark";
 
 // Proxy público que sirve una foto/plano de una ficha de Idealista lista para
-// el Partner API: con nuestra marca de agua (solo fotos, no planos) y siempre
-// en JPEG (ver la nota en brand-watermark.ts sobre por qué .webp se queda
+// el Partner API: con nuestra marca de agua (fotos Y planos) y siempre en
+// JPEG (ver la nota en brand-watermark.ts sobre por qué .webp se queda
 // "pending_to_process" para siempre). Público a propósito: lo pide el propio
 // backend de Idealista al descargar la imagen de la URL que le mandamos en
 // `PUT /v1/properties/{id}/images`; no hay sesión de por medio.
