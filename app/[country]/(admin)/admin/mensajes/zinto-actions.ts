@@ -15,6 +15,8 @@ import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { getZintoV2Config } from "@/lib/services/zinto-v2/config";
 import {
   sendWhatsAppMessageV2,
+  upsertContactV2,
+  normalizeRecipientV2,
   ZintoV2ApiError,
   ZINTO_V2_MAX_MESSAGE_LENGTH,
 } from "@/lib/services/zinto-v2/client";
@@ -165,6 +167,73 @@ export async function updateConversationName(
 
     if (error) {
       return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/es/admin/mensajes");
+    revalidatePath("/cl/admin/mensajes");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "unknown_error",
+    };
+  }
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Update the contact email of a WhatsApp conversation (admin only).
+ *
+ * Nuestra propia fuente de verdad (v2 no tiene GET de contactos para leerlo
+ * de vuelta — ver upsertContactV2). Se guarda igual aunque el push a Zinto
+ * falle: perder el dato en nuestro CRM por un problema de red hacia Zinto
+ * sería peor que quedarnos sin enriquecer el de ellos por ahora.
+ */
+export async function updateConversationEmail(
+  conversationId: string,
+  newEmail: string,
+): Promise<UpdateConversationResult> {
+  await assertPermission("mensajes", "edit");
+
+  const trimmed = newEmail.trim();
+  if (trimmed && !EMAIL_PATTERN.test(trimmed)) {
+    return { ok: false, error: "invalid_email" };
+  }
+
+  try {
+    const supabase = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { error } = await supabase
+      .from("zinto_conversations")
+      .update({ contact_email: trimmed || null })
+      .eq("id", conversationId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (trimmed) {
+      try {
+        const conversation = await getConversationById(conversationId);
+        const v2Config = await getZintoV2Config();
+        if (conversation && v2Config?.enabled) {
+          const externalId = normalizeRecipientV2(conversation.phone_number);
+          if (externalId) {
+            await upsertContactV2(externalId, {
+              email: trimmed,
+              phone: externalId,
+              name: conversation.contact_name || undefined,
+            });
+          }
+        }
+      } catch {
+        // Best-effort: el correo ya quedó guardado en nuestra base aunque
+        // Zinto no lo haya podido recibir (v2 caído, contacto rechazado,
+        // etc.) — nunca se pierde por un fallo del lado de ellos.
+      }
     }
 
     revalidatePath("/es/admin/mensajes");

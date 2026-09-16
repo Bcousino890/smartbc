@@ -13,6 +13,10 @@ export interface ZintoConversation {
   last_message?: string;
   unread_count?: number;
   contact_name?: string | null;
+  // Correo del contacto — nuestra propia fuente de verdad (v2 de Zinto no
+  // tiene ningún GET de contactos para leerlo de vuelta). Se empuja a Zinto
+  // por PUT /contacts/{externalId} al guardar, ver updateConversationEmail().
+  contact_email?: string | null;
   contact_message?: string | null;
   property_title?: string | null;
   lead_id?: string | null;

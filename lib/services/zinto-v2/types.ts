@@ -30,6 +30,21 @@ export interface ZintoV2ErrorBody {
   };
 }
 
+/**
+ * PUT /contacts/{externalId}. Zinto confirmó por escrito (2026-09-16):
+ * `email` (igual que `phone` y `company`) es un campo propio del contacto,
+ * al mismo nivel que `name` — nunca va en `customFields` ni se simula con
+ * un tag, y un PUT sobre un externalId existente ACTUALIZA el valor
+ * guardado (no solo se usa en el alta inicial).
+ */
+export interface ZintoV2ContactInput {
+  name?: string;
+  phone?: string;
+  email?: string;
+  company?: string;
+  customFields?: Record<string, unknown>;
+}
+
 /** Adjunto saliente — confirmado en producción (2026-09-15): POST /media/upload
  * sube el archivo y devuelve la `url` que va acá. */
 export interface ZintoV2MessageMediaInput {

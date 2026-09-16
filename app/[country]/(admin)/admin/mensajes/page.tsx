@@ -132,6 +132,7 @@ export default async function AdminMensajesPage({
         unreadCount: c.unread_count ?? 0,
         contactMessage: c.contact_message ?? null,
         propertyTitle: c.property_title ?? null,
+        contactEmail: c.contact_email ?? null,
         country: (c.country as 'es' | 'cl') || 'es',
       };
     });
