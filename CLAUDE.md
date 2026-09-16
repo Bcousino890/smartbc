@@ -474,11 +474,11 @@ link de Airbnb):
 - **`.webp` se queda en `state: "pending_to_process"` para siempre** — 16 de
   17 fotos nunca procesaron (el panel de Idealista las marca con error horas
   después); la única que sí era la única `.jpg` (un original de Airbnb sin
-  pasar por nuestro storage). Probado en vivo: la MISMA foto en `.webp` vs
-  `.jpg` — en 5 minutos con la ficha activa ninguna de las dos había
-  terminado de procesar todavía (Idealista tarda más de eso), así que esto es
-  correlación fuerte sobre el único caso real que tenemos, no una prueba A/B
-  aislada — pero cambiar a JPEG no tiene downside, así que se hizo igual.
+  pasar por nuestro storage). CONFIRMADO tras el fix: se resincronizaron las
+  17 fotos de BC-1528 (ahora vía el proxy, en JPEG) y a los 5 minutos las
+  17 estaban `"processed"` con checksum — antes, las mismas 16 llevaban
+  HORAS en `.webp` sin procesar nunca. Idealista no lo documenta en ningún
+  lado (el schema de `image_process.json` no restringe formato).
 - **Nunca llevaban nuestro logo.** `applyBrandWatermark` (creado para el ZIP
   de descarga manual, `lib/services/photo-zip.ts`) nunca se conectó al flujo
   de la API en tiempo real — el ZIP sí marca las fotos, la API nunca lo hizo.
