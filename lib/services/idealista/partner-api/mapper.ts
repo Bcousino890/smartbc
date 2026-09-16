@@ -14,6 +14,7 @@ import type {
   IdealistaPropertyType,
   IdealistaScope,
 } from "./types";
+import { DESCRIPTION_FOOTER } from "../description-style";
 
 // Traducción de una ficha de `idealista_listings` al cuerpo que espera
 // `POST/PUT /v1/properties`.
@@ -634,9 +635,20 @@ export function buildPropertyPayload(row: IdealistaListingRow, options: MapperOp
   const operation = buildOperation(row, errors);
   const features = buildFeatures(row, type, errors, warnings);
 
-  const descriptionText = trimTo(row.description, 4000);
-  if (!descriptionText) {
-    warnings.push("La ficha no tiene descripción: el anuncio se publicará sin texto.");
+  // El footer (fianza + personal shopper) es texto de alquiler: no tiene
+  // sentido en venta, así que solo se añade cuando la operación es rent — y
+  // SIEMPRE que sea rent, aunque la ficha no traiga cuerpo de descripción.
+  // Se reserva su tamaño ANTES de recortar a 4000 para que nunca se corte.
+  const isRentDescription = operation.type === "rent";
+  const footer = isRentDescription ? DESCRIPTION_FOOTER : "";
+  const bodyText = trimTo(row.description, 4000 - footer.length) ?? "";
+  const descriptionText = `${bodyText}${footer}`.trim() || undefined;
+  if (!bodyText) {
+    warnings.push(
+      isRentDescription
+        ? "La ficha no tiene descripción propia: el anuncio se publicará solo con el footer automático."
+        : "La ficha no tiene descripción: el anuncio se publicará sin texto."
+    );
   }
 
   const externalLink = trimTo(row.external_link, 500);

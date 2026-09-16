@@ -6,6 +6,12 @@
 export const AGENCY_NAME = "Benjamín Cousiño Propiedades";
 export const AGENCY_OPENING = `${AGENCY_NAME} presenta`;
 
+// Se añade SIEMPRE al final de la descripción de todo anuncio de ALQUILER
+// (nunca en venta: habla de fianza, que no aplica). Centralizado aquí para que
+// la vista previa del formulario (idealista-form.tsx) y lo que de verdad viaja
+// a Idealista (mapper.ts, buildPropertyPayload) sean exactamente el mismo texto.
+export const DESCRIPTION_FOOTER = `\n\nRequisitos: 1 fianza + personal shopper\n\nPara más propiedades consulta por chat de Idealista y WhatsApp y te enviamos más opciones que se acomoden a tus necesidades.`;
+
 // Guía de estilo que se inyecta en el prompt del sistema de ambos endpoints.
 export const DESCRIPTION_STYLE = `Escribe la descripción del anuncio con un registro PREMIUM e inmobiliario de alta gama, al estilo de las grandes promotoras de lujo (EMAAR, DAMAC), pero adaptado al mercado residencial español y a Idealista. Elegante, aspiracional y evocador, sin caer en superlativos huecos ni promesas que los datos no respalden.
 

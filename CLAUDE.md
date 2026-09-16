@@ -443,6 +443,28 @@ El CRM hoy no publica ni `building` ni `room` ni `countryhouse` (no están en el
 selector de tipo de `idealista-form.tsx`), así que esas tres tipologías sólo
 importan para el listado oficial de pruebas, no para `mapper.ts`.
 
+### Footer automático de alquiler: existía en la UI pero nunca viajaba (2026-09-16)
+El formulario mostraba "Footer automático — al final siempre se agrega" con el
+texto de fianza/personal shopper, pero `DESCRIPTION_FOOTER` solo se usaba en la
+vista previa (`showDescPreview`) — nunca se concatenaba al `description` real
+que se guarda y se manda a Idealista. Cero fichas de alquiler lo llevaban.
+Fix: la constante se movió a `lib/services/idealista/description-style.ts`
+(single source of truth para la UI y el mapper) y `buildPropertyPayload` la
+añade siempre que `operation.type === "rent"` — incluso si la ficha no tiene
+descripción propia, para que el requisito de fianza no dependa de que alguien
+escriba texto. En venta nunca se añade (habla de fianza, no aplica). La UI
+ahora también avisa que solo aplica en alquiler.
+
+### El pin verde (ubicación enviada a Idealista) se resetea solo al reabrir la ficha
+`GeocodingMapSection` (dentro de `idealista-form.tsx`) inicializaba
+`hasManualPin` en `false` siempre, así que en cuanto el efecto de geocodificar
+`street`/`city` corría al montar el componente — algo que pasa SIEMPRE que hay
+calle y ciudad, incluso al abrir una ficha ya guardada con su pin ya elegido —
+pisaba `latitude`/`longitude` con el resultado fresco del geocoder, tirando
+cualquier ajuste manual previo. Fix: `hasManualPin` arranca en `true` si la
+ficha ya trae coordenadas (`latitude !== 0 || longitude !== 0`) al montar; solo
+una ficha nueva sin coordenadas deja que el geocoder mueva el pin verde solo.
+
 ### El error de "falta el contacto" mentía sobre dónde arreglarlo (2026-08-24)
 `mapper.ts` exige `contact_id` (ver arriba) y hasta esta fecha el mensaje decía
 "Créalo o selecciónalo en Configuración → Idealista" — pero ahí **no existe

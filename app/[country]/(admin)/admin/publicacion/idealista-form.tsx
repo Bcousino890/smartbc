@@ -5,11 +5,9 @@ import { useRef, useState, useEffect } from "react";
 import { Image as ImageIcon, Loader2, MapPin, Minus, Plus, Save, Send, Trash2, Video, RefreshCw, Calendar, Clock, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PropertyVideoPanel } from "@/components/admin/property-video-panel";
+import { DESCRIPTION_FOOTER } from "@/lib/services/idealista/description-style";
 
 const MapPicker = dynamic(() => import("./map-picker"), { ssr: false });
-
-// ── Texto fijo que siempre se agrega al final de la descripción ───────────────
-const DESCRIPTION_FOOTER = `\n\nRequisitos: 1 fianza + personal shopper\n\nPara más propiedades consulta por chat de Idealista y WhatsApp y te enviamos más opciones que se acomoden a tus necesidades.`;
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -426,8 +424,10 @@ function GeocodingMapSection({
   // Coordenadas reales geocodificadas (pin azul — solo para referencia)
   const [realLat, setRealLat] = useState(0);
   const [realLng, setRealLng] = useState(0);
-  // Si el usuario ya movió el pin verde manualmente
-  const [hasManualPin, setHasManualPin] = useState(false);
+  // Si ya hay una posición decidida para el pin verde (elegida ahora o
+  // guardada de antes: da igual el origen, una vez que existe no se vuelve a
+  // pisar sola con el geocoder cada vez que se abre la ficha).
+  const [hasManualPin, setHasManualPin] = useState(() => latitude !== 0 || longitude !== 0);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const callbackRef = useRef(onCoordinatesChange);
   useEffect(() => { callbackRef.current = onCoordinatesChange; });
@@ -1647,15 +1647,21 @@ export function IdealistaForm({
             </p>
             <pre className="whitespace-pre-wrap text-sm text-ink/80 font-sans leading-relaxed">
               {(form.description || "").trimEnd()}
-              {DESCRIPTION_FOOTER}
+              {form.operation === "rent" ? DESCRIPTION_FOOTER : ""}
             </pre>
           </div>
         )}
 
-        <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 text-xs text-ink/60">
-          <strong className="text-ink/80">Footer automático</strong> — al final siempre se agrega:
-          <pre className="mt-1 whitespace-pre-wrap text-xs text-ink/50 font-sans">{DESCRIPTION_FOOTER.trim()}</pre>
-        </div>
+        {form.operation === "rent" ? (
+          <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 text-xs text-ink/60">
+            <strong className="text-ink/80">Footer automático</strong> — al publicar se agrega siempre al final (solo en alquiler):
+            <pre className="mt-1 whitespace-pre-wrap text-xs text-ink/50 font-sans">{DESCRIPTION_FOOTER.trim()}</pre>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-ink/10 bg-ink/5 px-4 py-3 text-xs text-ink/50">
+            El footer automático (fianza + personal shopper) solo se agrega en alquiler; esta ficha es de venta.
+          </div>
+        )}
 
         <div>
           <Label>Sitio web</Label>
