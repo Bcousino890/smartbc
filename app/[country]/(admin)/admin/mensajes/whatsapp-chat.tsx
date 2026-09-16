@@ -47,6 +47,7 @@ export type WhatsAppConversation = {
   contactMessage?: string | null;
   propertyTitle?: string | null;
   contactEmail?: string | null;
+  contactAvatarUrl?: string | null;
   country?: 'es' | 'cl';
 };
 
@@ -288,9 +289,7 @@ export function WhatsAppChat({
             <header className="border-b border-gold/15 bg-cream-50/85 px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 text-xs font-bold text-[#128C7E]">
-                    {active.initials}
-                  </span>
+                  <ContactAvatar avatarUrl={active.contactAvatarUrl} initials={active.initials} size={40} />
                   <div className="min-w-0">
                     <p className="truncate text-base font-bold text-ink">
                       {active.displayName}
@@ -450,6 +449,43 @@ export function WhatsAppChat({
   );
 }
 
+/**
+ * Avatar del contacto: foto de perfil de WhatsApp si Zinto la entregó
+ * (confirmado en producción 2026-09-16 — solo lectura, solo canal no
+ * oficial), o las iniciales de siempre si no hay foto. La URL de Zinto es un
+ * endpoint autenticado — pasa por el mismo proxy que los adjuntos de
+ * mensajes (app/api/admin/zinto/media/route.ts).
+ */
+function ContactAvatar({
+  avatarUrl,
+  initials,
+  size,
+}: {
+  avatarUrl?: string | null;
+  initials: string;
+  size: number;
+}) {
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/api/admin/zinto/media?url=${encodeURIComponent(avatarUrl)}`}
+        alt=""
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full bg-[#25D366]/15 text-xs font-bold text-[#128C7E]"
+      style={{ width: size, height: size }}
+    >
+      {initials}
+    </span>
+  );
+}
+
 function WhatsAppList({
   conversations,
   activeId,
@@ -531,9 +567,7 @@ function WhatsAppList({
                 active && "bg-white/75",
               )}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25D366]/15 text-xs font-bold text-[#128C7E]">
-                {c.initials}
-              </span>
+              <ContactAvatar avatarUrl={c.contactAvatarUrl} initials={c.initials} size={36} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="truncate text-sm font-semibold text-ink">

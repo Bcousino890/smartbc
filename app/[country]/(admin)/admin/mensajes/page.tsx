@@ -133,6 +133,7 @@ export default async function AdminMensajesPage({
         contactMessage: c.contact_message ?? null,
         propertyTitle: c.property_title ?? null,
         contactEmail: c.contact_email ?? null,
+        contactAvatarUrl: c.contact_avatar_url ?? null,
         country: (c.country as 'es' | 'cl') || 'es',
       };
     });
