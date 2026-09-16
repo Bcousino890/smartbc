@@ -54,3 +54,14 @@ export async function applyBrandWatermark(buf: Buffer): Promise<Buffer> {
     ])
     .toBuffer();
 }
+
+// Prepara una imagen para el Partner API de Idealista: marca (si aplica, no
+// para planos) + JPEG forzado. El storage propio guarda todo en `.webp` (más
+// liviano para nuestro portal), pero Idealista se queda las fotos en
+// "pending_to_process" indefinidamente con `.webp` — confirmado en producción
+// el 2026-09-16 sobre una ficha real (16/17 fotos nunca procesaron; la única
+// que sí era la única `.jpg`). JPEG es el formato que sabemos que procesa.
+export async function prepareForIdealista(buf: Buffer, opts: { watermark: boolean }): Promise<Buffer> {
+  const source = opts.watermark ? await applyBrandWatermark(buf) : buf;
+  return sharp(source, { failOn: "none" }).rotate().jpeg({ quality: 90 }).toBuffer();
+}

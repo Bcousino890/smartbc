@@ -465,6 +465,35 @@ cualquier ajuste manual previo. Fix: `hasManualPin` arranca en `true` si la
 ficha ya trae coordenadas (`latitude !== 0 || longitude !== 0`) al montar; solo
 una ficha nueva sin coordenadas deja que el geocoder mueva el pin verde solo.
 
+### Fotos por API: sin marca de agua y en `.webp` que nunca procesa (2026-09-16)
+`buildImageList` (`publish.ts`) mandaba la URL cruda de `photo_ids`/`plan_ids`
+tal cual — casi siempre `.webp` de nuestro storage (`lib/sync/watermark.ts`,
+pensado para servir rápido el portal propio, no para Idealista). Dos problemas
+reales, confirmados sobre BC-1528 (ficha real, sembrada por "Inspo" desde un
+link de Airbnb):
+- **`.webp` se queda en `state: "pending_to_process"` para siempre** — 16 de
+  17 fotos nunca procesaron (el panel de Idealista las marca con error horas
+  después); la única que sí era la única `.jpg` (un original de Airbnb sin
+  pasar por nuestro storage). Probado en vivo: la MISMA foto en `.webp` vs
+  `.jpg` — en 5 minutos con la ficha activa ninguna de las dos había
+  terminado de procesar todavía (Idealista tarda más de eso), así que esto es
+  correlación fuerte sobre el único caso real que tenemos, no una prueba A/B
+  aislada — pero cambiar a JPEG no tiene downside, así que se hizo igual.
+- **Nunca llevaban nuestro logo.** `applyBrandWatermark` (creado para el ZIP
+  de descarga manual, `lib/services/photo-zip.ts`) nunca se conectó al flujo
+  de la API en tiempo real — el ZIP sí marca las fotos, la API nunca lo hizo.
+  "Inspo" además trae fotos DE OTRO PORTAL sin marca a propósito (es un
+  borrador), y BC-1528 se publicó de verdad sin pasar por ese paso.
+
+Fix: `buildImageList` ya no manda la URL del storage — manda
+`/api/public/idealista-photos/{listingId}/{photo|plan}/{index}`
+(`app/api/public/idealista-photos/.../route.ts`), que descarga el original,
+le pone la marca SOLO si es foto (nunca en planos) y siempre devuelve JPEG
+(`prepareForIdealista` en `brand-watermark.ts`). Público a propósito — lo
+pide el backend de Idealista, sin sesión — pero solo sirve `photo_ids`/
+`plan_ids` YA guardados en esa ficha, nunca una URL por query string, para no
+abrir un proxy de descarga genérico.
+
 ### El error de "falta el contacto" mentía sobre dónde arreglarlo (2026-08-24)
 `mapper.ts` exige `contact_id` (ver arriba) y hasta esta fecha el mensaje decía
 "Créalo o selecciónalo en Configuración → Idealista" — pero ahí **no existe

@@ -113,20 +113,45 @@ function toAbsoluteUrl(url: string): string {
 }
 
 /**
+ * URL pública de una foto/plano de la ficha ya lista para Idealista: pasa por
+ * `/api/public/idealista-photos/...`, que la sirve con nuestra marca de agua
+ * (solo fotos) y siempre en JPEG — nunca la URL cruda del storage (`.webp`),
+ * que Idealista deja en "pending_to_process" para siempre (ver
+ * lib/services/idealista/brand-watermark.ts).
+ */
+function idealistaPhotoProxyUrl(listingId: string, kind: "photo" | "plan", index: number): string {
+  const origin = process.env.NEXT_PUBLIC_PORTAL_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  return `${origin.replace(/\/$/, "")}/api/public/idealista-photos/${listingId}/${kind}/${index}`;
+}
+
+/**
  * Fotos que se mandan a Idealista, en el orden en que se publicarán.
  * Los planos van al final: es el orden que aplica Idealista de todos modos.
  */
 function buildImageList(listing: ListingRecord, warnings: string[]): IdealistaImageInput[] {
-  const photos = (listing.photo_ids ?? []).map(toAbsoluteUrl);
-  const plans = (listing.plan_ids ?? []).map(toAbsoluteUrl);
-  const all = [...photos, ...plans].filter((url) => /^https?:\/\//i.test(url));
-
-  const skipped = photos.length + plans.length - all.length;
-  if (skipped > 0) {
-    warnings.push(
-      `${skipped} imagen(es) sin URL pública absoluta no se mandan. Configura NEXT_PUBLIC_PORTAL_URL para que Idealista pueda descargarlas.`
-    );
+  const origin = process.env.NEXT_PUBLIC_PORTAL_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  if (!origin) {
+    warnings.push("Falta NEXT_PUBLIC_PORTAL_URL: no se pueden mandar fotos (Idealista necesita poder descargarlas).");
+    return [];
   }
+
+  const validPhotoIdx = (listing.photo_ids ?? [])
+    .map((url, i) => (/^https?:\/\//i.test(url) ? i : -1))
+    .filter((i) => i >= 0);
+  const validPlanIdx = (listing.plan_ids ?? [])
+    .map((url, i) => (/^https?:\/\//i.test(url) ? i : -1))
+    .filter((i) => i >= 0);
+
+  const skipped =
+    (listing.photo_ids?.length ?? 0) - validPhotoIdx.length + (listing.plan_ids?.length ?? 0) - validPlanIdx.length;
+  if (skipped > 0) {
+    warnings.push(`${skipped} imagen(es) sin URL pública absoluta no se mandan.`);
+  }
+
+  const all = [
+    ...validPhotoIdx.map((i) => idealistaPhotoProxyUrl(listing.id, "photo", i)),
+    ...validPlanIdx.map((i) => idealistaPhotoProxyUrl(listing.id, "plan", i)),
+  ];
 
   if (all.length > MAX_IMAGES) {
     warnings.push(`Idealista admite ${MAX_IMAGES} fotos por anuncio: se mandan las ${MAX_IMAGES} primeras.`);
