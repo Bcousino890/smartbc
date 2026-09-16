@@ -913,3 +913,28 @@ código: `/media/upload` y `/media` aparecen, `MessageInput` ya tiene
   no volverse un proxy abierto) y reenvía con las credenciales del servidor.
 
 Límite: 10 MB por archivo (lo impone Zinto en `/media/upload`).
+
+### Correo del contacto (2026-09-16) — nuestro, no de Zinto
+
+Zinto confirmó por escrito que `email` en `PUT /contacts/{externalId}` es un
+campo propio del contacto (igual que `name`/`phone`/`company`, nunca
+`customFields` ni un tag) y que un PUT sobre un `externalId` existente
+actualiza el valor guardado. Pero como v2 **no tiene ningún GET de
+contactos** (contrato de solo empuje, ver arriba), nunca podemos leerlo de
+vuelta — así que el correo que se ve en `/admin/mensajes` (botón "Editar
+contacto" en la cabecera del chat) sale de **nuestra propia columna**
+`zinto_conversations.contact_email` (migración 0167), no de Zinto.
+`updateConversationEmail()` (`zinto-actions.ts`) guarda ahí primero
+(siempre) y de forma best-effort empuja el mismo valor a Zinto vía
+`upsertContactV2()` (`lib/services/zinto-v2/client.ts`), usando el teléfono
+en E.164 como `externalId` — si el push a Zinto falla, el correo igual
+queda guardado en nuestra base.
+
+⚠️ **Pendiente de Zinto, NO implementado todavía:** confirmaron que están
+agregando `avatarUrl` (en la respuesta de `PUT /contacts/{externalId}` y en
+`contact.avatar_url` de los eventos `message.*`) — de solo lectura, solo
+para el canal WhatsApp no oficial (QR; el canal oficial de Meta nunca la
+trae), capturada una sola vez al crear el contacto (no se actualiza si el
+cliente cambia su foto después), y como endpoint autenticado igual que
+`/media`. Avisarán cuando esté en producción — hasta entonces no hay nada
+que leer, no vale la pena tocar código para esto todavía.

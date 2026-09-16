@@ -5,6 +5,7 @@ import type {
   ZintoV2Health,
   ZintoV2MessageMediaInput,
   ZintoV2MediaUploadOutput,
+  ZintoV2ContactInput,
 } from "./types";
 
 /** Igual límite que v1 (Zinto no lo repite por versión, pero WhatsApp es el mismo canal). */
@@ -121,6 +122,28 @@ export async function getHealthV2(): Promise<ZintoV2Health> {
 /** GET /capabilities — requiere integrations:manage; confirma scopes reales de la clave. */
 export async function getCapabilitiesV2(): Promise<ZintoV2Capabilities> {
   return zintoV2Fetch("/capabilities", { method: "GET" });
+}
+
+/**
+ * PUT /contacts/{externalId} — scope contacts:write. Contrato de solo
+ * empuje: no hay ningún GET para leer un contacto de vuelta (confirmado en
+ * CLAUDE.md, "El contrato v2 es de EMPUJE"), así que esto solo sirve para
+ * enriquecer el CRM de Zinto con datos que YA tenemos — nunca para traer
+ * datos nuevos hacia SmartBC. `externalId` es NUESTRO id (no el de Zinto);
+ * usamos el teléfono en E.164 con "+" para que sea estable y sin mapeo
+ * aparte que mantener.
+ */
+export async function upsertContactV2(
+  externalId: string,
+  data: ZintoV2ContactInput,
+): Promise<unknown> {
+  if (!externalId) {
+    throw new ZintoV2ApiError(400, "Falta el externalId del contacto", "INVALID_REQUEST");
+  }
+  return zintoV2Fetch(`/contacts/${encodeURIComponent(externalId)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
 export interface SendMessageV2Options {

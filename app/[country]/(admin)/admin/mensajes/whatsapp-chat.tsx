@@ -28,6 +28,7 @@ import {
   markZintoConversationRead,
   startWhatsAppConversation,
   updateConversationName,
+  updateConversationEmail,
   deleteConversation,
 } from "./zinto-actions";
 import { ZintoCrmPanel } from "./zinto-crm-panel";
@@ -45,6 +46,7 @@ export type WhatsAppConversation = {
   unreadCount: number;
   contactMessage?: string | null;
   propertyTitle?: string | null;
+  contactEmail?: string | null;
   country?: 'es' | 'cl';
 };
 
@@ -251,8 +253,9 @@ export function WhatsAppChat({
         />
       )}
       {showEditName && active && (
-        <EditNameModal
+        <EditContactModal
           currentName={active.displayName}
+          currentEmail={active.contactEmail ?? ""}
           onClose={() => setShowEditName(false)}
           conversationId={active.id}
           onUpdated={() => {
@@ -292,11 +295,12 @@ export function WhatsAppChat({
                     <p className="truncate text-base font-bold text-ink">
                       {active.displayName}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-ink/55">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-ink/55">
                       <span>+{active.phoneNumber}</span>
                       <span className="inline-block rounded-full bg-gold/20 px-1.5 py-0.5 font-medium">
                         {active.country === 'cl' ? '🇨🇱 Chile' : '🇪🇸 España'}
                       </span>
+                      {active.contactEmail && <span>{active.contactEmail}</span>}
                     </div>
                   </div>
                 </div>
@@ -304,7 +308,7 @@ export function WhatsAppChat({
                   <button
                     type="button"
                     onClick={() => setShowEditName(true)}
-                    title="Editar nombre"
+                    title="Editar contacto"
                     className="flex items-center justify-center rounded-lg p-1.5 text-ink/50 transition hover:bg-gold/10 hover:text-ink"
                   >
                     <Edit2 size={16} strokeWidth={1.75} />
@@ -907,18 +911,21 @@ function generateGreeting(conversation: WhatsAppConversation): string {
   return `Hola ${name}, ¿cómo estás? 👋 Vi tu consulta anterior:\n\n"${originalMessage}"`;
 }
 
-function EditNameModal({
+function EditContactModal({
   currentName,
+  currentEmail,
   onClose,
   conversationId,
   onUpdated,
 }: {
   currentName: string;
+  currentEmail: string;
   onClose: () => void;
   conversationId: string;
   onUpdated: () => void;
 }) {
   const [name, setName] = useState(currentName);
+  const [email, setEmail] = useState(currentEmail);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -931,12 +938,30 @@ function EditNameModal({
     }
     setError(null);
     startTransition(async () => {
-      const result = await updateConversationName(conversationId, newName);
-      if (result.ok) {
-        onUpdated();
-      } else {
-        setError(result.error || "No se pudo actualizar el nombre.");
+      const nameChanged = newName !== currentName;
+      const emailChanged = email.trim() !== currentEmail;
+
+      const nameResult = nameChanged
+        ? await updateConversationName(conversationId, newName)
+        : { ok: true as const };
+      if (!nameResult.ok) {
+        setError(nameResult.error || "No se pudo actualizar el nombre.");
+        return;
       }
+
+      const emailResult = emailChanged
+        ? await updateConversationEmail(conversationId, email)
+        : { ok: true as const };
+      if (!emailResult.ok) {
+        setError(
+          emailResult.error === "invalid_email"
+            ? "El correo no es válido."
+            : emailResult.error || "No se pudo actualizar el correo.",
+        );
+        return;
+      }
+
+      onUpdated();
     });
   };
 
@@ -951,7 +976,7 @@ function EditNameModal({
       >
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-ink">
-            Editar nombre
+            Editar contacto
           </h3>
           <button type="button" onClick={onClose} className="text-ink/50 hover:text-ink">
             <X size={18} />
@@ -968,6 +993,18 @@ function EditNameModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="Nombre"
               autoFocus
+              className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-ink/65">
+              Correo del contacto
+            </span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
               className="rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none"
             />
           </label>
