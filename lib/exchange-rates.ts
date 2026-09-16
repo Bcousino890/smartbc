@@ -21,6 +21,7 @@ export async function fetchExchangeRates(): Promise<ExchangeRates> {
   try {
     const res = await fetch("https://mindicador.cl/api", {
       next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return FALLBACK_RATES;
     const data = (await res.json()) as {

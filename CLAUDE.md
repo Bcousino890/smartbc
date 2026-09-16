@@ -38,6 +38,19 @@ nunca se había ejecutado (y que además estaba roto).
 
 `npm install` solo se lanza si cambió `package-lock.json`: reescribir
 `node_modules` bajo un proceso vivo también rompe peticiones.
+
+⚠️ **Un fetch externo sin timeout puede tumbar TODO el build (2026-09-16).**
+`mindicador.cl` (tipo de cambio, usado por `app/web/layout.tsx` en las 5
+páginas públicas `/web/*`) se puso lento/errático y el `fetch` de
+`lib/exchange-rates.ts` no tenía `signal`. Next da 60s por página en
+generación estática, reintenta 3 veces y si sigue fallando **aborta el build
+entero** — el script lo detecta (`.next` queda intacto, sigue la versión
+anterior) pero dos despliegues seguidos (#290 y #291) se quedaron sin salir
+durante horas por esto, sin que nadie lo notara hasta revisar el log. Fix:
+`signal: AbortSignal.timeout(8000)` en ese fetch (mismo patrón que
+`lib/geo/geocode.ts`). Cualquier `fetch` a un servicio externo que corra
+durante generación estática (o en un layout compartido) necesita timeout por
+la misma razón.
 ### Datos del servidor verificados en producción (2026-08-11)
 Comprobados por SSH contra la máquina viva. El repo tenía **cuatro** de estos
 datos mal, y por eso se pierde tanto tiempo: la gente instala o reinicia cosas
