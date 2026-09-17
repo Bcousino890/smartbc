@@ -10,12 +10,20 @@ import { buildWatermarkedPhotoZip, safeZipName } from "@/lib/services/photo-zip"
 // en vez de `idealista_listings`.
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const profile = await getCurrentProfile();
   if (!profile) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (!canAccess(profile.role, "properties", "export")) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Fotos SIN nuestra marca de agua: los originales que se suben a portales o
+  // se pasan a un cliente/colaborador no deben salir así por descuido, así que
+  // además del permiso de exportar hace falta ser owner/admin.
+  const clean = new URL(req.url).searchParams.get("clean") === "1";
+  if (clean && !["owner", "admin"].includes(profile.role)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -47,15 +55,16 @@ export async function GET(
   const folder = safeZipName(
     property.bc_reference || property.property_reference || slug,
   );
-  const zip = await buildWatermarkedPhotoZip(urls, folder);
+  const zip = await buildWatermarkedPhotoZip(urls, folder, { watermark: !clean });
   if (!zip) {
     return Response.json({ error: "No se pudo descargar ninguna foto" }, { status: 502 });
   }
 
+  const fileName = clean ? `${folder}-original.zip` : `${folder}.zip`;
   return new Response(new Uint8Array(zip), {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${folder}.zip"`,
+      "Content-Disposition": `attachment; filename="${fileName}"`,
       "Content-Length": String(zip.length),
     },
   });
