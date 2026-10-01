@@ -1,5 +1,12 @@
 import "server-only";
 import { createClient } from "../server";
+import { briefFromRow } from "@/lib/clients/brief";
+import {
+  effectivePrice,
+  evaluateMatch,
+  exclusionLabel,
+  zoneLikePattern,
+} from "@/lib/clients/brief-match";
 
 export type SuggestedProperty = {
   id: string;
@@ -16,14 +23,24 @@ export type SuggestedProperty = {
   bcReference: string | null;
   photos: string[];
   matchScore: number;
+  /** Por qué encaja. Las ve EL CLIENTE en su portal: solo cosas positivas. */
   matchReasons: string[];
+  /**
+   * Lo que el agente debe confirmar (dato que falta, se pasa del
+   * presupuesto, la renta no cuadra con los ingresos…). Solo para el panel:
+   * la ruta del portal del cliente las quita antes de responder.
+   */
+  matchWarnings: string[];
 };
+
+/** Fuera de la lista por chocar con el encargo, contado por motivo. */
+export type ExcludedSummary = Array<{ label: string; count: number }>;
 
 // El resultado distingue "no hay preferencias" de "la query falló". Antes las
 // dos ramas devolvían [] y por eso un error de relación pasó meses sin que
 // nadie lo notara: el bloque de la ficha simplemente decía "no hay resultados".
 export type SuggestedPropertiesResult =
-  | { ok: true; suggestions: SuggestedProperty[] }
+  | { ok: true; suggestions: SuggestedProperty[]; excluded?: ExcludedSummary }
   | { ok: false; reason: "no_preferences" }
   | { ok: false; reason: "error"; message: string };
 
@@ -33,14 +50,23 @@ type PropertyRow = {
   id: string;
   slug: string;
   title: string;
+  description?: string | null;
   zone: string;
   subzone: string | null;
   bedrooms: number;
   bathrooms: number;
   square_meters: number | null;
   price: number | string;
+  rent_price?: number | string | null;
   currency: string | null;
   operation: "rent" | "sale";
+  operations?: string[] | null;
+  stay?: string | null;
+  property_type?: string | null;
+  features?: string[] | null;
+  features_manual?: string[] | null;
+  floor_override?: string | null;
+  available_from?: string | null;
   bc_reference: string | null;
   last_synced_at: string | null;
   updated_at: string | null;
@@ -74,11 +100,24 @@ export function proxyPhotoUrls(prop: PropertyRow): string[] {
   return sorted.map((_, i) => `/p/${prop.slug}/${i}?v=${v}`);
 }
 
+/** Cuántas propiedades se miran como mucho por cliente antes de puntuar. */
+const CANDIDATE_LIMIT = 400;
+
 /**
- * Propiedades sugeridas para un cliente, a partir de `client_preferences`.
+ * Propiedades sugeridas para un cliente, a partir de su encargo
+ * (`client_preferences`, ver lib/clients/brief.ts).
  *
- * Puntúa zona, precio, dormitorios, baños, superficie y nº de fotos. El score
- * es orientativo: sirve para ordenar, no para decidir.
+ * Dos pasos:
+ *  1. SQL trae las candidatas con lo que la BD sabe filtrar sin ambigüedad:
+ *     operación (incluidas las duales), precio, estancia SOLO en alquiler,
+ *     zona/barrio y dormitorios.
+ *  2. `evaluateMatch` (lib/clients/brief-match.ts, puro y con tests) descarta
+ *     lo que choca con el encargo según el texto de la ficha (sin ascensor,
+ *     interior, planta, tipo, amueblado, mascotas, obra nueva…), puntúa y
+ *     separa las razones (las ve el cliente) de los avisos (solo el agente).
+ *
+ * `excluded` cuenta los descartes del paso 2 por motivo, para que el agente
+ * vea qué se ha quedado fuera y por qué en vez de un "no hay resultados".
  *
  * `country` aísla el catálogo (un cliente de España no debe recibir
  * sugerencias de Chile). Sin el argumento no se filtra, que es el
@@ -110,22 +149,31 @@ export async function getSuggestedProperties(
   }
   if (!prefsData) return { ok: false, reason: "no_preferences" };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const prefs = prefsData as any;
+  const brief = briefFromRow(prefsData);
+  const op = brief.operation;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase.from("properties").select(`
       id,
       slug,
       title,
+      description,
       zone,
       subzone,
       bedrooms,
       bathrooms,
       square_meters,
       price,
+      rent_price,
       currency,
       operation,
+      operations,
+      stay,
+      property_type,
+      features,
+      features_manual,
+      floor_override,
+      available_from,
       bc_reference,
       last_synced_at,
       updated_at,
@@ -137,25 +185,57 @@ export async function getSuggestedProperties(
   if (opts?.country) query = query.eq("country", opts.country);
   if (opts?.createdAfter) query = query.gt("created_at", opts.createdAfter);
 
-  // `operation` y `stay` pueden ser null en las preferencias. `.eq(col, null)`
-  // no casa ninguna fila, así que filtrar incondicionalmente vaciaba el
-  // resultado para cualquier cliente sin esas preferencias fijadas (habitual
-  // en venta, donde `stay` no aplica).
-  if (prefs.operation) {
-    // Las propiedades duales llevan la operación en `operations[]` además de
-    // en `operation`, y solo mirando `operation` se perdían.
-    query = query.or(
-      `operation.eq.${prefs.operation},operations.cs.{${prefs.operation}}`,
+  // Todas las condiciones con OR van en UN solo filtro lógico,
+  // `or=(and(or(…),or(…)))`, en vez de encadenar varios `.or()`.
+  const groups: string[] = [];
+
+  // Operación + precio. En las duales (0085) `price` es el de venta y el de
+  // alquiler va en `rent_price`: para un inquilino hay que mirar ese.
+  const ceiling =
+    brief.maxPrice !== null ? brief.maxPrice * (1 + (brief.maxPriceFlexPct ?? 0) / 100) : null;
+  const range = (col: string) =>
+    [
+      brief.minPrice !== null ? `${col}.gte.${brief.minPrice}` : null,
+      ceiling !== null ? `${col}.lte.${ceiling}` : null,
+    ].filter(Boolean) as string[];
+  if (op === "rent") {
+    groups.push(
+      `or(and(${["operation.eq.rent", ...range("price")].join(",")}),` +
+        `and(${["operation.eq.sale", "operations.cs.{rent}", ...range("rent_price")].join(",")}))`,
+    );
+    // La estancia solo existe en alquiler. Una propiedad sin estancia
+    // cargada no se descarta: no saberlo no es decir que no.
+    if (brief.stay) groups.push(`or(stay.eq.${brief.stay},stay.is.null)`);
+  } else {
+    groups.push("or(operation.eq.sale,operations.cs.{sale})");
+    const r = range("price");
+    if (r.length) groups.push(`and(${r.join(",")})`);
+  }
+
+  // Zona o barrio. Los nombres se buscan en las DOS columnas: los encargos
+  // viejos guardaban los barrios dentro de `zones`, y hay barrios que en
+  // unas fichas vienen como zona y en otras como subzona (Recoletos,
+  // Almagro…). Si el cliente está abierto a otras zonas, no se filtra aquí:
+  // se puntúa en `evaluateMatch`.
+  //
+  // `ilike` y no igualdad: las zonas escritas a mano llegan sin tildes o en
+  // minúsculas ("chamberi"). El patrón es permisivo a propósito; la
+  // comparación exacta la hace `evaluateMatch` justo después.
+  const patterns = [...new Set([...brief.zones, ...brief.subzones].map(zoneLikePattern))].filter(Boolean);
+  if (patterns.length && !brief.zonesFlexible) {
+    groups.push(
+      `or(${patterns.flatMap((p) => [`zone.ilike."${p}"`, `subzone.ilike."${p}"`]).join(",")})`,
     );
   }
-  if (prefs.stay) query = query.eq("stay", prefs.stay);
-  if (prefs.min_price) query = query.gte("price", prefs.min_price);
-  if (prefs.max_price) query = query.lte("price", prefs.max_price);
 
-  const zones = (prefs.zones as string[] | null) ?? [];
-  if (zones.length > 0) query = query.in("zone", zones);
+  query = query.or(`and(${groups.join(",")})`);
 
-  const { data: propertiesData, error: propsError } = await query.limit(50);
+  if (brief.minBedrooms !== null) query = query.gte("bedrooms", brief.minBedrooms);
+  if (brief.maxBedrooms !== null) query = query.lte("bedrooms", brief.maxBedrooms);
+
+  const { data: propertiesData, error: propsError } = await query
+    .order("created_at", { ascending: false })
+    .limit(CANDIDATE_LIMIT);
 
   if (propsError) {
     console.error(
@@ -166,81 +246,50 @@ export async function getSuggestedProperties(
   }
 
   const properties = (propertiesData ?? []) as PropertyRow[];
-  if (properties.length === 0) return { ok: true, suggestions: [] };
+  const excludedCounts = new Map<string, number>();
+  const suggestions: SuggestedProperty[] = [];
 
-  const priceMid =
-    prefs.min_price && prefs.max_price
-      ? (Number(prefs.min_price) + Number(prefs.max_price)) / 2
-      : null;
+  for (const prop of properties) {
+    const photos = proxyPhotoUrls(prop);
+    const outcome = evaluateMatch(brief, { ...prop, photoCount: photos.length });
+    if (outcome.excluded) {
+      const label = exclusionLabel(outcome.reason);
+      excludedCounts.set(label, (excludedCounts.get(label) ?? 0) + 1);
+      continue;
+    }
+    const price = effectivePrice(prop, op) ?? Number(prop.price);
+    suggestions.push({
+      id: prop.id,
+      slug: prop.slug,
+      title: prop.title,
+      zone: prop.zone,
+      subzone: prop.subzone,
+      bedrooms: prop.bedrooms,
+      bathrooms: prop.bathrooms,
+      squareMeters: prop.square_meters ?? 0,
+      price,
+      currency: prop.currency,
+      // El precio de arriba es el de la operación del cliente: la operación
+      // que acompaña al precio tiene que ser la misma o se formatea mal
+      // ("2.200 €" de venta en vez de "2.200 €/mes").
+      operation: op,
+      bcReference: prop.bc_reference,
+      photos,
+      matchScore: outcome.score,
+      matchReasons: outcome.reasons,
+      matchWarnings: outcome.warnings,
+    });
+  }
 
-  const suggestions: SuggestedProperty[] = properties
-    .map((prop) => {
-      const reasons: string[] = [];
-      let score = 0;
-      const price = Number(prop.price);
+  suggestions.sort((a, b) => b.matchScore - a.matchScore);
 
-      if (zones.includes(prop.zone)) {
-        score += 30;
-        reasons.push(`En ${prop.zone}`);
-      } else if (zones.length > 0) {
-        score += 5;
-        reasons.push(`Cercano a ${zones[0]}`);
-      }
-
-      if (priceMid && Math.abs(price - priceMid) < priceMid * 0.1) {
-        score += 25;
-        reasons.push("Precio competitivo");
-      } else if (
-        prefs.min_price &&
-        prefs.max_price &&
-        price >= Number(prefs.min_price) &&
-        price <= Number(prefs.max_price)
-      ) {
-        score += 20;
-        reasons.push("Dentro del presupuesto");
-      }
-
-      if (prop.bedrooms >= 1 && prop.bedrooms <= 5) {
-        score += 15;
-        reasons.push(`${prop.bedrooms} habitaciones`);
-      }
-      if (prop.bathrooms >= 1) {
-        score += 10;
-        reasons.push(`${prop.bathrooms} baño(s)`);
-      }
-      if (prop.square_meters && prop.square_meters >= 40) {
-        score += 10;
-        reasons.push(`${prop.square_meters} m²`);
-      }
-
-      const photos = proxyPhotoUrls(prop);
-      if (photos.length >= 3) {
-        score += 5;
-        reasons.push("Múltiples fotos");
-      }
-
-      return {
-        id: prop.id,
-        slug: prop.slug,
-        title: prop.title,
-        zone: prop.zone,
-        subzone: prop.subzone,
-        bedrooms: prop.bedrooms,
-        bathrooms: prop.bathrooms,
-        squareMeters: prop.square_meters ?? 0,
-        price,
-        currency: prop.currency,
-        operation: prop.operation,
-        bcReference: prop.bc_reference,
-        photos,
-        matchScore: Math.min(score, 100),
-        matchReasons: reasons.slice(0, 3),
-      };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, opts?.limit ?? 10);
-
-  return { ok: true, suggestions };
+  return {
+    ok: true,
+    suggestions: suggestions.slice(0, opts?.limit ?? 10),
+    excluded: [...excludedCounts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count),
+  };
 }
 
 /** Nº de propiedades disponibles que casan con el cliente. 0 si falla. */
@@ -258,7 +307,7 @@ export async function getAvailablePropertiesCount(
  */
 export async function getPropertyForOffer(
   propertyId: string,
-): Promise<Omit<SuggestedProperty, "matchScore" | "matchReasons"> | null> {
+): Promise<Omit<SuggestedProperty, "matchScore" | "matchReasons" | "matchWarnings"> | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("properties")

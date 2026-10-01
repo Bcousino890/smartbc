@@ -70,7 +70,7 @@ export async function setNewListingAlertsEnabled(
 
   const db = createAdminClient() as any;
 
-  // Mismo patrón que saveClientPreferences: UPDATE si ya existe la fila de
+  // Mismo patrón que saveClientPreferencesFull: UPDATE si ya existe la fila de
   // preferencias, INSERT si no (client_preferences tiene PK = client_id).
   const existing = await db
     .from("client_preferences")

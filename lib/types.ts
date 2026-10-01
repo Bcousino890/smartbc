@@ -318,6 +318,12 @@ export type AdminClient = {
   profileType: ClientProfileType;
   /** false = nadie lo eligió y `profileType` es el valor por defecto. */
   profileTypeKnown?: boolean;
+  /**
+   * El encargo completo (lib/clients/brief.ts). null = sin encargo guardado.
+   * Los campos sueltos de abajo (operation, preferredZone, budget…) son la
+   * versión resumida que siguen usando los filtros y la tabla.
+   */
+  brief?: import("@/lib/clients/brief").BriefInput | null;
   operation: Operation;
   stayType: StayType;
   preferredZone: string;

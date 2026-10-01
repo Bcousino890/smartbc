@@ -61,6 +61,7 @@ import { CommandHeader } from "./_components/command-header";
 import { CommandTabs } from "./_components/command-tabs";
 import { EditClientDialog } from "./_components/edit-client-dialog";
 import { EditPreferencesDialog } from "./_components/edit-preferences-dialog";
+import type { BriefProfile } from "@/lib/clients/brief";
 import { NextActionCard } from "./_components/next-action-card";
 import { ShortlistStatusCard, ViewingDayCard } from "./_components/overview-cards";
 import { PortalLinksCard } from "./_components/portal-links-card";
@@ -141,7 +142,18 @@ export function ClientFichaView({
   const tab: CommandTab = isCommandTab(urlTab) ? urlTab : "overview";
 
   const [editClient, setEditClient] = useState(false);
-  const [editPrefs, setEditPrefs] = useState(false);
+  // `?encargo=editar` abre el encargo directamente: es a donde lleva el
+  // botón "Editar encargo" del panel lateral del listado.
+  const [editPrefs, setEditPrefs] = useState(params?.get("encargo") === "editar");
+  const closePrefs = useCallback(() => {
+    setEditPrefs(false);
+    if (params?.get("encargo")) {
+      const qs = new URLSearchParams(params.toString());
+      qs.delete("encargo");
+      const q = qs.toString();
+      router.replace(q ? `?${q}` : "?", { scroll: false });
+    }
+  }, [params, router]);
 
   const goTab = useCallback(
     (next: CommandTab, anchor?: string) => {
@@ -468,13 +480,18 @@ export function ClientFichaView({
             client={client}
             country={country}
           />
-          <EditPreferencesDialog
-            open={editPrefs}
-            onClose={() => setEditPrefs(false)}
-            clientId={client.id}
-            country={country}
-            prefs={cc.prefs}
-          />
+          {/* Montado solo mientras está abierto: cada apertura parte del
+              encargo guardado, no de lo que se dejó a medias la vez anterior. */}
+          {editPrefs && (
+            <EditPreferencesDialog
+              open
+              onClose={closePrefs}
+              clientId={client.id}
+              country={country}
+              prefs={cc.prefs}
+              profile={client.profileTypeKnown === false ? null : (client.profileType as BriefProfile)}
+            />
+          )}
         </>
       )}
     </div>

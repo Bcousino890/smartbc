@@ -882,6 +882,64 @@ cosas hay CERO. Son dos casos concretos:
 
 De fondo: 26 fichas de alquiler preparadas frente a 10 de venta.
 
+## El encargo del cliente — un solo formulario, venta ≠ alquiler (2026-10-01)
+Hasta esta fecha había TRES editores de `client_preferences` que no
+preguntaban lo mismo: "Nuevo cliente" (con un "Sector" que no se guardaba en
+ningún sitio, la estancia también en venta y los barrios mezclados dentro de
+`zones`), "El encargo del cliente" de la ficha y el panel lateral del listado
+(seis campos que al guardar **reducían las zonas a una sola**). Ahora:
+
+- **Catálogo único:** `lib/clients/brief.ts`. Opciones, etiquetas, qué campo
+  aplica a qué operación (`RENT_ONLY` / `SALE_ONLY`), `buildPreferencesPayload`
+  (encargo → columnas), `briefFromRow` (columnas → encargo) y `briefGaps` (lo
+  que falta). Si añades un campo al encargo, va aquí y sale solo en el
+  formulario, en la ficha y en el match.
+- **Formulario único:** `components/admin/clientes/encargo/encargo-form.tsx`.
+  Lo pintan "Nuevo cliente" (`create-client-dialog.tsx` →
+  `createClientWithBrief`) y la ficha (`edit-preferences-dialog.tsx` →
+  `saveClientPreferencesFull`); las dos acciones guardan con el MISMO
+  `buildPreferencesPayload`. El panel lateral del listado ya no edita: resume y
+  enlaza a `?encargo=editar`, que abre el diálogo en la ficha.
+  `saveClientPreferences` (el editor de seis campos) se borró.
+- **Venta ≠ alquiler.** En venta no hay estudiantes, universidades, estancia,
+  amueblado, mascotas ni avales; en alquiler no hay finalidad, hipoteca,
+  ahorro, estado, obra nueva ni "acepta inquilino". Lo que no aplica se
+  guarda como NULL al guardar — no se queda escondido influyendo en el match.
+  El perfil también depende de la operación (nadie compra "como estudiante").
+- **Migración 0170** añade las columnas nuevas (tipos de vivienda, barrios,
+  margen de presupuesto, planta mínima, imprescindibles/deseables, urgencia,
+  ingresos, situación laboral, garantías, financiación, ahorro, estado, obra
+  nueva, inquilino…) y pone `stay = NULL` en las filas de venta.
+
+⚠️ **El match filtraba por `stay` también en venta:** "Nuevo cliente" guardaba
+`stay = 'long'` siempre, ninguna propiedad en venta tiene `stay`, y por eso
+**a ningún comprador le salía una sola propiedad sugerida**. Ahora la estancia
+solo se mira en alquiler y una propiedad sin estancia cargada no se descarta.
+
+**El match nuevo** (`getSuggestedProperties` → `lib/clients/brief-match.ts`,
+puro, `npm run test:client-brief`):
+- SQL trae candidatas con UN solo filtro lógico (`or=(and(or(…),or(…)))`):
+  operación + precio (en las duales el inquilino compara con `rent_price`, no
+  con `price`, que es el de venta), estancia solo en alquiler, zona **o**
+  barrio (cada nombre se busca en `zone` y en `subzone`) y dormitorios.
+- `evaluateMatch` descarta SOLO con evidencia explícita en el texto de la
+  ficha ("sin ascensor", "Interior", planta por debajo, otro tipo, "sin
+  amueblar", "no se admiten mascotas", "para reformar", "con inquilino"…). Que
+  la ficha no mencione algo NO la descarta: se avisa al agente para confirmar.
+  `features`/`property_type` son texto libre, por eso todo va con regex sobre
+  texto sin tildes, nunca por igualdad.
+- ⚠️ `matchReasons` las VE EL CLIENTE en su portal; `matchWarnings` ("la renta
+  supera 1/3 de sus ingresos", "confirmar ascensor", "ahorro < 30 %"…) son
+  solo para el agente y `app/api/cliente/suggested-properties` las quita antes
+  de responder. No mezcles una cosa con otra.
+- El bloque "Propiedades sugeridas" de la ficha enseña también cuántas
+  propiedades se descartaron y por qué (`excluded`), para que un encargo muy
+  estricto no se confunda con un catálogo vacío.
+
+El diálogo de Chile (`create-client-dialog-cl.tsx`) sigue con `createNewClient`
+y su panel lateral propio; en la ficha, un cliente chileno ve el mismo
+formulario más su bloque de Chile.
+
 ## Enlaces de portales en la ficha del cliente (`lib/portal-links/**`)
 El paso que faltaba **antes** de la selección: el piso que se ve con el cliente
 en Idealista todavía no es ficha nuestra, así que no cabe en

@@ -19,6 +19,13 @@ import { revalidatePath } from "next/cache";
 import { assertPermission } from "@/lib/auth/guard";
 import { createAdminClient } from "@/lib/db/admin";
 import { isCountry } from "@/lib/country-config";
+import {
+  buildPreferencesPayload,
+  validateBrief,
+  type BriefInput,
+  type BriefProfile,
+} from "@/lib/clients/brief";
+import { setClientProfileTag } from "@/lib/clients/profile-tag";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -118,28 +125,10 @@ export async function assignClientAdvisor(
   return { ok: true };
 }
 
-// ─── Preferencias ────────────────────────────────────────────────────────────
+// ─── Preferencias (el encargo) ───────────────────────────────────────────────
 
-export type SavePreferencesInput = {
-  clientId: string;
-  country: "es" | "cl";
-  operation: "rent" | "sale";
-  stay: "short" | "long";
-  zones: string[];
-  minPrice: number | null;
-  maxPrice: number | null;
-  minBedrooms: number | null;
-  minBathrooms: number | null;
-  minSquareMeters: number | null;
-  maxSquareMeters: number | null;
-  availableFrom: string | null;
-  occupants: number | null;
-  students: number | null;
-  workers: number | null;
-  pets: boolean;
-  universities: string | null;
-  notes: string | null;
-  // Chile
+/** Lo que solo existe en Chile. NULL = no se toca lo que ya hubiera. */
+export type ChilePreferencesInput = {
   preferredRegions: string[];
   preferredCommunes: string[];
   requiresServiceBedroom: boolean | null;
@@ -151,65 +140,64 @@ export type SavePreferencesInput = {
   maxPriceUf: number | null;
 };
 
+export type SavePreferencesInput = {
+  clientId: string;
+  country: "es" | "cl";
+  brief: BriefInput;
+  /** El perfil (etiqueta). NULL = no se cambia. */
+  profile: BriefProfile | null;
+  chile: ChilePreferencesInput | null;
+};
+
 const num = (v: number | null): number | null =>
   v === null || Number.isNaN(v) ? null : v;
 
 /**
- * Un único upsert con las 34 columnas. `client_preferences` tiene la clave
- * primaria en `client_id`, así que se comprueba antes si la fila existe: sin
- * fila, INSERT; con fila, UPDATE.
+ * Guarda el encargo con `buildPreferencesPayload` — EXACTAMENTE la misma
+ * función que usa "Nuevo cliente" (`createClientWithBrief`), así que los dos
+ * guardan lo mismo y de la misma forma. Lo que no aplica a la operación va a
+ * NULL: un cliente que pasa de alquiler a venta no arrastra estudiantes ni
+ * estancia.
  *
- * Los campos chilenos se guardan siempre que vengan; que se PINTEN o no lo
- * decide el país del cliente, no esta función. Así, cambiar a un cliente de
- * país no le borra en silencio lo que ya tenía puesto.
+ * Las columnas chilenas solo se escriben si vienen (`chile`): guardar desde
+ * España no le borra a nadie lo que ya tenía puesto. Tampoco se tocan los
+ * avisos de propiedades nuevas, que tienen su propio interruptor.
  */
 export async function saveClientPreferencesFull(
   input: SavePreferencesInput,
 ): Promise<ActionResult> {
+  let staffId: string | null = null;
   try {
-    await assertPermission("clientes", "edit");
+    const me = await assertPermission("clientes", "edit");
+    staffId = me.id ?? null;
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
 
-  if (
-    input.minPrice !== null &&
-    input.maxPrice !== null &&
-    input.minPrice > input.maxPrice
-  ) {
-    return { ok: false, error: "El presupuesto mínimo no puede superar al máximo." };
-  }
+  const valid = validateBrief(input.brief);
+  if (!valid.ok) return valid;
 
   const payload: Record<string, unknown> = {
     client_id: input.clientId,
     country: input.country,
-    operation: input.operation,
-    stay: input.stay,
-    zones: input.zones,
-    min_price: num(input.minPrice),
-    max_price: num(input.maxPrice),
-    min_bedrooms: num(input.minBedrooms),
-    min_bathrooms: num(input.minBathrooms),
-    min_square_meters: num(input.minSquareMeters),
-    max_square_meters: num(input.maxSquareMeters),
-    available_from: input.availableFrom || null,
-    occupants: num(input.occupants),
-    students: num(input.students),
-    workers: num(input.workers),
-    pets: input.pets,
-    universities: input.universities?.trim() || null,
-    notes: input.notes?.trim() || null,
-    preferred_regions: input.preferredRegions,
-    preferred_communes: input.preferredCommunes,
-    requires_service_bedroom: input.requiresServiceBedroom,
-    min_parking_spaces: num(input.minParkingSpaces),
-    prefers_condominium: input.prefersCondominium,
-    min_floors: num(input.minFloors),
-    currency_preference: input.currencyPreference,
-    min_price_uf: num(input.minPriceUf),
-    max_price_uf: num(input.maxPriceUf),
+    ...buildPreferencesPayload(input.brief),
     updated_at: new Date().toISOString(),
   };
+
+  if (input.chile) {
+    const c = input.chile;
+    Object.assign(payload, {
+      preferred_regions: c.preferredRegions,
+      preferred_communes: c.preferredCommunes,
+      requires_service_bedroom: c.requiresServiceBedroom,
+      min_parking_spaces: num(c.minParkingSpaces),
+      prefers_condominium: c.prefersCondominium,
+      min_floors: num(c.minFloors),
+      currency_preference: c.currencyPreference,
+      min_price_uf: num(c.minPriceUf),
+      max_price_uf: num(c.maxPriceUf),
+    });
+  }
 
   const { data: existing } = await db()
     .from("client_preferences")
@@ -225,6 +213,12 @@ export async function saveClientPreferencesFull(
     : await db().from("client_preferences").insert(payload);
 
   if (error) return { ok: false, error: error.message };
+
+  if (input.profile) {
+    const tag = await setClientProfileTag(db(), input.clientId, input.profile, staffId);
+    if (!tag.ok) return { ok: false, error: `Encargo guardado, pero no el perfil: ${tag.error}` };
+  }
+
   refresh(input.clientId);
   return { ok: true };
 }

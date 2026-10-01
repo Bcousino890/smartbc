@@ -15,6 +15,7 @@ import "server-only";
 // ============================================================================
 
 import { createAdminClient } from "../admin";
+import { briefFromRow, type BriefInput } from "@/lib/clients/brief";
 import { createClient } from "../server";
 import { checkPermission } from "@/lib/auth/guard";
 import type { EngagementSummary } from "@/lib/client-command-center/types";
@@ -429,6 +430,11 @@ export type ClientPreferencesFull = {
   currency_preference: string | null;
   min_price_uf: number | null;
   max_price_uf: number | null;
+  /**
+   * El encargo completo, leído con el mismo `briefFromRow` que usa el match
+   * (lib/clients/brief.ts). Es lo que pintan "El encargo" y su formulario.
+   */
+  brief: BriefInput;
 };
 
 const asArray = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
@@ -480,6 +486,7 @@ export async function getClientPreferencesFull(
       currency_preference: r.currency_preference ?? null,
       min_price_uf: r.min_price_uf === null ? null : Number(r.min_price_uf),
       max_price_uf: r.max_price_uf === null ? null : Number(r.max_price_uf),
+      brief: briefFromRow(r),
     };
   } catch (e) {
     console.error("[getClientPreferencesFull]", e);

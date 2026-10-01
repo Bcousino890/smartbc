@@ -1,102 +1,33 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowRight,
-  Check,
   Heart,
-  Info,
   Link2,
   Mail,
   MapPin,
-  PawPrint,
   Pencil,
   Phone,
-  RotateCcw,
-  Save,
   Star,
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { saveClientPreferences } from "@/app/(admin)/admin/clientes/actions";
+import {
+  briefGaps,
+  FEATURE_LABEL,
+  labelOf,
+  PROPERTY_TYPES,
+  PURCHASE_PURPOSE,
+  type BriefInput,
+  type FeatureKey,
+} from "@/lib/clients/brief";
 import { realEmail } from "@/lib/clients/display";
 import { dictionary } from "@/lib/i18n/dictionary";
 import { useT } from "@/lib/i18n/provider";
 import type { PortalLinkSummary } from "@/lib/portal-links/summary";
-import { MADRID_ZONES } from "@/lib/mock-properties";
-import type {
-  AdminClient,
-  ClientProfileType,
-  Operation,
-  StayType,
-} from "@/lib/types";
+import type { AdminClient } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-type FeedbackKind = "idle" | "saved" | "error";
-
-type FiltersState = {
-  profileType: ClientProfileType;
-  operation: Operation;
-  stayType: StayType;
-  preferredZone: string;
-  sector: string;
-  budgetMin: number;
-  budgetMax: number;
-  occupants: number;
-  students: number;
-  workers: number;
-  pets: boolean;
-  universities: string;
-};
-
-function snapshotFromClient(client: AdminClient): FiltersState {
-  return {
-    profileType: client.profileType,
-    operation: client.operation,
-    stayType: client.stayType,
-    preferredZone: client.preferredZone,
-    sector: client.sector,
-    budgetMin: client.budgetMin,
-    budgetMax: client.budgetMax,
-    occupants: client.occupants,
-    students: client.students,
-    workers: client.workers,
-    pets: client.pets,
-    universities: client.universities || "",
-  };
-}
-
-function statesEqual(a: FiltersState, b: FiltersState): boolean {
-  return (
-    a.profileType === b.profileType &&
-    a.operation === b.operation &&
-    a.stayType === b.stayType &&
-    a.preferredZone === b.preferredZone &&
-    a.sector === b.sector &&
-    a.budgetMin === b.budgetMin &&
-    a.budgetMax === b.budgetMax &&
-    a.occupants === b.occupants &&
-    a.students === b.students &&
-    a.workers === b.workers &&
-    a.pets === b.pets &&
-    a.universities === b.universities
-  );
-}
-
-const PROFILE_OPTIONS: { value: ClientProfileType; labelKey: string }[] = [
-  { value: "student", labelKey: "clientes.profile.student" },
-  { value: "worker", labelKey: "clientes.profile.worker" },
-];
-
-const OPERATION_OPTIONS: { value: Operation; labelKey: string }[] = [
-  { value: "alquiler", labelKey: "filters.operation.rent" },
-  { value: "venta", labelKey: "filters.operation.sale" },
-];
-
-const STAY_OPTIONS: { value: StayType; labelKey: string }[] = [
-  { value: "corta", labelKey: "filters.stay.short" },
-  { value: "larga", labelKey: "filters.stay.long" },
-];
 
 export function ClientDetailPanel({
   client,
@@ -123,9 +54,9 @@ export function ClientDetailPanel({
     );
   }
 
-  // `key`: sin él, al pasar de un cliente a otro el estado de los filtros se
-  // quedaba con los del ANTERIOR (useState solo usa el valor inicial al
-  // montar), y "Guardar" los escribía en el nuevo.
+  // `key`: cada cliente monta su propio panel. Cuando aquí había un editor,
+  // sin él el estado se quedaba con el cliente ANTERIOR y "Guardar" lo
+  // escribía en el nuevo; se mantiene para que nada vuelva a heredarse.
   return (
     <ClientDetailPanelInner
       key={client.id}
@@ -145,64 +76,13 @@ function ClientDetailPanelInner({
   fichaHref?: string;
   portalSummary?: PortalLinkSummary | null;
 }) {
-  // El snapshot inicial es lo que viene de BD (vía adapter). Editamos sobre él
-  // y comparamos para saber si hay cambios pendientes.
-  const initial = snapshotFromClient(client);
-  const [state, setState] = useState<FiltersState>(initial);
-  const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<FeedbackKind>("idle");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const isDirty = !statesEqual(state, initial);
-
-  const handleSave = () => {
-    setFeedback("idle");
-    setErrorMsg(null);
-    startTransition(async () => {
-      const result = await saveClientPreferences({
-        clientId: client.id,
-        operation: state.operation,
-        stayType: state.stayType,
-        preferredZone: state.preferredZone,
-        budgetMin: state.budgetMin,
-        budgetMax: state.budgetMax,
-        occupants: state.occupants,
-        students: state.students,
-        workers: state.workers,
-        pets: state.pets,
-        universities: state.universities,
-      });
-      if (result.ok) {
-        setFeedback("saved");
-        setTimeout(() => setFeedback("idle"), 2500);
-      } else {
-        setFeedback("error");
-        setErrorMsg(result.error);
-      }
-    });
-  };
-
-  const handleReset = () => {
-    setState(initial);
-    setFeedback("idle");
-    setErrorMsg(null);
-  };
-
   return (
     <aside className="flex flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <ClientHeader client={client} fichaHref={fichaHref} />
       <ContactInfo client={client} />
       <ActivityBlock client={client} fichaHref={fichaHref} portalSummary={portalSummary} />
-      <CustomFiltersBlock state={state} setState={setState} />
+      <EncargoBlock brief={client.brief ?? null} fichaHref={fichaHref} />
       <InternalNotesBlock client={client} />
-      <ActionsRow
-        isDirty={isDirty}
-        isPending={isPending}
-        feedback={feedback}
-        errorMsg={errorMsg}
-        onSave={handleSave}
-        onReset={handleReset}
-      />
     </aside>
   );
 }
@@ -435,163 +315,107 @@ function ActivityItem({
   );
 }
 
-function CustomFiltersBlock({
-  state,
-  setState,
-}: {
-  state: FiltersState;
-  setState: React.Dispatch<React.SetStateAction<FiltersState>>;
-}) {
-  const t = useT();
+/**
+ * El encargo, en resumen y de solo lectura. Hasta 2026-10-01 aquí había un
+ * TERCER editor de preferencias, con seis campos, que al guardar reducía las
+ * zonas a una sola y escribía la estancia también en venta. Ahora se edita en
+ * un único sitio —la ficha, el mismo formulario que "Nuevo cliente"— y este
+ * botón lleva directo a él (`?encargo=editar`).
+ */
+function EncargoBlock({ brief, fichaHref }: { brief: BriefInput | null; fichaHref?: string }) {
+  const editHref = fichaHref ? `${fichaHref}?encargo=editar` : undefined;
+  const fmt = (n: number) => new Intl.NumberFormat("es-ES").format(n);
 
-  // Helper para update parcial sin escribir el spread en cada handler.
-  const patch = <K extends keyof FiltersState>(key: K, value: FiltersState[K]) =>
-    setState((s) => ({ ...s, [key]: value }));
+  const rows: Array<[string, string]> = [];
+  if (brief) {
+    const rent = brief.operation === "rent";
+    const unit = rent ? " €/mes" : " €";
+    rows.push([
+      "Busca",
+      [
+        rent ? "Alquiler" : "Compra",
+        rent ? (brief.stay === "short" ? "temporada" : "larga") : labelOf(PURCHASE_PURPOSE, brief.purchasePurpose)?.toLowerCase(),
+        brief.propertyTypes.map((k) => labelOf(PROPERTY_TYPES, k)).join(", ") || null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    ]);
+    const where = [...brief.zones, ...brief.subzones];
+    if (where.length) rows.push(["Zonas", where.join(", ") + (brief.zonesFlexible ? " (abierto a otras)" : "")]);
+    if (brief.minPrice !== null || brief.maxPrice !== null) {
+      rows.push([
+        "Presupuesto",
+        brief.minPrice !== null && brief.maxPrice !== null
+          ? `${fmt(brief.minPrice)} – ${fmt(brief.maxPrice)}${unit}`
+          : brief.maxPrice !== null
+            ? `hasta ${fmt(brief.maxPrice)}${unit}`
+            : `desde ${fmt(brief.minPrice as number)}${unit}`,
+      ]);
+    }
+    const size = [
+      brief.minBedrooms !== null ? `${brief.minBedrooms}+ dorm.` : null,
+      brief.minBathrooms !== null ? `${brief.minBathrooms}+ baños` : null,
+      brief.minSquareMeters !== null ? `${brief.minSquareMeters}+ m²` : null,
+    ].filter(Boolean);
+    if (size.length) rows.push(["Vivienda", size.join(" · ")]);
+    if (rent && brief.occupants) {
+      rows.push([
+        "Quién",
+        [
+          `${brief.occupants} pers.`,
+          brief.students ? `${brief.students} estudian` : null,
+          brief.workers ? `${brief.workers} trabajan` : null,
+          brief.pets ? "con mascota" : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      ]);
+    }
+    if (brief.mustHave.length) {
+      rows.push(["Imprescindible", brief.mustHave.map((k) => FEATURE_LABEL[k as FeatureKey] ?? k).join(", ")]);
+    }
+  }
+
+  const essential = brief ? briefGaps(brief).filter((g) => g.level === "essential") : [];
 
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
-      <p className="crm-label-sm text-ink/55">
-        {t("clientes.detail.filters.title")}
-      </p>
+      <header className="flex items-center justify-between gap-2">
+        <p className="crm-label-sm text-ink/55">El encargo</p>
+        {editHref && (
+          <Link
+            href={editHref}
+            className="inline-flex items-center gap-1 rounded-md border border-ink/12 bg-white/70 px-2 py-1 text-xs text-ink/70 transition hover:border-gold/50 hover:text-ink"
+          >
+            <Pencil size={11} strokeWidth={1.75} />
+            {brief ? "Editar encargo" : "Definir encargo"}
+          </Link>
+        )}
+      </header>
 
-      <div className="mt-3 space-y-3">
-        <FilterRow label={t("clientes.detail.filters.profile")}>
-          <Toggle
-            value={state.profileType}
-            onChange={(v) => patch("profileType", v as ClientProfileType)}
-            options={PROFILE_OPTIONS.map((o) => ({
-              value: o.value,
-              label: t(o.labelKey),
-            }))}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.operation")}>
-          <Toggle
-            value={state.operation}
-            onChange={(v) => patch("operation", v as Operation)}
-            options={OPERATION_OPTIONS.map((o) => ({
-              value: o.value,
-              label: t(o.labelKey),
-            }))}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.stay")}>
-          <Toggle
-            value={state.stayType}
-            onChange={(v) => patch("stayType", v as StayType)}
-            options={STAY_OPTIONS.map((o) => ({
-              value: o.value,
-              label: t(o.labelKey),
-            }))}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.sector")}>
-          <Select
-            value={state.sector}
-            onChange={(v) => patch("sector", v)}
-            options={["Madrid"].map((v) => ({ value: v, label: v }))}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.zone")}>
-          <Select
-            value={state.preferredZone}
-            onChange={(v) => patch("preferredZone", v)}
-            options={MADRID_ZONES.map((z) => ({ value: z, label: z }))}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.budget")}>
-          <BudgetRange
-            min={state.budgetMin}
-            max={state.budgetMax}
-            onChange={(min, max) =>
-              setState((s) => ({ ...s, budgetMin: min, budgetMax: max }))
-            }
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.occupants")}>
-          <NumberInput
-            value={state.occupants}
-            onChange={(v) => patch("occupants", v)}
-            min={0}
-            icon={<Users size={13} strokeWidth={1.75} />}
-            suffix={t("clientes.detail.filters.occupants.unit")}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.students")}>
-          <NumberInput
-            value={state.students}
-            onChange={(v) => patch("students", v)}
-            min={0}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.workers")}>
-          <NumberInput
-            value={state.workers}
-            onChange={(v) => patch("workers", v)}
-            min={0}
-          />
-        </FilterRow>
-        <FilterRow label={t("clientes.detail.filters.pets")}>
-          <Toggle
-            value={state.pets ? "yes" : "no"}
-            onChange={(v) => patch("pets", v === "yes")}
-            options={[
-              {
-                value: "yes",
-                label: t("clientes.detail.filters.pets.yes"),
-                icon: <PawPrint size={13} strokeWidth={1.75} />,
-              },
-              {
-                value: "no",
-                label: t("clientes.detail.filters.pets.no"),
-              },
-            ]}
-          />
-        </FilterRow>
-        <FilterRow label="Universidades cercanas">
-          <input
-            type="text"
-            value={state.universities}
-            onChange={(e) => patch("universities", e.target.value)}
-            placeholder="Ej: UAM, IE, CUNEF"
-            className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
-          />
-        </FilterRow>
-      </div>
-
-      <p className="mt-3 flex items-start gap-2 rounded-lg border border-gold/30 bg-cream-100/60 p-2.5 text-xs leading-snug text-ink/70">
-        <Info size={13} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold" />
-        <span>{t("clientes.detail.filters.notice")}</span>
-      </p>
+      {!brief ? (
+        <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-3 py-4 text-center text-xs text-ink/55">
+          Sin encargo todavía: sin él no hay propiedades sugeridas.
+        </p>
+      ) : (
+        <>
+          <dl className="mt-3 space-y-1.5">
+            {rows.map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[96px_1fr] gap-2 text-xs">
+                <dt className="text-ink/50">{label}</dt>
+                <dd className="text-ink/85">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {essential.length > 0 && (
+            <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              <span>Falta: {essential.map((g) => g.label.toLowerCase()).join(", ")}</span>
+            </p>
+          )}
+        </>
+      )}
     </section>
-  );
-}
-
-function BudgetRange({
-  min,
-  max,
-  onChange,
-}: {
-  min: number;
-  max: number;
-  onChange: (min: number, max: number) => void;
-}) {
-  const t = useT();
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <NumberInput
-        value={min}
-        onChange={(v) => onChange(v, max)}
-        min={0}
-        suffix={t("clientes.detail.filters.budget.unit.from")}
-      />
-      <NumberInput
-        value={max}
-        onChange={(v) => onChange(min, v)}
-        min={0}
-        suffix={t("clientes.detail.filters.budget.unit.to")}
-      />
-    </div>
   );
 }
 
@@ -646,181 +470,5 @@ function InternalNotesBlock({ client }: { client: AdminClient }) {
         </p>
       </div>
     </section>
-  );
-}
-
-function ActionsRow({
-  isDirty,
-  isPending,
-  feedback,
-  errorMsg,
-  onSave,
-  onReset,
-}: {
-  isDirty: boolean;
-  isPending: boolean;
-  feedback: FeedbackKind;
-  errorMsg: string | null;
-  onSave: () => void;
-  onReset: () => void;
-}) {
-  const t = useT();
-
-  return (
-    <div className="mt-5 border-t border-gold/15 pt-4">
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={onReset}
-          disabled={!isDirty || isPending}
-          className={cn(
-            "flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-white/80 px-4 py-2.5 text-sm font-medium text-ink transition",
-            "hover:border-gold/55 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50",
-          )}
-        >
-          <RotateCcw size={14} strokeWidth={1.75} className="text-gold" />
-          <span>{t("clientes.detail.actions.reset")}</span>
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!isDirty || isPending}
-          className={cn(
-            "flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-cream-50 transition",
-            "hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50",
-          )}
-        >
-          <Save size={14} strokeWidth={1.75} className="text-gold" />
-          <span>
-            {isPending
-              ? t("clientes.detail.actions.saving")
-              : t("clientes.detail.actions.saveFilters")}
-          </span>
-        </button>
-      </div>
-
-      {feedback === "saved" && (
-        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700">
-          <Check size={13} strokeWidth={2} />
-          <span>{t("clientes.detail.actions.saved")}</span>
-        </p>
-      )}
-      {feedback === "error" && (
-        <p className="mt-2.5 text-center text-xs font-medium text-red-600">
-          {t("clientes.detail.actions.error")}
-          {errorMsg ? ` · ${errorMsg}` : ""}
-        </p>
-      )}
-      {feedback === "idle" && isDirty && (
-        <p className="mt-2.5 text-center text-xs text-ink/55">
-          {t("clientes.detail.actions.unsaved")}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function FilterRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[80px_1fr] items-center gap-3">
-      <span className="text-xs font-medium text-ink/60">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function Toggle({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string; icon?: React.ReactNode }[];
-}) {
-  return (
-    <div className="flex gap-1 rounded-lg border border-ink/10 bg-white/70 p-1">
-      {options.map((opt) => {
-        const active = value === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
-              active
-                ? "bg-ink text-cream-50 shadow-sm"
-                : "text-ink/65 hover:text-ink",
-            )}
-          >
-            {opt.icon}
-            <span>{opt.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-
-function NumberInput({
-  value,
-  onChange,
-  min,
-  icon,
-  suffix,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  icon?: React.ReactNode;
-  suffix?: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white/70 px-3 py-1.5 text-xs text-ink focus-within:border-gold/55">
-      {icon && <span className="text-gold">{icon}</span>}
-      <input
-        type="number"
-        min={min}
-        value={value}
-        onChange={(e) => {
-          const n = Number(e.target.value);
-          onChange(Number.isFinite(n) ? n : 0);
-        }}
-        className="w-full bg-transparent py-0.5 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-      />
-      {suffix && <span className="shrink-0 text-ink/50">{suffix}</span>}
-    </div>
-  );
-}
-
-function Select({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full appearance-none rounded-lg border border-ink/10 bg-white/70 px-3 py-2 text-xs text-ink focus:border-gold/55 focus:outline-none"
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
   );
 }
