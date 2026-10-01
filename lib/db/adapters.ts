@@ -2,6 +2,7 @@
 // A medida que migramos componentes a los tipos de BD directamente, estos adapters se eliminan.
 
 import { PROFILE_TYPE_BY_TAG } from "@/lib/clients/display";
+import { briefFromRow } from "@/lib/clients/brief";
 import type {
   AdminClient,
   AdminProperty,
@@ -234,6 +235,8 @@ export function clientRowToAdminClient(
     workers: prefs?.workers ?? 1,
     pets: prefs?.pets ?? false,
     universities: (prefs as any)?.universities ?? undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    brief: prefs ? briefFromRow(prefs as any) : null,
     lastAccessText: signals.lastActivityAt ?? undefined,
     status,
     assignedAdvisor: signals.advisorName ?? "",

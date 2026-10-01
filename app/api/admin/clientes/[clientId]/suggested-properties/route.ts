@@ -57,7 +57,12 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ ok: true, suggestions: result.suggestions, alertsEnabled });
+    return NextResponse.json({
+      ok: true,
+      suggestions: result.suggestions,
+      excluded: result.excluded ?? [],
+      alertsEnabled,
+    });
   } catch (error) {
     console.error("Error in suggested properties endpoint:", error);
     return NextResponse.json(

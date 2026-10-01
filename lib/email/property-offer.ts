@@ -13,7 +13,7 @@ const BORDER = "#e8dfd0";
 const GOLD_DEEP = "#a3824f";
 const SANS_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
-type OfferableProperty = Omit<SuggestedProperty, "matchScore" | "matchReasons">;
+type OfferableProperty = Omit<SuggestedProperty, "matchScore" | "matchReasons" | "matchWarnings">;
 
 function operationLabel(op: "rent" | "sale"): string {
   return op === "rent" ? "Alquiler" : "Venta";

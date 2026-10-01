@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { Heart, MapPin, Home, Zap, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import type { SuggestedProperty } from "@/lib/db/queries/suggested-properties";
+import type { SuggestedProperty as FullSuggestion } from "@/lib/db/queries/suggested-properties";
+
+// El portal del cliente nunca recibe los avisos internos del agente.
+type SuggestedProperty = Omit<FullSuggestion, "matchWarnings">;
 import { cn } from "@/lib/utils";
 
 export function SuggestedPropertiesGrid({

@@ -7,83 +7,23 @@ import { createAdminClient } from "@/lib/db/admin";
 import { assertPermission } from "@/lib/auth/guard";
 import { createInvitedUser } from "@/lib/email/password-reset";
 import type { ClientProfileType, Operation, StayType } from "@/lib/types";
-
-export type SaveClientPreferencesInput = {
-  clientId: string;
-  operation: Operation;
-  stayType: StayType;
-  preferredZone: string;
-  budgetMin: number;
-  budgetMax: number;
-  occupants: number;
-  students: number;
-  workers: number;
-  pets: boolean;
-  universities?: string;
-};
+import {
+  buildPreferencesPayload,
+  validateBrief,
+  type BriefInput,
+  type BriefProfile,
+} from "@/lib/clients/brief";
+import { setClientProfileTag } from "@/lib/clients/profile-tag";
 
 export type SaveClientPreferencesResult =
   | { ok: true }
   | { ok: false; error: string };
 
-export async function saveClientPreferences(
-  input: SaveClientPreferencesInput,
-): Promise<SaveClientPreferencesResult> {
-  await assertPermission("clientes", "edit");
-  const supabase = await createClient();
-  const auth = await requireStaff(supabase);
-  if (!auth.ok) return auth;
-
-  const payload = {
-    client_id: input.clientId,
-    operation: input.operation === "alquiler" ? "rent" : "sale",
-    stay: input.stayType === "corta" ? "short" : "long",
-    zones: input.preferredZone ? [input.preferredZone] : [],
-    min_price: input.budgetMin,
-    max_price: input.budgetMax,
-    occupants: input.occupants,
-    students: input.students,
-    workers: input.workers,
-    pets: input.pets,
-    universities: input.universities || null,
-  };
-
-  // client_preferences tiene PK = client_id, así que UPDATE si existe, INSERT si no.
-  const existingResult = await supabase
-    .from("client_preferences")
-    .select("client_id")
-    .eq("client_id", input.clientId)
-    .maybeSingle();
-
-  const existingRow = existingResult.data as { client_id: string } | null;
-
-  // supabase-js no infiere bien Insert/Update tras chains tipadas.
-  const prefs = supabase.from("client_preferences") as unknown as {
-    update: (
-      payload: Record<string, unknown>,
-    ) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => Promise<{ error: { message: string } | null }>;
-    };
-    insert: (
-      payload: Record<string, unknown>,
-    ) => Promise<{ error: { message: string } | null }>;
-  };
-
-  const writeResult = existingRow
-    ? await prefs.update(payload).eq("client_id", input.clientId)
-    : await prefs.insert(payload);
-
-  if (writeResult.error) {
-    return { ok: false, error: writeResult.error.message };
-  }
-
-  revalidatePath("/admin/clientes");
-  revalidatePath("/cl/admin/clientes");
-  return { ok: true };
-}
+// `saveClientPreferences` (el editor de seis campos del panel lateral del
+// listado) se retiró el 2026-10-01: al guardar reducía las zonas a una sola y
+// escribía la estancia también en venta. El encargo se guarda solo con
+// `saveClientPreferencesFull` (ficha) y `createClientWithBrief` (alta), que
+// comparten `buildPreferencesPayload`.
 
 export type CreateClientInput = {
   firstName: string;
@@ -240,6 +180,89 @@ export async function createNewClient(
   }
 
   revalidatePath("/admin/clientes");
+  revalidatePath("/cl/admin/clientes");
+  return { ok: true, clientId };
+}
+
+// ─── Nuevo cliente con el encargo completo (España) ──────────────────────────
+
+export type CreateClientWithBriefInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  country: "es" | "cl";
+  profile: BriefProfile;
+  brief: BriefInput;
+};
+
+/**
+ * "Nuevo cliente" de España. Guarda el encargo con `buildPreferencesPayload`,
+ * la MISMA función que usa "El encargo del cliente" en la ficha
+ * (`saveClientPreferencesFull`): lo que se pregunta al crear y al editar es
+ * lo mismo y se guarda igual.
+ *
+ * Sustituye a `createNewClient` en el diálogo de España, que guardaba la
+ * estancia también en venta (y así ningún comprador recibía sugerencias),
+ * metía los barrios dentro de `zones` y pedía un "Sector" que no se guardaba
+ * en ningún sitio. `createNewClient` sigue para el diálogo de Chile.
+ */
+export async function createClientWithBrief(
+  input: CreateClientWithBriefInput,
+): Promise<CreateClientResult> {
+  await assertPermission("clientes", "create");
+  const supabase = await createClient();
+  const auth = await requireStaff(supabase);
+  if (!auth.ok) return auth as CreateClientResult;
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const email = input.email.trim().toLowerCase();
+  if (!firstName) return { ok: false, error: "El nombre es obligatorio." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "El email no es válido." };
+
+  const valid = validateBrief(input.brief);
+  if (!valid.ok) return valid;
+
+  const adminClient = createAdminClient();
+  const phone = input.phone?.trim() || undefined;
+
+  const inviteResult = await createInvitedUser({
+    email,
+    firstName,
+    lastName,
+    userMetadata: { phone },
+  });
+  if (!inviteResult.ok) {
+    return { ok: false, error: inviteResult.error || "Error creating profile" };
+  }
+  const clientId = inviteResult.userId;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = adminClient as any;
+
+  const { error: profileError } = await db
+    .from("profiles")
+    .update({ phone: phone ?? null, country: input.country })
+    .eq("id", clientId);
+  if (profileError) return { ok: false, error: profileError.message };
+
+  const { error: prefsError } = await db.from("client_preferences").insert({
+    client_id: clientId,
+    country: input.country,
+    ...buildPreferencesPayload(input.brief),
+  });
+  if (prefsError) return { ok: false, error: prefsError.message };
+
+  // El usuario y el encargo ya existen: si la etiqueta falla no se deshace
+  // nada, se avisa para que el perfil se elija desde la ficha.
+  const tag = await setClientProfileTag(db, clientId, input.profile, auth.userId ?? null);
+  if (!tag.ok) {
+    console.error("[createClientWithBrief] profile tag:", tag.error);
+  }
+
+  revalidatePath("/admin/clientes");
+  revalidatePath("/es/admin/clientes");
   revalidatePath("/cl/admin/clientes");
   return { ok: true, clientId };
 }

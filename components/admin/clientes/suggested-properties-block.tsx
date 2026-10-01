@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Bell, CheckCircle, Home, Loader2, Mail, Ruler, Star, Users } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bell, CheckCircle, Home, Loader2, Mail, Ruler, Star, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { addPropertyToSelection } from "@/app/[country]/(admin)/admin/clientes/viewing-collections-actions";
@@ -10,12 +10,12 @@ import {
   setNewListingAlertsEnabled,
 } from "@/app/[country]/(admin)/admin/clientes/property-offer-actions";
 import { AddToSelectionButton } from "@/components/admin/viewing-collections/selected-properties-block";
-import type { SuggestedProperty } from "@/lib/db/queries/suggested-properties";
+import type { ExcludedSummary, SuggestedProperty } from "@/lib/db/queries/suggested-properties";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; suggestions: SuggestedProperty[] }
+  | { kind: "ready"; suggestions: SuggestedProperty[]; excluded: ExcludedSummary }
   | { kind: "no_preferences" }
   | { kind: "error"; message: string };
 
@@ -56,7 +56,11 @@ export function SuggestedPropertiesBlock({
           setState({ kind: "no_preferences" });
           return;
         }
-        setState({ kind: "ready", suggestions: json.suggestions ?? [] });
+        setState({
+          kind: "ready",
+          suggestions: json.suggestions ?? [],
+          excluded: json.excluded ?? [],
+        });
       } catch (err) {
         if (!cancelled) {
           setState({
@@ -130,7 +134,7 @@ export function SuggestedPropertiesBlock({
 
       {state.kind === "no_preferences" && (
         <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-xs text-ink/55">
-          {clientName} no tiene preferencias configuradas todavía. Añádelas para
+          {clientName} no tiene el encargo definido todavía. Complétalo para
           recibir sugerencias automáticas.
         </p>
       )}
@@ -144,9 +148,13 @@ export function SuggestedPropertiesBlock({
 
       {state.kind === "ready" && state.suggestions.length === 0 && (
         <p className="mt-3 rounded-xl border border-dashed border-gold/25 bg-white/40 px-4 py-6 text-center text-xs text-ink/55">
-          No hay propiedades disponibles que coincidan con las preferencias de{" "}
+          No hay propiedades disponibles que coincidan con el encargo de{" "}
           <strong>{clientName}</strong>.
         </p>
+      )}
+
+      {state.kind === "ready" && state.excluded.length > 0 && (
+        <ExcludedLine excluded={state.excluded} />
       )}
 
       {state.kind === "ready" && state.suggestions.length > 0 && (
@@ -255,6 +263,28 @@ function SuggestionCard({
             )}
           </div>
 
+          {(property.matchReasons.length > 0 || property.matchWarnings.length > 0) && (
+            <div className="mt-1.5 space-y-1">
+              {property.matchReasons.length > 0 && (
+                <p className="truncate text-xs text-emerald-800/80" title={property.matchReasons.join(" · ")}>
+                  {property.matchReasons.slice(0, 4).join(" · ")}
+                </p>
+              )}
+              {property.matchWarnings.length > 0 && (
+                <p
+                  className="flex items-start gap-1 text-xs text-amber-800"
+                  title={property.matchWarnings.join("\n")}
+                >
+                  <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                  <span className="line-clamp-2">
+                    {property.matchWarnings.slice(0, 3).join(" · ")}
+                    {property.matchWarnings.length > 3 && ` · +${property.matchWarnings.length - 3}`}
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="mt-2 flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-ink">
               {config.formatPrice(
@@ -304,17 +334,29 @@ function SuggestionCard({
                     return res;
                   }}
                 />
-              ) : (
-                property.matchReasons.length > 0 && (
-                  <span className="truncate text-xs text-ink/55">
-                    {property.matchReasons[0]}
-                  </span>
-                )
-              )}
+              ) : null}
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Lo que el encargo ha dejado fuera, por motivo. Sin esto, un encargo muy
+ * estricto se ve igual que un catálogo vacío: "no hay resultados".
+ */
+function ExcludedLine({ excluded }: { excluded: ExcludedSummary }) {
+  const total = excluded.reduce((n, e) => n + e.count, 0);
+  return (
+    <p className="mt-2 text-xs text-ink/50" title="Propiedades disponibles que chocan con algo que el cliente no acepta">
+      {total === 1 ? "1 descartada" : `${total} descartadas`} por el encargo:{" "}
+      {excluded
+        .slice(0, 4)
+        .map((e) => `${e.label.toLowerCase()} (${e.count})`)
+        .join(" · ")}
+      {excluded.length > 4 && " · …"}
+    </p>
   );
 }

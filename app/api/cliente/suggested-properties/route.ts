@@ -38,7 +38,13 @@ export async function GET() {
       return NextResponse.json({ error: result.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, properties: result.suggestions });
+    // Los avisos son notas internas para el agente ("la renta supera 1/3 de
+    // sus ingresos", "confirmar ascensor"…): nunca deben llegar al cliente.
+    const properties = result.suggestions.map(
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      ({ matchWarnings, ...rest }) => rest,
+    );
+    return NextResponse.json({ ok: true, properties });
   } catch (error) {
     console.error("Error fetching suggested properties:", error);
     return NextResponse.json(
