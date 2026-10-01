@@ -8,6 +8,10 @@ import type {
   PortalLinkWithNotes,
   StaffRef,
 } from "@/lib/portal-links/types";
+import {
+  summarizePortalLinksByClient,
+  type PortalLinkSummary,
+} from "@/lib/portal-links/summary";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function db() {
@@ -27,6 +31,56 @@ export async function canAccessClientLinks(clientId: string): Promise<boolean> {
   if (restriction === "all" || !userId) return true;
   const ids = await getAssignedClientIds(userId);
   return ids.includes(clientId);
+}
+
+/**
+ * Resumen de enlaces por cliente para la LISTA de clientes (columna
+ * "Anuncios"): una sola lectura por país en vez de una consulta por fila.
+ *
+ * Mismo gate que la ficha: el permiso `viewing_collections` con su scope. Un
+ * asesor con scope propio solo ve las cifras de sus clientes; el resto de
+ * filas sale sin columna, igual que su ficha saldría sin el bloque.
+ *
+ * Solo se leen tres columnas, así que paginar de 1000 en 1000 (el tope de
+ * PostgREST) es barato; el techo de 20 páginas está para no colgar la lista
+ * si algún día la tabla se dispara.
+ */
+export async function getPortalLinkSummaries(
+  clientIds: string[],
+  country: string,
+): Promise<Record<string, PortalLinkSummary>> {
+  if (clientIds.length === 0) return {};
+
+  const { restriction, userId } = await resolveViewScope("viewing_collections");
+  if (restriction === "none") return {};
+  let allowed = new Set(clientIds);
+  if (restriction !== "all" && userId) {
+    const own = new Set(await getAssignedClientIds(userId));
+    allowed = new Set(clientIds.filter((id) => own.has(id)));
+  }
+  if (allowed.size === 0) return {};
+
+  const PAGE = 1000;
+  const rows: Array<Pick<ClientPortalLinkRow, "client_id" | "status" | "created_at">> = [];
+  for (let from = 0; from < 20 * PAGE; from += PAGE) {
+    const { data, error } = await db()
+      .from("client_portal_links")
+      .select("client_id, status, created_at")
+      // `country` es el del cliente (lo fija `countryOfClient` al insertar).
+      .eq("country", country)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      // Sin tabla o sin permiso: la lista se pinta sin la columna, no se cae.
+      console.error("[portal-links] no se pudo resumir por cliente:", error.message);
+      return {};
+    }
+    const page = (data ?? []) as typeof rows;
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+
+  return summarizePortalLinksByClient(rows.filter((r) => allowed.has(r.client_id)));
 }
 
 const LINK_COLUMNS = `

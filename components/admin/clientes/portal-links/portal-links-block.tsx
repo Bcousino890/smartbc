@@ -274,7 +274,7 @@ export function PortalLinksBlock({
 
   return (
     <>
-      <span id="portal-links" className="scroll-mt-24" />
+      <span id="portal-links" className="block scroll-mt-28" />
       <section className="overflow-hidden rounded-2xl border border-gold/15 bg-cream-50/85 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm">
         {/* Cabecera editorial */}
         <header className="px-5 pt-5">

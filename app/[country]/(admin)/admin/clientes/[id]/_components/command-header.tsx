@@ -24,6 +24,7 @@ import type { AdminClient } from "@/lib/types";
 import { useT } from "@/lib/i18n/provider";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { cn } from "@/lib/utils";
+import { PROFILE_TYPE_BY_TAG, realEmail } from "@/lib/clients/display";
 import { assignClientAdvisor } from "../actions";
 import { RelativeTime } from "./relative-time";
 import { StageRail } from "./stage-rail";
@@ -59,6 +60,14 @@ export function CommandHeader({
   const [saving, startSave] = useTransition();
 
   const fullName = `${client.firstName} ${client.lastName}`.trim();
+  const email = realEmail(client.email);
+  // La etiqueta "Estudiante" ES el perfil (de ahí se deduce): pintarla también
+  // como etiqueta salía repetido — "ESTUDIANTE ESTUDIANTE". Solo se quita la
+  // que produce el perfil que ya se enseña; cualquier otra se queda.
+  const showProfile = client.profileTypeKnown !== false;
+  const otherTags = tags.filter(
+    (tag) => !(showProfile && PROFILE_TYPE_BY_TAG[tag.name] === client.profileType),
+  );
 
   return (
     <header className="border-b border-ink/10 bg-cream-50/60">
@@ -95,11 +104,13 @@ export function CommandHeader({
             </span>
             <div className="min-w-0">
               <h1 className="truncate text-[22px] font-bold leading-tight text-ink">
-                {fullName || client.email}
+                {fullName || email || client.phone || "—"}
               </h1>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <Pill tone="neutral">{t(`clientes.profile.${client.profileType}`)}</Pill>
-                {tags.map((tag) => (
+                {showProfile && (
+                  <Pill tone="neutral">{t(`clientes.profile.${client.profileType}`)}</Pill>
+                )}
+                {otherTags.map((tag) => (
                   <Pill
                     key={tag.id}
                     tone={tag.category === "priority" ? "gold" : "neutral"}
@@ -113,12 +124,14 @@ export function CommandHeader({
 
           {/* ── Contacto: enlaces que se pulsan, no texto decorativo ── */}
           <ul className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink/60">
-            <li className="flex min-w-0 items-center gap-1.5">
-              <Mail size={12} strokeWidth={1.75} className="shrink-0 text-gold" />
-              <a href={`mailto:${client.email}`} className="truncate hover:text-ink hover:underline">
-                {client.email}
-              </a>
-            </li>
+            {email && (
+              <li className="flex min-w-0 items-center gap-1.5">
+                <Mail size={12} strokeWidth={1.75} className="shrink-0 text-gold" />
+                <a href={`mailto:${email}`} className="truncate hover:text-ink hover:underline">
+                  {email}
+                </a>
+              </li>
+            )}
             {client.phone && (
               <li className="flex items-center gap-1.5">
                 <Phone size={12} strokeWidth={1.75} className="shrink-0 text-gold" />

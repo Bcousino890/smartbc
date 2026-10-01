@@ -17,7 +17,7 @@
 // haga lo que uno espera.
 // ============================================================================
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ClientMetrics,
@@ -37,6 +37,7 @@ import type {
   ClientTagRef,
 } from "@/lib/db/queries/client-command-center";
 import type { PortalLinkWithNotes, StaffRef } from "@/lib/portal-links/types";
+import type { PortalLinkSummary } from "@/lib/portal-links/summary";
 import type {
   ItineraryWithStops,
   SelectionWithProperty,
@@ -62,6 +63,8 @@ import { EditClientDialog } from "./_components/edit-client-dialog";
 import { EditPreferencesDialog } from "./_components/edit-preferences-dialog";
 import { NextActionCard } from "./_components/next-action-card";
 import { ShortlistStatusCard, ViewingDayCard } from "./_components/overview-cards";
+import { PortalLinksCard } from "./_components/portal-links-card";
+import { PropertiesJumpBar } from "./_components/properties-jump-bar";
 import {
   FavoritesBlock,
   VisitsBlock,
@@ -104,6 +107,8 @@ export type CommandCenterProps = {
   engagement: ClientEngagement;
   /** De dónde salió el cliente, si vino de un lead. */
   origin: ClientOrigin | null;
+  /** Anuncios de portales (extensión o pegados), contados en el servidor. */
+  portalSummary: PortalLinkSummary;
   canEditClient: boolean;
 };
 
@@ -160,6 +165,18 @@ export function ClientFichaView({
     [params, router],
   );
 
+  // La extensión de Chrome, al enviar, deja un enlace a
+  // `?tab=properties#portal-links`. El navegador intenta saltar al ancla antes
+  // de que la pestaña esté pintada del todo; se repite ya montada.
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({ block: "start" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   const selections = viewingCollections?.selections ?? [];
   const itineraries = viewingCollections?.itineraries ?? [];
   const shortlists = viewingCollections?.shortlists ?? [];
@@ -195,7 +212,14 @@ export function ClientFichaView({
         onEditPreferences={() => setEditPrefs(true)}
       />
 
-      <CommandTabs active={tab} counts={counts} onChange={(x) => goTab(x)} />
+      <CommandTabs
+        active={tab}
+        counts={counts}
+        // Punto dorado en Propiedades cuando hay anuncios recién llegados: es
+        // lo que avisa, sin entrar, de que la extensión ha mandado algo.
+        alerts={{ properties: Boolean(portalLinks) && cc.portalSummary.fresh > 0 }}
+        onChange={(x) => goTab(x)}
+      />
 
       <main className="mx-auto max-w-[1320px] px-4 py-5 lg:px-8">
         {tab === "overview" && (
@@ -252,6 +276,15 @@ export function ClientFichaView({
               </div>
 
               <div className="space-y-5">
+                {portalLinks && (
+                  <PortalLinksCard
+                    links={links}
+                    summary={cc.portalSummary}
+                    clientName={client.firstName || clientName}
+                    locale={config.locale}
+                    onGo={() => goTab("properties", "portal-links")}
+                  />
+                )}
                 <ShortlistStatusCard
                   shortlists={shortlists}
                   locale={config.locale}
@@ -286,29 +319,47 @@ export function ClientFichaView({
               </Panel>
             ) : null}
 
-            {viewingCollections && (
-              <>
-                <SelectedPropertiesBlock
-                  clientId={client.id}
-                  clientName={clientName}
-                  country={country}
-                  selections={selections}
-                  canEdit={viewingCollections.canEdit}
-                  canDelete={viewingCollections.canDelete}
-                  canCreateItinerary={viewingCollections.canCreate}
-                />
-                <ClientShortlistBlock
-                  clientId={client.id}
-                  country={country}
-                  shortlists={shortlists}
-                  selections={selections}
-                  portalLinks={links}
-                  canEdit={viewingCollections.canEdit}
-                  canCreate={viewingCollections.canCreate}
-                />
-              </>
-            )}
+            {/* Índice de la pestaña. Son cinco bloques largos y el primero
+                que importa cambia según el cliente: así se ve de un vistazo
+                dónde hay algo y se salta sin hacer scroll. */}
+            <PropertiesJumpBar
+              items={[
+                ...(portalLinks
+                  ? [{
+                      id: "portal-links",
+                      label: t("cc.properties.section.portalLinks"),
+                      count: links.length,
+                      highlight: cc.portalSummary.fresh > 0,
+                    }]
+                  : []),
+                ...(viewingCollections
+                  ? [
+                      {
+                        id: "cc-selection",
+                        label: t("cc.properties.section.selection"),
+                        count: selections.length,
+                      },
+                      {
+                        id: "cc-shortlist",
+                        label: t("cc.properties.section.shortlist"),
+                        count: shortlists.length,
+                      },
+                    ]
+                  : []),
+                { id: "cc-suggested", label: t("cc.properties.section.suggested"), count: null },
+                {
+                  id: "cc-favorites",
+                  label: t("cc.properties.section.favorites"),
+                  count: favorites.length,
+                },
+              ]}
+            />
 
+            {/* Orden de embudo: lo que llega de los portales (extensión o
+                pegado) es lo primero que se trabaja — se llama y, si sigue,
+                se crea la ficha y pasa a la selección. Antes estaba debajo de
+                la selección y de la selección privada, y lo que mandaba la
+                extensión no se encontraba. */}
             {portalLinks && (
               <PortalLinksBlock
                 clientId={client.id}
@@ -323,20 +374,51 @@ export function ClientFichaView({
               />
             )}
 
-            <SuggestedPropertiesBlock
-              clientId={client.id}
-              clientName={clientName}
-              selectedPropertyIds={selectedPropertyIds}
-              canAddToSelection={Boolean(viewingCollections?.canCreate)}
-            />
+            {viewingCollections && (
+              <>
+                <div id="cc-selection" className="scroll-mt-28">
+                  <SelectedPropertiesBlock
+                    clientId={client.id}
+                    clientName={clientName}
+                    country={country}
+                    selections={selections}
+                    canEdit={viewingCollections.canEdit}
+                    canDelete={viewingCollections.canDelete}
+                    canCreateItinerary={viewingCollections.canCreate}
+                  />
+                </div>
+                <div id="cc-shortlist" className="scroll-mt-28">
+                  <ClientShortlistBlock
+                    clientId={client.id}
+                    country={country}
+                    shortlists={shortlists}
+                    selections={selections}
+                    portalLinks={links}
+                    canEdit={viewingCollections.canEdit}
+                    canCreate={viewingCollections.canCreate}
+                  />
+                </div>
+              </>
+            )}
 
-            <FavoritesBlock
-              favorites={favorites}
-              clientId={client.id}
-              country={country}
-              selectedPropertyIds={selectedPropertyIds}
-              canAddToSelection={Boolean(viewingCollections?.canCreate)}
-            />
+            <div id="cc-suggested" className="scroll-mt-28">
+              <SuggestedPropertiesBlock
+                clientId={client.id}
+                clientName={clientName}
+                selectedPropertyIds={selectedPropertyIds}
+                canAddToSelection={Boolean(viewingCollections?.canCreate)}
+              />
+            </div>
+
+            <div id="cc-favorites" className="scroll-mt-28">
+              <FavoritesBlock
+                favorites={favorites}
+                clientId={client.id}
+                country={country}
+                selectedPropertyIds={selectedPropertyIds}
+                canAddToSelection={Boolean(viewingCollections?.canCreate)}
+              />
+            </div>
           </div>
         )}
 

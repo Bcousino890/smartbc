@@ -14,6 +14,7 @@ import {
   getAssignableStaff,
   getClientPortalLinks,
 } from "@/lib/db/queries/portal-links";
+import { summarizePortalLinks } from "@/lib/portal-links/summary";
 import { getClientShortlists } from "@/lib/db/queries/client-shortlists";
 import {
   EMPTY_CLIENT_ENGAGEMENT,
@@ -188,6 +189,10 @@ export default async function ClientCommandCenterPage({
     lastPortalNoteAt,
   };
 
+  // "Nuevo" se decide aquí, en el servidor, y no en el navegador: así la
+  // tarjeta de Resumen y la lista de clientes cuentan con el mismo reloj.
+  const portalSummary = summarizePortalLinks(portalLinks);
+
   const stage = deriveClientStage(snapshot);
   const nextActions = deriveNextActions(snapshot);
   const metrics = deriveMetrics(snapshot);
@@ -327,6 +332,7 @@ export default async function ClientCommandCenterPage({
         applications,
         engagement,
         origin,
+        portalSummary,
         canEditClient: editGate.ok,
       }}
     />

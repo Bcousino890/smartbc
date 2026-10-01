@@ -6,17 +6,19 @@ import { CreateClientDialogCL } from "@/components/admin/clientes/create-client-
 import { ClientDetailPanel } from "@/components/admin/clientes/client-detail-panel";
 import { ClientDetailPanelCL } from "@/components/admin/clientes/client-detail-panel-cl";
 import { ClientsTable } from "@/components/admin/clientes/clients-table";
-import type { Country } from "@/lib/country-config";
+import { getCountryConfig, type Country } from "@/lib/country-config";
+import type { PortalLinkSummary } from "@/lib/portal-links/summary";
 import type { AdminClient } from "@/lib/types";
 
 export function ClientesAdminClient({
   clients,
-  totalClients,
   country,
+  portalSummaries,
 }: {
   clients: AdminClient[];
-  totalClients: number;
   country: Country;
+  /** null = sin permiso o módulo apagado. */
+  portalSummaries: Record<string, PortalLinkSummary> | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | undefined>(
     clients[0]?.id,
@@ -31,6 +33,11 @@ export function ClientesAdminClient({
   // (Chile: región/comuna/UF; España: polígonos de interés en mapa), por eso
   // hay dos variantes de diálogo/panel en vez de una sola parametrizada.
   const isCl = country === "cl";
+  const fichaHref = selected
+    ? `${getCountryConfig(country).prefix}/clientes/${selected.id}`
+    : undefined;
+  const selectedPortal =
+    selected && portalSummaries ? (portalSummaries[selected.id] ?? null) : undefined;
 
   return (
     <div className="space-y-5">
@@ -41,14 +48,19 @@ export function ClientesAdminClient({
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <ClientsTable
           clients={clients}
-          totalClients={totalClients}
+          country={country}
+          portalSummaries={portalSummaries}
           selectedId={selectedId}
           onSelect={setSelectedId}
         />
         {isCl ? (
-          <ClientDetailPanelCL client={selected} />
+          <ClientDetailPanelCL client={selected} fichaHref={fichaHref} />
         ) : (
-          <ClientDetailPanel client={selected} />
+          <ClientDetailPanel
+            client={selected}
+            fichaHref={fichaHref}
+            portalSummary={selectedPortal}
+          />
         )}
       </div>
     </div>

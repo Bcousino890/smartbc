@@ -1,12 +1,28 @@
 /* SmartBC ← Selección de anuncios en portales
  *
  * Se ejecuta sobre los listados y las fichas de Idealista, Fotocasa,
- * Habitaclia y pisos.com. Pone una casilla en cada anuncio y una barra
+ * Habitaclia y pisos.com. Pone un botón "＋ Añadir" en cada anuncio y un panel
  * flotante para mandar los marcados a la ficha de un cliente del CRM
  * (sección "Enlaces de portales"), con quién los va a llamar ya elegido.
  *
  * El flujo que resuelve: ver diez pisos con el cliente delante, marcarlos ahí
  * mismo y que lleguen a su ficha listos para repartir y llamar.
+ *
+ * Desde la 1.10:
+ *  · Lo marcado vive en una CESTA guardada en el navegador (chrome.storage),
+ *    no en la página: se puede marcar en la página 1, pasar a la 2, abrir un
+ *    anuncio, volver, cambiar de pestaña o de portal, y la cesta sigue ahí.
+ *    Antes, cambiar de página perdía todo lo marcado.
+ *  · Cada anuncio de la cesta lleva su NOTA y su PRIORIDAD (el orden de la
+ *    lista, con ▲▼). Las dos viajan al CRM: la nota queda en el anuncio y el
+ *    orden es el de la cola de llamadas.
+ *  · Lo que YA está en la ficha del cliente elegido sale como "✓ En ficha",
+ *    preguntándoselo al servidor (no a la memoria del navegador): vale
+ *    también para lo que mandó otro compañero o se pegó a mano en el CRM.
+ *  · El panel se pliega a una pastilla y recuerda cómo se dejó.
+ *  · En la página de UN anuncio, el ＋ ya no se engancha al enlace
+ *    "Siguiente" (que también apunta a un anuncio): el anuncio abierto se
+ *    añade desde el propio panel.
  *
  * Toda la extracción va anclada a URLs y a regex de texto, NUNCA a clases CSS
  * (los portales las cambian sin avisar): si un campo no se encuentra va null y
@@ -21,8 +37,47 @@
 
   const PORTAL_ORIGIN = "https://portal.bcousinoprop.com";
   const LINKS_API = PORTAL_ORIGIN + "/api/extension/portal-links";
+  const CHECK_API = PORTAL_ORIGIN + "/api/extension/portal-links/check";
   const CLIENTS_API = PORTAL_ORIGIN + "/api/extension/clients";
   const MAX_SELECTION = 60;
+
+  // Claves de chrome.storage.local. `smartbcLastClient`, `smartbcLastAssignee`
+  // y `smartbcLeadsToken` ya existían: no se renombran para no perder lo que
+  // cada navegador tiene guardado.
+  const K = {
+    basket: "smartbcBasket",
+    collapsed: "smartbcPanelCollapsed",
+    client: "smartbcLastClient",
+    assignee: "smartbcLastAssignee",
+    token: "smartbcLeadsToken",
+  };
+
+  // Mismos textos que LINK_STATUS_LABEL en lib/portal-links/types.ts.
+  const STATUS_LABEL = {
+    pending: "Por llamar",
+    no_answer: "No contesta",
+    callback: "Volver a llamar",
+    to_visit: "Para visitar",
+    discarded: "Descartado",
+    converted: "Ficha creada",
+  };
+
+  const GOLD = "#c9a96e";
+  const GOLD_DARK = "#8a6d1f";
+  const INK = "#0a0a0a";
+  const GREEN = "#0a7d4f";
+
+  /**
+   * Dónde aterriza lo que se envía: la ficha del cliente, pestaña
+   * Propiedades, bloque "Enlaces de portales" (ancla #portal-links).
+   */
+  function fichaUrl(client) {
+    const country = client && client.country === "cl" ? "cl" : "es";
+    return (
+      `${PORTAL_ORIGIN}/${country}/admin/clientes/${encodeURIComponent(client.id)}` +
+      "?tab=properties#portal-links"
+    );
+  }
 
   // ── Adaptadores por portal ────────────────────────────────────────────
   // `link` reconoce el enlace a un anuncio dentro del listado y captura su
@@ -59,6 +114,9 @@
   const portal = PORTALS.find((p) => p.host.test(location.hostname));
   if (!portal) return;
   if (portal.skip && portal.skip.test(location.pathname)) return;
+
+  /** Clave de un anuncio en la cesta: el mismo número en dos portales no es el mismo piso. */
+  const keyOf = (portalId, ref) => `${portalId}:${ref}`;
 
   // ── Utilidades ────────────────────────────────────────────────────────
   function text(el) {
@@ -125,16 +183,43 @@
     return null;
   }
 
+  function detailRef() {
+    const m = location.pathname.match(portal.detail);
+    return m ? m[1] : null;
+  }
+
+  /**
+   * Enlaces que apuntan a un anuncio pero NO son una tarjeta: "Siguiente" /
+   * "Anterior" de la ficha, la barra fija de arriba, la paginación. Antes se
+   * les ponía un ＋ encima (tapando el "Siguiente") y, peor, como ya había
+   * "algo" en la página, el anuncio que se estaba mirando nunca se registraba.
+   * Se reconocen por semántica (header/nav) y por su texto, no por clases.
+   */
+  const NAV_TEXT = /^\s*(siguiente|anterior|next|previous|prev|volver|«|»|‹|›|<|>)\s*$/i;
+  function isNavAnchor(a) {
+    if (a.closest("header, nav, [role='navigation']")) return true;
+    const label = [
+      text(a) || "",
+      a.getAttribute("aria-label") || "",
+      a.getAttribute("title") || "",
+    ];
+    return label.some((l) => l && NAV_TEXT.test(l));
+  }
+
   /**
    * Sube desde el enlace hasta el contenedor de la tarjeta: el primer
    * ancestro que sea article/li y que tenga una foto o un precio dentro.
    * Con tope de niveles para no acabar en el <body> en un listado raro.
+   *
+   * En la página de un anuncio solo vale una tarjeta "de verdad" (los
+   * carruseles de similares): el respaldo de "el padre del enlace" era
+   * exactamente lo que acababa pegando el ＋ al botón "Siguiente".
    */
-  function cardOf(anchor) {
+  function cardOf(anchor, strict) {
     let el = anchor;
     for (let i = 0; i < 8 && el && el !== document.body; i++) {
       el = el.parentElement;
-      if (!el) break;
+      if (!el || el === document.body) break;
       const tag = el.tagName;
       const isCandidate =
         tag === "ARTICLE" ||
@@ -145,6 +230,7 @@
         return el;
       }
     }
+    if (strict) return null;
     return anchor.closest("article, li") || anchor.parentElement;
   }
 
@@ -173,46 +259,172 @@
     };
   }
 
+  /** El anuncio de la página de ficha: título del h1 y foto del og:image. */
+  function readDetail(ref) {
+    const h1 = document.querySelector("h1");
+    const scope = (h1 && h1.closest("main, article, section")) || document.body;
+    const data = readCard(scope, location.href.split("#")[0], ref);
+    data.title = text(h1) || data.title;
+    const og = document.querySelector('meta[property="og:image"]');
+    const ogUrl = og && og.getAttribute("content");
+    if (ogUrl) data.imageUrl = ogUrl;
+    return data;
+  }
+
+  // ── Almacenamiento ────────────────────────────────────────────────────
+  // Si la extensión se recarga, este script sigue vivo en la pestaña pero
+  // pierde su contexto y chrome.storage lanza. Se avisa en vez de romperse.
+  function contextLost() {
+    status("La extensión se ha actualizado: recarga la página", true);
+  }
+
+  function load(keys) {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(keys, (d) => resolve(d || {}));
+      } catch {
+        contextLost();
+        resolve({});
+      }
+    });
+  }
+
+  function store(obj) {
+    try {
+      chrome.storage.local.set(obj);
+    } catch {
+      contextLost();
+    }
+  }
+
+  // ── Estado ────────────────────────────────────────────────────────────
+  /** Tarjetas de ESTA página: ref → { container, button, data }. */
+  const cards = new Map();
+  /** El anuncio de la página de ficha, si la página es una ficha. */
+  let pageListing = null;
+  /**
+   * La cesta: lo marcado en cualquier página de cualquier portal, en orden de
+   * prioridad. [{ key, data, note, addedAt }]
+   */
+  let basket = [];
+  /** url → estado en la ficha del cliente elegido (lo dice el servidor). */
+  let inFicha = new Map();
+  let chosenClient = null;
+  let staff = [];
+  let collapsed = false;
+  let changingClient = false;
+
+  const basketIndex = (key) => basket.findIndex((i) => i.key === key);
+  const fichaStatusOf = (data) => (data ? inFicha.get(data.url) : undefined);
+  const firstName = (c) => (c && c.name ? c.name.split(" ")[0] : "");
+
+  function saveBasket() {
+    store({ [K.basket]: basket });
+  }
+
+  function addToBasket(key, data) {
+    if (basketIndex(key) >= 0) return true;
+    if (basket.length >= MAX_SELECTION) {
+      status(`Máximo ${MAX_SELECTION} anuncios por envío`, true);
+      return false;
+    }
+    basket.push({ key, data, note: "", addedAt: Date.now() });
+    saveBasket();
+    return true;
+  }
+
+  function removeFromBasket(key) {
+    const i = basketIndex(key);
+    if (i < 0) return;
+    basket.splice(i, 1);
+    saveBasket();
+  }
+
+  function moveInBasket(key, dir) {
+    const i = basketIndex(key);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= basket.length) return;
+    [basket[i], basket[j]] = [basket[j], basket[i]];
+    saveBasket();
+  }
+
+  let noteTimer = null;
+  function setNote(key, note) {
+    const i = basketIndex(key);
+    if (i < 0) return;
+    basket[i].note = note;
+    // Se guarda al dejar de teclear: escribir en storage en cada tecla
+    // dispara el onChanged de todas las pestañas abiertas.
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(saveBasket, 400);
+  }
+
+  function toggle(key, data) {
+    if (basketIndex(key) >= 0) {
+      removeFromBasket(key);
+    } else if (chosenClient && fichaStatusOf(data)) {
+      status(
+        `Ya está en la ficha de ${firstName(chosenClient)} · ${STATUS_LABEL[fichaStatusOf(data)] || ""}`,
+      );
+      return;
+    } else {
+      addToBasket(key, data);
+    }
+    refresh();
+  }
+
   // ── Recolección de tarjetas ───────────────────────────────────────────
-  const cards = new Map(); // ref → { container, data }
+  let lastHref = location.href;
 
   function collect() {
-    const anchors = [...document.querySelectorAll("a[href]")];
-    for (const a of anchors) {
+    // Portales que navegan sin recargar (Fotocasa): otra página, otras tarjetas.
+    if (location.href !== lastHref) {
+      lastHref = location.href;
+      for (const entry of cards.values()) entry.button && entry.button.remove();
+      cards.clear();
+      pageListing = null;
+    }
+
+    const ownRef = detailRef();
+    if (ownRef && (!pageListing || pageListing.ref !== ownRef)) {
+      pageListing = { ref: ownRef, key: keyOf(portal.id, ownRef), data: readDetail(ownRef) };
+    }
+    const h1 = ownRef ? document.querySelector("h1") : null;
+
+    let added = false;
+    for (const a of document.querySelectorAll("a[href]")) {
       const href = a.getAttribute("href") || "";
       const m = href.match(portal.link);
       if (!m) continue;
+      const ref = m[1];
+      if (ref === ownRef || cards.has(ref)) continue;
+      if (root && root.contains(a)) continue; // los enlaces del propio panel
+      if (isNavAnchor(a)) continue;
       let absolute;
       try {
         absolute = new URL(href, location.href).toString();
       } catch {
         continue;
       }
-      const ref = m[1];
-      if (cards.has(ref)) continue;
-      const container = cardOf(a);
+      const container = cardOf(a, Boolean(ownRef));
       if (!container) continue;
+      // En una ficha, el bloque que contiene el h1 es el anuncio abierto,
+      // no una tarjeta de "similares".
+      if (h1 && container.contains(h1)) continue;
       // Un mismo contenedor puede alojar dos referencias en carruseles de
       // "anuncios similares": nos quedamos con la primera.
       if (container.dataset.smartbcRef && container.dataset.smartbcRef !== ref) continue;
       container.dataset.smartbcRef = ref;
-      cards.set(ref, { container, data: readCard(container, absolute, ref) });
+      cards.set(ref, { container, button: null, data: readCard(container, absolute, ref) });
       decorate(ref);
+      added = true;
     }
 
-    // Página de ficha: no hay tarjetas, hay un anuncio.
-    if (cards.size === 0 && portal.detail.test(location.pathname)) {
-      const ref = location.pathname.match(portal.detail)[1];
-      const data = readCard(document.body, location.href, ref);
-      data.title = text(document.querySelector("h1")) || data.title;
-      cards.set(ref, { container: null, data });
-    }
-    render();
+    refresh();
+    if (added || ownRef) scheduleCheck();
   }
 
-  // ── Casilla sobre cada tarjeta ────────────────────────────────────────
-  const selected = new Set();
-
+  // ── Botón sobre cada tarjeta ──────────────────────────────────────────
   function decorate(ref) {
     const entry = cards.get(ref);
     if (!entry || !entry.container) return;
@@ -223,66 +435,86 @@
       container.style.position = "relative";
     }
 
-    const box = document.createElement("button");
-    box.type = "button";
-    box.className = "smartbc-pick";
-    box.title = "Marcar para enviar a SmartBC";
-    box.textContent = "＋";
-    Object.assign(box.style, {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "smartbc-pick";
+    css(btn, {
       position: "absolute",
-      top: "8px",
-      left: "8px",
+      top: "10px",
+      left: "10px",
       zIndex: "9998",
-      width: "28px",
-      height: "28px",
-      lineHeight: "1",
-      borderRadius: "8px",
-      border: "1px solid rgba(10,10,10,.15)",
-      background: "rgba(255,255,255,.95)",
-      color: "#0a0a0a",
-      fontSize: "15px",
-      fontWeight: "700",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "5px",
+      height: "30px",
+      padding: "0 11px",
+      borderRadius: "999px",
+      border: "1px solid rgba(10,10,10,.12)",
+      font: "600 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       cursor: "pointer",
-      boxShadow: "0 2px 8px rgba(0,0,0,.18)",
+      boxShadow: "0 3px 10px rgba(0,0,0,.22)",
+      transition: "transform .12s ease",
     });
-    box.addEventListener("click", (e) => {
+    btn.addEventListener("mouseenter", () => (btn.style.transform = "scale(1.05)"));
+    btn.addEventListener("mouseleave", () => (btn.style.transform = "none"));
+    btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      toggle(ref);
+      toggle(keyOf(portal.id, ref), entry.data);
     });
-    container.appendChild(box);
+    container.appendChild(btn);
+    entry.button = btn;
     paint(ref);
+  }
+
+  /** Tres estados que se tienen que distinguir de un vistazo. */
+  function pickLook(key, data) {
+    const idx = basketIndex(key);
+    const st = fichaStatusOf(data);
+    if (idx >= 0) {
+      return {
+        label: `✓ ${idx + 1}`,
+        title: `Marcado · prioridad ${idx + 1}. Clic para quitarlo de la selección.`,
+        bg: GOLD,
+        fg: "#fff",
+        border: "#a88a52",
+      };
+    }
+    if (st) {
+      return {
+        label: "✓ En ficha",
+        title: `Ya está en la ficha de ${chosenClient ? chosenClient.name : "este cliente"} · ${STATUS_LABEL[st] || st}`,
+        bg: "#e7f4ee",
+        fg: GREEN,
+        border: "rgba(10,125,79,.35)",
+      };
+    }
+    return {
+      label: "＋ Añadir",
+      title: "Añadir a la selección para mandarlo a la ficha de un cliente",
+      bg: "rgba(255,255,255,.97)",
+      fg: INK,
+      border: "rgba(10,10,10,.12)",
+    };
   }
 
   function paint(ref) {
     const entry = cards.get(ref);
-    if (!entry || !entry.container) return;
-    const box = entry.container.querySelector(":scope > .smartbc-pick");
-    if (!box) return;
-    const on = selected.has(ref);
-    box.textContent = on ? "✓" : "＋";
-    box.style.background = on ? "#c9a96e" : "rgba(255,255,255,.95)";
-    box.style.color = on ? "#fff" : "#0a0a0a";
-    box.style.borderColor = on ? "#a88a52" : "rgba(10,10,10,.15)";
-  }
-
-  function toggle(ref) {
-    if (selected.has(ref)) selected.delete(ref);
-    else if (selected.size >= MAX_SELECTION) {
-      status(`Máximo ${MAX_SELECTION} anuncios por envío`, true);
-      return;
-    } else selected.add(ref);
-    paint(ref);
-    render();
+    if (!entry || !entry.button) return;
+    const look = pickLook(keyOf(portal.id, ref), entry.data);
+    const btn = entry.button;
+    // Solo si cambia: cada escritura es una mutación del DOM de la página.
+    if (btn.textContent !== look.label) btn.textContent = look.label;
+    btn.title = look.title;
+    btn.style.background = look.bg;
+    btn.style.color = look.fg;
+    btn.style.borderColor = look.border;
   }
 
   // ── Token ─────────────────────────────────────────────────────────────
-  function getToken() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get("smartbcLeadsToken", (d) =>
-        resolve(d.smartbcLeadsToken || null),
-      );
-    });
+  async function getToken() {
+    const d = await load(K.token);
+    return d[K.token] || null;
   }
 
   async function requireToken() {
@@ -293,176 +525,347 @@
       );
       if (token) {
         token = token.trim();
-        chrome.storage.local.set({ smartbcLeadsToken: token });
+        store({ [K.token]: token });
       }
     }
     return token || null;
   }
 
-  // ── Panel flotante ────────────────────────────────────────────────────
-  let panel, countEl, statusEl, clientInput, clientList, staffSelect, sendBtn;
-  let chosenClient = null;
-  let staff = [];
-  let searchTimer = null;
+  // ── "¿Ya está en la ficha?" ───────────────────────────────────────────
+  let checkTimer = null;
+  function scheduleCheck() {
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(checkInFicha, 500);
+  }
 
+  async function checkInFicha() {
+    if (!chosenClient) {
+      inFicha = new Map();
+      refresh();
+      return;
+    }
+    const urls = new Set();
+    for (const entry of cards.values()) urls.add(entry.data.url);
+    if (pageListing) urls.add(pageListing.data.url);
+    for (const item of basket) urls.add(item.data.url);
+    if (urls.size === 0) return;
+
+    const token = await getToken();
+    if (!token) return;
+    const clientId = chosenClient.id;
+    try {
+      const res = await fetch(CHECK_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ clientId, urls: [...urls].slice(0, 200) }),
+      });
+      if (!res.ok) return; // sin marca "en ficha": no es motivo para molestar
+      const body = await res.json();
+      // Si mientras tanto se cambió de cliente, esta respuesta ya no vale.
+      if (!chosenClient || chosenClient.id !== clientId) return;
+      inFicha = new Map(Object.entries(body.existing || {}));
+      refresh();
+    } catch {
+      /* sin red: se queda sin la marca, nada más */
+    }
+  }
+
+  // ── Panel ─────────────────────────────────────────────────────────────
   function css(el, styles) {
     Object.assign(el.style, styles);
     return el;
   }
 
+  /** h("div", {estilos}, {props}, [hijos]) — para no repetir createElement. */
+  function h(tag, styles, props, children) {
+    const el = document.createElement(tag);
+    if (styles) css(el, styles);
+    if (props) {
+      for (const [k, v] of Object.entries(props)) {
+        if (k === "on") for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
+        else if (k === "text") el.textContent = v;
+        else el[k] = v;
+      }
+    }
+    for (const c of children || []) {
+      if (c) el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return el;
+  }
+
+  const FONT = "13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  const LABEL = { fontSize: "10px", letterSpacing: ".16em", fontWeight: "700", color: "#8a8378" };
+  const BTN = {
+    padding: "6px 10px",
+    border: "1px solid rgba(10,10,10,.18)",
+    borderRadius: "8px",
+    background: "#fff",
+    fontSize: "12px",
+    cursor: "pointer",
+    color: INK,
+  };
+  const LINKISH = {
+    border: "0",
+    background: "transparent",
+    padding: "0",
+    color: GOLD_DARK,
+    fontWeight: "600",
+    fontSize: "11.5px",
+    cursor: "pointer",
+    textDecoration: "underline",
+  };
+
+  let root, pill, panel, statusEl;
+  let clientBox, staffSelect, detailBox, basketHead, basketList, sendBtn, pageCountEl;
+
   function buildPanel() {
-    panel = document.createElement("div");
-    css(panel, {
+    root = h("div", {
       position: "fixed",
       right: "18px",
       bottom: "18px",
       zIndex: "2147483000",
-      width: "312px",
-      padding: "14px",
+      font: FONT,
+      color: INK,
+    });
+    root.id = "smartbc-portal-panel";
+
+    // Plegado: una pastilla que no tapa nada y sigue contando.
+    pill = h(
+      "button",
+      {
+        display: "none",
+        alignItems: "center",
+        gap: "8px",
+        padding: "9px 14px",
+        borderRadius: "999px",
+        border: "1px solid rgba(201,169,110,.55)",
+        background: "#fbf8f3",
+        boxShadow: "0 10px 28px rgba(20,14,4,.28)",
+        font: "600 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        color: INK,
+        cursor: "pointer",
+      },
+      { type: "button", title: "Abrir el panel de SmartBC", on: { click: () => setCollapsed(false) } },
+    );
+
+    panel = h("div", {
+      width: "320px",
+      maxHeight: "calc(100vh - 36px)",
+      display: "flex",
+      flexDirection: "column",
       borderRadius: "14px",
       background: "#fbf8f3",
       border: "1px solid rgba(201,169,110,.45)",
       boxShadow: "0 18px 45px rgba(20,14,4,.28)",
-      font: "13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      color: "#0a0a0a",
+      overflow: "hidden",
     });
 
-    const title = document.createElement("div");
-    title.textContent = "SMARTBC · ENVIAR A UNA FICHA";
-    css(title, {
-      fontSize: "10px",
-      letterSpacing: ".18em",
-      fontWeight: "700",
-      color: "#a88a52",
-      marginBottom: "8px",
-    });
-    panel.appendChild(title);
+    // Cabecera con el botón de plegar.
+    panel.appendChild(
+      h(
+        "div",
+        { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px 6px" },
+        null,
+        [
+          h("div", { ...LABEL, color: "#a88a52", letterSpacing: ".18em" }, { text: "SMARTBC · ENVIAR A UNA FICHA" }),
+          h(
+            "button",
+            { ...BTN, padding: "2px 9px", lineHeight: "1.2", fontSize: "14px" },
+            {
+              type: "button",
+              text: "–",
+              title: "Plegar (se recuerda al cambiar de página)",
+              on: { click: () => setCollapsed(true) },
+            },
+          ),
+        ],
+      ),
+    );
 
-    countEl = document.createElement("div");
-    css(countEl, { fontSize: "12px", color: "#555", marginBottom: "8px" });
-    panel.appendChild(countEl);
+    const body = h("div", { padding: "0 14px 12px", overflowY: "auto" });
+    panel.appendChild(body);
 
-    clientInput = document.createElement("input");
-    clientInput.placeholder = "Buscar cliente por nombre o teléfono…";
-    css(clientInput, {
-      width: "100%",
-      boxSizing: "border-box",
-      padding: "7px 9px",
-      border: "1px solid rgba(10,10,10,.18)",
-      borderRadius: "8px",
-      fontSize: "12px",
-      background: "#fff",
-    });
-    clientInput.addEventListener("input", () => {
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => searchClients(clientInput.value.trim()), 320);
-    });
-    panel.appendChild(clientInput);
+    pageCountEl = h("div", { fontSize: "11.5px", color: "#6b665e", marginBottom: "8px" });
+    body.appendChild(pageCountEl);
 
-    clientList = document.createElement("div");
-    css(clientList, {
-      maxHeight: "142px",
+    clientBox = h("div", { marginBottom: "8px" });
+    body.appendChild(clientBox);
+
+    staffSelect = h(
+      "select",
+      {
+        width: "100%",
+        padding: "6px 8px",
+        border: "1px solid rgba(10,10,10,.18)",
+        borderRadius: "8px",
+        fontSize: "12px",
+        background: "#fff",
+      },
+      { on: { change: () => store({ [K.assignee]: staffSelect.value || "" }) } },
+    );
+    staffSelect.appendChild(h("option", null, { value: "", text: "Sin asignar" }));
+    body.appendChild(
+      h("div", { marginBottom: "10px" }, null, [
+        h("div", { ...LABEL, marginBottom: "4px" }, { text: "QUIÉN LOS LLAMA" }),
+        staffSelect,
+      ]),
+    );
+
+    detailBox = h("div");
+    body.appendChild(detailBox);
+
+    basketHead = h("div", {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "6px",
+      margin: "4px 0 6px",
+    });
+    body.appendChild(basketHead);
+
+    basketList = h("div", { maxHeight: "250px", overflowY: "auto", margin: "0 -4px", padding: "0 4px" });
+    body.appendChild(basketList);
+
+    sendBtn = h(
+      "button",
+      {
+        width: "100%",
+        marginTop: "10px",
+        padding: "9px 10px",
+        border: "0",
+        borderRadius: "8px",
+        background: INK,
+        color: "#fbf8f3",
+        fontSize: "12.5px",
+        fontWeight: "600",
+        cursor: "pointer",
+      },
+      { type: "button", on: { click: send } },
+    );
+    body.appendChild(sendBtn);
+
+    statusEl = h("div", { fontSize: "11.5px", marginTop: "8px", color: GREEN });
+    body.appendChild(statusEl);
+
+    root.appendChild(pill);
+    root.appendChild(panel);
+    document.body.appendChild(root);
+  }
+
+  function setCollapsed(next) {
+    collapsed = next;
+    store({ [K.collapsed]: next });
+    refresh();
+  }
+
+  /** `link` (opcional): { href, label } — se pinta detrás del mensaje. */
+  function status(msg, isError, link) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || "";
+    statusEl.style.color = isError ? "#b4232a" : GREEN;
+    if (link && link.href) {
+      statusEl.appendChild(
+        h(
+          "a",
+          { display: "inline-block", marginLeft: "6px", color: GOLD_DARK, fontWeight: "600", textDecoration: "underline" },
+          { href: link.href, target: "_blank", rel: "noopener", text: link.label },
+        ),
+      );
+    }
+  }
+
+  // ── Cliente ───────────────────────────────────────────────────────────
+  let clientInput = null;
+  let clientList = null;
+  let searchTimer = null;
+
+  function renderClient() {
+    clientBox.innerHTML = "";
+    clientInput = null;
+    clientList = null;
+    if (chosenClient && !changingClient) {
+      // Elegido: una línea, no un buscador con cinco filas ocupando el panel.
+      clientBox.appendChild(
+        h(
+          "div",
+          {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "7px 9px",
+            border: "1px solid rgba(201,169,110,.45)",
+            borderRadius: "8px",
+            background: "#fff",
+          },
+          null,
+          [
+            h(
+              "span",
+              { flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "12.5px" },
+              null,
+              [h("span", { color: "#8a8378" }, { text: "Ficha: " }), h("strong", null, { text: chosenClient.name })],
+            ),
+            h(
+              "a",
+              { ...LINKISH, textDecoration: "none" },
+              { href: fichaUrl(chosenClient), target: "_blank", rel: "noopener", text: "abrir ↗", title: "Abrir su ficha en SmartBC" },
+            ),
+            h("button", LINKISH, {
+              type: "button",
+              text: "cambiar",
+              on: {
+                click: () => {
+                  changingClient = true;
+                  refresh();
+                  if (clientInput) clientInput.focus();
+                  searchClients("");
+                },
+              },
+            }),
+          ],
+        ),
+      );
+      return;
+    }
+
+    clientInput = h(
+      "input",
+      {
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "7px 9px",
+        border: "1px solid rgba(10,10,10,.18)",
+        borderRadius: "8px",
+        fontSize: "12px",
+        background: "#fff",
+      },
+      {
+        placeholder: "Buscar cliente por nombre o teléfono…",
+        on: {
+          input: () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => searchClients(clientInput.value.trim()), 320);
+          },
+          keydown: (e) => {
+            if (e.key === "Escape" && chosenClient) {
+              changingClient = false;
+              refresh();
+            }
+          },
+        },
+      },
+    );
+    clientList = h("div", {
+      maxHeight: "150px",
       overflowY: "auto",
       marginTop: "6px",
       display: "none",
-      border: "1px solid rgba(10,10,10,.10)",
+      border: "1px solid rgba(10,10,10,.08)",
       borderRadius: "8px",
       background: "#fff",
     });
-    panel.appendChild(clientList);
-
-    const staffWrap = document.createElement("div");
-    css(staffWrap, { marginTop: "8px" });
-    const staffLabel = document.createElement("div");
-    staffLabel.textContent = "QUIÉN LOS LLAMA";
-    css(staffLabel, {
-      fontSize: "9.5px",
-      letterSpacing: ".16em",
-      fontWeight: "700",
-      color: "#8a8378",
-      marginBottom: "4px",
-    });
-    staffSelect = document.createElement("select");
-    css(staffSelect, {
-      width: "100%",
-      padding: "6px 8px",
-      border: "1px solid rgba(10,10,10,.18)",
-      borderRadius: "8px",
-      fontSize: "12px",
-      background: "#fff",
-    });
-    staffWrap.appendChild(staffLabel);
-    staffWrap.appendChild(staffSelect);
-    panel.appendChild(staffWrap);
-
-    const actions = document.createElement("div");
-    css(actions, { display: "flex", gap: "6px", marginTop: "10px" });
-
-    const allBtn = document.createElement("button");
-    allBtn.type = "button";
-    allBtn.textContent = "Todos";
-    css(allBtn, {
-      flex: "0 0 auto",
-      padding: "8px 10px",
-      border: "1px solid rgba(10,10,10,.18)",
-      borderRadius: "8px",
-      background: "#fff",
-      fontSize: "12px",
-      cursor: "pointer",
-    });
-    allBtn.addEventListener("click", () => {
-      const everySelected = cards.size > 0 && selected.size === cards.size;
-      selected.clear();
-      if (!everySelected) {
-        for (const ref of [...cards.keys()].slice(0, MAX_SELECTION)) {
-          selected.add(ref);
-        }
-      }
-      for (const ref of cards.keys()) paint(ref);
-      render();
-    });
-    actions.appendChild(allBtn);
-
-    sendBtn = document.createElement("button");
-    sendBtn.type = "button";
-    css(sendBtn, {
-      flex: "1",
-      padding: "8px 10px",
-      border: "0",
-      borderRadius: "8px",
-      background: "#0a0a0a",
-      color: "#fbf8f3",
-      fontSize: "12px",
-      fontWeight: "600",
-      cursor: "pointer",
-    });
-    sendBtn.addEventListener("click", send);
-    actions.appendChild(sendBtn);
-    panel.appendChild(actions);
-
-    statusEl = document.createElement("div");
-    css(statusEl, { fontSize: "11.5px", marginTop: "8px", color: "#0a7d4f" });
-    panel.appendChild(statusEl);
-
-    document.body.appendChild(panel);
-  }
-
-  function status(msg, isError) {
-    if (!statusEl) return;
-    statusEl.textContent = msg || "";
-    statusEl.style.color = isError ? "#b4232a" : "#0a7d4f";
-  }
-
-  function render() {
-    if (!panel) return;
-    countEl.textContent = cards.size
-      ? `${selected.size} de ${cards.size} anuncios marcados`
-      : "No se han reconocido anuncios en esta página";
-    sendBtn.textContent = chosenClient
-      ? `Enviar ${selected.size} a ${chosenClient.name.split(" ")[0]}`
-      : `Enviar ${selected.size}`;
-    sendBtn.disabled = selected.size === 0 || !chosenClient;
-    sendBtn.style.opacity = sendBtn.disabled ? ".45" : "1";
+    clientBox.appendChild(clientInput);
+    clientBox.appendChild(clientList);
   }
 
   async function searchClients(q) {
@@ -483,82 +886,403 @@
       staff = body.staff || [];
       fillStaff();
       showClients(body.clients || []);
-    } catch (e) {
+    } catch {
       status("No se pudo conectar con SmartBC", true);
     }
   }
 
   function fillStaff() {
     if (staffSelect.options.length > 1) return;
-    staffSelect.innerHTML = "";
-    const none = document.createElement("option");
-    none.value = "";
-    none.textContent = "Sin asignar";
-    staffSelect.appendChild(none);
-    for (const s of staff) {
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = s.name;
-      staffSelect.appendChild(opt);
-    }
-    chrome.storage.local.get("smartbcLastAssignee", (d) => {
-      if (d.smartbcLastAssignee) staffSelect.value = d.smartbcLastAssignee;
+    for (const s of staff) staffSelect.appendChild(h("option", null, { value: s.id, text: s.name }));
+    load(K.assignee).then((d) => {
+      if (d[K.assignee]) staffSelect.value = d[K.assignee];
     });
   }
 
   function showClients(list) {
+    if (!clientList) return; // con un cliente elegido el buscador está plegado
     clientList.innerHTML = "";
     if (list.length === 0) {
       clientList.style.display = "none";
       return;
     }
     for (const c of list) {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.textContent = c.phone ? `${c.name} · ${c.phone}` : c.name;
-      css(row, {
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        padding: "7px 9px",
-        border: "0",
-        borderBottom: "1px solid rgba(10,10,10,.06)",
-        background: "transparent",
-        fontSize: "12px",
-        cursor: "pointer",
-      });
-      row.addEventListener("click", () => {
-        chosenClient = c;
-        chrome.storage.local.set({ smartbcLastClient: c });
-        clientInput.value = c.name;
-        clientList.style.display = "none";
-        status(`Ficha: ${c.name}`);
-        render();
-      });
-      clientList.appendChild(row);
+      clientList.appendChild(
+        h(
+          "button",
+          {
+            display: "block",
+            width: "100%",
+            textAlign: "left",
+            padding: "7px 9px",
+            border: "0",
+            borderBottom: "1px solid rgba(10,10,10,.06)",
+            background: "transparent",
+            fontSize: "12px",
+            cursor: "pointer",
+          },
+          {
+            type: "button",
+            text: c.phone ? `${c.name} · ${c.phone}` : c.name,
+            on: { click: () => chooseClient(c) },
+          },
+        ),
+      );
     }
     clientList.style.display = "block";
   }
 
+  function chooseClient(c) {
+    chosenClient = c;
+    changingClient = false;
+    store({ [K.client]: c });
+    inFicha = new Map();
+    status("");
+    refresh();
+    scheduleCheck();
+  }
+
+  // ── Anuncio de la página de ficha ─────────────────────────────────────
+  function renderDetail() {
+    detailBox.innerHTML = "";
+    if (!pageListing) return;
+    const { key, data } = pageListing;
+    const look = pickLook(key, data);
+    detailBox.appendChild(
+      h(
+        "div",
+        {
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "8px",
+          marginBottom: "10px",
+          border: "1px solid rgba(201,169,110,.45)",
+          borderRadius: "10px",
+          background: "#fff",
+        },
+        null,
+        [
+          thumb(data),
+          h("div", { flex: "1", minWidth: "0" }, null, [
+            h("div", { ...LABEL, fontSize: "9.5px", marginBottom: "2px" }, { text: "ESTE ANUNCIO" }),
+            h(
+              "div",
+              { fontSize: "12px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+              { text: data.title || "Anuncio", title: data.title || "" },
+            ),
+            data.priceLabel ? h("div", { fontSize: "11.5px", color: "#6b665e" }, { text: data.priceLabel }) : null,
+          ]),
+          h(
+            "button",
+            {
+              ...BTN,
+              padding: "7px 10px",
+              fontWeight: "600",
+              background: look.bg,
+              color: look.fg,
+              borderColor: look.border,
+              whiteSpace: "nowrap",
+            },
+            { type: "button", text: look.label, title: look.title, on: { click: () => toggle(key, data) } },
+          ),
+        ],
+      ),
+    );
+  }
+
+  function thumb(data) {
+    const box = {
+      width: "44px",
+      height: "34px",
+      flex: "0 0 auto",
+      borderRadius: "6px",
+      background: "#eee8dc",
+      objectFit: "cover",
+    };
+    if (!data.imageUrl) return h("div", box);
+    return h("img", box, { src: data.imageUrl, alt: "", referrerPolicy: "no-referrer", loading: "lazy" });
+  }
+
+  // ── La cesta ──────────────────────────────────────────────────────────
+  function renderBasket() {
+    basketHead.innerHTML = "";
+    basketList.innerHTML = "";
+
+    const pageKeys = [...cards.keys()].map((ref) => keyOf(portal.id, ref));
+    const allPageMarked = pageKeys.length > 0 && pageKeys.every((k) => basketIndex(k) >= 0);
+
+    basketHead.appendChild(h("div", LABEL, { text: `MARCADOS · ${basket.length}` }));
+    const actions = h("div", { display: "flex", gap: "10px" });
+    if (pageKeys.length > 0) {
+      actions.appendChild(
+        h("button", LINKISH, {
+          type: "button",
+          text: allPageMarked ? "Quitar los de esta página" : "Marcar toda la página",
+          title: allPageMarked
+            ? "Quita de la selección los anuncios de esta página"
+            : "Añade los anuncios de esta página que aún no están en la ficha",
+          on: { click: () => markPage(!allPageMarked) },
+        }),
+      );
+    }
+    if (basket.length > 0) {
+      actions.appendChild(
+        h("button", { ...LINKISH, color: "#8a8378" }, {
+          type: "button",
+          text: "Vaciar",
+          on: {
+            click: () => {
+              if (!window.confirm(`¿Quitar los ${basket.length} anuncios marcados?`)) return;
+              basket = [];
+              saveBasket();
+              refresh();
+            },
+          },
+        }),
+      );
+    }
+    basketHead.appendChild(actions);
+
+    if (basket.length === 0) {
+      basketList.appendChild(
+        h(
+          "div",
+          {
+            padding: "10px",
+            border: "1px dashed rgba(201,169,110,.45)",
+            borderRadius: "10px",
+            fontSize: "11.5px",
+            color: "#6b665e",
+            textAlign: "center",
+          },
+          { text: "Pulsa «＋ Añadir» en los anuncios que quieras mandar. Lo marcado se guarda aunque cambies de página." },
+        ),
+      );
+      return;
+    }
+
+    basket.forEach((item, i) => basketList.appendChild(basketRow(item, i)));
+  }
+
+  function basketRow(item, i) {
+    const st = fichaStatusOf(item.data);
+    const arrow = (label, dir, disabled) =>
+      h(
+        "button",
+        {
+          border: "0",
+          background: "transparent",
+          padding: "0 3px",
+          fontSize: "11px",
+          lineHeight: "1",
+          color: disabled ? "#d6d1c7" : "#6b665e",
+          cursor: disabled ? "default" : "pointer",
+        },
+        {
+          type: "button",
+          text: label,
+          disabled,
+          title: dir < 0 ? "Subir prioridad" : "Bajar prioridad",
+          on: {
+            click: () => {
+              moveInBasket(item.key, dir);
+              refresh();
+            },
+          },
+        },
+      );
+
+    const note = h(
+      "textarea",
+      {
+        width: "100%",
+        boxSizing: "border-box",
+        marginTop: "5px",
+        padding: "5px 7px",
+        border: "1px solid rgba(10,10,10,.12)",
+        borderRadius: "6px",
+        fontSize: "11.5px",
+        lineHeight: "1.35",
+        resize: "vertical",
+        minHeight: "28px",
+        background: "#fffdf9",
+        fontFamily: "inherit",
+      },
+      {
+        rows: 1,
+        placeholder: "Añadir nota…",
+        title: "Lo que hay que saber al llamar (p. ej. «solo WhatsApp», «negociable»). Llega al CRM con el anuncio.",
+        value: item.note || "",
+        on: { input: (e) => setNote(item.key, e.target.value) },
+      },
+    );
+
+    const meta = [item.data.priceLabel, portalName(item.key)].filter(Boolean).join(" · ");
+
+    return h(
+      "div",
+      { display: "flex", gap: "6px", padding: "7px 0", borderBottom: "1px solid rgba(10,10,10,.07)" },
+      null,
+      [
+        h(
+          "div",
+          { display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", width: "18px", paddingTop: "2px" },
+          null,
+          [
+            arrow("▲", -1, i === 0),
+            h("div", { fontSize: "11px", fontWeight: "700", color: GOLD_DARK }, { text: String(i + 1) }),
+            arrow("▼", 1, i === basket.length - 1),
+          ],
+        ),
+        thumb(item.data),
+        h("div", { flex: "1", minWidth: "0" }, null, [
+          h("div", { display: "flex", alignItems: "flex-start", gap: "4px" }, null, [
+            h(
+              "a",
+              {
+                flex: "1",
+                minWidth: "0",
+                fontSize: "12px",
+                fontWeight: "600",
+                color: INK,
+                textDecoration: "none",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              },
+              {
+                href: item.data.url,
+                target: "_blank",
+                rel: "noopener",
+                text: item.data.title || item.data.url.replace(/^https?:\/\//, ""),
+                title: item.data.title || item.data.url,
+              },
+            ),
+            h(
+              "button",
+              { border: "0", background: "transparent", padding: "0 2px", color: "#8a8378", cursor: "pointer", fontSize: "13px", lineHeight: "1" },
+              {
+                type: "button",
+                text: "✕",
+                title: "Quitar de la selección",
+                on: {
+                  click: () => {
+                    removeFromBasket(item.key);
+                    refresh();
+                  },
+                },
+              },
+            ),
+          ]),
+          h("div", { fontSize: "11px", color: "#6b665e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, null, [
+            meta,
+            st ? h("span", { color: GREEN, fontWeight: "600" }, { text: ` · ya en ficha (${STATUS_LABEL[st] || st})` }) : null,
+          ]),
+          note,
+        ]),
+      ],
+    );
+  }
+
+  function portalName(key) {
+    const id = key.split(":")[0];
+    return { idealista: "Idealista", fotocasa: "Fotocasa", habitaclia: "Habitaclia", pisos: "pisos.com" }[id] || id;
+  }
+
+  function markPage(on) {
+    if (on) {
+      for (const [ref, entry] of cards) {
+        // Lo que ya está en la ficha no se vuelve a marcar: el servidor lo
+        // saltaría de todas formas y solo ensucia la cesta.
+        if (fichaStatusOf(entry.data)) continue;
+        if (!addToBasket(keyOf(portal.id, ref), entry.data)) break;
+      }
+    } else {
+      const pageKeys = new Set([...cards.keys()].map((ref) => keyOf(portal.id, ref)));
+      basket = basket.filter((i) => !pageKeys.has(i.key));
+      saveBasket();
+    }
+    refresh();
+  }
+
+  // ── Pintado general ───────────────────────────────────────────────────
+  function refresh() {
+    if (!root) return;
+    for (const ref of cards.keys()) paint(ref);
+
+    pill.style.display = collapsed ? "inline-flex" : "none";
+    panel.style.display = collapsed ? "none" : "flex";
+    pill.textContent = "";
+    pill.appendChild(h("span", { color: "#a88a52", letterSpacing: ".12em", fontSize: "10.5px" }, { text: "SMARTBC" }));
+    pill.appendChild(
+      h("span", null, {
+        text: basket.length
+          ? `${basket.length} marcado${basket.length > 1 ? "s" : ""}${chosenClient ? ` → ${firstName(chosenClient)}` : ""}`
+          : "Enviar a una ficha",
+      }),
+    );
+    pill.appendChild(h("span", { color: "#8a8378" }, { text: "▴" }));
+    if (collapsed) return;
+
+    const pageMarked = [...cards.keys()].filter((ref) => basketIndex(keyOf(portal.id, ref)) >= 0).length;
+    const pageInFicha = [...cards.values()].filter((e) => fichaStatusOf(e.data)).length;
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    pageCountEl.textContent = cards.size
+      ? `${plural(cards.size, "anuncio", "anuncios")} en esta página · ${plural(pageMarked, "marcado", "marcados")}` +
+        (pageInFicha ? ` · ${pageInFicha} ya en la ficha` : "")
+      : pageListing
+        ? "Estás en la página de un anuncio"
+        : "No se han reconocido anuncios en esta página";
+
+    // El buscador de clientes se rehace solo si cambia de modo: rehacerlo en
+    // cada refresco borraría lo que se está escribiendo.
+    const mode = chosenClient && !changingClient ? `c:${chosenClient.id}` : "search";
+    if (clientBox.dataset.mode !== mode) {
+      clientBox.dataset.mode = mode;
+      renderClient();
+    }
+
+    renderDetail();
+
+    // Igual con la cesta: si se está ESCRIBIENDO una nota no se rehace (se
+    // perdería el cursor); la próxima acción la repinta. Solo cuenta un campo
+    // de texto: con el foco en un ▲▼ la lista tiene que reordenarse ya.
+    const ae = document.activeElement;
+    const typing = ae && basketList.contains(ae) && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT");
+    if (!typing) renderBasket();
+
+    const n = basket.length;
+    sendBtn.textContent = chosenClient
+      ? `Enviar ${n} a ${firstName(chosenClient)}`
+      : n
+        ? `Elige un cliente para enviar ${n}`
+        : "Enviar";
+    sendBtn.disabled = n === 0 || !chosenClient;
+    sendBtn.style.opacity = sendBtn.disabled ? ".45" : "1";
+    sendBtn.style.cursor = sendBtn.disabled ? "default" : "pointer";
+  }
+
+  // ── Envío ─────────────────────────────────────────────────────────────
   async function send() {
-    if (!chosenClient || selected.size === 0) return;
+    if (!chosenClient || basket.length === 0) return;
     const token = await requireToken();
     if (!token) return;
 
-    const links = [...selected]
-      .map((ref) => cards.get(ref))
-      .filter(Boolean)
-      .map((entry) => entry.data);
+    // Lo que se esté escribiendo en una nota entra en este envío.
+    clearTimeout(noteTimer);
+
+    // El orden de la cesta ES la prioridad: el servidor los pone en la cola
+    // de llamadas en este orden.
+    const items = basket.slice(0, MAX_SELECTION);
+    const links = items.map((i) => ({ ...i.data, notes: (i.note || "").trim() || null }));
 
     sendBtn.disabled = true;
     status("Enviando…");
     try {
       const res = await fetch(LINKS_API, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token,
-        },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({
           clientId: chosenClient.id,
           assignedTo: staffSelect.value || null,
@@ -574,39 +1298,95 @@
         status(body.error || `Error ${res.status}`, true);
         return;
       }
-      chrome.storage.local.set({ smartbcLastAssignee: staffSelect.value || "" });
-      const parts = [`${body.inserted} enviados`];
-      if (body.skipped) parts.push(`${body.skipped} ya estaban`);
-      status(`✓ ${parts.join(" · ")} → ${chosenClient.name}`);
-      selected.clear();
-      for (const ref of cards.keys()) paint(ref);
-    } catch (e) {
+      store({ [K.assignee]: staffSelect.value || "" });
+
+      // Lo enviado sale de la cesta; lo que no cupo en este envío se queda.
+      const sent = new Set(items.map((i) => i.key));
+      basket = basket.filter((i) => !sent.has(i.key));
+      saveBasket();
+
+      const parts = [`${body.inserted} enviado${body.inserted === 1 ? "" : "s"}`];
+      if (body.skipped) parts.push(`${body.skipped} ya estaban (su nota no se ha cambiado)`);
+      status(`✓ ${parts.join(" · ")} → ${chosenClient.name}`, false, {
+        href: fichaUrl(chosenClient),
+        label: "Ver en su ficha ↗",
+      });
+      checkInFicha();
+    } catch {
       status("No se pudo conectar con SmartBC", true);
     } finally {
-      render();
+      // El foco puede seguir en una nota de una fila que ya no existe.
+      if (document.activeElement && basketList.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
+      refresh();
     }
   }
 
   // ── Arranque ──────────────────────────────────────────────────────────
-  function boot() {
+  async function boot() {
     buildPanel();
-    collect();
+    const saved = await load([K.basket, K.collapsed, K.client]);
+    basket = Array.isArray(saved[K.basket]) ? saved[K.basket] : [];
+    collapsed = saved[K.collapsed] === true;
     // El cliente elegido la última vez ahorra volver a buscarlo entre página
     // y página del listado.
-    chrome.storage.local.get("smartbcLastClient", (d) => {
-      if (d.smartbcLastClient) {
-        chosenClient = d.smartbcLastClient;
-        clientInput.value = chosenClient.name;
-        status(`Ficha: ${chosenClient.name}`);
-        render();
-      }
-    });
+    chosenClient = saved[K.client] || null;
+
+    collect();
     searchClients("");
+
+    // Otra pestaña (u otro portal) cambió la cesta, el cliente o el plegado:
+    // se refleja aquí sin recargar.
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== "local") return;
+        let dirty = false;
+        if (changes[K.basket]) {
+          const next = changes[K.basket].newValue || [];
+          if (JSON.stringify(next) !== JSON.stringify(basket)) {
+            basket = next;
+            dirty = true;
+          }
+        }
+        if (changes[K.collapsed] && changes[K.collapsed].newValue !== collapsed) {
+          collapsed = changes[K.collapsed].newValue === true;
+          dirty = true;
+        }
+        if (changes[K.client]) {
+          const next = changes[K.client].newValue || null;
+          if ((next && next.id) !== (chosenClient && chosenClient.id)) {
+            chosenClient = next;
+            changingClient = false;
+            inFicha = new Map();
+            scheduleCheck();
+            dirty = true;
+          }
+        }
+        if (dirty) refresh();
+      });
+    } catch {
+      /* contexto perdido: el resto sigue funcionando en esta página */
+    }
 
     // Los listados cargan tarjetas al hacer scroll y algunos portales navegan
     // sin recargar: se vuelve a recolectar cuando el DOM cambia, con freno.
     let pending = null;
-    const obs = new MutationObserver(() => {
+    // Los cambios del propio panel y de los botones ＋ no cuentan: si contaran,
+    // repintar un botón dispararía otra recolección, y así cada 400 ms.
+    const ours = (n) =>
+      n && n.nodeType === 1 && (n === root || (n.classList && n.classList.contains("smartbc-pick")));
+    const insideOurs = (n) => {
+      const el = n && (n.nodeType === 1 ? n : n.parentElement);
+      return Boolean(el && (root.contains(el) || el.closest(".smartbc-pick")));
+    };
+    const obs = new MutationObserver((mutations) => {
+      const foreign = mutations.some(
+        (m) =>
+          !insideOurs(m.target) &&
+          ([...m.addedNodes].some((n) => !ours(n)) || [...m.removedNodes].some((n) => !ours(n))),
+      );
+      if (!foreign && location.href === lastHref) return;
       clearTimeout(pending);
       pending = setTimeout(collect, 400);
     });

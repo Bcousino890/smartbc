@@ -221,6 +221,9 @@ export function deriveNextActions(
       detailKey: "cc.next.portalCalls.detail",
       vars: { count: callbacks > 0 ? callbacks : toCall },
       tab: "properties",
+      // Directo al bloque: está en la misma pestaña que la selección y la
+      // selección privada, y sin ancla había que buscarlo.
+      anchor: "portal-links",
     });
   }
 
