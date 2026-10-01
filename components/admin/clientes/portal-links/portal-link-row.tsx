@@ -256,6 +256,16 @@ export function PortalLinkRow({
                   {specs.join(" · ")}
                 </p>
               )}
+              {/* La nota que se escribió al marcarlo (extensión o diálogo).
+                  La columna existía pero no se enseñaba en ningún sitio. */}
+              {link.notes && (
+                <p
+                  title={link.notes}
+                  className="mt-1.5 line-clamp-2 whitespace-pre-line border-s-2 border-gold/40 ps-2 text-xs italic leading-relaxed text-ink/60"
+                >
+                  {link.notes}
+                </p>
+              )}
             </div>
 
             <div className="shrink-0 text-right">

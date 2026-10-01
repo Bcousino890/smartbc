@@ -15,6 +15,9 @@ import type { PortalLinkInput } from "@/lib/portal-links/types";
 //
 // Reenviar la misma página NO duplica: `insertPortalLinks` deduplica por
 // `url_key` (la URL normalizada, o host+referencia del anuncio).
+//
+// El ORDEN del array es la prioridad: la extensión manda su cesta ya ordenada
+// y `insertPortalLinks` asigna las posiciones en ese orden, al final de la cola.
 // ============================================================================
 
 const MAX_LINKS = 60;
@@ -36,6 +39,8 @@ type IncomingLink = {
   imageUrl?: unknown;
   contactName?: unknown;
   contactPhone?: unknown;
+  /** Lo que se apuntó en la extensión al marcarlo ("dueño solo por WhatsApp"…). */
+  notes?: unknown;
 };
 
 function str(v: unknown, max = 500): string | null {
@@ -118,6 +123,7 @@ export async function POST(request: Request) {
       imageUrl: str(l.imageUrl, 1000),
       contactName: str(l.contactName, 200),
       contactPhone: str(l.contactPhone, 60),
+      notes: str(l.notes, 2000),
     }))
     .filter((l) => l.url);
 

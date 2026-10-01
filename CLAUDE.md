@@ -976,6 +976,22 @@ llamar ya asignado. Usa el **mismo token** que los leads del inbox. Rutas:
 CORS por lista explícita de orígenes — nunca `*`: estas rutas escriben en la
 ficha de un cliente).
 
+**La cesta de la extensión (1.10, 2026-10-01).** Lo marcado vive en
+`chrome.storage.local` (`smartbcBasket`), no en la página: sobrevive a pasar de
+página, de pestaña y de portal, y las pestañas abiertas se sincronizan solas
+(`storage.onChanged`). Cada entrada lleva nota y el orden de la cesta es la
+prioridad: viajan en el `POST` (`links[].notes`, y el orden del array → las
+posiciones que asigna `insertPortalLinks`). La nota acaba en
+`client_portal_links.notes`, que hasta esta fecha existía pero no se enseñaba
+en ningún sitio (ahora sale bajo el título en `portal-link-row.tsx`). El
+"✓ En ficha" sale de `POST /api/extension/portal-links/check`, que normaliza
+con el MISMO `parsePortalUrl().urlKey` que deduplica al insertar.
+⚠️ En la página de UN anuncio, el enlace "Siguiente" también casa con el regex
+de anuncio: antes recibía el ＋ y el anuncio abierto nunca se registraba.
+`isNavAnchor()` (header/nav o texto "Siguiente/Anterior…") y `cardOf(…,
+strict)` lo evitan; si un portal nuevo vuelve a pegar el ＋ en su navegación,
+es ahí donde mirar.
+
 ⚠️ La extracción del listado (título, precio, m²…) va anclada a **URLs y regex
 de texto, nunca a clases CSS**. Si un portal cambia su maquetación el campo
 llega vacío pero **el enlace se envía igual**, que es lo único imprescindible
