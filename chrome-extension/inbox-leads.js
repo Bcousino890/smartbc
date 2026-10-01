@@ -26,6 +26,16 @@
   // (ver cardDateLabel).
   const TIME_ONLY_RE = /^\d{1,2}:\d{2}$/;
   const DAY_HEADER_RE = /^(hoy|ayer|\d{1,2}\s+[a-zà-ÿ]{3,}\.?)$/i;
+  // Banner promocional que Idealista intercala junto al hilo de mensajes
+  // ("El 70% de los agentes ya usan la app de idealista... Apunta con la
+  // cámara para descargar la app...", con QR) — no lo escribió el contacto,
+  // pero al no llevar ningún atributo que lo distinga de un mensaje real se
+  // colaba como parte de "message" (tanto por el selector primario como por
+  // el respaldo de bloques y por las filas del modo LISTA). Sin anclar a
+  // clases CSS, por la misma regla que el resto del archivo: substring, no
+  // línea exacta, para no depender de la puntuación exacta del banner.
+  const PROMO_BANNER_RE =
+    /agentes ya usan la app de idealista|descargar la app.*responder|apunta con la c[aá]mara/i;
   // El inbox tiene dos tipos de hilo: mensajes (CONVERSATION_) y llamadas
   // perdidas (CALL_). Ambos son leads. La "clave" de un hilo es el id
   // numérico para las conversaciones y "call_<id>" para las llamadas, para
@@ -385,7 +395,9 @@
     const used = new Set(
       [lead.name, lead.phone && lines[phoneIdx], lead.propertyTitle, priceIdx >= 0 ? lines[priceIdx] : null, lead.messageDate].filter(Boolean),
     );
-    const candidates = lines.filter((l) => !used.has(l) && !/^internacional$/i.test(l) && l.length > 15);
+    const candidates = lines.filter(
+      (l) => !used.has(l) && !/^internacional$/i.test(l) && !PROMO_BANNER_RE.test(l) && l.length > 15,
+    );
     if (candidates.length > 0) {
       lead.message = candidates.reduce((a, b) => (b.length > a.length ? b : a), "");
     }
@@ -477,7 +489,8 @@
         const p = el.querySelector("p[data-kiwi-text]") || el.querySelector("p");
         return ((p || el).innerText || "").trim();
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter((t) => !PROMO_BANNER_RE.test(t));
     // Solo se descartan duplicados CONSECUTIVOS (artefactos de render).
     // Un contacto puede mandar exactamente el mismo texto en días distintos
     // (la misma plantilla a cada anuncio que consulta): esos son mensajes
@@ -626,6 +639,7 @@
             !DATE_RE.test(t) &&
             !PRICE_RE.test(t) &&
             !NOISE_RE.test(t) &&
+            !PROMO_BANNER_RE.test(t) &&
             !/^vio el anuncio/i.test(t),
         );
       // Igual que arriba: solo se descartan duplicados consecutivos; el
@@ -816,6 +830,57 @@
   // el recorrido pareciera completo cuando no lo era.
   let autoRun = null;
 
+  // Verdadero mientras navigatePrev espera a que la URL refleje el click en
+  // "Anterior". El router de más abajo (onUrlChange) sondea location.href
+  // cada 500ms; durante el salto entre conversaciones la URL de Idealista
+  // puede pasar por un instante intermedio que no matchea ninguna
+  // conversación (p.ej. queda en "/inbox" sin id mientras la SPA todavía
+  // está montando la siguiente). Sin este freno, ese poll caía en la rama
+  // "nos fuimos del hilo" y llamaba a removeDetailButton(), que pone
+  // autoRun a null — apagando el recorrido automático desde fuera del
+  // propio bucle a mitad de un salto. Por eso "Capturar todas" avanzaba
+  // exactamente 1 y se detenía solo (mal etiquetado como "fin del inbox").
+  let autoNavInFlight = false;
+
+  // Persistencia mínima para sobrevivir a una recarga completa de página: si
+  // "Anterior" resulta ser una navegación de verdad en vez de un cambio de
+  // ruta dentro de la SPA, TODO el contexto de este script desaparece a
+  // mitad del salto (autoRun, autoNavInFlight, todo) y el recorrido se veía
+  // exactamente como "avanza uno y no sigue", sin ningún error que lo
+  // explicara — el guion se reinicia de cero en la página nueva. Se guarda
+  // el progreso en sessionStorage (sobrevive a la navegación dentro de la
+  // misma pestaña, a diferencia de una variable) justo antes de cada salto;
+  // si al arrancar el script hay progreso pendiente y esta página YA es una
+  // conversación, se retoma desde ahí en vez de perderlo (ver el arranque
+  // del router, al final del archivo).
+  //
+  // Guarda también enviadas/fallidas y la hora de inicio: el parte que se
+  // manda al terminar (`reportRun`) tiene que contar el recorrido ENTERO,
+  // no solo el tramo posterior a la última recarga.
+  const AUTO_RUN_STORAGE_KEY = "smartbcAutoRunState";
+  function saveAutoRunState(state) {
+    try {
+      sessionStorage.setItem(AUTO_RUN_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      /* sessionStorage no disponible — el peor caso es perder la reanudación */
+    }
+  }
+  function loadAutoRunState() {
+    try {
+      const raw = sessionStorage.getItem(AUTO_RUN_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function clearAutoRunState() {
+    try {
+      sessionStorage.removeItem(AUTO_RUN_STORAGE_KEY);
+    } catch {
+      /* ignorar */
+    }
+  }
+
   // Localiza el control de navegación entre conversaciones ("Anterior" /
   // "Reciente") por su texto — sus clases _kiwi-button_* llevan hash de
   // build. No siempre es un <button> (a veces Idealista usa <a> o un
@@ -854,43 +919,72 @@
       const key = threadKeyFromUrl();
       return key && key !== currentId ? key : null;
     };
-    const nav = findNavButton("anterior");
-    if (!nav) return { next: null, reason: 'no encontré el control "Anterior"' };
-    if (nav.disabled) return { next: null, reason: "fin del inbox (Anterior deshabilitado)" };
+    // Espera a que el botón esté realmente listo (no solo presente): Idealista
+    // puede dejarlo deshabilitado un instante mientras termina de montar la
+    // conversación que se acaba de abrir. Rendirse en el primer vistazo hacía
+    // que el recorrido se cortara en falso aunque quedaran más conversaciones.
+    const nav = await waitFor(() => {
+      const btn = findNavButton("anterior");
+      return btn && !btn.disabled ? btn : null;
+    }, 3000);
+    if (!nav) {
+      // findNavButton() ya descarta los deshabilitados, así que no sirve
+      // para distinguir "no existe" de "existe pero deshabilitado" — se
+      // busca aquí por texto sin ese filtro, solo para el mensaje.
+      const existsDisabled = [...document.querySelectorAll('button, a, [role="button"]')].some((b) => {
+        const text = (b.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+        return text === "anterior" || text.startsWith("anterior ") || text.endsWith(" anterior");
+      });
+      return existsDisabled
+        ? { next: null, reason: "fin del inbox (Anterior deshabilitado)" }
+        : { next: null, reason: 'no encontré el control "Anterior"' };
+    }
     // eslint-disable-next-line no-console
     console.log('[SmartBC] auto: click en <' + nav.tagName.toLowerCase() + '> "' + (nav.textContent || "").trim().slice(0, 30) + '"');
 
-    nav.click();
-    let next = await waitFor(changed, 4000, 150);
-    if (!next) {
-      // Reintento: algunos builds enganchan el click en el <span> hijo.
-      const again = findNavButton("anterior") || nav;
-      const inner = again.querySelector("span") || again;
-      inner.click();
-      next = await waitFor(changed, 8000, 150);
+    autoNavInFlight = true;
+    try {
+      nav.click();
+      let next = await waitFor(changed, 4000, 150);
+      if (!next) {
+        // Reintento: algunos builds enganchan el click en el <span> hijo.
+        const again = findNavButton("anterior") || nav;
+        const inner = again.querySelector("span") || again;
+        inner.click();
+        next = await waitFor(changed, 8000, 150);
+      }
+      if (!next) {
+        // Diagnóstico: si el nombre del contacto SÍ cambió pero la URL no,
+        // el problema es que Idealista navega sin tocar el history (esto
+        // quedaría anotado para poder confirmarlo con evidencia real en vez
+        // de volver a adivinar a ciegas).
+        const nameChanged = contactNameNow() !== beforeName;
+        const reason =
+          "la conversación no cambió al pulsar Anterior (URL sigue en " +
+          (threadKeyFromUrl() || "sin id") +
+          (nameChanged ? "; el nombre del contacto SÍ cambió — Idealista no actualiza la URL al navegar" : "; el contacto tampoco cambió") +
+          ")";
+        return { next: null, reason };
+      }
+      return { next, reason: null };
+    } finally {
+      autoNavInFlight = false;
     }
-    if (!next) {
-      // Diagnóstico: si el nombre del contacto SÍ cambió pero la URL no,
-      // el problema es que Idealista navega sin tocar el history (esto
-      // quedaría anotado para poder confirmarlo con evidencia real en vez
-      // de volver a adivinar a ciegas).
-      const nameChanged = contactNameNow() !== beforeName;
-      const reason =
-        "la conversación no cambió al pulsar Anterior (URL sigue en " +
-        (threadKeyFromUrl() || "sin id") +
-        (nameChanged ? "; el nombre del contacto SÍ cambió — Idealista no actualiza la URL al navegar" : "; el contacto tampoco cambió") +
-        ")";
-      return { next: null, reason };
-    }
-    return { next, reason: null };
   }
 
-  async function runAutoCapture(startId) {
-    const startedAt = new Date().toISOString();
-    autoRun = { sent: 0, failed: 0, failedIds: [] };
+  async function runAutoCapture(startId, resumeState) {
+    // Al retomar tras una recarga se sigue contando desde donde iba. Un estado
+    // guardado por la 1.8.x solo traía `captured` (visitadas): se toman como
+    // enviadas porque es lo único que esa versión sabía decir.
+    const startedAt = resumeState?.startedAt || new Date().toISOString();
+    autoRun = {
+      sent: resumeState?.sent ?? resumeState?.captured ?? 0,
+      failed: resumeState?.failed ?? 0,
+      failedIds: Array.isArray(resumeState?.failedIds) ? resumeState.failedIds : [],
+    };
     updateAutoButton();
     let currentId = startId;
-    const visited = new Set();
+    const visited = new Set(resumeState?.visited || []);
     let stopReason = "fin del inbox";
     // El recorrido termina de forma natural cuando ya no hay botón
     // "Anterior" (última consulta del inbox). El tope de 2000 y el set
@@ -899,7 +993,26 @@
       if (visited.has(currentId)) { stopReason = "vuelta al inicio (ciclo)"; break; }
       visited.add(currentId);
 
-      const outcome = await captureDetail(currentId, true);
+      // Cualquier error de aquí en adelante (extracción, envío al portal,
+      // navegación) se capturaba antes SIN pasar por la limpieza de abajo:
+      // el bucle moría a mitad de camino, el botón se quedaba pegado en
+      // "⏹ Detener (N)" para siempre y no había ninguna pista visible de
+      // qué había pasado — se veía exactamente como "avanza uno y no sigue".
+      // Ahora cualquier fallo detiene el recorrido igual, pero SIEMPRE con
+      // limpieza, con el motivo real en la insignia y con la conversación
+      // contada como fallida en el parte.
+      let outcome;
+      try {
+        outcome = await captureDetail(currentId, true);
+      } catch (err) {
+        console.error("[SmartBC] auto: error capturando", currentId, err);
+        if (autoRun) {
+          autoRun.failed++;
+          autoRun.failedIds.push(currentId);
+        }
+        stopReason = "error al capturar la conversación (" + (err?.message || err) + ")";
+        break;
+      }
       if (!autoRun) { stopReason = "detenido por el usuario"; break; }
 
       if (outcome === "fatal") {
@@ -926,7 +1039,26 @@
         autoRun.failed > 0,
       );
 
-      const { next, reason } = await navigatePrev(currentId);
+      // Se guarda ANTES de intentar el salto: si resulta ser una recarga
+      // completa (ver comentario junto a AUTO_RUN_STORAGE_KEY), el arranque
+      // del script en la página nueva retoma el recorrido desde aquí en vez
+      // de quedarse solo con esta primera captura.
+      saveAutoRunState({
+        sent: autoRun.sent,
+        failed: autoRun.failed,
+        failedIds: autoRun.failedIds,
+        visited: [...visited],
+        startedAt,
+      });
+
+      let next, reason;
+      try {
+        ({ next, reason } = await navigatePrev(currentId));
+      } catch (err) {
+        console.error("[SmartBC] auto: error navegando desde", currentId, err);
+        stopReason = "error al pasar a la siguiente conversación (" + (err?.message || err) + ")";
+        break;
+      }
       if (!next) { stopReason = reason; break; }
       // eslint-disable-next-line no-console
       console.log("[SmartBC] auto:", autoRun.sent, "enviadas →", next);
@@ -937,6 +1069,7 @@
     const failed = autoRun ? autoRun.failed : 0;
     const failedIds = autoRun ? autoRun.failedIds : [];
     autoRun = null;
+    clearAutoRunState();
     updateAutoButton();
 
     // Sin auto-hide: el motivo del fin queda visible para diagnosticar. Y si
@@ -1010,6 +1143,7 @@
     autoBtn.addEventListener("click", () => {
       if (autoRun) {
         autoRun = null; // el bucle lo detecta y se detiene
+        clearAutoRunState();
         updateAutoButton();
         showBadge("Auto detenido", false, 3000);
       } else {
@@ -1025,12 +1159,16 @@
     const autoBtn = document.getElementById("smartbc-auto-capture");
     if (autoBtn) autoBtn.remove();
     autoRun = null;
+    clearAutoRunState();
   }
 
   // ── Router SPA ───────────────────────────────────────────────────────────
   let lastUrl = null;
 
   function onUrlChange() {
+    // Ver el comentario de autoNavInFlight: no reaccionar a un estado
+    // intermedio de la propia navegación que dispara navigatePrev.
+    if (autoNavInFlight) return;
     const url = location.href;
     const threadKey = threadKeyFromUrl(url);
     if (threadKey) {
@@ -1045,6 +1183,23 @@
     } else {
       removeListButton();
       removeDetailButton();
+    }
+  }
+
+  // Si quedó un recorrido a medias por una recarga completa de página (ver
+  // el comentario junto a AUTO_RUN_STORAGE_KEY, arriba) y esta página ya es
+  // una conversación, se retoma solo desde aquí en vez de quedarse en
+  // "avanzó uno y no siguió" cada vez que "Anterior" recarga la página.
+  const pendingAutoRun = loadAutoRunState();
+  if (pendingAutoRun) {
+    const key = threadKeyFromUrl();
+    if (key) {
+      lastUrl = location.href; // evita que el poll de abajo duplique el arranque
+      removeListButton();
+      ensureDetailButton(key);
+      runAutoCapture(key, pendingAutoRun);
+    } else {
+      clearAutoRunState(); // no estamos en una conversación: el progreso ya no sirve
     }
   }
 
