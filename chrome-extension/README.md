@@ -95,13 +95,24 @@ llegan a su ficha del CRM listos para repartir y llamar.
 3. Busca el cliente por nombre o teléfono y elige **quién los llama**
    (por ejemplo Fabricio). Ambas cosas se recuerdan para la siguiente página
    del listado.
-4. **Enviar** → llegan a `/es/admin/clientes/<id>` → bloque **Enlaces de
-   portales**, en estado *Por llamar*.
+4. **Enviar** → llegan a la ficha del cliente, en estado *Por llamar*. El
+   panel deja un enlace **"Ver en su ficha ↗"** que abre directamente el
+   bloque (ver "Dónde llegan" abajo).
 5. Quien llama abre la ficha, marca el resultado ("no acepta contrato de menos
    de 11 meses", "podemos verlo mañana") y, cuando el piso sigue adelante,
    pulsa **Crear ficha desde el anuncio**: se importa con el importador por
    enlace y queda en la selección del cliente, listo para el itinerario y la
    colección privada.
+
+### Dónde llegan
+
+| Dónde | URL | Qué se ve |
+|---|---|---|
+| Lista de clientes | `/es/admin/clientes` | Columna **Anuncios**: "3 por llamar", "2 nuevos" (últimas 48 h). Ordenar por *Anuncios por llamar* los pone arriba. |
+| Ficha → Resumen | `/es/admin/clientes/<id>` | Tarjeta **Anuncios de portales**: cifras y los 3 últimos que llegaron. |
+| Ficha → Propiedades | `/es/admin/clientes/<id>?tab=properties#portal-links` | El bloque **Enlaces de portales**, el primero de la pestaña: llamar, anotar, repartir, crear la ficha. |
+
+La pestaña Propiedades lleva un punto dorado mientras haya anuncios nuevos.
 
 ### Notas
 

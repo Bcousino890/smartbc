@@ -24,6 +24,19 @@
   const CLIENTS_API = PORTAL_ORIGIN + "/api/extension/clients";
   const MAX_SELECTION = 60;
 
+  /**
+   * Dónde aterriza lo que se envía: la ficha del cliente, pestaña
+   * Propiedades, bloque "Enlaces de portales" (ancla #portal-links). Antes el
+   * panel decía "✓ 5 enviados → Camila" y había que adivinar dónde mirarlo.
+   */
+  function fichaUrl(client) {
+    const country = client && client.country === "cl" ? "cl" : "es";
+    return (
+      `${PORTAL_ORIGIN}/${country}/admin/clientes/${encodeURIComponent(client.id)}` +
+      "?tab=properties#portal-links"
+    );
+  }
+
   // ── Adaptadores por portal ────────────────────────────────────────────
   // `link` reconoce el enlace a un anuncio dentro del listado y captura su
   // referencia; `detail` reconoce que la página ES un anuncio.
@@ -447,10 +460,26 @@
     document.body.appendChild(panel);
   }
 
-  function status(msg, isError) {
+  /** `link` (opcional): { href, label } — se pinta detrás del mensaje. */
+  function status(msg, isError, link) {
     if (!statusEl) return;
     statusEl.textContent = msg || "";
     statusEl.style.color = isError ? "#b4232a" : "#0a7d4f";
+    if (link && link.href) {
+      const a = document.createElement("a");
+      a.href = link.href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = link.label;
+      css(a, {
+        display: "inline-block",
+        marginLeft: "6px",
+        color: "#8a6d1f",
+        fontWeight: "600",
+        textDecoration: "underline",
+      });
+      statusEl.appendChild(a);
+    }
   }
 
   function render() {
@@ -532,7 +561,7 @@
         chrome.storage.local.set({ smartbcLastClient: c });
         clientInput.value = c.name;
         clientList.style.display = "none";
-        status(`Ficha: ${c.name}`);
+        status(`Ficha: ${c.name}`, false, { href: fichaUrl(c), label: "abrir ↗" });
         render();
       });
       clientList.appendChild(row);
@@ -577,7 +606,10 @@
       chrome.storage.local.set({ smartbcLastAssignee: staffSelect.value || "" });
       const parts = [`${body.inserted} enviados`];
       if (body.skipped) parts.push(`${body.skipped} ya estaban`);
-      status(`✓ ${parts.join(" · ")} → ${chosenClient.name}`);
+      status(`✓ ${parts.join(" · ")} → ${chosenClient.name}`, false, {
+        href: fichaUrl(chosenClient),
+        label: "Ver en su ficha ↗",
+      });
       selected.clear();
       for (const ref of cards.keys()) paint(ref);
     } catch (e) {
@@ -597,7 +629,10 @@
       if (d.smartbcLastClient) {
         chosenClient = d.smartbcLastClient;
         clientInput.value = chosenClient.name;
-        status(`Ficha: ${chosenClient.name}`);
+        status(`Ficha: ${chosenClient.name}`, false, {
+          href: fichaUrl(chosenClient),
+          label: "abrir ↗",
+        });
         render();
       }
     });
