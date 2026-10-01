@@ -28,6 +28,11 @@ import {
   SELECTABLE_LINK_STATUSES,
   type PortalLinkStatus,
 } from "../lib/portal-links/types.ts";
+import {
+  isFreshLink,
+  summarizePortalLinks,
+  summarizePortalLinksByClient,
+} from "../lib/portal-links/summary.ts";
 
 let failures = 0;
 
@@ -328,6 +333,58 @@ check(
     { id: "segundo", rating: 5 },
   ]).join() === "primero,segundo",
 );
+
+// ============================================================================
+section("📬 RESUMEN · lo que cuentan la lista de clientes y la ficha");
+// ============================================================================
+
+{
+  const now = new Date("2026-10-01T12:00:00Z");
+  const links: Array<{ client_id: string; status: PortalLinkStatus; created_at: string }> = [
+    { client_id: "a", status: "pending", created_at: "2026-10-01T09:00:00Z" },   // nuevo
+    { client_id: "a", status: "callback", created_at: "2026-09-29T13:00:00Z" },  // 47 h: nuevo
+    { client_id: "a", status: "no_answer", created_at: "2026-09-29T11:00:00Z" }, // 49 h: ya no
+    { client_id: "a", status: "discarded", created_at: "2026-10-01T10:00:00Z" }, // descartado: nunca nuevo
+    { client_id: "a", status: "to_visit", created_at: "2026-09-01T10:00:00Z" },
+    { client_id: "a", status: "converted", created_at: "2026-08-01T10:00:00Z" },
+    { client_id: "b", status: "pending", created_at: "2026-09-01T10:00:00Z" },
+  ];
+  const a = summarizePortalLinks(links.filter((l) => l.client_id === "a"), now);
+
+  check("cuenta el total", a.total === 6, String(a.total));
+  check(
+    "por llamar = pending + no_answer + callback (igual que el bloque de la ficha)",
+    a.toCall === 3,
+    String(a.toCall),
+  );
+  check("los callbacks se cuentan aparte", a.callbacks === 1);
+  check("para visitar / con ficha / descartados", a.toVisit === 1 && a.converted === 1 && a.discarded === 1);
+  check(
+    "nuevo = menos de 48 h y no descartado",
+    a.fresh === 2,
+    String(a.fresh),
+  );
+  check(
+    "el último que llegó es el más reciente, aunque esté descartado",
+    a.lastAddedAt === "2026-10-01T10:00:00Z",
+    String(a.lastAddedAt),
+  );
+  check("el resumen lleva el instante con el que se midió", a.computedAt === now.toISOString());
+  check(
+    "isFreshLink usa la misma regla que el contador",
+    links.filter((l) => l.client_id === "a" && isFreshLink(l, now)).length === a.fresh,
+  );
+
+  const empty = summarizePortalLinks([], now);
+  check("sin enlaces: todo a cero y sin fecha", empty.total === 0 && empty.lastAddedAt === null);
+
+  const byClient = summarizePortalLinksByClient(links, now);
+  check(
+    "agrupa por cliente sin mezclar",
+    byClient.a?.total === 6 && byClient.b?.total === 1 && byClient.b?.fresh === 0,
+  );
+  check("un cliente sin enlaces no aparece", !("c" in byClient));
+}
 
 // ============================================================================
 console.log(`\n${failures === 0 ? "✅ TODO OK" : `❌ ${failures} FALLO(S)`}\n`);

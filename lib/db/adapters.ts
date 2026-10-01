@@ -1,6 +1,7 @@
 // Adapters: convierten rows de Supabase al shape que esperan los componentes UI legacy.
 // A medida que migramos componentes a los tipos de BD directamente, estos adapters se eliminan.
 
+import { PROFILE_TYPE_BY_TAG } from "@/lib/clients/display";
 import type {
   AdminClient,
   AdminProperty,
@@ -145,13 +146,6 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
   year: "numeric",
 });
 
-const PROFILE_TYPE_BY_TAG: Record<string, ClientProfileType> = {
-  Estudiante: "student",
-  Trabajador: "worker",
-  Empresa: "company",
-  Familia: "family",
-  Inversor: "investor",
-};
 
 /**
  * Señales que la fila de `profiles` no lleva encima y que, sin ellas, esta
@@ -180,8 +174,13 @@ export function clientRowToAdminClient(
   const lastName = rest.join(" ");
   const initials = deriveInitials(fullName);
 
-  const profileType: ClientProfileType =
-    tags.map((t) => PROFILE_TYPE_BY_TAG[t.name]).find(Boolean) ?? "worker";
+  const taggedProfile = tags
+    .map((t) => (t ? PROFILE_TYPE_BY_TAG[t.name] : undefined))
+    .find(Boolean);
+  // "worker" sigue siendo el valor por defecto (los filtros del portal del
+  // cliente lo necesitan), pero `profileTypeKnown` dice si alguien lo eligió:
+  // la lista ponía "Trabajador" a todos los leads sin etiqueta.
+  const profileType: ClientProfileType = taggedProfile ?? "worker";
 
   const prefs = row.client_preferences;
   const operation: Operation =
@@ -221,6 +220,7 @@ export function clientRowToAdminClient(
     location: undefined,
     avatarInitials: initials,
     profileType,
+    profileTypeKnown: Boolean(taggedProfile),
     operation,
     stayType,
     preferredZone: prefs?.zones?.[0] ?? "—",

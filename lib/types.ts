@@ -316,6 +316,8 @@ export type AdminClient = {
   // Custom filters the admin assigns to this client. They drive what the
   // client sees in their own portal.
   profileType: ClientProfileType;
+  /** false = nadie lo eligió y `profileType` es el valor por defecto. */
+  profileTypeKnown?: boolean;
   operation: Operation;
   stayType: StayType;
   preferredZone: string;

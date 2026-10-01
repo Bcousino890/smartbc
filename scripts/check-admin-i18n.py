@@ -38,6 +38,7 @@ TEMPLATES = {
  "cc.shortlist.status.": ["reviewing","submitted","archived"],
  "cc.shortlist.link.": ["active","expired","revoked"],
  "cc.itinerary.status.": ["draft","published","completed","cancelled","archived"],
+ "cc.portal.status.": ["pending","no_answer","callback","to_visit","discarded","converted"],
  "cc.applications.status.": ["draft","pending_review","approved","rejected","completed"],
  "cc.applications.operation.": ["rent","sale"],
  "cc.applications.doc.": ["pending","verified","rejected","needs_correction"],

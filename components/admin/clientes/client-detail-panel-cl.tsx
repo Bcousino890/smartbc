@@ -14,7 +14,7 @@ import {
   Mail,
   MapPin,
   MessageSquare,
-  MoreVertical,
+  ArrowRight,
   Pencil,
   Phone,
   RotateCcw,
@@ -22,8 +22,10 @@ import {
   Star,
   Trees,
 } from "lucide-react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { saveClientPreferencesChile } from "@/app/(admin)/admin/clientes/actions";
+import { realEmail } from "@/lib/clients/display";
 import { useT } from "@/lib/i18n/provider";
 import type { AdminClient } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -117,8 +119,10 @@ function getAvatarColor(name: string): string {
 
 export function ClientDetailPanelCL({
   client,
+  fichaHref,
 }: {
   client: AdminClient | undefined;
+  fichaHref?: string;
 }) {
   if (!client) {
     return (
@@ -131,10 +135,20 @@ export function ClientDetailPanelCL({
     );
   }
 
-  return <ClientDetailPanelCLInner client={client} />;
+  // `key`: sin él, al pasar de un cliente a otro el estado de los filtros se
+  // quedaba con los del ANTERIOR (useState solo usa el valor inicial al
+  // montar), y "Guardar" los escribía en el nuevo.
+  return <ClientDetailPanelCLInner key={client.id} client={client} fichaHref={fichaHref} />;
 }
 
-function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
+function ClientDetailPanelCLInner({
+  client,
+  fichaHref,
+}: {
+  client: AdminClient;
+  fichaHref?: string;
+}) {
+  const t = useT();
   const initial = snapshotFromClient(client);
   const [state, setState] = useState<ChileFiltersState>(initial);
   const [isPending, startTransition] = useTransition();
@@ -209,17 +223,25 @@ function ClientDetailPanelCLInner({ client }: { client: AdminClient }) {
             </span>
           </div>
         </div>
-        <button type="button" aria-label="Más opciones" className="flex h-8 w-8 items-center justify-center rounded-lg text-ink/45 transition hover:bg-white/60 hover:text-ink">
-          <MoreVertical size={16} strokeWidth={1.75} />
-        </button>
+        {fichaHref && (
+          <Link
+            href={fichaHref}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
+          >
+            {t("clientes.table.openFicha")}
+            <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
+          </Link>
+        )}
       </div>
 
       {/* Contacto */}
       <ul className="flex flex-col gap-2 border-t border-gold/15 px-5 py-3 text-xs text-ink/70">
-        <li className="flex items-center gap-1.5 truncate">
-          <Mail size={13} strokeWidth={1.75} className="text-gold" />
-          <span className="truncate">{client.email}</span>
-        </li>
+        {realEmail(client.email) && (
+          <li className="flex items-center gap-1.5 truncate">
+            <Mail size={13} strokeWidth={1.75} className="text-gold" />
+            <span className="truncate">{client.email}</span>
+          </li>
+        )}
         {client.phone && (
           <li className="flex items-center gap-1.5">
             <Phone size={13} strokeWidth={1.75} className="text-gold" />

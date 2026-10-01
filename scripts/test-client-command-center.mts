@@ -270,6 +270,17 @@ check(
 );
 
 check(
+  "las llamadas de portales saltan directas al bloque (#portal-links), no solo a la pestaña",
+  (() => {
+    const a = deriveNextActions(
+      { ...empty(), portalLinks: [{ status: "pending", last_called_at: null }] },
+      NOW,
+    ).find((x) => x.kind === "portal_calls_pending");
+    return a?.tab === "properties" && a.anchor === "portal-links";
+  })(),
+);
+
+check(
   "el enlace a punto de caducar avisa a 7 días, no antes",
   (() => {
     const lejos = deriveNextActions(

@@ -885,6 +885,22 @@ Migración **0135**: `client_portal_links` (el anuncio) y
 `client_portal_link_notes` (el registro de llamadas, que es un HILO — quien
 llama después necesita leer lo que dijo el anterior, no pisarlo).
 
+**Dónde se VEN los anuncios (2026-10-01).** Hasta esta fecha solo existía el
+bloque de la ficha, tercero en la pestaña Propiedades y sin nada en Resumen
+que lo anunciara: lo que se mandaba desde la extensión parecía no llegar.
+Ahora aparece en tres sitios, contados con el mismo `summarizePortalLinks()`
+(`lib/portal-links/summary.ts`, "nuevo" = menos de 48 h y no descartado,
+calculado en el servidor):
+- Lista de clientes → columna **Anuncios** ("3 por llamar", "2 nuevos") y
+  orden *Anuncios por llamar* (`getPortalLinkSummaries()`, una lectura por
+  país, mismo gate y scope de `viewing_collections` que la ficha).
+- Ficha → Resumen → tarjeta **Anuncios de portales**
+  (`_components/portal-links-card.tsx`), y punto dorado en la pestaña
+  Propiedades mientras haya nuevos.
+- Ficha → Propiedades: el bloque es el **primero** (orden de embudo) y tiene
+  ancla `#portal-links`. La extensión, al enviar, enlaza a
+  `/{país}/admin/clientes/{id}?tab=properties#portal-links`.
+
 **Cosas que conviene saber antes de tocarlo:**
 - **La deduplicación es la promesa del módulo.** `url_key` es la URL
   normalizada (sin `www.`, sin barra final, sin parámetros de tracking) y, si

@@ -1,15 +1,13 @@
 "use client";
 
 import {
+  ArrowRight,
   Check,
-  Clock,
-  Eye,
   Heart,
   Info,
+  Link2,
   Mail,
   MapPin,
-  MessageSquare,
-  MoreVertical,
   PawPrint,
   Pencil,
   Phone,
@@ -18,9 +16,13 @@ import {
   Star,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { saveClientPreferences } from "@/app/(admin)/admin/clientes/actions";
+import { realEmail } from "@/lib/clients/display";
+import { dictionary } from "@/lib/i18n/dictionary";
 import { useT } from "@/lib/i18n/provider";
+import type { PortalLinkSummary } from "@/lib/portal-links/summary";
 import { MADRID_ZONES } from "@/lib/mock-properties";
 import type {
   AdminClient,
@@ -98,8 +100,13 @@ const STAY_OPTIONS: { value: StayType; labelKey: string }[] = [
 
 export function ClientDetailPanel({
   client,
+  fichaHref,
+  portalSummary,
 }: {
   client: AdminClient | undefined;
+  fichaHref?: string;
+  /** undefined = sin permiso; null = sin anuncios. */
+  portalSummary?: PortalLinkSummary | null;
 }) {
   const t = useT();
 
@@ -116,10 +123,28 @@ export function ClientDetailPanel({
     );
   }
 
-  return <ClientDetailPanelInner client={client} />;
+  // `key`: sin él, al pasar de un cliente a otro el estado de los filtros se
+  // quedaba con los del ANTERIOR (useState solo usa el valor inicial al
+  // montar), y "Guardar" los escribía en el nuevo.
+  return (
+    <ClientDetailPanelInner
+      key={client.id}
+      client={client}
+      fichaHref={fichaHref}
+      portalSummary={portalSummary}
+    />
+  );
 }
 
-function ClientDetailPanelInner({ client }: { client: AdminClient }) {
+function ClientDetailPanelInner({
+  client,
+  fichaHref,
+  portalSummary,
+}: {
+  client: AdminClient;
+  fichaHref?: string;
+  portalSummary?: PortalLinkSummary | null;
+}) {
   // El snapshot inicial es lo que viene de BD (vía adapter). Editamos sobre él
   // y comparamos para saber si hay cambios pendientes.
   const initial = snapshotFromClient(client);
@@ -165,9 +190,9 @@ function ClientDetailPanelInner({ client }: { client: AdminClient }) {
 
   return (
     <aside className="flex flex-col rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
-      <ClientHeader client={client} />
+      <ClientHeader client={client} fichaHref={fichaHref} />
       <ContactInfo client={client} />
-      <ActivityBlock client={client} />
+      <ActivityBlock client={client} fichaHref={fichaHref} portalSummary={portalSummary} />
       <CustomFiltersBlock state={state} setState={setState} />
       <InternalNotesBlock client={client} />
       <ActionsRow
@@ -200,7 +225,7 @@ function getPanelAvatarColor(name: string): string {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ClientHeader({ client }: { client: AdminClient }) {
+function ClientHeader({ client, fichaHref }: { client: AdminClient; fichaHref?: string }) {
   const t = useT();
   const isActive = client.status === "active";
   const fullName = `${client.firstName} ${client.lastName}`.trim();
@@ -232,24 +257,31 @@ function ClientHeader({ client }: { client: AdminClient }) {
           </span>
         </div>
       </div>
-      <button
-        type="button"
-        aria-label="Más opciones"
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-ink/45 transition hover:bg-white/60 hover:text-ink"
-      >
-        <MoreVertical size={16} strokeWidth={1.75} />
-      </button>
+      {/* Antes: un "⋮" que no abría nada. La ficha completa es lo que se
+          busca desde aquí. */}
+      {fichaHref && (
+        <Link
+          href={fichaHref}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-cream-50 transition hover:bg-ink-soft"
+        >
+          {t("clientes.table.openFicha")}
+          <ArrowRight size={12} strokeWidth={1.75} className="text-gold" />
+        </Link>
+      )}
     </header>
   );
 }
 
 function ContactInfo({ client }: { client: AdminClient }) {
+  const email = realEmail(client.email);
   return (
     <ul className="mt-4 grid grid-cols-1 gap-2 text-xs text-ink/70 sm:grid-cols-3">
-      <li className="flex items-center gap-1.5 truncate">
-        <Mail size={13} strokeWidth={1.75} className="text-gold" />
-        <span className="truncate">{client.email}</span>
-      </li>
+      {email && (
+        <li className="flex items-center gap-1.5 truncate">
+          <Mail size={13} strokeWidth={1.75} className="text-gold" />
+          <span className="truncate">{email}</span>
+        </li>
+      )}
       {client.phone && (
         <li className="flex items-center gap-1.5">
           <Phone size={13} strokeWidth={1.75} className="text-gold" />
@@ -266,23 +298,34 @@ function ContactInfo({ client }: { client: AdminClient }) {
   );
 }
 
-function ActivityBlock({ client }: { client: AdminClient }) {
+/**
+ * Solo lo que la lista SABE. "Propiedades vistas", "Mensajes" y "Última
+ * conexión" salían siempre a 0 / "—" porque la lista no carga la analítica
+ * (la ficha sí: a un cliente con 13 vistas se le leía aquí "0 vistas"). Esas
+ * cifras viven en la ficha; aquí quedan favoritos, visitas y los anuncios que
+ * le han llegado de los portales.
+ */
+function ActivityBlock({
+  client,
+  fichaHref,
+  portalSummary,
+}: {
+  client: AdminClient;
+  fichaHref?: string;
+  portalSummary?: PortalLinkSummary | null;
+}) {
   const t = useT();
   const a = client.activity;
-  const lastConn = a.lastConnectionLabelKey
-    ? t(a.lastConnectionLabelKey, { time: a.lastConnectionValue ?? "" })
-    : (a.lastConnectionText ?? "—");
+  const n = (key: string, count: number) =>
+    t(count === 1 && `${key}.one` in dictionary.es ? `${key}.one` : key, { count });
+  const portalHref = fichaHref ? `${fichaHref}?tab=properties#portal-links` : undefined;
+
   return (
     <section className="mt-5 border-t border-gold/15 pt-4">
       <p className="crm-label-sm text-ink/55">
         {t("clientes.detail.activity.title")}
       </p>
-      <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
-        <ActivityItem
-          icon={<Eye size={15} strokeWidth={1.75} />}
-          value={a.propertiesViewed}
-          labelKey="clientes.detail.activity.viewed"
-        />
+      <ul className="mt-3 grid grid-cols-3 gap-3">
         <ActivityItem
           icon={<Heart size={15} strokeWidth={1.75} />}
           value={a.favorites}
@@ -293,17 +336,58 @@ function ActivityBlock({ client }: { client: AdminClient }) {
           value={a.visitsRequested}
           labelKey="clientes.detail.activity.visits"
         />
-        <ActivityItem
-          icon={<MessageSquare size={15} strokeWidth={1.75} />}
-          value={a.messages}
-          labelKey="clientes.detail.activity.messages"
-        />
-        <ActivityItem
-          icon={<Clock size={15} strokeWidth={1.75} />}
-          value={lastConn}
-          labelKey="clientes.detail.activity.lastConnection"
-        />
+        {portalSummary !== undefined && (
+          <ActivityItem
+            icon={<Link2 size={15} strokeWidth={1.75} />}
+            value={portalSummary?.total ?? 0}
+            labelKey="clientes.detail.activity.portalLinks"
+          />
+        )}
       </ul>
+
+      {portalSummary !== undefined && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2 text-xs">
+          {portalSummary && portalSummary.total > 0 ? (
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink/70">
+              {portalSummary.toCall > 0 && (
+                <strong className="font-medium text-gold-dark">
+                  {n("clientes.portal.toCall", portalSummary.toCall)}
+                </strong>
+              )}
+              {portalSummary.fresh > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gold" />
+                  {n("clientes.portal.fresh", portalSummary.fresh)}
+                </span>
+              )}
+              {portalSummary.toCall === 0 && portalSummary.fresh === 0 && (
+                <span>{n("clientes.portal.total", portalSummary.total)}</span>
+              )}
+            </span>
+          ) : (
+            <span className="text-ink/50">{t("clientes.detail.portal.none")}</span>
+          )}
+          {portalHref && portalSummary && portalSummary.total > 0 && (
+            <Link
+              href={portalHref}
+              className="inline-flex items-center gap-1 font-medium text-ink/60 transition hover:text-ink"
+            >
+              {t("clientes.detail.portal.see")}
+              <ArrowRight size={11} strokeWidth={2} />
+            </Link>
+          )}
+        </div>
+      )}
+
+      {fichaHref && (
+        <Link
+          href={`${fichaHref}?tab=activity`}
+          className="mt-2 inline-flex items-center gap-1 text-xs text-ink/45 transition hover:text-ink"
+        >
+          {t("clientes.detail.activity.inFicha")}
+          <ArrowRight size={11} strokeWidth={2} />
+        </Link>
+      )}
     </section>
   );
 }

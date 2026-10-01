@@ -21,11 +21,14 @@ import { cn } from "@/lib/utils";
 export function CommandTabs({
   active,
   counts,
+  alerts,
   onChange,
 }: {
   active: CommandTab;
   /** Cifra que acompaña a cada pestaña. `null` = no se pinta nada. */
   counts: Partial<Record<CommandTab, number | null>>;
+  /** Punto dorado: hay algo recién llegado dentro (p.ej. anuncios nuevos). */
+  alerts?: Partial<Record<CommandTab, boolean>>;
   onChange: (tab: CommandTab) => void;
 }) {
   const t = useT();
@@ -44,6 +47,7 @@ export function CommandTabs({
         <div className="mx-auto flex max-w-[1320px] gap-1 overflow-x-auto px-3 [scrollbar-width:none] sm:px-4 lg:px-8 [&::-webkit-scrollbar]:hidden">
         {COMMAND_TABS.map((tab) => {
           const count = counts[tab];
+          const alert = Boolean(alerts?.[tab]);
           const on = tab === active;
           return (
             <button
@@ -67,6 +71,12 @@ export function CommandTabs({
                 >
                   {count}
                 </span>
+              )}
+              {alert && (
+                <span
+                  aria-label={t("cc.tabs.new")}
+                  className="absolute end-0.5 top-2 h-1.5 w-1.5 rounded-full bg-gold"
+                />
               )}
               <span
                 aria-hidden
