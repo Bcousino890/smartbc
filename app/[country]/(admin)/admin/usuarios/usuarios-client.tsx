@@ -9,6 +9,7 @@ import type {
   InternalUserStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { requestJson, type RequestJsonFailure } from "@/lib/http/request-json";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PermissionsDrawer } from "@/components/admin/permissions/permissions-drawer";
 
@@ -161,6 +162,24 @@ function CountryPicker({
 
 type ModalType = "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
 
+/**
+ * Mensaje del modal de alta cuando falla la petición. Si no hubo respuesta
+ * legible (corte de conexión, timeout, 502 del proxy) la cuenta pudo crearse
+ * igualmente en el servidor: se dice, en vez del "Failed to fetch" crudo.
+ * Reintentar nunca duplica — la ruta contesta "ya existe" (409).
+ */
+function describeCreateFailure(result: RequestJsonFailure): string {
+  if (result.kind === "http") {
+    const existingRole = result.data?.existingRole;
+    if (result.data?.code === "email_exists" && typeof existingRole === "string") {
+      const label = ROLE_LABEL[existingRole as InternalUserRole] ?? existingRole;
+      return `${result.error} Rol actual: ${label}.`;
+    }
+    return result.error;
+  }
+  return `${result.error} Puede que el usuario se haya creado igualmente: búscalo en la lista (se está actualizando) antes de reintentar. Si reintentas y ya existe, te avisará en vez de duplicarlo.`;
+}
+
 interface CreateUserModalProps {
   userRole: InternalUserRole;
   advisors: InternalUser[];
@@ -178,6 +197,7 @@ function CreateUserModal({
   onClose,
   onSuccess,
 }: CreateUserModalProps) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -199,49 +219,46 @@ function CreateUserModal({
     setStatus("loading");
     setErrorMsg("");
 
-    try {
-      // El selector multi-país solo aplica a staff no-admin (asesores/agentes).
-      // Admin accede a ambos países por rol; cliente es de un solo país.
-      const showCountryPicker = modalType !== "client" && modalType !== "admin";
-      const payload = {
-        email,
-        firstName,
-        lastName,
-        phone: phone.trim() || undefined,
-        role: modalType,
-        assignedAdvisorId:
-          modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
-        password: modalType !== "client" ? password : undefined,
-        // País por defecto/landing: el elegido en el picker (si aplica) o el
-        // árbol admin desde el que se creó el usuario.
-        country: showCountryPicker ? defaultCountry : country,
-        // El backend deriva multi_country de countries.length > 1.
-        countries: showCountryPicker ? selectedCountries : undefined,
-      };
+    // El selector multi-país solo aplica a staff no-admin (asesores/agentes).
+    // Admin accede a ambos países por rol; cliente es de un solo país.
+    const showCountryPicker = modalType !== "client" && modalType !== "admin";
+    const payload = {
+      email,
+      firstName,
+      lastName,
+      phone: phone.trim() || undefined,
+      role: modalType,
+      assignedAdvisorId:
+        modalType === "client" && assignedAdvisor ? assignedAdvisor : undefined,
+      password: modalType !== "client" ? password : undefined,
+      // País por defecto/landing: el elegido en el picker (si aplica) o el
+      // árbol admin desde el que se creó el usuario.
+      country: showCountryPicker ? defaultCountry : country,
+      // El backend deriva multi_country de countries.length > 1.
+      countries: showCountryPicker ? selectedCountries : undefined,
+    };
 
-      const res = await fetch("/api/admin/usuarios/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const result = await requestJson("/api/admin/usuarios/create", {
+      method: "POST",
+      body: payload,
+    });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setStatus("error");
-        setErrorMsg(data.error ?? "Error desconocido");
-        return;
-      }
-
-      setStatus("success");
-      setTimeout(() => {
-        onClose();
-        onSuccess?.();
-      }, 1800);
-    } catch (err) {
+    if (!result.ok) {
       setStatus("error");
-      setErrorMsg(err instanceof Error ? err.message : "Error de red");
+      setErrorMsg(describeCreateFailure(result));
+      // La cuenta puede existir aunque aquí no lo sepamos: se refresca la
+      // lista de detrás del modal para que se vea si ya está.
+      if (result.kind !== "http" || result.data?.mayExist === true) {
+        router.refresh();
+      }
+      return;
     }
+
+    setStatus("success");
+    setTimeout(() => {
+      onClose();
+      onSuccess?.();
+    }, 1800);
   };
 
   const MODAL_TITLES: Record<ModalType, string> = {
@@ -527,17 +544,20 @@ function EditUserModal({ user, defaultCountry, currentUserRole, onClose, onSucce
       if (nextEmail && nextEmail !== user.email) payload.email = nextEmail;
       if (newPassword) payload.password = newPassword;
 
-      const res = await fetch("/api/admin/usuarios/update", {
+      const result = await requestJson("/api/admin/usuarios/update", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
+      if (!result.ok) {
         setStatus("error");
-        setErrorMsg(data.error ?? "Error desconocido");
+        // Sin respuesta legible los cambios pueden haberse guardado; guardar
+        // otra vez los mismos valores no rompe nada.
+        setErrorMsg(
+          result.kind === "http"
+            ? result.error
+            : `${result.error} Puede que los cambios se hayan guardado igualmente; reintentar es seguro.`,
+        );
         return;
       }
 

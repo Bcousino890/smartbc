@@ -1,10 +1,88 @@
 import "server-only";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
 import { createInvitedUser } from "@/lib/email/password-reset";
 
+// Tope por llamada a GoTrue/PostgREST. Sin él, un GoTrue o un Kong colgado deja
+// la petición abierta hasta que algo de por medio la corta (undici a los 300 s,
+// el proxy antes) y el modal acaba sin una respuesta que enseñar. Con todas las
+// llamadas en serie del peor caso (crear + perfil + reintento + deshacer) se
+// sigue quedando por debajo de los ~60 s del proxy.
+const SUPABASE_CALL_TIMEOUT_MS = 10_000;
+// La auditoría es best-effort: no puede retener la respuesta de un usuario que
+// YA se creó bien.
+const AUDIT_WAIT_MS = 5_000;
+
+// `authAttempted`: ya se llamó a GoTrue — si algo falla desde ahí, la cuenta
+// puede existir en auth aunque la respuesta sea un error.
+type Progress = { authAttempted: boolean };
+
+/**
+ * Esta ruta SIEMPRE contesta JSON. Una excepción sin capturar sale de Next como
+ * 500 sin cuerpo, y el modal solo podía enseñar "Unexpected end of JSON input".
+ * Y como la cuenta puede haberse creado antes del fallo, la respuesta dice si
+ * conviene revisar la lista antes de reintentar (`mayExist`).
+ */
 export async function POST(req: Request) {
+  const progress: Progress = { authAttempted: false };
+  try {
+    return await handleCreate(req, progress);
+  } catch (err) {
+    console.error("[usuarios/create] Error inesperado:", err);
+    const detail = err instanceof Error ? err.message : String(err);
+    return Response.json(
+      {
+        error: progress.authAttempted
+          ? `Error inesperado al crear el usuario (${detail}). Puede que la cuenta se haya creado igualmente: revisa la lista antes de reintentar.`
+          : `Error inesperado al crear el usuario (${detail}). No se llegó a crear nada: puedes reintentar.`,
+        code: "internal_error",
+        mayExist: progress.authAttempted,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// GoTrue: `email_exists` (API 2024-01-01) o, en versiones sin código, el texto
+// "A user with this email address has already been registered".
+function isDuplicateEmail(message: string | null | undefined, code?: string): boolean {
+  return code === "email_exists" || /already (been )?registered/i.test(message ?? "");
+}
+
+/**
+ * El correo ya tiene cuenta. Nunca se duplica (GoTrue no lo permite), pero el
+ * caso típico es un reintento tras un "Failed to fetch": el primer intento sí
+ * llegó y creó la cuenta. Se devuelve el rol actual para que el panel diga si
+ * quedó bien o a medias (p. ej. como 'client', el default del trigger).
+ */
+async function emailExistsResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  email: string
+): Promise<Response> {
+  const candidates = Array.from(new Set([email.trim(), email.trim().toLowerCase()]));
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("role")
+    .in("email", candidates)
+    .limit(1)
+    .maybeSingle()
+    .retry(false);
+
+  return Response.json(
+    {
+      error: `Ya existe un usuario con el correo ${email}; no se ha creado otro. Si un intento anterior dio error de conexión, seguramente se creó entonces: búscalo en la lista y edítalo (rol, países, contraseña) en vez de crearlo de nuevo.`,
+      code: "email_exists",
+      mayExist: true,
+      existingRole: existing?.role ?? null,
+    },
+    { status: 409 }
+  );
+}
+
+async function handleCreate(req: Request, progress: Progress): Promise<Response> {
   let body: {
     email: string;
     firstName: string;
@@ -97,7 +175,24 @@ export async function POST(req: Request) {
     );
   }
 
-  const supabase = createAdminClient();
+  // Modelo multi-país: `countries` ⊆ {'es','cl'} y no vacío. Se valida ANTES de
+  // crear la cuenta: validarlo después devolvía el 400 con la cuenta ya creada
+  // en auth y el perfil sin rol.
+  if (
+    countries !== undefined &&
+    !(
+      Array.isArray(countries) &&
+      countries.length > 0 &&
+      countries.every((c) => c === "es" || c === "cl")
+    )
+  ) {
+    return Response.json(
+      { error: "countries debe ser un array no vacío de 'es' | 'cl'" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createAdminClient({ timeoutMs: SUPABASE_CALL_TIMEOUT_MS });
 
   // Crear usuario en auth
   let userId: string = "";
@@ -105,6 +200,7 @@ export async function POST(req: Request) {
   let clientEmailSent: boolean | undefined;
   let clientTempPassword: string | undefined;
 
+  progress.authAttempted = true;
   if (role === "client") {
     // Cliente: cuenta ya confirmada (el acceso no depende de que llegue el
     // correo) + enlace de fijar contraseña por AWS SES, en vez del mailer
@@ -117,6 +213,9 @@ export async function POST(req: Request) {
     });
 
     if (!inviteResult.ok) {
+      if (isDuplicateEmail(inviteResult.error)) {
+        return emailExistsResponse(supabase, email);
+      }
       authError = inviteResult.error;
     } else {
       userId = inviteResult.userId;
@@ -137,6 +236,22 @@ export async function POST(req: Request) {
     });
 
     if (error) {
+      if (isAuthRetryableFetchError(error)) {
+        // GoTrue no contestó (timeout, red, 502/504 de Kong): la petición pudo
+        // llegar y crear la cuenta igualmente — no lo sabemos.
+        console.error("[usuarios/create] GoTrue no respondió:", error.message);
+        return Response.json(
+          {
+            error: `El servidor de autenticación no respondió (${error.message}). Puede que la cuenta se haya creado igualmente: revisa la lista antes de reintentar.`,
+            code: "auth_unreachable",
+            mayExist: true,
+          },
+          { status: 504 }
+        );
+      }
+      if (isDuplicateEmail(error.message, error.code)) {
+        return emailExistsResponse(supabase, email);
+      }
       authError = error.message;
     } else {
       userId = data.user?.id || "";
@@ -162,19 +277,9 @@ export async function POST(req: Request) {
   };
 
   // Modelo multi-país (nuevo): si viene `countries`, tiene prioridad sobre
-  // country/multiCountry. Se valida ⊆ {'es','cl'} y no vacío.
+  // country/multiCountry (ya validado arriba, antes de crear la cuenta).
   let hasCountries = false;
   if (countries !== undefined) {
-    const valid =
-      Array.isArray(countries) &&
-      countries.length > 0 &&
-      countries.every((c) => c === "es" || c === "cl");
-    if (!valid) {
-      return Response.json(
-        { error: "countries debe ser un array no vacío de 'es' | 'cl'" },
-        { status: 400 }
-      );
-    }
     const unique = Array.from(new Set(countries));
     profileUpdate.countries = unique;
     // País por defecto/landing: el enviado explícitamente o el primero del set.
@@ -222,25 +327,64 @@ export async function POST(req: Request) {
   }
 
   if (profileError) {
+    console.error("[usuarios/create] Error actualizando perfil:", profileError.message);
+
+    // Staff: la cuenta ya existe en auth pero SIN su rol — el trigger
+    // handle_new_user la deja como 'client', sin acceso al panel y sin países.
+    // Se deshace para que reintentar funcione, en vez de chocar con "ya existe"
+    // y dejar un agente convertido en cliente. Los clientes no se deshacen: su
+    // correo de invitación puede haber salido ya, y su rol es el correcto.
+    if (role !== "client") {
+      const { error: rollbackError } = await supabase.auth.admin.deleteUser(userId);
+      if (rollbackError) {
+        console.error("[usuarios/create] No se pudo deshacer la cuenta:", rollbackError.message);
+        return Response.json(
+          {
+            error: `No se pudo guardar el perfil (${profileError.message}) y tampoco deshacer la cuenta: existe en la lista sin su rol. Edítala para asignarle rol y países en vez de crearla de nuevo.`,
+            code: "profile_failed",
+            mayExist: true,
+          },
+          { status: 500 }
+        );
+      }
+      return Response.json(
+        {
+          error: `No se pudo guardar el perfil (${profileError.message}). Se ha deshecho la creación de la cuenta: puedes reintentar.`,
+          code: "profile_failed",
+          mayExist: false,
+        },
+        { status: 500 }
+      );
+    }
+
     return Response.json(
-      { error: `Error actualizando perfil: ${profileError.message}` },
+      {
+        error: `Error actualizando perfil: ${profileError.message}`,
+        code: "profile_failed",
+        mayExist: true,
+      },
       { status: 500 }
     );
   }
 
   // Auditoría (best-effort): registra la creación del usuario con su rol y país.
-  await logPermissionEvent({
-    actorId: currentProfile.id,
-    targetUserId: userId,
-    eventType: "user_created",
-    country:
-      typeof profileUpdate.country === "string" ? profileUpdate.country : null,
-    newValue: {
-      role,
-      country: profileUpdate.country ?? null,
-      countries: profileUpdate.countries ?? null,
-    },
-  });
+  // Con tope de espera: si PostgREST se cuelga, el insert sigue en segundo
+  // plano pero la respuesta de un usuario ya creado no se queda retenida.
+  await Promise.race([
+    logPermissionEvent({
+      actorId: currentProfile.id,
+      targetUserId: userId,
+      eventType: "user_created",
+      country:
+        typeof profileUpdate.country === "string" ? profileUpdate.country : null,
+      newValue: {
+        role,
+        country: profileUpdate.country ?? null,
+        countries: profileUpdate.countries ?? null,
+      },
+    }),
+    new Promise<void>((resolve) => setTimeout(resolve, AUDIT_WAIT_MS)),
+  ]);
 
   return Response.json({
     ok: true,

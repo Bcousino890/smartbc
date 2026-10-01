@@ -201,6 +201,29 @@ root@…` y `ssh root@…` son dos prefijos distintos.
   2026-08-24 para que no queden dos caminos de "reset" — uno vivo por SES y
   uno muerto por GoTrue.
 
+## "Failed to fetch" en un formulario del panel NO es un error del servidor (2026-10-01)
+Pasó al crear un agente junior en `/admin/usuarios`. Comprobado en Chromium
+con el `catch` que tenían los modales (`await fetch(); await res.json()`):
+- excepción sin capturar en la ruta (Next: 500 sin cuerpo) → *"Unexpected end of JSON input"*
+- PM2 caído / reiniciando, o timeout del proxy (502/504 HTML) → *"Unexpected token '<'…"*
+- **solo** una conexión cortada (antes o durante la respuesta) o una redirección
+  a otro origen → *"Failed to fetch"*
+
+O sea: "Failed to fetch" no lo produce el código de la ruta, y la petición pudo
+ejecutarse entera en el servidor. Lo primero es mirar si el usuario se creó, luego el log de acceso del proxy (`499` = el navegador cerró;
+sin línea = nunca llegó) y `pm2 logs smartbc-portal`. Antes, reintentar daba
+*"A user with this email address has already been registered"* (en inglés, sin
+más), y si fallaba la escritura del perfil quedaba un agente creado como
+`client` (el default del trigger `handle_new_user`).
+
+Ahora `app/api/admin/usuarios/create` siempre contesta JSON, corta cada llamada
+a GoTrue/PostgREST a los 10 s (`createAdminClient({ timeoutMs })` — **nunca**
+como default global: ese cliente sube vídeos de 500 MB), devuelve 409
+`email_exists` con el rol actual en vez de "ya registrado", valida `countries`
+antes de crear la cuenta y deshace la cuenta de staff si el perfil no se pudo
+guardar. Los modales usan `lib/http/request-json.ts`, que separa red / timeout /
+respuesta no-JSON / error HTTP; úsalo en formularios nuevos del panel.
+
 ## Upload de archivos (Vídeos, Planos)
 - **Límites en la app:** vídeos ≤500MB, planos ≤100MB
 - **Almacenamiento:** bucket Supabase `properties-photos` (self-hosted en VPS)
