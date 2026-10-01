@@ -73,8 +73,11 @@ export default async function ClientCommandCenterPage({
     ? await getEffectivePermissions(profile.id, profile.role, country)
     : null;
   const vc = perms?.viewing_collections;
+  const isAdmin = profile?.role === "owner" || profile?.role === "admin";
   const inScope =
-    vcSettings.enabled && Boolean(vc?.view) && (await canAccessClient(id));
+    (isAdmin || vcSettings.enabled) &&
+    Boolean(vc?.view) &&
+    (await canAccessClient(id));
 
   const [selections, itineraries, shortlists] = inScope
     ? await Promise.all([
