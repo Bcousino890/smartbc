@@ -852,6 +852,17 @@ primera clase y tiene su propio botón.
 lo que hacía que la bandeja diera por huérfanos a **202** leads cuando de verdad
 lo eran **102**.
 
+⚠️ **`inbox-leads.js` vivió en dos ramas a la vez (unificado 2026-10-01, v1.10.1).**
+Los arreglos de "Capturar todas" de la 1.8.4 (`claude/admin-new-clients-email-3ews1f`:
+`autoNavInFlight`, reanudación por `sessionStorage`, esperar a que "Anterior"
+esté activo, errores que no dejan el botón colgado) nunca llegaron a `main`, y
+`main` reescribió el mismo bucle por su cuenta (enviadas/fallidas, parte en
+`idealista_capture_runs`). El equipo usaba a diario la 1.8.4 cargada desde esa
+rama. Sin el freno `autoNavInFlight`, el `main` de antes de unificar se rompía
+en el primer salto (`TypeError … reading 'sent'`): el router ve un instante
+`/inbox` sin id, llama a `removeDetailButton()` y pone `autoRun` a null a mitad
+del bucle. Si vuelves a tocar el bucle, conserva las dos cosas.
+
 **¿Está llegando todo?** `npm run idealista:cobertura` (solo lee) y la sección
 "Cobertura de contactos" de `/es/admin/idealista`. La extensión ahora cuenta las
 conversaciones que el CRM **confirmó**, no las que visitó —antes sumaba igual

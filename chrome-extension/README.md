@@ -56,6 +56,14 @@ Extensión de Chrome con tres funciones:
   de Idealista, una por una, hasta recorrer todo el inbox. El botón cambia
   a "⏹ Detener (N)" mientras corre — vuelve a pulsarlo para parar. Consejo:
   abre la conversación más reciente y deja que recorra el resto.
+  - **N son las ENVIADAS** al CRM, no las visitadas. Al terminar, el cartel
+    dice cuántas fallaron y **cuáles** ("sin enviar: 4512…"), para abrir ese
+    hilo y pulsar Reenviar. El parte de cada recorrido queda guardado en el
+    CRM (sección "Cobertura de contactos" de `/es/admin/idealista`).
+  - Si el token falla, se para en seco en vez de recorrer el inbox entero
+    sin guardar nada. Cada envío fallido se reintenta una vez.
+  - Si Idealista recarga la página al pulsar "Anterior", el recorrido se
+    retoma solo donde iba (antes avanzaba una y se quedaba parado).
 - **Llamadas perdidas**: los hilos de tipo "Llamada perdida" (el contacto
   llamó pidiendo información y no fue respondido) también se capturan —
   llegan sin nombre pero con teléfono y la propiedad consultada, y el
