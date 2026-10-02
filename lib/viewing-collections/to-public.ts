@@ -119,8 +119,8 @@ const MAX_PUBLIC_ADDRESS_SENTENCES = 3;
 const FALLBACK_AGENT: PublicAgentContact = {
   displayName: "Benjamín Cousiño Propiedades",
   email: "contacto@bcousinoprop.com",
-  phone: "+34 694 20 97 63",
-  whatsappUrl: "https://wa.me/34694209763",
+  phone: "+34 641 45 71 23",
+  whatsappUrl: "https://wa.me/34641457123",
   avatarUrl: null,
 };
 

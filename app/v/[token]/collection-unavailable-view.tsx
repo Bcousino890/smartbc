@@ -80,10 +80,10 @@ export function CollectionUnavailableView() {
             contacto@bcousinoprop.com
           </a>
           <a
-            href="tel:+34694209763"
+            href="tel:+34641457123"
             className="vc-focus border border-cream-50/30 px-7 py-3.5 text-center font-display text-[10.5px] font-medium uppercase vc-tracked text-cream-50 transition-colors duration-500 hover:border-cream-50"
           >
-            +34 694 20 97 63
+            +34 641 45 71 23
           </a>
         </div>
       </main>

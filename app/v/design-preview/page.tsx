@@ -155,8 +155,8 @@ const COLLECTION: PublicViewingCollection = {
   agent: {
     displayName: "María López",
     email: "maria@bcousinoprop.com",
-    phone: "+34 694 20 97 63",
-    whatsappUrl: "https://wa.me/34694209763",
+    phone: "+34 641 45 71 23",
+    whatsappUrl: "https://wa.me/34641457123",
     avatarUrl: null,
   },
 };

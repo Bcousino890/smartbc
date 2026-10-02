@@ -86,7 +86,7 @@ export const properties: Property[] = [
     features: ["Terraza 180 m²", "Piscina privada", "Portero 24h", "Garaje doble", "Climatización por suelo radiante", "Cocina Bulthaup", "Cerramientos Climalit", "Trastero"],
     address: "Calle Serrano",
     office: "Madrid",
-    phone: "+34 694 209 763",
+    phone: "+34 641 457 123",
   },
   {
     id: "villa-marbella",
@@ -114,7 +114,7 @@ export const properties: Property[] = [
     features: ["Acceso directo a playa", "Spa y gimnasio", "Cine privado", "Piscina climatizada", "Servicio de personal", "Domótica Crestron", "Sistema seguridad perimetral", "9 plazas garaje"],
     address: "Boulevard Príncipe Alfonso",
     office: "Madrid",
-    phone: "+34 694 209 763",
+    phone: "+34 641 457 123",
   },
   {
     id: "apt-vitacura",
@@ -166,7 +166,7 @@ export const properties: Property[] = [
     features: ["Parcela 2.000 m²", "Piscina", "Pista pádel", "Casa invitados", "Garaje 3 vehículos", "Seguridad urbanización 24h"],
     address: "Urbanización La Finca",
     office: "Madrid",
-    phone: "+34 694 209 763",
+    phone: "+34 641 457 123",
   },
   {
     id: "penthouse-cachagua",

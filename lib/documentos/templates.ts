@@ -8,7 +8,7 @@
 //
 // Datos de las sociedades tomados de los formatos oficiales:
 //   - España: BENJAMÍN COUSIÑO PROPIEDADES S.L., CIF B19444561,
-//     Calle Serrano 19 — Planta 4 Derecha, 28001 Madrid.
+//     Calle Serrano 19, 28001 Madrid.
 //     Representada por D. Benjamín Cousiño, Administrador Único.
 //   - Chile: Benjamín Cousiño Propiedades SpA, RUT 77290154-2,
 //     representada por doña Andrea Bonhomme.
@@ -339,7 +339,7 @@ const mandatoAlquilerES: DocTemplate = {
       type: "paragraph",
       text:
         `De una parte, BENJAMÍN COUSIÑO PROPIEDADES S.L., sociedad de responsabilidad limitada, CIF B19444561, con ` +
-        `domicilio social en Calle Serrano, 19 – Planta 4 Derecha, 28001 Madrid, representada por D. Benjamín Cousiño, ` +
+        `domicilio social en Calle Serrano 19, 28001 Madrid, representada por D. Benjamín Cousiño, ` +
         `Administrador Único (en adelante, "LA AGENCIA").`,
     },
     {
@@ -473,7 +473,7 @@ const mandatoVentaES: DocTemplate = {
       type: "paragraph",
       text:
         `De una parte, BENJAMÍN COUSIÑO PROPIEDADES S.L., sociedad de responsabilidad limitada, CIF B19444561, con ` +
-        `domicilio social en Calle Serrano, 19 – Planta 4 Derecha, 28001 Madrid, representada por D. Benjamín Cousiño, ` +
+        `domicilio social en Calle Serrano 19, 28001 Madrid, representada por D. Benjamín Cousiño, ` +
         `Administrador Único (en adelante, "LA AGENCIA").`,
     },
     {
@@ -594,8 +594,8 @@ const personalShopperES: DocTemplate = {
     {
       type: "paragraph",
       text:
-        `De una parte, BENJAMÍN COUSIÑO PROPIEDADES S.L., CIF B19444561, con domicilio social en Calle Serrano, 19 – ` +
-        `Planta 4 Derecha, 28001 Madrid, representada por D. Benjamín Cousiño, Administrador Único (en adelante, "LA AGENCIA").`,
+        `De una parte, BENJAMÍN COUSIÑO PROPIEDADES S.L., CIF B19444561, con domicilio social en Calle Serrano 19, ` +
+        `28001 Madrid, representada por D. Benjamín Cousiño, Administrador Único (en adelante, "LA AGENCIA").`,
     },
     {
       type: "paragraph",

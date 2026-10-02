@@ -26,7 +26,7 @@ export function SiteFooter() {
           <p className="eyebrow text-gold">Madrid · España</p>
           <p className="mt-4 font-display text-2xl">Calle Serrano 19</p>
           <p className="text-sm text-cream/70 mt-1">28001 Madrid — Barrio Salamanca</p>
-          <a href="tel:+34694209763" className="block mt-4 text-cream hover:text-gold transition-colors">+34 694 209 763</a>
+          <a href="tel:+34641457123" className="block mt-4 text-cream hover:text-gold transition-colors">+34 641 457 123</a>
           <p className="text-xs text-cream/50 mt-2 tracking-wider">Lun–Vie 9:00–19:00 · Sáb 10:00–14:00</p>
         </div>
 

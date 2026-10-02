@@ -102,7 +102,7 @@ export default function About() {
           <h2 className="mt-6 font-display text-4xl md:text-6xl text-navy">Nuestras Oficinas</h2>
           <div className="mt-14 grid md:grid-cols-2 gap-px bg-stone-200">
             {[
-              { country: "España · Desde 2025", city: "Madrid", addr: "Calle Serrano 19", line2: "28001 Madrid — Barrio Salamanca", phone: "+34 694 209 763", hours: "Lun–Vie 9:00–19:00 · Sáb 10:00–14:00" },
+              { country: "España · Desde 2025", city: "Madrid", addr: "Calle Serrano 19", line2: "28001 Madrid — Barrio Salamanca", phone: "+34 641 457 123", hours: "Lun–Vie 9:00–19:00 · Sáb 10:00–14:00" },
               { country: "Chile · Desde 2018", city: "Vitacura", addr: "Av. Kennedy 7440, Oficina 701", line2: "Vitacura, Santiago", phone: "+56 9 61791938", hours: "Lun–Vie 9:00–18:30" },
             ].map((o) => (
               <div key={o.city} className="bg-cream p-12">
