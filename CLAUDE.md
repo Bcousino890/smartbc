@@ -561,8 +561,10 @@ El paso a producción trajo 45 "Fichas guardadas" sin `contact_id` (nunca hizo
 falta hasta ahora, porque no se publicaba de verdad por API). En vez de
 asignarlo ficha por ficha, `idealista_config.default_contact_id` guarda un
 único contacto que se usa cuando la ficha no trae el suyo propio:
-- `mapper.ts` (`buildPropertyPayload`) cae a `options.defaultContactId` si
-  `row.contact_id` viene vacío — mismo camino para alta y modificación, ya que
+- ⚠️ **Desde 2026-10-02 el contacto por defecto MANDA** sobre el de la ficha:
+  a Idealista siempre van los datos de la empresa, nunca los de un agente.
+  `row.contact_id` solo se usa si no hay contacto por defecto. (Antes:
+  `mapper.ts` caía a `options.defaultContactId` solo si `row.contact_id` venía vacío) — mismo camino para alta y modificación, ya que
   `buildPropertyUpdatePayload` es un wrapper de la misma función.
 - Se fija desde Configuración → Idealista → "API en tiempo real", sección
   "Contacto por defecto" (`POST /api/admin/idealista/api/default-contact` →

@@ -632,11 +632,15 @@ export function buildPropertyPayload(row: IdealistaListingRow, options: MapperOp
 
   const type = mapPropertyType(row);
 
-  const contactId = Number(row.contact_id || options.defaultContactId || "");
+  // A Idealista siempre va el contacto de la EMPRESA (teléfono y datos de la
+  // agencia), nunca el de un agente: el contacto por defecto manda sobre el que
+  // tenga guardado la ficha. El de la ficha solo se usa si no hay ninguno
+  // configurado.
+  const contactId = Number(options.defaultContactId || row.contact_id || "");
   if (!Number.isInteger(contactId) || contactId <= 0) {
     errors.push(
-      'Falta el contacto de Idealista en la ficha. Selecciónalo o créalo en la sección ' +
-        '"Contacto e info interna" del formulario, antes de publicar.'
+      'Falta el contacto de Idealista de la empresa. Fíjalo en Configuración → Idealista → ' +
+        '"API en tiempo real" → "Contacto por defecto", antes de publicar.'
     );
   }
 

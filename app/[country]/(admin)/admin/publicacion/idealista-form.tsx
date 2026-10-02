@@ -1718,6 +1718,10 @@ export function IdealistaForm({
         <SectionHeader step={10} title="Contacto e info interna" />
         <div>
           <Label>Contacto en Idealista</Label>
+          <p className="mb-1.5 text-xs text-ink/50">
+            Al publicar se usa siempre el contacto de la empresa (Configuración → Idealista → Contacto por
+            defecto). Este solo cuenta si no hay ninguno configurado.
+          </p>
           <select
             value={form.contactId}
             onChange={(e) => set("contactId", e.target.value)}

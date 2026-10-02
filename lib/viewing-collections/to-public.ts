@@ -348,14 +348,14 @@ function formatWindow(
   return a ?? b;
 }
 
+// El cliente ve el nombre y la foto de su agente, pero los datos de contacto
+// (teléfono, WhatsApp, email) son siempre los de la EMPRESA, nunca los
+// personales del agente.
 function toPublicAgent(agent: RawPublicAgent): PublicAgentContact {
   if (!agent || !agent.full_name?.trim()) return FALLBACK_AGENT;
-  const digits = (agent.phone ?? "").replace(/[^\d]/g, "");
   return {
+    ...FALLBACK_AGENT,
     displayName: agent.full_name.trim(),
-    email: agent.email,
-    phone: agent.phone,
-    whatsappUrl: digits.length >= 9 ? `https://wa.me/${digits}` : null,
     avatarUrl: agent.avatar_url,
   };
 }

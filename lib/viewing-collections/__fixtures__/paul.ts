@@ -117,7 +117,7 @@ export function mondayCollection(
     agent: {
       full_name: "María López",
       email: "maria@bcousinoprop.com",
-      phone: "+34 641 45 71 23",
+      phone: "+34 600 999 888",
       avatar_url: null,
     },
     expiresAt: "2026-10-16T10:00:00Z",
