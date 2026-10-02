@@ -329,8 +329,8 @@ function Home() {
               <Link to="/contacto" className="text-[11px] tracking-[0.28em] uppercase bg-gold text-navy px-8 py-4 hover:bg-cream transition-colors">
                 Hablemos de Colaboración
               </Link>
-              <a href="mailto:contacto@bcousinorprop.com" className="text-[11px] tracking-[0.28em] uppercase border border-cream/30 text-cream px-8 py-4 hover:border-gold hover:text-gold transition-colors">
-                contacto@bcousinorprop.com
+              <a href="mailto:contacto@bcousinoprop.com" className="text-[11px] tracking-[0.28em] uppercase border border-cream/30 text-cream px-8 py-4 hover:border-gold hover:text-gold transition-colors">
+                contacto@bcousinoprop.com
               </a>
             </div>
           </div>

@@ -18,8 +18,8 @@ export function SiteFooter() {
           <p className="mt-6 text-sm text-cream/60 leading-relaxed">
             Personal shopper inmobiliario en España y Chile. Acceso a una cartera privada de más de 1.800 propiedades off market en las ubicaciones más exclusivas.
           </p>
-          <a href="mailto:contacto@bcousinorprop.com" className="mt-6 inline-block text-cream hover:text-gold transition-colors tracking-wide">
-            contacto@bcousinorprop.com
+          <a href="mailto:contacto@bcousinoprop.com" className="mt-6 inline-block text-cream hover:text-gold transition-colors tracking-wide">
+            contacto@bcousinoprop.com
           </a>
         </div>
 

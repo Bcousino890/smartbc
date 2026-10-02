@@ -120,7 +120,7 @@ export const MADRID_ZONES_WITH_SUBZONES: Record<string, string[]> = {
 
 const DEFAULT_CONTACT: PropertyContact = {
   phone: "+34 641 457 123",
-  email: "info@bencousinopropiedades.com",
+  email: "contacto@bcousinoprop.com",
   hoursKey: "detail.contact.hours",
   whatsapp: "+34641457123",
 };
