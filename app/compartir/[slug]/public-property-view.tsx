@@ -50,9 +50,9 @@ import type { MapProvider } from "@/lib/services/location/provider";
 
 const BC_CONTACT = {
   email: "contacto@bcousinoprop.com",
-  phoneDisplay: "+34 694 20 97 63",
-  phoneE164: "+34694209763",
-  whatsapp: "34694209763",
+  phoneDisplay: "+34 641 45 71 23",
+  phoneE164: "+34641457123",
+  whatsapp: "34641457123",
 };
 
 export type VideoMedia = {

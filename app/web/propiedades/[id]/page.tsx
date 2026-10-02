@@ -53,7 +53,7 @@ async function getPortalProperty(slug: string): Promise<Property | null> {
   const countryCode = p.country as string;
   const city = countryCode === "es" ? "Madrid" : "Santiago";
   const office = countryCode === "es" ? "Madrid" : "Santiago";
-  const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
+  const phone = countryCode === "es" ? "+34 641 457 123" : "+56 9 61791938";
   const priceNum = Number(p.price);
   const priceStr = getCountryConfig(isCountry(countryCode) ? countryCode : "es").formatPrice(
     priceNum,
@@ -129,7 +129,7 @@ async function getSimilarProperties(currentSlug: string): Promise<Property[]> {
     const countryCode = p.country as string;
     const city = countryCode === "es" ? "Madrid" : "Santiago";
     const office = countryCode === "es" ? "Madrid" : "Santiago";
-    const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
+    const phone = countryCode === "es" ? "+34 641 457 123" : "+56 9 61791938";
     const priceNum = Number(p.price);
     const priceStr = getCountryConfig(isCountry(countryCode) ? countryCode : "es").formatPrice(
       priceNum,

@@ -70,7 +70,7 @@ export async function fetchPortalProperties(): Promise<Property[]> {
       const countryLabel = countryCode === "es" ? "España" : "Chile";
       const city = countryCode === "es" ? "Madrid" : "Santiago";
       const office = countryCode === "es" ? "Madrid" : "Santiago";
-      const phone = countryCode === "es" ? "+34 694 209 763" : "+56 9 61791938";
+      const phone = countryCode === "es" ? "+34 641 457 123" : "+56 9 61791938";
 
       const videos = (
         (p.property_media as Array<{ url: string; type: string; file_name: string }>) ?? []

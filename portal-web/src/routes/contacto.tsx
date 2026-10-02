@@ -85,7 +85,7 @@ function Contacto() {
           </div>
 
           {[
-            { city: "Madrid, España", addr: "Calle Serrano 19, 28001", phone: "+34 694 209 763", hours: "Lun–Vie 9:00–19:00 · Sáb 10:00–14:00" },
+            { city: "Madrid, España", addr: "Calle Serrano 19, 28001", phone: "+34 641 457 123", hours: "Lun–Vie 9:00–19:00 · Sáb 10:00–14:00" },
             { city: "Vitacura, Chile", addr: "Av. Kennedy 7440, Oficina 701 · Vitacura", phone: "+56 9 61791938", hours: "Lun–Vie 9:00–18:30" },
           ].map((o) => (
             <div key={o.city} className="border-l-2 border-gold pl-5">

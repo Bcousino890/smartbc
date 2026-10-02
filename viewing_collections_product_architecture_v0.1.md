@@ -1843,7 +1843,7 @@ Tras publicar:
 ├───────────────────────────────────────────────────────────┤
 │  YOUR AGENT                                               │
 │  ⬤  María López                                           │
-│     ✉ maria@bcousinoprop.com   ☎ +34 694 20 97 63         │
+│     ✉ maria@bcousinoprop.com   ☎ +34 641 45 71 23         │
 │                    [ WhatsApp ]                           │
 ├───────────────────────────────────────────────────────────┤
 │  Benjamín Cousiño Propiedades                             │
@@ -1868,7 +1868,7 @@ Tras publicar:
 │         enlace actualizado.                               │
 │                                                           │
 │              ✉ contacto@bcousinoprop.com                  │
-│              ☎ +34 694 20 97 63                           │
+│              ☎ +34 641 45 71 23                           │
 │                                                           │
 │                                                           │
 ├───────────────────────────────────────────────────────────┤

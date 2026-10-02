@@ -365,7 +365,7 @@ section("🟡 Agente");
 check("el agente aparece con su nombre", monday.agent.displayName === "María López");
 check(
   "el WhatsApp del agente se construye con los dígitos",
-  monday.agent.whatsappUrl === "https://wa.me/34694209763",
+  monday.agent.whatsappUrl === "https://wa.me/34641457123",
   String(monday.agent.whatsappUrl),
 );
 
