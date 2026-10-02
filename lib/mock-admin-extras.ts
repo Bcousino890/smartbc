@@ -73,7 +73,7 @@ export const mockAppSettings: AppSettings = {
     taxId: "B-12345678",
     address: "Calle de Velázquez, 76, 28001 Madrid",
     phone: "+34 91 123 45 67",
-    email: "info@bencousinopropiedades.com",
+    email: "contacto@bcousinoprop.com",
   },
   branding: {
     primaryColor: "#0a0a0a",

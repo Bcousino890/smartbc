@@ -5,7 +5,7 @@ import { extractMobiliaPhotos } from "./mobilia";
 const SITE_BASE = "https://levelrealestate.es";
 const SITEMAP_URL = `${SITE_BASE}/property-sitemap.xml`;
 const USER_AGENT =
-  "smartbc-bot/1.0 (contacto@bencousinopropiedades.com)";
+  "smartbc-bot/1.0 (contacto@bcousinoprop.com)";
 const REQUEST_DELAY_MS = 2500;
 const REQUEST_TIMEOUT_MS = 20000;
 // Límite por sync para no agotar el maxDuration del endpoint (300s). El primer

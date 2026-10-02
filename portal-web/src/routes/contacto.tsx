@@ -76,8 +76,8 @@ function Contacto() {
         <aside className="space-y-8">
           <div>
             <p className="eyebrow">Email Directo</p>
-            <a href="mailto:contacto@bcousinorprop.com" className="mt-3 block font-display text-2xl text-navy hover:text-gold transition-colors break-all">
-              contacto@bcousinorprop.com
+            <a href="mailto:contacto@bcousinoprop.com" className="mt-3 block font-display text-2xl text-navy hover:text-gold transition-colors break-all">
+              contacto@bcousinoprop.com
             </a>
           </div>
           <div>
