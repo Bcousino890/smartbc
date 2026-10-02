@@ -300,18 +300,32 @@ export async function upsertContact(input: {
 
 /** Contactos guardados en el espejo local, para el desplegable del formulario. */
 export async function listLocalContacts(): Promise<
-  Array<{ contactId: number; name: string; email: string; isAgent: boolean; active: boolean }>
+  Array<{
+    contactId: number;
+    name: string;
+    firstName: string;
+    lastName: string | null;
+    email: string;
+    phone: string | null;
+    phonePrefix: string | null;
+    isAgent: boolean;
+    active: boolean;
+  }>
 > {
   const db = createAdminClient() as any;
   const { data } = await db
     .from("idealista_api_contacts")
-    .select("contact_id, name, last_name, email, is_agent, active")
+    .select("contact_id, name, last_name, email, phone, phone_prefix, is_agent, active")
     .order("name", { ascending: true });
 
   return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     contactId: Number(row.contact_id),
     name: [row.name, row.last_name].filter(Boolean).join(" ").trim(),
+    firstName: String(row.name ?? ""),
+    lastName: row.last_name ? String(row.last_name) : null,
     email: String(row.email ?? ""),
+    phone: row.phone ? String(row.phone) : null,
+    phonePrefix: row.phone_prefix ? String(row.phone_prefix) : null,
     isAgent: row.is_agent === true,
     active: row.active !== false,
   }));

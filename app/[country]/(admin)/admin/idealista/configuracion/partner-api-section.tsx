@@ -24,8 +24,16 @@ interface ConfigStatus {
 interface ContactOption {
   contactId: number;
   name: string;
+  firstName: string;
+  lastName: string | null;
   email: string;
+  phone: string | null;
+  phonePrefix: string | null;
+  isAgent: boolean;
 }
+
+// Teléfono de la agencia: es el que ven los clientes en cada anuncio de Idealista.
+const AGENCY_PHONE = "641457123";
 
 interface Orphan {
   propertyId: number;
@@ -56,6 +64,8 @@ export function PartnerApiSection() {
   const [contactOptions, setContactOptions] = useState<ContactOption[]>([]);
   const [defaultContactId, setDefaultContactId] = useState("");
   const [savingDefaultContact, setSavingDefaultContact] = useState(false);
+  const [newPhone, setNewPhone] = useState(AGENCY_PHONE);
+  const [updatingPhones, setUpdatingPhones] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -74,15 +84,64 @@ export function PartnerApiSection() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
+  const loadContacts = useCallback(() => {
     fetch("/api/admin/idealista/api/contacts")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (Array.isArray(data?.contacts)) setContactOptions(data.contacts);
       })
       .catch(() => {});
-  }, [load]);
+  }, []);
+
+  useEffect(() => {
+    void load();
+    loadContacts();
+  }, [load, loadContacts]);
+
+  // Cambia el teléfono principal de todos los contactos en Idealista (PUT por
+  // contacto). Los anuncios apuntan al contacto por id, así que todos los ya
+  // publicados pasan a mostrar el número nuevo sin republicarlos.
+  async function updateAllPhones() {
+    const phone = newPhone.replace(/\D/g, "");
+    const editable = contactOptions.filter((c) => !c.isAgent);
+    if (!phone || editable.length === 0) return;
+    setUpdatingPhones(true);
+    setMessage(null);
+    const errors: string[] = [];
+    let updated = 0;
+    for (const c of editable) {
+      try {
+        const res = await fetch("/api/admin/idealista/api/contacts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contactId: c.contactId,
+            name: c.firstName || c.name,
+            lastName: c.lastName ?? undefined,
+            email: c.email,
+            phone,
+            phonePrefix: "34",
+          }),
+        });
+        const body = await res.json().catch(() => null);
+        if (res.ok && body?.ok) updated++;
+        else errors.push(`#${c.contactId} ${c.name}: ${(body?.errors ?? [body?.error ?? `Error ${res.status}`]).join(" · ")}`);
+      } catch {
+        errors.push(`#${c.contactId} ${c.name}: no se pudo conectar con el servidor`);
+      }
+    }
+    const agents = contactOptions.filter((c) => c.isAgent);
+    for (const a of agents) {
+      errors.push(`#${a.contactId} ${a.name}: es un agente de Idealista, cámbialo desde su área privada`);
+    }
+    setMessage({
+      kind: errors.length ? "error" : "ok",
+      text: `Teléfono actualizado en ${updated} de ${contactOptions.length} contacto(s).`,
+      details: errors.length ? errors : undefined,
+    });
+    setUpdatingPhones(false);
+    loadContacts();
+  }
 
   async function saveDefaultContact() {
     const contactId = Number(defaultContactId);
@@ -301,6 +360,41 @@ export function PartnerApiSection() {
             className="rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm font-semibold text-ink transition hover:border-gold/40 disabled:opacity-50"
           >
             {savingDefaultContact ? "Guardando…" : "Guardar y aplicar a fichas sin contacto"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-ink/10 bg-cream-50 p-3">
+        <label className="mb-1 block text-xs font-medium text-ink/70">Teléfono que ven los clientes en Idealista</label>
+        <p className="mb-2 text-xs text-ink/50">
+          Cambia el teléfono principal de todos los contactos en Idealista. Los anuncios ya publicados se actualizan
+          solos, porque apuntan al contacto.
+        </p>
+        {contactOptions.length > 0 && (
+          <ul className="mb-2 space-y-0.5 text-xs text-ink/60">
+            {contactOptions.map((c) => (
+              <li key={c.contactId}>
+                {c.name} (#{c.contactId}): {c.phone ? `+${c.phonePrefix ?? "34"} ${c.phone}` : "sin teléfono"}
+                {c.isAgent ? " · agente, no editable por API" : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-ink/60">+34</span>
+          <input
+            value={newPhone}
+            onChange={(e) => setNewPhone(e.target.value)}
+            inputMode="tel"
+            className={`${inputCls} max-w-[12rem]`}
+          />
+          <button
+            type="button"
+            onClick={updateAllPhones}
+            disabled={updatingPhones || !newPhone.trim() || contactOptions.every((c) => c.isAgent)}
+            className="rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm font-semibold text-ink transition hover:border-gold/40 disabled:opacity-50"
+          >
+            {updatingPhones ? "Actualizando…" : "Actualizar en todos los contactos"}
           </button>
         </div>
       </div>
