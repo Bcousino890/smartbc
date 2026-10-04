@@ -134,6 +134,14 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Rutas que RECIBEN ARCHIVOS, fuera del middleware: Next 15.5 copia el
+    // cuerpo de cada petición que pasa por aquí y lo CORTA a 10 MB
+    // (`middlewareClientMaxBodySize`, solo avisa con un console.warn) — la
+    // ruta recibe un FormData truncado ("Failed to parse body as FormData").
+    // En /api el middleware no controla acceso (solo refresca la cookie de
+    // sesión; isAdmin/isClient no casan con /api), y cada una de estas rutas
+    // comprueba sesión y permisos por su cuenta. Si añades una ruta de subida,
+    // añádela aquí y que se autentique sola.
+    "/((?!_next/static|_next/image|favicon.ico|api/admin/properties/upload|api/admin/publicacion/upload-media|api/admin/idealista/upload-media|api/admin/idealista/video-music|api/admin/zinto/media/send|api/property-applications/documents/upload|api/property-applications/documents/auto-upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

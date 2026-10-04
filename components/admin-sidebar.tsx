@@ -11,6 +11,7 @@ import {
   Home,
   LayoutDashboard,
   LogOut,
+  Mail,
   Menu,
   MessageSquare,
   Radio,
@@ -69,6 +70,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "solicitudes"   },
   { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
   { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
+  // Sin recurso de permisos a propósito: es el buzón PERSONAL de cada
+  // usuario del staff (@bcousinoprop.com), no un módulo compartido.
+  { href: "/admin/correo",             labelKey: "admin.nav.correo",             icon: Mail                                                },
   { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "sindicacion",  onlyCountry: "es" },
   { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
   { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },

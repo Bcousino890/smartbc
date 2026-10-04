@@ -224,7 +224,102 @@ antes de crear la cuenta y deshace la cuenta de staff si el perfil no se pudo
 guardar. Los modales usan `lib/http/request-json.ts`, que separa red / timeout /
 respuesta no-JSON / error HTTP; úsalo en formularios nuevos del panel.
 
+## Correo corporativo dentro del CRM — `/admin/correo` (2026-10-04)
+Cada usuario del staff lee y envía SU buzón `@bcousinoprop.com` sin salir del
+panel (diseño de tres columnas tipo Roundcube: carpetas · lista con buscador
+· lectura con Responder / Responder a todos / Reenviar / Eliminar / Archivo /
+SPAM / Marcar). **No tiene nada que ver con AWS SES** (arriba): SES es para
+los correos automáticos de la app; esto es el buzón personal de cPanel.
+- **Servidor fijo para todos** (`lib/mailbox/config.ts`, los "Secure SSL/TLS
+  Settings" del propio cPanel): IMAP `bcousinoprop.com:993`, SMTP
+  `bcousinoprop.com:465`, usuario = la dirección. Override con
+  `MAILBOX_IMAP_HOST/PORT`, `MAILBOX_SMTP_HOST/PORT`, `MAILBOX_ALLOWED_DOMAINS`.
+  El host NUNCA lo elige el usuario (el CRM no debe poder abrir conexiones
+  IMAP/SMTP a servidores arbitrarios) y solo se conectan buzones del dominio.
+- **La contraseña se escribe una vez**: se prueba contra IMAP y SMTP ANTES de
+  guardarla y se guarda cifrada (`encryptSecret`, `EMAIL_ENCRYPTION_KEY`) en
+  `user_mailboxes` (migración 0171, RLS sin políticas: solo service role). Si
+  alguien la cambia en cPanel, el siguiente acceso devuelve `auth_failed`, se
+  apunta en `last_error` y el panel pide reconectar. ⚠️ `[UNAVAILABLE]` /
+  "temporary failure" (cPanel caído) se trata como error de CONEXIÓN, no de
+  contraseña — si no, una caída del servidor obligaría a todos a reconectar.
+- **Firma automática para todos, nuevos y antiguos, sin backfill**: modo
+  `auto` (default de la columna) la GENERA en cada envío
+  (`lib/mailbox/signature.ts`): nombre, cargo (del rol, o `signature_title`),
+  teléfono, correo, dirección de la oficina, web y logo por URL absoluta. El
+  teléfono es SIEMPRE el de la agencia, `+34 641 457 123`, para todos los
+  usuarios y países (nunca el móvil del perfil; misma regla que #297). El
+  nombre de la agencia no se repite junto al cargo: ya lo dice el logo. No
+  hace falta tocar la creación de usuarios: un usuario creado hoy ya la tiene.
+  `custom` (HTML propio) y `none` desde el botón "Firma".
+- **Una vez conectado no se vuelve a pedir la contraseña**: ni al cerrar
+  sesión del CRM ni al cambiar de dispositivo (vive cifrada en el servidor, no
+  en el navegador). Solo se pide otra vez si se cambia en cPanel, si se pulsa
+  "Desconectar" o si cambia `EMAIL_ENCRYPTION_KEY`.
+- ⚠️ **Adjuntos — los límites del camino (`lib/mailbox/attachments.ts`):**
+  1. **El middleware de Next 15.5 CORTA a 10 MB el cuerpo de cualquier
+     petición** que pase por `middleware.ts` (`middlewareClientMaxBodySize`,
+     solo avisa con un `console.warn`): la ruta recibe un FormData truncado y
+     falla con "Failed to parse body as FormData". Comprobado en local. Por
+     eso los adjuntos NO viajan en el envío: se suben antes por trozos de 4 MB
+     (`/api/admin/correo/uploads`, a disco temporal, se borran al enviar o a
+     las 24 h) y el envío es un JSON con sus ids. Las demás subidas del panel
+     (fotos/vídeos/planos de propiedad, publicación, Idealista, música,
+     WhatsApp, documentación) se arreglaron de otra forma — ver "Subidas de
+     más de 10 MB" en "Upload de archivos".
+  2. nginx del VPS (`client_max_body_size`, no verificado): si un trozo da
+     413, el cliente baja solo a trozos de 512 KB.
+  3. **Destinatarios**: base64 engorda ~37 %; Outlook rechaza por encima de
+     ~20 MB y Gmail de 25 MB. Hasta 18 MB en total va adjunto (≈ 25 MB
+     codificado); lo que no cabe se sube al bucket privado `mail-attachments`
+     (migración 0171) y va como **enlace de descarga** en el cuerpo
+     (`/api/public/correo-archivo/[token]`, HMAC con `EMAIL_ENCRYPTION_KEY`,
+     30 días, streaming, siempre `attachment`). Los caducados se borran solos
+     en el siguiente envío de ese usuario. Máximo 100 MB por archivo y 20
+     archivos — y para los que van por enlace manda además el
+     `FILE_SIZE_LIMIT` del contenedor `storage` (ver "Upload de archivos").
+- **cPanel no guarda lo enviado por SMTP en "Enviados"** (Gmail sí): el MIME se
+  compone UNA vez y esos mismos bytes se mandan y se añaden por IMAP a Enviados.
+  La cabecera Bcc se conserva en la copia y se QUITA de lo que viaja
+  (`stripBccHeader`, vigilado por `npm run test:mailbox`).
+- Un buzón recién creado puede no tener aún Papelera/Archivo/SPAM/Enviados:
+  se crean al usarlas (`ensureSpecialFolder`, nombres de cPanel bajo `INBOX.`).
+  "Eliminar" nunca borra definitivamente salvo desde la propia Papelera.
+- El HTML de un correo recibido se pinta en `<iframe sandbox srcdoc>` SIN
+  `allow-scripts` ni `allow-same-origin` (+ CSP) y los adjuntos se descargan
+  siempre como `attachment` + `nosniff`: nada recibido por correo ejecuta en el
+  origen del CRM.
+- Una conexión IMAP por petición (sin pool) y timeouts acotados en IMAP y SMTP.
+  Probado de punta a punta contra un Dovecot real con separador `.` y prefijo
+  `INBOX.` como el de cPanel (login, carpetas, paginación, búsqueda, cid,
+  adjuntos, responder con hilo, reenviar con adjuntos, archivar, SPAM,
+  papelera).
+
 ## Upload de archivos (Vídeos, Planos)
+- ⚠️ **Subidas de más de 10 MB (arreglado 2026-10-04).** Next 15.5 copia el
+  cuerpo de toda petición que pasa por `middleware.ts` y lo CORTA a 10 MB
+  (`middlewareClientMaxBodySize`, solo un `console.warn`): la ruta recibe un
+  FormData truncado → *"Failed to parse body as FormData"*. Desde que se subió
+  a Next 15.5, **ningún vídeo/plano/documento de más de 10 MB subía**, por
+  muchos límites de 100–500 MB que pusiera el código. Un comentario de
+  `property-edit-view.tsx` ya lo había visto en el Route Handler y movió los
+  vídeos a Server Action creyendo que eso lo arreglaba — no: un Server Action
+  va contra la URL de la página y pasa igual por el middleware. Arreglo:
+  - Las rutas que reciben archivos están **excluidas del `matcher`** del
+    middleware (lista en `middleware.ts`). En `/api` el middleware no
+    controla acceso (solo refresca la cookie), y cada una comprueba sesión y
+    permisos por su cuenta. **Ruta de subida nueva → añádela a esa lista.**
+  - Fotos, vídeos y planos de propiedad ya no van por Server Action sino por
+    `POST /api/admin/properties/upload/{photo|video|plan}`, que llama a las
+    MISMAS funciones de `actions.ts` (permisos incluidos). Cliente:
+    `lib/http/upload-form.ts`.
+  - No se subió `middlewareClientMaxBodySize`: el middleware retiene en
+    memoria una copia del cuerpo que nunca lee — con vídeos de 500 MB serían
+    cientos de MB de RAM extra por subida.
+  - Verificado con `next build` + `next start`: 12 MB llegan enteros a las
+    rutas excluidas y `/es/admin/**` sigue redirigiendo a `/login` sin sesión.
+  - Queda el `client_max_body_size` de nginx en el VPS (no verificado): si da
+    413, el panel ahora lo dice con esas palabras.
 - **Límites en la app:** vídeos ≤500MB, planos ≤100MB
 - **Almacenamiento:** bucket Supabase `properties-photos` (self-hosted en VPS)
 - ⚠️ **Si uploads fallan por tamaño:** el contenedor `storage` del VPS tiene un

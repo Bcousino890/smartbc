@@ -38,13 +38,14 @@ const MapPicker = dynamic(() => import("../../publicacion/map-picker"), {
 import {
   updateProperty,
   addPropertyVideo,
-  uploadPropertyPlan,
-  uploadPropertyVideo,
   deletePropertyMedia,
   deleteProperty,
   generateApproximateFloorPlanAction,
   type MediaItem,
+  type UploadPlanResult,
+  type UploadVideoResult,
 } from "@/app/(admin)/admin/propiedades/actions";
+import { postUploadForm } from "@/lib/http/upload-form";
 import { PropertyPhotosModal } from "@/components/admin/property-photos-modal";
 import { PropertyVideoPanel } from "@/components/admin/property-video-panel";
 import {
@@ -336,15 +337,17 @@ export function PropertyEditView({
     setVideoError(null);
     setUploadingVideo(true);
 
-    // Subimos por Server Action (no por Route Handler): el límite de body de
-    // Next (bodySizeLimit: 5gb) SOLO aplica a Server Actions. El Route Handler
-    // cortaba el body de los vídeos grandes y fallaba con "Failed to parse body
-    // as FormData". Mismo camino probado que los planos.
+    // Por Route Handler, NO por Server Action. El "Failed to parse body as
+    // FormData" que antes se achacó al Route Handler era el middleware: Next
+    // 15.5 corta a 10 MB el cuerpo de toda petición que pase por él, y un
+    // Server Action siempre pasa (va contra la URL de la página). Esta ruta
+    // está excluida del matcher (ver middleware.ts y
+    // app/api/admin/properties/upload/[kind]/route.ts).
     const fd = new FormData();
     fd.set("slug", property.slug);
     fd.set("file", file);
     try {
-      const res = await uploadPropertyVideo(fd);
+      const res = await postUploadForm<UploadVideoResult>("/api/admin/properties/upload/video", fd);
       if (res.ok) {
         setVideos((v) => [...v, res.item]);
       } else {
@@ -375,7 +378,7 @@ export function PropertyEditView({
         const fd = new FormData();
         fd.set("slug", property.slug);
         fd.set("file", file);
-        const res = await uploadPropertyPlan(fd);
+        const res = await postUploadForm<UploadPlanResult>("/api/admin/properties/upload/plan", fd);
         if (res.ok) setPlans((p) => [...p, res.item]);
         else { setPlanError(res.error); break; }
       }

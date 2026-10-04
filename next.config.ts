@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
     "puppeteer-extra-plugin",
     "merge-deep",
     "clone-deep",
+    // Correo corporativo (/admin/correo): imapflow arrastra pino y mailparser
+    // iconv/encodings — mejor cargarlos tal cual que bundlearlos.
+    "imapflow",
+    "mailparser",
   ],
   async headers() {
     return [

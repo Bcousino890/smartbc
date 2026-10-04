@@ -40,7 +40,8 @@
     "test:neighborhoods": "node scripts/qa-neighborhood-layer.mjs",
     "test:tracking": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-tracking.mts",
     "test:zone": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zone-explorer.mts",
-    "test:media": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-media-range.mts"
+    "test:media": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-media-range.mts",
+    "test:mailbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-mailbox.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",
@@ -51,9 +52,11 @@
     "@types/leaflet-draw": "^1.0.13",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
+    "imapflow": "^2.2.4",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "lucide-react": "^0.460.0",
+    "mailparser": "^3.9.34",
     "maplibre-gl": "^5.24.0",
     "next": "^15.1.6",
     "nodemailer": "^6.10.1",
@@ -70,6 +73,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.9.0",
     "@types/node": "^22.9.0",
     "@types/nodemailer": "^6.4.23",
     "@types/react": "^19.0.0",
