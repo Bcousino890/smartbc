@@ -33,14 +33,69 @@ export function parseAddressList(raw: string | null | undefined): { valid: strin
   return { valid, invalid };
 }
 
+const URL_RE = /https?:\/\/[^\s<>"']+/g;
+
+/**
+ * Texto → HTML seguro con los enlaces clicables. Se enlaza ANTES de escapar:
+ * hacerlo al revés dejaba el `&gt;` de un `<https://…>` dentro de la URL y el
+ * enlace salía roto. La puntuación final de una frase no entra en el enlace.
+ */
+export function linkifyEscape(text: string): string {
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    const start = m.index ?? 0;
+    const url = m[0].replace(/[.,;:!?)\]]+$/, "");
+    if (!url) continue;
+    out += escapeHtml(text.slice(last, start)) + `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
+    last = start + url.length;
+  }
+  return out + escapeHtml(text.slice(last));
+}
+
 /** Texto escrito en el textarea → HTML seguro (enlaces clicables, saltos). */
 export function plainTextToHtml(text: string): string {
-  const escaped = escapeHtml(text.replace(/\r\n/g, "\n"));
-  const linked = escaped.replace(
-    /\bhttps?:\/\/[^\s<]+[^\s<.,;:!?)\]'"]/g,
-    (url) => `<a href="${url}">${url}</a>`,
-  );
-  return linked.replace(/\n/g, "<br>");
+  return linkifyEscape(text.replace(/\r\n/g, "\n")).replace(/\n/g, "<br>");
+}
+
+const QUOTE_STYLE = "margin:6px 0 0 0;padding:0 0 0 12px;border-left:2px solid #d9cdb8;color:#555;font-size:13px;";
+
+/**
+ * Texto plano citado ("> …", ">> …") → HTML con una cita ANIDADA por nivel,
+ * en vez de dejar los `>` como texto suelto dentro de una sola cita.
+ */
+export function plainQuoteToHtml(text: string): string {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  let html = "";
+  let depth = 0;
+  let first = true;
+  for (const raw of lines) {
+    let rest = raw;
+    let d = 0;
+    for (;;) {
+      const m = rest.match(/^\s*>\s?/);
+      if (!m) break;
+      d++;
+      rest = rest.slice(m[0].length);
+    }
+    while (depth < d) {
+      html += `<blockquote style="${QUOTE_STYLE}">`;
+      depth++;
+      first = true;
+    }
+    while (depth > d) {
+      html += "</blockquote>";
+      depth--;
+      first = true;
+    }
+    html += (first ? "" : "<br>") + linkifyEscape(rest);
+    first = false;
+  }
+  while (depth > 0) {
+    html += "</blockquote>";
+    depth--;
+  }
+  return html;
 }
 
 /** Cabecera "El …, X escribió:" + texto citado (respuesta / reenvío). */
@@ -51,6 +106,8 @@ export type QuotedOriginal = {
   date: string;
   subject: string;
   text: string;
+  /** HTML original ya limpio (lib/mailbox/quote.ts). Si viene, se cita este y no el texto. */
+  html?: string | null;
 };
 
 function quoteHeaderLines(q: QuotedOriginal): string[] {
@@ -116,11 +173,13 @@ export function buildOutgoingBody(
 
   if (quoted) {
     const header = quoteHeaderLines(quoted);
-    const quotedHtml = plainTextToHtml(quoted.text);
+    // Mejor el HTML original (formato y citas anidadas intactos); si no lo hay,
+    // el texto con sus ">" convertidos en citas anidadas.
+    const quotedHtml = quoted.html?.trim() ? quoted.html : plainQuoteToHtml(quoted.text);
     if (quoted.kind === "reply") {
       htmlParts.push(
         `<br><div style="font-family:Arial,sans-serif;font-size:13px;color:#6b6b6b;">${header.map(escapeHtml).join("<br>")}</div>` +
-          `<blockquote style="margin:6px 0 0 0;padding:0 0 0 12px;border-left:2px solid #d9cdb8;color:#555;font-size:13px;">${quotedHtml}</blockquote>`,
+          `<blockquote style="${QUOTE_STYLE}">${quotedHtml}</blockquote>`,
       );
       textParts.push(
         `\n${header.join("\n")}\n${quoted.text

@@ -12,6 +12,7 @@ import { appendToSent, getAllAttachments, getMessage, markAnswered, withImap, ty
 import { cleanupExpiredLargeFiles, LargeFileError, storeLargeFile } from "@/lib/mailbox/large-files";
 import { APP_URL, mailboxErrorResponse, requireMailbox, signatureProfileOf } from "@/lib/mailbox/session";
 import { resolveSignature } from "@/lib/mailbox/signature";
+import { quotableHtml } from "@/lib/mailbox/quote";
 import { sendMail, type OutgoingAttachment } from "@/lib/mailbox/smtp";
 import { deleteUpload, readUpload, UploadError } from "@/lib/mailbox/uploads";
 
@@ -128,6 +129,8 @@ export async function POST(req: NextRequest) {
             date: formatQuoteDate(original.date, country),
             subject: original.subject,
             text: original.text ?? "",
+            // Se cita el HTML original, limpiado (ver lib/mailbox/quote.ts).
+            html: quotableHtml(original.html),
           };
           if (mode === "reply" && original.messageId) {
             inReplyTo = headerSafe(original.messageId);

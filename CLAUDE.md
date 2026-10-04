@@ -309,6 +309,15 @@ los correos automáticos de la app; esto es el buzón personal de cPanel.
 - Un buzón recién creado puede no tener aún Papelera/Archivo/SPAM/Enviados:
   se crean al usarlas (`ensureSpecialFolder`, nombres de cPanel bajo `INBOX.`).
   "Eliminar" nunca borra definitivamente salvo desde la propia Papelera.
+- **Citas en respuestas/reenvíos (2026-10-04):** se cita el HTML ORIGINAL del
+  mensaje (como Gmail), limpiado con cheerio (`lib/mailbox/quote.ts`: fuera
+  scripts, estilos, formularios, iframes, `on*`, `javascript:` e imágenes
+  `data:`/`cid:`; si pesa > 150 000 caracteres se cae al texto). Antes se citaba
+  el texto plano del original dentro de UNA cita, y los `>` de las citas
+  anteriores salían como texto suelto y el enlace de `<https://…>` quedaba roto
+  (`&gt` dentro de la URL, porque se enlazaba DESPUÉS de escapar). Sin HTML,
+  `plainQuoteToHtml` convierte cada `>` en una cita anidada. `linkifyEscape`
+  enlaza ANTES de escapar. No importes `quote.ts` desde el cliente (cheerio).
 - El HTML de un correo recibido se pinta en `<iframe sandbox srcdoc>` SIN
   `allow-scripts` ni `allow-same-origin` (+ CSP) y los adjuntos se descargan
   siempre como `attachment` + `nosniff`: nada recibido por correo ejecuta en el
