@@ -34,3 +34,12 @@ CREATE TABLE IF NOT EXISTS user_mailboxes (
 );
 
 ALTER TABLE user_mailboxes ENABLE ROW LEVEL SECURITY;
+
+-- Archivos que no caben como adjunto (ver lib/mailbox/attachments.ts: más de
+-- 18 MB en total rebotaría en Outlook/Gmail) se suben aquí y el correo lleva
+-- un enlace de descarga firmado (HMAC, 30 días) servido por
+-- /api/public/correo-archivo/[token]. Bucket PRIVADO y sin políticas: solo el
+-- service role lee y escribe; el público entra únicamente por esa ruta.
+insert into storage.buckets (id, name, public)
+values ('mail-attachments', 'mail-attachments', false)
+on conflict (id) do nothing;

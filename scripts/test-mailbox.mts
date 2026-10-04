@@ -15,6 +15,12 @@
  */
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
 import {
+  MAX_ATTACHED_TOTAL_BYTES,
+  planDelivery,
+  storageSafeName,
+  UPLOAD_CHUNK_BYTES,
+} from "../lib/mailbox/attachments.ts";
+import {
   isAllowedMailboxEmail,
   normalizeMailboxEmail,
   suggestedMailboxEmail,
@@ -56,26 +62,26 @@ console.log("Firma automática");
 const amelia = {
   fullName: "Amelia Rivas",
   role: "agent_senior",
-  phone: "+34 600 111 222",
   country: "es",
   email: "amelia.rivas@bcousinoprop.com",
 };
 const html = buildAutoSignatureHtml(amelia, "https://crm.bcousinoprop.com/");
 check("lleva el nombre", html.includes("Amelia Rivas"));
-check("lleva el cargo del rol", html.includes("Agente inmobiliario"));
-check("lleva el móvil personal", html.includes("+34 600 111 222") && html.includes("tel:+34600111222"));
-check("lleva el teléfono de la oficina", html.includes("+34 641 457 123"));
-check("lleva la dirección de Serrano", html.includes("Calle Serrano 19, 28001 Madrid"));
+check("cargo limpio, sin el nombre de la agencia pegado", html.includes(">Agente Inmobiliario<") && !/Agente Inmobiliario\s*·/.test(html));
+check("teléfono de la agencia SIEMPRE", html.includes("+34 641 457 123") && html.includes("tel:+34641457123"));
+check("lleva la dirección de Serrano", html.includes("Calle Serrano 19 · 28001 Madrid"));
 check("logo por URL absoluta sin doble barra", html.includes("https://crm.bcousinoprop.com/logo.png"));
 check("cargo personalizado manda", signatureTitle({ role: "owner", title: "Socio fundador" }) === "Socio fundador");
 check("owner → Director", signatureTitle({ role: "owner", title: null }) === "Director");
 
-const legacy = buildAutoSignatureText({ fullName: "viejo@bcousinoprop.com", role: "advisor", phone: null, country: "es", email: "viejo@bcousinoprop.com" });
-check("perfil antiguo sin nombre firma con la agencia", legacy.startsWith("Benjamín Cousiño Propiedades"), legacy);
-check("sin móvil no pinta línea M", !legacy.includes("\nM "));
+const legacy = buildAutoSignatureText({ fullName: "viejo@bcousinoprop.com", role: "advisor", country: "es", email: "viejo@bcousinoprop.com" });
+check("perfil antiguo sin nombre: no firma con su email como nombre", legacy.startsWith("Asesor Inmobiliario\nBenjamín Cousiño Propiedades"), legacy);
+check("texto plano con el teléfono de la agencia", legacy.includes("+34 641 457 123"));
 
-const chile = buildAutoSignatureText({ ...amelia, country: "cl", phone: null });
-check("Chile: teléfono de Chile y sin dirección de Madrid", chile.includes("+56 9 61791938") && !chile.includes("Serrano"));
+const chile = buildAutoSignatureText({ ...amelia, country: "cl" });
+check("Chile: también +34 641 457 123 y sin dirección de Madrid", chile.includes("+34 641 457 123") && !chile.includes("Serrano"));
+const chileHtml = buildAutoSignatureHtml({ ...amelia, country: "cl" }, "https://x");
+check("Chile HTML: nunca el número chileno", !chileHtml.includes("+56"));
 
 const xss = buildAutoSignatureHtml({ ...amelia, fullName: "<script>alert(1)</script>" }, "https://x");
 check("escapa el nombre", !xss.includes("<script>"));
@@ -127,6 +133,22 @@ check("sin <script>", !/<script/i.test(doc));
 check("con CSP default-src 'none'", doc.includes("default-src 'none'"));
 check("enlaces fuera del panel", doc.includes('<base target="_blank">'));
 check("texto plano escapado", buildViewerDocument(null, "<b>x</b>").includes("&lt;b&gt;x&lt;/b&gt;"));
+
+console.log("Adjuntos");
+const MB = 1024 * 1024;
+check("todo cabe → todo adjunto", planDelivery([2 * MB, 5 * MB]).join() === "attach,attach");
+check("uno enorme → enlace, los demás adjuntos", planDelivery([3 * MB, 40 * MB, 4 * MB]).join() === "attach,link,attach");
+check("se llena el cupo → el resto enlace", planDelivery([10 * MB, 7 * MB, 2 * MB]).join() === "attach,attach,link");
+check("justo en el límite → adjunto", planDelivery([MAX_ATTACHED_TOTAL_BYTES]).join() === "attach");
+check("18 MB adjuntos ≈ 25 MB en base64 (lo que aceptan Gmail/Outlook)", (MAX_ATTACHED_TOTAL_BYTES * 4) / 3 <= 25 * MB);
+check("trozo de subida < 10 MB del middleware de Next", UPLOAD_CHUNK_BYTES < 10 * MB);
+check("nombre seguro para storage", storageSafeName("../Contrato arras ñ.pdf") === "Contrato_arras_n.pdf", storageSafeName("../Contrato arras ñ.pdf"));
+const withLinks = buildOutgoingBody("Te paso el vídeo", null, null, {
+  links: [{ filename: "visita<1>.mp4", size: 52 * MB, url: "https://crm.x/api/public/correo-archivo/abc" }],
+  untilLabel: "3 de noviembre de 2026",
+});
+check("enlace de descarga en el HTML, escapado", withLinks.html.includes("https://crm.x/api/public/correo-archivo/abc") && withLinks.html.includes("visita&lt;1&gt;.mp4"));
+check("enlace en el texto plano con tamaño y caducidad", withLinks.text.includes("- visita<1>.mp4 (52 MB): https://crm.x/") && withLinks.text.includes("3 de noviembre"));
 
 if (failed) {
   console.log(`\n${failed} fallo(s)`);

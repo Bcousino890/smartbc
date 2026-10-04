@@ -2,10 +2,14 @@
  * Firma de correo corporativa — generada desde el perfil, no guardada.
  *
  * Modo 'auto' (el de todos por defecto, usuarios nuevos y antiguos): se
- * construye EN CADA ENVÍO con el nombre, cargo, teléfono y dirección del
- * perfil, así que nadie tiene que configurarla y se actualiza sola. Modo
- * 'custom': el HTML que el usuario escribió en /admin/correo. Modo 'none':
- * sin firma.
+ * construye EN CADA ENVÍO con el nombre y el cargo del usuario, así que nadie
+ * tiene que configurarla y se actualiza sola. Modo 'custom': el HTML que el
+ * usuario escribió en /admin/correo. Modo 'none': sin firma.
+ *
+ * El teléfono es SIEMPRE el de la agencia (+34 641 457 123), para todos los
+ * usuarios y países: las llamadas entran por el número de la empresa, nunca
+ * por el móvil personal de un agente (misma regla que Idealista y las
+ * colecciones, ver #297).
  *
  * Puro (sin server-only): lo usan la ruta de envío, la vista previa del panel
  * y `npm run test:mailbox`.
@@ -18,29 +22,28 @@ export type SignatureMode = "auto" | "custom" | "none";
 
 export const AGENCY_NAME = "Benjamín Cousiño Propiedades";
 export const AGENCY_WEBSITE_URL = "https://www.bcousinoprop.com/";
-const AGENCY_WEBSITE_LABEL = "www.bcousinoprop.com";
+const AGENCY_WEBSITE_LABEL = "bcousinoprop.com";
+export const AGENCY_PHONE = "+34 641 457 123";
 
-/** Datos de la oficina por país (mismos que web, PDFs y portales). */
-const OFFICE: Record<"es" | "cl", { phone: string; address: string | null }> = {
-  es: { phone: "+34 641 457 123", address: "Calle Serrano 19, 28001 Madrid" },
-  // Chile: sin oficina pública cargada en ningún sitio del repo — no se inventa.
-  cl: { phone: "+56 9 61791938", address: null },
+/** Dirección de la oficina por país (Chile: sin oficina pública en el repo — no se inventa). */
+const OFFICE_ADDRESS: Record<"es" | "cl", string | null> = {
+  es: "Calle Serrano 19 · 28001 Madrid",
+  cl: null,
 };
 
 /** Cargo por defecto según el rol (editable por usuario: signature_title). */
 export const ROLE_SIGNATURE_TITLE: Record<string, string> = {
   owner: "Director",
   admin: "Administración",
-  advisor: "Asesor inmobiliario",
-  agent_admin: "Agente inmobiliario",
-  agent_senior: "Agente inmobiliario",
-  agent_junior: "Agente inmobiliario",
+  advisor: "Asesor Inmobiliario",
+  agent_admin: "Agente Inmobiliario",
+  agent_senior: "Agente Inmobiliario",
+  agent_junior: "Agente Inmobiliario",
 };
 
 export type SignatureProfile = {
   fullName: string | null;
   role: string | null;
-  phone: string | null;
   country: string | null;
   /** Dirección del buzón (la que firma). */
   email: string;
@@ -48,11 +51,13 @@ export type SignatureProfile = {
   title?: string | null;
 };
 
+const GOLD = "#c5a572";
 const GOLD_DEEP = "#a3824f";
 const INK = "#1c1a17";
-const MUTED = "#8a7c66";
+const MUTED = "#6f6556";
 const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-const LOGO_WIDTH = 160;
+const SERIF = "Georgia, 'Iowan Old Style', 'Times New Roman', Times, serif";
+const LOGO_WIDTH = 150;
 const LOGO_HEIGHT = Math.round(LOGO_WIDTH * (519 / 3282)); // proporción real de /public/logo.png
 
 export function escapeHtml(text: string): string {
@@ -68,78 +73,76 @@ function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
-function officeFor(country: string | null) {
-  return country === "cl" ? OFFICE.cl : OFFICE.es;
+function officeAddress(country: string | null): string | null {
+  return country === "cl" ? OFFICE_ADDRESS.cl : OFFICE_ADDRESS.es;
 }
 
 export function signatureTitle(p: Pick<SignatureProfile, "role" | "title">): string {
   const custom = p.title?.trim();
   if (custom) return custom;
-  return ROLE_SIGNATURE_TITLE[p.role ?? ""] ?? "Agente inmobiliario";
+  return ROLE_SIGNATURE_TITLE[p.role ?? ""] ?? "Agente Inmobiliario";
 }
 
-function displayName(p: SignatureProfile): string {
+function displayName(p: SignatureProfile): string | null {
   const name = p.fullName?.trim();
   // Un perfil sin nombre (full_name = email por el trigger handle_new_user)
   // no debe firmar con la dirección dos veces.
-  if (name && !name.includes("@")) return name;
-  return AGENCY_NAME;
+  return name && !name.includes("@") ? name : null;
 }
 
-/** Firma automática en HTML. `appUrl` = dominio público (para el logo). */
+/**
+ * Firma automática en HTML. `appUrl` = dominio público (para el logo).
+ *
+ *   Amelia Rivas                  ← serif, grande
+ *   Agente Inmobiliario           ← dorado
+ *   ───
+ *   +34 641 457 123
+ *   amelia.rivas@bcousinoprop.com
+ *   Calle Serrano 19 · 28001 Madrid
+ *   bcousinoprop.com
+ *   [logo Benjamín Cousiño]       ← el nombre de la agencia lo dice el logo
+ */
 export function buildAutoSignatureHtml(p: SignatureProfile, appUrl: string): string {
-  const office = officeFor(p.country);
-  const name = displayName(p);
+  const name = displayName(p) ?? AGENCY_NAME;
   const title = signatureTitle(p);
-  const personalPhone = p.phone?.trim() || null;
-  const line = (inner: string) =>
-    `<tr><td style="padding:1px 0;font-family:${SANS};font-size:13px;line-height:19px;color:${INK};">${inner}</td></tr>`;
-  const label = (t: string) => `<span style="color:${MUTED};">${t}</span>&nbsp;`;
-  const link = (href: string, text: string) =>
-    `<a href="${escapeHtml(href)}" style="color:${INK};text-decoration:none;">${escapeHtml(text)}</a>`;
-
-  const rows: string[] = [];
-  rows.push(
-    `<tr><td style="padding:0;font-family:${SANS};font-size:15px;line-height:21px;font-weight:700;color:${INK};">${escapeHtml(name)}</td></tr>`,
-  );
-  rows.push(
-    `<tr><td style="padding:0 0 8px 0;font-family:${SANS};font-size:12px;line-height:18px;letter-spacing:0.06em;text-transform:uppercase;color:${GOLD_DEEP};">${escapeHtml(title)} · ${escapeHtml(AGENCY_NAME)}</td></tr>`,
-  );
-  if (personalPhone && personalPhone !== office.phone) {
-    rows.push(line(`${label("M")}${link(telHref(personalPhone), personalPhone)}`));
-  }
-  rows.push(line(`${label("T")}${link(telHref(office.phone), office.phone)}`));
-  rows.push(line(`${label("E")}${link(`mailto:${p.email}`, p.email)}`));
-  if (office.address) rows.push(line(escapeHtml(office.address)));
-  rows.push(
-    line(
-      `<a href="${AGENCY_WEBSITE_URL}" style="color:${GOLD_DEEP};text-decoration:none;font-weight:600;">${AGENCY_WEBSITE_LABEL}</a>`,
-    ),
-  );
-
+  const address = officeAddress(p.country);
   const base = appUrl.replace(/\/+$/, "");
+
+  const text = (inner: string, extra = "") =>
+    `<tr><td style="padding:0;font-family:${SANS};font-size:13px;line-height:20px;color:${MUTED};${extra}">${inner}</td></tr>`;
+  const link = (href: string, label: string, color = MUTED) =>
+    `<a href="${escapeHtml(href)}" style="color:${color};text-decoration:none;">${escapeHtml(label)}</a>`;
+
   return [
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:8px;">`,
-    `<tr><td style="padding:0 0 12px 0;"><img src="${escapeHtml(base)}/logo.png" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${escapeHtml(AGENCY_NAME)}" style="display:block;border:0;outline:none;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;"></td></tr>`,
-    `<tr><td style="padding:10px 0 0 0;border-top:1px solid #e8dfd0;">`,
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">`,
-    ...rows,
-    `</table>`,
-    `</td></tr>`,
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:12px;">`,
+    `<tr><td style="padding:0;font-family:${SERIF};font-size:19px;line-height:24px;color:${INK};">${escapeHtml(name)}</td></tr>`,
+    `<tr><td style="padding:2px 0 0 0;font-family:${SANS};font-size:13px;line-height:18px;letter-spacing:0.02em;color:${GOLD_DEEP};">${escapeHtml(title)}</td></tr>`,
+    // Raya dorada corta: una celda con borde (un <hr> o un div con alto se
+    // ve distinto en cada cliente de correo).
+    `<tr><td style="padding:10px 0 10px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="36" style="width:36px;border-top:1px solid ${GOLD};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`,
+    text(link(telHref(AGENCY_PHONE), AGENCY_PHONE, INK), "font-weight:600;"),
+    text(link(`mailto:${p.email}`, p.email)),
+    ...(address ? [text(escapeHtml(address))] : []),
+    text(link(AGENCY_WEBSITE_URL, AGENCY_WEBSITE_LABEL, GOLD_DEEP), "font-weight:600;"),
+    `<tr><td style="padding:14px 0 0 0;"><img src="${escapeHtml(base)}/logo.png" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${escapeHtml(AGENCY_NAME)}" style="display:block;border:0;outline:none;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;"></td></tr>`,
     `</table>`,
   ].join("");
 }
 
-/** La misma firma en texto plano (parte text/plain del correo). */
+/** La misma firma en texto plano (parte text/plain: aquí no hay logo, así que va el nombre de la agencia). */
 export function buildAutoSignatureText(p: SignatureProfile): string {
-  const office = officeFor(p.country);
-  const personalPhone = p.phone?.trim() || null;
-  const lines = [displayName(p), `${signatureTitle(p)} · ${AGENCY_NAME}`];
-  if (personalPhone && personalPhone !== office.phone) lines.push(`M ${personalPhone}`);
-  lines.push(`T ${office.phone}`);
-  lines.push(`E ${p.email}`);
-  if (office.address) lines.push(office.address);
-  lines.push(AGENCY_WEBSITE_LABEL);
+  const name = displayName(p);
+  const address = officeAddress(p.country);
+  const lines = [
+    ...(name ? [name] : []),
+    signatureTitle(p),
+    AGENCY_NAME,
+    "",
+    AGENCY_PHONE,
+    p.email,
+    ...(address ? [address] : []),
+    AGENCY_WEBSITE_LABEL,
+  ];
   return lines.join("\n");
 }
 

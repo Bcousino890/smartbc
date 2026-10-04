@@ -71,7 +71,6 @@ export function signatureProfileOf(profile: ProfileRow, email: string, title: st
   return {
     fullName: p.full_name ?? null,
     role: p.role ?? null,
-    phone: p.phone ?? null,
     country: p.country ?? null,
     email,
     title,

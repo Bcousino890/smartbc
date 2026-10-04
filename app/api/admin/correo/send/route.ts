@@ -1,20 +1,22 @@
 import "server-only";
 import { NextRequest } from "next/server";
+import { MAX_FILES_PER_MAIL, planDelivery } from "@/lib/mailbox/attachments";
 import {
   buildOutgoingBody,
   headerSafe,
   parseAddressList,
+  type FileLink,
   type QuotedOriginal,
 } from "@/lib/mailbox/compose";
 import { appendToSent, getAllAttachments, getMessage, markAnswered, withImap, type MailAddress } from "@/lib/mailbox/imap";
+import { cleanupExpiredLargeFiles, LargeFileError, storeLargeFile } from "@/lib/mailbox/large-files";
 import { APP_URL, mailboxErrorResponse, requireMailbox, signatureProfileOf } from "@/lib/mailbox/session";
 import { resolveSignature } from "@/lib/mailbox/signature";
 import { sendMail, type OutgoingAttachment } from "@/lib/mailbox/smtp";
+import { deleteUpload, readUpload, UploadError } from "@/lib/mailbox/uploads";
 
 export const dynamic = "force-dynamic";
 
-/** Tope habitual de un SMTP compartido (cPanel/Exim suele cortar en 25–50 MB). */
-const MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_RECIPIENTS = 100;
 
 function formatAddress(a: MailAddress): string {
@@ -22,34 +24,53 @@ function formatAddress(a: MailAddress): string {
   return a.address || a.name || "";
 }
 
-function formatQuoteDate(iso: string | null, country: string | null): string {
-  if (!iso) return "";
-  return new Intl.DateTimeFormat("es-ES", {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZone: country === "cl" ? "America/Santiago" : "Europe/Madrid",
-  }).format(new Date(iso));
+function tzOf(country: string | null) {
+  return country === "cl" ? "America/Santiago" : "Europe/Madrid";
 }
 
+function formatQuoteDate(iso: string | null, country: string | null): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("es-ES", { dateStyle: "long", timeStyle: "short", timeZone: tzOf(country) }).format(
+    new Date(iso),
+  );
+}
+
+type SendBody = {
+  to?: unknown;
+  cc?: unknown;
+  bcc?: unknown;
+  subject?: unknown;
+  body?: unknown;
+  includeSignature?: unknown;
+  mode?: unknown;
+  refFolder?: unknown;
+  refUid?: unknown;
+  uploads?: unknown;
+};
+
+/**
+ * Envía un correo. Los adjuntos NO viajan aquí: se subieron antes por trozos
+ * (/api/admin/correo/uploads) y llegan como ids — el middleware cortaría
+ * cualquier cuerpo > 10 MB (ver lib/mailbox/attachments.ts). Lo que no cabe
+ * como adjunto sin que rebote en el destino sale como enlace de descarga.
+ */
 export async function POST(req: NextRequest) {
   const gate = await requireMailbox();
   if (!gate.ok) return gate.response;
   const { profile, row, creds } = gate;
+  const country = (profile as { country?: string | null }).country ?? null;
 
-  let form: FormData;
+  let input: SendBody;
   try {
-    form = await req.formData();
+    input = await req.json();
   } catch {
     return Response.json({ error: "Petición inválida" }, { status: 400 });
   }
-  const str = (k: string) => {
-    const v = form.get(k);
-    return typeof v === "string" ? v : "";
-  };
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-  const to = parseAddressList(str("to"));
-  const cc = parseAddressList(str("cc"));
-  const bcc = parseAddressList(str("bcc"));
+  const to = parseAddressList(str(input.to));
+  const cc = parseAddressList(str(input.cc));
+  const bcc = parseAddressList(str(input.bcc));
   const invalid = [...to.invalid, ...cc.invalid, ...bcc.invalid];
   if (invalid.length) {
     return Response.json({ error: `Dirección no válida: ${invalid.slice(0, 3).join(", ")}` }, { status: 400 });
@@ -59,35 +80,30 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Máximo ${MAX_RECIPIENTS} destinatarios por correo.` }, { status: 400 });
   }
 
-  const subject = (headerSafe(str("subject"), 500) ?? "").trim();
-  const bodyText = str("body").slice(0, 200_000);
-  const includeSignature = str("includeSignature") !== "0";
-  const mode = str("mode") === "reply" || str("mode") === "forward" ? (str("mode") as "reply" | "forward") : "new";
-  const refFolder = str("refFolder").slice(0, 300) || "INBOX";
-  const refUid = Number.parseInt(str("refUid"), 10);
+  const subject = (headerSafe(str(input.subject), 500) ?? "").trim();
+  const bodyText = str(input.body).slice(0, 200_000);
+  const includeSignature = input.includeSignature !== false;
+  const mode = input.mode === "reply" || input.mode === "forward" ? input.mode : "new";
+  const refFolder = str(input.refFolder).slice(0, 300) || "INBOX";
+  const refUid = typeof input.refUid === "number" ? input.refUid : Number.parseInt(str(input.refUid), 10);
+  const uploadIds = Array.isArray(input.uploads)
+    ? input.uploads.filter((x): x is string => typeof x === "string").slice(0, MAX_FILES_PER_MAIL)
+    : [];
 
-  const attachments: OutgoingAttachment[] = [];
-  let total = 0;
-  for (const value of form.getAll("attachments")) {
-    if (!(value instanceof Blob) || value.size === 0) continue;
-    total += value.size;
-    if (total > MAX_TOTAL_ATTACHMENT_BYTES) {
-      return Response.json({ error: "Los adjuntos superan 25 MB en total." }, { status: 400 });
+  // Los adjuntos subidos tienen que estar completos ANTES de tocar el SMTP.
+  const uploaded: OutgoingAttachment[] = [];
+  try {
+    for (const id of uploadIds) {
+      const u = await readUpload(profile.id, id);
+      uploaded.push({ filename: u.filename, contentType: u.contentType, content: u.content });
     }
-    attachments.push({
-      filename: value instanceof File && value.name ? value.name : "adjunto",
-      contentType: value.type || undefined,
-      content: Buffer.from(await value.arrayBuffer()),
-    });
+  } catch (err) {
+    if (err instanceof UploadError) return Response.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const signature = includeSignature
-    ? resolveSignature(
-        row.signature_mode,
-        row.signature_html,
-        signatureProfileOf(profile, creds.email, row.signature_title),
-        APP_URL,
-      )
+    ? resolveSignature(row.signature_mode, row.signature_html, signatureProfileOf(profile, creds.email, row.signature_title), APP_URL)
     : null;
 
   try {
@@ -95,6 +111,7 @@ export async function POST(req: NextRequest) {
       let quoted: QuotedOriginal | null = null;
       let inReplyTo: string | undefined;
       let references: string | undefined;
+      const files: OutgoingAttachment[] = [];
 
       // Respuesta / reenvío: el original se lee del buzón en el servidor, no
       // se confía en lo que mande el navegador para las cabeceras de hilo.
@@ -105,7 +122,7 @@ export async function POST(req: NextRequest) {
             kind: mode,
             from: original.from.map(formatAddress).join(", "),
             to: original.to.map(formatAddress).join(", "),
-            date: formatQuoteDate(original.date, (profile as { country?: string | null }).country ?? null),
+            date: formatQuoteDate(original.date, country),
             subject: original.subject,
             text: original.text ?? "",
           };
@@ -113,19 +130,36 @@ export async function POST(req: NextRequest) {
             inReplyTo = headerSafe(original.messageId);
             references = headerSafe([original.references, original.messageId].filter(Boolean).join(" "));
           }
-          if (mode === "forward") {
-            for (const att of await getAllAttachments(client, refFolder, refUid)) {
-              total += att.content.length;
-              if (total > MAX_TOTAL_ATTACHMENT_BYTES) {
-                throw new RangeError("Los adjuntos (incluidos los del original) superan 25 MB en total.");
-              }
-              attachments.push(att);
-            }
-          }
+          if (mode === "forward") files.push(...(await getAllAttachments(client, refFolder, refUid)));
         }
       }
+      files.push(...uploaded);
 
-      const body = buildOutgoingBody(bodyText, signature, quoted);
+      // Adjunto mientras quepa sin rebotar; el resto, enlace de descarga.
+      const plan = planDelivery(files.map((f) => f.content.length));
+      const attachments = files.filter((_, i) => plan[i] === "attach");
+      const links: FileLink[] = [];
+      let until = 0;
+      for (const [i, f] of files.entries()) {
+        if (plan[i] !== "link") continue;
+        const stored = await storeLargeFile(
+          profile.id,
+          { filename: f.filename, contentType: f.contentType ?? "application/octet-stream", content: f.content },
+          APP_URL,
+        );
+        until = stored.expiresAt;
+        links.push({ filename: f.filename, size: f.content.length, url: stored.url });
+      }
+      const fileLinks = links.length
+        ? {
+            links,
+            untilLabel: new Intl.DateTimeFormat("es-ES", { dateStyle: "long", timeZone: tzOf(country) }).format(
+              new Date(until),
+            ),
+          }
+        : null;
+
+      const body = buildOutgoingBody(bodyText, signature, quoted, fileLinks);
       const sent = await sendMail(creds, {
         fromName: profile.full_name && !profile.full_name.includes("@") ? profile.full_name : null,
         to: to.valid,
@@ -148,11 +182,14 @@ export async function POST(req: NextRequest) {
         console.error("[correo] no se pudo guardar en Enviados:", err);
       }
       if (mode === "reply" && refUid > 0) await markAnswered(client, refFolder, refUid);
-      return { messageId: sent.messageId, savedToSent };
+      return { messageId: sent.messageId, savedToSent, attached: attachments.length, linked: links.length };
     });
+
+    await Promise.all(uploadIds.map((id) => deleteUpload(profile.id, id).catch(() => undefined)));
+    void cleanupExpiredLargeFiles(profile.id);
     return Response.json({ ok: true, ...result });
   } catch (err) {
-    if (err instanceof RangeError) return Response.json({ error: err.message }, { status: 400 });
+    if (err instanceof LargeFileError) return Response.json({ error: err.message }, { status: 413 });
     return mailboxErrorResponse(profile.id, err);
   }
 }

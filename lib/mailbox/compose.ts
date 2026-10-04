@@ -2,6 +2,7 @@
  * Piezas puras del correo saliente y de la vista de lectura de /admin/correo.
  * Sin server-only: las usa la ruta de envío, el cliente y los tests.
  */
+import { formatBytes } from "./attachments";
 import { escapeHtml, type ResolvedSignature } from "./signature";
 
 const ADDRESS_RE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]+$/;
@@ -63,16 +64,50 @@ function quoteHeaderLines(q: QuotedOriginal): string[] {
   ];
 }
 
-/** Cuerpo final (HTML + texto) = lo escrito + firma + original citado. */
+/** Archivo que no cabía como adjunto y va como enlace de descarga. */
+export type FileLink = { filename: string; size: number; url: string };
+
+function fileLinksHtml(links: FileLink[], untilLabel: string): string {
+  const rows = links
+    .map(
+      (l) =>
+        `<tr><td style="padding:6px 14px;border-top:1px solid #efe8db;font-family:Arial,sans-serif;font-size:13px;line-height:18px;">` +
+        `<a href="${escapeHtml(l.url)}" style="color:#1c1a17;font-weight:600;text-decoration:none;">${escapeHtml(l.filename)}</a>` +
+        `<span style="color:#8a7c66;">&nbsp;&nbsp;${escapeHtml(formatBytes(l.size))}</span>` +
+        `&nbsp;&nbsp;<a href="${escapeHtml(l.url)}" style="color:#a3824f;text-decoration:none;">Descargar</a></td></tr>`,
+    )
+    .join("");
+  return (
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;border:1px solid #e8dfd0;border-collapse:separate;border-radius:6px;">` +
+    `<tr><td style="padding:8px 14px;font-family:Arial,sans-serif;font-size:12px;color:#8a7c66;">` +
+    `${links.length === 1 ? "1 archivo" : `${links.length} archivos`} para descargar · disponible${links.length === 1 ? "" : "s"} hasta el ${escapeHtml(untilLabel)}</td></tr>` +
+    rows +
+    `</table>`
+  );
+}
+
+/**
+ * Cuerpo final (HTML + texto) = lo escrito + enlaces de archivos grandes +
+ * firma + original citado.
+ */
 export function buildOutgoingBody(
   bodyText: string,
   signature: ResolvedSignature,
   quoted: QuotedOriginal | null,
+  fileLinks: { links: FileLink[]; untilLabel: string } | null = null,
 ): { html: string; text: string } {
   const htmlParts: string[] = [
     `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:21px;color:#1c1a17;">${plainTextToHtml(bodyText)}</div>`,
   ];
   const textParts: string[] = [bodyText.replace(/\r\n/g, "\n")];
+
+  if (fileLinks && fileLinks.links.length) {
+    htmlParts.push(fileLinksHtml(fileLinks.links, fileLinks.untilLabel));
+    textParts.push(
+      `\nArchivos para descargar (hasta el ${fileLinks.untilLabel}):\n` +
+        fileLinks.links.map((l) => `- ${l.filename} (${formatBytes(l.size)}): ${l.url}`).join("\n"),
+    );
+  }
 
   if (signature) {
     htmlParts.push(`<br><div class="smartbc-signature">${signature.html}</div>`);

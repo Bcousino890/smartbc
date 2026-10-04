@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  Check,
   Archive,
   ArrowLeft,
   ChevronLeft,
@@ -32,6 +33,16 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { requestJson } from "@/lib/http/request-json";
+import {
+  formatBytes,
+  LARGE_FILE_LINK_DAYS,
+  MAX_ATTACHED_TOTAL_BYTES,
+  MAX_FILE_BYTES,
+  MAX_FILES_PER_MAIL,
+  planDelivery,
+  UPLOAD_CHUNK_BYTES,
+  UPLOAD_FALLBACK_CHUNK_BYTES,
+} from "@/lib/mailbox/attachments";
 import { buildViewerDocument } from "@/lib/mailbox/compose";
 import { buildAutoSignatureHtml, type SignatureMode, type SignatureProfile } from "@/lib/mailbox/signature";
 import { cn } from "@/lib/utils";
@@ -131,12 +142,6 @@ function listDate(iso: string | null): string {
 function fullDate(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" });
-}
-
-function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function folderIcon(use: string | null) {
@@ -949,7 +954,7 @@ function MessageView({ message, folder }: { message: Message; folder: string }) 
               >
                 <Paperclip size={13} className="shrink-0 text-gold" />
                 <span className="truncate">{a.filename}</span>
-                <span className="shrink-0 text-ink/40">{fileSize(a.size)}</span>
+                <span className="shrink-0 text-ink/40">{formatBytes(a.size)}</span>
                 <Download size={12} className="shrink-0 text-ink/40" />
               </a>
             ))}
@@ -976,6 +981,80 @@ function MessageView({ message, folder }: { message: Message; folder: string }) 
 
 // ─── Redactar / responder / reenviar ────────────────────────────────────────
 
+type UploadItem = {
+  key: string;
+  file: File;
+  id: string | null;
+  sent: number;
+  status: "uploading" | "done" | "error";
+  error?: string;
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Sube un archivo por trozos (ver lib/mailbox/attachments.ts: el middleware
+ * corta cuerpos > 10 MB y nginx puede cortar en 1 MB). Si un trozo devuelve
+ * 413 se baja a trozos pequeños; los cortes de red se reintentan y el
+ * servidor dice desde qué byte seguir, así que nunca se duplica nada.
+ */
+async function uploadInChunks(
+  file: File,
+  onProgress: (sent: number) => void,
+  isCancelled: () => boolean,
+  onCreated: (id: string) => void,
+): Promise<string> {
+  const start = await requestJson<{ id: string }>(`${API}/uploads`, {
+    body: { filename: file.name, size: file.size, contentType: file.type },
+    timeoutMs: 30_000,
+  });
+  if (!start.ok) throw new Error(start.error);
+  const id = start.data.id;
+  onCreated(id);
+
+  let offset = 0;
+  let chunkSize = UPLOAD_CHUNK_BYTES;
+  let failures = 0;
+  while (offset < file.size) {
+    if (isCancelled()) throw new Error("cancelado");
+    const end = Math.min(file.size, offset + chunkSize);
+    let res: Response;
+    try {
+      res = await fetch(`${API}/uploads/${id}?offset=${offset}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file.slice(offset, end),
+        signal: AbortSignal.timeout(90_000),
+      });
+    } catch {
+      if (++failures > 5) throw new Error("Se cortó la conexión subiendo el archivo.");
+      await sleep(1000 * failures);
+      continue;
+    }
+    if (res.status === 413 && chunkSize > UPLOAD_FALLBACK_CHUNK_BYTES) {
+      chunkSize = UPLOAD_FALLBACK_CHUNK_BYTES;
+      continue;
+    }
+    let data: { received?: number; error?: string } | null = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (!res.ok || typeof data?.received !== "number") {
+      if (res.status === 413) throw new Error("El servidor web rechaza el archivo por tamaño (límite de nginx).");
+      if (res.status < 500 && data?.error) throw new Error(data.error);
+      if (++failures > 5) throw new Error(data?.error || `Error del servidor (HTTP ${res.status}).`);
+      await sleep(1000 * failures);
+      continue;
+    }
+    failures = 0;
+    offset = data.received;
+    onProgress(offset);
+  }
+  return id;
+}
+
 function ComposeDialog({
   state,
   account,
@@ -990,11 +1069,15 @@ function ComposeDialog({
   onAuthFailed: () => void;
 }) {
   const [form, setForm] = useState(state);
-  const [files, setFiles] = useState<File[]>([]);
+  const [items, setItems] = useState<UploadItem[]>([]);
   const [includeSignature, setIncludeSignature] = useState(account.signature.mode !== "none");
   const [sending, setSending] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const cancelled = useRef(new Set<string>());
+  const itemsRef = useRef<UploadItem[]>([]);
+  itemsRef.current = items;
 
   const signatureHtml =
     account.signature.mode === "custom"
@@ -1006,48 +1089,96 @@ function ComposeDialog({
   const set = (k: keyof ComposeState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const totalSize = files.reduce((n, f) => n + f.size, 0);
+  const patchItem = (key: string, patch: Partial<UploadItem>) =>
+    setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+
+  function addFiles(list: FileList | File[]) {
+    const incoming = Array.from(list);
+    if (!incoming.length) return;
+    setError(null);
+    const room = MAX_FILES_PER_MAIL - itemsRef.current.length;
+    if (incoming.length > room) setError(`Máximo ${MAX_FILES_PER_MAIL} archivos por correo.`);
+    for (const file of incoming.slice(0, Math.max(0, room))) {
+      const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`;
+      if (file.size === 0) {
+        setItems((p) => [...p, { key, file, id: null, sent: 0, status: "error", error: "Archivo vacío" }]);
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setItems((p) => [
+          ...p,
+          { key, file, id: null, sent: 0, status: "error", error: `Supera ${formatBytes(MAX_FILE_BYTES)}` },
+        ]);
+        continue;
+      }
+      setItems((p) => [...p, { key, file, id: null, sent: 0, status: "uploading" }]);
+      uploadInChunks(
+        file,
+        (sent) => patchItem(key, { sent }),
+        () => cancelled.current.has(key),
+        (id) => patchItem(key, { id }),
+      )
+        .then((id) => patchItem(key, { id, sent: file.size, status: "done" }))
+        .catch((err: Error) => {
+          if (cancelled.current.has(key)) return;
+          patchItem(key, { status: "error", error: err.message });
+        });
+    }
+  }
+
+  function removeItem(item: UploadItem) {
+    cancelled.current.add(item.key);
+    setItems((p) => p.filter((i) => i.key !== item.key));
+    if (item.id) void requestJson(`${API}/uploads/${item.id}`, { method: "DELETE" });
+  }
+
+  function close() {
+    // Lo subido y no enviado se borra ya (si no, a las 24 h).
+    for (const it of itemsRef.current) {
+      cancelled.current.add(it.key);
+      if (it.id) void requestJson(`${API}/uploads/${it.id}`, { method: "DELETE" });
+    }
+    onClose();
+  }
+
+  const okItems = items.filter((i) => i.status !== "error");
+  const plan = planDelivery(okItems.map((i) => i.file.size));
+  const deliveryOf = new Map(okItems.map((it, i) => [it.key, plan[i]]));
+  const anyLink = plan.includes("link");
+  const uploading = items.some((i) => i.status === "uploading");
+  const failed = items.filter((i) => i.status === "error");
+  const totalSize = okItems.reduce((n, i) => n + i.file.size, 0);
 
   async function send() {
     setError(null);
     if (!form.to.trim()) return setError("Falta el destinatario.");
-    if (totalSize > 25 * 1024 * 1024) return setError("Los adjuntos superan 25 MB en total.");
+    if (uploading) return setError("Espera a que terminen de subirse los archivos.");
+    if (failed.length) return setError("Quita los archivos con error antes de enviar.");
     if (!form.subject.trim() && !confirm("¿Enviar sin asunto?")) return;
     setSending(true);
-    const fd = new FormData();
-    fd.set("to", form.to);
-    fd.set("cc", form.cc);
-    fd.set("bcc", form.bcc);
-    fd.set("subject", form.subject);
-    fd.set("body", form.body);
-    fd.set("mode", form.mode);
-    fd.set("includeSignature", includeSignature ? "1" : "0");
-    if (form.refFolder) fd.set("refFolder", form.refFolder);
-    if (form.refUid) fd.set("refUid", String(form.refUid));
-    for (const f of files) fd.append("attachments", f);
-
-    let res: Response;
-    try {
-      res = await fetch(`${API}/send`, { method: "POST", body: fd, signal: AbortSignal.timeout(120_000) });
-    } catch (err) {
-      setSending(false);
-      setError(
-        (err as { name?: string })?.name === "TimeoutError"
-          ? "El servidor tardó demasiado. Revisa en Enviados si salió antes de reintentar."
-          : "Se cortó la conexión. Revisa en Enviados si salió antes de reintentar.",
-      );
-      return;
-    }
-    let data: { ok?: boolean; error?: string; code?: string; savedToSent?: boolean } = {};
-    try {
-      data = await res.json();
-    } catch {
-      // respuesta no JSON (502 del proxy…)
-    }
+    const res = await requestJson<{ ok: true; linked: number }>(`${API}/send`, {
+      body: {
+        to: form.to,
+        cc: form.cc,
+        bcc: form.bcc,
+        subject: form.subject,
+        body: form.body,
+        mode: form.mode,
+        includeSignature,
+        refFolder: form.refFolder,
+        refUid: form.refUid,
+        uploads: items.map((i) => i.id).filter(Boolean),
+      },
+      timeoutMs: 180_000,
+    });
     setSending(false);
-    if (!res.ok || !data.ok) {
-      if (data.code === "auth_failed") onAuthFailed();
-      setError(data.error || `Error del servidor (HTTP ${res.status}).`);
+    if (!res.ok) {
+      if (res.data?.code === "auth_failed") onAuthFailed();
+      setError(
+        res.kind === "network" || res.kind === "timeout"
+          ? `${res.error} Revisa en Enviados si salió antes de reintentar.`
+          : res.error,
+      );
       return;
     }
     onSent();
@@ -1059,10 +1190,33 @@ function ComposeDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 sm:items-center sm:p-6">
-      <div className="flex max-h-[100vh] w-full max-w-3xl flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-2xl">
+      <div
+        className="relative flex max-h-[100vh] w-full max-w-3xl flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-2xl"
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return;
+          e.preventDefault();
+          setDragging(false);
+          addFiles(e.dataTransfer.files);
+        }}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gold bg-cream-50/95 text-ink">
+            <Paperclip size={28} className="text-gold" />
+            <p className="mt-2 text-sm font-semibold">Suelta los archivos para adjuntarlos</p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between bg-ink px-5 py-3 text-cream-50">
           <p className="text-sm font-semibold">{title}</p>
-          <button onClick={onClose} className="text-cream-50/70 hover:text-cream-50" aria-label="Cerrar">
+          <button onClick={close} className="text-cream-50/70 hover:text-cream-50" aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
@@ -1114,21 +1268,47 @@ function ComposeDialog({
             </p>
           )}
 
-          {files.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {files.map((f, i) => (
-                <span
-                  key={`${f.name}-${i}`}
-                  className="flex items-center gap-2 rounded-lg border border-ink/10 bg-cream-50 px-3 py-1.5 text-xs text-ink/75"
-                >
-                  <Paperclip size={12} className="text-gold" />
-                  <span className="max-w-[180px] truncate">{f.name}</span>
-                  <span className="text-ink/40">{fileSize(f.size)}</span>
-                  <button onClick={() => setFiles((p) => p.filter((_, j) => j !== i))} aria-label="Quitar">
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
+          {items.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {items.map((it) => {
+                const pct = it.file.size ? Math.round((it.sent / it.file.size) * 100) : 0;
+                const delivery = deliveryOf.get(it.key);
+                return (
+                  <div
+                    key={it.key}
+                    className={cn(
+                      "rounded-lg border px-3 py-2 text-xs",
+                      it.status === "error" ? "border-rose-200 bg-rose-50" : "border-ink/10 bg-cream-50",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Paperclip size={13} className="shrink-0 text-gold" />
+                      <span className="min-w-0 flex-1 truncate text-ink/80">{it.file.name}</span>
+                      <span className="shrink-0 text-ink/45">{formatBytes(it.file.size)}</span>
+                      {it.status === "done" && delivery === "link" && (
+                        <span className="shrink-0 rounded-full bg-gold/20 px-2 py-0.5 text-ink/70">Enlace</span>
+                      )}
+                      {it.status === "done" && delivery === "attach" && <Check size={14} className="shrink-0 text-emerald-600" />}
+                      <button onClick={() => removeItem(it)} aria-label="Quitar" className="shrink-0 text-ink/40 hover:text-ink">
+                        <X size={13} />
+                      </button>
+                    </div>
+                    {it.status === "uploading" && (
+                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/10">
+                        <div className="h-full bg-gold transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
+                    {it.status === "error" && <p className="mt-1 text-rose-700">{it.error}</p>}
+                  </div>
+                );
+              })}
+              {anyLink && (
+                <p className="text-xs leading-relaxed text-ink/55">
+                  Más de {formatBytes(MAX_ATTACHED_TOTAL_BYTES)} adjuntos hacen rebotar el correo en Outlook o Gmail:
+                  los marcados como <b>Enlace</b> van como enlace de descarga dentro del correo, válido{" "}
+                  {LARGE_FILE_LINK_DAYS} días.
+                </p>
+              )}
             </div>
           )}
 
@@ -1160,11 +1340,15 @@ function ComposeDialog({
         <div className="flex items-center gap-3 border-t border-ink/10 px-5 py-3">
           <button
             onClick={send}
-            disabled={sending}
+            disabled={sending || uploading}
             className="flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-semibold text-cream-50 hover:bg-ink/90 disabled:opacity-60"
           >
-            {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} className="text-gold" />}
-            {sending ? "Enviando…" : "Enviar"}
+            {sending || uploading ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Send size={15} className="text-gold" />
+            )}
+            {sending ? "Enviando…" : uploading ? "Subiendo archivos…" : "Enviar"}
           </button>
           <button
             onClick={() => fileInput.current?.click()}
@@ -1178,12 +1362,13 @@ function ComposeDialog({
             multiple
             className="hidden"
             onChange={(e) => {
-              const picked = Array.from(e.target.files ?? []);
-              setFiles((p) => [...p, ...picked]);
+              if (e.target.files) addFiles(e.target.files);
               e.target.value = "";
             }}
           />
-          <span className="ml-auto text-xs text-ink/40">{totalSize > 0 ? `${fileSize(totalSize)} / 25 MB` : ""}</span>
+          <span className="ml-auto hidden text-xs text-ink/40 sm:block">
+            {totalSize > 0 ? `${formatBytes(totalSize)} · ` : ""}Arrastra archivos aquí · hasta {formatBytes(MAX_FILE_BYTES)} cada uno
+          </span>
         </div>
       </div>
     </div>
@@ -1252,7 +1437,7 @@ function SignatureDialog({
           </button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-5">
-          {option("auto", "Automática (recomendada)", "Con tu nombre, cargo, teléfonos y los datos de la agencia. Se actualiza sola.")}
+          {option("auto", "Automática (recomendada)", "Con tu nombre, tu cargo, el teléfono de la agencia y el logo. Se actualiza sola.")}
           {option("custom", "Personalizada", "Escribe tu propia firma en HTML.")}
           {option("none", "Sin firma", "")}
 
@@ -1266,7 +1451,7 @@ function SignatureDialog({
                 className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm outline-none focus:border-gold"
               />
               <span className="mt-1 block text-xs text-ink/45">
-                Vacío = «{sig.defaultTitle}». El nombre y el teléfono móvil salen de tu perfil de usuario.
+                Vacío = «{sig.defaultTitle}». El nombre sale de tu perfil; el teléfono es siempre el de la agencia.
               </span>
             </label>
           )}

@@ -18,7 +18,8 @@ export { MailboxAuthError, MailboxConnectionError };
  */
 
 /** Correos más grandes que esto no se descargan enteros para leerlos. */
-const MAX_PARSE_BYTES = 40 * 1024 * 1024;
+// cPanel/Exim acepta correos de hasta ~50 MB: todo lo que pueda llegar se puede leer.
+const MAX_PARSE_BYTES = 60 * 1024 * 1024;
 /** Imágenes incrustadas (cid:) que se pasan a data: para verlas. */
 const MAX_INLINE_IMAGE_BYTES = 3 * 1024 * 1024;
 

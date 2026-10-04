@@ -245,12 +245,39 @@ los correos automáticos de la app; esto es el buzón personal de cPanel.
   contraseña — si no, una caída del servidor obligaría a todos a reconectar.
 - **Firma automática para todos, nuevos y antiguos, sin backfill**: modo
   `auto` (default de la columna) la GENERA en cada envío
-  (`lib/mailbox/signature.ts`) con nombre, cargo (del rol, o
-  `signature_title`), móvil del perfil, teléfono/dirección de la oficina
-  (Chile: su teléfono, sin dirección — no hay una pública en el repo) y logo
-  por URL absoluta. Por eso no hace falta tocar la creación de usuarios: un
-  usuario creado hoy ya la tiene. `custom` (HTML propio) y `none` desde el
-  botón "Firma".
+  (`lib/mailbox/signature.ts`): nombre, cargo (del rol, o `signature_title`),
+  teléfono, correo, dirección de la oficina, web y logo por URL absoluta. El
+  teléfono es SIEMPRE el de la agencia, `+34 641 457 123`, para todos los
+  usuarios y países (nunca el móvil del perfil; misma regla que #297). El
+  nombre de la agencia no se repite junto al cargo: ya lo dice el logo. No
+  hace falta tocar la creación de usuarios: un usuario creado hoy ya la tiene.
+  `custom` (HTML propio) y `none` desde el botón "Firma".
+- **Una vez conectado no se vuelve a pedir la contraseña**: ni al cerrar
+  sesión del CRM ni al cambiar de dispositivo (vive cifrada en el servidor, no
+  en el navegador). Solo se pide otra vez si se cambia en cPanel, si se pulsa
+  "Desconectar" o si cambia `EMAIL_ENCRYPTION_KEY`.
+- ⚠️ **Adjuntos — los límites del camino (`lib/mailbox/attachments.ts`):**
+  1. **El middleware de Next 15.5 CORTA a 10 MB el cuerpo de cualquier
+     petición** que pase por `middleware.ts` (`middlewareClientMaxBodySize`,
+     solo avisa con un `console.warn`): la ruta recibe un FormData truncado y
+     falla con "Failed to parse body as FormData". Comprobado en local. Por
+     eso los adjuntos NO viajan en el envío: se suben antes por trozos de 4 MB
+     (`/api/admin/correo/uploads`, a disco temporal, se borran al enviar o a
+     las 24 h) y el envío es un JSON con sus ids. ⚠️ **Afecta también a otras
+     rutas del panel que reciben archivos por FormData** (vídeos de
+     publicación, documentación, música de vídeos): por encima de 10 MB
+     fallan igual.
+  2. nginx del VPS (`client_max_body_size`, no verificado): si un trozo da
+     413, el cliente baja solo a trozos de 512 KB.
+  3. **Destinatarios**: base64 engorda ~37 %; Outlook rechaza por encima de
+     ~20 MB y Gmail de 25 MB. Hasta 18 MB en total va adjunto (≈ 25 MB
+     codificado); lo que no cabe se sube al bucket privado `mail-attachments`
+     (migración 0171) y va como **enlace de descarga** en el cuerpo
+     (`/api/public/correo-archivo/[token]`, HMAC con `EMAIL_ENCRYPTION_KEY`,
+     30 días, streaming, siempre `attachment`). Los caducados se borran solos
+     en el siguiente envío de ese usuario. Máximo 100 MB por archivo y 20
+     archivos — y para los que van por enlace manda además el
+     `FILE_SIZE_LIMIT` del contenedor `storage` (ver "Upload de archivos").
 - **cPanel no guarda lo enviado por SMTP en "Enviados"** (Gmail sí): el MIME se
   compone UNA vez y esos mismos bytes se mandan y se añaden por IMAP a Enviados.
   La cabecera Bcc se conserva en la copia y se QUITA de lo que viaja
