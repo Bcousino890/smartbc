@@ -53,7 +53,7 @@ export async function GET() {
     allowedDomains: allowedMailboxDomains(),
     connectedAt: row?.connected_at ?? null,
     lastError: row?.last_error ?? null,
-    server: { imap: `${cfg.imapHost}:${cfg.imapPort}`, smtp: `${cfg.smtpHost}:${cfg.smtpPort}` },
+    server: { imap: `${cfg.imapHosts[0]}:${cfg.imapPort}`, smtp: `${cfg.smtpHosts[0]}:${cfg.smtpPort}` },
     signature: {
       mode: row?.signature_mode ?? "auto",
       customHtml: row?.signature_html ?? null,

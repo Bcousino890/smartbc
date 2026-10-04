@@ -230,10 +230,21 @@ panel (diseño de tres columnas tipo Roundcube: carpetas · lista con buscador
 · lectura con Responder / Responder a todos / Reenviar / Eliminar / Archivo /
 SPAM / Marcar). **No tiene nada que ver con AWS SES** (arriba): SES es para
 los correos automáticos de la app; esto es el buzón personal de cPanel.
-- **Servidor fijo para todos** (`lib/mailbox/config.ts`, los "Secure SSL/TLS
-  Settings" del propio cPanel): IMAP `bcousinoprop.com:993`, SMTP
-  `bcousinoprop.com:465`, usuario = la dirección. Override con
-  `MAILBOX_IMAP_HOST/PORT`, `MAILBOX_SMTP_HOST/PORT`, `MAILBOX_ALLOWED_DOMAINS`.
+- **Servidor fijo para todos** (`lib/mailbox/config.ts`): IMAP 993 y SMTP 465
+  (SSL), usuario = la dirección. ⚠️ **El host NO es `bcousinoprop.com`
+  aunque lo diga cPanel** ("Secure SSL/TLS Settings"): `bcousinoprop.com`,
+  `www.` y `mail.` apuntan al VPS (la web pública sale de ahí), así que con
+  ese host el CRM se conectaba a sí mismo → *"No se pudo contactar con el
+  servidor de correo"* (le pasó a `contacto@` el mismo día del despliegue).
+  El correo vive en el servidor de cPanel de Namecheap:
+  `premium705.web-hosting.com` (panel/webmail) y `premium705-3.web-hosting.com`
+  (el MX). Se prueban en ese orden y se recuerda el que responde
+  (`lib/mailbox/hosts.ts`); solo se pasa al siguiente por red/certificado,
+  nunca por contraseña mala, y el SMTP nunca reintenta un envío en otro
+  servidor (podría salir dos veces). El error dice qué servidor falló y por
+  qué. Override con `MAILBOX_IMAP_HOST`/`MAILBOX_SMTP_HOST` (lista separada
+  por comas) y `MAILBOX_*_PORT`, `MAILBOX_ALLOWED_DOMAINS`. Si se cambia de
+  hosting de correo, es ahí donde tocar.
   El host NUNCA lo elige el usuario (el CRM no debe poder abrir conexiones
   IMAP/SMTP a servidores arbitrarios) y solo se conectan buzones del dominio.
 - **La contraseña se escribe una vez**: se prueba contra IMAP y SMTP ANTES de
