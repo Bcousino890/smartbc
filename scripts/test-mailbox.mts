@@ -27,8 +27,11 @@ import {
   normalizeMailboxEmail,
   suggestedMailboxEmail,
 } from "../lib/mailbox/config.ts";
+import { quotableHtml, sanitizeQuotedHtml } from "../lib/mailbox/quote.ts";
 import {
   buildOutgoingBody,
+  linkifyEscape,
+  plainQuoteToHtml,
   buildViewerDocument,
   headerSafe,
   parseAddressList,
@@ -135,6 +138,28 @@ check("sin <script>", !/<script/i.test(doc));
 check("con CSP default-src 'none'", doc.includes("default-src 'none'"));
 check("enlaces fuera del panel", doc.includes('<base target="_blank">'));
 check("texto plano escapado", buildViewerDocument(null, "<b>x</b>").includes("&lt;b&gt;x&lt;/b&gt;"));
+
+console.log("Citas en respuestas");
+const link = linkifyEscape("mira <https://www.google.com/maps/x?entry=gmail&source=g> y https://bcousinoprop.com/a.");
+check("enlace sin el '>' del <url> (antes salía roto: …g&gt)", link.includes('href="https://www.google.com/maps/x?entry=gmail&amp;source=g"') && !link.includes("&gt\"") , link);
+check("la punto final de la frase no entra en el enlace", link.includes('href="https://bcousinoprop.com/a">https://bcousinoprop.com/a</a>.'), link);
+check("texto con < y & se escapa", linkifyEscape("a<b & c") === "a&lt;b &amp; c");
+const nested = plainQuoteToHtml("Sí, llegó.\n> prueba 1\n>\n> > hola\n> fin\nfuera");
+const opens = (nested.match(/<blockquote/g) ?? []).length, closes = (nested.match(/<\/blockquote>/g) ?? []).length;
+check("cada '>' es un nivel de cita, sin '>' sueltos", opens === 2 && closes === 2 && !nested.includes("&gt;"), nested);
+check("la cita termina y el texto de fuera queda fuera", nested.endsWith("</blockquote>fuera") || nested.includes("</blockquote><br>fuera") || nested.includes("</blockquote>fuera"), nested);
+const dirty = '<html><head><style>p{x}</style><script>alert(1)</script></head><body><p onclick="x()" id="a">Hola <b>mundo</b></p><a href="javascript:alert(1)">m</a><a href="https://ok.com/x">ok</a><img src="data:image/png;base64,AAAA"><img src="cid:foto"><img src="https://ok.com/i.png" onerror="x()"><iframe src="https://evil"></iframe><form action="https://evil"><input name="p"></form></body></html>';
+const clean = sanitizeQuotedHtml(dirty);
+check("fuera script/style/iframe/form", !/<script|<style|<iframe|<form|<input/i.test(clean), clean);
+check("fuera onclick/onerror/id", !/onclick|onerror|\sid=/i.test(clean), clean);
+check("fuera javascript: pero se conserva el enlace normal", !/javascript:/i.test(clean) && clean.includes('href="https://ok.com/x"'), clean);
+check("fuera imágenes incrustadas (data:/cid:), se conserva la remota", !/data:image|cid:/i.test(clean) && clean.includes('src="https://ok.com/i.png"'), clean);
+check("se conserva el formato", clean.includes("<b>mundo</b>"), clean);
+check("sin HTML → no se cita HTML", quotableHtml(null) === null && quotableHtml("  ") === null);
+check("HTML gigante → se cae al texto", quotableHtml("<p>" + "x".repeat(200_000) + "</p>") === null);
+const withHtml = buildOutgoingBody("ok", null, { kind: "reply", from: "B <b@x.com>", date: "hoy", subject: "s", text: "> texto plano", html: "<p>HTML original <b>negrita</b></p>" });
+check("si hay HTML original, se cita ese y no el texto plano", withHtml.html.includes("<b>negrita</b>") && !withHtml.html.includes("texto plano"));
+check("el texto plano de la respuesta sigue citando con '>'", withHtml.text.includes("> > texto plano"), withHtml.text);
 
 console.log("Servidor SMTP (Hetzner bloquea 25 y 465)");
 const cfgDefault = mailboxServerConfig();
