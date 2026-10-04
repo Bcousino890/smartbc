@@ -3,6 +3,7 @@ import { ImapFlow, type ListResponse, type MessageStructureObject } from "imapfl
 import { simpleParser, type AddressObject, type ParsedMail } from "mailparser";
 import { mailboxServerConfig } from "./config";
 import { MailboxAuthError, MailboxConnectionError } from "./errors";
+import { describeNetworkFailure, hostsToTry, networkFailure, rememberHost } from "./hosts";
 import type { MailboxCredentials } from "./store";
 
 export { MailboxAuthError, MailboxConnectionError };
@@ -23,26 +24,25 @@ const MAX_PARSE_BYTES = 60 * 1024 * 1024;
 /** Imágenes incrustadas (cid:) que se pasan a data: para verlas. */
 const MAX_INLINE_IMAGE_BYTES = 3 * 1024 * 1024;
 
-function newClient(creds: MailboxCredentials) {
-  const cfg = mailboxServerConfig();
+function newClient(creds: MailboxCredentials, host: string, port: number) {
   return new ImapFlow({
-    host: cfg.imapHost,
-    port: cfg.imapPort,
+    host,
+    port,
     secure: true,
     auth: { user: creds.email, pass: creds.password },
     logger: false,
     disableAutoIdle: true,
-    connectionTimeout: 12_000,
+    connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 45_000,
   });
 }
 
-function describeConnectError(err: unknown): Error {
+/** Error de un servidor que SÍ respondió (contraseña, servicio caído…). */
+function describeServerError(err: unknown): Error {
   const e = err as {
     authenticationFailed?: boolean;
     serverResponseCode?: string;
-    code?: string;
     message?: string;
     responseText?: string;
     response?: unknown;
@@ -57,25 +57,37 @@ function describeConnectError(err: unknown): Error {
   if (e?.authenticationFailed || /AUTHENTICATIONFAILED|authentication failed|invalid credentials/i.test(text)) {
     return new MailboxAuthError();
   }
-  if (e?.code === "ETIMEDOUT" || e?.code === "CONNECT_TIMEOUT" || /timeout/i.test(e?.message ?? "")) {
-    return new MailboxConnectionError("El servidor de correo no respondió a tiempo.");
-  }
-  if (e?.code === "ENOTFOUND" || e?.code === "ECONNREFUSED") {
-    return new MailboxConnectionError("No se pudo contactar con el servidor de correo.");
-  }
   return new MailboxConnectionError(e?.message || "Error de conexión con el servidor de correo.");
 }
 
-export async function withImap<T>(creds: MailboxCredentials, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
-  const client = newClient(creds);
-  // Sin este listener, un 'error' del socket después del login tumba el proceso.
-  client.on("error", () => {});
-  try {
-    await client.connect();
-  } catch (err) {
-    client.close();
-    throw describeConnectError(err);
+/**
+ * Conecta probando los servidores de config.ts en orden: si uno no responde
+ * (red, DNS, timeout, certificado) se pasa al siguiente; si responde y
+ * rechaza (contraseña), se para ahí — el otro diría lo mismo.
+ */
+async function connectAny(creds: MailboxCredentials): Promise<ImapFlow> {
+  const cfg = mailboxServerConfig();
+  const tried: string[] = [];
+  for (const host of hostsToTry("imap", cfg.imapHosts)) {
+    const client = newClient(creds, host, cfg.imapPort);
+    // Sin este listener, un 'error' del socket después del login tumba el proceso.
+    client.on("error", () => {});
+    try {
+      await client.connect();
+      rememberHost("imap", host);
+      return client;
+    } catch (err) {
+      client.close();
+      const net = networkFailure(err);
+      if (!net) throw describeServerError(err);
+      tried.push(describeNetworkFailure(host, cfg.imapPort, net));
+    }
   }
+  throw new MailboxConnectionError(`No se pudo contactar con el servidor de correo (${tried.join("; ")}).`);
+}
+
+export async function withImap<T>(creds: MailboxCredentials, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+  const client = await connectAny(creds);
   try {
     return await fn(client);
   } finally {

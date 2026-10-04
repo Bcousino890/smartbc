@@ -1,14 +1,22 @@
 /**
- * Servidor de correo corporativo (cPanel de bcousinoprop.com).
+ * Servidor de correo corporativo (cPanel de bcousinoprop.com, Namecheap).
  *
- * Valores de "Secure SSL/TLS Settings (Recommended)" del propio cPanel
- * (Email Accounts → Connect Devices) — iguales para todos los buzones del
- * dominio, por eso el usuario solo escribe su contraseña:
- *   IMAP  bcousinoprop.com:993 (SSL)
- *   SMTP  bcousinoprop.com:465 (SSL)
- * Usuario = la dirección completa.
+ * ⚠️ NO es `bcousinoprop.com` aunque cPanel lo diga ("Secure SSL/TLS
+ * Settings" → Incoming/Outgoing Server: bcousinoprop.com). cPanel da por hecho
+ * que el dominio apunta a él, pero `bcousinoprop.com`, `www.` y `mail.` tienen
+ * el A record en el VPS (178.105.185.125: la web pública se sirve desde ahí,
+ * ver MARKETING_HOSTS en middleware.ts). Con ese host el CRM se conectaba a sí
+ * mismo → ECONNREFUSED → "No se pudo contactar con el servidor de correo"
+ * (pasó en producción el 2026-10-04 con contacto@). El correo vive en el
+ * servidor de cPanel:
+ *   premium705.web-hosting.com    — el del panel/webmail (198.177.120.58)
+ *   premium705-3.web-hosting.com  — el del registro MX (198.177.120.60)
+ * Se prueban en ese orden y se recuerda el que responde. Usar el nombre del
+ * servidor (no el del dominio) es además lo que hace que el certificado SSL
+ * valide. Puertos SSL directos: IMAP 993, SMTP 465. Usuario = la dirección.
  *
- * Override por env (MAILBOX_*) si algún día se cambia de hosting. El host
+ * Override por env: MAILBOX_IMAP_HOST / MAILBOX_SMTP_HOST (uno o varios
+ * separados por comas, en orden de preferencia) y MAILBOX_*_PORT. El host
  * NUNCA lo elige el usuario: así el CRM no se puede usar para abrir
  * conexiones IMAP/SMTP contra servidores arbitrarios.
  *
@@ -27,13 +35,21 @@ function envStr(name: string, fallback: string): string {
   return raw && raw.trim() ? raw.trim() : fallback;
 }
 
+function hostList(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export const MAILBOX_DEFAULT_DOMAIN = "bcousinoprop.com";
+export const MAILBOX_DEFAULT_HOSTS = "premium705.web-hosting.com,premium705-3.web-hosting.com";
 
 export function mailboxServerConfig() {
   return {
-    imapHost: envStr("MAILBOX_IMAP_HOST", MAILBOX_DEFAULT_DOMAIN),
+    imapHosts: hostList(envStr("MAILBOX_IMAP_HOST", MAILBOX_DEFAULT_HOSTS)),
     imapPort: envInt("MAILBOX_IMAP_PORT", 993),
-    smtpHost: envStr("MAILBOX_SMTP_HOST", MAILBOX_DEFAULT_DOMAIN),
+    smtpHosts: hostList(envStr("MAILBOX_SMTP_HOST", MAILBOX_DEFAULT_HOSTS)),
     smtpPort: envInt("MAILBOX_SMTP_PORT", 465),
   };
 }
