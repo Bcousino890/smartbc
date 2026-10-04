@@ -230,8 +230,16 @@ panel (diseño de tres columnas tipo Roundcube: carpetas · lista con buscador
 · lectura con Responder / Responder a todos / Reenviar / Eliminar / Archivo /
 SPAM / Marcar). **No tiene nada que ver con AWS SES** (arriba): SES es para
 los correos automáticos de la app; esto es el buzón personal de cPanel.
-- **Servidor fijo para todos** (`lib/mailbox/config.ts`): IMAP 993 y SMTP 465
-  (SSL), usuario = la dirección. ⚠️ **El host NO es `bcousinoprop.com`
+- **Servidor fijo para todos** (`lib/mailbox/config.ts`): IMAP 993 (SSL) y
+  **SMTP 587 (STARTTLS)**, usuario = la dirección. ⚠️ **El SMTP NO va por el
+  465 que recomienda cPanel: Hetzner bloquea por defecto las conexiones
+  SALIENTES a los puertos 25 y 465** de todos sus servidores cloud (el 587
+  está libre). Con el 465 la lectura funcionaba y el envío daba `ETIMEDOUT` en
+  los dos servidores (pasó el 2026-10-04 con `amelia.rivas@`); IMAP 993 nunca
+  estuvo afectado. STARTTLS es obligatorio (`requireTLS`): si un servidor no lo
+  ofrece, se rechaza sin mandar la contraseña en claro (probado). Override:
+  `MAILBOX_SMTP_PORT` y `MAILBOX_SMTP_SECURITY` (ssl | starttls; por defecto
+  465 → ssl, cualquier otro → starttls). ⚠️ **El host NO es `bcousinoprop.com`
   aunque lo diga cPanel** ("Secure SSL/TLS Settings"): `bcousinoprop.com`,
   `www.` y `mail.` apuntan al VPS (la web pública sale de ahí), así que con
   ese host el CRM se conectaba a sí mismo → *"No se pudo contactar con el
@@ -293,6 +301,11 @@ los correos automáticos de la app; esto es el buzón personal de cPanel.
   compone UNA vez y esos mismos bytes se mandan y se añaden por IMAP a Enviados.
   La cabecera Bcc se conserva en la copia y se QUITA de lo que viaja
   (`stripBccHeader`, vigilado por `npm run test:mailbox`).
+- **cPanel suele tener DOS carpetas de spam** (`Junk` la del servidor y `spam`
+  la de Exim/SpamAssassin): sin desempate el panel enseñaba dos "SPAM" iguales.
+  `lib/mailbox/folders.ts` deja UNA carpeta por uso (gana la que declara el
+  servidor, luego la deducida por imapflow, luego por nombre) y la otra
+  conserva su nombre real, para no esconder correo.
 - Un buzón recién creado puede no tener aún Papelera/Archivo/SPAM/Enviados:
   se crean al usarlas (`ensureSpecialFolder`, nombres de cPanel bajo `INBOX.`).
   "Eliminar" nunca borra definitivamente salvo desde la propia Papelera.

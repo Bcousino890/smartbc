@@ -8,7 +8,7 @@ import { describeNetworkFailure, forgetHost, hostsToTry, networkFailure, remembe
 import type { MailboxCredentials } from "./store";
 
 /**
- * Envío con el SMTP del propio buzón (cPanel, 465 SSL) — NO por AWS SES:
+ * Envío con el SMTP del propio buzón (cPanel, 587 STARTTLS) — NO por AWS SES:
  * SES es para los correos automáticos de la app (reset, invitaciones,
  * digest). Lo que un agente escribe a mano sale de SU buzón, llega con SU
  * dirección y las respuestas vuelven a SU bandeja.
@@ -19,8 +19,10 @@ function transport(creds: MailboxCredentials, host: string) {
   return nodemailer.createTransport({
     host,
     port: cfg.smtpPort,
-    // SSL directo (465, el de cPanel); 587/25 negocian STARTTLS.
-    secure: cfg.smtpPort !== 587 && cfg.smtpPort !== 25,
+    // 587 = STARTTLS (requireTLS: si el servidor no lo ofrece, falla en vez de
+    // mandar la contraseña en claro); 465 = SSL directo, que Hetzner bloquea.
+    secure: cfg.smtpSecurity === "ssl",
+    requireTLS: cfg.smtpSecurity === "starttls",
     auth: { user: creds.email, pass: creds.password },
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,

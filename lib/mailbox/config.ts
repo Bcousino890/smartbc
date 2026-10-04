@@ -13,10 +13,18 @@
  *   premium705-3.web-hosting.com  — el del registro MX (198.177.120.60)
  * Se prueban en ese orden y se recuerda el que responde. Usar el nombre del
  * servidor (no el del dominio) es además lo que hace que el certificado SSL
- * valide. Puertos SSL directos: IMAP 993, SMTP 465. Usuario = la dirección.
+ * valide. Usuario = la dirección.
+ *
+ * ⚠️ SMTP va por el 587 (STARTTLS), NO por el 465 que recomienda cPanel:
+ * Hetzner bloquea por defecto las conexiones SALIENTES a los puertos 25 y 465
+ * de todos sus servidores cloud (anti-spam; el 587 está libre). Con el 465 la
+ * lectura (IMAP 993) funcionaba y el envío daba ETIMEDOUT en los dos servidores
+ * (pasó en producción el 2026-10-04, con amelia.rivas@). El 587 de cPanel
+ * exige STARTTLS y la misma contraseña, y el certificado es el del servidor.
  *
  * Override por env: MAILBOX_IMAP_HOST / MAILBOX_SMTP_HOST (uno o varios
- * separados por comas, en orden de preferencia) y MAILBOX_*_PORT. El host
+ * separados por comas, en orden de preferencia), MAILBOX_*_PORT y
+ * MAILBOX_SMTP_SECURITY (ssl | starttls). El host
  * NUNCA lo elige el usuario: así el CRM no se puede usar para abrir
  * conexiones IMAP/SMTP contra servidores arbitrarios.
  *
@@ -45,12 +53,21 @@ function hostList(raw: string): string[] {
 export const MAILBOX_DEFAULT_DOMAIN = "bcousinoprop.com";
 export const MAILBOX_DEFAULT_HOSTS = "premium705.web-hosting.com,premium705-3.web-hosting.com";
 
+export type SmtpSecurity = "starttls" | "ssl";
+
 export function mailboxServerConfig() {
+  const smtpPort = envInt("MAILBOX_SMTP_PORT", 587);
+  // Salvo que se diga otra cosa, 465 es SSL directo y cualquier otro puerto
+  // negocia STARTTLS (obligatorio: nunca se manda la contraseña en claro).
+  const forced = envStr("MAILBOX_SMTP_SECURITY", "").toLowerCase();
+  const smtpSecurity: SmtpSecurity =
+    forced === "ssl" || forced === "starttls" ? forced : smtpPort === 465 ? "ssl" : "starttls";
   return {
     imapHosts: hostList(envStr("MAILBOX_IMAP_HOST", MAILBOX_DEFAULT_HOSTS)),
     imapPort: envInt("MAILBOX_IMAP_PORT", 993),
     smtpHosts: hostList(envStr("MAILBOX_SMTP_HOST", MAILBOX_DEFAULT_HOSTS)),
-    smtpPort: envInt("MAILBOX_SMTP_PORT", 465),
+    smtpPort,
+    smtpSecurity,
   };
 }
 
