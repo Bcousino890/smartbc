@@ -257,6 +257,16 @@ export async function listMessages(
   }
 }
 
+// ─── ¿Hay correo nuevo? (una sola orden IMAP, sin listar nada) ──────────────
+
+export type FolderStatus = { messages: number; uidNext: number; unseen: number };
+
+export async function folderStatus(client: ImapFlow, folder: string): Promise<FolderStatus> {
+  const st = await client.status(folder, { messages: true, uidNext: true, unseen: true });
+  if (!st) return { messages: 0, uidNext: 0, unseen: 0 };
+  return { messages: st.messages ?? 0, uidNext: st.uidNext ?? 0, unseen: st.unseen ?? 0 };
+}
+
 // ─── Un mensaje ──────────────────────────────────────────────────────────────
 
 export type MailAttachmentMeta = {
@@ -275,6 +285,8 @@ export type MailMessage = {
   cc: MailAddress[];
   replyTo: MailAddress[];
   date: string | null;
+  /** Cuándo entró en el buzón (INTERNALDATE). Si es mucho después de `date`, el retraso fue del servidor de correo. */
+  receivedAt: string | null;
   messageId: string | null;
   references: string | null;
   html: string | null;
@@ -327,16 +339,21 @@ function visibleAttachments(parsed: ParsedMail, html: string | null): MailAttach
 async function fetchParsed(
   client: ImapFlow,
   uid: number,
-): Promise<{ parsed: ParsedMail | null; flags: Set<string>; size: number } | null> {
-  const meta = await client.fetchOne(String(uid), { uid: true, size: true, flags: true }, { uid: true });
+): Promise<{ parsed: ParsedMail | null; flags: Set<string>; size: number; receivedAt: string | null } | null> {
+  const meta = await client.fetchOne(
+    String(uid),
+    { uid: true, size: true, flags: true, internalDate: true },
+    { uid: true },
+  );
   if (!meta) return null;
   const size = meta.size ?? 0;
   const flags = meta.flags ?? new Set<string>();
-  if (size > MAX_PARSE_BYTES) return { parsed: null, flags, size };
+  const receivedAt = toIso(meta.internalDate);
+  if (size > MAX_PARSE_BYTES) return { parsed: null, flags, size, receivedAt };
   const full = await client.fetchOne(String(uid), { uid: true, source: true }, { uid: true });
   if (!full || !full.source) return null;
   const parsed = await simpleParser(full.source, { skipImageLinks: true });
-  return { parsed, flags, size };
+  return { parsed, flags, size, receivedAt };
 }
 
 function referencesOf(parsed: ParsedMail): string | null {
@@ -355,7 +372,7 @@ export async function getMessage(
   try {
     const got = await fetchParsed(client, uid);
     if (!got) return null;
-    const { parsed, flags } = got;
+    const { parsed, flags, receivedAt } = got;
     if (opts.markSeen && !flags.has("\\Seen")) {
       await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
       flags.add("\\Seen");
@@ -370,6 +387,7 @@ export async function getMessage(
         cc: [],
         replyTo: [],
         date: null,
+        receivedAt,
         messageId: null,
         references: null,
         html: null,
@@ -390,6 +408,7 @@ export async function getMessage(
       cc: addrList(parsed.cc),
       replyTo: addrList(parsed.replyTo),
       date: toIso(parsed.date),
+      receivedAt,
       messageId: parsed.messageId ?? null,
       references: referencesOf(parsed),
       html,

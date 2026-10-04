@@ -106,8 +106,11 @@ export async function POST(req: NextRequest) {
     ? resolveSignature(row.signature_mode, row.signature_html, signatureProfileOf(profile, creds.email, row.signature_title), APP_URL)
     : null;
 
+  const t0 = Date.now();
+  const marks: Record<string, number> = {};
   try {
     const result = await withImap(creds, async (client) => {
+      marks.imapConnect = Date.now() - t0;
       let quoted: QuotedOriginal | null = null;
       let inReplyTo: string | undefined;
       let references: string | undefined;
@@ -160,6 +163,7 @@ export async function POST(req: NextRequest) {
         : null;
 
       const body = buildOutgoingBody(bodyText, signature, quoted, fileLinks);
+      const tSmtp = Date.now();
       const sent = await sendMail(creds, {
         fromName: profile.full_name && !profile.full_name.includes("@") ? profile.full_name : null,
         to: to.valid,
@@ -173,6 +177,7 @@ export async function POST(req: NextRequest) {
         attachments,
       });
 
+      marks.smtp = Date.now() - tSmtp;
       // Ya salió: lo que falle de aquí en adelante no debe parecer un fallo de envío.
       let savedToSent = true;
       try {
@@ -187,7 +192,11 @@ export async function POST(req: NextRequest) {
 
     await Promise.all(uploadIds.map((id) => deleteUpload(profile.id, id).catch(() => undefined)));
     void cleanupExpiredLargeFiles(profile.id);
-    return Response.json({ ok: true, ...result });
+    // Dónde se va el tiempo (ms): conexión IMAP, entrega al SMTP, total. Se ve en
+    // `pm2 logs smartbc-portal` y el panel lo enseña al terminar el envío.
+    const timings = { imapConnect: marks.imapConnect ?? 0, smtp: marks.smtp ?? 0, total: Date.now() - t0 };
+    console.log(`[correo] envío ${creds.email} → ${to.valid.length + cc.valid.length + bcc.valid.length} dest. · ${JSON.stringify(timings)}`);
+    return Response.json({ ok: true, ...result, timings });
   } catch (err) {
     if (err instanceof LargeFileError) return Response.json({ error: err.message }, { status: 413 });
     return mailboxErrorResponse(profile.id, err);

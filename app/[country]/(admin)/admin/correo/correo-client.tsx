@@ -92,6 +92,7 @@ type Message = {
   cc: Addr[];
   replyTo: Addr[];
   date: string | null;
+  receivedAt: string | null;
   html: string | null;
   text: string | null;
   attachments: Array<{ index: number; filename: string; contentType: string; size: number }>;
@@ -137,6 +138,27 @@ function listDate(iso: string | null): string {
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   }
   return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
+/** "3 min 20 s" / "45 s" / "2 h 5 min". */
+function duration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min${s % 60 ? ` ${s % 60} s` : ""}`;
+  return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`;
+}
+
+/**
+ * Retraso de ENTREGA: lo que pasó entre que el remitente lo envió (cabecera
+ * Date) y que entró en tu buzón (INTERNALDATE). Si es grande, el correo se
+ * quedó esperando en el servidor de correo (cola de Gmail, cPanel, filtro
+ * antispam…), no en el CRM. Menos de 2 min no se avisa: es relojes y colas.
+ */
+function deliveryDelay(message: { date: string | null; receivedAt: string | null }): number | null {
+  if (!message.date || !message.receivedAt) return null;
+  const ms = new Date(message.receivedAt).getTime() - new Date(message.date).getTime();
+  return Number.isFinite(ms) && ms >= 120_000 ? ms : null;
 }
 
 function fullDate(iso: string | null): string {
@@ -427,16 +449,45 @@ function Mailbox({
     void loadList();
   }, [loadList]);
 
-  // Correo nuevo cada minuto (solo en la primera página y sin búsqueda).
+  // Correo nuevo: cada 15 s se pregunta al servidor si la carpeta cambió (una
+  // sola orden IMAP, sin listar nada) y solo si cambió se recarga la lista. Al
+  // volver a la pestaña se comprueba al instante. Solo en la primera página y
+  // sin búsqueda activa.
+  const statusKey = useRef<string | null>(null);
   useEffect(() => {
+    statusKey.current = null;
     if (page !== 0 || activeQuery) return;
-    const t = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      void loadList({ silent: true });
-      void loadFolders();
-    }, 60_000);
-    return () => clearInterval(t);
-  }, [page, activeQuery, loadList, loadFolders]);
+    let stopped = false;
+    async function check() {
+      if (stopped || document.visibilityState !== "visible") return;
+      const res = await getJson<{ messages: number; uidNext: number; unseen: number }>(
+        `${API}/status?folder=${encodeURIComponent(folder)}`,
+      );
+      if (stopped) return;
+      if (!res.ok) {
+        handleFailure(res);
+        return;
+      }
+      const key = `${res.data.uidNext}:${res.data.messages}:${res.data.unseen}`;
+      const changed = statusKey.current !== null && statusKey.current !== key;
+      statusKey.current = key;
+      if (changed) {
+        void loadList({ silent: true });
+        void loadFolders();
+      }
+    }
+    void check();
+    const t = setInterval(check, 15_000);
+    const onVisible = () => void check();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [page, activeQuery, folder, loadList, loadFolders, handleFailure]);
 
   const currentFolder = folders.find((f) => f.path === folder);
 
@@ -858,9 +909,9 @@ function Mailbox({
           state={compose}
           account={account}
           onClose={() => setCompose(null)}
-          onSent={() => {
+          onSent={(ms) => {
             setCompose(null);
-            toast("Correo enviado");
+            toast(ms ? `Correo enviado (${duration(ms)})` : "Correo enviado");
             void loadFolders();
             if (currentFolder?.specialUse === "\\Sent") void loadList({ silent: true });
             if (compose.mode === "reply" && compose.refUid) {
@@ -944,6 +995,15 @@ function MessageView({ message, folder }: { message: Message; folder: string }) 
           </div>
           <span className="shrink-0 text-xs text-ink/45">{fullDate(message.date)}</span>
         </div>
+        {(() => {
+          const delay = deliveryDelay(message);
+          return delay ? (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Este correo tardó {duration(delay)} en llegar a tu buzón desde que se envió. El retraso estuvo en el
+              servidor de correo (cola de salida del remitente o filtro antispam), no en el CRM.
+            </p>
+          ) : null;
+        })()}
         {message.attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {message.attachments.map((a) => (
@@ -1065,7 +1125,7 @@ function ComposeDialog({
   state: ComposeState;
   account: Account;
   onClose: () => void;
-  onSent: () => void;
+  onSent: (ms?: number) => void;
   onAuthFailed: () => void;
 }) {
   const [form, setForm] = useState(state);
@@ -1156,7 +1216,7 @@ function ComposeDialog({
     if (failed.length) return setError("Quita los archivos con error antes de enviar.");
     if (!form.subject.trim() && !confirm("¿Enviar sin asunto?")) return;
     setSending(true);
-    const res = await requestJson<{ ok: true; linked: number }>(`${API}/send`, {
+    const res = await requestJson<{ ok: true; linked: number; timings?: { total: number } }>(`${API}/send`, {
       body: {
         to: form.to,
         cc: form.cc,
@@ -1181,7 +1241,7 @@ function ComposeDialog({
       );
       return;
     }
-    onSent();
+    onSent(res.data.timings?.total);
   }
 
   const title = form.mode === "reply" ? "Responder" : form.mode === "forward" ? "Reenviar" : "Nuevo correo";

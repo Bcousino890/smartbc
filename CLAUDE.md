@@ -313,6 +313,20 @@ los correos automáticos de la app; esto es el buzón personal de cPanel.
   `allow-scripts` ni `allow-same-origin` (+ CSP) y los adjuntos se descargan
   siempre como `attachment` + `nosniff`: nada recibido por correo ejecuta en el
   origen del CRM.
+- **"El correo llega pero tarda": dónde mirar (2026-10-04).** El CRM no ve la
+  cola de entrega, pero ahora la hace visible:
+  - Cada mensaje compara la cabecera `Date` (cuándo lo envió el remitente) con
+    `INTERNALDATE` (cuándo entró en el buzón): si pasan más de 2 min, el visor
+    avisa "tardó X en llegar a tu buzón… el retraso estuvo en el servidor de
+    correo, no en el CRM". Ese retraso es de Gmail/cPanel/antispam, no se
+    arregla desde aquí.
+  - La lista se refresca sola: cada 15 s `GET /api/admin/correo/status` (una
+    sola orden IMAP STATUS, sin listar) y solo si cambia `uidNext`/`messages`/
+    `unseen` recarga; además al volver a la pestaña. Antes era un recargo
+    completo cada 60 s.
+  - El envío devuelve `timings` ({imapConnect, smtp, total} en ms): el panel
+    muestra "Correo enviado (3 s)" y queda en `pm2 logs smartbc-portal` como
+    `[correo] envío …`.
 - Una conexión IMAP por petición (sin pool) y timeouts acotados en IMAP y SMTP.
   Probado de punta a punta contra un Dovecot real con separador `.` y prefijo
   `INBOX.` como el de cPanel (login, carpetas, paginación, búsqueda, cid,
