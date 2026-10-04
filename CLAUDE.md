@@ -224,6 +224,50 @@ antes de crear la cuenta y deshace la cuenta de staff si el perfil no se pudo
 guardar. Los modales usan `lib/http/request-json.ts`, que separa red / timeout /
 respuesta no-JSON / error HTTP; úsalo en formularios nuevos del panel.
 
+## Correo corporativo dentro del CRM — `/admin/correo` (2026-10-04)
+Cada usuario del staff lee y envía SU buzón `@bcousinoprop.com` sin salir del
+panel (diseño de tres columnas tipo Roundcube: carpetas · lista con buscador
+· lectura con Responder / Responder a todos / Reenviar / Eliminar / Archivo /
+SPAM / Marcar). **No tiene nada que ver con AWS SES** (arriba): SES es para
+los correos automáticos de la app; esto es el buzón personal de cPanel.
+- **Servidor fijo para todos** (`lib/mailbox/config.ts`, los "Secure SSL/TLS
+  Settings" del propio cPanel): IMAP `bcousinoprop.com:993`, SMTP
+  `bcousinoprop.com:465`, usuario = la dirección. Override con
+  `MAILBOX_IMAP_HOST/PORT`, `MAILBOX_SMTP_HOST/PORT`, `MAILBOX_ALLOWED_DOMAINS`.
+  El host NUNCA lo elige el usuario (el CRM no debe poder abrir conexiones
+  IMAP/SMTP a servidores arbitrarios) y solo se conectan buzones del dominio.
+- **La contraseña se escribe una vez**: se prueba contra IMAP y SMTP ANTES de
+  guardarla y se guarda cifrada (`encryptSecret`, `EMAIL_ENCRYPTION_KEY`) en
+  `user_mailboxes` (migración 0171, RLS sin políticas: solo service role). Si
+  alguien la cambia en cPanel, el siguiente acceso devuelve `auth_failed`, se
+  apunta en `last_error` y el panel pide reconectar. ⚠️ `[UNAVAILABLE]` /
+  "temporary failure" (cPanel caído) se trata como error de CONEXIÓN, no de
+  contraseña — si no, una caída del servidor obligaría a todos a reconectar.
+- **Firma automática para todos, nuevos y antiguos, sin backfill**: modo
+  `auto` (default de la columna) la GENERA en cada envío
+  (`lib/mailbox/signature.ts`) con nombre, cargo (del rol, o
+  `signature_title`), móvil del perfil, teléfono/dirección de la oficina
+  (Chile: su teléfono, sin dirección — no hay una pública en el repo) y logo
+  por URL absoluta. Por eso no hace falta tocar la creación de usuarios: un
+  usuario creado hoy ya la tiene. `custom` (HTML propio) y `none` desde el
+  botón "Firma".
+- **cPanel no guarda lo enviado por SMTP en "Enviados"** (Gmail sí): el MIME se
+  compone UNA vez y esos mismos bytes se mandan y se añaden por IMAP a Enviados.
+  La cabecera Bcc se conserva en la copia y se QUITA de lo que viaja
+  (`stripBccHeader`, vigilado por `npm run test:mailbox`).
+- Un buzón recién creado puede no tener aún Papelera/Archivo/SPAM/Enviados:
+  se crean al usarlas (`ensureSpecialFolder`, nombres de cPanel bajo `INBOX.`).
+  "Eliminar" nunca borra definitivamente salvo desde la propia Papelera.
+- El HTML de un correo recibido se pinta en `<iframe sandbox srcdoc>` SIN
+  `allow-scripts` ni `allow-same-origin` (+ CSP) y los adjuntos se descargan
+  siempre como `attachment` + `nosniff`: nada recibido por correo ejecuta en el
+  origen del CRM.
+- Una conexión IMAP por petición (sin pool) y timeouts acotados en IMAP y SMTP.
+  Probado de punta a punta contra un Dovecot real con separador `.` y prefijo
+  `INBOX.` como el de cPanel (login, carpetas, paginación, búsqueda, cid,
+  adjuntos, responder con hilo, reenviar con adjuntos, archivar, SPAM,
+  papelera).
+
 ## Upload de archivos (Vídeos, Planos)
 - **Límites en la app:** vídeos ≤500MB, planos ≤100MB
 - **Almacenamiento:** bucket Supabase `properties-photos` (self-hosted en VPS)
