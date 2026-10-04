@@ -14,8 +14,9 @@ import { useRouter } from "next/navigation";
 import {
   deletePropertyPhoto,
   reorderPropertyPhotos,
-  uploadPropertyPhoto,
+  type UploadPropertyPhotoResult,
 } from "@/app/(admin)/admin/propiedades/actions";
+import { postUploadForm } from "@/lib/http/upload-form";
 import { Modal } from "@/components/ui/modal";
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
@@ -67,7 +68,7 @@ export function PropertyPhotosModal({
           formData.set("isCover", String(!coverAssigned));
           if (country) formData.set("country", country);
 
-          const result = await uploadPropertyPhoto(formData);
+          const result = await postUploadForm<UploadPropertyPhotoResult>("/api/admin/properties/upload/photo", formData);
           if (result.ok) {
             const isCover = !coverAssigned;
             coverAssigned = coverAssigned || isCover;

@@ -263,10 +263,10 @@ los correos automáticos de la app; esto es el buzón personal de cPanel.
      falla con "Failed to parse body as FormData". Comprobado en local. Por
      eso los adjuntos NO viajan en el envío: se suben antes por trozos de 4 MB
      (`/api/admin/correo/uploads`, a disco temporal, se borran al enviar o a
-     las 24 h) y el envío es un JSON con sus ids. ⚠️ **Afecta también a otras
-     rutas del panel que reciben archivos por FormData** (vídeos de
-     publicación, documentación, música de vídeos): por encima de 10 MB
-     fallan igual.
+     las 24 h) y el envío es un JSON con sus ids. Las demás subidas del panel
+     (fotos/vídeos/planos de propiedad, publicación, Idealista, música,
+     WhatsApp, documentación) se arreglaron de otra forma — ver "Subidas de
+     más de 10 MB" en "Upload de archivos".
   2. nginx del VPS (`client_max_body_size`, no verificado): si un trozo da
      413, el cliente baja solo a trozos de 512 KB.
   3. **Destinatarios**: base64 engorda ~37 %; Outlook rechaza por encima de
@@ -296,6 +296,30 @@ los correos automáticos de la app; esto es el buzón personal de cPanel.
   papelera).
 
 ## Upload de archivos (Vídeos, Planos)
+- ⚠️ **Subidas de más de 10 MB (arreglado 2026-10-04).** Next 15.5 copia el
+  cuerpo de toda petición que pasa por `middleware.ts` y lo CORTA a 10 MB
+  (`middlewareClientMaxBodySize`, solo un `console.warn`): la ruta recibe un
+  FormData truncado → *"Failed to parse body as FormData"*. Desde que se subió
+  a Next 15.5, **ningún vídeo/plano/documento de más de 10 MB subía**, por
+  muchos límites de 100–500 MB que pusiera el código. Un comentario de
+  `property-edit-view.tsx` ya lo había visto en el Route Handler y movió los
+  vídeos a Server Action creyendo que eso lo arreglaba — no: un Server Action
+  va contra la URL de la página y pasa igual por el middleware. Arreglo:
+  - Las rutas que reciben archivos están **excluidas del `matcher`** del
+    middleware (lista en `middleware.ts`). En `/api` el middleware no
+    controla acceso (solo refresca la cookie), y cada una comprueba sesión y
+    permisos por su cuenta. **Ruta de subida nueva → añádela a esa lista.**
+  - Fotos, vídeos y planos de propiedad ya no van por Server Action sino por
+    `POST /api/admin/properties/upload/{photo|video|plan}`, que llama a las
+    MISMAS funciones de `actions.ts` (permisos incluidos). Cliente:
+    `lib/http/upload-form.ts`.
+  - No se subió `middlewareClientMaxBodySize`: el middleware retiene en
+    memoria una copia del cuerpo que nunca lee — con vídeos de 500 MB serían
+    cientos de MB de RAM extra por subida.
+  - Verificado con `next build` + `next start`: 12 MB llegan enteros a las
+    rutas excluidas y `/es/admin/**` sigue redirigiendo a `/login` sin sesión.
+  - Queda el `client_max_body_size` de nginx en el VPS (no verificado): si da
+    413, el panel ahora lo dice con esas palabras.
 - **Límites en la app:** vídeos ≤500MB, planos ≤100MB
 - **Almacenamiento:** bucket Supabase `properties-photos` (self-hosted en VPS)
 - ⚠️ **Si uploads fallan por tamaño:** el contenedor `storage` del VPS tiene un

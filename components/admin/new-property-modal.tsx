@@ -5,8 +5,9 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createProperty,
-  uploadPropertyPhoto,
+  type UploadPropertyPhotoResult,
 } from "@/app/(admin)/admin/propiedades/actions";
+import { postUploadForm } from "@/lib/http/upload-form";
 import { Modal } from "@/components/ui/modal";
 import { MADRID_ZONES, CHILE_REGIONS, CHILE_COMMUNES_SANTIAGO, sectorsForCommune } from "@/lib/mock-properties";
 import { propertyFeaturesForCountry } from "@/lib/property-features";
@@ -228,7 +229,7 @@ export function NewPropertyModal({
             fd.set("file", photos[i].file);
             fd.set("isCover", i === 0 ? "true" : "false");
             fd.set("country", country);
-            const up = await uploadPropertyPhoto(fd);
+            const up = await postUploadForm<UploadPropertyPhotoResult>("/api/admin/properties/upload/photo", fd);
             if (!up.ok) photoError = true;
           }
           setUploadingPhotos(false);
