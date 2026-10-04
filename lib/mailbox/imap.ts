@@ -3,6 +3,7 @@ import { ImapFlow, type ListResponse, type MessageStructureObject } from "imapfl
 import { simpleParser, type AddressObject, type ParsedMail } from "mailparser";
 import { mailboxServerConfig } from "./config";
 import { MailboxAuthError, MailboxConnectionError } from "./errors";
+import { resolveSpecialUses } from "./folders";
 import { describeNetworkFailure, hostsToTry, networkFailure, rememberHost } from "./hosts";
 import type { MailboxCredentials } from "./store";
 
@@ -126,28 +127,13 @@ const SPECIAL_LABEL: Record<string, string> = {
   "\\Flagged": "Destacados",
 };
 
-/** cPanel no siempre marca SPECIAL-USE: se deduce también por el nombre. */
-const NAME_HINTS: Array<[RegExp, string]> = [
-  [/^(sent|sent items|sent messages|enviados?|elementos enviados)$/i, "\\Sent"],
-  [/^(trash|deleted|deleted items|deleted messages|papelera|eliminados)$/i, "\\Trash"],
-  [/^(drafts?|borradores?)$/i, "\\Drafts"],
-  [/^(junk|spam|correo no deseado)$/i, "\\Junk"],
-  [/^(archive|archivo|archivados)$/i, "\\Archive"],
-];
-
-function specialUseOf(box: ListResponse): string | null {
-  if (box.path.toUpperCase() === "INBOX") return "\\Inbox";
-  if (box.specialUse) return box.specialUse;
-  for (const [re, use] of NAME_HINTS) if (re.test(box.name)) return use;
-  return null;
-}
-
 export async function listFolders(client: ImapFlow): Promise<MailFolder[]> {
   const boxes = await client.list({ statusQuery: { unseen: true, messages: true } });
+  const uses = resolveSpecialUses(boxes);
   const folders = boxes
     .filter((b) => !b.flags.has("\\Noselect") && !b.flags.has("\\NonExistent"))
     .map((b) => {
-      const use = specialUseOf(b);
+      const use = uses.get(b.path) ?? null;
       return {
         path: b.path,
         name: (use && SPECIAL_LABEL[use]) || b.name,
@@ -167,8 +153,9 @@ type SpecialUse = "\\Sent" | "\\Trash" | "\\Archive" | "\\Junk" | "\\Inbox";
 
 async function findSpecialFolder(client: ImapFlow, use: SpecialUse): Promise<string | null> {
   const boxes = await client.list();
-  const hit = boxes.find((b) => specialUseOf(b) === use && !b.flags.has("\\Noselect"));
-  return hit?.path ?? null;
+  const uses = resolveSpecialUses(boxes);
+  for (const [path, u] of uses) if (u === use) return path;
+  return null;
 }
 
 // ─── Lista de mensajes ───────────────────────────────────────────────────────

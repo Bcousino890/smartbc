@@ -20,8 +20,10 @@ import {
   storageSafeName,
   UPLOAD_CHUNK_BYTES,
 } from "../lib/mailbox/attachments.ts";
+import { resolveSpecialUses } from "../lib/mailbox/folders.ts";
 import {
   isAllowedMailboxEmail,
+  mailboxServerConfig,
   normalizeMailboxEmail,
   suggestedMailboxEmail,
 } from "../lib/mailbox/config.ts";
@@ -133,6 +135,40 @@ check("sin <script>", !/<script/i.test(doc));
 check("con CSP default-src 'none'", doc.includes("default-src 'none'"));
 check("enlaces fuera del panel", doc.includes('<base target="_blank">'));
 check("texto plano escapado", buildViewerDocument(null, "<b>x</b>").includes("&lt;b&gt;x&lt;/b&gt;"));
+
+console.log("Servidor SMTP (Hetzner bloquea 25 y 465)");
+const cfgDefault = mailboxServerConfig();
+check("SMTP por el 587 con STARTTLS por defecto", cfgDefault.smtpPort === 587 && cfgDefault.smtpSecurity === "starttls", cfgDefault);
+check("IMAP sigue en el 993", cfgDefault.imapPort === 993);
+process.env.MAILBOX_SMTP_PORT = "465";
+check("puerto 465 → SSL directo (si algún día se desbloquea)", mailboxServerConfig().smtpSecurity === "ssl");
+process.env.MAILBOX_SMTP_PORT = "2525";
+check("otro puerto → STARTTLS, nunca texto plano", mailboxServerConfig().smtpSecurity === "starttls");
+process.env.MAILBOX_SMTP_SECURITY = "ssl";
+check("MAILBOX_SMTP_SECURITY manda", mailboxServerConfig().smtpSecurity === "ssl");
+delete process.env.MAILBOX_SMTP_PORT;
+delete process.env.MAILBOX_SMTP_SECURITY;
+
+console.log("Carpetas especiales");
+const f = (path: string, name: string, specialUse?: string, specialUseSource?: "user" | "extension" | "name") => ({ path, name, specialUse, specialUseSource });
+const cpanel = [
+  f("INBOX", "INBOX"),
+  f("INBOX.Junk", "Junk", "\\Junk", "extension"),
+  f("INBOX.spam", "spam", "\\Junk", "name"),
+  f("INBOX.Sent", "Sent", "\\Sent", "extension"),
+  f("INBOX.Trash", "Trash", "\\Trash", "extension"),
+  f("INBOX.Archive", "Archive"),
+  f("INBOX.Clientes", "Clientes"),
+];
+const uses = resolveSpecialUses(cpanel);
+check("dos carpetas compiten por SPAM: gana la que declara el servidor", uses.get("INBOX.Junk") === "\\Junk");
+check("la otra queda sin uso especial (conserva su nombre real)", !uses.has("INBOX.spam"));
+check("una sola carpeta por uso", [...uses.values()].filter((u) => u === "\\Junk").length === 1);
+check("Archive deducido por nombre", uses.get("INBOX.Archive") === "\\Archive");
+check("una carpeta de usuario no es especial", !uses.has("INBOX.Clientes"));
+check("INBOX siempre Entrada", uses.get("INBOX") === "\\Inbox");
+const onlyName = resolveSpecialUses([f("INBOX", "INBOX"), f("INBOX.spam", "spam")]);
+check("sin SPECIAL-USE, 'spam' por nombre sirve de SPAM", onlyName.get("INBOX.spam") === "\\Junk");
 
 console.log("Adjuntos");
 const MB = 1024 * 1024;
