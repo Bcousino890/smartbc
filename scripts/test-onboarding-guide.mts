@@ -9,7 +9,15 @@
 //   3. Un paso solo aparece si el usuario tiene el permiso que declara.
 import assert from "node:assert/strict";
 import { isNavItemVisible, NAV_ITEMS } from "../lib/admin-nav.ts";
-import { buildGuide, MODULE_GUIDES, navItemsWithoutGuide } from "../lib/onboarding/guide.ts";
+import {
+  buildGuide,
+  buildPermissionTable,
+  buildRoleComparison,
+  COMPARED_ROLES,
+  MODULE_GUIDES,
+  navItemsWithoutGuide,
+  RESOURCE_WHERE,
+} from "../lib/onboarding/guide.ts";
 import {
   applyOverrides,
   PERMISSION_ACTIONS,
@@ -128,6 +136,62 @@ test("ningún rol staff ve un paso cuyo permiso no tiene", () => {
       }
     }
   }
+});
+
+test("tabla de permisos: solo los recursos del país activo", () => {
+  const owner = applyOverrides("owner", []);
+  const es = buildPermissionTable(owner, PERMISSIONS_BY_ROLE.owner, "es").map((r) => r.resource);
+  const cl = buildPermissionTable(owner, PERMISSIONS_BY_ROLE.owner, "cl").map((r) => r.resource);
+  assert.ok(!es.includes("captaciones"));
+  for (const r of ["agencias", "particulares", "sindicacion", "diagnostico"] as const) {
+    assert.ok(es.includes(r), `es: ${r}`);
+    assert.ok(!cl.includes(r), `cl: ${r}`);
+  }
+  assert.ok(cl.includes("captaciones"));
+  for (const r of ["properties", "publicacion", "clientes", "configuracion", "viewing_collections"] as const) {
+    assert.ok(es.includes(r) && cl.includes(r), r);
+  }
+});
+
+test("tabla de permisos: cada recurso explica dónde se nota", () => {
+  for (const r of PERMISSION_RESOURCES) assert.ok(RESOURCE_WHERE[r]?.length, r);
+});
+
+test("tabla de permisos: lo que tiene, lo que no y 'Publicar' solo donde aplica", () => {
+  const junior = applyOverrides("agent_junior", []);
+  const rows = buildPermissionTable(junior, PERMISSIONS_BY_ROLE.agent_junior, "es");
+  const props = rows.find((r) => r.resource === "properties")!;
+  assert.equal(props.cells.view.allowed, true);
+  assert.equal(props.cells.create.allowed, false);
+  assert.equal(props.cells.publish.applies, true);
+  const agencias = rows.find((r) => r.resource === "agencias")!;
+  assert.equal(agencias.cells.publish.applies, false);
+  assert.ok(rows.every((r) => PERMISSION_ACTIONS.every((a) => !r.cells[a].exception)), "sin excepciones");
+});
+
+test("tabla de permisos: marca las excepciones en los dos sentidos", () => {
+  const permissions = applyOverrides("agent_junior", [
+    { resource: "properties", action: "create", allowed: true },
+    { resource: "mensajes", action: "view", allowed: false },
+  ]);
+  const rows = buildPermissionTable(permissions, PERMISSIONS_BY_ROLE.agent_junior, "es");
+  const props = rows.find((r) => r.resource === "properties")!;
+  assert.deepEqual(props.cells.create, { applies: true, allowed: true, exception: true });
+  const msgs = rows.find((r) => r.resource === "mensajes")!;
+  assert.deepEqual(msgs.cells.view, { applies: true, allowed: false, exception: true });
+  assert.equal(props.cells.view.exception, false);
+});
+
+test("comparativa de roles: resume con 'Todo', '—' o la lista de acciones", () => {
+  const rows = buildRoleComparison("cl");
+  const col = (label: string) => COMPARED_ROLES.findIndex((c) => c.label === label);
+  const props = rows.find((r) => r.resource === "properties")!;
+  assert.equal(props.values[col("Propietario / Admin")], "Todo");
+  assert.equal(props.values[col("Agente Junior")], "Ver");
+  assert.equal(props.values[col("Captadora")], "—");
+  const cap = rows.find((r) => r.resource === "captaciones")!;
+  assert.equal(cap.values[col("Captadora")], "Ver · Editar");
+  assert.equal(props.values.length, COMPARED_ROLES.length);
 });
 
 console.log(`\n${passed} pruebas OK`);

@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { RoleComparisonTable } from "@/components/admin/onboarding/role-comparison-table";
 import { PageFooter } from "@/components/ui/page-footer";
 import { profileRowToInternalUser, deriveInitials } from "@/lib/db/adapters";
 import { getAllProfiles } from "@/lib/db/queries/clients";
 import { getCountryRolesMap } from "@/lib/db/queries/permissions";
 import { UsuariosClient } from "./usuarios-client";
 import { getCurrentProfile } from "@/lib/db/queries/session";
+import { buildRoleComparison } from "@/lib/onboarding/guide";
 import { canAccess } from "@/lib/permissions";
 import type { InternalUserRole } from "@/lib/types";
 import { getCountryConfig, type Country } from "@/lib/country-config";
@@ -81,6 +83,22 @@ export default async function AdminUsuariosPage({
         titleKey="usuarios.title"
         subtitleKey="usuarios.subtitle"
       />
+
+      {/* Referencia para elegir el rol: qué trae cada uno por defecto (la
+          misma tabla que la Guía de inicio, lib/onboarding/guide.ts). */}
+      <details className="group mt-6 rounded-2xl border border-gold/15 bg-cream-50/85">
+        <summary className="cursor-pointer list-none px-5 py-4 font-semibold text-ink">
+          <span className="mr-2 inline-block transition group-open:rotate-90">›</span>
+          Qué puede hacer cada rol en {country === "cl" ? "Chile" : "España"}
+        </summary>
+        <div className="border-t border-gold/15">
+          <RoleComparisonTable rows={buildRoleComparison(country)} />
+        </div>
+        <p className="border-t border-gold/15 px-5 py-3 text-xs text-ink/55">
+          Son los permisos por defecto de cada rol. Con el botón «Permisos» de cada persona
+          puedes darle o quitarle permisos sueltos sin cambiarle el rol.
+        </p>
+      </details>
 
       <UsuariosClient users={allUsers} currentUserRole={currentUserRole} country={country} />
 

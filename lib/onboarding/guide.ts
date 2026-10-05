@@ -20,10 +20,15 @@ import {
   type NavItem,
 } from "@/lib/admin-nav";
 import {
+  ACTION_LABELS,
   getViewRestriction,
   PERMISSION_ACTIONS,
+  PERMISSION_RESOURCES,
+  PERMISSIONS_BY_ROLE,
+  RESOURCE_LABELS,
   type EffectivePermissions,
   type PermissionAction,
+  type PermissionMatrix,
   type PermissionResource,
 } from "@/lib/permissions";
 
@@ -460,6 +465,127 @@ export function buildGuide(input: {
   }
 
   return { modules, hidden, scopeNotes: buildScopeNotes(role, permissions, country) };
+}
+
+// ─── Tabla de permisos ───────────────────────────────────────────────────────
+
+/** Dónde se nota cada permiso en el panel (lo que el usuario reconoce). */
+export const RESOURCE_WHERE: Record<PermissionResource, string> = {
+  properties: "Fichas, fotos, vídeos, planos y SmartLinks",
+  agencias: "Agencias colaboradoras y su cartera",
+  particulares: "Anuncios de particulares, llamadas y enlaces temporales",
+  publicacion: "Publicación en portales e Idealista",
+  captaciones: "Captaciones, intentos de contacto y datos del dueño",
+  clientes: "Fichas de cliente y su encargo",
+  solicitudes: "Bandeja de solicitudes y documentación de candidatos",
+  documentacion: "Documentos de candidatos",
+  mensajes: "WhatsApp, chat del equipo y mensajes de clientes",
+  reportes: "Estadísticas y comisiones",
+  usuarios: "Cuentas del equipo y sus permisos",
+  configuracion: "Configuración, Integraciones y Demo Setup",
+  sindicacion: "Sincronización con webs de agencias",
+  diagnostico: "Herramientas técnicas",
+  calendario: "Eventos y visitas",
+  viewing_collections: "Selección, itinerarios, colecciones y anuncios de portales del cliente",
+};
+
+/**
+ * "Publicar" solo significa algo en propiedades (web pública) y colecciones
+ * (enlace al cliente); en el resto de recursos no hay nada que publicar.
+ */
+export function actionApplies(resource: PermissionResource, action: PermissionAction): boolean {
+  return action !== "publish" || resource === "properties" || resource === "viewing_collections";
+}
+
+/**
+ * País en el que existe un recurso, deducido del menú: si TODOS los módulos
+ * que lo usan son de un solo país, el recurso es de ese país (Agencias,
+ * Particulares… → España; Captaciones → Chile). Sin módulo propio → los dos.
+ */
+export function resourceCountry(resource: PermissionResource): "es" | "cl" | null {
+  const items = NAV_ITEMS.filter((i) => i.permissionResource === resource);
+  if (items.length === 0) return null;
+  const first = items[0].onlyCountry ?? null;
+  return items.every((i) => (i.onlyCountry ?? null) === first) ? first : null;
+}
+
+export function resourcesForCountry(country: string): PermissionResource[] {
+  return PERMISSION_RESOURCES.filter((r) => {
+    const only = resourceCountry(r);
+    return !only || only === country;
+  });
+}
+
+export type PermissionCell = {
+  applies: boolean;
+  allowed: boolean;
+  /** Distinto del valor por defecto de su rol: es una excepción de su cuenta. */
+  exception: boolean;
+};
+
+export type PermissionTableRow = {
+  resource: PermissionResource;
+  label: string;
+  where: string;
+  cells: Record<PermissionAction, PermissionCell>;
+};
+
+/** Tabla recurso × acción del usuario en el país activo. */
+export function buildPermissionTable(
+  permissions: EffectivePermissions,
+  baseMatrix: PermissionMatrix,
+  country: string,
+): PermissionTableRow[] {
+  return resourcesForCountry(country).map((resource) => {
+    const cells = {} as Record<PermissionAction, PermissionCell>;
+    for (const action of PERMISSION_ACTIONS) {
+      const applies = actionApplies(resource, action);
+      const allowed = applies && permissions[resource]?.[action] === true;
+      const byRole = applies && baseMatrix[resource]?.[action] === true;
+      cells[action] = { applies, allowed, exception: applies && allowed !== byRole };
+    }
+    return { resource, label: RESOURCE_LABELS[resource], where: RESOURCE_WHERE[resource], cells };
+  });
+}
+
+/** Roles que se comparan (owner y admin tienen la misma matriz: una columna). */
+export const COMPARED_ROLES: { roles: string[]; label: string }[] = [
+  { roles: ["owner", "admin"], label: "Propietario / Admin" },
+  { roles: ["advisor"], label: ROLE_LABELS.advisor },
+  { roles: ["agent_admin"], label: ROLE_LABELS.agent_admin },
+  { roles: ["agent_senior"], label: ROLE_LABELS.agent_senior },
+  { roles: ["agent_junior"], label: ROLE_LABELS.agent_junior },
+  { roles: ["captadora"], label: ROLE_LABELS.captadora },
+];
+
+/** "Todo", "—" o la lista de acciones permitidas ("Ver · Crear · Editar"). */
+export function summarizeActions(
+  resource: PermissionResource,
+  allowed: (action: PermissionAction) => boolean,
+): string {
+  const applicable = PERMISSION_ACTIONS.filter((a) => actionApplies(resource, a));
+  const yes = applicable.filter(allowed);
+  if (yes.length === 0) return "—";
+  if (yes.length === applicable.length) return "Todo";
+  return yes.map((a) => ACTION_LABELS[a]).join(" · ");
+}
+
+export type RoleComparisonRow = {
+  resource: PermissionResource;
+  label: string;
+  /** Un resumen por columna de `COMPARED_ROLES`, en el mismo orden. */
+  values: string[];
+};
+
+/** Qué puede hacer cada rol POR DEFECTO (sin excepciones), en un país. */
+export function buildRoleComparison(country: string): RoleComparisonRow[] {
+  return resourcesForCountry(country).map((resource) => ({
+    resource,
+    label: RESOURCE_LABELS[resource],
+    values: COMPARED_ROLES.map(({ roles }) =>
+      summarizeActions(resource, (a) => PERMISSIONS_BY_ROLE[roles[0]][resource][a] === true),
+    ),
+  }));
 }
 
 /** `href`s del menú sin ficha en la guía (debe estar vacío; lo vigila el test). */

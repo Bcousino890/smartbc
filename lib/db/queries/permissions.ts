@@ -139,7 +139,13 @@ export async function getEffectiveRoleAndPermissions(
   userId: string,
   role: string,
   country?: string,
-): Promise<{ effectiveRole: string; isCustomRole: boolean; permissions: EffectivePermissions }> {
+): Promise<{
+  effectiveRole: string;
+  isCustomRole: boolean;
+  /** Matriz del rol (custom / por país / global) SIN excepciones por usuario. */
+  baseMatrix: PermissionMatrix;
+  permissions: EffectivePermissions;
+}> {
   const { effectiveRole, matrix: baseMatrix, isCustomRole } = await resolveBaseMatrix(
     userId,
     role,
@@ -188,7 +194,7 @@ export async function getEffectiveRoleAndPermissions(
     ? applyOverridesForCountry(effectiveRole, overrides, country, baseMatrix)
     : applyOverrides(effectiveRole, overrides, baseMatrix);
 
-  return { effectiveRole, isCustomRole, permissions };
+  return { effectiveRole, isCustomRole, baseMatrix, permissions };
 }
 
 /**
