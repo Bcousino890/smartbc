@@ -7,6 +7,7 @@ import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getEffectivePermissions } from "@/lib/db/queries/permissions";
 import { isStaffRole } from "@/lib/permissions";
 import { isCountry } from "@/lib/country-config";
+import { resolveCountryAccess, type CountryAccessProfile } from "@/lib/auth/country-access";
 import type { AdminUser } from "@/lib/types";
 
 export default async function AdminLayout({
@@ -27,35 +28,16 @@ export default async function AdminLayout({
   if (!isStaffRole(profile.role)) redirect("/inicio");
 
   // Redirect a la sección del país que le corresponde al perfil.
-  // Los usuarios multi-país (rol admin, owner, o marcados como multi_country
-  // porque trabajan en ambos mercados) pueden ver ambos libremente.
-  const isOwnerOrAdmin =
-    profile.role === "admin" || profile.role === "owner";
-
-  // País por defecto/landing del perfil.
-  const userCountry = (profile as any).country ?? "es";
-
-  // Conjunto de países con acceso. Lectura defensiva de `profiles.countries`
-  // (migración 0088): si no existe o viene vacía, caemos al país único.
-  // owner/admin acceden a ambos mercados por definición.
-  const rawCountries = (profile as any).countries;
-  let countries: string[] =
-    Array.isArray(rawCountries) && rawCountries.length
-      ? rawCountries
-      : [userCountry];
-  if (isOwnerOrAdmin) {
-    countries = Array.from(new Set([...countries, "es", "cl"]));
-  }
-
-  const canSwitchCountry =
-    isOwnerOrAdmin ||
-    Boolean((profile as { multi_country?: boolean }).multi_country) ||
-    countries.length > 1;
+  // Los usuarios multi-país (rol admin, owner, o con varios países en
+  // `profiles.countries`) pueden ver ambos libremente. La regla vive en
+  // lib/auth/country-access.ts (la comparte la Guía de inicio).
+  const { countries, defaultCountry, canSwitchCountry, isOwnerOrAdmin } =
+    resolveCountryAccess(profile as CountryAccessProfile);
 
   // Si el país solicitado no está en su conjunto de acceso (y no es owner/admin),
   // le mandamos a su país por defecto en vez de dejarle ver otro mercado.
   if (!isOwnerOrAdmin && !countries.includes(country)) {
-    redirect(`/${userCountry === "cl" ? "cl" : "es"}/admin`);
+    redirect(`/${defaultCountry}/admin`);
   }
 
   const adminUser = profileToAdminUser(profile.full_name, profile.email, profile.role);
@@ -182,6 +164,8 @@ const ROLE_KEY_MAP: Record<string, string> = {
   agent_admin: "admin.role.agent_admin",
   agent_senior: "admin.role.agent_senior",
   agent_junior: "admin.role.agent_junior",
+  captadora: "admin.role.captadora",
+  viewer: "admin.role.viewer",
 };
 
 function profileToAdminUser(

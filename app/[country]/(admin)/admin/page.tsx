@@ -5,6 +5,16 @@ import { getDashboardData } from "@/lib/db/queries/dashboard";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { getCountryConfig, type Country } from "@/lib/country-config";
 import { DashboardGreetingCard, DashboardGreetingSkeleton } from "@/components/admin/dashboard-greeting-card";
+import { OnboardingWelcomeCard } from "@/components/admin/onboarding-welcome-card";
+
+/** Días durante los que una cuenta nueva ve el aviso de la Guía de inicio. */
+const NEW_ACCOUNT_DAYS = 30;
+
+function isNewAccount(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const age = Date.now() - new Date(createdAt).getTime();
+  return age >= 0 && age < NEW_ACCOUNT_DAYS * 24 * 60 * 60 * 1000;
+}
 
 function formatDate(iso: string, locale: string) {
   return new Date(iso).toLocaleDateString(locale, {
@@ -89,6 +99,15 @@ export default async function AdminDashboardPage({
           Resumen general de la actividad del CRM
         </p>
       </div>
+
+      {/* Cuentas recién creadas: aviso que lleva a la Guía de inicio. */}
+      {profile && isNewAccount(profile.created_at) && (
+        <OnboardingWelcomeCard
+          userId={profile.id}
+          firstName={firstName}
+          guideHref={`${config.prefix}/guia`}
+        />
+      )}
 
       {/* Saludo con IA: leads recientes + una sugerencia sobre fichas de
           Idealista. Solo España — es donde vive todo ese análisis (ver

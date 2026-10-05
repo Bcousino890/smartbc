@@ -143,6 +143,8 @@ const ROLE_KEY_MAP: Record<string, string> = {
   agent_admin: "admin.role.agent_admin",
   agent_senior: "admin.role.agent_senior",
   agent_junior: "admin.role.agent_junior",
+  captadora: "admin.role.captadora",
+  viewer: "admin.role.viewer",
 };
 
 function profileToAdminUser(
