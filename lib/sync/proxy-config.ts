@@ -113,6 +113,10 @@ function randomSessionId(len = 8): string {
  *                                             typo común al copiar del panel de
  *                                             Evomi — se repara si los últimos
  *                                             dos segmentos parecen host:puerto)
+ *   - `http://host:puerto:usuario:password`  (formato nativo con "http://"
+ *                                             delante — así quedó guardado el
+ *                                             de Evomi en oct-2026 y TODO el
+ *                                             import por link salía sin proxy)
  *   - `host:puerto`                          (sin auth)
  *
  * El password puede contener ":" (los de Geonode son UUID sin ":", pero se
@@ -136,7 +140,7 @@ export function normalizeProxyUrl(raw: string | null | undefined): string | unde
     if (s.includes("@")) {
       canonical = s; // ya canónica → se respeta
     } else {
-      canonical = repairMissingAt(s) ?? s;
+      canonical = repairMissingAt(s) ?? repairNativeWithScheme(s) ?? s;
     }
   } else if (s.includes("@")) {
     // Sin esquema pero con "@": usuario:password@host:puerto → solo anteponer http.
@@ -176,6 +180,19 @@ function repairMissingAt(s: string): string | null {
   const userInfo = parts.slice(0, -2).join(":");
   if (!userInfo) return null;
   return `${scheme}${userInfo}@${host}:${port}`;
+}
+
+/**
+ * Repara `http://host:puerto:usuario:password` (formato nativo del panel con el
+ * esquema antepuesto) a `http://usuario:password@host:puerto`, SOLO si el
+ * primer segmento parece host (con punto) y el segundo puerto (numérico).
+ */
+function repairNativeWithScheme(s: string): string | null {
+  const scheme = s.match(/^https?:\/\//i)?.[0];
+  if (!scheme) return null;
+  const [host, port, user, ...rest] = s.slice(scheme.length).split(":");
+  if (!rest.length || !host.includes(".") || !/^\d+$/.test(port) || !user) return null;
+  return `${scheme}${user}:${rest.join(":")}@${host}:${port}`;
 }
 
 /** Quita modificadores de sesión/país que hayan quedado pegados en la credencial base. */

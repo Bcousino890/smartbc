@@ -20,6 +20,7 @@ import {
   getViewingCollectionsSettings,
 } from "@/lib/db/queries/viewing-collections";
 import { isCollectionLanguage } from "@/lib/viewing-collections/i18n";
+import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 import {
   CONFIRMATIONS_REVOKING_EXACT_ADDRESS,
   midpointPosition,
@@ -184,6 +185,9 @@ export async function addPropertyToSelection(
   clientId: string,
   propertyId: string,
   source: SelectionSource = "manual",
+  // false desde addStop: ahí el piso va a un itinerario concreto y meterlo
+  // además en el borrador automático chocaría con su propia parada.
+  autoBook = true,
 ): Promise<ActionResult<{ selectionId: string }>> {
   const g = await gate("create", clientId);
   if (!g.ok) return g;
@@ -216,6 +220,7 @@ export async function addPropertyToSelection(
 
   if (error) return { ok: false, error: translateDbError(error.message) };
 
+  if (autoBook) await syncDraftBook(clientId, g.userId);
   revalidateClient(clientId);
   return { ok: true, selectionId: data.id };
 }
@@ -255,6 +260,7 @@ export async function addPropertiesToSelection(
   const { error } = await db().from("client_property_selections").insert(rows);
   if (error) return { ok: false, error: translateDbError(error.message) };
 
+  await syncDraftBook(clientId, g.userId);
   revalidateClient(clientId);
   return { ok: true, added: rows.length };
 }
@@ -556,6 +562,7 @@ export async function addStop(
       clientId,
       ref.propertyId,
       "manual",
+      false,
     );
     if (!created.ok) return created;
     selectionId = created.selectionId;
