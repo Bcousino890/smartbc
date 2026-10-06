@@ -19,6 +19,7 @@ import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
+import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 import {
   insertPortalLinks,
   linkText,
@@ -350,6 +351,8 @@ export async function linkPropertyToPortalLink(
   const addedToSelection = !selError;
   if (selError) {
     console.error("[portal-links] no se pudo añadir a la selección:", selError.message);
+  } else {
+    await syncDraftBook(clientId, g.userId);
   }
 
   await db().from("client_portal_link_notes").insert({

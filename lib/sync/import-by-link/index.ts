@@ -65,6 +65,15 @@ function dedupePreviewPhotos(preview: ImportPreview): ImportPreview {
  */
 export async function extractFromUrl(
   rawUrl: string,
+  options?: {
+    /**
+     * HTML de la ficha ya descargado por el propio navegador del agente
+     * ("Plan B" de la pantalla de importar: Ctrl+U → copiar → pegar). Si
+     * viene, NO se descarga nada: no depende de proxy (Evomi), de Relay
+     * (crawio) ni de créditos de nadie. Es la vía que funciona siempre.
+     */
+    html?: string;
+  },
 ): Promise<ImportExtractResult> {
   const detected = detectPortal(rawUrl);
   if (!detected) {
@@ -112,7 +121,10 @@ export async function extractFromUrl(
     detected.url = normalizeAirbnbUrl(detected.url);
   }
 
-  const fetched = await fetchHtml(detected.url.toString());
+  const pastedHtml = options?.html?.trim();
+  const fetched = pastedHtml
+    ? { ok: true as const, html: pastedHtml, finalUrl: detected.url.toString() }
+    : await fetchHtml(detected.url.toString());
   if (!fetched.ok) return { ok: false, error: fetched.error };
 
   const $ = cheerio.load(fetched.html);
@@ -121,7 +133,12 @@ export async function extractFromUrl(
   let preview: ImportPreview;
   switch (detected.portal) {
     case "idealista":
-      preview = await extractIdealista($, finalUrl, { proxyUrl: await getProxyUrl() });
+      preview = await extractIdealista($, finalUrl, {
+        proxyUrl: await getProxyUrl(),
+        // Con HTML pegado es porque la descarga desde el servidor no funciona:
+        // la búsqueda del teléfono por AJAX fallaría igual y solo haría esperar.
+        skipPhoneAjax: !!pastedHtml,
+      });
       break;
     case "fotocasa":
       preview = extractFotocasa($, finalUrl);

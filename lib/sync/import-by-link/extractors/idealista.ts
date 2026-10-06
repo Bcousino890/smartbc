@@ -635,7 +635,7 @@ function extractExactAddressFromDom($: CheerioAPI): string | null {
 export async function extractIdealista(
   $: CheerioAPI,
   sourceUrl: string,
-  options?: { proxyUrl?: string }
+  options?: { proxyUrl?: string; skipPhoneAjax?: boolean }
 ): Promise<ImportPreview> {
   const embedded = findEmbeddedListing($);
   const preview = embedded
@@ -681,7 +681,7 @@ export async function extractIdealista(
     }
   }
 
-  if (!advertiserInfo.phone && ajaxAdId) {
+  if (!advertiserInfo.phone && ajaxAdId && !options?.skipPhoneAjax) {
     const idSource = embedded?.propertyCode ? "propertyCode" : "URL";
     console.log(`[idealista-extractor] Iniciando AJAX para adId=${ajaxAdId} (fuente: ${idSource})`);
     try {

@@ -202,6 +202,13 @@ function repairMissingAt(s: string): string | null {
   if (!userInfo) return null;
   return `${scheme}${userInfo}@${host}:${port}`;
 }
+function repairNativeWithScheme(s: string): string | null {
+  const scheme = s.match(/^https?:\/\//i)?.[0];
+  if (!scheme) return null;
+  const [host, port, user, ...rest] = s.slice(scheme.length).split(":");
+  if (!rest.length || !host.includes(".") || !/^\d+$/.test(port) || !user) return null;
+  return `${scheme}${user}:${rest.join(":")}@${host}:${port}`;
+}
 function stripStrayModifiers(url: string): string {
   try {
     const u = new URL(url);
@@ -220,7 +227,7 @@ function normalizeProxyUrl(raw: string | null | undefined): string | undefined {
 
   let canonical: string;
   if (/^https?:\/\//i.test(s)) {
-    canonical = s.includes("@") ? s : (repairMissingAt(s) ?? s);
+    canonical = s.includes("@") ? s : (repairMissingAt(s) ?? repairNativeWithScheme(s) ?? s);
   } else if (s.includes("@")) {
     canonical = `http://${s}`;
   } else {
@@ -258,6 +265,16 @@ check(
   "evomi: repara el '@' que falta y limpia el '_country-ES,FR,IT' pegado",
   evomiTypo === "http://testuser:testpass@core-residential.evomi.com:1000",
   evomiTypo,
+);
+// Caso real oct-2026 (credenciales de EJEMPLO): formato nativo del panel con
+// "http://" delante. Antes quedaba "Invalid URL" y el import por link salía sin proxy.
+const evomiNativeScheme = normalizeProxyUrl(
+  "http://core-residential.evomi.com:1000:testuser:testpass_country-ES",
+);
+check(
+  "evomi: http://host:port:user:pass → canónica y sin '_country-ES' pegado",
+  evomiNativeScheme === "http://testuser:testpass@core-residential.evomi.com:1000",
+  evomiNativeScheme,
 );
 check(
   "sin '@' y sin patrón host:puerto reconocible → se deja intacta (no se adivina mal)",
