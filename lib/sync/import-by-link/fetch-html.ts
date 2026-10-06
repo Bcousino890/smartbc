@@ -286,8 +286,7 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
     console.log(`[fetch-html] Intento 0: UA WhatsApp vía curl (Idealista)`);
     // Vía curl (no fetch/undici): DataDome valida el TLS fingerprint además
     // del UA. El JA3 de curl + UA WhatsApp pasa; el de undici no.
-    const curlResult = await fetchViaCurl(url, WHATSAPP_UA, {
-      proxyUrl,
+    const curlOpts = {
       // Sin esto, Idealista decide el idioma de sus textos generados (planta,
       // orientación, "with lift", "Listing updated on...") por la geo de la
       // IP saliente — con proxy residencial rotativo eso es una lotería: la
@@ -295,7 +294,17 @@ export async function fetchHtml(url: string): Promise<FetchHtmlResult> {
       // afecta a la descripción libre (la escribe el propio anunciante en el
       // idioma que eligió), solo a las etiquetas que genera el propio portal.
       headers: ["Accept-Language: es-ES,es;q=0.9"],
-    });
+    };
+    let curlResult = await fetchViaCurl(url, WHATSAPP_UA, { ...curlOpts, proxyUrl });
+    // Proxy sin saldo / credenciales rechazadas / URL mal guardada: curl ni
+    // llega al portal (status 0). Antes la cadena seguía sin reintentar este
+    // paso, que es justo el que funciona; ahora se repite sin proxy.
+    if (!curlResult.ok && curlResult.status === 0 && proxyUrl) {
+      console.log(
+        `[fetch-html] ✗ Proxy inutilizable (${curlResult.reason}) → reintento sin proxy`,
+      );
+      curlResult = await fetchViaCurl(url, WHATSAPP_UA, curlOpts);
+    }
     if (curlResult.ok) {
       console.log(`[fetch-html] ✓ UA WhatsApp (curl) exitoso`);
       return { ok: true, html: curlResult.html, finalUrl: url };

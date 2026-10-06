@@ -17,8 +17,13 @@ export type PreviewByLinkResult =
   | { ok: true; preview: ImportPreview }
   | { ok: false; error: string; kind: ImportExtractError["kind"] | "auth" };
 
+// Tope del HTML pegado a mano (una ficha de Idealista ronda 1-2 MB).
+const MAX_PASTED_HTML = 20 * 1024 * 1024;
+
 export async function previewByLink(
   url: string,
+  // "Plan B": código fuente de la ficha pegado por el agente desde su navegador.
+  html?: string,
 ): Promise<PreviewByLinkResult> {
   await assertPermission("properties", "create");
   const supabase = await createClient();
@@ -43,7 +48,21 @@ export async function previewByLink(
     };
   }
 
-  const result = await extractFromUrl(trimmed);
+  if (html !== undefined) {
+    if (html.length > MAX_PASTED_HTML) {
+      return { ok: false, kind: "parse_failed", error: "El código pegado es demasiado grande." };
+    }
+    if (!/<html|<body|<div/i.test(html)) {
+      return {
+        ok: false,
+        kind: "parse_failed",
+        error:
+          "Eso no parece el código de la página. Abre el anuncio, pulsa Ctrl+U (Cmd+Opción+U en Mac), luego Ctrl+A y Ctrl+C, y pégalo aquí.",
+      };
+    }
+  }
+
+  const result = await extractFromUrl(trimmed, html !== undefined ? { html } : undefined);
   if (!result.ok) {
     const reasonMap: Record<ImportExtractError["kind"], string> = {
       fetch_failed: "no se pudo descargar la página",

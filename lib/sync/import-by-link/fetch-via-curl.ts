@@ -97,7 +97,12 @@ async function curlOnce(
     }
     return { ok: true, html };
   } catch (err) {
-    const reason = err instanceof Error ? err.message : "error curl";
+    // El mensaje de execFile incluye la línea de comando entera, con la URL del
+    // proxy y su contraseña: acababa tal cual en `pm2 logs`. Se tapa.
+    const reason = (err instanceof Error ? err.message : "error curl").replace(
+      /(-x\s+)\S+/g,
+      "$1<proxy>",
+    );
     return { ok: false, status: 0, reason };
   }
 }

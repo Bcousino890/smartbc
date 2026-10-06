@@ -4,6 +4,7 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  ClipboardPaste,
   Image as ImageIcon,
   Loader2,
   X,
@@ -82,23 +83,39 @@ export function ImportByLinkClient({
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // "Plan B": si el servidor no consigue descargar la ficha (anti-bot, proxy
+  // sin saldo, Relay sin créditos…), el agente pega el código fuente que SU
+  // navegador ya descargó. No depende de ningún proveedor de pago.
+  const [showPaste, setShowPaste] = useState(false);
+  const [pastedHtml, setPastedHtml] = useState("");
   const [previewing, startPreview] = useTransition();
   const [confirming, startConfirm] = useTransition();
 
   const handlePreview = useCallback(
-    (rawUrl?: string) => {
+    (rawUrl?: string, html?: string) => {
       const target = (rawUrl ?? url).trim();
       if (!target) return;
       setError(null);
       setSuccess(null);
       startPreview(async () => {
-        const result = await previewByLink(target);
+        const result = await previewByLink(target, html);
         if (!result.ok) {
           setError(result.error);
           setPreview(null);
           setForm(null);
+          // Solo cuando el problema es DESCARGAR (no un anuncio retirado ni
+          // una URL inválida) tiene sentido ofrecer pegar la página.
+          if (
+            html !== undefined ||
+            result.kind === "blocked" ||
+            (result.kind === "fetch_failed" && !/ya no existe/.test(result.error))
+          ) {
+            setShowPaste(true);
+          }
           return;
         }
+        setShowPaste(false);
+        setPastedHtml("");
         setPreview(result.preview);
         // Los pisos importados por link van TODOS a la agencia genérica
         // "Portales externos" (slug `portales-externos`). El usuario puede
@@ -257,6 +274,57 @@ export function ImportByLinkClient({
             className="text-red-700/60 hover:text-red-700"
           >
             <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {showPaste && !preview && (
+        <div className="space-y-3 rounded-xl border border-gold/30 bg-white px-4 py-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-ink/85">
+            <ClipboardPaste size={16} />
+            Plan B: pega la página (no gasta proxy ni créditos)
+          </div>
+          <ol className="list-decimal space-y-1 pl-5 text-xs text-ink/60">
+            <li>
+              Abre el anuncio en tu navegador:{" "}
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                abrir anuncio
+              </a>
+              .
+            </li>
+            <li>
+              Pulsa <b>Ctrl+U</b> (en Mac <b>Cmd+Opción+U</b>) para ver el código de la página.
+            </li>
+            <li>
+              Pulsa <b>Ctrl+A</b> y <b>Ctrl+C</b> (en Mac <b>Cmd+A</b>, <b>Cmd+C</b>), vuelve aquí y pégalo abajo.
+            </li>
+          </ol>
+          <textarea
+            value={pastedHtml}
+            onChange={(e) => setPastedHtml(e.target.value)}
+            placeholder="Pega aquí el código de la página (empieza por <!DOCTYPE html>…)"
+            rows={5}
+            spellCheck={false}
+            className="w-full rounded-xl border border-ink/15 bg-white px-3 py-2 font-mono text-xs placeholder:text-ink/35 focus:border-gold/55 focus:outline-none"
+            disabled={previewing || confirming}
+          />
+          <button
+            type="button"
+            onClick={() => handlePreview(undefined, pastedHtml)}
+            disabled={!url.trim() || !pastedHtml.trim() || previewing || confirming}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-cream-50 transition disabled:opacity-50"
+          >
+            {previewing ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <ArrowRight size={15} />
+            )}
+            Extraer del código pegado
           </button>
         </div>
       )}
