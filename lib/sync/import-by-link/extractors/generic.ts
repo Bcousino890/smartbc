@@ -88,30 +88,65 @@ export function extractGeneric(
   // <body> (scripts incluidos), y en una web sin precio salía basura.
   if (price === null) price = euroPrice(description) ?? euroPrice(visibleText);
 
-  // Fotos: og:image como mínimo + cualquier URL en el JSON-LD que parezca
-  // imagen. El extractor por-portal hace el filtrado fino.
-  const photoSet = new Set<string>();
-  if (ogImage) photoSet.add(ogImage);
+  // Fotos: og:image + JSON-LD + TODO lo que la página use como imagen, en
+  // orden de aparición. Las webs de agencias/promotoras esconden la galería
+  // de mil formas: Google Sites pone el carrusel como `background-image` en
+  // un <div> (hortaleza-9 de arcoprom: 21 fotos, y antes solo salían 2),
+  // WordPress enlaza la foto grande en un <a> de lightbox, y casi todos usan
+  // lazy-load (`data-src`, `data-bg`, `srcset`).
+  // clave de la foto → URL elegida (Map conserva el orden de aparición).
+  const photoMap = new Map<string, string>();
+  const addPhoto = (raw: string | undefined | null, opts?: { trusted?: boolean }) => {
+    const url = normalizePhotoUrl(raw, sourceUrl);
+    if (!url) return;
+    if (!opts?.trusted && !looksLikePhotoUrl(url)) return;
+    const key = photoDedupKey(url);
+    const prev = photoMap.get(key);
+    // Si ya estaba la miniatura de WordPress (foo-300x200.jpg), gana el original.
+    if (prev && !(WP_SIZE_SUFFIX.test(prev) && !WP_SIZE_SUFFIX.test(url))) return;
+    photoMap.set(key, url);
+  };
+  if (ogImage) addPhoto(ogImage, { trusted: true });
   if (jsonLd) {
-    for (const url of collectUrlStrings(jsonLd)) {
-      if (/\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url)) photoSet.add(url);
-    }
+    for (const url of collectUrlStrings(jsonLd)) addPhoto(url);
   }
-  $("img").each((_, el) => {
-    const src = $(el).attr("data-original") ?? $(el).attr("data-src") ?? $(el).attr("src");
-    if (!src || !/^https?:\/\//.test(src)) return;
+  $(
+    "img, source, a[href], [style*='background'], [data-bg], [data-background], [data-background-image]",
+  ).each((_, el) => {
+    const $el = $(el);
     // Iconos (redes sociales, logos pequeños) declaran su tamaño: fuera.
-    const w = Number($(el).attr("width"));
-    const h = Number($(el).attr("height"));
+    const w = Number($el.attr("width"));
+    const h = Number($el.attr("height"));
     if ((w && w < 120) || (h && h < 120)) return;
-    if (/\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(src) || isImageCdnUrl(src)) {
-      photoSet.add(src);
+
+    const tag = (el as { tagName?: string }).tagName?.toLowerCase();
+    if (tag === "a") {
+      // Lightbox: el <a> apunta a la foto en grande.
+      addPhoto($el.attr("href"));
+      return;
+    }
+    for (const attr of ["data-original", "data-lazy-src", "data-src", "src"]) {
+      const v = $el.attr(attr);
+      if (v) {
+        addPhoto(v);
+        break;
+      }
+    }
+    const srcset = $el.attr("data-srcset") ?? $el.attr("srcset");
+    if (srcset) addPhoto(largestFromSrcset(srcset));
+    for (const attr of ["data-bg", "data-background", "data-background-image"]) {
+      const v = $el.attr(attr);
+      if (v) addPhoto(cssUrl(v) ?? v);
+    }
+    const style = $el.attr("style");
+    if (style && /background/i.test(style)) {
+      for (const m of style.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi)) addPhoto(m[2]);
     }
   });
 
   if (!title) warnings.push("título no detectado — el portal puede requerir JS");
   if (price === null) warnings.push("precio no detectado");
-  if (photoSet.size === 0) warnings.push("no se encontraron fotos");
+  if (photoMap.size === 0) warnings.push("no se encontraron fotos");
 
   return {
     portal,
@@ -131,7 +166,7 @@ export function extractGeneric(
     features: [],
     latitude: null,
     longitude: null,
-    photos: Array.from(photoSet).map((url) => ({ url })),
+    photos: Array.from(photoMap.values()).map((url) => ({ url })),
     rawAttributes: {},
     warnings,
   };
@@ -184,4 +219,69 @@ function isImageCdnUrl(src: string): boolean {
   } catch {
     return false;
   }
+}
+
+const WP_SIZE_SUFFIX = /-\d{2,5}x\d{2,5}(\.[a-z]+)$/i;
+
+function isGoogleImage(url: URL): boolean {
+  return /(^|\.)(googleusercontent\.com|ggpht\.com)$/.test(url.hostname);
+}
+
+// URL absoluta http(s) o null. Las de Google llevan el tamaño tras "="
+// (`=w1280`, `=w16383`…): se pide siempre `=w2048`, que es nítida para una
+// ficha y no descarga originales de 10+ MB.
+function normalizePhotoUrl(raw: string | undefined | null, base: string): string | null {
+  const v = raw?.trim();
+  if (!v || v.startsWith("data:")) return null;
+  let u: URL;
+  try {
+    u = new URL(v, base);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  if (isGoogleImage(u)) {
+    const eq = u.pathname.indexOf("=");
+    if (eq !== -1) u.pathname = u.pathname.slice(0, eq);
+    return `${u.origin}${u.pathname}=w2048`;
+  }
+  return u.toString();
+}
+
+function looksLikePhotoUrl(url: string): boolean {
+  if (/(?:logo|icon|favicon|sprite|avatar|placeholder|blank)[^/]*$/i.test(url)) return false;
+  return /\.(?:jpe?g|png|webp|avif)(?:$|[?#])/i.test(url) || isImageCdnUrl(url);
+}
+
+// La misma foto con otro tamaño/CDN params cuenta como una.
+function photoDedupKey(url: string): string {
+  try {
+    const u = new URL(url);
+    if (isGoogleImage(u)) return u.pathname.split("=")[0];
+    return `${u.hostname}${u.pathname}`
+      .toLowerCase()
+      // WordPress: foo-1024x768.jpg y foo.jpg son la misma foto.
+      .replace(WP_SIZE_SUFFIX, "$1");
+  } catch {
+    return url;
+  }
+}
+
+function largestFromSrcset(srcset: string): string | null {
+  let best: string | null = null;
+  let bestW = -1;
+  for (const part of srcset.split(",")) {
+    const [u, d] = part.trim().split(/\s+/);
+    if (!u) continue;
+    const n = d ? parseFloat(d) : 0;
+    if (n >= bestW) {
+      bestW = n;
+      best = u;
+    }
+  }
+  return best;
+}
+
+function cssUrl(v: string): string | null {
+  return v.match(/url\(\s*(['"]?)([^'")]+)\1\s*\)/i)?.[2] ?? null;
 }
