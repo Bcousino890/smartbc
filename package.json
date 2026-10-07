@@ -42,7 +42,8 @@
     "test:zone": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-zone-explorer.mts",
     "test:media": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-media-range.mts",
     "test:mailbox": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-mailbox.mts",
-    "test:onboarding-guide": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-onboarding-guide.mts"
+    "test:onboarding-guide": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-onboarding-guide.mts",
+    "test:user-admin": "node --experimental-strip-types --import ./scripts/node-ts-loader.mjs scripts/test-user-admin.mts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1106.0",

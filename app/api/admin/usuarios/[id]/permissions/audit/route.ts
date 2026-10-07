@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
+import { getRequestPermissions } from "@/lib/auth/guard";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 
 // Nº máximo de entradas de historial devueltas (más recientes primero).
@@ -28,10 +29,10 @@ export async function GET(
     return Response.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  // Autorización: solo owner/admin/agent_admin pueden ver el historial de
-  // permisos de un usuario (mismo criterio que el POST de permisos).
-  const callerRole = currentProfile.role as string;
-  if (!["owner", "admin", "agent_admin"].includes(callerRole)) {
+  // Autorización: el historial de permisos de alguien lo ve quien ve Usuarios
+  // (permiso efectivo, no una lista fija de roles: respeta excepciones).
+  const { permissions } = await getRequestPermissions(currentProfile);
+  if (permissions.usuarios?.view !== true) {
     return Response.json({ error: "Sin acceso" }, { status: 403 });
   }
 

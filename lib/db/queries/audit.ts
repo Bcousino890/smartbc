@@ -7,7 +7,11 @@ export type PermissionAuditEventType =
   | "role_changed"
   | "country_changed"
   | "permissions_updated"
-  | "user_created";
+  | "user_created"
+  | "country_roles_changed"
+  | "custom_role_changed"
+  | "email_changed"
+  | "password_changed";
 
 export interface LogPermissionEventInput {
   /** Quién hace el cambio. Puede ser null si no hay actor identificable. */
