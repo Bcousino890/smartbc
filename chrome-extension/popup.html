@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>SmartBC</title>
+    <style>
+      :root {
+        --ink: #0a0a0a;
+        --cream: #fbf8f3;
+        --gold: #c9a96e;
+        --gold-dark: #8a6d1f;
+        --muted: #6b665e;
+        --green: #0a7d4f;
+        --red: #b4232a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        width: 320px;
+        background: var(--cream);
+        color: var(--ink);
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px 10px;
+        border-bottom: 1px solid rgba(201, 169, 110, 0.35);
+      }
+      header img { width: 32px; height: 32px; border-radius: 4px; }
+      header .title { font-weight: 700; letter-spacing: 0.04em; }
+      header .version { font-size: 11px; color: var(--muted); }
+      main { padding: 14px 16px; }
+      .status { margin: 0 0 12px; }
+      .status strong { display: block; font-size: 14px; }
+      .ok { color: var(--green); }
+      .error { color: var(--red); }
+      .muted { color: var(--muted); font-size: 12px; }
+      button {
+        width: 100%;
+        padding: 9px 10px;
+        border-radius: 8px;
+        border: 0;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .primary { background: var(--ink); color: var(--cream); }
+      .secondary { background: #fff; color: var(--ink); border: 1px solid rgba(10, 10, 10, 0.18); margin-top: 8px; }
+      a { color: var(--gold-dark); font-weight: 600; }
+      footer { padding: 10px 16px 14px; border-top: 1px solid rgba(10, 10, 10, 0.06); }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon-48.png" alt="" />
+      <div>
+        <div class="title">SmartBC</div>
+        <div class="version" id="version"></div>
+      </div>
+    </header>
+    <main>
+      <p class="status" id="status">Comprobando…</p>
+      <button class="primary" id="connect" hidden>Conectar con mi usuario</button>
+      <p class="muted" id="connect-hint" hidden>Se abre el CRM. Si te pide entrar, entra y vuelve a pulsar «Conectar».</p>
+      <button class="secondary" id="disconnect" hidden>Desconectar este navegador</button>
+      <p class="muted" id="manage" hidden>
+        <a href="#" id="manage-link">Gestionar mis navegadores conectados ↗</a>
+      </p>
+    </main>
+    <footer class="muted">
+      Marca anuncios en Idealista, Fotocasa, Habitaclia o pisos.com y mándalos a la ficha de un cliente.
+      Necesitas un usuario de SmartBC.
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

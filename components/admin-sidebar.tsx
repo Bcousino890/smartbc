@@ -24,6 +24,7 @@ import {
   Users,
   X,
   Plug,
+  Puzzle,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -79,6 +80,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "diagnostico",  onlyCountry: "es" },
   { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
   { href: "/admin/integraciones",      labelKey: "admin.nav.integraciones",      icon: Plug,          permissionResource: "configuracion" },
+  // Sin permiso propio: todo el equipo conecta aquí SU extensión (la página
+  // ya filtra lo de admin).
+  { href: "/admin/extension",          labelKey: "admin.nav.extension",          icon: Puzzle                                              },
   { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
 ];
 

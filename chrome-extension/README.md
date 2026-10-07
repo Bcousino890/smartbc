@@ -1,4 +1,10 @@
-# SmartBC → Idealista
+# SmartBC — extensión de Chrome
+
+> **2.0 (2026-10-07): cada persona conecta SU extensión con su usuario del CRM.**
+> Ya no se pega ningún token: icono de SmartBC → **Conectar con mi usuario** →
+> se abre el CRM (`/es/admin/extension`) y queda conectada. El token compartido
+> de la 1.x sigue funcionando hasta que un admin lo apague en esa misma página.
+> Para publicarla en la Chrome Web Store y protegerla de copias: `STORE.md`.
 
 Extensión de Chrome con tres funciones:
 
@@ -11,13 +17,20 @@ Extensión de Chrome con tres funciones:
    portal y los manda a la sección **Enlaces de portales** de su ficha, con el
    compañero que los va a llamar ya asignado.
 
-## Instalación (una sola vez)
+## Instalación
 
-1. Abre Chrome → `chrome://extensions`
-2. Activa **"Modo de desarrollador"** (interruptor arriba a la derecha)
-3. Click en **"Cargar descomprimida"**
-4. Selecciona la carpeta `chrome-extension/` de este repositorio
-5. Listo — la extensión queda instalada permanentemente en tu navegador
+**Equipo:** desde el enlace de la Chrome Web Store (CRM → Extensión de Chrome
+lo muestra si no la tienes). Después: icono de SmartBC → **Conectar con mi
+usuario**.
+
+**Desarrollo** (probar cambios sin publicar):
+1. Chrome → `chrome://extensions` → **Modo de desarrollador**
+2. **Cargar descomprimida** → la carpeta `chrome-extension/` (o
+   `dist/extension-build/` tras `npm run build:extension`, que es lo que se
+   publica, minificado)
+3. Ojo: una carga "sin empaquetar" tiene OTRO ID que la de la tienda. Si en el
+   CRM hay IDs admitidos apuntados, añade también el tuyo de desarrollo o no
+   podrás conectar.
 
 ## Uso
 
@@ -30,14 +43,10 @@ Extensión de Chrome con tres funciones:
 
 ## Leads del inbox
 
-### Configuración (una sola vez)
+### Configuración
 
-1. En el portal (sesión de owner/admin): **Idealista → Configuración**
-   (`/es/admin/idealista/configuracion`) → sección **"Token de la extensión
-   de Chrome"** → **Generar token** → botón de copiar
-2. Chrome → `chrome://extensions` → SmartBC → Idealista → **Opciones**
-3. Pega el token y pulsa **Guardar** (dura 1 año; se revoca rotando
-   `IDEALISTA_EXT_SECRET` en el VPS)
+Ninguna aparte de conectar la extensión con tu usuario (ver arriba). Lo que
+captures queda registrado a tu nombre.
 
 ### Uso
 
@@ -60,8 +69,9 @@ Extensión de Chrome con tres funciones:
     dice cuántas fallaron y **cuáles** ("sin enviar: 4512…"), para abrir ese
     hilo y pulsar Reenviar. El parte de cada recorrido queda guardado en el
     CRM (sección "Cobertura de contactos" de `/es/admin/idealista`).
-  - Si el token falla, se para en seco en vez de recorrer el inbox entero
-    sin guardar nada. Cada envío fallido se reintenta una vez.
+  - Si la conexión falla (sin conectar, sesión revocada o caducada), se para
+    en seco en vez de recorrer el inbox entero sin guardar nada, y el cartel
+    ofrece **Conectar**. Cada envío fallido se reintenta una vez.
   - Si Idealista recarga la página al pulsar "Anterior", el recorrido se
     retoma solo donde iba (antes avanzaba una y se quedaba parado).
 - **Llamadas perdidas**: los hilos de tipo "Llamada perdida" (el contacto
@@ -136,7 +146,7 @@ La pestaña Propiedades lleva un punto dorado mientras haya anuncios nuevos.
 
 ### Notas
 
-- Usa el **mismo token** que los leads del inbox (Opciones de la extensión).
+- Usa la **misma conexión** que los leads del inbox (tu usuario del CRM).
 - Reenviar la misma página **no duplica**: el portal deduplica por la URL
   normalizada del anuncio (o por su referencia, cuando el portal la lleva en la
   URL), así que se puede pasar por el listado entero sin miedo.
@@ -152,3 +162,15 @@ La pestaña Propiedades lleva un punto dorado mientras haya anuncios nuevos.
   falta para llamar.
 - El teléfono del anuncio casi nunca está en el listado (los portales lo
   ocultan): se escribe en la propia ficha al llamar la primera vez.
+
+## Cómo habla con el CRM (2.0)
+
+- Todas las llamadas salen del **service worker** (`background.js`), nunca de
+  la página del portal, y siempre con **POST**: es la única forma en que Chrome
+  manda `Origin: chrome-extension://<ID>` (en GET no lo manda — comprobado).
+  El servidor exige ese Origin para los tokens por usuario.
+- `crm-connect.js` solo corre en `/{es,cl}/admin/extension` del CRM: recibe por
+  `postMessage` el token que la página pidió al servidor con la sesión del CRM.
+- `popup.html` es el popup del icono y también la página de opciones.
+- Servidor: `lib/extension/sessions.ts` (sesiones, verificación) y
+  `lib/extension/guard.ts` (permisos y cartera del usuario en cada ruta).

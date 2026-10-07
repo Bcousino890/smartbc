@@ -1,6 +1,6 @@
 import "server-only";
-import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { createAdminClient } from "@/lib/db/admin";
+import { canUseClient, requireExtension } from "@/lib/extension/guard";
 import { extensionCorsHeaders } from "@/lib/portal-links/extension-cors";
 import { parsePortalUrl } from "@/lib/portal-links/portals";
 import { isLinkStatus, type PortalLinkStatus } from "@/lib/portal-links/types";
@@ -31,11 +31,9 @@ export async function POST(request: Request) {
   const json = (body: unknown, status: number) =>
     Response.json(body, { status, headers: cors });
 
-  const auth = request.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token || !verifyExtensionToken(token)) {
-    return json({ error: "Token inválido o caducado" }, 401);
-  }
+  const gate = await requireExtension(request, cors);
+  if (!gate.ok) return gate.response;
+  const user = gate.auth.kind === "user" ? gate.auth.user : null;
 
   let body: { clientId?: unknown; urls?: unknown };
   try {
@@ -59,6 +57,15 @@ export async function POST(request: Request) {
 
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   const admin = createAdminClient() as any;
+  if (user) {
+    const { data: client } = await admin
+      .from("profiles")
+      .select("id, country, assigned_advisor_id")
+      .eq("id", clientId)
+      .eq("role", "client")
+      .maybeSingle();
+    if (!client || !canUseClient(user, client)) return json({ existing: {} }, 200);
+  }
   const { data, error } = await admin
     .from("client_portal_links")
     .select("url_key, status")

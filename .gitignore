@@ -55,3 +55,6 @@ next-env.d.ts
 # ejecutar logica de gate obsoleta contra produccion: nunca se versionan.
 scripts/*.bundle.mjs
 scripts/*.bundle.cjs
+
+# Paquetes de la extensión para la Chrome Web Store (npm run build:extension)
+/dist

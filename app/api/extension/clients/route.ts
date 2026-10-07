@@ -1,6 +1,6 @@
 import "server-only";
-import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { createAdminClient } from "@/lib/db/admin";
+import { clientRestriction, hasCollectionsPermission, requireExtension } from "@/lib/extension/guard";
 import { extensionCorsHeaders } from "@/lib/portal-links/extension-cors";
 
 // ============================================================================
@@ -26,15 +26,32 @@ function sanitizeQuery(raw: string): string {
   return raw.replace(/[,()%*\\]/g, " ").trim().slice(0, 60);
 }
 
+/**
+ * GET lo usan las extensiones 1.x (token compartido, desde la página del
+ * portal). La 2.0 llama con POST desde su service worker: es el único método
+ * en el que Chrome manda `Origin: chrome-extension://<id>`, y sin él un token
+ * por usuario no se acepta (ver lib/extension/sessions.ts).
+ */
+export async function POST(request: Request) {
+  return GET(request);
+}
+
 export async function GET(request: Request) {
   const cors = extensionCorsHeaders(request);
   const json = (body: unknown, status: number) =>
     Response.json(body, { status, headers: cors });
 
-  const auth = request.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token || !verifyExtensionToken(token)) {
-    return json({ error: "Token inválido o caducado" }, 401);
+  const gate = await requireExtension(request, cors);
+  if (!gate.ok) return gate.response;
+  const user = gate.auth.kind === "user" ? gate.auth.user : null;
+
+  // Con un usuario identificado, la lista es la que vería en el CRM: sus
+  // países y, si es agente junior/senior, solo sus clientes. Antes cualquier
+  // navegador con el token veía la lista entera.
+  if (user) {
+    if (clientRestriction(user) === "none" || !(await hasCollectionsPermission(user, "view"))) {
+      return json({ error: "Tu usuario no tiene acceso a las fichas de clientes." }, 403);
+    }
   }
 
   const q = sanitizeQuery(new URL(request.url).searchParams.get("q") ?? "");
@@ -48,6 +65,11 @@ export async function GET(request: Request) {
     .eq("role", "client")
     .order("updated_at", { ascending: false, nullsFirst: false })
     .limit(LIMIT);
+
+  if (user) {
+    query = query.in("country", user.countries);
+    if (clientRestriction(user) !== "all") query = query.eq("assigned_advisor_id", user.id);
+  }
 
   if (q) {
     query = query.or(
@@ -97,6 +119,8 @@ export async function GET(request: Request) {
         id: s.id,
         name: s.full_name || s.email || "—",
       })),
+      // Quién está conectado: la extensión lo propone como "quién los llama".
+      me: user ? { id: user.id, name: user.fullName || user.email || "Yo" } : null,
     },
     200,
   );

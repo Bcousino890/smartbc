@@ -50,12 +50,16 @@ export function ExtensionTokenSection() {
     <div className="mt-7 rounded-2xl border border-gold/15 bg-cream-50/85 p-5 shadow-[0_15px_40px_-25px_rgba(40,28,10,0.20)] backdrop-blur-sm md:p-6">
       <div className="mb-4 flex items-center gap-2">
         <KeyRound size={20} className="text-gold" />
-        <h2 className="crm-section-title text-ink">Token de la extensión de Chrome</h2>
+        <h2 className="crm-section-title text-ink">Token compartido de la extensión (antiguo)</h2>
       </div>
+      <p className="mb-2 text-sm text-ink/60">
+        Desde la versión 2.0 cada persona conecta <strong>su</strong> extensión con su usuario, sin pegar
+        tokens: <a href="/es/admin/extension" className="text-gold-dark underline">Extensión de Chrome</a>.
+      </p>
       <p className="mb-4 text-sm text-ink/60">
-        La extensión necesita este token para enviar los contactos del inbox de Idealista al portal.
-        Genera uno, cópialo y pégalo en Chrome → Extensiones → SmartBC → Idealista → <strong>Opciones</strong>.
-        Dura 1 año; generar uno nuevo no invalida los anteriores.
+        Este token es el de la versión 1.x: no dice quién es, dura 1 año y da acceso a toda la lista de
+        clientes. Solo sirve mientras el equipo migra, y deja de aceptarse en cuanto se apague en la página
+        de la extensión.
       </p>
 
       <button
@@ -64,7 +68,7 @@ export function ExtensionTokenSection() {
         disabled={loading}
         className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-cream-50 transition hover:bg-ink/85 disabled:opacity-50"
       >
-        {loading ? "Generando…" : token ? "Generar otro token" : "Generar token"}
+        {loading ? "Generando…" : token ? "Generar otro token antiguo" : "Generar token antiguo"}
       </button>
 
       {error && <p className="mt-3 text-sm font-medium text-red-700">{error}</p>}

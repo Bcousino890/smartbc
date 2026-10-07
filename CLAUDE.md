@@ -1207,7 +1207,7 @@ encerrada en `record_collection_feedback()`, y las barreras son deliberadas:
 **Extensión de Chrome** (`chrome-extension/portal-links.js`): pone un **＋** en
 cada anuncio de Idealista / Fotocasa / Habitaclia / pisos.com y una barra para
 mandar los marcados a la ficha de un cliente con el compañero que los va a
-llamar ya asignado. Usa el **mismo token** que los leads del inbox. Rutas:
+llamar ya asignado. Usa la **misma conexión por usuario** que los leads del inbox (ver "Extensión de Chrome 2.0"). Rutas:
 `POST /api/extension/portal-links` y `GET /api/extension/clients` (Bearer +
 CORS por lista explícita de orígenes — nunca `*`: estas rutas escriben en la
 ficha de un cliente).
@@ -1232,6 +1232,52 @@ es ahí donde mirar.
 de texto, nunca a clases CSS**. Si un portal cambia su maquetación el campo
 llega vacío pero **el enlace se envía igual**, que es lo único imprescindible
 para llamar. No "arregles" eso metiendo selectores CSS: duran semanas.
+
+## Extensión de Chrome 2.0 — cada usuario conecta la suya (2026-10-07)
+Hasta la 1.x la extensión entraba con UN token compartido (HMAC,
+`lib/services/idealista/extension-token.ts`): anónimo, de un año, daba la
+lista ENTERA de clientes y solo se revocaba rotando el secreto (a todos a la
+vez). Ahora:
+
+- **Sesión por usuario y navegador** (`extension_sessions`, migración 0172;
+  `lib/extension/sessions.ts`). Se conecta desde `/{país}/admin/extension`
+  (botón "Conectar" de la extensión → la página pide el token con la sesión del
+  CRM → `postMessage` → `chrome-extension/crm-connect.js`). Solo se guarda el
+  SHA-256; caduca a los 60 días sin uso; se revoca de una en una (el usuario
+  las suyas, owner/admin las de todos). Quien deja de ser staff la pierde al
+  momento.
+- **Cada ruta `/api/extension/**` aplica lo que el usuario ve en el CRM**
+  (`lib/extension/guard.ts`): permiso `viewing_collections`, sus países y, si
+  es agente junior/senior, solo su cartera. `added_by` y
+  `idealista_capture_runs.captured_by` ya dicen quién fue.
+- **Anticopia:** cada token va atado al ID de la extensión que lo pidió
+  (`extension_sessions.extension_id`) y solo vale con `Origin:
+  chrome-extension://<ese id>`, que pone Chrome. Una copia (otro ID) recibe 403
+  aunque lleve un token robado — probado con Playwright. Además
+  `extension.security.allowedExtensionIds` (en la misma página) limita qué IDs
+  pueden conectarse: se rellena con el ID de la Chrome Web Store al publicar.
+  Pasos de publicación y textos de la ficha: `chrome-extension/STORE.md`;
+  paquete minificado: `npm run build:extension`. La tienda PROHÍBE ofuscar:
+  minificar es el máximo en el propio código.
+
+⚠️ **Chrome solo manda `Origin: chrome-extension://<id>` en peticiones POST del
+service worker; en GET no lo manda** (comprobado). Por eso `background.js`
+llama a TODO con POST (también `clients` y `me`, que aceptan los dos métodos),
+y un token por usuario usado con GET se rechaza. Si alguien "simplifica" a GET,
+la extensión deja de funcionar entera.
+
+⚠️ **El token compartido sigue aceptándose** hasta que un admin desmarque
+"Aceptar todavía el token compartido antiguo" en `/{país}/admin/extension`
+(`extension.security.legacyTokenEnabled`). Hacerlo cuando todo el equipo
+aparezca en "Todo el equipo" con la 2.0.
+
+⚠️ **Probar la extensión en este entorno:** Chromium coge el proxy del entorno
+y `--host-resolver-rules` NO se aplica a lo que va por proxy — un test
+"contra un servidor falso" acabó cargando el login del CRM REAL. Lanzar
+siempre con `--no-proxy-server` además de `--host-resolver-rules=MAP
+portal.bcousinoprop.com 127.0.0.1:<puerto>` y `--ignore-certificate-errors`.
+Una carga "sin empaquetar" tiene otro ID que la de la tienda: si hay IDs
+admitidos apuntados, añade el de desarrollo.
 
 ## Idioma del scraping y de los enlaces temporales de `particulares` (2026-09-07)
 El CRM entero es en español, así que la ficha scrapeada de un particular

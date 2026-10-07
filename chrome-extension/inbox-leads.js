@@ -5,7 +5,8 @@
  *  - DETALLE: al abrir una conversación captura automáticamente el mensaje
  *    completo y el panel "Perfil para búsqueda de vivienda" y enriquece el lead.
  * Autenticación: token de larga duración guardado en chrome.storage.local
- * (se genera en SmartBC y se pega en las Opciones de la extensión).
+ * (2.0: la extensión se conecta con el usuario del CRM y las llamadas las hace
+ * el service worker, background.js — aquí no se maneja ningún token).
  * Toda la extracción va anclada a URLs y regex de texto, nunca a clases CSS:
  * si algo no se encuentra, el campo va null — el envío nunca se rompe.
  */
@@ -13,8 +14,8 @@
   "use strict";
 
   const PORTAL_ORIGIN = "https://portal.bcousinoprop.com";
-  const API_URL = PORTAL_ORIGIN + "/api/extension/idealista-leads";
-  const RUNS_URL = PORTAL_ORIGIN + "/api/extension/idealista-capture-runs";
+  const API_URL = "/api/extension/idealista-leads";
+  const RUNS_URL = "/api/extension/idealista-capture-runs";
 
   const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/;
   const COUNTRY_RE = /\(([A-Z]{2})\)/;
@@ -204,7 +205,7 @@
     return result;
   }
 
-  // ── Token ──────────────────────────────────────────────────────────────────
+  // ── Conexión con el CRM (por el service worker) ──────────────────────────
   function getToken() {
     return new Promise((resolve) => {
       chrome.storage.local.get("smartbcLeadsToken", (data) => {
@@ -213,25 +214,36 @@
     });
   }
 
-  async function requireToken() {
-    let token = await getToken();
-    if (!token) {
-      token = window.prompt(
-        "SmartBC: pega el token de la extensión (se genera en el portal y se guarda una sola vez):",
-      );
-      if (token) {
-        token = token.trim();
-        chrome.storage.local.set({ smartbcLeadsToken: token });
+  /** Llamada al CRM a través de background.js (origen de la extensión). */
+  function api(path, method, body) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "smartbc:api", path, method, body }, (res) => {
+          if (chrome.runtime.lastError || !res) {
+            resolve({ ok: false, status: 0, data: null, error: "No se pudo hablar con la extensión (recarga la página)" });
+            return;
+          }
+          resolve(res);
+        });
+      } catch {
+        resolve({ ok: false, status: 0, data: null, error: "La extensión se ha actualizado: recarga la página" });
       }
+    });
+  }
+
+  function openConnect() {
+    try {
+      chrome.runtime.sendMessage({ type: "smartbc:openConnect" });
+    } catch {
+      /* contexto perdido: el aviso ya pide recargar */
     }
-    return token || null;
   }
 
   // ── UI de estado ──────────────────────────────────────────────────
   let badgeEl = null;
   let badgeTimer = null;
 
-  function showBadge(text, isError, autoHideMs) {
+  function showBadge(text, isError, autoHideMs, action) {
     if (!badgeEl) {
       badgeEl = document.createElement("div");
       badgeEl.id = "smartbc-leads-badge";
@@ -246,6 +258,15 @@
     badgeEl.innerHTML =
       '<div style="font-weight:600;margin-bottom:2px">🏠 SmartBC</div>' +
       '<div style="opacity:.9;color:' + (isError ? "#ff8080" : "#fff") + '">' + text + "</div>";
+    if (action) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = action.label;
+      btn.style.cssText =
+        "margin-top:8px;padding:5px 10px;border:0;border-radius:6px;background:#c9a96e;color:#1a1a1a;font-weight:600;cursor:pointer";
+      btn.addEventListener("click", action.onClick);
+      badgeEl.appendChild(btn);
+    }
     badgeEl.style.display = "block";
     if (badgeTimer) clearTimeout(badgeTimer);
     if (autoHideMs) {
@@ -267,42 +288,34 @@
 
   async function sendLeads(source, leads) {
     lastSendFatal = false;
-    const token = await requireToken();
+    const token = await getToken();
     if (!token) {
       lastSendFatal = true;
-      showBadge("Falta el token de SmartBC: configúralo en las Opciones de la extensión", true, 8000);
-      return null;
-    }
-    try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token,
-        },
-        body: JSON.stringify({ source, leads }),
+      showBadge("La extensión no está conectada con tu usuario del CRM.", true, 0, {
+        label: "Conectar",
+        onClick: openConnect,
       });
-      if (res.status === 401) {
-        lastSendFatal = true;
-        showBadge("Token caducado o inválido: genera uno nuevo en SmartBC y pégalo en Opciones", true, 10000);
-        return null;
-      }
-      if (!res.ok) {
-        let detail = "";
-        try {
-          const body = await res.json();
-          detail = body.detail || body.error || "";
-        } catch {
-          /* cuerpo no-JSON */
-        }
-        showBadge("Error del portal (" + res.status + ")" + (detail ? ": " + detail : ""), true, 12000);
-        return null;
-      }
-      return await res.json();
-    } catch (err) {
-      showBadge("No se pudo conectar con el portal: " + err.message, true, 8000);
       return null;
     }
+    const res = await api(API_URL, "POST", { source, leads });
+    if (res.status === 401 || res.status === 403) {
+      lastSendFatal = true;
+      showBadge((res.data && res.data.error) || "La sesión de la extensión ya no vale.", true, 0, {
+        label: "Volver a conectar",
+        onClick: openConnect,
+      });
+      return null;
+    }
+    if (res.status === 0) {
+      showBadge(res.error, true, 8000);
+      return null;
+    }
+    if (!res.ok) {
+      const detail = (res.data && (res.data.detail || res.data.error)) || "";
+      showBadge("Error del portal (" + res.status + ")" + (detail ? ": " + detail : ""), true, 12000);
+      return null;
+    }
+    return res.data;
   }
 
   // El parte de un recorrido completo: cuántas llegaron de verdad, cuántas no
@@ -312,17 +325,11 @@
   // Silencioso a propósito: si el parte no se puede guardar, no vale la pena
   // tapar con otro error el resumen que el usuario está leyendo.
   async function reportRun(run) {
-    try {
-      const token = await requireToken();
-      if (!token) return;
-      await fetch(RUNS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify(run),
-      });
-    } catch (err) {
+    if (!(await getToken())) return;
+    const res = await api(RUNS_URL, "POST", run);
+    if (!res.ok) {
       // eslint-disable-next-line no-console
-      console.warn("[SmartBC] no se pudo guardar el parte del recorrido:", err);
+      console.warn("[SmartBC] no se pudo guardar el parte del recorrido:", res.status, res.error);
     }
   }
 
@@ -1021,7 +1028,7 @@
         // fue bien. Se para aquí, con la conversación todavía a la vista.
         autoRun.failed++;
         autoRun.failedIds.push(currentId);
-        stopReason = "el envío no está autorizado (revisa el token en Opciones)";
+        stopReason = "el envío no está autorizado (conecta la extensión con tu usuario)";
         break;
       }
       if (outcome === "sent") {
