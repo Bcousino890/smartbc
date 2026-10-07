@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
+import { requireExtension } from "@/lib/extension/guard";
 import { suggestLeadType } from "@/lib/services/idealista/lead-classifier";
 import { isPersistedLeadImage, persistIdealistaLeadImage } from "@/lib/services/idealista/persist-lead-image";
 import {
@@ -185,11 +185,8 @@ function mergeProperties(existing: NormalizedProperty[], incoming: NormalizedPro
 }
 
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
-  if (!token || !verifyExtensionToken(token)) {
-    return Response.json({ error: "Token inválido o expirado" }, { status: 401, headers: corsHeaders() });
-  }
+  const gate = await requireExtension(req, corsHeaders());
+  if (!gate.ok) return gate.response;
 
   let body: { source?: unknown; leads?: unknown };
   try {

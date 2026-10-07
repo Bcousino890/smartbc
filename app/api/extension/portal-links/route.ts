@@ -1,6 +1,6 @@
 import "server-only";
-import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { createAdminClient } from "@/lib/db/admin";
+import { canUseClient, hasCollectionsPermission, requireExtension } from "@/lib/extension/guard";
 import { insertPortalLinks } from "@/lib/portal-links/insert";
 import { extensionCorsHeaders } from "@/lib/portal-links/extension-cors";
 import type { PortalLinkInput } from "@/lib/portal-links/types";
@@ -59,10 +59,11 @@ export async function POST(request: Request) {
   const json = (body: unknown, status: number) =>
     Response.json(body, { status, headers: cors });
 
-  const auth = request.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token || !verifyExtensionToken(token)) {
-    return json({ error: "Token inválido o caducado" }, 401);
+  const gate = await requireExtension(request, cors);
+  if (!gate.ok) return gate.response;
+  const user = gate.auth.kind === "user" ? gate.auth.user : null;
+  if (user && !(await hasCollectionsPermission(user, "create"))) {
+    return json({ error: "Tu usuario no puede añadir anuncios a fichas de clientes." }, 403);
   }
 
   let body: { clientId?: unknown; assignedTo?: unknown; links?: unknown };
@@ -88,11 +89,16 @@ export async function POST(request: Request) {
   const admin = createAdminClient() as any;
   const { data: client } = await admin
     .from("profiles")
-    .select("id, full_name")
+    .select("id, full_name, country, assigned_advisor_id")
     .eq("id", clientId)
     .eq("role", "client")
     .maybeSingle();
   if (!client) return json({ error: "Ese cliente no existe" }, 404);
+  // Mismo criterio que la ficha: un agente no manda anuncios a un cliente
+  // que no es de su cartera ni de sus países.
+  if (user && !canUseClient(user, client)) {
+    return json({ error: "Ese cliente no es de tu cartera." }, 403);
+  }
 
   const assignedTo = str(body.assignedTo, 64);
   if (assignedTo) {
@@ -129,12 +135,12 @@ export async function POST(request: Request) {
 
   if (links.length === 0) return json({ error: "Ningún enlace utilizable" }, 400);
 
-  // added_by va a null: el token no identifica a una persona, identifica al
-  // navegador que lo tiene pegado. Quién llamó sí queda registrado, porque las
-  // notas se escriben desde el panel con sesión.
+  // Con la extensión conectada por usuario, queda registrado quién los mandó.
+  // Con el token compartido antiguo no se sabe (identifica a un navegador, no
+  // a una persona) y `added_by` queda vacío, como antes.
   const result = await insertPortalLinks({
     clientId,
-    userId: null,
+    userId: user?.id ?? null,
     assignedTo,
     links,
   });

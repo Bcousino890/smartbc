@@ -12,6 +12,10 @@ const ALLOWED_ORIGINS = [
   /^https:\/\/(www\.)?fotocasa\.es$/i,
   /^https:\/\/(www\.)?habitaclia\.com$/i,
   /^https:\/\/(www\.)?pisos\.com$/i,
+  // Desde la 2.0 las llamadas las hace el service worker de la extensión, con
+  // su propio origen. Qué ID concreto se admite lo decide
+  // `extension.security.allowedExtensionIds` (lib/extension/token.ts).
+  /^chrome-extension:\/\/[a-p]{32}$/,
 ];
 
 export function resolveExtensionOrigin(request: Request): string | null {

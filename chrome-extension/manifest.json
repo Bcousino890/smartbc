@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "SmartBC → Idealista",
-  "version": "1.10.1",
-  "description": "Rellena y publica anuncios en Idealista con los datos de SmartBC, captura los contactos del inbox y manda anuncios de portales a la ficha de un cliente.",
+  "name": "SmartBC",
+  "short_name": "SmartBC",
+  "version": "2.0.0",
+  "description": "Marca anuncios en Idealista, Fotocasa, Habitaclia y pisos.com y mándalos a la ficha de un cliente de SmartBC. Requiere un usuario de SmartBC.",
+  "author": "Benjamín Cousiño Propiedades",
+  "homepage_url": "https://portal.bcousinoprop.com",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.idealista.com/*",
@@ -11,9 +14,27 @@
     "https://www.pisos.com/*",
     "https://portal.bcousinoprop.com/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "SmartBC",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
   "options_ui": {
-    "page": "options.html",
+    "page": "popup.html",
     "open_in_tab": false
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "content_scripts": [
     {
@@ -34,6 +55,14 @@
         "https://www.pisos.com/*"
       ],
       "js": ["portal-links.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://portal.bcousinoprop.com/es/admin/extension*",
+        "https://portal.bcousinoprop.com/cl/admin/extension*"
+      ],
+      "js": ["crm-connect.js"],
       "run_at": "document_idle"
     }
   ]

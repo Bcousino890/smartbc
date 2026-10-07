@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
+import { requireExtension } from "@/lib/extension/guard";
 
 // El parte de cada recorrido de "Capturar todas" de la extensión.
 //
@@ -26,11 +26,9 @@ const asCount = (v: unknown) =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), 100_000) : 0;
 
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!verifyExtensionToken(token)) {
-    return Response.json({ error: "No autorizado" }, { status: 401, headers: corsHeaders() });
-  }
+  const gate = await requireExtension(req, corsHeaders());
+  if (!gate.ok) return gate.response;
+  const capturedBy = gate.auth.kind === "user" ? gate.auth.user.id : null;
 
   let body: Record<string, unknown>;
   try {
@@ -66,6 +64,8 @@ export async function POST(req: Request) {
       failed_ids: failedIds,
       stop_reason: stopReason,
       started_at: startedAt,
+      // Quién hizo el recorrido (solo con la extensión conectada por usuario).
+      captured_by: capturedBy,
     });
 
   if (error) {

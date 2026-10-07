@@ -29,16 +29,18 @@
  * el envío sigue — la URL sola ya sirve para llamar. Reenviar la misma página
  * no duplica: el servidor deduplica por la URL normalizada del anuncio.
  *
- * Autenticación: el mismo token de larga duración de los leads del inbox
- * (Opciones de la extensión).
+ * Autenticación (2.0): cada usuario conecta SU extensión desde el CRM
+ * (/{país}/admin/extension) y las llamadas las hace el service worker
+ * (background.js) con ese token — aquí no se toca ningún token. El servidor
+ * aplica lo que ese usuario ve en el CRM (su cartera, sus países).
  */
 (function () {
   "use strict";
 
   const PORTAL_ORIGIN = "https://portal.bcousinoprop.com";
-  const LINKS_API = PORTAL_ORIGIN + "/api/extension/portal-links";
-  const CHECK_API = PORTAL_ORIGIN + "/api/extension/portal-links/check";
-  const CLIENTS_API = PORTAL_ORIGIN + "/api/extension/clients";
+  const LINKS_API = "/api/extension/portal-links";
+  const CHECK_API = "/api/extension/portal-links/check";
+  const CLIENTS_API = "/api/extension/clients";
   const MAX_SELECTION = 60;
 
   // Claves de chrome.storage.local. `smartbcLastClient`, `smartbcLastAssignee`
@@ -311,6 +313,8 @@
   let inFicha = new Map();
   let chosenClient = null;
   let staff = [];
+  /** Quién está conectado ({id, name}), según el CRM. */
+  let me = null;
   let collapsed = false;
   let changingClient = false;
 
@@ -511,24 +515,49 @@
     btn.style.borderColor = look.border;
   }
 
-  // ── Token ─────────────────────────────────────────────────────────────
-  async function getToken() {
-    const d = await load(K.token);
-    return d[K.token] || null;
+  // ── API (por el service worker) ───────────────────────────────────────
+  // Las llamadas al CRM las hace background.js: así salen con el origen de la
+  // extensión (chrome-extension://<id>), que el servidor comprueba, y el token
+  // nunca pasa por la página del portal.
+  function api(path, options) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          { type: "smartbc:api", path, method: (options && options.method) || "GET", body: options && options.body },
+          (res) => {
+            if (chrome.runtime.lastError || !res) {
+              resolve({ ok: false, status: 0, data: null, error: "No se pudo hablar con la extensión" });
+              return;
+            }
+            resolve(res);
+          },
+        );
+      } catch {
+        contextLost();
+        resolve({ ok: false, status: 0, data: null, error: "La extensión se ha actualizado" });
+      }
+    });
   }
 
-  async function requireToken() {
-    let token = await getToken();
-    if (!token) {
-      token = window.prompt(
-        "SmartBC: pega el token de la extensión (se genera en el portal, Idealista → Configuración):",
-      );
-      if (token) {
-        token = token.trim();
-        store({ [K.token]: token });
-      }
+  function openConnect() {
+    try {
+      chrome.runtime.sendMessage({ type: "smartbc:openConnect" });
+    } catch {
+      contextLost();
     }
-    return token || null;
+  }
+
+  /** Sin conexión, o la sesión se cerró desde el CRM: se ofrece reconectar. */
+  function askToConnect(res) {
+    const msg =
+      (res && res.data && res.data.error) ||
+      "La extensión no está conectada con tu usuario del CRM.";
+    status(msg, true, { label: "Conectar ↗", onClick: openConnect });
+  }
+
+  async function isConnected() {
+    const d = await load(K.token);
+    return Boolean(d[K.token]);
   }
 
   // ── "¿Ya está en la ficha?" ───────────────────────────────────────────
@@ -550,24 +579,14 @@
     for (const item of basket) urls.add(item.data.url);
     if (urls.size === 0) return;
 
-    const token = await getToken();
-    if (!token) return;
+    if (!(await isConnected())) return;
     const clientId = chosenClient.id;
-    try {
-      const res = await fetch(CHECK_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ clientId, urls: [...urls].slice(0, 200) }),
-      });
-      if (!res.ok) return; // sin marca "en ficha": no es motivo para molestar
-      const body = await res.json();
-      // Si mientras tanto se cambió de cliente, esta respuesta ya no vale.
-      if (!chosenClient || chosenClient.id !== clientId) return;
-      inFicha = new Map(Object.entries(body.existing || {}));
-      refresh();
-    } catch {
-      /* sin red: se queda sin la marca, nada más */
-    }
+    const res = await api(CHECK_API, { method: "POST", body: { clientId, urls: [...urls].slice(0, 200) } });
+    if (!res.ok) return; // sin marca "en ficha": no es motivo para molestar
+    // Si mientras tanto se cambió de cliente, esta respuesta ya no vale.
+    if (!chosenClient || chosenClient.id !== clientId) return;
+    inFicha = new Map(Object.entries((res.data && res.data.existing) || {}));
+    refresh();
   }
 
   // ── Panel ─────────────────────────────────────────────────────────────
@@ -616,7 +635,7 @@
   };
 
   let root, pill, panel, statusEl;
-  let clientBox, staffSelect, detailBox, basketHead, basketList, sendBtn, pageCountEl;
+  let clientBox, staffSelect, detailBox, basketHead, basketList, sendBtn, pageCountEl, meEl;
 
   function buildPanel() {
     root = h("div", {
@@ -667,7 +686,10 @@
         { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px 6px" },
         null,
         [
-          h("div", { ...LABEL, color: "#a88a52", letterSpacing: ".18em" }, { text: "SMARTBC · ENVIAR A UNA FICHA" }),
+          h("div", { minWidth: "0" }, null, [
+            h("div", { ...LABEL, color: "#a88a52", letterSpacing: ".18em" }, { text: "SMARTBC · ENVIAR A UNA FICHA" }),
+            (meEl = h("div", { fontSize: "11px", color: "#8a8378", marginTop: "2px" }, { text: "" })),
+          ]),
           h(
             "button",
             { ...BTN, padding: "2px 9px", lineHeight: "1.2", fontSize: "14px" },
@@ -758,12 +780,33 @@
     refresh();
   }
 
-  /** `link` (opcional): { href, label } — se pinta detrás del mensaje. */
+  /**
+   * `link` (opcional): { href, label } o { onClick, label } — se pinta detrás
+   * del mensaje.
+   */
   function status(msg, isError, link) {
     if (!statusEl) return;
     statusEl.textContent = msg || "";
     statusEl.style.color = isError ? "#b4232a" : GREEN;
-    if (link && link.href) {
+    if (link && link.onClick) {
+      statusEl.appendChild(
+        h(
+          "button",
+          {
+            marginLeft: "6px",
+            padding: "0",
+            border: "0",
+            background: "transparent",
+            color: GOLD_DARK,
+            fontWeight: "600",
+            textDecoration: "underline",
+            cursor: "pointer",
+            font: "inherit",
+          },
+          { type: "button", text: link.label, on: { click: link.onClick } },
+        ),
+      );
+    } else if (link && link.href) {
       statusEl.appendChild(
         h(
           "a",
@@ -844,7 +887,10 @@
         on: {
           input: () => {
             clearTimeout(searchTimer);
-            searchTimer = setTimeout(() => searchClients(clientInput.value.trim()), 320);
+            // El texto se lee YA: si se elige un cliente antes de que salte el
+            // temporizador, el buscador ya no existe y leerlo después rompía.
+            const q = clientInput.value.trim();
+            searchTimer = setTimeout(() => searchClients(q), 320);
           },
           keydown: (e) => {
             if (e.key === "Escape" && chosenClient) {
@@ -869,33 +915,35 @@
   }
 
   async function searchClients(q) {
-    const token = await getToken();
-    if (!token) {
-      status("Falta el token: ábrelo en Opciones de la extensión", true);
+    if (!(await isConnected())) {
+      askToConnect(null);
       return;
     }
-    try {
-      const res = await fetch(`${CLIENTS_API}?q=${encodeURIComponent(q)}`, {
-        headers: { Authorization: "Bearer " + token },
-      });
-      if (res.status === 401) {
-        status("Token caducado: genera uno nuevo en SmartBC", true);
-        return;
-      }
-      const body = await res.json();
-      staff = body.staff || [];
-      fillStaff();
-      showClients(body.clients || []);
-    } catch {
-      status("No se pudo conectar con SmartBC", true);
+    const res = await api(`${CLIENTS_API}?q=${encodeURIComponent(q)}`);
+    if (res.status === 401 || res.status === 403) {
+      askToConnect(res);
+      return;
     }
+    if (!res.ok) {
+      status(res.error || "No se pudo conectar con SmartBC", true);
+      return;
+    }
+    const body = res.data || {};
+    staff = body.staff || [];
+    me = body.me || null;
+    if (me) meEl.textContent = me.name;
+    fillStaff();
+    showClients(body.clients || []);
   }
 
   function fillStaff() {
     if (staffSelect.options.length > 1) return;
     for (const s of staff) staffSelect.appendChild(h("option", null, { value: s.id, text: s.name }));
     load(K.assignee).then((d) => {
+      // Lo último elegido manda; si nunca se eligió nada, quien está
+      // conectado (lo habitual es que llame quien los marca).
       if (d[K.assignee]) staffSelect.value = d[K.assignee];
+      else if (me && staff.some((s) => s.id === me.id)) staffSelect.value = me.id;
     });
   }
 
@@ -933,6 +981,7 @@
   }
 
   function chooseClient(c) {
+    clearTimeout(searchTimer);
     chosenClient = c;
     changingClient = false;
     store({ [K.client]: c });
@@ -1266,8 +1315,10 @@
   // ── Envío ─────────────────────────────────────────────────────────────
   async function send() {
     if (!chosenClient || basket.length === 0) return;
-    const token = await requireToken();
-    if (!token) return;
+    if (!(await isConnected())) {
+      askToConnect(null);
+      return;
+    }
 
     // Lo que se esté escribiendo en una nota entra en este envío.
     clearTimeout(noteTimer);
@@ -1280,22 +1331,17 @@
     sendBtn.disabled = true;
     status("Enviando…");
     try {
-      const res = await fetch(LINKS_API, {
+      const res = await api(LINKS_API, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({
-          clientId: chosenClient.id,
-          assignedTo: staffSelect.value || null,
-          links,
-        }),
+        body: { clientId: chosenClient.id, assignedTo: staffSelect.value || null, links },
       });
       if (res.status === 401) {
-        status("Token caducado: genera uno nuevo en SmartBC", true);
+        askToConnect(res);
         return;
       }
-      const body = await res.json().catch(() => ({}));
+      const body = res.data || {};
       if (!res.ok) {
-        status(body.error || `Error ${res.status}`, true);
+        status(body.error || res.error || `Error ${res.status}`, true);
         return;
       }
       store({ [K.assignee]: staffSelect.value || "" });
@@ -1342,6 +1388,14 @@
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area !== "local") return;
         let dirty = false;
+        // Se acaba de conectar (o desconectar) en otra pestaña: se vuelve a
+        // preguntar quién es y qué clientes ve, sin recargar el portal.
+        if (changes[K.token]) {
+          me = null;
+          if (meEl) meEl.textContent = "";
+          status("");
+          searchClients("");
+        }
         if (changes[K.basket]) {
           const next = changes[K.basket].newValue || [];
           if (JSON.stringify(next) !== JSON.stringify(basket)) {
