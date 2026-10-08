@@ -293,6 +293,56 @@ export async function getPreviewCollection(
   };
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Token público VIGENTE del Private Book de un itinerario, buscado por su id.
+ *
+ * Para `/v/preview/[itineraryId]` cuando lo abre alguien sin sesión de equipo
+ * (el cliente al que le mandaron la URL de la previsualización): si el book
+ * está publicado y tiene un enlace sin revocar ni caducar, se le lleva a
+ * `/v/{token}`. Se aplican las MISMAS reglas que `getPublicCollectionByToken`
+ * (módulo activo, itinerario publicado o completado, enlace vigente), así que
+ * un borrador nunca se abre por aquí. Si hay varios enlaces vigentes, el más
+ * reciente.
+ *
+ * Cualquier otro caso devuelve null y la página enseña la vista de "no
+ * disponible", sin decir por qué.
+ */
+export async function getActiveCollectionTokenByItineraryId(
+  itineraryId: string,
+): Promise<string | null> {
+  if (!UUID_RE.test(itineraryId)) return null;
+
+  const settings = await getViewingCollectionsSettings();
+  if (!settings.enabled) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+
+  const { data: itinerary } = await supabase
+    .from("viewing_itineraries")
+    .select("status")
+    .eq("id", itineraryId)
+    .maybeSingle();
+  if (!itinerary || !["published", "completed"].includes(itinerary.status)) {
+    return null;
+  }
+
+  const { data: share } = await supabase
+    .from("viewing_collection_shares")
+    .select("token")
+    .eq("itinerary_id", itineraryId)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (share?.token as string | undefined) ?? null;
+}
+
 /**
  * Traduce el `order` que ve el cliente (1..N) al id de la parada.
  *

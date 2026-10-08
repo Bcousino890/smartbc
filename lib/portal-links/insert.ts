@@ -130,6 +130,8 @@ export function buildLinkRow(
 
 export type InsertLinksResult = {
   inserted: number;
+  /** Ids de los enlaces NUEVOS (los repetidos no vienen). */
+  insertedIds?: string[];
   skipped: number;
   invalid: number;
   error?: string;
@@ -204,6 +206,7 @@ export async function insertPortalLinks(params: {
     };
   }
 
-  const inserted = ((data ?? []) as unknown[]).length;
-  return { inserted, skipped: rows.length - inserted, invalid };
+  const insertedIds = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  const inserted = insertedIds.length;
+  return { inserted, insertedIds, skipped: rows.length - inserted, invalid };
 }

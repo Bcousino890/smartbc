@@ -227,6 +227,58 @@ export async function setShortlistComment(
 }
 
 /**
+ * Estrellas del cliente, de 1 a 5 (0 = quitar la valoración).
+ *
+ * Si la residencia ya es ficha nuestra, la misma valoración se copia a la
+ * selección del cliente (client_property_selections.client_rating): es lo que
+ * ve el agente en "Propiedades seleccionadas" sin abrir la selección privada.
+ */
+export async function setShortlistRating(
+  token: string,
+  itemId: string,
+  rating: number,
+): Promise<ShortlistWriteResult> {
+  const { gate, error } = await open(token);
+  if (!gate) return { ok: false, error: error! };
+  if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
+    return { ok: false, error: "La valoración va de 1 a 5 estrellas." };
+  }
+
+  const item = await itemOf(gate.id, itemId);
+  if (!item) return { ok: false, error: "Esa residencia no está en tu selección." };
+
+  const { error: dbError } = await db()
+    .from("client_shortlist_items")
+    .update({ client_rating: rating, updated_at: new Date().toISOString() })
+    .eq("id", itemId)
+    .eq("shortlist_id", gate.id);
+  if (dbError) return { ok: false, error: "No se pudo guardar la valoración." };
+
+  // La ficha: la del item o, si es un anuncio de portal, la que se le creó.
+  let propertyId: string | null = item.property_id ?? null;
+  if (!propertyId) {
+    const { data: link } = await db()
+      .from("client_shortlist_items")
+      .select("client_portal_links ( property_id )")
+      .eq("id", itemId)
+      .maybeSingle();
+    const l = Array.isArray(link?.client_portal_links)
+      ? link.client_portal_links[0]
+      : link?.client_portal_links;
+    propertyId = l?.property_id ?? null;
+  }
+  if (propertyId) {
+    await db()
+      .from("client_property_selections")
+      .update({ client_rating: rating, client_feedback_at: new Date().toISOString() })
+      .eq("client_id", gate.clientId)
+      .eq("property_id", propertyId);
+  }
+
+  return { ok: true, revision: await touch(gate.id, gate.revision) };
+}
+
+/**
  * Añadir una residencia que el cliente ha encontrado.
  *
  * Queda marcada como `client_added` para siempre: no puede acabar pareciendo

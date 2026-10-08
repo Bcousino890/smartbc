@@ -12,6 +12,7 @@
 
 import type { PublicShortlistProperty } from "@/lib/client-shortlist/public-contract";
 import type { ShortlistDictionary } from "@/lib/client-shortlist/i18n";
+import { StarRating } from "./star-rating";
 import type { ShortlistDecision } from "@/lib/client-shortlist/types";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ export function PriorityRow({
   onView,
   onNote,
   onDecide,
+  onRate,
   busy,
   dragHandleProps,
   isDragging,
@@ -41,6 +43,7 @@ export function PriorityRow({
   onView: () => void;
   onNote: () => void;
   onDecide: (d: ShortlistDecision) => void;
+  onRate: (n: number) => void;
   busy?: boolean;
   dragHandleProps?: React.ComponentProps<"button">;
   isDragging?: boolean;
@@ -102,6 +105,9 @@ export function PriorityRow({
         <p dir="ltr" className="mt-0.5 font-serif text-[14px] vc-nums text-ink/70 rtl:text-right">
           {property.priceLabel}
         </p>
+        <div className="mt-0.5">
+          <StarRating t={t} value={property.rating} onRate={onRate} disabled={busy} size="sm" />
+        </div>
         {compact && (
           <div className="mt-1 flex flex-wrap items-center gap-x-4">
             <Mini onClick={() => onDecide("must_visit")}>{t.mustVisit}</Mini>

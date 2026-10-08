@@ -91,6 +91,9 @@ export type ShortlistDictionary = {
   aboutResidence: string;
   features: string;
   loadingDetails: string;
+  /** Estrellas */
+  yourRating: string;
+  rateStars: (n: number) => string;
   /** Franja de vuelta en el SmartLink abierto desde la selección. */
   backToSelection: string;
   /** Terminal */
@@ -163,6 +166,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "Sobre la residencia",
     features: "Características",
     loadingDetails: "Cargando…",
+    yourRating: "Tu valoración",
+    rateStars: (n) => `${n} de 5 estrellas`,
     backToSelection: "Volver a tu selección",
     emptyState: "Todavía no hay residencias en esta selección.",
   },
@@ -232,6 +237,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "About the residence",
     features: "Features",
     loadingDetails: "Loading…",
+    yourRating: "Your rating",
+    rateStars: (n) => `${n} of 5 stars`,
     backToSelection: "Back to your selection",
     emptyState: "There are no residences in this selection yet.",
   },
@@ -301,6 +308,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "À propos de la résidence",
     features: "Caractéristiques",
     loadingDetails: "Chargement…",
+    yourRating: "Votre note",
+    rateStars: (n) => `${n} sur 5 étoiles`,
     backToSelection: "Revenir à votre sélection",
     emptyState: "Il n'y a encore aucune résidence dans cette sélection.",
   },
@@ -370,6 +379,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "La residenza",
     features: "Caratteristiche",
     loadingDetails: "Caricamento…",
+    yourRating: "Il tuo voto",
+    rateStars: (n) => `${n} stelle su 5`,
     backToSelection: "Torna alla tua selezione",
     emptyState: "Non ci sono ancora residenze in questa selezione.",
   },
@@ -439,6 +450,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "Über die Residenz",
     features: "Merkmale",
     loadingDetails: "Wird geladen…",
+    yourRating: "Ihre Bewertung",
+    rateStars: (n) => `${n} von 5 Sternen`,
     backToSelection: "Zurück zu Ihrer Auswahl",
     emptyState: "In dieser Auswahl gibt es noch keine Residenzen.",
   },
@@ -507,6 +520,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "عن المسكن",
     features: "المواصفات",
     loadingDetails: "جارٍ التحميل…",
+    yourRating: "تقييمك",
+    rateStars: (n) => `${n} من 5 نجوم`,
     backToSelection: "العودة إلى اختيارك",
     emptyState: "لا توجد مساكن في هذه القائمة بعد.",
   },
@@ -576,6 +591,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "Konut hakkında",
     features: "Özellikler",
     loadingDetails: "Yükleniyor…",
+    yourRating: "Puanınız",
+    rateStars: (n) => `5 üzerinden ${n} yıldız`,
     backToSelection: "Seçiminize dön",
     emptyState: "Bu seçkide henüz konut yok.",
   },
@@ -644,6 +661,8 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "על הנכס",
     features: "מאפיינים",
     loadingDetails: "טוען…",
+    yourRating: "הדירוג שלך",
+    rateStars: (n) => `${n} מתוך 5 כוכבים`,
     backToSelection: "חזרה לבחירה שלך",
     emptyState: "אין עדיין נכסים בבחירה הזו.",
   },
