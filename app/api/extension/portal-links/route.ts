@@ -3,6 +3,7 @@ import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { createAdminClient } from "@/lib/db/admin";
 import { insertPortalLinks } from "@/lib/portal-links/insert";
 import { processPendingPortalLinks } from "@/lib/portal-links/auto-import";
+import { addLinksToActiveShortlist } from "@/lib/client-shortlist/auto-add";
 import { after } from "next/server";
 import { extensionCorsHeaders } from "@/lib/portal-links/extension-cors";
 import type { PortalLinkInput } from "@/lib/portal-links/types";
@@ -146,6 +147,8 @@ export async function POST(request: Request) {
   // Las fichas se crean solas en cuanto entran, después de responder a la
   // extensión (lib/portal-links/auto-import.ts).
   after(() => processPendingPortalLinks());
+  // Y aparecen solos en la selección privada que el cliente ya tiene.
+  await addLinksToActiveShortlist(clientId, result.insertedIds ?? []);
 
   return json(
     {

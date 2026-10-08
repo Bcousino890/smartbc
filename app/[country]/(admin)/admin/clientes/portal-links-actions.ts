@@ -28,6 +28,7 @@ import {
 } from "@/lib/portal-links/auto-import";
 import { syncDiscardedLink } from "@/lib/portal-links/discard-sync";
 import { createItinerary } from "./viewing-collections-actions";
+import { addLinksToActiveShortlist } from "@/lib/client-shortlist/auto-add";
 import {
   insertPortalLinks,
   linkText,
@@ -123,6 +124,8 @@ export async function addPortalLinks(
   // Las fichas se crean solas en cuanto entran los enlaces, después de
   // responder: el agente no espera a las descargas del portal.
   after(() => processPendingPortalLinks());
+  // Y aparecen solos en la selección privada que el cliente ya tiene.
+  await addLinksToActiveShortlist(clientId, res.insertedIds ?? []);
 
   revalidateClient(clientId);
   return {
