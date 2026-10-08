@@ -11,7 +11,7 @@ import { extractIdealistaMapLocation } from "./extractors/idealista";
 // Para cada ficha de "Portales externos" que viene de Idealista vuelve a leer
 // el anuncio y guarda en `properties` el punto del mapa del propio anuncio
 // (extractIdealistaMapLocation) y si es exacto o solo de zona
-// (`location_precision`, migración 0174). Las fichas importadas antes de esta
+// (`location_precision`, migración 0175). Las fichas importadas antes de esta
 // fecha no tienen esa precisión, y las que no trajeron coordenadas al
 // importarse acabaron con un punto de Nominatim (calle/barrio) en vez del del
 // anuncio.
@@ -133,13 +133,13 @@ export async function backfillIdealistaPins(
     return q;
   };
   let { data, error } = await query(true);
-  // Sin la migración 0174 la columna no existe. Escribir así no tiene sentido,
+  // Sin la migración 0175 la columna no existe. Escribir así no tiene sentido,
   // pero el dry-run sí sirve ANTES de desplegar para ver qué cambiaría.
   if (error && /location_precision/.test(error.message)) {
     if (!opts.dryRun) {
-      throw new Error("falta la columna properties.location_precision: aplica antes la migración 0174");
+      throw new Error("falta la columna properties.location_precision: aplica antes la migración 0175");
     }
-    log("[pin-backfill] ⚠ sin migración 0174: dry-run sin columna de precisión (se da por vacía)");
+    log("[pin-backfill] ⚠ sin migración 0175: dry-run sin columna de precisión (se da por vacía)");
     ({ data, error } = await query(false));
   }
   if (error) throw new Error(`consulta de fichas: ${error.message}`);

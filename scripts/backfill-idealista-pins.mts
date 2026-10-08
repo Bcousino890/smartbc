@@ -2,7 +2,7 @@
 //
 // Vuelve a leer cada anuncio de Idealista de la agencia "Portales externos" y
 // guarda en `properties` el punto del mapa del propio anuncio + si es exacto o
-// solo de zona (`location_precision`, migración 0174 — tiene que estar
+// solo de zona (`location_precision`, migración 0175 — tiene que estar
 // aplicada). La lógica vive en lib/sync/import-by-link/idealista-pin-backfill.ts;
 // esto solo parsea argumentos.
 //

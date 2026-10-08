@@ -108,7 +108,7 @@ export type Property = {
   latitude?: number | null;
   longitude?: number | null;
   // Qué tan fiable es ese punto (columna `properties.location_precision`,
-  // migración 0174). Ver LocationPrecision. null = sin dato (fichas antiguas).
+  // migración 0175). Ver LocationPrecision. null = sin dato (fichas antiguas).
   locationPrecision?: LocationPrecision | null;
   // Referencia interna BC (BC-0001, BC-0002…). Única por propiedad y
   // distinta del `external_id` del portal de origen. Se muestra al cliente
