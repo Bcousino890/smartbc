@@ -1,10 +1,116 @@
 import "server-only";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { getEffectivePermissions } from "@/lib/db/queries/permissions";
+import { getEffectiveRoleAndPermissions } from "@/lib/db/queries/permissions";
 import { getCountryConfig, isCountry, type Country } from "@/lib/country-config";
 import type { ProfileRow } from "@/lib/db/queries/session";
-import type { PermissionResource, PermissionAction } from "@/lib/permissions";
+import { resolveCountryAccess, type CountryAccessProfile } from "@/lib/auth/country-access";
+import { COUNTRY_HEADER } from "@/lib/db/middleware";
+import {
+  PERMISSION_ACTIONS,
+  PERMISSION_RESOURCES,
+  type EffectivePermissions,
+  type PermissionAction,
+  type PermissionResource,
+} from "@/lib/permissions";
+
+// ─── País de la petición ──────────────────────────────────────────────────────
+//
+// Los permisos dependen del país (rol por país y excepciones por país), pero
+// las rutas /api/admin/** y las server actions no llevan el país en la URL.
+// Hasta 2026-10-05 se evaluaban SIN país: se ignoraba el rol por país y se
+// aplicaban a la vez las excepciones de España y de Chile en un orden
+// cualquiera — el menú decía una cosa y la API hacía otra. Ahora:
+//
+//   1. país explícito (`opts.country`, o el de la URL en `guardPage`);
+//   2. si no, el del panel de la petición: el de la URL para páginas y server
+//      actions (lo marca el middleware), o el de la página que llama para las
+//      rutas /api (Referer `/es/admin/…`, que el navegador manda en toda
+//      petición del mismo origen);
+//   3. si el usuario solo tiene un país, ese;
+//   4. si tiene varios y no se sabe cuál: lo permitido en TODOS (lo más
+//      estricto — nunca más de lo que tendría en cualquiera de ellos).
+//
+// Un país explícito al que el usuario no tiene acceso no concede nada.
+
+/**
+ * País del panel de la petición: el que marca el middleware a partir de la
+ * URL (páginas y server actions viven bajo `/es/admin…` o `/cl/admin…`) o, en
+ * las rutas /api, el de la página que llama (Referer).
+ */
+async function countryFromRequest(): Promise<Country | null> {
+  try {
+    const h = await headers();
+    const marked = h.get(COUNTRY_HEADER);
+    if (isCountry(marked)) return marked;
+    const referer = h.get("referer");
+    if (!referer) return null;
+    const match = /^\/(es|cl)\/admin(?:\/|$)/.exec(new URL(referer).pathname);
+    return match ? (match[1] as Country) : null;
+  } catch {
+    // Fuera de una petición (scripts) o Referer malformado.
+    return null;
+  }
+}
+
+function noPermissions(): EffectivePermissions {
+  const out = {} as EffectivePermissions;
+  for (const r of PERMISSION_RESOURCES) {
+    out[r] = {} as Record<PermissionAction, boolean>;
+    for (const a of PERMISSION_ACTIONS) out[r][a] = false;
+  }
+  return out;
+}
+
+export type RequestPermissions = {
+  permissions: EffectivePermissions;
+  /** País con el que se evaluó, o null si se cruzaron todos sus países. */
+  country: Country | null;
+  /** Rol efectivo de cada país evaluado (uno, o varios si se cruzaron). */
+  effectiveRoles: string[];
+};
+
+/**
+ * Permisos efectivos del usuario para la petición en curso, con el país
+ * resuelto como se explica arriba. Es lo que usan todos los gates de este
+ * archivo; úsalo también cuando una ruta necesite la matriz entera.
+ */
+export async function getRequestPermissions(
+  profile: ProfileRow,
+  explicitCountry?: string | null,
+): Promise<RequestPermissions> {
+  const access = resolveCountryAccess(profile as CountryAccessProfile);
+  const accessible = access.countries.filter(isCountry);
+
+  if (explicitCountry !== undefined && explicitCountry !== null) {
+    if (!isCountry(explicitCountry) || !accessible.includes(explicitCountry)) {
+      return { permissions: noPermissions(), country: null, effectiveRoles: [] };
+    }
+  }
+
+  let country: Country | null =
+    explicitCountry && isCountry(explicitCountry) ? explicitCountry : await countryFromRequest();
+  if (country && !accessible.includes(country)) country = null;
+  if (!country && accessible.length === 1) country = accessible[0];
+
+  if (country) {
+    const r = await getEffectiveRoleAndPermissions(profile.id, profile.role, country);
+    return { permissions: r.permissions, country, effectiveRoles: [r.effectiveRole] };
+  }
+
+  const all = await Promise.all(
+    accessible.map((c) => getEffectiveRoleAndPermissions(profile.id, profile.role, c)),
+  );
+  if (all.length === 0) return { permissions: noPermissions(), country: null, effectiveRoles: [] };
+  const permissions = noPermissions();
+  for (const r of PERMISSION_RESOURCES) {
+    for (const a of PERMISSION_ACTIONS) {
+      permissions[r][a] = all.every((x) => x.permissions[r]?.[a] === true);
+    }
+  }
+  return { permissions, country: null, effectiveRoles: all.map((x) => x.effectiveRole) };
+}
 
 /**
  * Gate de autorización server-side reutilizable para route handlers de
@@ -49,7 +155,7 @@ export async function requirePermission(
     };
   }
 
-  const effective = await getEffectivePermissions(profile.id, profile.role);
+  const { permissions: effective } = await getRequestPermissions(profile);
   const allowed = effective[resource]?.[action] ?? false;
 
   if (!allowed) {
@@ -103,11 +209,7 @@ export async function assertPermission(
     throw new Error("No autenticado");
   }
 
-  const effective = await getEffectivePermissions(
-    profile.id,
-    profile.role,
-    opts?.country,
-  );
+  const { permissions: effective } = await getRequestPermissions(profile, opts?.country);
   const allowed = effective[resource]?.[action] ?? false;
 
   if (!allowed) {
@@ -147,11 +249,7 @@ export async function checkPermission(
     return { ok: false, error: "No autenticado" };
   }
 
-  const effective = await getEffectivePermissions(
-    profile.id,
-    profile.role,
-    opts?.country,
-  );
+  const { permissions: effective } = await getRequestPermissions(profile, opts?.country);
   const allowed = effective[resource]?.[action] ?? false;
 
   if (!allowed) {
@@ -198,11 +296,7 @@ export async function guardPage(
     redirect(prefix);
   }
 
-  const effective = await getEffectivePermissions(
-    profile.id,
-    profile.role,
-    safeCountry,
-  );
+  const { permissions: effective } = await getRequestPermissions(profile, safeCountry);
   if (!(effective[resource]?.view ?? false)) {
     redirect(prefix);
   }
@@ -211,26 +305,16 @@ export async function guardPage(
 }
 
 /**
- * Verifica que un profile puede operar en un país concreto.
- *
- * Regla actual:
- *   role ∈ {owner, admin}  ||  multi_country === true  ||
- *   profile.country === country  ||  profile.countries?.includes(country)
- *
- * `profiles.countries[]` aún no existe en el esquema; se lee de forma
- * defensiva (optional chaining) para no romper si otro agente lo añade.
+ * Verifica que un profile puede operar en un país concreto. Misma regla que el
+ * layout del panel (`resolveCountryAccess`): owner/admin, los dos; el resto,
+ * los de `profiles.countries` (o su país único).
  */
 export function canOperateInCountry(
   profile: ProfileRow,
   country: string,
 ): boolean {
-  if (profile.role === "owner" || profile.role === "admin") return true;
-  if (profile.multi_country === true) return true;
-  if (profile.country === country) return true;
-  // Campo futuro `countries[]`: lectura defensiva.
-  const countries = (profile as { countries?: string[] | null }).countries;
-  if (Array.isArray(countries) && countries.includes(country)) return true;
-  return false;
+  const access = resolveCountryAccess(profile as CountryAccessProfile);
+  return access.isOwnerOrAdmin || access.countries.includes(country);
 }
 
 /**

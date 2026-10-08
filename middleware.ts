@@ -90,7 +90,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // --- Sesión y control de acceso ---
-  const { supabase, response } = await updateSession(request);
+  // El país del panel (/es/admin…, /cl/admin…) viaja en una cabecera interna
+  // hasta las páginas y server actions, para evaluar los permisos con él.
+  const panelCountry = /^\/(es|cl)\/admin(?:\/|$)/.exec(pathname)?.[1] ?? null;
+  const { supabase, response } = await updateSession(request, { country: panelCountry });
 
   if (isPublicRoute(pathname)) {
     return response;

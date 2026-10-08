@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  BookOpen,
   Building2,
   Calendar,
   ClipboardList,
@@ -32,55 +33,40 @@ import { useState } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
 import { useT } from "@/lib/i18n/provider";
 import {
-  canAccess,
-  type EffectivePermissions,
-  type PermissionResource,
-} from "@/lib/permissions";
+  isNavItemInCountry,
+  isNavItemVisible,
+  NAV_ITEMS,
+  type NavIconName,
+} from "@/lib/admin-nav";
+import { canAccess, type EffectivePermissions } from "@/lib/permissions";
 import type { AdminUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type NavItem = {
-  href: string;
-  labelKey: string;
-  icon: React.ElementType;
-  /** Recurso de permisos asociado. Si se define, se comprueba canAccess(role, resource, "view") */
-  permissionResource?: string;
-  /** Si se define, el item solo se muestra para ese país (ej: "cl" o "es") */
-  onlyCountry?: string;
+// La lista del menú y su regla de visibilidad viven en lib/admin-nav.ts,
+// compartidas con la Guía de inicio (/admin/guia) para que las dos enseñen
+// siempre los mismos módulos.
+const ICONS: Record<NavIconName, React.ElementType> = {
+  LayoutDashboard,
+  BookOpen,
+  Building2,
+  Home,
+  User,
+  Send,
+  Globe2,
+  Sparkles,
+  Users,
+  ClipboardList,
+  FileStack,
+  Calendar,
+  MessageSquare,
+  Mail,
+  Radio,
+  BarChart3,
+  UserCog,
+  Stethoscope,
+  Plug,
+  Settings,
 };
-
-const NAV_ITEMS: NavItem[] = [
-  { href: "/admin",                    labelKey: "admin.nav.dashboard",          icon: LayoutDashboard },
-  { href: "/admin/agencias",           labelKey: "admin.nav.agencias",           icon: Building2,     permissionResource: "agencias",     onlyCountry: "es" },
-  { href: "/admin/propiedades",        labelKey: "admin.nav.propiedades",        icon: Home,          permissionResource: "properties"    },
-  // Particulares = anuncios scrapeados de Idealista → solo tiene sentido en España.
-  // Estado del scraper y sus frecuencias vive plegado dentro de esta misma
-  // página ("Configuración scraper Idealista"), no como entrada aparte.
-  { href: "/admin/particulares",       labelKey: "admin.nav.particulares",       icon: User,          permissionResource: "particulares", onlyCountry: "es" },
-  // Antes apuntaba a "properties": el toggle "Publicación" del panel de
-  // permisos no controlaba este enlace ni coincidía con el recurso que ya
-  // usan las rutas /api/admin/publicacion/* (requirePermission("publicacion", ...)).
-  { href: "/admin/publicacion",        labelKey: "admin.nav.publicacion",        icon: Send,          permissionResource: "publicacion"   },
-  { href: "/admin/captaciones",       labelKey: "admin.nav.captaciones",       icon: Globe2,        permissionResource: "captaciones",  onlyCountry: "cl" },
-  // Idealista es la integración de publicación con ese portal → mismo
-  // recurso que /admin/publicacion (antes "properties", desalineado).
-  { href: "/admin/idealista",          labelKey: "admin.nav.idealista",          icon: Sparkles,      permissionResource: "publicacion",  onlyCountry: "es" },
-  { href: "/admin/clientes",           labelKey: "admin.nav.clientes",           icon: Users,         permissionResource: "clientes"      },
-  { href: "/admin/solicitudes",        labelKey: "admin.nav.solicitudes",        icon: ClipboardList, permissionResource: "solicitudes"   },
-  { href: "/admin/solicitudes-documentacion", labelKey: "admin.nav.solicitudes_doc", icon: FileStack, permissionResource: "solicitudes"   },
-  { href: "/admin/calendario",         labelKey: "admin.nav.calendario",         icon: Calendar,      permissionResource: "calendario"    },
-  { href: "/admin/mensajes",           labelKey: "admin.nav.mensajes",           icon: MessageSquare, permissionResource: "mensajes"      },
-  // Sin recurso de permisos a propósito: es el buzón PERSONAL de cada
-  // usuario del staff (@bcousinoprop.com), no un módulo compartido.
-  { href: "/admin/correo",             labelKey: "admin.nav.correo",             icon: Mail                                                },
-  { href: "/admin/sindicacion",        labelKey: "admin.nav.sindicacion",        icon: Radio,         permissionResource: "sindicacion",  onlyCountry: "es" },
-  { href: "/admin/reportes",           labelKey: "admin.nav.reportes",           icon: BarChart3,     permissionResource: "reportes"      },
-  { href: "/admin/usuarios",           labelKey: "admin.nav.usuarios",           icon: UserCog,       permissionResource: "usuarios"      },
-  { href: "/admin/diagnostico",        labelKey: "admin.nav.diagnostico",        icon: Stethoscope,   permissionResource: "diagnostico",  onlyCountry: "es" },
-  { href: "/admin/demo-setup",         labelKey: "admin.nav.demo_setup",         icon: Sparkles,      permissionResource: "configuracion" },
-  { href: "/admin/integraciones",      labelKey: "admin.nav.integraciones",      icon: Plug,          permissionResource: "configuracion" },
-  { href: "/admin/configuracion",      labelKey: "admin.nav.configuracion",      icon: Settings,      permissionResource: "configuracion" },
-];
 
 interface AdminSidebarProps {
   user: AdminUser;
@@ -114,7 +100,7 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
   const prefix = country === "cl" ? "/cl/admin" : "/es/admin";
   const navItems = NAV_ITEMS.map(item => ({
     ...item,
-    href: item.href.replace("/admin", prefix),
+    navHref: item.href.replace("/admin", prefix),
   }));
 
   function toggleMobile() {
@@ -130,14 +116,11 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
   // Filtrar items de nav según permisos y país. Si llegan los permisos efectivos
   // (rol + excepciones por usuario) usamos esos; si no, defaults del rol.
-  const visibleItems = navItems.filter(({ permissionResource, onlyCountry }) => {
-    if (onlyCountry && onlyCountry !== country) return false;
-    if (!permissionResource) return true;
-    if (permissions) {
-      return permissions[permissionResource as PermissionResource]?.view ?? true;
-    }
-    if (!currentRole) return true;
-    return canAccess(currentRole, permissionResource, "view");
+  const visibleItems = navItems.filter((item) => {
+    if (permissions) return isNavItemVisible(item, permissions, country);
+    if (!isNavItemInCountry(item, country)) return false;
+    if (!item.permissionResource || !currentRole) return true;
+    return canAccess(currentRole, item.permissionResource, "view");
   });
 
   return (
@@ -221,7 +204,8 @@ export function AdminSidebar({ user, currentRole, permissions, pendingVisits = 0
 
         <nav className="mt-3 flex-1 overflow-y-auto px-3">
           <ul className="space-y-1">
-            {visibleItems.map(({ href, labelKey, icon: Icon }) => {
+            {visibleItems.map(({ navHref: href, labelKey, icon }) => {
+              const Icon = ICONS[icon];
               const dashboardHref = `${prefix}`;
               const active =
                 pathname === href ||

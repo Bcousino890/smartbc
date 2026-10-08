@@ -1,11 +1,22 @@
 import "server-only";
 import { createAdminClient } from "../admin";
 import { getCurrentProfile } from "./session";
+import { getRequestPermissions } from "@/lib/auth/guard";
 import {
   getViewRestriction,
   type PermissionResource,
   type ViewRestriction,
 } from "@/lib/permissions";
+
+/** De más a menos restrictiva. */
+const RESTRICTION_ORDER: ViewRestriction[] = ["none", "assigned_only", "own_only", "team", "all"];
+
+function strictest(restrictions: ViewRestriction[]): ViewRestriction {
+  return restrictions.reduce<ViewRestriction>(
+    (acc, r) => (RESTRICTION_ORDER.indexOf(r) < RESTRICTION_ORDER.indexOf(acc) ? r : acc),
+    "all",
+  );
+}
 
 /**
  * Scope de datos resuelto para el usuario actual sobre un recurso concreto.
@@ -38,9 +49,20 @@ export async function resolveViewScope(
     profile = null;
   }
   const role = profile?.role ?? null;
-  const restriction: ViewRestriction = role
-    ? getViewRestriction(role, resource)
-    : "all";
+  if (!profile || !role) return { restriction: "all", userId: null, role };
+
+  // Con el ROL EFECTIVO del país de la petición (rol por país), no con el
+  // global: un usuario senior en Chile y junior en España ve su cartera según
+  // el país en el que está. Si no se sabe el país y sus roles difieren, manda
+  // el más restrictivo.
+  let roles: string[] = [role];
+  try {
+    const { effectiveRoles } = await getRequestPermissions(profile);
+    if (effectiveRoles.length > 0) roles = effectiveRoles;
+  } catch {
+    // Sin poder resolver el país: rol global (comportamiento anterior).
+  }
+  const restriction = strictest(roles.map((r) => getViewRestriction(r, resource)));
   return { restriction, userId: profile?.id ?? null, role };
 }
 

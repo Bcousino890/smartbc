@@ -1,8 +1,24 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { getCurrentProfile } from "@/lib/db/queries/session";
+import { getCountryRolesMap } from "@/lib/db/queries/permissions";
 import { logPermissionEvent } from "@/lib/db/queries/audit";
-import { STAFF_ROLES } from "@/lib/permissions";
+import {
+  countOwners,
+  customRoleExists,
+  loadTargetProfile,
+  requireUserAdmin,
+} from "@/lib/auth/user-admin";
+import {
+  canAssignCustomRole,
+  canAssignRole,
+  canChangeOwnAccess,
+  canManageUser,
+  COUNTRY_ASSIGNABLE_ROLES,
+  keepsAnOwner,
+} from "@/lib/auth/user-admin-rules";
+
+/** Mínimo de caracteres de una contraseña puesta por un administrador. */
+const MIN_PASSWORD_LENGTH = 8;
 
 export async function PATCH(req: Request) {
   let body: {
@@ -14,7 +30,7 @@ export async function PATCH(req: Request) {
     email?: string;
     // null = borrar el teléfono (el formulario lo manda vacío a propósito).
     phone?: string | null;
-    role?: "owner" | "admin" | "advisor" | "agent_junior" | "agent_senior" | "agent_admin" | "client";
+    role?: string;
     password?: string;
     country?: "es" | "cl";
     multiCountry?: boolean;
@@ -57,13 +73,81 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "userId requerido" }, { status: 400 });
   }
 
-  const currentProfile = await getCurrentProfile();
-  if (!currentProfile) {
-    return Response.json({ error: "No autenticado" }, { status: 401 });
+  // Permiso efectivo usuarios.edit (antes: lista fija owner/admin/agent_admin,
+  // sin más reglas — un agent_admin podía hacerse propietario a sí mismo o
+  // cambiar el correo y la contraseña del propietario).
+  const gate = await requireUserAdmin("edit");
+  if (!gate.ok) return gate.response;
+  const currentProfile = gate.actor;
+
+  const target = await loadTargetProfile(userId);
+  if (!target) {
+    return Response.json({ error: "Usuario no encontrado" }, { status: 404 });
+  }
+  const forbid = (error: string) => Response.json({ error }, { status: 403 });
+
+  // A quién puede tocar (propietario solo otro propietario; admin solo
+  // propietario/admin). Aplica a CUALQUIER cambio: nombre, correo, contraseña…
+  const manage = canManageUser({ id: currentProfile.id, role: currentProfile.role }, target);
+  if (!manage.ok) return forbid(manage.error);
+
+  const isSelf = currentProfile.id === userId;
+  // El formulario de edición manda SIEMPRE rol, países y rol por país, aunque
+  // no se hayan tocado: se compara con lo guardado para saber qué cambia de
+  // verdad (si no, nadie podría editar ni su propio nombre).
+  const roleChanges = role !== undefined && role !== target.role;
+  const storedCountries =
+    target.countries && target.countries.length > 0 ? target.countries : [target.country ?? "es"];
+  const sameSet = (a: string[], b: string[]) =>
+    a.length === b.length && [...a].sort().join() === [...b].sort().join();
+  const countriesChange =
+    countries !== undefined &&
+    (!Array.isArray(countries) || !sameSet(Array.from(new Set(countries)), storedCountries));
+  const multiCountryChange =
+    countries === undefined && multiCountry !== undefined && Boolean(multiCountry) !== Boolean(target.multi_country);
+  let countryRolesChange = false;
+  if (countryRoles !== undefined) {
+    const map: Record<string, Record<string, string>> = await getCountryRolesMap([userId]).catch(() => ({}));
+    const current = map[userId] ?? {};
+    countryRolesChange =
+      !countryRoles ||
+      typeof countryRoles !== "object" ||
+      Object.entries(countryRoles).some(([c, r]) => (current[c] ?? null) !== (r || null));
+  }
+  const customRoleChange =
+    customRoleId !== undefined && (customRoleId || null) !== (target.custom_role_id ?? null);
+  const accessChanges =
+    roleChanges || countriesChange || multiCountryChange || countryRolesChange || customRoleChange;
+  // Nadie cambia su propio acceso (rol, países, rol por país, rol personalizado).
+  if (isSelf && accessChanges) {
+    const own = canChangeOwnAccess(currentProfile.id, userId);
+    if (!own.ok) return forbid(own.error);
   }
 
-  if (!["owner", "admin", "agent_admin"].includes(currentProfile.role)) {
-    return Response.json({ error: "Solo owner/admin pueden editar usuarios" }, { status: 403 });
+  if (roleChanges) {
+    const assign = canAssignRole(currentProfile.role, role);
+    if (!assign.ok) {
+      return Response.json({ error: assign.error }, { status: assign.error.startsWith("Rol inválido") ? 400 : 403 });
+    }
+    if (roleChanges && target.role === "owner") {
+      const keep = keepsAnOwner({ targetCurrentRole: target.role, nextRole: role, ownerCount: await countOwners() });
+      if (!keep.ok) return forbid(keep.error);
+    }
+  }
+
+  if (customRoleChange) {
+    const custom = canAssignCustomRole(currentProfile.role);
+    if (!custom.ok) return forbid(custom.error);
+    if (customRoleId && !(await customRoleExists(customRoleId))) {
+      return Response.json({ error: "Rol personalizado no encontrado" }, { status: 400 });
+    }
+  }
+
+  if (password !== undefined && password !== "" && (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH)) {
+    return Response.json(
+      { error: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres` },
+      { status: 400 },
+    );
   }
 
   const supabase = createAdminClient();
@@ -128,14 +212,18 @@ export async function PATCH(req: Request) {
     hasCustomRoleId = true;
   }
 
-  // Validación de countryRoles: solo países válidos y roles de staff
-  // conocidos (no tiene sentido asignar "client"/"viewer" como rol de país).
+  // Validación de countryRoles: solo países válidos y roles de staff que no
+  // sean propietario/admin (esos son globales: tienen los dos países y acceso
+  // total; por país permitirían colarse un rol alto sin pasar por las reglas).
   if (countryRoles !== undefined) {
+    if (!countryRoles || typeof countryRoles !== "object" || Array.isArray(countryRoles)) {
+      return Response.json({ error: "countryRoles inválido" }, { status: 400 });
+    }
     for (const [c, r] of Object.entries(countryRoles)) {
       if (c !== "es" && c !== "cl") {
         return Response.json({ error: `País inválido en countryRoles: ${c}` }, { status: 400 });
       }
-      if (r !== null && !STAFF_ROLES.includes(r as (typeof STAFF_ROLES)[number])) {
+      if (r !== null && !(COUNTRY_ASSIGNABLE_ROLES as readonly string[]).includes(r)) {
         return Response.json({ error: `Rol inválido en countryRoles: ${r}` }, { status: 400 });
       }
     }
@@ -202,32 +290,58 @@ export async function PATCH(req: Request) {
     // la tabla aún no existe (migración 0090 pendiente), se ignora en
     // silencio: el resto de la actualización ya se aplicó arriba.
     if (countryRoles !== undefined) {
+      const failed: string[] = [];
       for (const [c, r] of Object.entries(countryRoles)) {
-        try {
-          if (r === null) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
-              .from("profiles_country_roles")
-              .delete()
-              .eq("user_id", userId)
-              .eq("country", c);
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
-              .from("profiles_country_roles")
-              .upsert(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const table = (supabase as any).from("profiles_country_roles");
+        const { error: crError } =
+          r === null
+            ? await table.delete().eq("user_id", userId).eq("country", c)
+            : await table.upsert(
                 { user_id: userId, country: c, role: r, created_by: currentProfile.id },
                 { onConflict: "user_id,country" },
               );
-          }
-        } catch {
-          // profiles_country_roles aún no existe: se ignora, sin romper el resto.
-        }
+        // 42P01 = la tabla aún no existe (migración 0090 sin aplicar): se
+        // ignora como antes. Cualquier otro error se avisa: antes se tragaba
+        // y el panel decía "guardado" con el rol por país sin cambiar.
+        if (crError && crError.code !== "42P01") failed.push(`${c}: ${crError.message}`);
+      }
+      if (failed.length > 0) {
+        return Response.json(
+          { error: `Se guardó el resto, pero no el rol por país (${failed.join("; ")})` },
+          { status: 500 },
+        );
       }
     }
 
-    // ── Auditoría (best-effort) de cambios de rol y país ──────────────────────
+    // ── Auditoría (best-effort) de cambios de acceso ──────────────────────────
     // Solo registramos cuando el valor realmente cambia respecto al snapshot.
+    if (nextEmail !== undefined && prevProfile && nextEmail !== (prevProfile.email ?? "").toLowerCase()) {
+      await logPermissionEvent({
+        actorId: currentProfile.id,
+        targetUserId: userId,
+        eventType: "email_changed",
+        oldValue: { email: prevProfile.email ?? null },
+        newValue: { email: nextEmail },
+      });
+    }
+    if (countryRolesChange) {
+      await logPermissionEvent({
+        actorId: currentProfile.id,
+        targetUserId: userId,
+        eventType: "country_roles_changed",
+        newValue: { countryRoles },
+      });
+    }
+    if (customRoleChange) {
+      await logPermissionEvent({
+        actorId: currentProfile.id,
+        targetUserId: userId,
+        eventType: "custom_role_changed",
+        oldValue: { customRoleId: target.custom_role_id ?? null },
+        newValue: { customRoleId: customRoleId || null },
+      });
+    }
     if (role !== undefined && prevProfile && role !== prevProfile.role) {
       await logPermissionEvent({
         actorId: currentProfile.id,
@@ -279,6 +393,11 @@ export async function PATCH(req: Request) {
     if (error) {
       return Response.json({ error: `Error cambiando contraseña: ${error.message}` }, { status: 500 });
     }
+    await logPermissionEvent({
+      actorId: currentProfile.id,
+      targetUserId: userId,
+      eventType: "password_changed",
+    });
   }
 
   return Response.json({ ok: true });

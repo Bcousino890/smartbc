@@ -1054,7 +1054,9 @@ export function UsuariosClient({ users, currentUserRole, country }: UsuariosClie
       {permissionsUser && (
         <PermissionsDrawer
           user={permissionsUser}
-          canEdit={currentUserRole === "admin" || currentUserRole === "owner"}
+          // El servidor decide si puede editar y hasta dónde (usuarios.edit +
+          // reglas de lib/auth/user-admin-rules.ts) y se lo dice al panel.
+          canEdit
           onClose={() => setPermissionsUser(null)}
           onSaved={handleSuccess}
         />
