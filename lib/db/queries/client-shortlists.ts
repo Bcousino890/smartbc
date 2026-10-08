@@ -396,6 +396,38 @@ export async function getClientShortlists(
   });
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Token público ACTIVO de una selección, buscado por su id.
+ *
+ * Existe para `/s/preview/[id]` cuando lo abre alguien sin sesión de equipo:
+ * el equipo copia la URL de la previsualización desde la barra del navegador
+ * y se la manda al cliente, que se encontraba con el 404 genérico. Con esto la
+ * previsualización le lleva a su enlace real (`/s/{token}`).
+ *
+ * Caducado, revocado o inexistente devuelven lo mismo — null — y la página
+ * enseña la vista de "no disponible", igual que `/s/{token}`. Conocer el id
+ * no da más de lo que da el token: el UUID es más difícil de adivinar que el
+ * token y la proyección pública no lo expone.
+ */
+export async function getActiveShortlistTokenById(
+  shortlistId: string,
+): Promise<string | null> {
+  if (!UUID_RE.test(shortlistId)) return null;
+
+  const { data } = await db()
+    .from("client_shortlists")
+    .select("token, expires_at, revoked_at")
+    .eq("id", shortlistId)
+    .maybeSingle();
+
+  if (!data?.token) return null;
+  if (linkStateOf(data) !== "active") return null;
+  return data.token as string;
+}
+
 /** Previsualización del agente: lo mismo que verá el cliente, sin instrumentar. */
 export async function getShortlistPreview(
   shortlistId: string,

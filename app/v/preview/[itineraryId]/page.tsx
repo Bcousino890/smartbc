@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { getPreviewCollection } from "@/lib/db/queries/viewing-collections";
+import { redirect } from "next/navigation";
+import {
+  getActiveCollectionTokenByItineraryId,
+  getPreviewCollection,
+} from "@/lib/db/queries/viewing-collections";
+import { CollectionUnavailableView } from "../../[token]/collection-unavailable-view";
 import { ViewingCollectionView } from "../../[token]/viewing-collection-view";
 
 /**
@@ -15,6 +19,12 @@ import { ViewingCollectionView } from "../../[token]/viewing-collection-view";
  * viewing_collections.view y que el cliente esté dentro del scope del agente.
  * `middleware.ts` deja pasar /v porque la ruta con token debe ser anónima, así
  * que la autorización de esta ruta vive entera en la query.
+ *
+ * Si la abre alguien sin sesión de equipo (o sin permiso) — típicamente el
+ * cliente, al que le han mandado esta URL copiada de la barra del navegador —
+ * no ve el 404 genérico: si el book está publicado y tiene un enlace vigente
+ * se le redirige a `/v/{token}`; si no (borrador, revocado, caducado), ve la
+ * misma vista de "no disponible" que `/v/{token}`.
  */
 export const dynamic = "force-dynamic";
 
@@ -32,7 +42,12 @@ export default async function ViewingCollectionPreviewPage({
 }) {
   const { itineraryId } = await params;
   const result = await getPreviewCollection(itineraryId);
-  if (!result.ok) notFound();
+  if (!result.ok) {
+    // `redirect` lanza: fuera de cualquier try/catch a propósito.
+    const token = await getActiveCollectionTokenByItineraryId(itineraryId);
+    if (token) redirect(`/v/${token}`);
+    return <CollectionUnavailableView />;
+  }
 
   return (
     <>
