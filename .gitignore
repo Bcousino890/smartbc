@@ -55,3 +55,8 @@ next-env.d.ts
 # ejecutar logica de gate obsoleta contra produccion: nunca se versionan.
 scripts/*.bundle.mjs
 scripts/*.bundle.cjs
+
+# Ficheros que la app escribe en producción (fotos subidas, etc.). El VPS
+# commitea solo lo que se edita en /opt/smartbc-app (ver DEPLOY.md): sin esta
+# línea, las subidas de los usuarios acabarían en GitHub.
+/public/uploads/
