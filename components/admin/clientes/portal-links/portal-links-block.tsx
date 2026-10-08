@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownWideNarrow,
+  BookOpen,
   Building2,
   Link2,
   Loader2,
@@ -27,6 +28,7 @@ import {
 import {
   assignPortalLinks,
   bulkCreatePropertiesFromLinks,
+  createBookFromPortalLinks,
   reorderPortalLinks,
   type BulkImportOutcome,
 } from "@/app/[country]/(admin)/admin/clientes/portal-links-actions";
@@ -189,9 +191,13 @@ export function PortalLinksBlock({
     });
 
   /**
-   * Manda los marcados al cliente para que los ordene, SIN crearles ficha
-   * antes: media lista se va a caer en la primera llamada y no tiene sentido
-   * importar quince anuncios para eso. La selección privada los acepta así.
+   * Manda los marcados al cliente para que los ordene.
+   *
+   * Antes de crear la selección se crea la FICHA de los que todavía no la
+   * tienen (2026-10-08): leyendo solo el anuncio, el cliente veía una foto y
+   * nada más, y tenía que decidir a ciegas. Con la ficha ve todas las fotos,
+   * las características y la descripción. Lo que no se pueda leer del portal
+   * se manda igual, con lo que trajo el anuncio.
    *
    * Crea SIEMPRE una selección nueva, aunque el cliente ya tenga otra abierta.
    * Añadirlos a la anterior mezclaría los anuncios de hoy con lo que se le
@@ -201,11 +207,14 @@ export function PortalLinksBlock({
    * El título lleva la fecha para poder distinguirlas de un vistazo en la
    * ficha. Es interno: el cliente no lo ve.
    */
-  const sendToClient = () => {
+  const sendToClient = async () => {
     setError(null);
-    startTransition(async () => {
+    const ids = [...checked];
+    await importMissing(ids, "Mandando al cliente");
+    setBusyLabel("Mandando al cliente…");
+    try {
       const res = await createClientShortlist(clientId, {
-        portalLinkIds: [...checked],
+        portalLinkIds: ids,
         language: sendLanguage,
         title: `Anuncios · ${new Date().toLocaleDateString("es-ES", {
           day: "2-digit",
@@ -217,8 +226,51 @@ export function PortalLinksBlock({
         return;
       }
       setChecked(new Set());
+    } finally {
+      setBusyLabel(null);
       router.refresh();
-    });
+    }
+  };
+
+  /**
+   * "Crear book con los seleccionados": un book NUEVO (borrador) con los
+   * marcados, en el orden del panel y sin los descartados. Primero se crea la
+   * ficha de los que no la tienen —una parada del book exige ficha—. Al
+   * terminar se va a la pestaña Visitas, donde está el book.
+   */
+  const createBook = async () => {
+    setError(null);
+    const ids = ordered
+      .filter((l) => checked.has(l.id) && l.status !== "discarded")
+      .map((l) => l.id);
+    if (ids.length === 0) {
+      setError("Los marcados están descartados: no hay nada que meter en el book.");
+      return;
+    }
+    await importMissing(ids, "Creando el book");
+    setBusyLabel("Creando el book…");
+    try {
+      const res = await createBookFromPortalLinks(clientId, ids, sendLanguage);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const fuera: string[] = [];
+      if (res.skippedPending > 0) {
+        fuera.push(
+          `${res.skippedPending} no se pudieron leer del portal y siguen sin ficha (créalas a mano desde su enlace)`,
+        );
+      }
+      if (res.skippedArchived > 0) fuera.push(`${res.skippedArchived} ya no están disponibles`);
+      if (fuera.length > 0) {
+        alert(`Book creado con ${res.stops} pisos. No han entrado: ${fuera.join(" y ")}.`);
+      }
+      setChecked(new Set());
+      router.push(`/${country}/admin/clientes/${clientId}?tab=viewings`);
+    } finally {
+      setBusyLabel(null);
+      router.refresh();
+    }
   };
 
   const assign = () => {
@@ -301,52 +353,75 @@ export function PortalLinksBlock({
   };
 
   /**
-   * "Crear fichas de los marcados" — el botón de una sola pulsada. Va uno por
-   * uno en el servidor (misma extracción, misma inserción que el importador
-   * de siempre) para no tener que abrir 15 formularios a mano. Puede tardar:
-   * son 15 descargas reales de Idealista, una detrás de otra a propósito.
+   * Crea la ficha de los anuncios que todavía no la tienen. Lo usan "Crear
+   * fichas", "Mandar al cliente" y "Crear book". Va uno por uno en el servidor
+   * (misma extracción, misma inserción que el importador de siempre): son
+   * descargas reales del portal, una detrás de otra a propósito.
+   *
+   * Los que ya tienen ficha o están descartados no se vuelven a pedir: antes
+   * se mandaban igual y volvían como "pendientes", que confundía.
    */
-  const [bulkCreating, setBulkCreating] = useState(false);
-  const [bulkDone, setBulkDone] = useState(0);
-  const [bulkTotal, setBulkTotal] = useState(0);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [bulkResults, setBulkResults] = useState<BulkImportOutcome[] | null>(null);
-  const bulkImport = async () => {
-    setError(null);
+  const importMissing = async (ids: string[], label: string) => {
     setBulkResults(null);
-    const ids = [...checked];
-    setBulkTotal(ids.length);
-    setBulkDone(0);
-    setBulkCreating(true);
+    const byId = new Map(links.map((l) => [l.id, l]));
+    const todo = ids.filter((id) => {
+      const l = byId.get(id);
+      return l && l.status !== "converted" && !l.property_id && l.status !== "discarded";
+    });
+    if (todo.length === 0) return;
 
     // Sin tope de pisos: se manda en tandas pequeñas, una petición corta por
     // tanda. Una sola petición con 40 descargas de Idealista tardaba minutos y
     // se caía por timeout, perdiendo todo el lote.
     const BATCH = 3;
     const all: BulkImportOutcome[] = [];
-    try {
-      for (let i = 0; i < ids.length; i += BATCH) {
-        const batch = ids.slice(i, i + BATCH);
-        let res: Awaited<ReturnType<typeof bulkCreatePropertiesFromLinks>>;
-        try {
-          res = await bulkCreatePropertiesFromLinks(clientId, batch);
-        } catch {
-          res = { ok: false, error: "se cortó la conexión con el servidor" };
-        }
-        if (res.ok) {
-          all.push(...res.results);
-        } else {
-          // Una tanda fallida no tumba el resto: se anota y se sigue.
-          all.push(...batch.map((linkId) => ({ linkId, ok: false, detail: res.error })));
-        }
-        setBulkDone(Math.min(i + BATCH, ids.length));
-        setBulkResults([...all]);
+    setBusyLabel(`${label}: creando fichas… (0/${todo.length})`);
+    for (let i = 0; i < todo.length; i += BATCH) {
+      const batch = todo.slice(i, i + BATCH);
+      let res: Awaited<ReturnType<typeof bulkCreatePropertiesFromLinks>>;
+      try {
+        res = await bulkCreatePropertiesFromLinks(clientId, batch);
+      } catch {
+        res = { ok: false, error: "se cortó la conexión con el servidor" };
       }
-    } finally {
-      setBulkCreating(false);
+      if (res.ok) {
+        all.push(...res.results);
+      } else {
+        // Una tanda fallida no tumba el resto: se anota y se sigue.
+        all.push(...batch.map((linkId) => ({ linkId, ok: false, detail: res.error })));
+      }
+      setBusyLabel(
+        `${label}: creando fichas… (${Math.min(i + BATCH, todo.length)}/${todo.length})`,
+      );
+      setBulkResults([...all]);
+    }
+  };
+
+  const bulkImport = async () => {
+    setError(null);
+    try {
+      await importMissing([...checked], "Fichas");
       setChecked(new Set());
+    } finally {
+      setBusyLabel(null);
       router.refresh();
     }
   };
+
+  const busy = busyLabel !== null;
+  const missingCount = useMemo(
+    () =>
+      links.filter(
+        (l) =>
+          checked.has(l.id) &&
+          l.status !== "converted" &&
+          !l.property_id &&
+          l.status !== "discarded",
+      ).length,
+    [links, checked],
+  );
 
   const filters: Array<[Filter, string, number]> = [
     ["all", "Todos", counts.all],
@@ -564,19 +639,27 @@ export function PortalLinksBlock({
                   {canCreate && (
                     <button
                       type="button"
-                      disabled={bulkCreating}
+                      disabled={busy || missingCount === 0}
                       onClick={bulkImport}
-                      title="Crea la ficha de cada anuncio marcado leyendo su página completa en el portal (título, precio, todas las fotos) y lo vincula a la selección del cliente. Uno detrás de otro; con muchos puede tardar."
+                      title="Crea la ficha de cada anuncio marcado que todavía no la tiene, leyendo su página completa en el portal (título, precio, todas las fotos, descripción), y la vincula a la selección del cliente."
                       className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                     >
-                      {bulkCreating ? (
-                        <Loader2 size={11} className="animate-spin" />
-                      ) : (
-                        <Building2 size={11} strokeWidth={1.75} />
-                      )}
-                      {bulkCreating
-                        ? `Creando fichas… (${bulkDone}/${bulkTotal})`
-                        : `Crear ${checked.size} ficha${checked.size > 1 ? "s" : ""}`}
+                      <Building2 size={11} strokeWidth={1.75} />
+                      {missingCount === 0
+                        ? "Ya tienen ficha"
+                        : `Crear ${missingCount} ficha${missingCount > 1 ? "s" : ""}`}
+                    </button>
+                  )}
+                  {canCreate && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={createBook}
+                      title="Crea un book nuevo (borrador) con los marcados, en el orden del panel y sin los descartados. Antes crea la ficha de los que no la tienen."
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 font-sans text-xs font-medium text-cream-50 transition hover:bg-ink-soft disabled:opacity-50"
+                    >
+                      <BookOpen size={11} strokeWidth={1.75} className="text-gold" />
+                      Crear book con {checked.size === 1 ? "el seleccionado" : `los ${checked.size}`}
                     </button>
                   )}
                   {canCreate && (
@@ -595,16 +678,12 @@ export function PortalLinksBlock({
                       </select>
                       <button
                         type="button"
-                        disabled={pending}
+                        disabled={pending || busy}
                         onClick={sendToClient}
-                        title="Crea una selección privada NUEVA con estos anuncios para que el cliente los ordene. No hace falta crearles ficha antes."
+                        title="Crea una selección privada NUEVA con estos anuncios para que el cliente los ordene. Antes crea la ficha de los que no la tienen, para que vea todas las fotos y la descripción."
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                       >
-                        {pending ? (
-                          <Loader2 size={11} className="animate-spin" />
-                        ) : (
-                          <Send size={11} strokeWidth={1.75} />
-                        )}
+                        <Send size={11} strokeWidth={1.75} />
                         Mandar al cliente
                       </button>
                     </>
@@ -617,6 +696,14 @@ export function PortalLinksBlock({
                     Quitar marcas
                   </button>
                 </div>
+              )}
+
+              {busyLabel && (
+                <p className="mt-3 flex items-center gap-2 rounded-xl border border-gold/25 bg-gold/5 px-4 py-2.5 font-sans text-xs text-ink/75">
+                  <Loader2 size={12} className="animate-spin text-gold-dark" />
+                  {busyLabel}
+                  <span className="text-ink/40">· no cierres esta pestaña</span>
+                </p>
               )}
 
               {andreaNotice && (

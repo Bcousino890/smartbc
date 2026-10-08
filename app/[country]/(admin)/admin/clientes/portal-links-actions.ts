@@ -21,6 +21,7 @@ import { checkPermission } from "@/lib/auth/guard";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
 import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 import { syncDiscardedLink } from "@/lib/portal-links/discard-sync";
+import { createItinerary } from "./viewing-collections-actions";
 import {
   insertPortalLinks,
   linkText,
@@ -600,4 +601,113 @@ export async function bulkCreatePropertiesFromLinks(
 
   revalidateClient(clientId);
   return { ok: true, results };
+}
+
+// ============================================================================
+// "Crear book con los seleccionados"
+// ============================================================================
+// Un book NUEVO (borrador) con los anuncios marcados, en el orden en que llegan
+// —el del panel— y sin los descartados. El panel crea antes la ficha de los
+// que no la tienen; los que aun así sigan sin ficha (el portal no se dejó leer)
+// no pueden ser parada y se devuelven contados para avisar.
+//
+// Se reutiliza createItinerary: mismas invariantes y permisos que crear un
+// book a mano.
+// ============================================================================
+
+export async function createBookFromPortalLinks(
+  clientId: string,
+  linkIds: string[],
+  language?: string,
+): Promise<
+  LinkActionResult<{
+    itineraryId: string;
+    stops: number;
+    skippedPending: number;
+    skippedArchived: number;
+  }>
+> {
+  const g = await gate("create", clientId);
+  if (!g.ok) return g;
+  if (!Array.isArray(linkIds) || linkIds.length === 0) {
+    return { ok: false, error: "No has marcado ningún anuncio." };
+  }
+  if (linkIds.length > 500) return { ok: false, error: "Demasiados anuncios de una vez." };
+
+  // Solo enlaces de ESTE cliente, aunque lleguen ids de otro.
+  const { data: rows } = await db()
+    .from("client_portal_links")
+    .select("id, status, property_id, country")
+    .eq("client_id", clientId)
+    .in("id", linkIds);
+  const byId = new Map(
+    ((rows ?? []) as Array<{ id: string; status: string; property_id: string | null; country: string }>).map(
+      (r) => [r.id, r],
+    ),
+  );
+  const wanted = linkIds
+    .map((id) => byId.get(id))
+    .filter((r): r is NonNullable<typeof r> => Boolean(r) && r!.status !== "discarded");
+
+  const skippedPending = wanted.filter((r) => !r.property_id).length;
+  const withProperty = [...new Set(wanted.filter((r) => r.property_id).map((r) => r.property_id!))];
+  if (withProperty.length === 0) {
+    return {
+      ok: false,
+      error: "Ninguno de los marcados tiene ficha todavía: no se pudieron leer del portal.",
+    };
+  }
+
+  const { data: props } = await db()
+    .from("properties")
+    .select("id, archived_at, status, country")
+    .in("id", withProperty);
+  const usable = new Map(
+    ((props ?? []) as Array<{ id: string; archived_at: string | null; status: string; country: string }>)
+      .filter((p) => !p.archived_at && p.status !== "archived")
+      .map((p) => [p.id, p]),
+  );
+  const ordered = withProperty.filter((id) => usable.has(id));
+  const skippedArchived = withProperty.length - ordered.length;
+  if (ordered.length === 0) return { ok: false, error: "Ninguno de los marcados sigue disponible." };
+
+  // Cada parada necesita su fila en la selección del cliente (y no descartada).
+  await db()
+    .from("client_property_selections")
+    .upsert(
+      ordered.map((propertyId) => ({
+        client_id: clientId,
+        property_id: propertyId,
+        source: "manual",
+        added_by: g.userId,
+        country: usable.get(propertyId)!.country === "cl" ? "cl" : "es",
+      })),
+      { onConflict: "client_id,property_id", ignoreDuplicates: true },
+    );
+  const { data: sel } = await db()
+    .from("client_property_selections")
+    .update({ status: "selected" })
+    .eq("client_id", clientId)
+    .in("property_id", ordered)
+    .select("id, property_id");
+  const selByProperty = new Map(
+    ((sel ?? []) as Array<{ id: string; property_id: string }>).map((s) => [s.property_id, s.id]),
+  );
+  const selectionIds = ordered.map((id) => selByProperty.get(id)).filter(Boolean) as string[];
+
+  const res = await createItinerary(clientId, {
+    title: `Book · ${new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}`,
+    language: language ?? "es",
+    selectionIds,
+  });
+  if (!res.ok) return res;
+
+  revalidateClient(clientId);
+  return {
+    ok: true,
+    itineraryId: res.itineraryId,
+    stops: selectionIds.length,
+    skippedPending,
+    skippedArchived,
+  };
 }
