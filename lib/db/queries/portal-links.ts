@@ -253,14 +253,15 @@ export async function getAssignableStaff(): Promise<StaffRef[]> {
   try {
     const { data } = await db()
       .from("profiles")
-      .select("id, full_name, email")
+      .select("id, full_name, email, phone")
       .in("role", STAFF_ROLES)
       .order("full_name");
     return ((data ?? []) as Array<{
       id: string;
       full_name: string | null;
       email: string | null;
-    }>).map((p) => ({ id: p.id, name: p.full_name || p.email || "—" }));
+      phone: string | null;
+    }>).map((p) => ({ id: p.id, name: p.full_name || p.email || "—", phone: p.phone }));
   } catch {
     return [];
   }

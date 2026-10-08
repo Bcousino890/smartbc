@@ -120,6 +120,8 @@ export type PortalLinkNote = {
 export type StaffRef = {
   id: string;
   name: string;
+  /** Solo lo trae getAssignableStaff: lo usa "Enviar a Andrea" para abrir su chat. */
+  phone?: string | null;
 };
 
 /** Ficha ya creada a partir del enlace, si la hay. */

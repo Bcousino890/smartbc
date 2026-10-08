@@ -246,8 +246,9 @@ export function PortalLinksBlock({
    * con lo que ve el resto del equipo.
    *
    * Solo WhatsApp: NO se le asignan en el CRM. Andrea trabaja con la lista
-   * escrita, no con el panel. Se abre WhatsApp con la lista ya redactada y el
-   * texto queda además copiado por si WhatsApp no abre.
+   * escrita, no con el panel. Se abre su chat de WhatsApp (teléfono de su
+   * perfil) con la lista ya redactada, y el texto queda además copiado por si
+   * WhatsApp no abre.
    */
   const andrea = useMemo(
     () => staff.find((s) => /^andrea\b/i.test(s.name.trim())) ?? null,
@@ -285,7 +286,14 @@ export function PortalLinksBlock({
       lines.join("\n\n"),
     ].join("\n");
 
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    // Con su teléfono en el perfil se abre directamente su chat; sin él,
+    // WhatsApp pide elegir a quién mandarlo.
+    const phone = (andrea.phone ?? "").replace(/\D/g, "");
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(text)}`,
+      "_blank",
+      "noopener",
+    );
     void navigator.clipboard?.writeText(text).catch(() => {});
     setAndreaNotice(
       `Lista de ${items.length} piso${items.length === 1 ? "" : "s"} para ${andrea.name} abierta en WhatsApp (y copiada)`,
