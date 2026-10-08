@@ -107,30 +107,38 @@ export async function getClientDescription(
     return { description: hit.description || null, features: hit.features ?? [] };
   }
 
-  let clean: { description: string; features: string[] };
+  let clean: { description: string; features: string[] } | null = null;
   let fromAi = false;
-  try {
-    const raw = await aiComplete({
-      system: systemPrompt(language),
-      userText: JSON.stringify({ description, features }),
-      maxTokens: 2500,
-      jsonSchema: SCHEMA as unknown as Record<string, unknown>,
-    });
-    const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as any;
-    if (typeof parsed?.description !== "string" || !Array.isArray(parsed?.features)) {
-      throw new Error("respuesta de la IA sin el formato pedido");
+  // Dos intentos: de vez en cuando la IA devuelve un JSON cortado o mal
+  // escapado (visto en producción con una descripción larga), y a la segunda
+  // sale bien. Sin IA configurada no se reintenta.
+  for (let attempt = 0; attempt < 2 && !clean; attempt++) {
+    try {
+      const raw = await aiComplete({
+        system: systemPrompt(language),
+        userText: JSON.stringify({ description, features }),
+        maxTokens: 4000,
+        jsonSchema: SCHEMA as unknown as Record<string, unknown>,
+      });
+      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? raw) as any;
+      if (typeof parsed?.description !== "string" || !Array.isArray(parsed?.features)) {
+        throw new Error("respuesta de la IA sin el formato pedido");
+      }
+      clean = {
+        description: parsed.description.trim(),
+        features: parsed.features.filter((f: unknown) => typeof f === "string" && f.trim()),
+      };
+      fromAi = true;
+    } catch (err) {
+      if (err instanceof AINotConfiguredError) break;
+      console.error(
+        `[client-description] intento ${attempt + 1} con IA fallido:`,
+        propertyId,
+        err instanceof Error ? err.message : err,
+      );
     }
-    clean = {
-      description: parsed.description.trim(),
-      features: parsed.features.filter((f: unknown) => typeof f === "string" && f.trim()),
-    };
-    fromAi = true;
-  } catch (err) {
-    if (!(err instanceof AINotConfiguredError)) {
-      console.error("[client-description] no se pudo limpiar con IA:", propertyId, err);
-    }
-    clean = fallbackClean(description, features);
   }
+  if (!clean) clean = fallbackClean(description, features);
 
   // Solo se guarda lo que limpió la IA: el filtro de respaldo es provisional y
   // se reintenta con IA en la siguiente apertura.
