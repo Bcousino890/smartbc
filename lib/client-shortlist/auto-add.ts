@@ -7,9 +7,13 @@ import { createAdminClient } from "@/lib/db/admin";
 // El cliente trabaja con UN enlace (/s/…) que ya tiene en el móvil. Si después
 // de mandárselo se le añaden pisos, tiene que verlos ahí sin que haya que
 // crear y reenviar otra selección. Así que cada anuncio que entra en "Enlaces
-// de portales" se añade, al final, a la selección privada MÁS RECIENTE del
-// cliente que siga viva (sin revocar, sin caducar, no archivada). Si no tiene
-// ninguna, no se hace nada: la primera se crea con "Mandar al cliente".
+// de portales" se añade, al final, a la selección privada que el cliente
+// TIENE: la que abrió más recientemente, entre las que siguen vivas (sin
+// revocar, sin caducar, no archivadas). Si no ha abierto ninguna, la más
+// reciente. Abierta antes que reciente a propósito: una selección creada de
+// prueba (o todavía sin mandar) no debe quedarse los pisos nuevos mientras el
+// cliente sigue mirando la suya. Si no tiene ninguna, no se hace nada: la
+// primera se crea con "Mandar al cliente".
 //
 // Entra como anuncio de portal (portal_link_id); en cuanto se le crea la
 // ficha, la selección la enseña con la ficha completa (ver
@@ -33,6 +37,7 @@ export async function addLinksToActiveShortlist(
       .neq("status", "archived")
       .is("revoked_at", null)
       .gt("expires_at", new Date().toISOString())
+      .order("first_opened_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
