@@ -21,7 +21,11 @@ import { createAdminClient } from "@/lib/db/admin";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RELAY_SCRAPE_URL = "https://api.crawio.com/scrape";
-const DEFAULT_TIMEOUT_SEC = 25;
+// 60 s (antes 25, 2026-10-08): Crawio renderiza la página con navegador y en
+// Idealista tardaba más de 25 s a menudo — 4 de 6 intentos acababan en
+// "timeout" aunque el servicio funcionaba. Las fichas se crean en segundo
+// plano (lib/portal-links/auto-import.ts): esperar más no bloquea a nadie.
+const DEFAULT_TIMEOUT_SEC = 60;
 
 async function readRelayApiKey(): Promise<string | undefined> {
   try {
