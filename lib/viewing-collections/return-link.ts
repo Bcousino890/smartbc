@@ -20,7 +20,7 @@ const KEY = "bcp:vc-return";
 const TTL_MS = 12 * 60 * 60 * 1000; // 12 h — una jornada de visitas larga
 
 export type CollectionReturn = {
-  /** Ruta de la colección, p. ej. "/v/uhwt3yc6fc5uqjza". */
+  /** Ruta de la colección o selección, p. ej. "/v/uhwt3yc6fc5uqjza" o "/s/…". */
   url: string;
   /** Rótulo ya traducido al idioma de la colección. */
   label: string;
@@ -47,7 +47,8 @@ export function readCollectionReturn(): CollectionReturn | null {
       !value?.url ||
       // Solo rutas internas de colección: nada de URLs absolutas que alguien
       // haya podido colar en el almacenamiento.
-      !/^\/v\/[A-Za-z0-9_-]+$/.test(value.url) ||
+      // (/v/ = Private Book, /s/ = selección privada).
+      !/^\/[vs]\/[A-Za-z0-9_-]+$/.test(value.url) ||
       typeof value.ts !== "number" ||
       Date.now() - value.ts > TTL_MS
     ) {

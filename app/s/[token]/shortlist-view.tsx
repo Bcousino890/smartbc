@@ -41,6 +41,7 @@ import { ReviewStage } from "./_components/review-stage";
 import { PriorityRow } from "./_components/priority-row";
 import { NoteSheet } from "./_components/note-sheet";
 import { ResidenceSheet } from "./_components/residence-sheet";
+import { rememberCollectionReturn } from "@/lib/viewing-collections/return-link";
 import { AddResidenceSheet } from "./_components/add-residence-sheet";
 import { SubmitBar } from "./_components/submit-bar";
 import {
@@ -81,6 +82,20 @@ export function ShortlistView({
   const [gallery, setGallery] = useState<PublicShortlistProperty | null>(null);
   const [galleryStart, setGalleryStart] = useState(0);
   const [detail, setDetail] = useState<PublicShortlistProperty | null>(null);
+
+  // "Ver residencia" abre el SmartLink de la ficha en otra pestaña: allí está
+  // todo (ubicación, descripción, fotos, vídeo). La selección se queda en esta
+  // pestaña, y el SmartLink enseña una franja para volver (mismo mecanismo que
+  // el Private Book: lib/viewing-collections/return-link.ts). Un anuncio que
+  // todavía no tiene ficha no tiene SmartLink: se abren sus fotos aquí.
+  const viewResidence = (p: PublicShortlistProperty) => {
+    if (!p.smartlinkUrl) {
+      setDetail(p);
+      return;
+    }
+    if (token) rememberCollectionReturn(`/s/${token}`, t.backToSelection);
+    window.open(p.smartlinkUrl, "_blank");
+  };
   const [noteFor, setNoteFor] = useState<PublicShortlistProperty | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [submitted, setSubmitted] = useState(shortlist.submitted);
@@ -526,7 +541,7 @@ export function ShortlistView({
           onNext={() =>
             setCursor((c) => Math.min(reviewOrder.length - 1, c + 1))
           }
-          onView={() => setDetail(current)}
+          onView={() => viewResidence(current)}
           onNote={() => setNoteFor(current)}
           hasPrev={cursor > 0}
           hasNext={cursor < reviewOrder.length - 1}
@@ -557,7 +572,7 @@ export function ShortlistView({
                     canMoveUp={i > 0}
                     canMoveDown={i < groups.must.length - 1}
                     onMove={(d) => move(p, d)}
-                    onView={() => setDetail(p)}
+                    onView={() => viewResidence(p)}
                     onNote={() => setNoteFor(p)}
                     onDecide={(d) => decide(p, d)}
                     busy={busyId === p.itemId}
@@ -581,7 +596,7 @@ export function ShortlistView({
                 property={p}
                 t={t}
                 compact
-                onView={() => setDetail(p)}
+                onView={() => viewResidence(p)}
                 onNote={() => setNoteFor(p)}
                 onDecide={(d) => decide(p, d)}
                 busy={busyId === p.itemId}
@@ -600,7 +615,7 @@ export function ShortlistView({
                 property={p}
                 t={t}
                 compact
-                onView={() => setDetail(p)}
+                onView={() => viewResidence(p)}
                 onNote={() => setNoteFor(p)}
                 onDecide={(d) => decide(p, d)}
                 busy={busyId === p.itemId}

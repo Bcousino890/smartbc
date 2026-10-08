@@ -91,6 +91,8 @@ export type ShortlistDictionary = {
   aboutResidence: string;
   features: string;
   loadingDetails: string;
+  /** Franja de vuelta en el SmartLink abierto desde la selección. */
+  backToSelection: string;
   /** Terminal */
   emptyState: string;
 };
@@ -161,6 +163,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "Sobre la residencia",
     features: "Características",
     loadingDetails: "Cargando…",
+    backToSelection: "Volver a tu selección",
     emptyState: "Todavía no hay residencias en esta selección.",
   },
 
@@ -229,6 +232,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "About the residence",
     features: "Features",
     loadingDetails: "Loading…",
+    backToSelection: "Back to your selection",
     emptyState: "There are no residences in this selection yet.",
   },
 
@@ -297,6 +301,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "À propos de la résidence",
     features: "Caractéristiques",
     loadingDetails: "Chargement…",
+    backToSelection: "Revenir à votre sélection",
     emptyState: "Il n'y a encore aucune résidence dans cette sélection.",
   },
 
@@ -365,6 +370,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "La residenza",
     features: "Caratteristiche",
     loadingDetails: "Caricamento…",
+    backToSelection: "Torna alla tua selezione",
     emptyState: "Non ci sono ancora residenze in questa selezione.",
   },
 
@@ -433,6 +439,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "Über die Residenz",
     features: "Merkmale",
     loadingDetails: "Wird geladen…",
+    backToSelection: "Zurück zu Ihrer Auswahl",
     emptyState: "In dieser Auswahl gibt es noch keine Residenzen.",
   },
 
@@ -500,6 +507,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "عن المسكن",
     features: "المواصفات",
     loadingDetails: "جارٍ التحميل…",
+    backToSelection: "العودة إلى اختيارك",
     emptyState: "لا توجد مساكن في هذه القائمة بعد.",
   },
 
@@ -568,6 +576,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "Konut hakkında",
     features: "Özellikler",
     loadingDetails: "Yükleniyor…",
+    backToSelection: "Seçiminize dön",
     emptyState: "Bu seçkide henüz konut yok.",
   },
 
@@ -635,6 +644,7 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     aboutResidence: "על הנכס",
     features: "מאפיינים",
     loadingDetails: "טוען…",
+    backToSelection: "חזרה לבחירה שלך",
     emptyState: "אין עדיין נכסים בבחירה הזו.",
   },
 };

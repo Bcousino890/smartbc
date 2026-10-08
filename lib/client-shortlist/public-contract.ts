@@ -41,6 +41,12 @@ export type PublicShortlistProperty = {
    * una galería que no existe.
    */
   pendingProperty: boolean;
+  /**
+   * El SmartLink de la ficha (/compartir/…): ubicación, descripción, todas
+   * las fotos, vídeo. "Ver residencia" lo abre en otra pestaña. null cuando
+   * todavía es un anuncio sin ficha: entonces se abren solo sus fotos.
+   */
+  smartlinkUrl: string | null;
   /** Siempre vía proxy /p/. Nunca la URL de Storage. */
   coverPhotoUrl: string | null;
   photoUrls: string[];

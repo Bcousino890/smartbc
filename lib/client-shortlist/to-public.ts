@@ -21,6 +21,7 @@ import {
   type CollectionLanguage,
 } from "@/lib/viewing-collections/i18n";
 import { getCountryConfig, isCountry } from "@/lib/country-config";
+import { shareSlug } from "@/lib/share-slug";
 import type {
   PublicClientShortlist,
   PublicShortlistProperty,
@@ -170,6 +171,10 @@ export function toPublicClientShortlist(
         // la galería usa esta lista, al abrirla, y carga en diferido.
         photoUrls: photos.slice(0, 60),
         pendingProperty: Boolean(item.externalPhotoUrls),
+        smartlinkUrl:
+          !item.externalPhotoUrls && prop.slug
+            ? `/compartir/${shareSlug(prop.slug, prop.bc_reference)}`
+            : null,
         origin: item.origin,
         decision: item.decision,
         rank: item.rank,
