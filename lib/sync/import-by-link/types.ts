@@ -1,4 +1,5 @@
 import type { PropertyOperation, PropertyStay } from "@/lib/db/database.types";
+import type { LocationPrecision } from "@/lib/types";
 import type { AdvertiserCheckResult } from "../particulares/idealista-advertiser-detector";
 
 // Resultado de la extracción de una ficha pública. Mismo "shape" que
@@ -45,6 +46,10 @@ export type ImportPreview = {
   // JSON embebido). Habilitan el feature de "distancia al campus".
   latitude: number | null;
   longitude: number | null;
+  // Si ese punto es el portal o solo la zona (2026-10-08). Hoy solo lo rellena
+  // Idealista, que lo dice explícitamente en la config de su mapa; el resto de
+  // portales lo deja sin definir (= sin dato).
+  locationPrecision?: LocationPrecision | null;
   photos: ImportPhoto[];
   // Campos sin parsear pero potencialmente útiles para el admin. p.ej. "Año
   // construcción", "Planta", "Estado conservación".

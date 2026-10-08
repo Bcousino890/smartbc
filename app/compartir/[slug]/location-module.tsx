@@ -30,6 +30,7 @@ import {
 import { buildMosaic, clampPointInView, contextZoomForWidth, fitPoints, fitTwoPoints, shiftViewVertically, type Mosaic } from "@/lib/geo/tile-math";
 import type { PoiTravel } from "@/lib/geo/poi-distance";
 import type { NearbyUniversity } from "@/lib/geo/universities-nearby";
+import type { LocationPrecision } from "@/lib/types";
 import { ZoneExplorerMapLibre } from "./zone-explorer-maplibre";
 import { residenceMarkerHtml } from "@/lib/services/location/markers";
 import { LOCATION_EASING, LOCATION_MOTION, prefersReducedMotion } from "@/lib/services/location/motion";
@@ -92,6 +93,7 @@ export function LocationModule({
   zone,
   lat,
   lng,
+  precision = null,
   pois,
   universities = [],
   mapProvider = "maplibre",
@@ -106,6 +108,9 @@ export function LocationModule({
   zone: string;
   lat: number | null;
   lng: number | null;
+  /** Si el punto es el portal o solo la zona (properties.location_precision).
+   *  null = sin dato (fichas antiguas): se mantiene el texto de siempre. */
+  precision?: LocationPrecision | null;
   pois: PoiTravel[];
   universities?: NearbyUniversity[];
   /** Proveedor del explorador de zona. */
@@ -422,9 +427,16 @@ export function LocationModule({
       <div className="px-6 pt-6 md:px-8 md:pt-8">
         <h2 className="crm-section-title text-ink">Ubicación · {title}</h2>
         {editorialLine && <p className="crm-label-sm mt-1.5 text-gold-dark">{editorialLine}</p>}
+        {/* Con coordenadas el mapa SIEMPRE pinta la vivienda en ese punto
+            (es el que da sentido a tiempos, búsqueda y rail). Lo que cambia
+            es lo que prometemos (2026-10-08): si el portal ocultaba la
+            dirección, ese punto es el de la zona que enseña el propio
+            portal, y llamarlo "exacto" era falso. */}
         <p className="mt-1 text-xs text-ink/55">
           {hasPreciseCoords
-            ? "Ubicación exacta de la propiedad."
+            ? precision === "approximate"
+              ? "Ubicación aproximada de la propiedad. Te pasaremos la dirección exacta al coordinar la visita."
+              : "Ubicación exacta de la propiedad."
             : "Zona aproximada del barrio. Te pasaremos la dirección exacta al coordinar la visita."}
         </p>
       </div>

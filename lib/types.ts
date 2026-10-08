@@ -2,6 +2,17 @@ export type StayType = "corta" | "larga";
 export type Operation = "alquiler" | "venta";
 export type PropertyBadge = "exclusiva" | "destacada" | "premium";
 
+// Precisión de las coordenadas guardadas de una propiedad (2026-10-08).
+//   · "exact"       → el punto es el portal: el anunciante publicó la dirección
+//                     completa (Idealista `addressVisibility: "EXACT"`) o un
+//                     admin lo fijó a mano en el mapa.
+//   · "approximate" → el punto es de la zona: el anunciante ocultó la dirección
+//                     (Idealista dibuja un círculo, no un pin) o lo sacamos
+//                     geocodificando una calle sin número / un barrio.
+// Hasta esta fecha el SmartLink decía "Ubicación exacta" para CUALQUIER
+// coordenada, aunque fuera el centro del barrio.
+export type LocationPrecision = "exact" | "approximate";
+
 export type PropertyFeature =
   | "exterior"
   | "furnished"
@@ -96,6 +107,9 @@ export type Property = {
   // para el cálculo de distancia a universidades.
   latitude?: number | null;
   longitude?: number | null;
+  // Qué tan fiable es ese punto (columna `properties.location_precision`,
+  // migración 0174). Ver LocationPrecision. null = sin dato (fichas antiguas).
+  locationPrecision?: LocationPrecision | null;
   // Referencia interna BC (BC-0001, BC-0002…). Única por propiedad y
   // distinta del `external_id` del portal de origen. Se muestra al cliente
   // en SmartLink para que pueda mencionarla al contactar con BC.

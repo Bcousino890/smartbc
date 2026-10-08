@@ -157,6 +157,9 @@ export type Database = {
           latitude: number | null;
           longitude: number | null;
           geocoded_at: string | null;
+          // Migración 0174. Opcional en el tipo para no romper filas de
+          // prueba construidas a mano; en BD siempre viene (null o valor).
+          location_precision?: "exact" | "approximate" | null;
           last_synced_at: string | null;
           archived_at: string | null;
           country: string;
@@ -200,6 +203,7 @@ export type Database = {
           latitude?: number | null;
           longitude?: number | null;
           geocoded_at?: string | null;
+          location_precision?: "exact" | "approximate" | null;
           last_synced_at?: string | null;
           archived_at?: string | null;
           created_at?: string;

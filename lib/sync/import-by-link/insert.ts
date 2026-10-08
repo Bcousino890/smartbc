@@ -155,8 +155,20 @@ export async function insertImportedProperty(
     features: overrides.features,
     cover_photo_url: coverUrl,
     source_url: preview.sourceUrl,
-    latitude: preview.latitude,
-    longitude: preview.longitude,
+    // Coordenadas del portal (para Idealista, el punto de su propio mapa) y
+    // si son del portal o solo de la zona. Solo se escriben si la preview las
+    // trae (2026-10-08): antes una re-importación sin coordenadas (HTML
+    // parcial) ponía latitude/longitude a null y el SmartLink volvía a
+    // geocodificar la zona, perdiendo el punto bueno. `geocoded_at` a null:
+    // estas no salen de Nominatim.
+    ...(preview.latitude != null && preview.longitude != null
+      ? {
+          latitude: preview.latitude,
+          longitude: preview.longitude,
+          location_precision: preview.locationPrecision ?? null,
+          geocoded_at: null,
+        }
+      : {}),
     ...(country ? { country } : {}),
     last_synced_at: new Date().toISOString(),
     // Fecha de "publicación": se refresca también en re-importación para que la

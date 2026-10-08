@@ -579,6 +579,7 @@ export function PublicPropertyView({
           zone={property.zone}
           lat={property.latitude ?? null}
           lng={property.longitude ?? null}
+          precision={property.locationPrecision ?? null}
           pois={neighborhood?.pois ?? []}
           neighborhood={neighborhood ?? null}
           fallbackCoords={

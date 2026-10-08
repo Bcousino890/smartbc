@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
-import { geocodePropertyAddress } from "@/lib/geo/geocode";
+import { geocodedPrecision, geocodePropertyAddress } from "@/lib/geo/geocode";
 
 export async function POST(req: Request) {
   try {
@@ -66,6 +66,9 @@ export async function POST(req: Request) {
               latitude: coords.lat,
               longitude: coords.lng,
               geocoded_at: new Date().toISOString(),
+              // Sin número de portal el punto es de la calle/zona: que el
+              // SmartLink no lo venda como exacto (ver geocodedPrecision).
+              location_precision: geocodedPrecision(prop.address),
             })
             .eq("id", prop.id);
 

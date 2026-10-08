@@ -491,6 +491,7 @@ export function propertyRowToClientProperty(
     ),
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
+    locationPrecision: row.location_precision ?? null,
     photoClasses,
     photoWatermarked,
     coverWidth: coverMeta?.source_width ?? null,

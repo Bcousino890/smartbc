@@ -191,6 +191,8 @@ export default async function PublicSharePage({
   if (coords) {
     property.latitude = coords.lat;
     property.longitude = coords.lng;
+    // Recién geocodificadas: la fila leída aún no trae su precisión.
+    if (coords.precision !== undefined) property.locationPrecision = coords.precision;
   }
 
   // Videos y planos subidos desde /admin/publicacion (tabla property_media).

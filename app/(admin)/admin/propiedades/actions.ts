@@ -618,6 +618,7 @@ export async function updateProperty(
     payload.latitude = null;
     payload.longitude = null;
     payload.geocoded_at = null;
+    payload.location_precision = null;
   }
   if (input.address !== undefined) {
     payload.address = input.address?.trim() || null;
@@ -626,6 +627,7 @@ export async function updateProperty(
     payload.latitude = null;
     payload.longitude = null;
     payload.geocoded_at = null;
+    payload.location_precision = null;
   }
   if (input.status !== undefined) {
     payload.status = input.status;
@@ -666,10 +668,32 @@ export async function updateProperty(
       payload.latitude = input.latitude;
       payload.longitude = input.longitude;
       payload.geocoded_at = new Date().toISOString();
+      // Precisión (2026-10-08, ver LocationPrecision): un punto que el admin
+      // MUEVE en el mapa es el portal → "exacta" en el SmartLink. Pero el
+      // formulario manda las coordenadas en TODOS los guardados (también al
+      // cambiar solo el título), y los bloques de address/zone de arriba
+      // ponen la precisión a null; si el punto no se movió, se conserva la
+      // que hubiera (p.ej. "approximate" de una ficha de Idealista con la
+      // dirección oculta), o cada guardado la convertiría en "exacta".
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: current } = await (createAdminClient() as any)
+        .from("properties")
+        .select("latitude, longitude, location_precision")
+        .eq("slug", input.slug)
+        .maybeSingle();
+      const moved =
+        current?.latitude == null ||
+        current?.longitude == null ||
+        Math.abs(Number(current.latitude) - input.latitude) > 1e-7 ||
+        Math.abs(Number(current.longitude) - input.longitude) > 1e-7;
+      payload.location_precision = moved
+        ? "exact"
+        : (current?.location_precision ?? null);
     } else {
       payload.latitude = null;
       payload.longitude = null;
       payload.geocoded_at = null;
+      payload.location_precision = null;
     }
   }
 

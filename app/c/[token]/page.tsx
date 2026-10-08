@@ -129,6 +129,8 @@ export default async function TokenSharePage({
   if (coords) {
     property.latitude = coords.lat;
     property.longitude = coords.lng;
+    // Recién geocodificadas: la fila leída aún no trae su precisión.
+    if (coords.precision !== undefined) property.locationPrecision = coords.precision;
   }
 
   // Vídeos y planos (property_media), igual que /compartir/[slug]. Un enlace

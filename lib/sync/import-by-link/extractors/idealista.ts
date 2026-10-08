@@ -1,5 +1,6 @@
 import type { CheerioAPI } from "cheerio";
 import type { ImportPreview } from "../types";
+import type { LocationPrecision } from "@/lib/types";
 import {
   isIdealistaImageUrl,
   toIdealistaHighQuality,
@@ -41,6 +42,9 @@ type IdealistaListing = {
   longitude?: number;
   // Idealista anida a veces las coordenadas bajo `ubication`.
   ubication?: { latitude?: number; longitude?: number };
+  // API: false cuando el anunciante oculta la dirección (las coordenadas son
+  // entonces de la zona, no del portal).
+  showAddress?: boolean;
   floor?: string;
   exterior?: boolean;
   hasLift?: boolean;
@@ -370,6 +374,9 @@ function extractFromDom($: CheerioAPI, sourceUrl: string): ImportPreview {
     zone,
     address,
     features: Array.from(featureSet),
+    // Las coordenadas NO se sacan aquí sino en extractIdealista (más abajo),
+    // común a los dos caminos: el mapa de la ficha (extractIdealistaMapLocation)
+    // está en el HTML tanto si hay JSON embebido como si no.
     latitude: null,
     longitude: null,
     photos,
@@ -465,6 +472,98 @@ function isSpainCoord(lat: number, lng: number): boolean {
     // Descartar 0,0 y valores triviales.
     Math.abs(lat) > 0.01
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// El punto del MAPA de la ficha: el mismo que pinta Idealista (2026-10-08).
+//
+// Verificado contra fichas reales (106322462, 112274718, 112589849). El HTML
+// trae dos bloques sobre el mapa:
+//
+//   1) Dentro de `var config = {…}`, la imagen estática del mapa:
+//        "map":{"src":"https://maps.googleapis.com/maps/api/staticmap?…
+//               &center=40.43676520%2C-3.69903580&…zoom=16…",
+//               "title":"Mapa de la zona","addressVisibility":"HIDDEN",…}
+//      `center` ES la coordenada del anuncio: el mapa interactivo se abre
+//      centrado ahí y pone ahí su pin (o su círculo).
+//   2) `var mapConfig = { latitude: '', longitude: '', markerVisible: N, … }`.
+//      Las coordenadas suelen venir VACÍAS (el mapa interactivo las pide al
+//      abrirse), pero `markerVisible` dice qué dibuja Idealista:
+//        1 → pin en el portal (dirección completa; addressVisibility "EXACT")
+//        2 → círculo en la calle (calle sin número; "HIDDEN")
+//        3 → círculo de barrio (ni calle; "HIDDEN") — p.ej. "Piso en venta en
+//            Trafalgar": el centro es prácticamente el del barrio, y no hay
+//            más precisión que sacar porque Idealista tampoco la tiene.
+//   Además, con la dirección oculta el DOM trae "Por privacidad, el anunciante
+//   no ha indicado la ubicación exacta del inmueble." (.no-show-address-feedback).
+//
+// Por qué una función aparte (y exportada): el backfill de fichas ya
+// importadas (lib/sync/import-by-link/idealista-pin-backfill.ts) solo
+// necesita esto, sin el resto del extractor (que además llama al AJAX del
+// teléfono: peticiones de más contra un portal que bloquea con facilidad).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IdealistaMapLocation = {
+  // Centro del mapa de la ficha. null si la página no trae el bloque del mapa.
+  coords: { latitude: number; longitude: number } | null;
+  // "approximate" cuando Idealista solo enseña la zona. null = sin señal.
+  precision: LocationPrecision | null;
+  // Valores crudos, para diagnóstico (logs del backfill).
+  addressVisibility: string | null;
+  markerVisible: number | null;
+};
+
+export function extractIdealistaMapLocation(rawHtml: string): IdealistaMapLocation {
+  let coords: IdealistaMapLocation["coords"] = null;
+  const toCoords = (lat: string | undefined, lng: string | undefined) => {
+    if (!lat || !lng) return null;
+    const la = parseFloat(lat);
+    const ln = parseFloat(lng);
+    return isSpainCoord(la, ln) ? { latitude: la, longitude: ln } : null;
+  };
+
+  // 1) Imagen estática del mapa. El `src` puede venir con `&`, `&amp;` o
+  //    su escape JSON (barra invertida + u0026) según cómo se serialice;
+  //    `center=` es inequívoco igualmente.
+  let addressVisibility: string | null = null;
+  const mapObj = rawHtml.match(/"map"\s*:\s*\{\s*"src"\s*:\s*"([^"]*)"([^{}]*)\}/);
+  if (mapObj) {
+    const center = mapObj[1].match(
+      /center=(-?\d{1,2}\.\d+)(?:%2C|,)(-?\d{1,3}\.\d+)/i,
+    );
+    coords = toCoords(center?.[1], center?.[2]);
+    addressVisibility =
+      mapObj[2].match(/"addressVisibility"\s*:\s*"([A-Za-z_]+)"/)?.[1] ?? null;
+  }
+  addressVisibility ??=
+    rawHtml.match(/"addressVisibility"\s*:\s*"([A-Za-z_]+)"/)?.[1] ?? null;
+
+  // 2) Config del mapa interactivo: `markerVisible` siempre; las coordenadas,
+  //    solo si algún día vienen rellenas y el bloque 1 no estaba.
+  let markerVisible: number | null = null;
+  const cfg = rawHtml.match(/mapConfig\s*=\s*\{([\s\S]{0,2000}?)\}/);
+  if (cfg) {
+    const mv = cfg[1].match(/markerVisible\s*:\s*['"]?(\d+)/)?.[1];
+    markerVisible = mv ? Number(mv) : null;
+    if (!coords) {
+      coords = toCoords(
+        cfg[1].match(/latitude\s*:\s*['"]?(-?\d{1,2}\.\d+)/)?.[1],
+        cfg[1].match(/longitude\s*:\s*['"]?(-?\d{1,3}\.\d+)/)?.[1],
+      );
+    }
+  }
+
+  // Precisión: addressVisibility manda (es el dato explícito); markerVisible y
+  // el aviso de privacidad del DOM son respaldo por si cambia el nombre/valor.
+  const vis = addressVisibility?.toUpperCase() ?? null;
+  let precision: LocationPrecision | null = null;
+  if (vis === "EXACT") precision = "exact";
+  else if (vis === "HIDDEN") precision = "approximate";
+  else if (markerVisible === 1) precision = "exact";
+  else if (markerVisible === 2 || markerVisible === 3) precision = "approximate";
+  else if (/no-show-address-feedback/.test(rawHtml)) precision = "approximate";
+
+  return { coords, precision, addressVisibility, markerVisible };
 }
 
 // Escanea el HTML crudo buscando coordenadas con varios patrones (la
@@ -709,12 +808,16 @@ export async function extractIdealista(
     console.log(`[idealista-extractor] No se pudo extraer adId del HTML ni de la URL, no se puede hacer AJAX fallback`);
   }
 
-  // ── Coordenadas: lo más cercano posible al piso real ───────────────────────
-  // Prioridad: las del listing embebido (planas o anidadas en `ubication`) →
-  // las que escaneemos del HTML crudo. Cualquiera de estas es mejor que
-  // geocodificar el nombre de la zona.
-  let latitude = preview.latitude;
-  let longitude = preview.longitude;
+  // ── Coordenadas: el MISMO punto que pinta Idealista en su mapa ─────────────
+  // (2026-10-08) Prioridad: centro del mapa de la ficha → listing embebido
+  // (plano o anidado en `ubication`) → escaneo genérico del HTML crudo.
+  // Antes no existía el primer paso: el centro del mapa salía solo por
+  // casualidad (patrón `center=` del escaneo genérico), DESPUÉS de probar
+  // `"latitude": …`, que puede casar antes con cualquier otro objeto de la
+  // página. Cualquiera de estas es mejor que geocodificar el nombre de la zona.
+  const mapLocation = extractIdealistaMapLocation(rawHtml);
+  let latitude = mapLocation.coords?.latitude ?? preview.latitude;
+  let longitude = mapLocation.coords?.longitude ?? preview.longitude;
   if (latitude == null || longitude == null) {
     const embLat = embedded?.latitude ?? embedded?.ubication?.latitude;
     const embLng = embedded?.longitude ?? embedded?.ubication?.longitude;
@@ -730,6 +833,19 @@ export async function extractIdealista(
       longitude = scanned.longitude;
     }
   }
+
+  // ¿Ese punto es el portal o solo la zona? Lo dice el propio mapa de la
+  // ficha; si no está (p.ej. respuesta de la API), `showAddress`. Sin
+  // coordenadas no hay nada que calificar.
+  const locationPrecision: LocationPrecision | null =
+    latitude == null || longitude == null
+      ? null
+      : (mapLocation.precision ??
+        (embedded?.showAddress === true
+          ? "exact"
+          : embedded?.showAddress === false
+            ? "approximate"
+            : null));
 
   // ── Dirección exacta (calle + número) si el anunciante la muestra ──────────
   // Si el listing ya trajo una dirección con pinta de calle, la respetamos;
@@ -753,6 +869,7 @@ export async function extractIdealista(
     address,
     latitude,
     longitude,
+    locationPrecision,
     advertiserInfo,
     floorPlanUrl: extractFloorPlanUrl($, embedded),
     videoUrl: extractVideoUrl($),
