@@ -238,6 +238,75 @@ export function PortalLinksBlock({
   };
 
   /**
+   * "Enviar a Andrea": la lista para que llame a las agencias.
+   *
+   * Lleva los marcados o, si no hay ninguno marcado, todos. Los descartados
+   * nunca entran. Cada piso conserva SU número del panel: si se descarta el 5,
+   * a Andrea le llegan el 4 y el 6, no una lista renumerada que ya no casa
+   * con lo que ve el resto del equipo.
+   *
+   * Se le asignan en el CRM (los ve en "Míos") y se abre WhatsApp con la
+   * lista ya escrita. El texto queda además copiado por si WhatsApp no abre.
+   */
+  const andrea = useMemo(
+    () => staff.find((s) => /^andrea\b/i.test(s.name.trim())) ?? null,
+    [staff],
+  );
+  const [andreaNotice, setAndreaNotice] = useState<string | null>(null);
+  const sendToAndrea = () => {
+    if (!andrea) return;
+    setError(null);
+    setAndreaNotice(null);
+    const pool = checked.size > 0 ? ordered.filter((l) => checked.has(l.id)) : ordered;
+    const items = pool.filter((l) => l.status !== "discarded");
+    if (items.length === 0) {
+      setError("No hay anuncios para enviar: los marcados están descartados.");
+      return;
+    }
+
+    const lines = items.map((l) => {
+      const n = ordered.indexOf(l) + 1;
+      const price =
+        l.price_label ||
+        (l.price ? `${new Intl.NumberFormat("es-ES").format(l.price)}€` : null);
+      const head = [`${n}. ${l.title || "Anuncio"}`, price].filter(Boolean).join(" · ");
+      const extra = [
+        l.contact_name || l.contact_phone
+          ? `Contacto: ${[l.contact_name, l.contact_phone].filter(Boolean).join(" ")}`
+          : null,
+        l.notes ? `Nota: ${l.notes}` : null,
+      ].filter(Boolean);
+      return [head, l.url, ...extra].join("\n");
+    });
+    const text = [
+      `*${clientName}* · ${items.length} piso${items.length === 1 ? "" : "s"} para llamar a las agencias`,
+      "",
+      lines.join("\n\n"),
+    ].join("\n");
+
+    // Se abre YA, dentro del clic: después de un await el navegador lo
+    // trataría como popup y lo bloquearía.
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    void navigator.clipboard?.writeText(text).catch(() => {});
+
+    startTransition(async () => {
+      const res = await assignPortalLinks(
+        items.map((l) => l.id),
+        andrea.id,
+      );
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setAndreaNotice(
+        `${items.length} asignado${items.length === 1 ? "" : "s"} a ${andrea.name} · lista copiada`,
+      );
+      setChecked(new Set());
+      router.refresh();
+    });
+  };
+
+  /**
    * "Crear fichas de los marcados" — el botón de una sola pulsada. Va uno por
    * uno en el servidor (misma extracción, misma inserción que el importador
    * de siempre) para no tener que abrir 15 formularios a mano. Puede tardar:
@@ -314,6 +383,21 @@ export function PortalLinksBlock({
               <Ornament className="mt-3" />
             </div>
 
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {canEdit && andrea && links.length > 0 && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={sendToAndrea}
+                title={`Le asigna a ${andrea.name} los marcados (o todos si no hay ninguno marcado, sin los descartados) y abre WhatsApp con la lista numerada para que llame a las agencias.`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-2 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+              >
+                <Send size={12} strokeWidth={1.75} />
+                {checked.size > 0
+                  ? `Enviar ${checked.size} a ${andrea.name.split(" ")[0]}`
+                  : `Enviar a ${andrea.name.split(" ")[0]}`}
+              </button>
+            )}
             {canCreate && (
               <button
                 type="button"
@@ -324,6 +408,7 @@ export function PortalLinksBlock({
                 Añadir enlaces
               </button>
             )}
+            </div>
           </div>
 
           {counts.all > 0 && (
@@ -470,6 +555,18 @@ export function PortalLinksBlock({
                     {pending && <Loader2 size={11} className="animate-spin" />}
                     Pasar para llamar
                   </button>
+                  {andrea && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={sendToAndrea}
+                      title={`Asigna los marcados a ${andrea.name} (sin los descartados) y abre WhatsApp con la lista numerada.`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
+                    >
+                      <Send size={11} strokeWidth={1.75} />
+                      Enviar a {andrea.name.split(" ")[0]}
+                    </button>
+                  )}
                   {canCreate && (
                     <button
                       type="button"
@@ -526,6 +623,12 @@ export function PortalLinksBlock({
                     Quitar marcas
                   </button>
                 </div>
+              )}
+
+              {andreaNotice && (
+                <p className="mt-3 rounded-xl border border-gold/25 bg-gold/5 px-4 py-2.5 font-sans text-xs text-ink/75">
+                  ✓ {andreaNotice}
+                </p>
               )}
 
               {bulkResults && (

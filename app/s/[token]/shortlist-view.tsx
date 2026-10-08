@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import type {
   PublicClientShortlist,
   PublicShortlistProperty,
@@ -438,10 +439,21 @@ export function ShortlistView({
           started ? "pt-5 sm:pt-6" : "pt-9 sm:pt-12",
         )}
       >
-        <p className="font-display text-[9.5px] font-medium uppercase vc-tracked text-ink/45">
-          Benjamín Cousiño
-        </p>
-        <p className="mt-1 font-display text-[8.5px] font-medium uppercase vc-tracked-sm text-ink/35">
+        {/* El logo, no el nombre en texto: es lo primero que ve el cliente y
+            tiene que reconocer la marca de un vistazo. Se encoge con la
+            cabecera en cuanto empieza a decidir. */}
+        <Image
+          src="/logo.png"
+          alt="Benjamín Cousiño Propiedades"
+          width={170}
+          height={Math.round(170 * (519 / 3282))}
+          priority
+          className={cn(
+            "mx-auto h-auto select-none transition-all duration-700 ease-out",
+            started ? "w-[104px] sm:w-[120px]" : "w-[140px] sm:w-[170px]",
+          )}
+        />
+        <p className="mt-2.5 font-display text-[8.5px] font-medium uppercase vc-tracked-sm text-ink/40">
           {t.privateClientServices}
         </p>
         <h1

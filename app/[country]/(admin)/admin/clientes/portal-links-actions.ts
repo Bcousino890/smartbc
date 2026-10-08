@@ -20,6 +20,7 @@ import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
 import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
+import { syncDiscardedLink } from "@/lib/portal-links/discard-sync";
 import {
   insertPortalLinks,
   linkText,
@@ -140,8 +141,14 @@ export async function updatePortalLinkStatus(
     };
   }
 
-  const clientId = await clientIdOfLink(linkId);
-  if (!clientId) return { ok: false, error: "Ese enlace ya no existe." };
+  const { data: before } = await db()
+    .from("client_portal_links")
+    .select("client_id, status, property_id")
+    .eq("id", linkId)
+    .maybeSingle();
+  const prev = before as { client_id: string; status: string; property_id: string | null } | null;
+  if (!prev) return { ok: false, error: "Ese enlace ya no existe." };
+  const clientId = prev.client_id;
   const g = await gate("edit", clientId);
   if (!g.ok) return g;
 
@@ -167,6 +174,20 @@ export async function updatePortalLinkStatus(
     status_after: status,
   });
   if (noteError) return { ok: false, error: translateLinkDbError(noteError.message) };
+
+  // Descartar lo saca de la selección privada y del book; quitar el descarte
+  // lo devuelve a la selección y al borrador. Ver lib/portal-links/discard-sync.
+  const wasDiscarded = prev.status === "discarded";
+  const isDiscarded = status === "discarded";
+  if (wasDiscarded !== isDiscarded) {
+    await syncDiscardedLink({
+      clientId,
+      userId: g.userId,
+      linkId,
+      propertyId: prev.property_id,
+      discarded: isDiscarded,
+    });
+  }
 
   revalidateClient(clientId);
   return { ok: true };

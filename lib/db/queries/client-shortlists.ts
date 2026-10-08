@@ -20,6 +20,7 @@ import {
   compareShortlistItems,
   shortlistZoneLabel,
   type RawShortlist,
+  type RawShortlistItem,
 } from "@/lib/client-shortlist/to-public";
 import {
   linkStateOf,
@@ -140,6 +141,44 @@ export async function resolveShortlistByToken(
   };
 }
 
+/**
+ * Lo que el equipo ha descartado deja de verlo el cliente, pero la fila NO se
+ * borra: su decisión y su nota siguen en el CRM. Se filtra al leer, a partir
+ * del estado del anuncio, así que quitar el descarte lo devuelve solo.
+ *
+ * Las prioridades se renumeran SOLO para mostrar (1, 2, 3 en vez de 1, 2, 4):
+ * al reordenar, el cliente manda los ids que ve y `renumber` deja el oculto
+ * detrás, así que la base de datos tampoco se queda con números repetidos.
+ */
+async function hideTeamDiscarded<
+  T extends { portal_link_id?: string | null; property_id?: string | null },
+>(clientId: string, items: T[]): Promise<T[]> {
+  const { data } = await db()
+    .from("client_portal_links")
+    .select("id, property_id")
+    .eq("client_id", clientId)
+    .eq("status", "discarded");
+  const rows = (data ?? []) as Array<{ id: string; property_id: string | null }>;
+  if (rows.length === 0) return items;
+  const linkIds = new Set(rows.map((r) => r.id));
+  const propertyIds = new Set(rows.map((r) => r.property_id).filter(Boolean));
+  return items.filter(
+    (it) =>
+      !(it.portal_link_id && linkIds.has(it.portal_link_id)) &&
+      !(it.property_id && propertyIds.has(it.property_id)),
+  );
+}
+
+function renumberVisibleRanks<T extends { decision: string; rank: number | null; position: number }>(
+  items: T[],
+): T[] {
+  const must = items
+    .filter((i) => i.decision === "must_visit")
+    .sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || a.position - b.position);
+  const rankOf = new Map(must.map((i, n) => [i, n + 1]));
+  return items.map((i) => (rankOf.has(i) ? { ...i, rank: rankOf.get(i)! } : i));
+}
+
 /** Lectura pública: el contrato proyectado, o un no rotundo. */
 export async function getPublicShortlistByToken(
   token: string,
@@ -162,7 +201,8 @@ export async function getPublicShortlistByToken(
     status: data.status,
     submitted_at: data.submitted_at,
     revision: data.revision,
-    items: (data.client_shortlist_items ?? [])
+    items: renumberVisibleRanks(
+      (await hideTeamDiscarded(data.client_id, data.client_shortlist_items ?? []))
       .map((it: any) => {
         const link = pickOne<any>(it.client_portal_links);
         const prop = link
@@ -185,7 +225,8 @@ export async function getPublicShortlistByToken(
             : {}),
         };
       })
-      .filter(Boolean),
+      .filter((x: RawShortlistItem | null): x is RawShortlistItem => Boolean(x)),
+    ),
   };
 
   return { ok: true, shortlist: toPublicClientShortlist(raw) };
@@ -365,7 +406,8 @@ export async function getShortlistPreview(
     status: data.status,
     submitted_at: data.submitted_at,
     revision: data.revision,
-    items: (data.client_shortlist_items ?? [])
+    items: renumberVisibleRanks(
+      (await hideTeamDiscarded(data.client_id, data.client_shortlist_items ?? []))
       .map((it: any) => {
         // La previsualización del agente tiene que enseñar EXACTAMENTE lo
         // mismo que verá el cliente, enlaces de portal incluidos.
@@ -388,7 +430,8 @@ export async function getShortlistPreview(
             : {}),
         };
       })
-      .filter(Boolean),
+      .filter((x: RawShortlistItem | null): x is RawShortlistItem => Boolean(x)),
+    ),
   };
   return { ok: true, shortlist: toPublicClientShortlist(raw) };
 }
