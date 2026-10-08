@@ -57,6 +57,8 @@ export type RawShortlistItem = {
   decision: ShortlistDecision;
   rank: number | null;
   client_comment: string | null;
+  /** 1–5 estrellas del cliente; 0 = sin valorar. */
+  client_rating: number;
   position: number;
   property: RawShortlistProperty;
   /**
@@ -180,6 +182,7 @@ export function toPublicClientShortlist(
         rank: item.rank,
         position: item.position,
         comment: item.client_comment,
+        rating: item.client_rating ?? 0,
       };
     });
 

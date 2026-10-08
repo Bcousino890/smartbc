@@ -17,6 +17,7 @@
 import { useEffect, useRef } from "react";
 import type { PublicShortlistProperty } from "@/lib/client-shortlist/public-contract";
 import type { ShortlistDictionary } from "@/lib/client-shortlist/i18n";
+import { StarRating } from "./star-rating";
 import type { ShortlistDecision } from "@/lib/client-shortlist/types";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,7 @@ export function ReviewStage({
   rtl,
   busy,
   onDecide,
+  onRate,
   onPrev,
   onNext,
   onView,
@@ -48,6 +50,7 @@ export function ReviewStage({
   rtl: boolean;
   busy?: boolean;
   onDecide: (d: ShortlistDecision) => void;
+  onRate: (n: number) => void;
   onPrev: () => void;
   onNext: () => void;
   onView: () => void;
@@ -180,6 +183,10 @@ export function ReviewStage({
               .filter(Boolean)
               .join(" · ")}
           </p>
+
+          <div className="mt-3">
+            <StarRating t={t} value={property.rating} onRate={onRate} disabled={busy} />
+          </div>
 
           {property.origin === "client_added" && (
             <p className="mt-2 font-display text-[9px] font-medium uppercase vc-tracked-sm text-gold-dark">

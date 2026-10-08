@@ -173,8 +173,9 @@ function ShortlistRow({
   // igual de valiosa —a veces más: "me gusta pero me preocupa el salón"— y no
   // aparecía en ninguna parte, porque solo se listaban los tres grupos con
   // decisión. Sus notas se muestran aparte.
+  // Igual con las estrellas: valorar sin decidir todavía también es una señal.
   const pendingWithNotes = s.items.filter(
-    (i) => i.decision === "undecided" && i.client_comment,
+    (i) => i.decision === "undecided" && (i.client_comment || i.client_rating > 0),
   );
   const must = s.items.filter((i) => i.decision === "must_visit");
   const maybe = s.items.filter((i) => i.decision === "maybe");
@@ -228,7 +229,7 @@ function ShortlistRow({
           <Group label="Alternativas" items={maybe} />
           <Group label="Descartadas" items={no} dim />
           <Group
-            label="Con nota, todavía sin decidir"
+            label="Con nota o estrellas, todavía sin decidir"
             items={pendingWithNotes}
           />
         </div>
@@ -391,6 +392,15 @@ function Group({
                 </span>
               )}
               <span>{i.property.displayTitle}</span>
+              {i.client_rating > 0 && (
+                <span
+                  className="text-xs tracking-tight text-gold"
+                  title={`${i.client_rating} de 5 estrellas`}
+                >
+                  {"★".repeat(i.client_rating)}
+                  <span className="text-ink/20">{"★".repeat(5 - i.client_rating)}</span>
+                </span>
+              )}
               {i.origin === "client_added" && (
                 <span className="rounded-full border border-gold/35 bg-gold/10 px-1.5 py-px text-xs font-medium text-gold-dark">
                   la añadió él

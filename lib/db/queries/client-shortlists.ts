@@ -59,7 +59,7 @@ const SHORTLIST_SELECT = `
   revision, created_at,
   client:profiles!client_shortlists_client_id_fkey ( full_name ),
   client_shortlist_items (
-    id, property_id, portal_link_id, origin, decision, rank, client_comment,
+    id, property_id, portal_link_id, origin, decision, rank, client_comment, client_rating,
     position, decided_at,
     properties ( ${PUBLIC_PROPERTY_SELECT} ),
     client_portal_links (
@@ -225,6 +225,7 @@ export async function getPublicShortlistByToken(
           decision: it.decision,
           rank: it.rank,
           client_comment: it.client_comment,
+          client_rating: it.client_rating ?? 0,
           position: it.position,
           property: prop,
           ...(link
@@ -335,6 +336,7 @@ export async function getClientShortlists(
           decision: it.decision,
           rank: it.rank,
           client_comment: it.client_comment,
+          client_rating: it.client_rating ?? 0,
           position: it.position,
           decided_at: it.decided_at,
           property: {
@@ -438,6 +440,7 @@ export async function getShortlistPreview(
           decision: it.decision,
           rank: it.rank,
           client_comment: it.client_comment,
+          client_rating: it.client_rating ?? 0,
           position: it.position,
           property: prop,
           ...(link

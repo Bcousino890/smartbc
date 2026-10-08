@@ -48,6 +48,7 @@ import {
   addShortlistProperty,
   setShortlistComment,
   setShortlistDecision,
+  setShortlistRating,
   setShortlistOrder,
   submitShortlist,
 } from "./actions";
@@ -290,6 +291,14 @@ export function ShortlistView({
   // NOTA: el reordenado de las pendientes desapareció con el modo «una
   // residencia cada vez». Su acción de servidor también se retiró: renumeraba
   // solo las pendientes y dejaba varias residencias compartiendo posición.
+
+  // Estrellas: independientes de la decisión. Optimista, como la nota.
+  const rate = (item: PublicShortlistProperty, rating: number) => {
+    const before = items;
+    setItems(items.map((i) => (i.itemId === item.itemId ? { ...i, rating } : i)));
+    track("property_rated", { rating });
+    void commit(before, () => setShortlistRating(token, item.itemId, rating));
+  };
 
   const saveNote = (item: PublicShortlistProperty, comment: string) => {
     const before = items;
@@ -537,6 +546,7 @@ export function ShortlistView({
           rtl={rtl}
           busy={busyId === current.itemId}
           onDecide={(d) => decideAndAdvance(current, d)}
+          onRate={(n) => rate(current, n)}
           onPrev={() => setCursor((c) => Math.max(0, c - 1))}
           onNext={() =>
             setCursor((c) => Math.min(reviewOrder.length - 1, c + 1))
@@ -575,6 +585,7 @@ export function ShortlistView({
                     onView={() => viewResidence(p)}
                     onNote={() => setNoteFor(p)}
                     onDecide={(d) => decide(p, d)}
+                onRate={(n) => rate(p, n)}
                     busy={busyId === p.itemId}
                     dragHandleProps={handleProps(p.itemId)}
                     isDragging={draggingId === p.itemId}
@@ -599,6 +610,7 @@ export function ShortlistView({
                 onView={() => viewResidence(p)}
                 onNote={() => setNoteFor(p)}
                 onDecide={(d) => decide(p, d)}
+                onRate={(n) => rate(p, n)}
                 busy={busyId === p.itemId}
               />
             ))}
@@ -618,6 +630,7 @@ export function ShortlistView({
                 onView={() => viewResidence(p)}
                 onNote={() => setNoteFor(p)}
                 onDecide={(d) => decide(p, d)}
+                onRate={(n) => rate(p, n)}
                 busy={busyId === p.itemId}
               />
             ))}

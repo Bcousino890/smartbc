@@ -61,6 +61,8 @@ export type PublicShortlistProperty = {
    */
   position: number;
   comment: string | null;
+  /** Estrellas que le ha puesto el cliente, 1–5. 0 = sin valorar. */
+  rating: number;
 };
 
 export type PublicClientShortlist = {

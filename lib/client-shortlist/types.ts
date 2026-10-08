@@ -28,6 +28,8 @@ export type ShortlistItemRow = {
   decision: ShortlistDecision;
   rank: number | null;
   client_comment: string | null;
+  /** Estrellas del cliente, 1–5. 0 = sin valorar. */
+  client_rating: number;
   position: number;
   decided_at: string | null;
 };
