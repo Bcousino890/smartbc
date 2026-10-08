@@ -245,8 +245,9 @@ export function PortalLinksBlock({
    * a Andrea le llegan el 4 y el 6, no una lista renumerada que ya no casa
    * con lo que ve el resto del equipo.
    *
-   * Se le asignan en el CRM (los ve en "Míos") y se abre WhatsApp con la
-   * lista ya escrita. El texto queda además copiado por si WhatsApp no abre.
+   * Solo WhatsApp: NO se le asignan en el CRM. Andrea trabaja con la lista
+   * escrita, no con el panel. Se abre WhatsApp con la lista ya redactada y el
+   * texto queda además copiado por si WhatsApp no abre.
    */
   const andrea = useMemo(
     () => staff.find((s) => /^andrea\b/i.test(s.name.trim())) ?? null,
@@ -284,26 +285,11 @@ export function PortalLinksBlock({
       lines.join("\n\n"),
     ].join("\n");
 
-    // Se abre YA, dentro del clic: después de un await el navegador lo
-    // trataría como popup y lo bloquearía.
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
     void navigator.clipboard?.writeText(text).catch(() => {});
-
-    startTransition(async () => {
-      const res = await assignPortalLinks(
-        items.map((l) => l.id),
-        andrea.id,
-      );
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setAndreaNotice(
-        `${items.length} asignado${items.length === 1 ? "" : "s"} a ${andrea.name} · lista copiada`,
-      );
-      setChecked(new Set());
-      router.refresh();
-    });
+    setAndreaNotice(
+      `Lista de ${items.length} piso${items.length === 1 ? "" : "s"} para ${andrea.name} abierta en WhatsApp (y copiada)`,
+    );
   };
 
   /**
@@ -389,7 +375,7 @@ export function PortalLinksBlock({
                 type="button"
                 disabled={pending}
                 onClick={sendToAndrea}
-                title={`Le asigna a ${andrea.name} los marcados (o todos si no hay ninguno marcado, sin los descartados) y abre WhatsApp con la lista numerada para que llame a las agencias.`}
+                title={`Abre WhatsApp con la lista numerada para ${andrea.name}: los marcados, o todos si no hay ninguno marcado, sin los descartados. No cambia nada en el CRM.`}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-2 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
               >
                 <Send size={12} strokeWidth={1.75} />
@@ -560,7 +546,7 @@ export function PortalLinksBlock({
                       type="button"
                       disabled={pending}
                       onClick={sendToAndrea}
-                      title={`Asigna los marcados a ${andrea.name} (sin los descartados) y abre WhatsApp con la lista numerada.`}
+                      title={`Abre WhatsApp con la lista numerada de los marcados para ${andrea.name} (sin los descartados). No cambia nada en el CRM.`}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                     >
                       <Send size={11} strokeWidth={1.75} />
