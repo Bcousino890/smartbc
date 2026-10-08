@@ -452,6 +452,7 @@ export async function reorderPortalLinks(
 // ============================================================================
 
 const BULK_IMPORT_AGENCY_SLUG = "portales-externos";
+const BULK_IMPORT_MAX_PER_CALL = 3;
 
 export type BulkImportOutcome = {
   linkId: string;
@@ -467,7 +468,11 @@ export async function bulkCreatePropertiesFromLinks(
   const g = await gate("create", clientId);
   if (!g.ok) return g;
 
-  const ids = [...new Set(linkIds)].slice(0, 30);
+  // Tope por LLAMADA, no por selección: cada llamada es una petición HTTP que
+  // descarga N anuncios reales y tiene que acabar antes del timeout del
+  // proxy. El panel parte la selección en tandas (sin límite total), así que
+  // marcar 41 o 400 pisos funciona igual.
+  const ids = [...new Set(linkIds)].slice(0, BULK_IMPORT_MAX_PER_CALL);
   if (ids.length === 0) return { ok: false, error: "No has marcado ningún anuncio." };
 
   // Solo enlaces de ESTE cliente y que todavía no sean ficha: repetir la

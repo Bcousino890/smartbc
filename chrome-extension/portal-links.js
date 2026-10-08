@@ -1266,6 +1266,18 @@
   // ── Envío ─────────────────────────────────────────────────────────────
   async function send() {
     if (!chosenClient || basket.length === 0) return;
+    // El último cliente elegido se recuerda entre sesiones y pestañas, y ya
+    // hubo pisos de un cliente que acabaron en la ficha de otro (6-oct):
+    // antes de enviar se confirma A QUIÉN van, con el nombre a la vista.
+    const n = Math.min(basket.length, MAX_SELECTION);
+    if (
+      !window.confirm(
+        `Vas a enviar ${n} anuncio${n === 1 ? "" : "s"} a la ficha de:\n\n${chosenClient.name}\n\n¿Es el cliente correcto?`,
+      )
+    ) {
+      return;
+    }
+
     const token = await requireToken();
     if (!token) return;
 

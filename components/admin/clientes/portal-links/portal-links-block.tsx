@@ -244,23 +244,45 @@ export function PortalLinksBlock({
    * son 15 descargas reales de Idealista, una detrás de otra a propósito.
    */
   const [bulkCreating, setBulkCreating] = useState(false);
+  const [bulkDone, setBulkDone] = useState(0);
+  const [bulkTotal, setBulkTotal] = useState(0);
   const [bulkResults, setBulkResults] = useState<BulkImportOutcome[] | null>(null);
-  const bulkImport = () => {
+  const bulkImport = async () => {
     setError(null);
     setBulkResults(null);
-    setBulkCreating(true);
     const ids = [...checked];
-    void bulkCreatePropertiesFromLinks(clientId, ids)
-      .then((res) => {
-        if (!res.ok) {
-          setError(res.error);
-          return;
+    setBulkTotal(ids.length);
+    setBulkDone(0);
+    setBulkCreating(true);
+
+    // Sin tope de pisos: se manda en tandas pequeñas, una petición corta por
+    // tanda. Una sola petición con 40 descargas de Idealista tardaba minutos y
+    // se caía por timeout, perdiendo todo el lote.
+    const BATCH = 3;
+    const all: BulkImportOutcome[] = [];
+    try {
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        let res: Awaited<ReturnType<typeof bulkCreatePropertiesFromLinks>>;
+        try {
+          res = await bulkCreatePropertiesFromLinks(clientId, batch);
+        } catch {
+          res = { ok: false, error: "se cortó la conexión con el servidor" };
         }
-        setBulkResults(res.results);
-        setChecked(new Set());
-        router.refresh();
-      })
-      .finally(() => setBulkCreating(false));
+        if (res.ok) {
+          all.push(...res.results);
+        } else {
+          // Una tanda fallida no tumba el resto: se anota y se sigue.
+          all.push(...batch.map((linkId) => ({ linkId, ok: false, detail: res.error })));
+        }
+        setBulkDone(Math.min(i + BATCH, ids.length));
+        setBulkResults([...all]);
+      }
+    } finally {
+      setBulkCreating(false);
+      setChecked(new Set());
+      router.refresh();
+    }
   };
 
   const filters: Array<[Filter, string, number]> = [
@@ -462,7 +484,7 @@ export function PortalLinksBlock({
                         <Building2 size={11} strokeWidth={1.75} />
                       )}
                       {bulkCreating
-                        ? `Creando fichas… (${checked.size})`
+                        ? `Creando fichas… (${bulkDone}/${bulkTotal})`
                         : `Crear ${checked.size} ficha${checked.size > 1 ? "s" : ""}`}
                     </button>
                   )}
