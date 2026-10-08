@@ -42,6 +42,12 @@ const RULES: { match: (host: string) => boolean; portal: ImportPortal }[] = [
     match: (h) => /(^|\.)airbnb\.[a-z.]+$/i.test(h) || /(^|\.)abnb\.me$/i.test(h),
     portal: "airbnb",
   },
+  {
+    // Solo la web de Sotheby's España: cada país de la red tiene su propia web
+    // con otra plataforma, y el extractor lee la estructura de ESTA (2026-10-08).
+    match: (h) => /(^|\.)spain-sothebysrealty\.com$/i.test(h),
+    portal: "sothebys",
+  },
 ];
 
 export function detectPortal(rawUrl: string): {

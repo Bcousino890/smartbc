@@ -11,6 +11,7 @@ import { extractInmoweb } from "./extractors/inmoweb";
 import { extractYaencontre } from "./extractors/yaencontre";
 import { extractUkio } from "./extractors/ukio";
 import { extractAirbnb, normalizeAirbnbUrl } from "./extractors/airbnb";
+import { extractSothebys } from "./extractors/sothebys";
 import { extractVideos, dedupeVideos } from "./extract-videos";
 import { dedupKey } from "../scrapers/image-utils";
 import { getProxyUrl } from "../proxy-config";
@@ -157,6 +158,9 @@ export async function extractFromUrl(
       break;
     case "airbnb":
       preview = extractAirbnb($, finalUrl);
+      break;
+    case "sothebys":
+      preview = extractSothebys($, finalUrl);
       break;
     case "mobilia":
     case "generic":
