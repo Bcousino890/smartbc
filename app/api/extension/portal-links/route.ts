@@ -2,6 +2,8 @@ import "server-only";
 import { verifyExtensionToken } from "@/lib/services/idealista/extension-token";
 import { createAdminClient } from "@/lib/db/admin";
 import { insertPortalLinks } from "@/lib/portal-links/insert";
+import { processPendingPortalLinks } from "@/lib/portal-links/auto-import";
+import { after } from "next/server";
 import { extensionCorsHeaders } from "@/lib/portal-links/extension-cors";
 import type { PortalLinkInput } from "@/lib/portal-links/types";
 
@@ -140,6 +142,10 @@ export async function POST(request: Request) {
   });
 
   if (result.error) return json({ error: result.error }, 500);
+
+  // Las fichas se crean solas en cuanto entran, después de responder a la
+  // extensión (lib/portal-links/auto-import.ts).
+  after(() => processPendingPortalLinks());
 
   return json(
     {

@@ -11,6 +11,8 @@ import { findNearbyUniversities } from "@/lib/geo/universities-nearby";
 import { currentMapProvider } from "@/lib/services/location/provider";
 import { getNeighborhoodPublic } from "@/lib/db/queries/neighborhoods";
 import { PublicPropertyView } from "./public-property-view";
+import { getClientDescription } from "@/lib/services/properties/client-description";
+import { PORTAL_IMPORT_AGENCY_SLUG } from "@/lib/portal-links/auto-import";
 import { CollectionReturnBar } from "@/components/public/collection-return-bar";
 
 export const dynamic = "force-dynamic";
@@ -166,6 +168,17 @@ export default async function PublicSharePage({
     cachedLat: row.latitude,
     cachedLng: row.longitude,
   });
+
+  // Ficha importada de un portal: su texto lo escribió OTRA inmobiliaria
+  // (nombre, teléfonos, referencias). Se enseña la versión limpia por IA, que
+  // se prepara al crear la ficha y se guarda (property_client_descriptions);
+  // si aún no existe, se genera aquí la primera vez. Las fichas propias no se
+  // tocan.
+  if (row.agencies?.slug === PORTAL_IMPORT_AGENCY_SLUG) {
+    const clean = await getClientDescription(row.id, "es");
+    (row as { description: string | null }).description = clean.description;
+    (row as { features: string[] | null }).features = clean.features;
+  }
 
   // `?op=rent` pide la variante de alquiler cuando la propiedad es dual
   // (venta + alquiler) — ver propertyRowToClientProperty.

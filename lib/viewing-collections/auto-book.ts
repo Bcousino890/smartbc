@@ -21,7 +21,7 @@ import { POSITION_STEP } from "@/lib/viewing-collections/types";
 // ============================================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export async function syncDraftBook(clientId: string, userId: string): Promise<void> {
+export async function syncDraftBook(clientId: string, userId: string | null): Promise<void> {
   try {
     const settings = await getViewingCollectionsSettings();
     if (!settings.enabled) return;
@@ -30,11 +30,14 @@ export async function syncDraftBook(clientId: string, userId: string): Promise<v
 
     const { data: selections, error: selErr } = await db
       .from("client_property_selections")
-      .select("id, position, created_at")
+      .select("id, position, added_at")
       .eq("client_id", clientId)
       .neq("status", "discarded")
       .order("position", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true });
+      // ⚠️ Es added_at: hasta 2026-10-08 pedía created_at, que no existe en
+      // esta tabla. La consulta fallaba siempre, el catch lo tragaba, y el
+      // book automático no llegó a crear ni un borrador desde que se escribió.
+      .order("added_at", { ascending: true });
     if (selErr) throw new Error(selErr.message);
     if (!selections?.length) return;
 

@@ -14,12 +14,18 @@
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { requireStaff } from "@/lib/db/auth-helpers";
 import { checkPermission } from "@/lib/auth/guard";
 import { canAccessClientLinks } from "@/lib/db/queries/portal-links";
-import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
+import {
+  attachPropertyToLink,
+  importPortalLink,
+  processPendingPortalLinks,
+  type LinkImportOutcome,
+} from "@/lib/portal-links/auto-import";
 import { syncDiscardedLink } from "@/lib/portal-links/discard-sync";
 import { createItinerary } from "./viewing-collections-actions";
 import {
@@ -113,6 +119,10 @@ export async function addPortalLinks(
       error: "Ninguno de los enlaces es válido (solo http:// o https://).",
     };
   }
+
+  // Las fichas se crean solas en cuanto entran los enlaces, después de
+  // responder: el agente no espera a las descargas del portal.
+  after(() => processPendingPortalLinks());
 
   revalidateClient(clientId);
   return {
@@ -342,51 +352,17 @@ export async function linkPropertyToPortalLink(
   const g = await gate("edit", clientId);
   if (!g.ok) return g;
 
-  const { data: prop } = await db()
-    .from("properties")
-    .select("id, country")
-    .eq("id", propertyId)
-    .maybeSingle();
-  if (!prop) return { ok: false, error: "Esa propiedad no existe." };
-
-  const { error } = await db()
-    .from("client_portal_links")
-    .update({ property_id: propertyId, status: "converted" })
-    .eq("id", linkId);
-  if (error) return { ok: false, error: translateLinkDbError(error.message) };
-
-  const { error: selError } = await db()
-    .from("client_property_selections")
-    .upsert(
-      {
-        client_id: clientId,
-        property_id: propertyId,
-        source: "manual",
-        added_by: g.userId,
-        country: (prop as { country?: string }).country === "cl" ? "cl" : "es",
-      },
-      { onConflict: "client_id,property_id", ignoreDuplicates: true },
-    );
-
-  // Que falle la selección no debe deshacer el vínculo: la ficha ya existe y
-  // añadirla a la selección se puede repetir desde el propio panel.
-  const addedToSelection = !selError;
-  if (selError) {
-    console.error("[portal-links] no se pudo añadir a la selección:", selError.message);
-  } else {
-    await syncDraftBook(clientId, g.userId);
-  }
-
-  await db().from("client_portal_link_notes").insert({
-    link_id: linkId,
-    author_id: g.userId,
-    kind: "status",
-    body: "Ficha creada en el CRM y añadida a la selección del cliente.",
-    status_after: "converted",
+  const res = await attachPropertyToLink({
+    linkId,
+    clientId,
+    propertyId,
+    userId: g.userId,
+    note: "Ficha creada en el CRM y añadida a la selección del cliente.",
   });
+  if (!res.ok) return { ok: false, error: translateLinkDbError(res.error) };
 
   revalidateClient(clientId);
-  return { ok: true, addedToSelection };
+  return { ok: true, addedToSelection: res.addedToSelection };
 }
 
 /**
@@ -473,15 +449,9 @@ export async function reorderPortalLinks(
 // panel pueda decir exactamente cuáles quedaron pendientes y por qué.
 // ============================================================================
 
-const BULK_IMPORT_AGENCY_SLUG = "portales-externos";
 const BULK_IMPORT_MAX_PER_CALL = 3;
 
-export type BulkImportOutcome = {
-  linkId: string;
-  ok: boolean;
-  /** Motivo legible cuando ok=false; título de la ficha creada cuando ok=true. */
-  detail: string;
-};
+export type BulkImportOutcome = LinkImportOutcome;
 
 export async function bulkCreatePropertiesFromLinks(
   clientId: string,
@@ -492,112 +462,25 @@ export async function bulkCreatePropertiesFromLinks(
 
   // Tope por LLAMADA, no por selección: cada llamada es una petición HTTP que
   // descarga N anuncios reales y tiene que acabar antes del timeout del
-  // proxy. El panel parte la selección en tandas (sin límite total), así que
-  // marcar 41 o 400 pisos funciona igual.
+  // proxy. El panel parte la selección en tandas (sin límite total).
   const ids = [...new Set(linkIds)].slice(0, BULK_IMPORT_MAX_PER_CALL);
   if (ids.length === 0) return { ok: false, error: "No has marcado ningún anuncio." };
 
-  // Solo enlaces de ESTE cliente y que todavía no sean ficha: repetir la
-  // acción sobre uno ya convertido no debe crear una segunda propiedad.
+  // Solo enlaces de ESTE cliente y que todavía no sean ficha.
   const { data: links } = await db()
     .from("client_portal_links")
-    .select("id, url, country, status")
+    .select("id")
     .eq("client_id", clientId)
     .in("id", ids)
     .neq("status", "converted");
-  const rows = (links ?? []) as Array<{
-    id: string;
-    url: string;
-    country: string;
-    status: string;
-  }>;
-
+  const rows = (links ?? []) as Array<{ id: string }>;
   if (rows.length === 0) {
     return { ok: false, error: "Los marcados ya tienen ficha o no son de este cliente." };
   }
 
-  const { data: agency } = await db()
-    .from("agencies")
-    .select("id")
-    .eq("slug", BULK_IMPORT_AGENCY_SLUG)
-    .maybeSingle();
-  if (!agency) {
-    return { ok: false, error: `No existe la agencia "${BULK_IMPORT_AGENCY_SLUG}".` };
-  }
-
-  // Import dinámico: este módulo trae scrapers pesados (Playwright, etc.) que
-  // no hace falta cargar en el resto de acciones de este fichero.
-  const { extractFromUrl } = await import("@/lib/sync/import-by-link");
-  const { insertImportedProperty } = await import("@/lib/sync/import-by-link/insert");
-
+  // Mismo camino que la creación automática (lib/portal-links/auto-import).
   const results: BulkImportOutcome[] = [];
-
-  for (const link of rows) {
-    const extracted = await extractFromUrl(link.url);
-    if (!extracted.ok) {
-      const REASONS: Record<string, string> = {
-        fetch_failed: "no se pudo descargar la página",
-        blocked: "el portal bloqueó la petición",
-        unsupported_url: "portal no soportado",
-        parse_failed: "no se pudo leer el HTML",
-      };
-      results.push({
-        linkId: link.id,
-        ok: false,
-        detail: REASONS[extracted.error.kind] ?? "fallo desconocido",
-      });
-      continue;
-    }
-
-    const preview = extracted.preview;
-    const title = preview.title?.trim();
-    const zone = preview.zone?.trim();
-    // Mismas validaciones mínimas que confirmByLink: si el scraping no trajo
-    // lo imprescindible, mejor dejarlo pendiente que crear una ficha coja.
-    if (!title || !zone || !preview.price || preview.price <= 0) {
-      results.push({
-        linkId: link.id,
-        ok: false,
-        detail: "faltan datos básicos (título, zona o precio) en el anuncio",
-      });
-      continue;
-    }
-
-    const inserted = await insertImportedProperty({
-      preview,
-      agencyId: (agency as { id: string }).id,
-      agencySlug: BULK_IMPORT_AGENCY_SLUG,
-      country: link.country === "cl" ? "cl" : "es",
-      overrides: {
-        title,
-        description: preview.description?.trim() || null,
-        operation: preview.operation === "rent" ? "rent" : "sale",
-        stay: preview.stay ?? null,
-        price: preview.price,
-        bedrooms: preview.bedrooms ?? 0,
-        bathrooms: preview.bathrooms ?? 0,
-        squareMeters: preview.squareMeters ?? null,
-        zone,
-        address: preview.address?.trim() || null,
-        features: preview.features,
-        externalReference: preview.externalReference,
-      },
-    });
-
-    if (!inserted.ok) {
-      results.push({ linkId: link.id, ok: false, detail: inserted.error });
-      continue;
-    }
-
-    const linked = await linkPropertyToPortalLink(link.id, inserted.propertyId);
-    results.push({
-      linkId: link.id,
-      ok: true,
-      // La ficha YA existe aunque el vínculo falle: se avisa en vez de
-      // deshacer una importación buena, igual que en el camino de uno en uno.
-      detail: linked.ok ? title : `${title} (ficha creada, pero sin vincular)`,
-    });
-  }
+  for (const link of rows) results.push(await importPortalLink(link.id, g.userId));
 
   revalidateClient(clientId);
   return { ok: true, results };

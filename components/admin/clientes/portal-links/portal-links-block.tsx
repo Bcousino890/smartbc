@@ -207,8 +207,10 @@ export function PortalLinksBlock({
    * El título lleva la fecha para poder distinguirlas de un vistazo en la
    * ficha. Es interno: el cliente no lo ve.
    */
+  const [sentLink, setSentLink] = useState<{ url: string; copied: boolean } | null>(null);
   const sendToClient = async () => {
     setError(null);
+    setSentLink(null);
     const ids = [...checked];
     await importMissing(ids, "Mandando al cliente");
     setBusyLabel("Mandando al cliente…");
@@ -225,6 +227,19 @@ export function PortalLinksBlock({
         setError(res.error);
         return;
       }
+      // El enlace queda copiado para pegarlo donde se hable con el cliente
+      // (WhatsApp, correo). Si el navegador no deja copiar —tras minutos
+      // creando fichas puede haber perdido el permiso—, el aviso lleva un
+      // botón para copiarlo a mano.
+      const url = `${window.location.origin}/s/${res.token}`;
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch {
+        /* se ofrece el botón */
+      }
+      setSentLink({ url, copied });
       setChecked(new Set());
     } finally {
       setBusyLabel(null);
@@ -680,7 +695,7 @@ export function PortalLinksBlock({
                         type="button"
                         disabled={pending || busy}
                         onClick={sendToClient}
-                        title="Crea una selección privada NUEVA con estos anuncios para que el cliente los ordene. Antes crea la ficha de los que no la tienen, para que vea todas las fotos y la descripción."
+                        title="Crea una selección privada NUEVA con estos anuncios y copia su enlace para pegarlo en el chat del cliente. No le envía nada: lo mandas tú."
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gold/45 bg-white px-3 py-1.5 font-sans text-xs font-medium text-gold-dark transition hover:border-gold disabled:opacity-50"
                       >
                         <Send size={11} strokeWidth={1.75} />
@@ -704,6 +719,27 @@ export function PortalLinksBlock({
                   {busyLabel}
                   <span className="text-ink/40">· no cierres esta pestaña</span>
                 </p>
+              )}
+
+              {sentLink && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 font-sans text-xs text-emerald-800">
+                  <span className="font-medium">
+                    {sentLink.copied
+                      ? "✓ Selección creada · enlace copiado, pégalo en el chat del cliente"
+                      : "✓ Selección creada"}
+                  </span>
+                  <span className="min-w-0 truncate text-emerald-700/80">{sentLink.url}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(sentLink.url).catch(() => {});
+                      setSentLink({ ...sentLink, copied: true });
+                    }}
+                    className="ml-auto rounded-lg border border-emerald-300 bg-white px-2.5 py-1 font-medium text-emerald-800 transition hover:border-emerald-500"
+                  >
+                    Copiar enlace
+                  </button>
+                </div>
               )}
 
               {andreaNotice && (
