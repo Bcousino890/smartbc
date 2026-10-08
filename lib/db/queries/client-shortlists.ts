@@ -62,7 +62,10 @@ const SHORTLIST_SELECT = `
     id, property_id, portal_link_id, origin, decision, rank, client_comment,
     position, decided_at,
     properties ( ${PUBLIC_PROPERTY_SELECT} ),
-    client_portal_links ( ${PUBLIC_PORTAL_LINK_SELECT} )
+    client_portal_links (
+      ${PUBLIC_PORTAL_LINK_SELECT},
+      linked:properties!client_portal_links_property_id_fkey ( ${PUBLIC_PROPERTY_SELECT} )
+    )
   )
 `;
 
@@ -204,10 +207,14 @@ export async function getPublicShortlistByToken(
     items: renumberVisibleRanks(
       (await hideTeamDiscarded(data.client_id, data.client_shortlist_items ?? []))
       .map((it: any) => {
-        const link = pickOne<any>(it.client_portal_links);
+        // Un anuncio al que ya se le creó ficha se enseña con la FICHA: todas
+        // sus fotos y sus datos, no la única foto que trajo el anuncio.
+        const rawLink = pickOne<any>(it.client_portal_links);
+        const linked = rawLink ? pickOne<any>(rawLink.linked) : null;
+        const link = linked ? null : rawLink;
         const prop = link
           ? portalLinkAsProperty(link)
-          : pickOne<any>(it.properties);
+          : linked ?? pickOne<any>(it.properties);
         if (!prop) return null;
         // Una propiedad archivada deja de mostrarse: el cliente no debe
         // priorizar algo que ya no se puede visitar.
@@ -311,10 +318,14 @@ export async function getClientShortlists(
         // Dos fuentes posibles: ficha nuestra o anuncio de portal todavía sin
         // ficha. El panel las muestra igual; lo que cambia es que del enlace
         // no hay slug al que enlazar ni referencia BC-####.
-        const link = pickOne<any>(it.client_portal_links);
+        // Un anuncio al que ya se le creó ficha se enseña con la FICHA: todas
+        // sus fotos y sus datos, no la única foto que trajo el anuncio.
+        const rawLink = pickOne<any>(it.client_portal_links);
+        const linked = rawLink ? pickOne<any>(rawLink.linked) : null;
+        const link = linked ? null : rawLink;
         const prop = link
           ? portalLinkAsProperty(link)
-          : pickOne<any>(it.properties);
+          : linked ?? pickOne<any>(it.properties);
         if (!prop) return null;
         return {
           id: it.id,
@@ -342,8 +353,8 @@ export async function getClientShortlists(
             /** Sin ficha todavía: el panel lo dice y no ofrece "Ver ficha". */
             pendingProperty: Boolean(link),
           },
-          inSelection: it.property_id
-            ? inSelection.has(it.property_id)
+          inSelection: (it.property_id ?? linked?.id)
+            ? inSelection.has(it.property_id ?? linked?.id)
             : false,
         };
       })
@@ -411,10 +422,14 @@ export async function getShortlistPreview(
       .map((it: any) => {
         // La previsualización del agente tiene que enseñar EXACTAMENTE lo
         // mismo que verá el cliente, enlaces de portal incluidos.
-        const link = pickOne<any>(it.client_portal_links);
+        // Un anuncio al que ya se le creó ficha se enseña con la FICHA: todas
+        // sus fotos y sus datos, no la única foto que trajo el anuncio.
+        const rawLink = pickOne<any>(it.client_portal_links);
+        const linked = rawLink ? pickOne<any>(rawLink.linked) : null;
+        const link = linked ? null : rawLink;
         const prop = link
           ? portalLinkAsProperty(link)
-          : pickOne<any>(it.properties);
+          : linked ?? pickOne<any>(it.properties);
         if (!prop) return null;
         if (prop.archived_at || prop.status === "archived") return null;
         return {

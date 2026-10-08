@@ -87,6 +87,10 @@ export type ShortlistDictionary = {
   bedrooms: string;
   bathrooms: string;
   surface: string;
+  /** Detalle de "Ver residencia" */
+  aboutResidence: string;
+  features: string;
+  loadingDetails: string;
   /** Terminal */
   emptyState: string;
 };
@@ -154,6 +158,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "Dormitorios",
     bathrooms: "Baños",
     surface: "Superficie",
+    aboutResidence: "Sobre la residencia",
+    features: "Características",
+    loadingDetails: "Cargando…",
     emptyState: "Todavía no hay residencias en esta selección.",
   },
 
@@ -219,6 +226,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "Bedrooms",
     bathrooms: "Bathrooms",
     surface: "Surface",
+    aboutResidence: "About the residence",
+    features: "Features",
+    loadingDetails: "Loading…",
     emptyState: "There are no residences in this selection yet.",
   },
 
@@ -284,6 +294,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "Chambres",
     bathrooms: "Salles de bain",
     surface: "Surface",
+    aboutResidence: "À propos de la résidence",
+    features: "Caractéristiques",
+    loadingDetails: "Chargement…",
     emptyState: "Il n'y a encore aucune résidence dans cette sélection.",
   },
 
@@ -349,6 +362,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "Camere",
     bathrooms: "Bagni",
     surface: "Superficie",
+    aboutResidence: "La residenza",
+    features: "Caratteristiche",
+    loadingDetails: "Caricamento…",
     emptyState: "Non ci sono ancora residenze in questa selezione.",
   },
 
@@ -414,6 +430,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "Schlafzimmer",
     bathrooms: "Badezimmer",
     surface: "Fläche",
+    aboutResidence: "Über die Residenz",
+    features: "Merkmale",
+    loadingDetails: "Wird geladen…",
     emptyState: "In dieser Auswahl gibt es noch keine Residenzen.",
   },
 
@@ -478,6 +497,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "غرف النوم",
     bathrooms: "الحمامات",
     surface: "المساحة",
+    aboutResidence: "عن المسكن",
+    features: "المواصفات",
+    loadingDetails: "جارٍ التحميل…",
     emptyState: "لا توجد مساكن في هذه القائمة بعد.",
   },
 
@@ -543,6 +565,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "Yatak odası",
     bathrooms: "Banyo",
     surface: "Alan",
+    aboutResidence: "Konut hakkında",
+    features: "Özellikler",
+    loadingDetails: "Yükleniyor…",
     emptyState: "Bu seçkide henüz konut yok.",
   },
 
@@ -607,6 +632,9 @@ const DICTS: Record<CollectionLanguage, ShortlistDictionary> = {
     bedrooms: "חדרי שינה",
     bathrooms: "חדרי רחצה",
     surface: "שטח",
+    aboutResidence: "על הנכס",
+    features: "מאפיינים",
+    loadingDetails: "טוען…",
     emptyState: "אין עדיין נכסים בבחירה הזו.",
   },
 };

@@ -240,14 +240,30 @@ export async function createItineraryFromShortlist(
     .from("client_shortlists")
     .select(
       `id, client_id, language, country,
-       client_shortlist_items ( property_id, decision, rank, position, origin )`,
+       client_shortlist_items (
+         property_id, decision, rank, position, origin,
+         client_portal_links ( property_id, status )
+       )`,
     )
     .eq("id", shortlistId)
     .maybeSingle();
 
   if (!shortlist) return { ok: false, error: "Selección no encontrada." };
 
+  // Un anuncio de portal al que ya se le creó ficha cuenta como esa ficha; uno
+  // que el equipo descartó no entra aunque el cliente lo marcara.
   let wanted = (shortlist.client_shortlist_items ?? [])
+    .map((i: any) => {
+      const link = Array.isArray(i.client_portal_links)
+        ? i.client_portal_links[0]
+        : i.client_portal_links;
+      return {
+        ...i,
+        property_id: i.property_id ?? link?.property_id ?? null,
+        teamDiscarded: link?.status === "discarded",
+      };
+    })
+    .filter((i: any) => !i.teamDiscarded)
     .filter(
       (i: any) =>
         i.decision === "must_visit" ||

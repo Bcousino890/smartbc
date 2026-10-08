@@ -24,7 +24,7 @@ export default async function ShortlistPreviewPage({
       <div className="bg-ink px-4 py-2 text-center font-display text-[10px] font-medium uppercase vc-tracked text-cream-50/80">
         Previsualización · así lo verá el cliente
       </div>
-      <ShortlistView shortlist={result.shortlist} token="" />
+      <ShortlistView shortlist={result.shortlist} token="" previewShortlistId={shortlistId} />
     </>
   );
 }

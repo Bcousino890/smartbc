@@ -24,6 +24,8 @@ import { createAdminClient } from "@/lib/db/admin";
 import { resolveShortlistByToken } from "@/lib/db/queries/client-shortlists";
 import { allowShortlistWrite } from "@/lib/client-shortlist/rate-limit";
 import type { ShortlistDecision } from "@/lib/client-shortlist/types";
+import { checkPermission } from "@/lib/auth/guard";
+import { getClientDescription } from "@/lib/services/properties/client-description";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -385,4 +387,55 @@ export async function searchShortlistProperties(
       alreadyIn: already.has(prop.id),
     };
   });
+}
+
+// ============================================================================
+// "Ver residencia": descripción y características (solo lectura).
+// ============================================================================
+// Se pide al abrir el detalle, no al cargar la página: la primera vez que se
+// abre una residencia hay que limpiar su texto con IA (quitar la inmobiliaria
+// de origen, teléfonos, referencias), y hacerlo para las 30 de golpe dejaría
+// la selección en blanco varios segundos. Ver lib/services/properties/client-description.ts.
+//
+// Mismo aislamiento que las escrituras: el item se comprueba contra el
+// shortlist del token. La previsualización del agente no tiene token: entra
+// con el id de la selección y exige sesión de equipo.
+
+export type ResidenceDetailResult =
+  | { ok: true; description: string | null; features: string[] }
+  | { ok: false };
+
+export async function getResidenceDetail(
+  ref: { token?: string; previewShortlistId?: string },
+  itemId: string,
+): Promise<ResidenceDetailResult> {
+  let shortlistId: string | null = null;
+  if (ref.token) {
+    const s = await resolveShortlistByToken(ref.token);
+    shortlistId = s?.id ?? null;
+  } else if (ref.previewShortlistId) {
+    const gate = await checkPermission("viewing_collections", "view");
+    if (gate.ok) shortlistId = ref.previewShortlistId;
+  }
+  if (!shortlistId || !itemId || itemId.length > 64) return { ok: false };
+
+  const { data: item } = await db()
+    .from("client_shortlist_items")
+    .select(
+      "property_id, shortlist:client_shortlists!inner ( language ), client_portal_links ( property_id )",
+    )
+    .eq("id", itemId)
+    .eq("shortlist_id", shortlistId)
+    .maybeSingle();
+  if (!item) return { ok: false };
+
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const propertyId: string | null =
+    item.property_id ?? one(item.client_portal_links)?.property_id ?? null;
+  // Anuncio todavía sin ficha: no hay descripción nuestra que enseñar.
+  if (!propertyId) return { ok: true, description: null, features: [] };
+
+  const language = one(item.shortlist)?.language ?? "es";
+  const detail = await getClientDescription(propertyId, language);
+  return { ok: true, ...detail };
 }

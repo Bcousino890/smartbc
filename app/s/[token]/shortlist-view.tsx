@@ -40,6 +40,7 @@ import { ShortlistNav, type ShortlistMode } from "./_components/shortlist-nav";
 import { ReviewStage } from "./_components/review-stage";
 import { PriorityRow } from "./_components/priority-row";
 import { NoteSheet } from "./_components/note-sheet";
+import { ResidenceSheet } from "./_components/residence-sheet";
 import { AddResidenceSheet } from "./_components/add-residence-sheet";
 import { SubmitBar } from "./_components/submit-bar";
 import {
@@ -55,10 +56,13 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 export function ShortlistView({
   shortlist,
   token,
+  previewShortlistId,
 }: {
   shortlist: PublicClientShortlist;
   /** Vacío en la previsualización del agente: ni escribe ni instrumenta. */
   token: string;
+  /** Solo en la previsualización: para leer el detalle de cada residencia. */
+  previewShortlistId?: string;
 }) {
   const router = useRouter();
   const t = getShortlistDictionary(shortlist.language);
@@ -75,6 +79,8 @@ export function ShortlistView({
   const [save, setSave] = useState<SaveState>("idle");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [gallery, setGallery] = useState<PublicShortlistProperty | null>(null);
+  const [galleryStart, setGalleryStart] = useState(0);
+  const [detail, setDetail] = useState<PublicShortlistProperty | null>(null);
   const [noteFor, setNoteFor] = useState<PublicShortlistProperty | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [submitted, setSubmitted] = useState(shortlist.submitted);
@@ -520,7 +526,7 @@ export function ShortlistView({
           onNext={() =>
             setCursor((c) => Math.min(reviewOrder.length - 1, c + 1))
           }
-          onView={() => setGallery(current)}
+          onView={() => setDetail(current)}
           onNote={() => setNoteFor(current)}
           hasPrev={cursor > 0}
           hasNext={cursor < reviewOrder.length - 1}
@@ -551,7 +557,7 @@ export function ShortlistView({
                     canMoveUp={i > 0}
                     canMoveDown={i < groups.must.length - 1}
                     onMove={(d) => move(p, d)}
-                    onView={() => setGallery(p)}
+                    onView={() => setDetail(p)}
                     onNote={() => setNoteFor(p)}
                     onDecide={(d) => decide(p, d)}
                     busy={busyId === p.itemId}
@@ -575,7 +581,7 @@ export function ShortlistView({
                 property={p}
                 t={t}
                 compact
-                onView={() => setGallery(p)}
+                onView={() => setDetail(p)}
                 onNote={() => setNoteFor(p)}
                 onDecide={(d) => decide(p, d)}
                 busy={busyId === p.itemId}
@@ -594,7 +600,7 @@ export function ShortlistView({
                 property={p}
                 t={t}
                 compact
-                onView={() => setGallery(p)}
+                onView={() => setDetail(p)}
                 onNote={() => setNoteFor(p)}
                 onDecide={(d) => decide(p, d)}
                 busy={busyId === p.itemId}
@@ -713,13 +719,27 @@ export function ShortlistView({
         </div>
       )}
 
+      {detail && (
+        <ResidenceSheet
+          t={t}
+          property={detail}
+          token={token}
+          previewShortlistId={previewShortlistId}
+          onOpenGallery={(i) => {
+            setGalleryStart(i);
+            setGallery(detail);
+          }}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
       {gallery && (
         <PrivateGallery
           title={gallery.title}
           photos={gallery.photoUrls}
           dict={galleryDict}
           rtl={rtl}
-          startIndex={0}
+          startIndex={galleryStart}
           onClose={() => setGallery(null)}
         />
       )}

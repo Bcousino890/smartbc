@@ -165,9 +165,10 @@ export function toPublicClientShortlist(
         squareMeters: prop.square_meters ?? null,
         bcReference: prop.bc_reference ?? null,
         coverPhotoUrl: photos[0] ?? null,
-        // Hasta 8: suficiente para recordar la casa, sin cargar 14 galerías
-        // enteras en un móvil.
-        photoUrls: photos.slice(0, 8),
+        // Hasta 60. Antes eran 8, pero "Ver residencia" es ahora donde el
+        // cliente estudia la casa y 8 fotos de 40 no la cuentan. No pesa: solo
+        // la galería usa esta lista, al abrirla, y carga en diferido.
+        photoUrls: photos.slice(0, 60),
         pendingProperty: Boolean(item.externalPhotoUrls),
         origin: item.origin,
         decision: item.decision,
