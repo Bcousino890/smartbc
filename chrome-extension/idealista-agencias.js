@@ -1,9 +1,8 @@
 // Agencias de Idealista que ya conocemos, solo para SUGERIR nombres al escribir
-// en "Ocultar agencias" (2026-10-09). Salen de las 27 primeras páginas del
-// directorio de inmobiliarias de Madrid (las de más anuncios primero) y de
-// listados de Chamberí. NO es una lista cerrada: se puede escribir cualquier
-// nombre, y la extensión recuerda además las agencias que va viendo al navegar
-// (idealista-filters.js).
+// en "Ocultar agencias" (2026-10-09). Salen del directorio de inmobiliarias de
+// Madrid (las de más anuncios primero) y de listados de Chamberí. NO es una
+// lista cerrada: se puede escribir cualquier nombre, y la extensión recuerda
+// además las agencias que va viendo al navegar (idealista-filters.js).
 window.__smartbcAgencias = [
  "+PISO",
  "31 Real Servicios Inmobiliarios",
@@ -59,6 +58,7 @@ window.__smartbcAgencias = [
  "BASTIA INMOBILIARIA - Vallecas",
  "BATUECAS REAL ESTATE",
  "Be Premium Real Estate",
+ "BEK Properties",
  "BELTON REAL ESTATE",
  "BERNADO LUXURY HOUSES",
  "Berskhire Hathaway HomeServices Madrid (BHHS)",
@@ -78,6 +78,7 @@ window.__smartbcAgencias = [
  "Clikalia España",
  "COLDWELL BANKER - UNIQUE REAL ESTATE",
  "COLIVE",
+ "Colomba Boutique Inmobiliaria",
  "CONSORCIO REAL ESTATE ÓPERA",
  "CONSULTING INMOBILIARIO ESQUIVEL S.L.U",
  "Cuadrado & Burgos Asesores",
@@ -98,6 +99,7 @@ window.__smartbcAgencias = [
  "Domus Now Getafe",
  "Domus RS",
  "Don Chamberi Grupo Inmobiliario",
+ "DONPISO MADRID HISPANOAMÉRICA",
  "DS Realty",
  "eHabitar",
  "EMBASSY PROPERTIES",
@@ -145,6 +147,7 @@ window.__smartbcAgencias = [
  "Gilmar Pozuelo - Aravaca",
  "GILMAR Viso - Chamartín",
  "Globalpiso",
+ "globalpiso San Blas",
  "GRUPO ALQUILA",
  "GRUPO INMOBILIA Servicios Inmobiliarios",
  "Grupo Inmobiliario EXTRA",
@@ -173,6 +176,7 @@ window.__smartbcAgencias = [
  "Hounting",
  "House & House",
  "House Hunting",
+ "HOUSELAND",
  "HOUSELAND SERVICIOS INMOBILIARIOS",
  "Housfy Madrid",
  "HousinGo",
@@ -187,6 +191,7 @@ window.__smartbcAgencias = [
  "Inmobiliaria D. Maqueda",
  "Inmobiliaria ferpra",
  "Inmobiliaria ferrari",
+ "Inmobiliaria Tagonia",
  "Inmobiliaria Zona Madrid",
  "Inmobiliarias Encuentro Arganzuela",
  "INMOBILIARIAS ENCUENTRO CALLE TOLEDO",
@@ -220,6 +225,7 @@ window.__smartbcAgencias = [
  "La Casa Agency PUNTO LATINA-MADRID RIO",
  "La Casa Agency | Comillas Real Estate",
  "La Casa Agency | Vista Alegre",
+ "Lady Casa asesores inmobiliarios",
  "LAFINCA",
  "Lemonhouse",
  "LEVEL REAL ESTATE",
@@ -248,6 +254,7 @@ window.__smartbcAgencias = [
  "MENGÓ CONSULTORES",
  "Mimaison",
  "Miscasa",
+ "Moradia Servicios Inmobiliarios",
  "MOREHOUSE",
  "Mr House Real Estate",
  "Mundhogar",
@@ -270,6 +277,7 @@ window.__smartbcAgencias = [
  "OIH INMOBILIARIA",
  "Olisson Club",
  "ONOMA Homes",
+ "Optimacasa",
  "Pacego",
  "Peymar Inmobiliaria y Gestión S.L.",
  "Private Real Estate",
@@ -291,10 +299,12 @@ window.__smartbcAgencias = [
  "REDPISO ALUCHE-OCAÑA",
  "REDPISO ARTURO SORIA",
  "REDPISO BARRIO DE LA CONCEPCION",
+ "REDPISO LOS ROSALES-PERALES DEL RIO",
  "REDPISO MALASAÑA-UNIVERSIDAD",
  "REDPISO PASEO DE EXTREMADURA",
  "REDPISO PLAZA CASTILLA-CHAMARTIN",
  "REDPISO PROSPERIDAD",
+ "REDPISO SAN LORENZO-HORTALEZA",
  "REDPISO VICALVARO",
  "Rei",
  "Reines Grupo Inmobiliario Chamartin",
@@ -324,6 +334,7 @@ window.__smartbcAgencias = [
  "SM HOMES Gestión Inmobiliaria",
  "Solfai",
  "Soluciones Tengacasa",
+ "SOLVIA Chamberí",
  "Solvia HR",
  "Solvia Inmobiliaria IB",
  "Sophiq Properties",
@@ -333,6 +344,7 @@ window.__smartbcAgencias = [
  "Spain Sotheby's International Realty",
  "Spanish Home",
  "Sr. Piso",
+ "SRV & AGENCIA A",
  "Statex",
  "SUMA Inmobiliaria",
  "Tailor & Key",
@@ -351,6 +363,7 @@ window.__smartbcAgencias = [
  "Tecnocasa Moscardo-Usera-Plaza Eliptica.",
  "TECNOCASA PROSPERIDAD",
  "TECNOCASA RETIRO Y MORATALAZ",
+ "Tecnocasa Usera",
  "TEMPOCASA",
  "TengoPiso Arcentales",
  "Tengotucasa",
@@ -361,6 +374,7 @@ window.__smartbcAgencias = [
  "TGG INMOBILIARIA",
  "THE AVENUE Select Real Estate",
  "Torresrubí gestión inmobiliaria",
+ "tratopersonal sl",
  "TRIACA REAL ESTATE",
  "Tu Piso Servicios Inmobiliarios",
  "Tuksa Premium Real Estate",

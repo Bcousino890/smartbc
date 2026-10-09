@@ -1364,6 +1364,15 @@
   // ── Arranque ──────────────────────────────────────────────────────────
   async function boot() {
     buildPanel();
+    // Token precargado (ficheros de instalación personalizados): si la
+    // extensión no tiene token guardado y existe `window.__smartbcSeedToken`
+    // (lo define seed-token.js, que NO está en el repositorio), se guarda al
+    // arrancar. Así una extensión recién instalada ya sale configurada.
+    const tokenSaved = await load([K.token]);
+    if (!tokenSaved[K.token] && typeof window.__smartbcSeedToken === "string" && window.__smartbcSeedToken) {
+      store({ [K.token]: window.__smartbcSeedToken });
+    }
+
     const saved = await load([K.basket, K.collapsed, K.client]);
     basket = Array.isArray(saved[K.basket]) ? saved[K.basket] : [];
     collapsed = saved[K.collapsed] === true;

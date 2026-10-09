@@ -253,6 +253,7 @@
     }
 
     const input = root.querySelector(".smartbc-agency-input");
+    input.addEventListener("focus", () => refreshSuggestions(true));
     const submit = () => {
       const parts = input.value.split(/[,;\n]+/);
       input.value = "";
@@ -337,17 +338,9 @@
       }),
     );
 
-    // Sugerencias al escribir: las conocidas + las vistas navegando.
-    const known = new Map();
-    for (const n of window.__smartbcAgencias || []) known.set(norm(n), n);
-    for (const n of Object.values(seenAgencies)) known.set(norm(n), n);
-    const dl = root.querySelector("#smartbc-agencias-list");
-    dl.innerHTML = "";
-    for (const n of [...known.values()].sort((a, b) => a.localeCompare(b, "es"))) {
-      const o = document.createElement("option");
-      o.value = n;
-      dl.appendChild(o);
-    }
+    // Sugerencias al escribir: se construyen la primera vez que se enfoca la
+    // casilla (son miles de nombres) y después solo se añaden las vistas nuevas.
+    refreshSuggestions(false);
 
     // Agencias ocultas, una a una.
     const termsEl = root.querySelector(".smartbc-terms");
@@ -389,6 +382,32 @@
       });
       status.appendChild(reset);
     }
+  }
+
+  // ── Sugerencias de agencias ───────────────────────────────────────────
+  // La lista conocida (idealista-agencias.js) tiene miles de nombres: crear sus
+  // <option> en cada cambio de filtro sería lento, así que se hace una vez, al
+  // enfocar la casilla, y luego solo se añaden las agencias vistas navegando.
+  let suggestionsBuilt = false;
+  const suggested = new Set();
+  function refreshSuggestions(force) {
+    const { root } = ensureUi();
+    const input = root.querySelector(".smartbc-agency-input");
+    if (!suggestionsBuilt && !force && document.activeElement !== input) return;
+    suggestionsBuilt = true;
+    const dl = root.querySelector("#smartbc-agencias-list");
+    const frag = document.createDocumentFragment();
+    const add = (n) => {
+      const k = norm(n);
+      if (!k || suggested.has(k)) return;
+      suggested.add(k);
+      const o = document.createElement("option");
+      o.value = n;
+      frag.appendChild(o);
+    };
+    for (const n of Object.values(seenAgencies)) add(n); // las vistas, primero
+    for (const n of window.__smartbcAgencias || []) add(n);
+    dl.appendChild(frag);
   }
 
   // ── Memoria entre páginas ─────────────────────────────────────────────
