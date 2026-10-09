@@ -152,3 +152,26 @@ La pestaña Propiedades lleva un punto dorado mientras haya anuncios nuevos.
   falta para llamar.
 - El teléfono del anuncio casi nunca está en el listado (los portales lo
   ocultan): se escribe en la propia ficha al llamar la primera vez.
+
+## Filtros extra en los listados de Idealista (v1.11.0)
+
+`idealista-filters.js` añade dos bloques en la barra de filtros de la izquierda
+(debajo de "Planta"), solo en listados:
+
+- **Planta exacta · SmartBC**: Bajo, Entreplanta, 1ª … 7ª o más, Sótano y "Sin
+  dato de planta". Cada opción dice cuántos anuncios de la página son de esa
+  planta. Se pueden marcar varias ("2ª y 3ª").
+- **Anunciante · SmartBC**: "Solo particulares (sin agencias)" y, en cada
+  anuncio de agencia, un enlace "ocultar agencia ✕". Las agencias ocultas
+  aparecen listadas con "mostrar".
+
+Se filtra en el navegador, sobre los 30 anuncios de la página que se ve:
+Idealista no admite estos filtros en su buscador. Lo elegido se recuerda entre
+páginas. Los anuncios ocultos no cuentan en el panel "Enviar a una ficha" y
+"Marcar toda la página" no los marca. "Quitar filtros" lo deja todo como estaba.
+
+Si Idealista cambia su maqueta y no se encuentra el bloque "Planta", los filtros
+aparecen en un cuadro flotante abajo a la izquierda.
+
+Para actualizar: `chrome://extensions` → SmartBC → **Recargar** (icono ⟳), y
+recargar la pestaña de Idealista.

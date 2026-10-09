@@ -1009,7 +1009,7 @@
     basketHead.innerHTML = "";
     basketList.innerHTML = "";
 
-    const pageKeys = [...cards.keys()].map((ref) => keyOf(portal.id, ref));
+    const pageKeys = visibleRefs().map((ref) => keyOf(portal.id, ref));
     const allPageMarked = pageKeys.length > 0 && pageKeys.every((k) => basketIndex(k) >= 0);
 
     basketHead.appendChild(h("div", LABEL, { text: `MARCADOS · ${basket.length}` }));
@@ -1190,16 +1190,24 @@
     return { idealista: "Idealista", fotocasa: "Fotocasa", habitaclia: "Habitaclia", pisos: "pisos.com" }[id] || id;
   }
 
+  // Los anuncios que ocultan los filtros de idealista-filters.js (clase
+  // `smartbc-hide`) no cuentan: ni se marcan con "Marcar toda la página" ni
+  // entran en los números del panel.
+  const isHidden = (entry) =>
+    Boolean(entry && entry.container && entry.container.classList.contains("smartbc-hide"));
+  const visibleRefs = () => [...cards.keys()].filter((ref) => !isHidden(cards.get(ref)));
+
   function markPage(on) {
     if (on) {
       for (const [ref, entry] of cards) {
+        if (isHidden(entry)) continue;
         // Lo que ya está en la ficha no se vuelve a marcar: el servidor lo
         // saltaría de todas formas y solo ensucia la cesta.
         if (fichaStatusOf(entry.data)) continue;
         if (!addToBasket(keyOf(portal.id, ref), entry.data)) break;
       }
     } else {
-      const pageKeys = new Set([...cards.keys()].map((ref) => keyOf(portal.id, ref)));
+      const pageKeys = new Set(visibleRefs().map((ref) => keyOf(portal.id, ref)));
       basket = basket.filter((i) => !pageKeys.has(i.key));
       saveBasket();
     }
@@ -1225,12 +1233,15 @@
     pill.appendChild(h("span", { color: "#8a8378" }, { text: "▴" }));
     if (collapsed) return;
 
-    const pageMarked = [...cards.keys()].filter((ref) => basketIndex(keyOf(portal.id, ref)) >= 0).length;
-    const pageInFicha = [...cards.values()].filter((e) => fichaStatusOf(e.data)).length;
+    const shown = visibleRefs();
+    const hiddenN = cards.size - shown.length;
+    const pageMarked = shown.filter((ref) => basketIndex(keyOf(portal.id, ref)) >= 0).length;
+    const pageInFicha = shown.filter((ref) => fichaStatusOf(cards.get(ref).data)).length;
     const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
     pageCountEl.textContent = cards.size
-      ? `${plural(cards.size, "anuncio", "anuncios")} en esta página · ${plural(pageMarked, "marcado", "marcados")}` +
-        (pageInFicha ? ` · ${pageInFicha} ya en la ficha` : "")
+      ? `${plural(shown.length, "anuncio", "anuncios")} en esta página · ${plural(pageMarked, "marcado", "marcados")}` +
+        (pageInFicha ? ` · ${pageInFicha} ya en la ficha` : "") +
+        (hiddenN ? ` · ${hiddenN} ocultos por tus filtros` : "")
       : pageListing
         ? "Estás en la página de un anuncio"
         : "No se han reconocido anuncios en esta página";
@@ -1347,6 +1358,9 @@
 
     collect();
     searchClients("");
+
+    // Los filtros de idealista-filters.js ocultan o muestran anuncios.
+    window.addEventListener("smartbc:filters-changed", () => refresh());
 
     // Otra pestaña (u otro portal) cambió la cesta, el cliente o el plegado:
     // se refleja aquí sin recargar.
