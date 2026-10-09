@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
   "name": "SmartBC → Idealista",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Rellena y publica anuncios en Idealista con los datos de SmartBC, captura los contactos del inbox y manda anuncios de portales a la ficha de un cliente.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://www.idealista.com/*",
     "https://www.fotocasa.es/*",
@@ -17,18 +19,31 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.idealista.com/tools/propiedad/nuevo*"],
-      "js": ["content-script.js"],
+      "matches": [
+        "https://www.idealista.com/tools/propiedad/nuevo*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.idealista.com/*"],
-      "js": ["idealista-filters.js"],
+      "matches": [
+        "https://www.idealista.com/*"
+      ],
+      "js": [
+        "idealista-agencias.js",
+        "idealista-filters.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.idealista.com/inbox*"],
-      "js": ["inbox-leads.js"],
+      "matches": [
+        "https://www.idealista.com/inbox*"
+      ],
+      "js": [
+        "inbox-leads.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -38,7 +53,9 @@
         "https://www.habitaclia.com/*",
         "https://www.pisos.com/*"
       ],
-      "js": ["portal-links.js"],
+      "js": [
+        "portal-links.js"
+      ],
       "run_at": "document_idle"
     }
   ]

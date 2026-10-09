@@ -153,22 +153,33 @@ La pestaña Propiedades lleva un punto dorado mientras haya anuncios nuevos.
 - El teléfono del anuncio casi nunca está en el listado (los portales lo
   ocultan): se escribe en la propia ficha al llamar la primera vez.
 
-## Filtros extra en los listados de Idealista (v1.11.0)
+## Filtros extra en los listados de Idealista (v1.12.0)
 
-`idealista-filters.js` añade dos bloques en la barra de filtros de la izquierda
+`idealista-filters.js` añade tres bloques en la barra de filtros de la izquierda
 (debajo de "Planta"), solo en listados:
 
-- **Planta exacta · SmartBC**: Bajo, Entreplanta, 1ª … 7ª o más, Sótano y "Sin
-  dato de planta". Cada opción dice cuántos anuncios de la página son de esa
-  planta. Se pueden marcar varias ("2ª y 3ª").
-- **Anunciante · SmartBC**: "Solo particulares (sin agencias)" y, en cada
-  anuncio de agencia, un enlace "ocultar agencia ✕". Las agencias ocultas
-  aparecen listadas con "mostrar".
+- **Planta exacta · SmartBC**: Bajo, Entreplanta, 1ª a 10ª, Ático y Dúplex
+  siempre; Sótano, plantas más altas (11ª…) y "Sin dato de planta" cuando haya
+  alguno en la página. Se pueden marcar varias y un anuncio entra si cumple
+  **cualquiera** de las marcadas (p. ej. "2ª, 3ª y Ático"). Cada opción dice
+  cuántos anuncios de la página hay.
+- **Exterior / interior · SmartBC**. Se combina con la planta (las dos tienen
+  que cumplirse: "2ª planta" **y** "exterior").
+- **Anunciante · SmartBC**: "Solo particulares" y **ocultar agencias por
+  nombre**: se escribe una o varias separadas por comas y se ocultan todos sus
+  anuncios. Basta un trozo ("gilmar" oculta las cuatro Gilmar; sin importar
+  mayúsculas ni tildes). Al escribir sugiere nombres (directorio de Madrid +
+  las agencias que la extensión ha ido viendo). Cada agencia oculta sale como
+  una etiqueta con ✕ para volver a mostrarla, y en cada anuncio de agencia hay
+  también "ocultar agencia ✕".
 
 Se filtra en el navegador, sobre los 30 anuncios de la página que se ve:
 Idealista no admite estos filtros en su buscador. Lo elegido se recuerda entre
 páginas. Los anuncios ocultos no cuentan en el panel "Enviar a una ficha" y
 "Marcar toda la página" no los marca. "Quitar filtros" lo deja todo como estaba.
+
+El ático y el dúplex se reconocen por el título del anuncio ("Ático en…"), no
+por el número de planta.
 
 Si Idealista cambia su maqueta y no se encuentra el bloque "Planta", los filtros
 aparecen en un cuadro flotante abajo a la izquierda.
