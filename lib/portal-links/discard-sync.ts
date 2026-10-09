@@ -31,7 +31,7 @@ import { syncDraftBook } from "@/lib/viewing-collections/auto-book";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function syncDiscardedLink(args: {
   clientId: string;
-  userId: string;
+  userId: string | null;
   linkId: string;
   propertyId: string | null;
   discarded: boolean;

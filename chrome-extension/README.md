@@ -186,3 +186,18 @@ aparecen en un cuadro flotante abajo a la izquierda.
 
 Para actualizar: `chrome://extensions` → SmartBC → **Recargar** (icono ⟳), y
 recargar la pestaña de Idealista.
+
+## Volver a marcar un piso que ya está en la ficha (v1.12.1)
+
+Antes, si un piso ya estaba en la ficha del cliente (aunque fuera uno descartado
+hacía semanas), el clic en "✓ En ficha" no hacía nada salvo un aviso pequeño y
+parecía que el piso "no dejaba seleccionarse". Ahora **se puede marcar de nuevo**
+y al enviarlo:
+
+- si estaba **descartado**, vuelve a "Por llamar"/"Con ficha", se reactiva en la
+  selección del cliente y en su borrador de book, y queda anotado en el hilo;
+- si traías una **nota**, se añade al hilo del anuncio;
+- se asegura de que esté en la **selección privada** que el cliente tiene abierta.
+
+El panel avisa al enviar: "N reactivados (estaban descartados) · M ya estaban en
+la ficha". El máximo por envío sube de 60 a **300** anuncios.

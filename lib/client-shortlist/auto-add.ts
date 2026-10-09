@@ -52,7 +52,18 @@ export async function addLinksToActiveShortlist(
       .maybeSingle();
     let position = (last?.position ?? 0) + 1;
 
-    const rows = linkIds.map((portalLinkId) => ({
+    // Los que ya están en la selección no se vuelven a meter (hay una UNIQUE
+    // shortlist + enlace): al reenviar un anuncio ya existente puede estar.
+    const { data: present } = await db
+      .from("client_shortlist_items")
+      .select("portal_link_id")
+      .eq("shortlist_id", shortlist.id)
+      .in("portal_link_id", linkIds);
+    const have = new Set(((present ?? []) as Array<{ portal_link_id: string }>).map((r) => r.portal_link_id));
+    const missing = linkIds.filter((id) => !have.has(id));
+    if (missing.length === 0) return;
+
+    const rows = missing.map((portalLinkId) => ({
       shortlist_id: shortlist.id,
       portal_link_id: portalLinkId,
       origin: "bcp_curated",

@@ -39,7 +39,7 @@
   const LINKS_API = PORTAL_ORIGIN + "/api/extension/portal-links";
   const CHECK_API = PORTAL_ORIGIN + "/api/extension/portal-links/check";
   const CLIENTS_API = PORTAL_ORIGIN + "/api/extension/clients";
-  const MAX_SELECTION = 60;
+  const MAX_SELECTION = 300; // 60 hasta la 1.12.0: con 40 pisos por cliente se quedaba corto
 
   // Claves de chrome.storage.local. `smartbcLastClient`, `smartbcLastAssignee`
   // y `smartbcLeadsToken` ya existían: no se renombran para no perder lo que
@@ -362,13 +362,25 @@
   function toggle(key, data) {
     if (basketIndex(key) >= 0) {
       removeFromBasket(key);
-    } else if (chosenClient && fichaStatusOf(data)) {
-      status(
-        `Ya está en la ficha de ${firstName(chosenClient)} · ${STATUS_LABEL[fichaStatusOf(data)] || ""}`,
-      );
-      return;
     } else {
-      addToBasket(key, data);
+      // Un piso que YA está en la ficha del cliente se puede volver a marcar
+      // (2026-10-09). Antes el clic solo escribía un aviso pequeño y no hacía
+      // nada, y parecía que el piso "no dejaba seleccionarse". Al enviarlo, el
+      // servidor lo reactiva si estaba descartado, guarda la nota nueva y lo
+      // pone en la selección del cliente (lib/portal-links/revive.ts).
+      const st = chosenClient ? fichaStatusOf(data) : undefined;
+      if (!addToBasket(key, data)) {
+        refresh();
+        return;
+      }
+      if (st) {
+        status(
+          `Ya estaba en la ficha de ${firstName(chosenClient)} (${STATUS_LABEL[st] || st}). ` +
+            (st === "discarded"
+              ? "Al enviarlo se vuelve a activar."
+              : "Al enviarlo se vuelve a poner en su selección."),
+        );
+      }
     }
     refresh();
   }
@@ -1329,7 +1341,10 @@
       saveBasket();
 
       const parts = [`${body.inserted} enviado${body.inserted === 1 ? "" : "s"}`];
-      if (body.skipped) parts.push(`${body.skipped} ya estaban (su nota no se ha cambiado)`);
+      const react = Number(body.reactivated) || 0;
+      if (react) parts.push(`${react} reactivado${react === 1 ? "" : "s"} (estaban descartados)`);
+      const already = Math.max(0, (Number(body.skipped) || 0) - react);
+      if (already) parts.push(`${already} ya estaban en la ficha`);
       status(`✓ ${parts.join(" · ")} → ${chosenClient.name}`, false, {
         href: fichaUrl(chosenClient),
         label: "Ver en su ficha ↗",

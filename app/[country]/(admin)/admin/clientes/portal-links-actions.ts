@@ -29,6 +29,7 @@ import {
 import { syncDiscardedLink } from "@/lib/portal-links/discard-sync";
 import { createItinerary } from "./viewing-collections-actions";
 import { addLinksToActiveShortlist } from "@/lib/client-shortlist/auto-add";
+import { reviveExistingLinks } from "@/lib/portal-links/revive";
 import {
   insertPortalLinks,
   linkText,
@@ -102,8 +103,8 @@ export async function addPortalLinks(
   if (!Array.isArray(links) || links.length === 0) {
     return { ok: false, error: "No has pegado ningún enlace." };
   }
-  if (links.length > 60) {
-    return { ok: false, error: "Máximo 60 enlaces por envío." };
+  if (links.length > 300) {
+    return { ok: false, error: "Máximo 300 enlaces por envío." };
   }
 
   const res = await insertPortalLinks({
@@ -126,6 +127,13 @@ export async function addPortalLinks(
   after(() => processPendingPortalLinks());
   // Y aparecen solos en la selección privada que el cliente ya tiene.
   await addLinksToActiveShortlist(clientId, res.insertedIds ?? []);
+  // Los que ya estaban (descartados, con nota nueva…): ver lib/portal-links/revive.
+  await reviveExistingLinks({
+    clientId,
+    userId: g.userId,
+    links,
+    insertedIds: res.insertedIds,
+  });
 
   revalidateClient(clientId);
   return {

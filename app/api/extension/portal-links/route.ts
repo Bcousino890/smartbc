@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { insertPortalLinks } from "@/lib/portal-links/insert";
 import { processPendingPortalLinks } from "@/lib/portal-links/auto-import";
 import { addLinksToActiveShortlist } from "@/lib/client-shortlist/auto-add";
+import { reviveExistingLinks } from "@/lib/portal-links/revive";
 import { after } from "next/server";
 import { extensionCorsHeaders } from "@/lib/portal-links/extension-cors";
 import type { PortalLinkInput } from "@/lib/portal-links/types";
@@ -23,7 +24,7 @@ import type { PortalLinkInput } from "@/lib/portal-links/types";
 // y `insertPortalLinks` asigna las posiciones en ese orden, al final de la cola.
 // ============================================================================
 
-const MAX_LINKS = 60;
+const MAX_LINKS = 300;
 
 export async function OPTIONS(request: Request) {
   return new Response(null, { status: 204, headers: extensionCorsHeaders(request) });
@@ -149,6 +150,14 @@ export async function POST(request: Request) {
   after(() => processPendingPortalLinks());
   // Y aparecen solos en la selección privada que el cliente ya tiene.
   await addLinksToActiveShortlist(clientId, result.insertedIds ?? []);
+  // Los que YA estaban en la ficha: se reactivan si estaban descartados, se
+  // guarda su nota nueva y se asegura que estén en la selección del cliente.
+  const revived = await reviveExistingLinks({
+    clientId,
+    userId: null,
+    links,
+    insertedIds: result.insertedIds,
+  });
 
   return json(
     {
@@ -157,6 +166,7 @@ export async function POST(request: Request) {
       inserted: result.inserted,
       skipped: result.skipped,
       invalid: result.invalid,
+      reactivated: revived.reactivated,
     },
     200,
   );
