@@ -105,16 +105,21 @@
 
   // "ocultar agencia" junto al nombre de la agencia de cada anuncio.
   function decorateAgency(card, agency) {
-    const host = card.querySelector(".featured-hightop-block-agent-container");
-    if (!host || !agency) return;
-    if (host.querySelector(".smartbc-hide-agency")) return;
+    if (!agency) return;
+    // Los anuncios destacados traen un bloque con el nombre de la agencia; el
+    // resto solo el logo (picture.logo-branding) suelto en la columna de
+    // información. En ambos casos el botón va pegado al logo.
+    const hightop = card.querySelector(".featured-hightop-block-agent-container");
+    const logo = card.querySelector("picture.logo-branding");
+    if (!hightop && !logo) return;
+    if (card.querySelector(".smartbc-hide-agency")) return;
     const b = document.createElement("button");
     b.type = "button";
     b.className = "smartbc-hide-agency";
     b.textContent = "ocultar agencia ✕";
     b.title = `No volver a ver anuncios de ${agency.name} en estas búsquedas`;
     b.style.cssText =
-      "margin-left:10px;border:0;background:none;color:#8a6d1f;font:600 11px/1 -apple-system,sans-serif;cursor:pointer;text-decoration:underline;";
+      "margin:4px 0 0 10px;border:0;background:none;color:#8a6d1f;font:600 11px/1 -apple-system,sans-serif;cursor:pointer;text-decoration:underline;display:inline-block;white-space:nowrap;flex:none;";
     b.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -122,7 +127,8 @@
       save();
       apply();
     });
-    host.appendChild(b);
+    if (hightop) hightop.appendChild(b);
+    else logo.insertAdjacentElement("afterend", b);
   }
 
   // ── Interfaz en la barra de la izquierda ──────────────────────────────
