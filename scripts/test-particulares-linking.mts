@@ -187,6 +187,93 @@ console.log("── distancias y contradicciones ──");
   check("mismo teléfono pero 70 vs 130 m²: no es el mismo piso", r2.groups.length === 0);
 }
 
+console.log("── normalización ampliada (abreviaturas, nº, planta tras el número, plantas en inglés, phone2) ──");
+{
+  const eq = (a: string, b: string) => {
+    const x = streetKey(a), y = streetKey(b);
+    return x.number === y.number && x.number != null && [...x.tokens].join() === [...y.tokens].join();
+  };
+  check("«C/ Orense, 49» = «Piso en venta en Calle de Orense, 49»", eq("C/ Orense, 49", "Piso en venta en Calle de Orense, 49"));
+  check("«Avda. de América 12 2ºB» = «Avenida de América, 12»", eq("Avda. de América 12 2ºB", "Avenida de América, 12"));
+  check("«Calle de Orense, nº 49, 3º izq» = «Calle de Orense 49»", eq("Calle de Orense, nº 49, 3º izq", "Calle de Orense 49"));
+  check("«Calle de Albasanz, 14 - Bis» tiene número 14", streetKey("Dúplex en venta en Calle de Albasanz, 14 - Bis").number === "14");
+  check("«Gral. Pardiñas, 96» = «Calle del General Pardiñas, 96»", eq("Gral. Pardiñas, 96", "Calle del General Pardiñas, 96"));
+  check("«Calle Mayor, s/n» no inventa número", streetKey("Calle Mayor, s/n").number === null);
+  check("planta en inglés: '3rd floor exterior' = 3, 'Ground floor exterior' = 0", floorNumber("3rd floor exterior") === 3 && floorNumber("Ground floor exterior") === 0 && floorNumber("1st floor interior") === 1);
+  check("teléfono con 0 delante y con paréntesis", phoneKey("0600123456") === phoneKey("(+34) 600-123-456"));
+  const p2a = row({ phone: "+34600000001", phone2: "+34611222333", square_meters: 90, bedrooms: 3, price: 400000 });
+  const p2b = row({ portal: "fotocasa", phone: "611 222 333", square_meters: 90, bedrooms: 3, price: 400000, address: "Calle de Jorge Juan, 92" });
+  check("el phone2 de uno casa con el teléfono del otro", computeLinks([p2a, p2b]).groups.length === 1);
+}
+
+console.log("── CASO REAL: Idealista 112792896 (PART-2026-290000) ↔ Fotocasa 191083740 ──");
+{
+  // Idealista: Calle de Orense 49, +34610561512, 970.000 €, 127 m², 4 hab, 2 baños.
+  // El de Fotocasa aún no está en el CRM: datos sintéticos equivalentes (mismo teléfono y precio,
+  // calle con otro formato, sin planta, y un baño más porque Fotocasa cuenta el aseo).
+  const idea = row({ id: "11111111-1111-1111-1111-112792896000", portal: "idealista", operation: "sale", price: 970000, square_meters: 127, bedrooms: 4, bathrooms: 2,
+    floor: "3ª planta exterior", address: "Piso en venta en Calle de Orense, 49", phone: "+34610561512", owner_name: "Particular", n_photos: 24, latitude: 40.4571, longitude: -3.6944 });
+  const fc = (over: Partial<LinkRow> = {}) => row({ id: "22222222-2222-2222-2222-191083740000", portal: "fotocasa", operation: "sale", price: 970000, square_meters: 127, bedrooms: 4, bathrooms: 2,
+    floor: null, address: "C/ Orense, 49, Castillejos", phone: "610 56 15 12", owner_name: null, n_photos: 12, latitude: 40.4572, longitude: -3.6943, ...over });
+  const r = computeLinks([idea, fc()]);
+  check("se agrupan: cierto R1, 1 grupo de 2 con Idealista como principal", r.groups.length === 1 && r.links[0]?.level === "cierto" && r.groups[0].primary === idea.id, r.links);
+  const r2 = computeLinks([idea, fc({ bathrooms: 3 })]);
+  check("con 3 baños en Fotocasa (2 vs 3) SIGUE siendo cierto: cada portal cuenta los aseos a su manera", r2.groups.length === 1 && r2.links[0]?.level === "cierto" && /baños/.test(r2.links[0].rule), r2.links);
+  const r3 = computeLinks([idea, fc({ bathrooms: 4 })]);
+  check("con 2 vs 4 baños NO se agrupa (contradicción real)", r3.groups.length === 0, r3.links);
+  const r4 = computeLinks([idea, fc({ price: 1000000, address: "Calle de Orense, 49" })]);
+  check("precio +3 % y calle abreviada de otra forma: cierto", r4.groups.length === 1, r4.links);
+  const r5 = computeLinks([idea, fc({ price: 1250000 })]);
+  check("precio +29 %: solo probable (no se agrupa solo)", r5.groups.length === 0 && r5.links[0]?.level === "probable", r5.links);
+  const r6 = computeLinks([idea, fc({ operation: "rent", price: 3800 })]);
+  check("el mismo piso en ALQUILER en Fotocasa también cuelga de la misma ficha (venta + alquiler)", r6.groups.length === 1 && JSON.stringify(r6.state.get(idea.id)?.link_ops) === '["rent","sale"]', r6.links);
+  const [a, b] = idea.id < fc().id ? [idea.id, fc().id] : [fc().id, idea.id];
+  const r7 = computeLinks([idea, fc()], [{ a, b, relation: "mismo_inmueble", status: "descartado" }]);
+  check("una persona lo descarta: manda siempre, no se vuelve a agrupar", r7.groups.length === 0 && r7.links.every((l) => l.relation !== "mismo_inmueble"), r7.links);
+  const r8 = computeLinks([idea, fc({ square_meters: 150, bedrooms: 5, price: 1500000 })], [{ a, b, relation: "mismo_inmueble", status: "confirmado" }]);
+  check("una persona lo confirma: se agrupa aunque los datos ya no cuadren", r8.groups.length === 1 && r8.links.some((l) => l.level === "cierto"), r8.links);
+}
+
+console.log("── mismo teléfono, otra calle: NO se fusiona (falso positivo medido) ──");
+{
+  const a = row({ phone: "+34646286438", price: 1400, operation: "rent", square_meters: 40, bedrooms: 1, address: "Calle de San Bartolomé, 18, Chueca-Justicia, Madrid", latitude: 40.4220, longitude: -3.6970 });
+  const b = row({ phone: "+34646286438", price: 1400, operation: "rent", square_meters: 41, bedrooms: 1, address: "Calle de Hortaleza, 41, Chueca-Justicia, Madrid", latitude: 40.4233, longitude: -3.6975, portal: "fotocasa" });
+  const r = computeLinks([a, b]);
+  check("mismo dueño, mismos metros y precio pero otra calle a 150 m → probable, sin grupo", r.groups.length === 0 && r.links[0]?.level === "probable", r.links);
+  const c = row({ phone: "+34633610110", operation: "sale", price: 418000, square_meters: 96, bedrooms: 3, bathrooms: 1, address: "Calle de los Yébenes, 116, Aluche, Madrid" });
+  const d = row({ portal: "fotocasa", phone: "+34633610110", operation: "sale", price: 418000, square_meters: 96, bedrooms: 3, bathrooms: 1, address: "Calle de los Yébenes, 8, Aluche" });
+  check("mismo teléfono, mismo precio, número distinto sin coordenadas → probable", computeLinks([c, d]).groups.length === 0);
+  const e = row({ phone: "+34614609448", operation: "sale", price: 1125000, square_meters: 130, bedrooms: 2, bathrooms: 2, address: "Calle de Bonetero, 13", latitude: 40.46000, longitude: -3.6800 });
+  const f = row({ portal: "fotocasa", phone: "+34614609448", operation: "sale", price: 1125000, square_meters: 130, bedrooms: 2, bathrooms: 2, address: "Calle de Bonetero, 9", latitude: 40.46030, longitude: -3.6803 });
+  check("número distinto pero coordenadas a <60 m (geocodificación del portal): sí cierto", computeLinks([e, f]).groups.length === 1);
+}
+
+console.log("── coordenadas: «cierto» solo con < 60 m + metros + habitaciones + MISMA planta ──");
+{
+  const base = { latitude: 40.4500, longitude: -3.7000, square_meters: 95, bedrooms: 3, bathrooms: 2, price: 600000, address: null as string | null };
+  const a = row({ ...base, floor: "4ª planta exterior" });
+  const b = row({ ...base, portal: "fotocasa", floor: "4ª planta exterior", latitude: 40.45020 });
+  check("22 m, misma planta: cierto (R3)", computeLinks([a, b]).groups.length === 1);
+  const c = row({ ...base, portal: "fotocasa", floor: null, latitude: 40.45020 });
+  const rc = computeLinks([a, c]);
+  check("22 m pero sin planta en un lado: solo probable", rc.groups.length === 0 && rc.links[0]?.level === "probable", rc.links);
+  const d = row({ ...base, portal: "fotocasa", floor: "4ª planta exterior", latitude: 40.45080 });
+  const rd = computeLinks([a, d]);
+  check("89 m aunque coincida todo: solo probable", rd.groups.length === 0 && rd.links[0]?.level === "probable", rd.links);
+  const e = row({ ...base, portal: "fotocasa", floor: "2ª planta exterior", latitude: 40.45020 });
+  check("22 m pero planta distinta (4.ª vs 2.ª): ningún enlace", computeLinks([a, e]).links.length === 0);
+}
+
+console.log("── planta en inglés vs español (misma publicación de Idealista en dos idiomas) ──");
+{
+  const mk = (floor: string, addr: string) => row({ phone: "+34670000001", floor, address: addr, square_meters: 60, bedrooms: 2, bathrooms: 1, price: 1500, operation: "rent" });
+  const es = mk("4ª planta exterior", "Alquiler de piso en Calle de Embajadores, 74");
+  const en = mk("4th floor exterior", "Flat / apartment for rent in Calle de Embajadores, 74");
+  check("«4ª planta» y «4th floor» son la misma planta", computeLinks([es, en]).links.some((l) => l.relation === "mismo_inmueble"));
+  const en3 = mk("3rd floor exterior", "Flat / apartment for rent in Calle de Embajadores, 74");
+  check("«4ª planta» vs «3rd floor» se contradicen", computeLinks([es, en3]).links.every((l) => l.relation !== "mismo_inmueble"));
+}
+
 console.log("── teléfonos de cualquier país (corrige la pérdida del 3,2 % de Fotocasa) ──");
 check("España: igual que antes", normalizeContactPhone("+34 600 12 34 56") === "+34600123456" && normalizeContactPhone("600123456") === "+34600123456" && normalizeContactPhone("0034600123456") === "+34600123456");
 check("Francia: +33 y 0033 se conservan en E.164", normalizeContactPhone("+33 7 12 34 56 78") === "+33712345678" && normalizeContactPhone("0033712345678") === "+33712345678");
