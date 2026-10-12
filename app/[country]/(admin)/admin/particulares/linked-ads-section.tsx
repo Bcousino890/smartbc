@@ -94,7 +94,7 @@ function LevelBadge({ link }: { link: LinkInfo | null }) {
   return (
     <span
       title={describeEvidence(link.evidence).join(" · ") || link.rule}
-      className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}
+      className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${cls}`}
     >
       {label}
     </span>
@@ -122,15 +122,15 @@ function AdRow({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={ad.cover_url} alt="" className="h-14 w-14 flex-none rounded-md object-cover" loading="lazy" />
       ) : (
-        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-md bg-ink/5 text-[10px] text-ink/30">sin foto</div>
+        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-md bg-ink/5 text-xs text-ink/30">sin foto</div>
       )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-[11px] font-semibold text-ink">{portalName(ad.portal)}</span>
-          <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-[11px] font-semibold text-cream-50">{opName(ad.operation)}</span>
+          <span className="rounded-md bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-ink">{portalName(ad.portal)}</span>
+          <span className="rounded-md bg-ink/85 px-1.5 py-0.5 text-xs font-semibold text-cream-50">{opName(ad.operation)}</span>
           <span className="text-sm font-semibold text-ink">{priceText(ad)}</span>
-          {!ad.is_active && <span className="rounded-md bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-600">Retirado</span>}
-          {ad.id === currentId && <span className="text-[11px] text-ink/40">(este anuncio)</span>}
+          {!ad.is_active && <span className="rounded-md bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-600">Retirado</span>}
+          {ad.id === currentId && <span className="text-xs text-ink/40">(este anuncio)</span>}
           <LevelBadge link={ad.link} />
         </div>
         <p className="mt-0.5 truncate text-xs text-ink/55">
@@ -145,7 +145,7 @@ function AdRow({
           {ad.n_photos > 0 ? ` · ${ad.n_photos} fotos` : ""}
         </p>
         {reasons.length > 0 && ad.link && ad.link.level !== "cierto" && (
-          <p className="mt-1 text-[11px] text-amber-700">Por qué se propone: {reasons.join(" · ")}</p>
+          <p className="mt-1 text-xs text-amber-700">Por qué se propone: {reasons.join(" · ")}</p>
         )}
         {onDecide && ad.link && (
           <div className="mt-1.5 flex gap-2">
@@ -236,7 +236,7 @@ export function LinkedAdsSection({
         <Link2 size={15} className="text-gold-dark" />
         <p className="crm-label-sm text-ink/60">Mismo inmueble en otros portales y operaciones</p>
         {members.length > 1 && (
-          <span className="rounded-md bg-ink/85 px-2 py-0.5 text-[11px] font-semibold text-cream-50">
+          <span className="rounded-md bg-ink/85 px-2 py-0.5 text-xs font-semibold text-cream-50">
             {members.length} anuncios · {[...new Set(members.map((m) => portalName(m.portal)))].join(" + ")}
           </span>
         )}
@@ -268,7 +268,7 @@ export function LinkedAdsSection({
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-[11px] text-ink/40">Suele ser la pareja o un familiar publicando con su propio número.</p>
+          <p className="mt-1 text-xs text-ink/40">Suele ser la pareja o un familiar publicando con su propio número.</p>
         </div>
       )}
 
@@ -278,7 +278,7 @@ export function LinkedAdsSection({
           <div className="flex flex-col gap-2">
             {otherPhotos.map((m) => (
               <div key={m.id}>
-                <p className="mb-1 text-[11px] text-ink/50">
+                <p className="mb-1 text-xs text-ink/50">
                   {portalName(m.portal)} · {opName(m.operation)} · {m.n_photos} fotos
                 </p>
                 <div className="flex gap-1.5 overflow-x-auto pb-1">

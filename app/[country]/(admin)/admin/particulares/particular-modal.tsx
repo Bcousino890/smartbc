@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Camera, Check, ChevronDown, ClipboardList, Copy, ExternalLink, History, Loader2, MapPin, MessageSquare, Phone, Plus, RefreshCw, Ruler, Sparkles, UserCheck, Video, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Bath, BedDouble, Building2, Calendar, Camera, Check, ChevronDown, ClipboardList, Compass, Copy, Euro, ExternalLink, Hammer, History, Leaf, Loader2, MapPin, MessageCircle, MessageSquare, Phone, Plus, RefreshCw, Ruler, Sparkles, UserCheck, Video, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -14,6 +14,11 @@ import { cn } from "@/lib/utils";
 import { assignParticular, createParticularShareLink, createPropertyFromParticular, logParticularContact, setParticularActive, updateParticularPhone } from "./actions";
 import { prefetchParticularDetail } from "./detail-cache";
 import { LinkedAdsSection } from "./linked-ads-section";
+import { AdMap } from "@/components/admin/particulares/ad-map";
+import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
+import { Gallery, type MediaItem } from "./_ficha/gallery";
+import { Lightbox } from "./_ficha/lightbox";
+import { formatEuros, formatPct, formatZone, groupThousands, mapPrecision, portalName, pricePerM2, priceVariation, relativeTime, whatsappUrl, zoneForMap } from "./_ficha/format";
 import type { ParticularChangeRow, ParticularRow, StaffOption } from "./particulares-types";
 
 export const DATE_FMT = new Intl.DateTimeFormat("es-ES", {
@@ -192,7 +197,7 @@ function ShareLinkAction({ particularId }: { particularId: string }) {
               {copied ? "Copiado" : "Copiar"}
             </button>
           </div>
-          <p className="text-[11px] text-ink/40">
+          <p className="text-xs text-ink/40">
             Caduca el{" "}
             {new Date(link.expiresAt).toLocaleDateString("es-ES", {
               day: "2-digit",
@@ -202,7 +207,7 @@ function ShareLinkAction({ particularId }: { particularId: string }) {
             })}
             . Cualquiera con el enlace puede verlo, sin iniciar sesión.
           </p>
-          <p className="text-[11px] text-ink/40">
+          <p className="text-xs text-ink/40">
             La descripción se limpia con IA antes de publicarla (sin
             teléfono, email ni menciones de "particular"/"sin agencias").
           </p>
@@ -215,21 +220,6 @@ function ShareLinkAction({ particularId }: { particularId: string }) {
       )}
     </div>
   );
-}
-
-// Texto de búsqueda para el mapa de fallback (sin coordenadas): la dirección
-// exacta es más precisa que la zona. Solo añadimos ", Madrid" si falta.
-function mapFallbackQuery(row: ParticularRow): string {
-  const base = row.address ?? row.zone ?? "";
-  return /madrid/i.test(base) ? base : `${base}, Madrid`;
-}
-
-// ¿La dirección es una calle concreta (vía + idealmente número), no solo una
-// zona/barrio? Determina si podemos clavar el puntito exacto.
-const STREET_RE =
-  /\b(calle|c\/|avda?\.?|avenida|paseo|p\.?º|plaza|pl\.|camino|carretera|ctra\.?|ronda|traves[ií]a|v[ií]a|glorieta|bulevar|gran\s+v[ií]a|cuesta|costanilla|callej[oó]n)\b/i;
-function isExactStreet(address: string | null | undefined): boolean {
-  return !!address && STREET_RE.test(address);
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -763,69 +753,64 @@ export function ParticularModal({
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"detalles" | "enlazados" | "historial">("detalles");
+  const [viewer, setViewer] = useState<{ items: MediaItem[]; start: number } | null>(null);
+  const [descOpen, setDescOpen] = useState(false);
 
-  // El listado solo trae la portada. Al abrir el modal hace falta la galería
-  // completa + la ficha técnica; normalmente ya vienen de la caché porque se
-  // prefetchan al pasar el ratón por la tarjeta (ver detail-cache.ts), así
-  // que el modal abre con todo puesto en vez de rellenarse a trozos.
+  // El listado solo trae la portada: la galería completa y la ficha técnica se
+  // piden al abrir (normalmente ya están en la caché por el prefetch de la tarjeta).
   useEffect(() => {
     let cancelled = false;
     if (currentRow.photos) return;
     (async () => {
       const data = await prefetchParticularDetail(row.id);
       if (cancelled || !data) return;
-      // Se fusiona el payload entero: fotos + ficha técnica (precio/m²,
-      // rebaja, planta, año, estado, energía…). `photos` sale siempre como
-      // array del servidor.
       setCurrentRow((prev) => ({ ...prev, ...data }));
     })();
     return () => {
       cancelled = true;
     };
-    // Solo al abrir: `row.id` identifica el anuncio del modal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id]);
 
-  const photos =
-    currentRow.photos ??
-    (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
-  const cover = photos[photoIdx]?.url;
-
-  // Preload the next/prev slide so paging the gallery is instant. The list only
-  // ships the cover, so the gallery loads on demand; without this each slide
-  // waits on its own download.
-  useEffect(() => {
-    if (photos.length < 2) return;
-    const around = [
-      photos[(photoIdx + 1) % photos.length]?.url,
-      photos[(photoIdx - 1 + photos.length) % photos.length]?.url,
-    ];
-    for (const u of around) {
-      if (u) {
-        const img = new window.Image();
-        img.src = u;
-      }
-    }
-  }, [photoIdx, photos]);
+  const photos = currentRow.photos ?? (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
   const hasPhone = Boolean(currentRow.phone);
+  const detailLoading = !currentRow.photos;
 
-  // Scroll-lock + Escape-para-cerrar: este modal no usa el <Modal> compartido
-  // (el carrusel de fotos hace de "header" propio, no encaja en su prop
-  // `title`), así que replica aquí lo mínimo que ese componente da gratis.
-  // Si EditPhoneModal (hijo, vía showEditPhone) está abierto, dejamos que
-  // Escape lo cierre a él primero en vez de cerrar este modal también.
+  // Español siempre, también para lo guardado en inglés antes del backfill.
+  const address = esAddress(currentRow.address);
+  const features = esFeatures(currentRow.features);
+  const zoneText = formatZone(currentRow.zone);
+  const title = address || zoneText || "Anuncio";
+  const portalLabel = portalName(currentRow.portal);
+  const operationLabel = currentRow.operation === "rent" ? "Alquiler" : "Venta";
+  const variation = priceVariation(currentRow.price, currentRow.previous_price, currentRow.price_drop_pct);
+  const perM2 = pricePerM2(currentRow.price, currentRow.square_meters, currentRow.price_per_m2);
+  const wa = whatsappUrl(
+    currentRow.phone,
+    `Hola, le escribo por su anuncio de ${currentRow.operation === "rent" ? "alquiler" : "venta"}${address ? ` en ${address}` : ""}.`,
+  );
+  const precision = mapPrecision({
+    latitude: currentRow.latitude,
+    longitude: currentRow.longitude,
+    address: currentRow.address,
+    zone: currentRow.zone,
+  });
+
+  // Bloqueo de scroll + Escape. Con el visor o el diálogo de teléfono abiertos,
+  // Escape cierra primero ESO y no la ficha.
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !showEditPhone) onClose();
+      if (e.key === "Escape" && !showEditPhone && !viewer) onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose, showEditPhone]);
+  }, [onClose, showEditPhone, viewer]);
 
   async function handleAssign(advisorId: string) {
     setAssigning(true);
@@ -833,9 +818,7 @@ export function ParticularModal({
     const value = advisorId || null;
     const res = await assignParticular(currentRow.id, value);
     if (res.ok) {
-      const name = value
-        ? (staffOptions.find((s) => s.id === value)?.name ?? null)
-        : null;
+      const name = value ? (staffOptions.find((s) => s.id === value)?.name ?? null) : null;
       setCurrentRow((prev) => ({ ...prev, assigned_to: value, assigned_name: name }));
       onAssigned?.(value, name);
     } else {
@@ -845,12 +828,9 @@ export function ParticularModal({
     setAssigning(false);
   }
 
-  // Estado de la conversión particular → propiedad (en Portales externos).
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<{ slug: string } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-
-  // Retirar / reactivar manualmente (además de la baja automática del cron).
   const [togglingActive, setTogglingActive] = useState(false);
 
   async function handleToggleActive() {
@@ -860,11 +840,7 @@ export function ParticularModal({
       const res = await setParticularActive(currentRow.id, next);
       if (res.ok) {
         const takenDownAt = next ? null : new Date().toISOString();
-        setCurrentRow((prev) => ({
-          ...prev,
-          is_active: next,
-          taken_down_at: takenDownAt,
-        }));
+        setCurrentRow((prev) => ({ ...prev, is_active: next, taken_down_at: takenDownAt }));
         onActiveChanged?.(next, takenDownAt);
       }
     } finally {
@@ -878,6 +854,7 @@ export function ParticularModal({
     try {
       const res = await createPropertyFromParticular(currentRow.id);
       if (res.ok) setCreated({ slug: res.slug });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       else setCreateError((res as any).error || "unknown_error");
     } catch {
       setCreateError("network_error");
@@ -886,18 +863,12 @@ export function ParticularModal({
     }
   }
 
-  const portalLabel =
-    currentRow.portal.charAt(0).toUpperCase() + currentRow.portal.slice(1);
-
   function handlePhoneSaved(newPhone: string | null) {
     setCurrentRow({ ...currentRow, phone: newPhone });
     onPhoneUpdated?.(newPhone);
     setShowEditPhone(false);
   }
 
-  // Verificación bajo demanda de ESTE anuncio: re-scrapea la ficha y llama
-  // al endpoint AJAX "Ver teléfono" de Idealista. Si aparece teléfono, se
-  // guarda y se refleja al instante.
   const [verifyingThis, setVerifyingThis] = useState(false);
   const [verifyThisResult, setVerifyThisResult] = useState<string | null>(null);
 
@@ -905,21 +876,14 @@ export function ParticularModal({
     setVerifyingThis(true);
     setVerifyThisResult(null);
     try {
-      const res = await fetch(
-        `/api/admin/particulares/verify-phones?id=${currentRow.id}`,
-        { method: "POST" },
-      );
+      const res = await fetch(`/api/admin/particulares/verify-phones?id=${currentRow.id}`, { method: "POST" });
       const data = await res.json();
       if (data?.ok && data.foundPhone) {
-        // Actualización en el sitio (sin recargar): refresca el modal y la
-        // tarjeta de la lista vía onPhoneUpdated.
         setCurrentRow((prev) => ({ ...prev, phone: data.foundPhone, chat_only: false }));
         onPhoneUpdated?.(data.foundPhone);
         setVerifyThisResult("✓ Teléfono encontrado y guardado.");
       } else if (data?.ok) {
-        setVerifyThisResult(
-          "El anuncio no expone teléfono en el portal (solo chat).",
-        );
+        setVerifyThisResult("El anuncio no expone teléfono en el portal (solo chat).");
       } else {
         setVerifyThisResult("No se pudo verificar — reintenta en un momento.");
       }
@@ -930,17 +894,182 @@ export function ParticularModal({
     }
   }
 
-  // Portal a document.body — igual que el Lightbox de PropertyGallery. Antes
-  // este modal renderizaba inline, anidado varios niveles dentro del
-  // contenedor flex-col de la página (page.tsx: `flex min-h-screen flex-col`).
-  // WebKit/iOS tiene bugs conocidos donde un `fixed` anidado así de profundo
-  // dentro de un flex container no siempre escapa al viewport real: en vez
-  // de quedar fijo en pantalla, terminaba posicionándose relativo a la
-  // altura TOTAL de ese contenedor (que crece con el listado + paginación +
-  // pie de página), así que el contenido de la ficha aparecía "flotando" en
-  // mitad de esa altura total en vez de sobre la pantalla — justo el bug
-  // reportado ("el gráfico y la foto aparecen debajo del pie de página").
-  // Un portal a <body> saca el modal de esa jerarquía por completo.
+  function openViewer(what: "photos" | "plan" | "video") {
+    const items: MediaItem[] = [];
+    if (what === "photos") {
+      photos.forEach((p) => items.push({ kind: "photo", url: p.url, alt: p.alt }));
+      setViewer({ items, start: photoIdx });
+      return;
+    }
+    if (what === "plan" && currentRow.floor_plan_url) items.push({ kind: "plan", url: currentRow.floor_plan_url });
+    if (what === "video" && currentRow.video_url) items.push({ kind: "video", url: currentRow.video_url });
+    if (items.length) setViewer({ items, start: 0 });
+  }
+
+  // Datos clave: solo lo que existe (nada de «—»).
+  const facts: Array<{ icon: ReactNode; label: string; value: string }> = [];
+  if (currentRow.bedrooms != null) facts.push({ icon: <BedDouble size={18} />, label: "Dormitorios", value: String(currentRow.bedrooms) });
+  if (currentRow.bathrooms != null) facts.push({ icon: <Bath size={18} />, label: "Baños", value: String(currentRow.bathrooms) });
+  if (currentRow.square_meters != null) facts.push({ icon: <Ruler size={18} />, label: "Superficie", value: `${currentRow.square_meters} m²` });
+  if (perM2 != null) facts.push({ icon: <Euro size={18} />, label: "Precio por m²", value: `${groupThousands(perM2)} €/m²` });
+  if (currentRow.floor) facts.push({ icon: <Building2 size={18} />, label: "Planta", value: esFloor(currentRow.floor) });
+  if (currentRow.has_lift != null) facts.push({ icon: <ArrowUpDown size={18} />, label: "Ascensor", value: currentRow.has_lift ? "Sí" : "No" });
+  if (currentRow.year_built != null) facts.push({ icon: <Calendar size={18} />, label: "Año de construcción", value: String(currentRow.year_built) });
+  if (currentRow.condition) facts.push({ icon: <Hammer size={18} />, label: "Estado", value: esCondition(currentRow.condition) });
+  if (currentRow.orientation) facts.push({ icon: <Compass size={18} />, label: "Orientación", value: esOrientation(currentRow.orientation) });
+  if (currentRow.energy_consumption) facts.push({ icon: <Zap size={18} />, label: "Energía · consumo", value: esText(currentRow.energy_consumption) });
+  if (currentRow.energy_emissions) facts.push({ icon: <Leaf size={18} />, label: "Energía · emisiones", value: esText(currentRow.energy_emissions) });
+
+  const description = currentRow.description ? esText(currentRow.description) : "";
+  const longDesc = description.length > 420;
+
+  const btnPrimary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
+
+  const priceBlock = (
+  <div className="rounded-xl border border-ink/10 bg-white p-4">
+    <p className="text-3xl font-bold tabular-nums text-ink">
+      {currentRow.price != null ? formatEuros(currentRow.price, { monthly: currentRow.operation === "rent" }) : "Precio no disponible"}
+    </p>
+    {variation && (
+      <p className={cn("mt-1 text-sm font-medium", variation.direction === "down" ? "text-emerald-800" : "text-red-800")}>
+        {variation.direction === "down" ? "Bajó" : "Subió"} {formatPct(Math.abs(variation.pct))} · antes {formatEuros(variation.previous, { monthly: currentRow.operation === "rent" })}
+      </p>
+    )}
+    <h2 className="mt-3 flex items-start gap-1.5 text-base font-semibold text-ink">
+      <MapPin size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold-dark" />
+      <span>{address || zoneText || "Madrid"}</span>
+    </h2>
+    {address && zoneText && <p className="ml-[22px] text-sm text-ink/70">{zoneText}</p>}
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      <span className="rounded-md bg-ink px-2 py-0.5 text-xs font-semibold text-cream-50">{operationLabel}</span>
+      <span className="rounded-md bg-gold/30 px-2 py-0.5 text-xs font-semibold text-ink">{portalLabel}</span>
+    </div>
+  </div>
+  );
+
+  const contactCard = (
+    <div className="rounded-xl border border-ink/10 bg-white p-4">
+      <p className="mb-3 text-sm font-semibold text-ink">Contacto · Particular</p>
+      {currentRow.owner_name && <p className="mb-3 font-medium text-ink">{currentRow.owner_name}</p>}
+      {hasPhone ? (
+        <div className="space-y-2">
+          <a href={`tel:${currentRow.phone}`} className={cn(btnPrimary, "w-full bg-emerald-700 text-white hover:bg-emerald-800")}>
+            <Phone size={16} strokeWidth={2} />
+            Llamar · {formatPhone(currentRow.phone!)}
+          </a>
+          {wa && (
+            <a href={wa} target="_blank" rel="noopener noreferrer" className={cn(btnPrimary, "w-full border border-emerald-700 text-emerald-800 hover:bg-emerald-50")}>
+              <MessageCircle size={16} strokeWidth={2} />
+              WhatsApp
+            </a>
+          )}
+          {currentRow.phone_confidence && (
+            <p className="text-xs text-ink/65">
+              {currentRow.phone_confidence === "high" ? "Teléfono verificado en el portal" : "Teléfono detectado automáticamente"}
+            </p>
+          )}
+          <button onClick={() => setShowEditPhone(true)} className={cn(btnPrimary, "w-full border border-ink/15 bg-white text-ink hover:border-ink/40")}>
+            Editar teléfono
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <a href={currentRow.source_url} target="_blank" rel="noopener noreferrer" className={cn(btnPrimary, "w-full border border-ink/15 bg-white text-ink hover:border-ink/40")}>
+            <MessageSquare size={16} strokeWidth={1.75} />
+            Contactar por chat en {portalLabel}
+          </a>
+          <button onClick={() => setShowEditPhone(true)} className={cn(btnPrimary, "w-full border border-gold-dark/40 bg-gold/10 text-ink hover:bg-gold/20")}>
+            <Phone size={14} strokeWidth={1.75} />
+            Agregar teléfono
+          </button>
+          <button onClick={handleVerifyThisPhone} disabled={verifyingThis} className={cn(btnPrimary, "w-full border border-ink/15 bg-white text-ink hover:border-ink/40 disabled:opacity-60")}>
+            {verifyingThis ? (
+              <><Loader2 size={14} className="animate-spin" /> Consultando el portal…</>
+            ) : (
+              <><RefreshCw size={14} strokeWidth={1.75} /> Verificar teléfono ahora</>
+            )}
+          </button>
+          {verifyThisResult && <p className="text-center text-xs text-ink/70">{verifyThisResult}</p>}
+        </div>
+      )}
+    </div>
+  );
+
+  const assignCard = (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+      <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <UserCheck size={14} strokeWidth={2} className="text-blue-700" />
+        Asignado a
+      </p>
+      <div className="flex items-center gap-2">
+        <select
+          aria-label="Asesor asignado"
+          value={currentRow.assigned_to ?? ""}
+          onChange={(e) => handleAssign(e.target.value)}
+          disabled={assigning || staffOptions.length === 0}
+          className="h-10 flex-1 rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink focus:border-ink/40 focus:outline-none disabled:opacity-60"
+        >
+          <option value="">Sin asignar</option>
+          {staffOptions.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        {assigning && <Loader2 size={16} className="animate-spin text-ink/50" />}
+      </div>
+      {assignError && <p className="mt-1.5 text-xs text-red-700">{assignError}</p>}
+      {currentRow.last_contact_by && (
+        <p className="mt-2 text-xs text-ink/70">
+          Último contacto: <span className="font-medium text-ink">{currentRow.last_contact_by}</span>
+          {currentRow.last_contact_at && ` · ${DATE_FMT.format(new Date(currentRow.last_contact_at))}`}
+        </p>
+      )}
+    </div>
+  );
+
+  const actions = (
+    <div className="space-y-2">
+      <a href={currentRow.source_url} target="_blank" rel="noopener noreferrer" className={cn(btnPrimary, "w-full border border-ink/15 bg-white text-ink hover:border-ink/40")}>
+        <ExternalLink size={14} strokeWidth={1.75} />
+        Ver en {portalLabel}
+      </a>
+      {canCreateProperty &&
+        (created ? (
+          <Link href={`/admin/propiedades/${created.slug}`} className={cn(btnPrimary, "w-full bg-emerald-700 text-white hover:bg-emerald-800")}>
+            <Check size={14} strokeWidth={2} />
+            Propiedad creada · abrir ficha
+          </Link>
+        ) : (
+          <button onClick={handleCreateProperty} disabled={creating} className={cn(btnPrimary, "w-full bg-gold text-ink hover:bg-gold-dark disabled:opacity-60")}>
+            <Plus size={14} strokeWidth={2} />
+            {creating ? "Creando…" : "Crear propiedad"}
+          </button>
+        ))}
+      {createError && <p className="text-xs text-red-700">No se pudo crear la propiedad ({createError}). Inténtalo de nuevo.</p>}
+      {currentRow.is_active && (
+        <button onClick={handleToggleActive} disabled={togglingActive} className={cn(btnPrimary, "w-full border border-red-300 text-red-800 hover:bg-red-50 disabled:opacity-60")}>
+          <X size={14} strokeWidth={2} />
+          {togglingActive ? "Guardando…" : "Marcar como retirado"}
+        </button>
+      )}
+      <ShareLinkAction particularId={currentRow.id} />
+    </div>
+  );
+
+  const tabBtn = (id: typeof tab, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === id}
+      onClick={() => setTab(id)}
+      className={cn(
+        "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink",
+        tab === id ? "border-ink text-ink" : "border-transparent text-ink/65 hover:text-ink",
+      )}
+    >
+      {label}
+    </button>
+  );
+
   if (typeof document === "undefined") return null;
   return createPortal(
     <>
@@ -952,600 +1081,203 @@ export function ParticularModal({
           onSaved={handlePhoneSaved}
         />
       )}
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
-        onClick={onClose}
-      >
+      {viewer && <Lightbox items={viewer.items} startIndex={viewer.start} title={title} onClose={() => setViewer(null)} />}
+      <div className="crm-root fixed inset-0 z-50 flex items-stretch justify-center bg-ink/50 backdrop-blur-sm sm:p-4" onClick={onClose}>
         <div
-          className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-cream-50 shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Ficha: ${title}`}
+          className="relative flex w-full max-w-6xl flex-col overflow-hidden bg-cream-50 shadow-2xl sm:rounded-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-        {/* Foto + nav */}
-        <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-ink/5">
-          {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cover}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-ink/30">
-              sin foto
-            </div>
-          )}
-
-          {/* Prev / Next */}
-          {photos.length > 1 && (
-            <>
-              <button
-                aria-label="Foto anterior"
-                onClick={() =>
-                  setPhotoIdx((i) => (i === 0 ? photos.length - 1 : i - 1))
-                }
-                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-white hover:bg-ink/70"
-              >
-                ‹
-              </button>
-              <button
-                aria-label="Foto siguiente"
-                onClick={() =>
-                  setPhotoIdx((i) => (i === photos.length - 1 ? 0 : i + 1))
-                }
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-white hover:bg-ink/70"
-              >
-                ›
-              </button>
-              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-                {photos.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPhotoIdx(i)}
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full transition-colors",
-                      i === photoIdx ? "bg-white" : "bg-white/50",
-                    )}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Badges */}
-          <span className="absolute left-3 top-3 rounded-md bg-ink/85 px-2 py-0.5 crm-label-sm text-cream-50">
-            {currentRow.operation === "rent" ? "Alquiler" : "Venta"}
-          </span>
-          <span className="absolute right-10 top-3 rounded-md bg-gold/90 px-2 py-0.5 crm-label-sm text-ink">
-            {portalLabel}
-          </span>
-
-          {/* Close */}
-          <button
-            onClick={onClose}
-            className="absolute right-3 top-3 rounded-full bg-white/90 p-1 text-ink hover:bg-white"
-          >
-            <X size={16} strokeWidth={2} />
-          </button>
-        </div>
-
-        {/* Contenido scrollable */}
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-          {/* Referencias (interna + externa) */}
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-4 py-3 sm:px-6">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {currentRow.particular_reference && (
-                <span className="rounded-md border border-gold/30 bg-gold/10 px-2.5 py-1 font-mono text-xs font-semibold tracking-wider text-gold-dark">
-                  {currentRow.particular_reference}
-                </span>
+                <span className="rounded-md border border-gold-dark/30 bg-gold/10 px-2 py-0.5 font-mono text-xs font-semibold text-ink">{currentRow.particular_reference}</span>
               )}
-              <span className="rounded-md border border-ink/15 bg-ink/5 px-2.5 py-1 font-mono text-xs text-ink/60">
+              <span className="rounded-md border border-ink/15 bg-ink/5 px-2 py-0.5 font-mono text-xs text-ink/70">
                 {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
+              {relativeTime(currentRow.created_at) && <span className="text-xs text-ink/65">Detectado {relativeTime(currentRow.created_at)}</span>}
             </div>
-          </div>
+            <button type="button" onClick={onClose} aria-label="Cerrar ficha" className="rounded-full p-2 text-ink hover:bg-ink/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink">
+              <X size={20} strokeWidth={2} />
+            </button>
+          </header>
 
-          {/* Precio + zona */}
-          <div>
-            {/* Badge de baja — el dato se conserva pero el anuncio ya no está activo */}
-            {!currentRow.is_active && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                <span className="font-semibold">Anuncio retirado</span>
-                {currentRow.taken_down_at && (
-                  <span className="text-red-500">
-                    · {DATE_FMT.format(new Date(currentRow.taken_down_at))}
-                  </span>
-                )}
-                <span className="ml-auto text-xs text-red-400">
-                  Datos conservados — puede volver a estar disponible
-                </span>
-                <button
-                  onClick={handleToggleActive}
-                  disabled={togglingActive}
-                  className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
-                >
-                  {togglingActive ? "Guardando…" : "Reactivar"}
-                </button>
-              </div>
-            )}
-            <p className="crm-number text-2xl text-ink">
-              {currentRow.price != null
-                ? `${formatPrice(currentRow.price)}${currentRow.operation === "rent" ? "/mes" : ""}`
-                : "Precio no disponible"}
-            </p>
-            {/* Dirección exacta si existe (migración 0035); si no, la zona como antes */}
-            {currentRow.address ? (
-              <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
-                <MapPin size={13} strokeWidth={1.75} className="text-gold" />
-                <span>
-                  {currentRow.address}
-                  {currentRow.zone && currentRow.zone !== currentRow.address && (
-                    <span className="text-ink/40"> · {currentRow.zone}</span>
-                  )}
-                </span>
-              </div>
-            ) : currentRow.zone ? (
-              <div className="mt-1 flex items-center gap-1 text-sm text-ink/60">
-                <MapPin size={13} strokeWidth={1.75} className="text-gold" />
-                {currentRow.zone}
-              </div>
-            ) : null}
-            <p className="mt-1 text-sm text-ink/50">
-              {[
-                currentRow.bedrooms != null ? `${currentRow.bedrooms} hab` : null,
-                currentRow.bathrooms != null ? `${currentRow.bathrooms} baños` : null,
-                currentRow.square_meters != null ? `${currentRow.square_meters} m²` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          </div>
+          <div className="flex-1 overflow-y-auto pb-24 lg:pb-0">
+            <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-w-0 space-y-6">
+                <Gallery
+                  photos={photos}
+                  index={photoIdx}
+                  onIndexChange={setPhotoIdx}
+                  loadingMore={detailLoading}
+                  title={title}
+                  operationLabel={operationLabel}
+                  portalLabel={portalLabel}
+                  retired={!currentRow.is_active}
+                  sourceUrl={currentRow.source_url}
+                  hasPlan={Boolean(currentRow.floor_plan_url)}
+                  hasVideo={Boolean(currentRow.video_url)}
+                  onOpenViewer={openViewer}
+                  keyboardActive={!viewer && !showEditPhone}
+                />
 
-          {/* Mismo inmueble en otros portales / operaciones (migración 0176) */}
-          <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />
+                {/* Precio y dirección: en móvil bajo la foto; en escritorio, en la columna derecha */}
+                <div className="lg:hidden">{priceBlock}</div>
 
-          {/* Ficha técnica — datos scrapeados de Idealista (bajo demanda) */}
-          {(currentRow.price_per_m2 != null ||
-            currentRow.previous_price != null ||
-            currentRow.floor ||
-            currentRow.has_lift != null ||
-            currentRow.year_built != null ||
-            currentRow.condition ||
-            currentRow.orientation ||
-            currentRow.energy_consumption ||
-            currentRow.energy_emissions ||
-            currentRow.reference) && (
-            <div className="rounded-xl border border-gold/20 bg-white p-4">
-              <p className="mb-3 crm-label-sm text-ink/40">Ficha técnica</p>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                {currentRow.price_per_m2 != null && (
-                  <div>
-                    <dt className="text-ink/40">Precio/m²</dt>
-                    <dd className="text-ink">{formatPrice(currentRow.price_per_m2)} €</dd>
-                  </div>
+                {facts.length > 0 && (
+                  <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                    {facts.map((f) => (
+                      <div key={f.label} className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white px-3 py-2.5">
+                        <span aria-hidden className="text-gold-dark">{f.icon}</span>
+                        <div className="min-w-0">
+                          <dt className="text-xs text-ink/65">{f.label}</dt>
+                          <dd className="break-words text-sm font-semibold text-ink">{f.value}</dd>
+                        </div>
+                      </div>
+                    ))}
+                  </dl>
                 )}
-                {currentRow.previous_price != null && (
-                  <div>
-                    <dt className="text-ink/40">Precio anterior</dt>
-                    <dd className="text-ink">
-                      {formatPrice(currentRow.previous_price)} €
-                      {currentRow.price_drop_pct != null
-                        ? ` (−${currentRow.price_drop_pct}%)`
-                        : ""}
-                    </dd>
-                  </div>
-                )}
-                {currentRow.floor && (
-                  <div>
-                    <dt className="text-ink/40">Planta</dt>
-                    <dd className="text-ink">{currentRow.floor}</dd>
-                  </div>
-                )}
-                {currentRow.has_lift != null && (
-                  <div>
-                    <dt className="text-ink/40">Ascensor</dt>
-                    <dd className="text-ink">{currentRow.has_lift ? "Sí" : "No"}</dd>
-                  </div>
-                )}
-                {currentRow.year_built != null && (
-                  <div>
-                    <dt className="text-ink/40">Año construcción</dt>
-                    <dd className="text-ink">{currentRow.year_built}</dd>
-                  </div>
-                )}
-                {currentRow.condition && (
-                  <div>
-                    <dt className="text-ink/40">Estado</dt>
-                    <dd className="text-ink">{currentRow.condition}</dd>
-                  </div>
-                )}
-                {currentRow.orientation && (
-                  <div>
-                    <dt className="text-ink/40">Orientación</dt>
-                    <dd className="text-ink">{currentRow.orientation}</dd>
-                  </div>
-                )}
-                {currentRow.energy_consumption && (
-                  <div>
-                    <dt className="text-ink/40">Energía · consumo</dt>
-                    <dd className="text-ink">{currentRow.energy_consumption}</dd>
-                  </div>
-                )}
-                {currentRow.energy_emissions && (
-                  <div>
-                    <dt className="text-ink/40">Energía · emisiones</dt>
-                    <dd className="text-ink">{currentRow.energy_emissions}</dd>
-                  </div>
-                )}
-                {currentRow.reference && (
-                  <div>
-                    <dt className="text-ink/40">Referencia</dt>
-                    <dd className="text-ink">{currentRow.reference}</dd>
-                  </div>
-                )}
-              </dl>
-              {currentRow.source_update_text && (
-                <p className="mt-3 text-xs text-ink/40">
-                  {currentRow.source_update_text}
-                </p>
-              )}
-              {currentRow.advertiser_profile_url && (
-                <a
-                  href={currentRow.advertiser_profile_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-block text-xs font-semibold text-gold hover:underline"
-                >
-                  Ver perfil del anunciante ↗
-                </a>
-              )}
-            </div>
-          )}
 
-          {/* Datos de contacto */}
-          <div className="rounded-xl border border-gold/20 bg-white p-4">
-            <p className="mb-3 crm-label-sm text-ink/40">
-              Contacto · Particular
-            </p>
+                <div role="tablist" aria-label="Secciones de la ficha" className="flex border-b border-ink/10">
+                  {tabBtn("detalles", "Detalles")}
+                  {tabBtn("enlazados", "Anuncios enlazados")}
+                  {tabBtn("historial", "Historial y contactos")}
+                </div>
 
-            {currentRow.owner_name && (
-              <p className="mb-3 font-medium text-ink">{currentRow.owner_name}</p>
-            )}
-
-            {hasPhone ? (
-              <div className="space-y-2">
-                <a
-                  href={`tel:${currentRow.phone}`}
-                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                >
-                  <Phone size={16} strokeWidth={2} />
-                  Llamar · {formatPhone(currentRow.phone!)}
-                  {/* Confianza de la extracción automática del teléfono (migración 0035).
-                      Sin confianza (añadido a mano) no se muestra badge. */}
-                  {currentRow.phone_confidence === "high" && (
-                    <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                      Verificado
-                    </span>
-                  )}
-                  {currentRow.phone_confidence === "medium" && (
-                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                      Detectado
-                    </span>
-                  )}
-                </a>
-                <button
-                  onClick={() => setShowEditPhone(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
-                >
-                  Editar teléfono
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <a
-                  href={currentRow.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5"
-                >
-                  <MessageSquare size={16} strokeWidth={1.75} />
-                  Contactar por chat
-                  {currentRow.chat_only && (
-                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                      Solo disponible
-                    </span>
-                  )}
-                </a>
-                <button
-                  onClick={() => setShowEditPhone(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-gold/30 bg-gold/5 px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/50 hover:bg-gold/10"
-                >
-                  <Phone size={14} strokeWidth={1.75} />
-                  Agregar teléfono
-                </button>
-                <button
-                  onClick={handleVerifyThisPhone}
-                  disabled={verifyingThis}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink/15 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-gold/40 hover:bg-gold/5 disabled:opacity-60"
-                >
-                  {verifyingThis ? (
-                    <><Loader2 size={14} className="animate-spin" /> Consultando el portal…</>
-                  ) : (
-                    <><RefreshCw size={14} strokeWidth={1.75} /> Verificar teléfono ahora</>
-                  )}
-                </button>
-                {verifyThisResult && (
-                  <p className="text-center text-xs text-ink/55">{verifyThisResult}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Asignación — quién gestiona este anuncio (evita doble trabajo) */}
-          <div className="rounded-xl border border-blue-200/60 bg-blue-50/40 p-4">
-            <p className="mb-2 flex items-center gap-1.5 crm-label-sm text-ink/40">
-              <UserCheck size={13} strokeWidth={2} className="text-blue-600" />
-              Asignado a
-            </p>
-            <div className="flex items-center gap-2">
-              <select
-                value={currentRow.assigned_to ?? ""}
-                onChange={(e) => handleAssign(e.target.value)}
-                disabled={assigning || staffOptions.length === 0}
-                className="flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink focus:border-gold/55 focus:outline-none disabled:opacity-60"
-              >
-                <option value="">Sin asignar</option>
-                {staffOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              {assigning && <Loader2 size={16} className="animate-spin text-ink/40" />}
-            </div>
-            {assignError && (
-              <p className="mt-1.5 text-xs text-red-600">{assignError}</p>
-            )}
-            {currentRow.last_contact_by && (
-              <p className="mt-2 text-xs text-ink/55">
-                Último contacto: <span className="font-medium text-ink/75">{currentRow.last_contact_by}</span>
-                {currentRow.last_contact_at &&
-                  ` · ${DATE_FMT.format(new Date(currentRow.last_contact_at))}`}
-              </p>
-            )}
-          </div>
-
-          {/* Registro de contactos CRM */}
-          <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
-            <ContactLog particularId={currentRow.id} />
-          </div>
-
-          {/* Historial de cambios (particulares_changes) + evolución del precio */}
-          <div className="rounded-xl border border-ink/10 bg-ink/3 p-4">
-            <ChangeHistory row={currentRow} />
-          </div>
-
-          {/* Mapa — prioridad: dirección exacta (puntito en el portal/número) →
-              coordenadas de Idealista (lo más cercano al real) → zona. Compacto
-              (h-36) para que no domine el modal. */}
-          {(() => {
-            const hasExact = isExactStreet(currentRow.address);
-            const hasCoords =
-              currentRow.latitude != null && currentRow.longitude != null;
-            if (!hasExact && !hasCoords && !currentRow.address && !currentRow.zone) {
-              return null;
-            }
-            return (
-              <div>
-                <p className="mb-2 crm-label-sm text-ink/40">
-                  Ubicación
-                </p>
-                <div className="overflow-hidden rounded-lg border border-ink/10">
-                  <div className="relative h-36 w-full bg-gray-100">
-                    <iframe
-                      title="Mapa de ubicación del anuncio"
-                      width="100%"
-                      height="100%"
-                      style={{ border: "none" }}
-                      src={
-                        hasExact
-                          ? // Dirección con calle/número → pin exacto en Google.
-                            `https://maps.google.com/maps?q=${encodeURIComponent(
-                              mapFallbackQuery(currentRow),
-                            )}&output=embed&zoom=17`
-                          : hasCoords
-                            ? // Coordenadas de Idealista → marcador en OSM.
-                              `https://www.openstreetmap.org/export/embed.html?bbox=${currentRow.longitude! - 0.002},${currentRow.latitude! - 0.002},${currentRow.longitude! + 0.002},${currentRow.latitude! + 0.002}&layer=mapnik&marker=${currentRow.latitude},${currentRow.longitude}`
-                            : // Solo zona.
-                              `https://maps.google.com/maps?q=${encodeURIComponent(
-                                mapFallbackQuery(currentRow),
-                              )}&output=embed&zoom=14`
-                      }
-                      allowFullScreen
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-white px-3 py-2 text-xs text-ink/50">
-                    <MapPin size={11} strokeWidth={1.75} className="text-gold" />
-                    {hasExact ? (
-                      <>Dirección exacta · {currentRow.address}</>
-                    ) : hasCoords ? (
-                      <>Ubicación aproximada (Idealista){currentRow.zone ? ` · ${currentRow.zone}` : ""}</>
-                    ) : (
-                      <>Zona aproximada · {currentRow.zone}</>
+                {tab === "detalles" && (
+                  <div className="space-y-6">
+                    {description && (
+                      <section>
+                        <h3 className="mb-2 text-sm font-semibold text-ink">Descripción</h3>
+                        <p className={cn("whitespace-pre-wrap text-sm leading-relaxed text-ink/80", longDesc && !descOpen && "line-clamp-6")}>{description}</p>
+                        {longDesc && (
+                          <button type="button" onClick={() => setDescOpen((v) => !v)} className="mt-1 text-sm font-semibold text-ink underline underline-offset-2">
+                            {descOpen ? "Ver menos" : "Ver más"}
+                          </button>
+                        )}
+                      </section>
+                    )}
+                    {features.length > 0 && (
+                      <section>
+                        <h3 className="mb-2 text-sm font-semibold text-ink">Características</h3>
+                        <div className="flex flex-wrap gap-1.5">
+                          {features.map((f, i) => (
+                            <span key={i} className="rounded-full border border-ink/10 bg-white px-3 py-1 text-sm text-ink/80">{f}</span>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+                    {currentRow.floor_plan_url && (
+                      <section>
+                        <h3 className="mb-2 text-sm font-semibold text-ink">Plano</h3>
+                        <button type="button" onClick={() => openViewer("plan")} aria-label="Ampliar el plano" className="block w-full">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={currentRow.floor_plan_url} alt="Plano de la vivienda" className="w-full rounded-lg border border-ink/10 bg-white" loading="lazy" />
+                        </button>
+                      </section>
+                    )}
+                    {currentRow.video_url && (
+                      <section>
+                        <h3 className="mb-2 text-sm font-semibold text-ink">Vídeo</h3>
+                        {(() => {
+                          const v = detectVideoType(currentRow.video_url);
+                          if (v.type === "youtube" && v.id)
+                            return <iframe src={getYoutubeEmbedUrl(v.id)} className="aspect-video w-full rounded-lg" allowFullScreen loading="lazy" title="Vídeo de YouTube" />;
+                          if (v.type === "vimeo" && v.id)
+                            return <iframe src={getVimeoEmbedUrl(v.id)} className="aspect-video w-full rounded-lg" allowFullScreen loading="lazy" title="Vídeo de Vimeo" />;
+                          // eslint-disable-next-line jsx-a11y/media-has-caption
+                          return <video controls preload="none" className="w-full rounded-lg" src={currentRow.video_url!} />;
+                        })()}
+                      </section>
+                    )}
+                    {precision !== null && (
+                      <section>
+                        <h3 className="mb-2 text-sm font-semibold text-ink">Ubicación</h3>
+                        <AdMap
+                          particularId={currentRow.id}
+                          latitude={currentRow.latitude}
+                          longitude={currentRow.longitude}
+                          address={currentRow.address}
+                          zone={zoneForMap(currentRow.zone)}
+                          precision={precision}
+                          height={288}
+                        />
+                      </section>
+                    )}
+                    {(currentRow.source_update_text || currentRow.advertiser_profile_url) && (
+                      <div className="space-y-1 text-xs text-ink/65">
+                        {currentRow.source_update_text && <p>{esText(currentRow.source_update_text)}</p>}
+                        {currentRow.advertiser_profile_url && (
+                          <a href={currentRow.advertiser_profile_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink underline underline-offset-2">
+                            Ver perfil del anunciante ↗
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
+
+                {tab === "enlazados" && <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />}
+
+                {tab === "historial" && (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-ink/10 bg-white p-4">
+                      <ContactLog particularId={currentRow.id} />
+                    </div>
+                    <div className="rounded-xl border border-ink/10 bg-white p-4">
+                      <ChangeHistory row={currentRow} />
+                    </div>
+                  </div>
+                )}
               </div>
-            );
-          })()}
 
-          {/* Vídeo del anuncio (migración 0036) */}
-          {currentRow.video_url && (
-            <div>
-              <p className="mb-2 crm-label-sm text-ink/40">
-                Vídeo
-              </p>
-              {(() => {
-                const videoInfo = detectVideoType(currentRow.video_url);
-                if (videoInfo.type === "youtube" && videoInfo.id) {
-                  return (
-                    <iframe
-                      src={getYoutubeEmbedUrl(videoInfo.id)}
-                      className="w-full rounded-lg aspect-video"
-                      allowFullScreen
-                      loading="lazy"
-                      title="YouTube video player"
-                    />
-                  );
-                }
-                if (videoInfo.type === "vimeo" && videoInfo.id) {
-                  return (
-                    <iframe
-                      src={getVimeoEmbedUrl(videoInfo.id)}
-                      className="w-full rounded-lg aspect-video"
-                      allowFullScreen
-                      loading="lazy"
-                      title="Vimeo video player"
-                    />
-                  );
-                }
-                // Direct video file (MP4, WebM, etc.)
-                return (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <video
-                    controls
-                    preload="none"
-                    className="w-full rounded-lg"
-                    src={currentRow.video_url}
-                  />
-                );
-              })()}
+              {/* Columna derecha: precio, contacto, asignación y acciones */}
+              <aside className="min-w-0 space-y-4 lg:sticky lg:top-0 lg:self-start">
+                {!currentRow.is_active && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                    <span className="font-semibold">Anuncio retirado</span>
+                    {currentRow.taken_down_at && <span>· {DATE_FMT.format(new Date(currentRow.taken_down_at))}</span>}
+                    <button onClick={handleToggleActive} disabled={togglingActive} className="ml-auto rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-60">
+                      {togglingActive ? "Guardando…" : "Reactivar"}
+                    </button>
+                  </div>
+                )}
+                <div className="hidden lg:block">{priceBlock}</div>
+                {contactCard}
+                {assignCard}
+                {actions}
+              </aside>
             </div>
-          )}
+          </div>
 
-          {/* Plano de la vivienda (migración 0036) */}
-          {currentRow.floor_plan_url && (
-            <div>
-              <p className="mb-2 crm-label-sm text-ink/40">
-                Plano
-              </p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={currentRow.floor_plan_url}
-                alt="Plano de la vivienda"
-                className="w-full rounded-lg border border-ink/10 bg-white"
-                loading="lazy"
-              />
-            </div>
-          )}
-
-          {/* Características */}
-          {currentRow.features && currentRow.features.length > 0 && (
-            <div>
-              <p className="mb-2 crm-label-sm text-ink/40">
-                Características
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {currentRow.features.map((f, i) => (
-                  <span
-                    key={i}
-                    className="rounded-full border border-ink/10 bg-white px-2.5 py-1 text-xs text-ink/70"
-                  >
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Descripción */}
-          {currentRow.description && (
-            <div>
-              <p className="mb-2 crm-label-sm text-ink/40">
-                Descripción
-              </p>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/75">
-                {currentRow.description}
-              </p>
-            </div>
-          )}
-
-          {/* Acciones inferiores */}
-          <div className="flex gap-2 border-t border-ink/8 pt-4">
-            <a
-              href={currentRow.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink/15 px-4 py-2 text-sm text-ink/70 transition hover:border-gold/40 hover:text-ink"
-            >
-              <ExternalLink size={14} strokeWidth={1.75} />
-              Ver en {portalLabel}
-            </a>
-            {/* Retirada manual: archiva el anuncio en el tab "Retirados" sin
-                esperar a que el cron detecte el 404 en el portal. */}
-            {currentRow.is_active && (
-              <button
-                onClick={handleToggleActive}
-                disabled={togglingActive}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
-              >
-                <X size={14} strokeWidth={2} />
-                {togglingActive ? "Guardando…" : "Marcar como retirado"}
+          {/* Barra inferior móvil: llamar / WhatsApp siempre al alcance del pulgar */}
+          <div className="absolute inset-x-0 bottom-0 z-10 flex gap-2 border-t border-ink/10 bg-white p-3 lg:hidden">
+            {hasPhone ? (
+              <>
+                <a href={`tel:${currentRow.phone}`} className={cn(btnPrimary, "flex-1 bg-emerald-700 text-white")}>
+                  <Phone size={16} /> Llamar
+                </a>
+                {wa && (
+                  <a href={wa} target="_blank" rel="noopener noreferrer" className={cn(btnPrimary, "flex-1 border border-emerald-700 text-emerald-800")}>
+                    <MessageCircle size={16} /> WhatsApp
+                  </a>
+                )}
+              </>
+            ) : (
+              <button onClick={() => setShowEditPhone(true)} className={cn(btnPrimary, "flex-1 border border-gold-dark/40 bg-gold/10 text-ink")}>
+                <Phone size={16} /> Agregar teléfono
               </button>
             )}
-            {canCreateProperty && (
-              created ? (
-                <Link
-                  href={`/admin/propiedades/${created.slug}`}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                >
-                  <Check size={14} strokeWidth={2} />
-                  Propiedad creada · abrir ficha
-                </Link>
-              ) : (
-                <button
-                  onClick={handleCreateProperty}
-                  disabled={creating}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink transition hover:bg-gold-dark disabled:opacity-60"
-                >
-                  <Plus size={14} strokeWidth={2} />
-                  {creating ? "Creando…" : "Crear propiedad"}
-                </button>
-              )
-            )}
+            <button type="button" onClick={onClose} className={cn(btnPrimary, "bg-ink px-5 text-cream-50")}>
+              Cerrar
+            </button>
           </div>
-          {createError && (
-            <p className="text-xs text-red-600">
-              No se pudo crear la propiedad ({createError}). Inténtalo de nuevo.
-            </p>
-          )}
-
-          {/* Link temporal externo — independiente de las acciones de arriba,
-              ver el bloque "Link temporal externo" más arriba en el archivo. */}
-          <ShareLinkAction particularId={currentRow.id} />
         </div>
-
-        {/* Cerrar, fijo debajo del contenido con scroll (no dentro de él):
-            la X de la esquina superior queda fuera del alcance del pulgar
-            en pantallas grandes (iPhone 16 Pro Max) sujetando el móvil con
-            una mano. Este botón vive al ras del borde inferior de la
-            ficha, que sí cae dentro de esa zona. */}
-        <div className="shrink-0 border-t border-ink/8 bg-cream-50 p-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 text-sm font-semibold text-cream-50 transition hover:bg-ink-soft"
-          >
-            <X size={16} strokeWidth={2} />
-            Cerrar
-          </button>
-        </div>
-      </div>
       </div>
     </>,
     document.body,
   );
 }
-
-// ─── Listado principal ────────────────────────────────────────────────────────
-

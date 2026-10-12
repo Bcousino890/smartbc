@@ -11,7 +11,8 @@ import { esAddress } from "@/lib/particulares/es-labels";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import type { LinkSummaryLite } from "@/lib/particulares/links-types";
 
-const NUM = new Intl.NumberFormat("es-ES");
+// es-ES no agrupa los números de 4 cifras por defecto («9524»): "always" lo fuerza («9.524»).
+const NUM = new Intl.NumberFormat("es-ES", { useGrouping: "always" } as Intl.NumberFormatOptions);
 const NUM_1 = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 /** Entero con separador de miles es-ES: 44230 → «44.230». */

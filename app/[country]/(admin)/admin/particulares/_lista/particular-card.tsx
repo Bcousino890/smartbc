@@ -359,7 +359,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
               {ago ?? (absolute ? `Detectado el ${absolute}` : "")}
             </span>
             {row.particular_reference && (
-              <span className="ml-auto hidden font-mono text-[11px] text-ink/55 sm:inline">{row.particular_reference}</span>
+              <span className="ml-auto hidden font-mono text-xs text-ink/55 sm:inline">{row.particular_reference}</span>
             )}
           </p>
         </div>

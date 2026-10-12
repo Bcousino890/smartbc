@@ -6,7 +6,7 @@ import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter
 import type { ParticularesFiltersApi } from "../use-particulares-filters";
 import { ChoiceGroup, FOCUS_RING, NumberField, SelectField, SwitchRow } from "./controls";
 import { RangeSlider } from "./range-slider";
-import { fmtEur } from "./format";
+import { fmtEur, fmtNum } from "./format";
 
 function Section({ title, defaultOpen = true, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
   return (
@@ -218,7 +218,7 @@ export function FiltersPanel({
             Limpiar
           </button>
           <button type="button" onClick={onClose} className={`h-11 flex-[2] rounded-xl bg-ink text-sm font-semibold text-cream-50 hover:bg-ink/90 ${FOCUS_RING}`}>
-            Ver {total.toLocaleString("es-ES")} anuncios
+            Ver {fmtNum(total)} anuncios
           </button>
         </footer>
       </aside>
