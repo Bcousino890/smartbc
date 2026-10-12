@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { latLngToTile, worldPixelToLatLng, TILE_SIZE } from "@/lib/geo/tile-math";
 import { PORTAL_LABEL, type ScraperPortal, type ScraperZone, type ZonePriority } from "@/lib/scrapers/control-types";
 import { FOCUS_RING, Segmented } from "../controls";
 import { PrioritySelect, ZoneInfo } from "./priority-select";
@@ -16,11 +17,20 @@ import { family, normalize, type TreeNode } from "./zones-tree";
  * contorno propio se pinta como marcador (mediana de sus anuncios) o se lista aparte
  * como «sin posición»: ninguna zona se oculta. El estado se comparte con la lista.
  *
+ * Calles: bajo el SVG van teselas raster de OpenStreetMap (tile.openstreetmap.org, sin clave;
+ * © colaboradores de OpenStreetMap). Se pintan solo las del encuadre (≈ 12–25 por vista), con la
+ * caché del navegador, sin precarga masiva, y siguen el zoom y el arrastre del SVG. Se pueden apagar.
+ *
+ * Subzonas: los municipios con barrios/urbanizaciones con contorno OSM (tipo "s", ver
+ * scripts/zonas-mapa/subzonas.mjs) los dibujan al acercar o al elegir el municipio. Las subzonas sin
+ * contorno salen como marcador y SIEMPRE en una lista de chips bajo el mapa, igual de marcables.
+ * Modelo: la zona más específica manda; sin marcar = no se scrapea.
+ *
  * Interacción: un TOQUE marca o desmarca (Sin marcar ⇄ Marcada); «Alta» se elige en el panel.
  * Un arrastre, un pellizco o una pulsación larga NO marcan. Doble toque/clic = acercar.
  */
 
-type GeoFeature = { id: string; n: string; k: "d" | "b" | "m"; p?: string; c: [number, number]; r: number[][] };
+type GeoFeature = { id: string; n: string; k: "d" | "b" | "m" | "s"; p?: string; c: [number, number]; r: number[][] };
 type Geo = { attribution: string; generated: string; features: GeoFeature[] };
 type Match = { generated: string; zones: Record<ScraperPortal, Record<string, { p?: string; pt?: [number, number] }>> };
 
@@ -34,9 +44,24 @@ const COS = Math.cos((LAT0 * Math.PI) / 180);
 const S = 1000; // unidades de mapa por grado
 const px = (lonE4: number) => (lonE4 / 1e4 - LON0) * COS * S;
 const py = (latE4: number) => -(latE4 / 1e4 - LAT0) * S;
+// Mapa (unidades) ⇄ grados, para colocar las teselas de OSM en la misma proyección.
+const lonToX = (lon: number) => (lon - LON0) * COS * S;
+const latToY = (lat: number) => -(lat - LAT0) * S;
+const xToLon = (x: number) => x / (COS * S) + LON0;
+const yToLat = (y: number) => LAT0 - y / S;
 
 const FILL: Record<ZonePriority, string> = { off: "#e6dfd0", normal: "#3a7d68", alta: "#c9a96e" };
+const STROKE: Record<ZonePriority, string> = { off: "#7a705e", normal: "#1f5a48", alta: "#8a6a2a" };
+// Relleno semitransparente: deja ver las calles de debajo.
+const FILL_OPACITY: Record<ZonePriority, number> = { off: 0.3, normal: 0.52, alta: 0.58 };
 const NEUTRAL_FILL = "#f6f3ec";
+const NEUTRAL_OPACITY = 0.22;
+
+/** Un municipio enseña sus subzonas cuando ocupa al menos este ancho en pantalla (px) o está elegido. */
+const SUBS_MIN_PX = 230;
+const TILE_MIN_Z = 7;
+const TILE_MAX_Z = 18;
+const TILE_URL = (z: number, x: number, y: number) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
 /** A partir de este zoom (relativo a Madrid capital) se pintan los barrios y el distrito queda como contorno. */
 const BARRIOS_FROM = 1.7;
@@ -63,18 +88,21 @@ const PolyLayer = memo(function PolyLayer({
   zonesByPoly,
   showBarrios,
   selectedPoly,
+  subsVisible,
 }: {
   polys: Poly[];
   zonesByPoly: Map<string, ScraperZone[]>;
   showBarrios: boolean;
   selectedPoly: string | null;
+  subsVisible: Set<string>;
 }) {
-  // Orden de pintado: municipios, distritos, barrios (los barrios encima).
+  // Orden de pintado: municipios, distritos, barrios y subzonas (lo más específico encima).
   return (
     <g>
       {polys.map(({ f, d }) => {
         const zs = zonesByPoly.get(f.id);
         if (f.k === "b" && !showBarrios) return null;
+        if (f.k === "s" && !(f.p && subsVisible.has(f.p))) return null;
         // Con barrios visibles, el distrito queda como simple contorno (no se pulsa).
         const outlineOnly = f.k === "d" && showBarrios;
         const interactive = !!zs && !outlineOnly;
@@ -86,8 +114,9 @@ const PolyLayer = memo(function PolyLayer({
             d={d}
             data-pid={interactive ? f.id : undefined}
             fill={outlineOnly ? "none" : st ? FILL[st] : NEUTRAL_FILL}
-            stroke={sel ? "#0a0a0a" : outlineOnly ? "#6b6355" : st ? "#ffffff" : "#d6cfbe"}
-            strokeWidth={sel ? 2.5 : outlineOnly ? 1.4 : 0.8}
+            fillOpacity={outlineOnly ? 0 : st ? FILL_OPACITY[st] : NEUTRAL_OPACITY}
+            stroke={sel ? "#0a0a0a" : outlineOnly ? "#4a4337" : st ? STROKE[st] : "#8a8170"}
+            strokeWidth={sel ? 2.6 : outlineOnly ? 1.6 : f.k === "s" ? 1.6 : 1.1}
             vectorEffect="non-scaling-stroke"
             strokeLinejoin="round"
             pointerEvents={interactive ? "auto" : "none"}
@@ -139,6 +168,7 @@ export function ZoneMap({
   const [selected, setSelected] = useState<string | null>(null); // zone_key
   const [more, setMore] = useState(40);
   const [tapMode, setTapMode] = useState<"toggle" | "view">("toggle");
+  const [streets, setStreets] = useState(true);
   const [snack, setSnack] = useState<{ text: string; undo: () => void } | null>(null);
 
   useEffect(() => {
@@ -158,7 +188,7 @@ export function ZoneMap({
   // Contornos ya proyectados (una sola vez).
   const polys = useMemo<Poly[]>(() => {
     if (!geo) return [];
-    const order = { m: 0, d: 1, b: 2 } as const;
+    const order = { m: 0, d: 1, b: 2, s: 3 } as const;
     return geo.features
       .slice()
       .sort((a, b) => order[a.k] - order[b.k])
@@ -249,7 +279,7 @@ export function ZoneMap({
   const bounds = useMemo(() => {
     const box = (list: Poly[]) =>
       list.reduce<[number, number, number, number]>((b, p) => [Math.min(b[0], p.box[0]), Math.min(b[1], p.box[1]), Math.max(b[2], p.box[2]), Math.max(b[3], p.box[3])], [Infinity, Infinity, -Infinity, -Infinity]);
-    return { capital: box(polys.filter((p) => p.f.k === "d")), all: box(polys.filter((p) => p.f.k !== "b")) };
+    return { capital: box(polys.filter((p) => p.f.k === "d")), all: box(polys.filter((p) => p.f.k === "m" || p.f.k === "d")) };
   }, [polys]);
 
   const fitK = useCallback((b: [number, number, number, number], pad = 0.94) => Math.min(size.w / Math.max(b[2] - b[0], 1e-6), size.h / Math.max(b[3] - b[1], 1e-6)) * pad, [size.w, size.h]);
@@ -471,8 +501,8 @@ export function ZoneMap({
   }, [zoomAt, polys.length]);
 
   // ── Encuadrar una zona ────────────────────────────────────────────────────
-  const zoomToZone = useCallback(
-    (z: ScraperZone) => {
+  const familyView = useCallback(
+    (z: ScraperZone): View | null => {
       const fam = new Map(zones.map((x) => [x.zone_key, x]));
       const kids = new Map<string, ScraperZone[]>();
       for (const x of zones) if (x.parent_key) kids.set(x.parent_key, [...(kids.get(x.parent_key) ?? []), x]);
@@ -495,9 +525,16 @@ export function ZoneMap({
           add([x - 3, y - 3, x + 3, y + 3]);
         }
       }
-      if (box) goTo(viewFor(box, 0.8, kCap * 25));
+      return box ? viewFor(box, 0.8, kCap * 60) : null;
     },
-    [zones, placement, polyById, goTo, viewFor, kCap],
+    [zones, placement, polyById, viewFor, kCap],
+  );
+  const zoomToZone = useCallback(
+    (z: ScraperZone) => {
+      const v = familyView(z);
+      if (v) goTo(v);
+    },
+    [familyView, goTo],
   );
 
   // «Ver en el mapa» desde la lista
@@ -512,6 +549,53 @@ export function ZoneMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, polys.length, match]);
 
+  // ── Subzonas de un municipio ───────────────────────────────────────────────
+  /** Contorno del municipio al que pertenece una zona (ella misma o un antecesor), si lo tiene. */
+  const muniOf = useCallback(
+    (z: ScraperZone | null | undefined): string | null => {
+      for (let c: ScraperZone | null | undefined = z, i = 0; c && i < 8; c = c.parent_key ? zoneByKey.get(c.parent_key) : null, i++) {
+        const poly = placement.get(c.zone_key)?.poly;
+        const f = poly ? polyById.get(poly)?.f : undefined;
+        if (f?.k === "m") return f.id;
+        if (f?.k === "s" && f.p) return f.p;
+      }
+      return null;
+    },
+    [zoneByKey, placement, polyById],
+  );
+  const activeMuni = useMemo(() => muniOf(selected ? zoneByKey.get(selected) : null), [muniOf, selected, zoneByKey]);
+  const munisWithSubs = useMemo(() => polys.filter((p) => p.f.k === "m" && polys.some((q) => q.f.k === "s" && q.f.p === p.f.id)), [polys]);
+  // Municipios cuyas subzonas se dibujan: el elegido, y los que ocupan bastante pantalla y se ven.
+  const subsKey = (() => {
+    const ids: string[] = [];
+    const x0 = -view.x / view.k;
+    const x1 = (size.w - view.x) / view.k;
+    const y0 = -view.y / view.k;
+    const y1 = (size.h - view.y) / view.k;
+    for (const m of munisWithSubs) {
+      const [bx0, by0, bx1, by1] = m.box;
+      const visible = bx1 > x0 && bx0 < x1 && by1 > y0 && by0 < y1;
+      if (m.f.id === activeMuni || (visible && (bx1 - bx0) * view.k >= SUBS_MIN_PX)) ids.push(m.f.id);
+    }
+    return ids.sort().join("|");
+  })();
+  const subsVisible = useMemo(() => new Set(subsKey ? subsKey.split("|") : []), [subsKey]);
+
+  // Al elegir un municipio con subzonas se acerca a él (si aún se ve pequeño) para que se vean sus barrios.
+  const lastAuto = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selected || lastAuto.current === selected) return;
+    const z = zoneByKey.get(selected);
+    const poly = z ? placement.get(z.zone_key)?.poly : undefined;
+    if (!z || !poly || polyById.get(poly)?.f.k !== "m" || !munisWithSubs.some((m) => m.f.id === poly)) return;
+    lastAuto.current = selected;
+    const v = familyView(z);
+    if (v && viewRef.current.k < v.k * 0.7) goTo(v);
+  }, [selected, zoneByKey, placement, polyById, munisWithSubs, familyView, goTo]);
+  useEffect(() => {
+    if (!selected) lastAuto.current = null;
+  }, [selected]);
+
   // ── Etiquetas progresivas y sin solapes ────────────────────────────────────
   // Se calculan por «nivel» de zoom (cuantizado) y se colocan de la más importante a la menos,
   // descartando las que se pisan o no caben. Así al acercar van apareciendo y nunca se amontonan.
@@ -522,9 +606,9 @@ export function ZoneMap({
     if (!polys.length) return [];
     const k = kq;
     const cands = polys
-      .filter((p) => p.f.k === "m" || (p.f.k === "d" && !showBarrios) || (p.f.k === "b" && showBarrios))
+      .filter((p) => (p.f.k === "m" && !subsVisible.has(p.f.id)) || (p.f.k === "d" && !showBarrios) || (p.f.k === "b" && showBarrios) || (p.f.k === "s" && !!p.f.p && subsVisible.has(p.f.p)))
       .map((p) => ({ p, w: (p.box[2] - p.box[0]) * k, h: (p.box[3] - p.box[1]) * k, hasZone: zonesByPoly.has(p.f.id) }))
-      .filter((c) => c.w >= 26 && c.h >= 14)
+      .filter((c) => (c.p.f.k === "s" ? c.w >= 18 && c.h >= 8 : c.w >= 26 && c.h >= 14))
       .sort((a, b) => Number(b.hasZone) - Number(a.hasZone) || b.w * b.h - a.w * a.h);
     const placed: Array<[number, number, number, number]> = [];
     const out: Label[] = [];
@@ -537,7 +621,44 @@ export function ZoneMap({
       out.push({ id: p.f.id, n: p.f.n, x: p.cx, y: p.cy });
     }
     return out;
-  }, [polys, kq, showBarrios, zonesByPoly]);
+  }, [polys, kq, showBarrios, zonesByPoly, subsVisible]);
+
+  // ── Calles: teselas OSM del encuadre actual ─────────────────────────
+  const tiles = useMemo(() => {
+    if (!streets || size.w <= 0) return [];
+    const m = 128; // medio tesela de margen para que no se vea el borde al arrastrar
+    const lonW = xToLon((-m - view.x) / view.k);
+    const lonE = xToLon((size.w + m - view.x) / view.k);
+    const latN = yToLat((-m - view.y) / view.k);
+    const latS = yToLat((size.h + m - view.y) / view.k);
+    const zIdeal = Math.log2((view.k * COS * S * 360) / TILE_SIZE);
+    const z0 = clamp(Math.round(zIdeal), TILE_MIN_Z, TILE_MAX_Z);
+    const out: Array<{ key: string; src: string; l: number; t: number; w: number; h: number }> = [];
+    // Nivel actual y, debajo, el anterior (casi siempre ya en caché): sin parpadeos al cambiar de zoom.
+    for (const z of z0 > TILE_MIN_Z ? [z0 - 1, z0] : [z0]) {
+      const n = 2 ** z;
+      const a = latLngToTile(latN, lonW, z);
+      const b = latLngToTile(latS, lonE, z);
+      const x0 = Math.floor(a.x);
+      const x1 = Math.floor(b.x);
+      const y0 = Math.max(0, Math.floor(a.y));
+      const y1 = Math.min(n - 1, Math.floor(b.y));
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 30) continue; // salvaguarda: nunca una avalancha de teselas
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          const nw = worldPixelToLatLng(tx * TILE_SIZE, ty * TILE_SIZE, z);
+          const se = worldPixelToLatLng((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, z);
+          const l = lonToX(nw.lng) * view.k + view.x;
+          const t = latToY(nw.lat) * view.k + view.y;
+          const r = lonToX(se.lng) * view.k + view.x;
+          const bo = latToY(se.lat) * view.k + view.y;
+          const tileX = ((tx % n) + n) % n;
+          out.push({ key: `${z}/${tileX}/${ty}`, src: TILE_URL(z, tileX, ty), l: Math.floor(l), t: Math.floor(t), w: Math.ceil(r) - Math.floor(l) + 1, h: Math.ceil(bo) - Math.floor(t) + 1 });
+        }
+      }
+    }
+    return out;
+  }, [streets, view, size.w, size.h]);
 
   // ── Teclado: flechas recorren las zonas con posición; Enter/Espacio marca; +/− zoom ──
   const navigable = useMemo(
@@ -578,6 +699,16 @@ export function ZoneMap({
 
   const marked = zones.filter((z) => z.priority !== "off").length;
 
+  // Subzonas del municipio activo: lista de chips (con o sin contorno), siempre marcables.
+  const muniRoot = activeMuni ? primaryOf(activeMuni) : undefined;
+  const muniKids = muniRoot ? family(buildNode(muniRoot)).filter((z) => z.zone_key !== muniRoot.zone_key) : [];
+  const muniKidsSorted = muniKids.slice().sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base", numeric: true }));
+  const muniMarked = muniKids.filter((z) => z.priority !== "off").length;
+  const where = (z: ScraperZone) => {
+    const pl = placement.get(z.zone_key);
+    return pl?.poly && polyById.get(pl.poly)?.f.k === "s" ? "contorno en el mapa" : pl?.poly ? "contorno del municipio" : pl?.pt ? "marcador en el mapa" : "solo en la lista";
+  };
+
   if (loadErr) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">No se pudieron cargar los contornos del mapa. La lista funciona igual.</p>;
   if (!geo || !match)
     return (
@@ -601,6 +732,10 @@ export function ZoneMap({
             { value: "view", label: "Solo ver datos" },
           ]}
         />
+        <label className="ml-auto inline-flex h-11 cursor-pointer items-center gap-2 text-sm text-ink">
+          <input type="checkbox" checked={streets} onChange={(e) => setStreets(e.target.checked)} className="h-5 w-5 accent-[#3a7d68]" />
+          Ver calles
+        </label>
       </div>
 
       <div
@@ -612,11 +747,28 @@ export function ZoneMap({
         className={cn("relative overflow-hidden rounded-xl border border-ink/15 bg-[#fbf9f4]", FOCUS_RING)}
         style={{ height: size.h, touchAction: "none" }}
       >
+        {streets && (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            {tiles.map((t) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={t.key}
+                src={t.src}
+                alt=""
+                draggable={false}
+                decoding="async"
+                referrerPolicy="strict-origin-when-cross-origin"
+                className="absolute max-w-none select-none"
+                style={{ left: t.l, top: t.t, width: t.w, height: t.h }}
+              />
+            ))}
+          </div>
+        )}
         <svg
           ref={svgRef}
           width="100%"
           height={size.h}
-          className="block select-none"
+          className="relative block select-none"
           style={{ touchAction: "none", cursor: "grab" }}
           onPointerDown={onDown}
           onPointerMove={onMove}
@@ -626,7 +778,7 @@ export function ZoneMap({
           onClick={onClick}
         >
           <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
-            <PolyLayer polys={polys} zonesByPoly={zonesByPoly} showBarrios={showBarrios} selectedPoly={selectedPoly} />
+            <PolyLayer polys={polys} zonesByPoly={zonesByPoly} showBarrios={showBarrios} selectedPoly={selectedPoly} subsVisible={subsVisible} />
             <LabelLayer labels={labels} k={view.k} />
             {/* Marcadores de zonas sin contorno propio: en la mediana de sus anuncios */}
             <g>
@@ -657,6 +809,12 @@ export function ZoneMap({
             <Maximize2 size={16} aria-hidden="true" />
           </button>
         </div>
+        <span className="pointer-events-none absolute bottom-0 right-0 rounded-tl-lg bg-white/85 px-1.5 py-0.5 text-[11px] leading-tight text-ink/80">
+          ©{" "}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="pointer-events-auto underline">
+            OpenStreetMap contributors
+          </a>
+        </span>
         <button type="button" onClick={() => goTo(viewFor(bounds.capital))} className={cn("absolute bottom-2 left-2 h-11 rounded-xl border border-ink/15 bg-white px-3 text-sm font-semibold shadow-sm hover:bg-cream-50", FOCUS_RING)}>
           Ver todo
         </button>
@@ -671,10 +829,66 @@ export function ZoneMap({
         )}
       </div>
 
+      {muniRoot && muniKidsSorted.length > 0 && (
+        <section className="mt-3 rounded-xl border border-ink/15 bg-white p-3" aria-label={`Barrios y subzonas de ${stripParen(muniRoot.label)}`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-ink">
+                Barrios y subzonas de {stripParen(muniRoot.label)} ({muniKidsSorted.length})
+              </h4>
+              <p className="text-sm text-ink/70">
+                {muniMarked} de {muniKidsSorted.length} marcadas. Toca un barrio, en el mapa o aquí, para marcarlo o desmarcarlo.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button type="button" disabled={disabled} onClick={() => onFamily(muniKidsSorted, true)} className={cn(BTN_SECONDARY, FOCUS_RING)}>
+                Marcar todos
+              </button>
+              <button type="button" disabled={disabled} onClick={() => onFamily(muniKidsSorted, false)} className={cn(BTN_SECONDARY, FOCUS_RING)}>
+                Desmarcar todos
+              </button>
+              <button type="button" onClick={() => zoomToZone(muniRoot)} className={cn(BTN_SECONDARY, FOCUS_RING)}>
+                Acercar al municipio
+              </button>
+            </div>
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {muniKidsSorted.map((z) => {
+              const on = z.priority !== "off";
+              return (
+                <li key={z.zone_key}>
+                  <button
+                    type="button"
+                    aria-pressed={on}
+                    disabled={disabled}
+                    title={`${z.label}: ${stateWord(z.priority)} (${where(z)})`}
+                    onClick={() => toggle(z.zone_key)}
+                    className={cn(
+                      "inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 py-1.5 text-left text-sm disabled:opacity-60",
+                      on ? "border-[#1f5a48] bg-[#3a7d68]/15 font-semibold text-ink" : "border-ink/20 bg-white text-ink/80 hover:bg-cream-50",
+                      z.zone_key === selected && "ring-2 ring-ink",
+                      FOCUS_RING,
+                    )}
+                  >
+                    <span aria-hidden="true" className="inline-block h-3.5 w-3.5 shrink-0 rounded-sm border" style={{ background: FILL[z.priority], opacity: on ? 1 : 0.6, borderColor: STROKE[z.priority] }} />
+                    <span>
+                      {stripParen(z.label)}
+                      <span className="block text-xs font-normal text-ink/65">
+                        {stateWord(z.priority)} · {where(z)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink/80" aria-label="Leyenda">
         {(["normal", "alta", "off"] as const).map((p) => (
           <span key={p} className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="inline-block h-3.5 w-3.5 rounded-sm border border-ink/20" style={{ background: FILL[p] }} />
+            <span aria-hidden="true" className="inline-block h-3.5 w-3.5 rounded-sm border border-ink/20" style={{ background: FILL[p], borderColor: STROKE[p] }} />
             {p === "normal" ? "Marcada" : p === "alta" ? "Alta" : "Sin marcar"}
           </span>
         ))}
@@ -706,7 +920,7 @@ export function ZoneMap({
         {markers.length > 0 && <> · {markers.length} marcadores</>}
       </p>
       <p className="text-xs text-ink/65">
-        Un toque marca o desmarca (para «Alta», usa el panel de abajo). Mantén pulsado para ver solo los datos. Arrastra para mover; pellizca, usa la rueda, doble toque o los botones para el zoom. Acerca el mapa para ver los barrios.
+        Un toque marca o desmarca (para «Alta», usa el panel de abajo). Mantén pulsado para ver solo los datos. Arrastra para mover; pellizca, usa la rueda, doble toque o los botones para el zoom. Acerca el mapa o elige un municipio para ver y marcar sus barrios.
       </p>
 
       {sel ? (
@@ -793,7 +1007,7 @@ export function ZoneMap({
       )}
 
       <p className="mt-3 text-xs text-ink/60">
-        {geo.attribution}. Datos del {geo.generated}.
+        {geo.attribution}. Datos del {geo.generated}. Mapa de calles © colaboradores de OpenStreetMap.
       </p>
     </div>
   );
