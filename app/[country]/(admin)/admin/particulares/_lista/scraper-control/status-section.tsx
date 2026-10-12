@@ -178,7 +178,7 @@ export function StatusSection({ data }: { data: ScraperControlPayload }) {
         </p>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid gap-4">
         {SCRAPER_PORTALS.map((p) => (
           <ScraperCard key={p} h={data.health[p]} now={now} />
         ))}

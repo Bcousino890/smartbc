@@ -59,7 +59,7 @@ function PrioritySelect({ value, onChange, label, disabled }: { value: ZonePrior
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKey(e, i)}
             className={cn(
-              "min-w-0 flex-1 rounded-[10px] px-2 text-sm transition disabled:cursor-not-allowed",
+              "min-w-0 flex-1 whitespace-nowrap rounded-[10px] px-1 text-sm transition disabled:cursor-not-allowed",
               active ? o.on : "font-medium text-ink/70 hover:bg-ink/[0.04] hover:text-ink",
               FOCUS_RING,
             )}
@@ -88,6 +88,19 @@ function buildTree(zones: ScraperZone[]): TreeNode[] {
 
 function family(n: TreeNode): ScraperZone[] {
   return [n.z, ...n.children.flatMap(family)];
+}
+
+/** Peticiones aproximadas del barrido de puesta al día: 30 anuncios por página de listado. */
+function sweepRequests(zs: ScraperZone[]): number | null {
+  const known = zs.filter((z) => z.listings_sale != null || z.listings_rent != null);
+  if (known.length === 0) return null;
+  return known.reduce((n, z) => n + Math.ceil(((z.listings_sale ?? 0) + (z.listings_rent ?? 0)) / 30), 0);
+}
+
+/** Mensaje al marcar: la zona se pone al día en la siguiente ejecución del crawler. */
+function markedMsg(zs: ScraperZone[], what: string): string {
+  const n = sweepRequests(zs.filter((z) => z.priority === "off"));
+  return `${what} Se barrerá en la próxima ejecución${n != null ? ` (≈ ${fmt(n)} peticiones)` : ""}.`;
 }
 
 function normalize(s: string) {
@@ -180,7 +193,7 @@ function TreeRow({
   const fam = family(node);
   return (
     <li className={cn(depth === 0 ? "border-t border-ink/10 first:border-t-0" : "border-t border-ink/5")}>
-      <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4" style={{ paddingLeft: depth * 20 }}>
+      <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4" style={{ paddingLeft: depth * 14 }}>
         <div className="flex min-w-0 items-center">
           {hasKids ? (
             <button
@@ -208,7 +221,7 @@ function TreeRow({
             <Info z={node.z} />
           </div>
         </div>
-        <div className="pl-9 sm:pl-0">
+        <div>
           <PrioritySelect value={node.z.priority} onChange={(p) => onSet(node.z, p)} label={`Estado de ${node.z.label}`} disabled={disabled} />
         </div>
       </div>
@@ -283,6 +296,9 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
       <div role="note" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm font-semibold text-amber-900">
         Lo que no esté marcado NO se scrapea: no se guarda ni su tarjeta, ni su ficha, ni su teléfono, y no cuesta ni un crédito.
       </div>
+      <p className="mb-4 text-sm text-ink/75">
+        Cada barrio decide por sí mismo. Si marcas un distrito y dejas un barrio sin marcar, se escanea el distrito entero menos ese barrio; si marcas un barrio y no su distrito, solo ese barrio. Al marcar una zona que estaba sin marcar, el crawler la pone al día en su siguiente ejecución; al desmarcarla, sus anuncios se quedan como están.
+      </p>
       <ul className="mb-4 grid gap-2 text-sm text-ink/80 sm:grid-cols-3">
         <li className="rounded-xl bg-ink/[0.05] px-3 py-2">
           <strong>Marcada</strong>: se vigila al ritmo de siempre.
@@ -341,10 +357,10 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
                 />
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={disabled} onClick={() => setMany(all.filter((z) => z.scope === "capital"), "normal", "Toda la capital marcada.")} className={cn(BTN_SECONDARY, "flex-1 lg:flex-none", FOCUS_RING)}>
+                <button type="button" disabled={disabled} onClick={() => setMany(all.filter((z) => z.scope === "capital"), "normal", markedMsg(all.filter((z) => z.scope === "capital"), "Toda la capital marcada."))} className={cn(BTN_SECONDARY, "flex-1 lg:flex-none", FOCUS_RING)}>
                   Marcar toda la capital
                 </button>
-                <button type="button" disabled={disabled} onClick={() => setMany(all, "normal", "Todas las zonas marcadas.")} className={cn(BTN_SECONDARY, "flex-1 lg:flex-none", FOCUS_RING)}>
+                <button type="button" disabled={disabled} onClick={() => setMany(all, "normal", markedMsg(all, "Todas las zonas marcadas."))} className={cn(BTN_SECONDARY, "flex-1 lg:flex-none", FOCUS_RING)}>
                   Marcar todo
                 </button>
                 <button type="button" disabled={disabled} onClick={() => setMany(all, "off", "Todas las zonas desmarcadas: no se escanea nada.")} className={cn(BTN_SECONDARY, "flex-1 lg:flex-none", FOCUS_RING)}>
@@ -386,8 +402,8 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
                           depth={0}
                           q={nq}
                           disabled={disabled}
-                          onSet={(z, p) => apply([{ zone_key: z.zone_key, priority: p }], `${z.label}: ${p === "off" ? "sin marcar, no se escanea" : p === "alta" ? "marcada con prioridad alta" : "marcada"}.`)}
-                          onFamily={(zs, mark) => setMany(zs, mark ? "normal" : "off", mark ? "Zona y barrios marcados." : "Zona y barrios desmarcados.")}
+                          onSet={(z, p) => apply([{ zone_key: z.zone_key, priority: p }], p === "off" ? `${z.label} sin marcar. Sus anuncios se quedan como están.` : z.priority === "off" ? markedMsg([z], `${z.label} marcada.`) : `${z.label}: ${p === "alta" ? "prioridad alta" : "marcada"}.`)}
+                          onFamily={(zs, mark) => setMany(zs, mark ? "normal" : "off", mark ? markedMsg(zs, "Zona y barrios marcados.") : "Zona y barrios desmarcados. Sus anuncios se quedan como están.")}
                         />
                       ))}
                     </ul>

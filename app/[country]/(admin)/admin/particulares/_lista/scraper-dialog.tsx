@@ -17,7 +17,7 @@ export function ScraperDialog({ open, onClose }: { open: boolean; onClose: () =>
   const { data, loading, error, reload, save, patchLocal } = useScraperControl(open);
 
   return (
-    <Modal open={open} onClose={onClose} title="Configuración de scrapers" subtitle="Qué se escanea, cuánto y con qué presupuesto" size="3xl">
+    <Modal open={open} onClose={onClose} title="Configuración de scrapers" subtitle="Qué se escanea y cuánto" size="3xl">
       {loading && !data ? (
         <p role="status" className="rounded-2xl border border-ink/10 bg-white p-6 text-sm text-ink/70">
           Cargando el estado de los scrapers…

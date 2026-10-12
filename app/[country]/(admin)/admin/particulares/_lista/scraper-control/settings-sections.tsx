@@ -269,7 +269,7 @@ export function KeysSection({ data, save }: { data: ScraperControlPayload; save:
       title="Claves de Crawio"
       description="Cada portal puede usar su propia clave, así Crawio te muestra el gasto por separado. La clave se guarda en el servidor y nunca vuelve a mostrarse entera."
     >
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4">
         {SCRAPER_PORTALS.map((p) => (
           <KeyCard key={p} portal={p} data={data} save={save} suggested={p === "idealista" ? idealista : fotocasa} />
         ))}
