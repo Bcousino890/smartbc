@@ -55,11 +55,19 @@ function isUniversity(p: PoiTravel): p is NearbyUniversity {
 // comercios y bancos que ningún filtro quita y que le roban protagonismo al
 // marcador de la vivienda. CARTO sirve los MISMOS datos OSM sin ese ruido, sin
 // API key y con @2x. La atribución suma CARTO, como exige su licencia.
+//
+// ACTUALIZACIÓN 2026-10-12: CARTO ya exige clave y devuelve en su lugar una
+// tesela con la marca de agua «API KEY REQUIRED» (200 OK, PNG de ~2 KB, por eso
+// tampoco salta el onerror). Se vuelve a las teselas estándar de OpenStreetMap
+// (sin clave; 256 px, sin @2x). El navegador envía el Referer del portal por
+// defecto (no hay Referrer-Policy restrictiva), que es lo que OSM pide para no
+// bloquear; si algún día vuelve el 418, la alternativa sin clave es otro
+// proveedor, NUNCA volver a un servicio que pida API key.
 const TILE_URL = (z: number, x: number, y: number) =>
-  `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
-const TILE_TEMPLATE = "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png";
+  `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+const TILE_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  '&copy; <a href="https://www.openstreetmap.org/copyright">colaboradores de OpenStreetMap</a>';
 
 // Lenguaje visual por categoría: MISMA familia para todas — mismo tamaño,
 // mismo trazo, mismo color. Se distinguen por icono y etiqueta, nunca por
@@ -765,13 +773,11 @@ export function LocationModule({
             </button>
 
             {/* Con el mapa vectorial la atribución la pone MapLibre; esta
-                solo acompaña al mosaico de respaldo (teselas de CARTO). */}
+                solo acompaña al mosaico de respaldo (teselas de OpenStreetMap). */}
             {!useVectorMap && (
               <span className="absolute bottom-1 right-1.5 z-[7] rounded bg-white/80 px-1.5 py-0.5 text-[10px] leading-tight text-ink/55">
                 ©{" "}
-                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">OpenStreetMap</a>{" "}
-                ©{" "}
-                <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">CARTO</a>
+                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">colaboradores de OpenStreetMap</a>
               </span>
             )}
           </>
