@@ -5,7 +5,13 @@
 
 export type SearchKind = "reference" | "url" | "phone" | "text";
 
-export type SearchPlan = { kind: SearchKind; clauses: string[] };
+export type SearchPlan = {
+  kind: SearchKind;
+  clauses: string[];
+  /** Texto de varias palabras: cada palabra debe aparecer en algún campo (AND de `.or()`),
+   *  así «Orense 49» encuentra «Calle de Orense, 49». Si existe, manda sobre `clauses`. */
+  groups?: string[][];
+};
 
 /** PostgREST separa las cláusulas de `.or()` con «,» y usa «(», «)» y «.» como sintaxis. */
 const safe = (s: string) => s.replace(/[%,()*\\]/g, " ").replace(/\s+/g, " ").trim();
@@ -66,5 +72,13 @@ export function buildSearchPlan(rawTerm: string, hasAddress: boolean): SearchPla
     `particular_reference.ilike.${like}`,
   ];
   if (hasAddress) clauses.push(`address.ilike.${like}`);
-  return { kind: "text", clauses };
+  const tokens = text.split(" ").filter(Boolean);
+  if (tokens.length < 2) return { kind: "text", clauses };
+  const groups = tokens.map((t) => {
+    const l = `%${t}%`;
+    const g = [`zone.ilike.${l}`, `description.ilike.${l}`, `external_id.ilike.${l}`, `owner_name.ilike.${l}`, `reference.ilike.${l}`, `particular_reference.ilike.${l}`];
+    if (hasAddress) g.push(`address.ilike.${l}`);
+    return g;
+  });
+  return { kind: "text", clauses, groups };
 }

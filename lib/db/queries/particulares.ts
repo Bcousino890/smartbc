@@ -289,7 +289,8 @@ function applyParticularesFilters(
   // si se filtra por operación hay que mirar también las de sus enlazados.
   if (hasLinks && !f.showDuplicates && !(f.searchAllStates && f.search?.trim())) q = q.is("duplicate_of", null);
   const plan = buildSearchPlan(f.search ?? "", hasAddress);
-  if (plan) q = q.or(plan.clauses.join(","));
+  if (plan?.groups) for (const g of plan.groups) q = q.or(g.join(","));
+  else if (plan) q = q.or(plan.clauses.join(","));
 
   if (f.operation) {
     q = hasLinks

@@ -27,3 +27,11 @@ assert.ok(txt.every((c) => !/[()]/.test(c.split(".ilike.")[1] ?? "")));
 assert.ok(txt.some((c) => c.startsWith("address.ilike.")) && txt.some((c) => c.startsWith("owner_name.ilike.")));
 assert.ok(!buildSearchPlan("Chamberí", false)!.clauses.some((c) => c.startsWith("address.")));
 console.log("ok: búsqueda de particulares");
+
+// «Orense 49» (varias palabras) → cada palabra en su grupo, para casar «Calle de Orense, 49».
+{
+  const p = buildSearchPlan("Orense 49", true)!;
+  assert.equal(p.groups?.length, 2);
+  assert.ok(p.groups![0].includes("address.ilike.%Orense%") && p.groups![1].includes("address.ilike.%49%"));
+  assert.equal(buildSearchPlan("Chamberí", true)!.groups, undefined);
+}
