@@ -183,7 +183,7 @@ export function keyHint(key: string): string {
 // Para cambiar la regla basta con tocar esta constante.
 /** Créditos de Crawio por petición (tarifa del plan): Idealista 2, Fotocasa 1. */
 export const CREDITS_PER_REQUEST: Record<ScraperPortal, number> = { idealista: 2, fotocasa: 1 };
-/** Una página de listado trae ~30 anuncios y se barre ~10 veces al mes: créditos/mes por anuncio y portal (Idealista ≈ 0,7; Fotocasa ≈ 0,35). */
+/** Una página de listado trae ~30 anuncios y se barre ~10 veces al mes: créditos/mes por anuncio y portal (Idealista ≈ 0,7; Fotocasa ≈ 0,33). */
 export function creditsPerListing(portal: ScraperPortal): number {
   return Math.round(((CREDITS_PER_REQUEST[portal] / 30) * 10) * 100) / 100;
 }
