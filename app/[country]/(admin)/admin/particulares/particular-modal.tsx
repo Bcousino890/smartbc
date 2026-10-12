@@ -18,6 +18,7 @@ import { AdMap } from "@/components/admin/particulares/ad-map";
 import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
 import { Gallery, type MediaItem } from "./_ficha/gallery";
 import { Lightbox } from "./_ficha/lightbox";
+import { SourcesTab } from "./_ficha/sources-tab";
 import { formatEuros, formatPct, formatZone, groupThousands, mapPrecision, portalName, pricePerM2, priceVariation, relativeTime, whatsappUrl, zoneForMap } from "./_ficha/format";
 import type { ParticularChangeRow, ParticularRow, StaffOption } from "./particulares-types";
 
@@ -412,92 +413,94 @@ function ChangeHistory({ row }: { row: ParticularRow }) {
     [pricePoints],
   );
 
-  return (
-    <div>
-      <p className="mb-3 crm-label-sm text-ink/40">
-        Historial de cambios
-      </p>
-      {loading ? (
-        <p className="flex items-center gap-1.5 text-xs text-ink/40 py-2">
-          <Loader2 size={12} className="animate-spin" />
-          Cargando historial…
-        </p>
-      ) : entries.length === 0 ? (
-        <p className="text-xs text-ink/40 py-2">Sin historial de cambios.</p>
-      ) : (
-        <ol className="space-y-3">
-          {entries.map((e) => (
-            <li key={e.key} className="flex items-start gap-2.5">
-              <span
-                className={cn(
-                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
-                  e.iconClass,
-                )}
-              >
-                {e.icon}
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-ink">{e.title}</p>
-                <p className="mt-0.5 text-xs text-ink/40">
-                  {HISTORY_DATE_FMT.format(new Date(e.date))}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
+  const first = pricePoints[0]?.price ?? null;
+  const last = row.price ?? pricePoints[pricePoints.length - 1]?.price ?? null;
+  const varPct = first != null && last != null && first > 0 ? ((last - first) / first) * 100 : null;
+  const since = row.detected_at ?? row.created_at;
+  const daysInMarket = since ? Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000)) : null;
+  const priceByKey = new Map<string, number>();
+  for (const c of changes ?? []) {
+    const pr = asPrice(c.new_value?.price);
+    if (pr != null && ["new_listing", "price_up", "price_down"].includes(c.change_type)) priceByKey.set(c.id, pr);
+  }
 
-      {/* Evolución del precio (alta → cambios → precio actual) */}
-      {!loading && showChart && (
-        <div className="mt-4">
-          <p className="mb-2 crm-label-sm text-ink/40">
-            Cambio de precio
-          </p>
-          <div className="rounded-lg border border-ink/10 bg-white p-3">
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(10, 10, 10, 0.06)" />
-                <XAxis
-                  dataKey="label"
-                  stroke="rgba(10, 10, 10, 0.4)"
-                  style={{ fontSize: "11px" }}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="rgba(10, 10, 10, 0.4)"
-                  style={{ fontSize: "11px" }}
-                  width={64}
-                  domain={["auto", "auto"]}
-                  tickFormatter={(v) => formatPrice(Number(v))}
-                  tickLine={false}
-                />
+  if (loading)
+    return (
+      <p className="flex items-center gap-1.5 py-2 text-sm text-ink/70">
+        <Loader2 size={14} className="animate-spin" /> Cargando histórico…
+      </p>
+    );
+
+  const kpi = (label: string, value: string, tone = "text-ink") => (
+    <div className="rounded-xl border border-ink/10 bg-white px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-ink/65">{label}</p>
+      <p className={cn("mt-1 text-xl font-semibold tabular-nums", tone)}>{value}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {kpi("Precio inicial", first != null ? `${formatPrice(first)} €` : "—")}
+        {kpi("Precio actual", last != null ? `${formatPrice(last)} €` : "—")}
+        {kpi(
+          "Variación",
+          varPct == null || Math.abs(varPct) < 0.05 ? "Sin cambios" : `${varPct > 0 ? "+" : "−"}${Math.abs(varPct).toFixed(1).replace(".", ",")} %`,
+          varPct == null || Math.abs(varPct) < 0.05 ? "text-ink" : varPct < 0 ? "text-emerald-800" : "text-red-800",
+        )}
+        {kpi("En el mercado", daysInMarket != null ? `${daysInMarket} ${daysInMarket === 1 ? "día" : "días"}` : "—")}
+      </div>
+
+      <section className="rounded-2xl border border-ink/10 bg-white p-4">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink">Evolución del precio</h3>
+        {chartData.length === 0 ? (
+          <p className="py-6 text-center text-sm text-ink/70">Todavía no hay precios registrados.</p>
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(10, 10, 10, 0.08)" />
+                <XAxis dataKey="label" stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} tickLine={false} />
+                <YAxis stroke="rgba(10, 10, 10, 0.6)" style={{ fontSize: "12px" }} width={64} domain={["auto", "auto"]} tickFormatter={(v) => formatPrice(Number(v))} tickLine={false} />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(251, 248, 243, 0.95)",
-                    border: "1px solid rgba(10, 10, 10, 0.1)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                  formatter={(value: unknown) => [
-                    typeof value === "number" ? `${formatPrice(value)} €` : "—",
-                    "Precio",
-                  ]}
+                  contentStyle={{ backgroundColor: "rgba(251, 248, 243, 0.97)", border: "1px solid rgba(10, 10, 10, 0.1)", borderRadius: "10px", fontSize: "13px" }}
+                  formatter={(value: unknown) => [typeof value === "number" ? `${formatPrice(value)} €` : "—", "Precio"]}
                   labelFormatter={(label) => `Fecha: ${label}`}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="price"
-                  stroke="#c9a96e"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#c9a96e", strokeWidth: 0 }}
-                  isAnimationActive={false}
-                  name="Precio"
-                />
+                <Line type="stepAfter" dataKey="price" stroke="#8a6d2f" strokeWidth={2.5} dot={{ r: 4, fill: "#8a6d2f", strokeWidth: 0 }} isAnimationActive={false} name="Precio" />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+            {!showChart && (
+              <p className="mt-2 text-xs text-ink/65">
+                El precio no ha cambiado desde que lo detectamos. Si cambia, lo verás aquí.
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-ink/10 bg-white p-4">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink">Línea de tiempo</h3>
+        {entries.length === 0 ? (
+          <p className="py-2 text-sm text-ink/70">Sin historial de cambios.</p>
+        ) : (
+          <ol className="space-y-4">
+            {entries.map((e) => {
+              const pr = priceByKey.get(e.key);
+              return (
+                <li key={e.key} className="flex items-start gap-3">
+                  <span className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", e.iconClass)}>{e.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-ink">{e.title}</p>
+                    <p className="mt-0.5 text-xs text-ink/65">{HISTORY_DATE_FMT.format(new Date(e.date))}</p>
+                  </div>
+                  {pr != null && <p className="shrink-0 text-sm font-semibold tabular-nums text-ink">{formatPrice(pr)} €</p>}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
     </div>
   );
 }
@@ -753,7 +756,8 @@ export function ParticularModal({
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"detalles" | "enlazados" | "historial">("detalles");
+  const [tab, setTab] = useState<"detalles" | "fuentes" | "historico" | "contactos">("detalles");
+  const [sourcesCount, setSourcesCount] = useState<number | null>(null);
   const [viewer, setViewer] = useState<{ items: MediaItem[]; start: number } | null>(null);
   const [descOpen, setDescOpen] = useState(false);
 
@@ -1143,8 +1147,9 @@ export function ParticularModal({
 
                 <div role="tablist" aria-label="Secciones de la ficha" className="flex border-b border-ink/10">
                   {tabBtn("detalles", "Detalles")}
-                  {tabBtn("enlazados", "Anuncios enlazados")}
-                  {tabBtn("historial", "Historial y contactos")}
+                  {tabBtn("fuentes", sourcesCount != null ? `Fuentes (${sourcesCount})` : "Fuentes")}
+                  {tabBtn("historico", "Histórico")}
+                  {tabBtn("contactos", "Contactos")}
                 </div>
 
                 {tab === "detalles" && (
@@ -1220,16 +1225,18 @@ export function ParticularModal({
                   </div>
                 )}
 
-                {tab === "enlazados" && <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />}
+                {tab === "fuentes" && (
+                  <div className="space-y-6">
+                    <SourcesTab rowId={currentRow.id} onCount={setSourcesCount} />
+                    <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />
+                  </div>
+                )}
 
-                {tab === "historial" && (
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-ink/10 bg-white p-4">
-                      <ContactLog particularId={currentRow.id} />
-                    </div>
-                    <div className="rounded-xl border border-ink/10 bg-white p-4">
-                      <ChangeHistory row={currentRow} />
-                    </div>
+                {tab === "historico" && <ChangeHistory row={currentRow} />}
+
+                {tab === "contactos" && (
+                  <div className="rounded-xl border border-ink/10 bg-white p-4">
+                    <ContactLog particularId={currentRow.id} />
                   </div>
                 )}
               </div>
