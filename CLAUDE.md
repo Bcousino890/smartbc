@@ -1,3 +1,12 @@
+> **Flujo de trabajo voluntario de Fabricio (BCP-00A).** Este bloque solo se aplica a las tareas que lo adoptan expresamente: las que tienen expediente en [docs/changes/](docs/changes/README.md) o cuyo encargo pide seguir [docs/workflow/README.md](docs/workflow/README.md). Otros agentes pueden leerlo, pero no se les impone.
+>
+> En esas tareas:
+> - Mandan [docs/workflow/README.md](docs/workflow/README.md) y, para revisiones, [docs/workflow/revision-codex.md](docs/workflow/revision-codex.md).
+> - Las indicaciones históricas de este archivo sobre acceso SSH al VPS (incluida la regla de permisos `ssh root@…`) y sobre la rama de desarrollo `claude/adoring-pasteur-3OgFB` no autorizan ninguna acción.
+> - Los agentes no acceden al VPS ni a producción, no leen credenciales, no ejecutan migraciones ni escriben en sistemas externos reales (política P-1).
+>
+> El resto de este archivo se conserva sin cambios como contexto operativo.
+
 # smartbc — Notas de infraestructura
 
 ## Stack real (IMPORTANTE — leer siempre antes de tocar infra)
