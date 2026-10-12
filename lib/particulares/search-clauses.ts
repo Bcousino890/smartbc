@@ -70,13 +70,14 @@ export function buildSearchPlan(rawTerm: string, hasAddress: boolean): SearchPla
     `owner_name.ilike.${like}`,
     `reference.ilike.${like}`,
     `particular_reference.ilike.${like}`,
+    `scraper_extra->>agency_reference.ilike.${like}`,
   ];
   if (hasAddress) clauses.push(`address.ilike.${like}`);
   const tokens = text.split(" ").filter(Boolean);
   if (tokens.length < 2) return { kind: "text", clauses };
   const groups = tokens.map((t) => {
     const l = `%${t}%`;
-    const g = [`zone.ilike.${l}`, `description.ilike.${l}`, `external_id.ilike.${l}`, `owner_name.ilike.${l}`, `reference.ilike.${l}`, `particular_reference.ilike.${l}`];
+    const g = [`zone.ilike.${l}`, `description.ilike.${l}`, `external_id.ilike.${l}`, `owner_name.ilike.${l}`, `reference.ilike.${l}`, `particular_reference.ilike.${l}`, `scraper_extra->>agency_reference.ilike.${l}`];
     if (hasAddress) g.push(`address.ilike.${l}`);
     return g;
   });

@@ -55,6 +55,12 @@ export type LinkedAd = {
   n_photos: number;
   created_at: string | null;
   particular_reference: string | null;
+  /** Referencia del anunciante/portal (`particulares.reference`): «BC-1746» en agencias de Idealista, «6994» en Fotocasa. */
+  reference?: string | null;
+  /** `scraper_extra->>agency_reference`, `agency_url` (enlace adicional de la agencia) y `portal_id`. */
+  agency_reference?: string | null;
+  agency_url?: string | null;
+  portal_id?: string | null;
   /** Observaciones de precio del scraper (`scraper_extra.price_history`): [fecha ISO, precio]. */
   price_history?: Array<[string, number]>;
   link: LinkInfo | null;

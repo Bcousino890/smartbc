@@ -76,6 +76,67 @@ export function portalName(portal: string | null | undefined): string {
   return PORTAL_NAMES[p.toLowerCase()] ?? p.charAt(0).toUpperCase() + p.slice(1);
 }
 
+/**
+ * ID del anuncio en el portal a partir de `external_id` («idealista-112787483» → «112787483»,
+ * «habitaclia-<uuid>» → el uuid). Sin prefijo se devuelve tal cual; vacío → null.
+ */
+export function portalAdId(portal: string | null | undefined, externalId: string | null | undefined): string | null {
+  const raw = (externalId ?? "").trim();
+  if (!raw) return null;
+  const prefix = `${(portal ?? "").trim().toLowerCase()}-`;
+  const id = prefix.length > 1 && raw.toLowerCase().startsWith(prefix) ? raw.slice(prefix.length) : raw;
+  return id || null;
+}
+
+/** Recorta un id largo (uuid) para la tabla: «a1b2c3d4…e5f6»; los cortos quedan enteros. */
+export function shortId(id: string, max = 14): string {
+  return id.length <= max ? id : `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+/** Dominio de un enlace sin «www.» (`https://www.bcousinoprop.com/x` → `bcousinoprop.com`); null si no es http(s) válido. */
+export function agencyDomain(url: string | null | undefined): { href: string; domain: string } | null {
+  const raw = (url ?? "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const domain = u.hostname.replace(/^www\./i, "");
+    return domain.includes(".") ? { href: u.href, domain } : null;
+  } catch {
+    return null;
+  }
+}
+
+export type SourceRefs = {
+  /** Referencia del anunciante / portal (`reference` o `scraper_extra.agency_reference`); null si no hay o es el propio id. */
+  reference: string | null;
+  /** ID del anuncio en el portal. */
+  adId: string | null;
+  /** Referencia interna PART-… */
+  internal: string | null;
+  agency: { href: string; domain: string } | null;
+};
+
+/** Lo que enseña la columna «Referencia» de la pestaña Fuentes. La referencia que coincide con el id no se duplica. */
+export function sourceRefs(m: {
+  portal: string;
+  external_id?: string | null;
+  reference?: string | null;
+  agency_reference?: string | null;
+  agency_url?: string | null;
+  particular_reference?: string | null;
+}): SourceRefs {
+  const adId = portalAdId(m.portal, m.external_id);
+  const ref = (m.reference ?? "").trim() || (m.agency_reference ?? "").trim() || null;
+  const sameAsId = !!ref && (ref === adId || ref === (m.external_id ?? "").trim());
+  return {
+    reference: ref && !sameAsId ? ref : null,
+    adId,
+    internal: m.particular_reference?.trim() || null,
+    agency: agencyDomain(m.agency_url),
+  };
+}
+
 // ─── Números y euros (es-ES) ────────────────────────────────────────────────
 
 /**

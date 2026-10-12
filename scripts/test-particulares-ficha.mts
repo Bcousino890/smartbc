@@ -17,6 +17,10 @@ import {
   mapPrecision,
   phoneBadge,
   portalName,
+  portalAdId,
+  shortId,
+  agencyDomain,
+  sourceRefs,
   priceVariation,
   pricePerM2,
   relativeTime,
@@ -127,6 +131,28 @@ eq("WhatsApp de algo que no es un teléfono", whatsappDigits("12345"), null);
 eq("URL de WhatsApp con texto", whatsappUrl("600000001", "Hola"), "https://wa.me/34600000001?text=Hola");
 eq("badge verificado", phoneBadge("high")?.label, "Verificado");
 eq("sin confianza, sin badge", phoneBadge(null), null);
+
+// ─── Fuentes: referencia, id del portal, enlace de agencia ───
+eq("id Idealista", portalAdId("idealista", "idealista-112787483"), "112787483");
+eq("id Fotocasa", portalAdId("fotocasa", "fotocasa-188319506"), "188319506");
+eq("id Pisos", portalAdId("pisos", "pisos-68410291967"), "68410291967");
+eq("id Habitaclia uuid", portalAdId("habitaclia", "habitaclia-3f2a9c1e-1111-2222-3333-444455556666"), "3f2a9c1e-1111-2222-3333-444455556666");
+eq("id sin prefijo", portalAdId("idealista", "112787483"), "112787483");
+eq("id vacío", portalAdId("pisos", ""), null);
+eq("id corto no se recorta", shortId("112787483"), "112787483");
+eq("uuid recortado", shortId("3f2a9c1e-1111-2222-3333-444455556666"), "3f2a9c1e…6666");
+eq("dominio sin www", agencyDomain("https://www.bcousinoprop.com/inmueble/1")?.domain, "bcousinoprop.com");
+eq("dominio sin esquema", agencyDomain("bcousinoprop.com")?.href, "https://bcousinoprop.com/");
+eq("javascript: no es enlace", agencyDomain("javascript:alert(1)"), null);
+eq("enlace vacío", agencyDomain(null), null);
+const agencia = sourceRefs({ portal: "idealista", external_id: "idealista-112787483", reference: "BC-1746", particular_reference: "PART-2026-316802", agency_url: "https://www.bcousinoprop.com/x" });
+eq("agencia: referencia", agencia.reference, "BC-1746");
+eq("agencia: id", agencia.adId, "112787483");
+eq("agencia: interna", agencia.internal, "PART-2026-316802");
+eq("agencia: dominio", agencia.agency?.domain, "bcousinoprop.com");
+eq("particular Idealista: referencia = id, no se duplica", sourceRefs({ portal: "idealista", external_id: "idealista-112787483", reference: "112787483" }).reference, null);
+eq("Fotocasa: referencia 6994", sourceRefs({ portal: "fotocasa", external_id: "fotocasa-188319506", reference: "6994" }).reference, "6994");
+eq("agency_reference como respaldo", sourceRefs({ portal: "idealista", external_id: "idealista-1", agency_reference: "X-9" }).reference, "X-9");
 
 console.log(`\n${ok} ok, ${fail} fallos`);
 if (fail > 0) process.exit(1);

@@ -5,7 +5,7 @@ import { ExternalLink, Loader2, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { LinkedAd } from "@/lib/particulares/links-types";
 import { cn } from "@/lib/utils";
-import { formatEuros, formatPhone, portalName, relativeTime, whatsappUrl } from "./format";
+import { formatEuros, formatPhone, portalName, relativeTime, shortId, sourceRefs, whatsappUrl } from "./format";
 import { GroupHeader } from "./group-header";
 import type { Op } from "./group-history";
 import { useGroupLinks } from "./use-group-links";
@@ -122,6 +122,44 @@ export function SourcesTab({ rowId, currentOp, onCount }: { rowId: string; curre
   );
 }
 
+/** Referencia del anunciante, ID del anuncio en el portal, enlace de la agencia y (secundaria) la referencia interna PART-…. */
+function RefsCell({ m }: { m: LinkedAd }) {
+  const r = sourceRefs(m);
+  if (!r.reference && !r.adId && !r.internal && !r.agency) return <span className="text-ink/60">—</span>;
+  return (
+    <div className="space-y-0.5">
+      {r.reference && (
+        <p className="whitespace-nowrap font-mono font-semibold text-ink" title="Referencia del anunciante en el portal">
+          {r.reference}
+        </p>
+      )}
+      {r.adId && (
+        <p className="whitespace-nowrap font-mono text-ink/80" title={`ID del anuncio en ${portalName(m.portal)}: ${r.adId}`}>
+          <span className="font-sans text-ink/60">ID </span>
+          {shortId(r.adId)}
+        </p>
+      )}
+      {r.agency && (
+        <a
+          href={r.agency.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Enlace adicional de la agencia"
+          className="inline-flex max-w-[170px] items-center gap-1 truncate text-ink underline-offset-2 hover:underline"
+        >
+          <span className="truncate">{r.agency.domain}</span>
+          <ExternalLink size={10} aria-hidden className="shrink-0" />
+        </a>
+      )}
+      {r.internal && (
+        <p className="whitespace-nowrap font-mono text-[11px] text-ink/55" title="Referencia interna del CRM">
+          {r.internal}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SourceRow({ m }: { m: LinkedAd }) {
   const wa = whatsappUrl(m.phone);
   const who = m.owner_name?.trim();
@@ -144,7 +182,9 @@ function SourceRow({ m }: { m: LinkedAd }) {
           </span>
         </a>
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-ink/80">{m.particular_reference ?? m.external_id ?? "—"}</td>
+      <td className="px-3 py-2.5 text-xs text-ink/80">
+        <RefsCell m={m} />
+      </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-ink">
         {m.phone ? (
           <span className="inline-flex items-center gap-1.5">

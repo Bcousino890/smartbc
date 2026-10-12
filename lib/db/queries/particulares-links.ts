@@ -17,7 +17,7 @@ import type {
  */
 
 const AD_COLUMNS =
-  "id, portal, external_id, source_url, operation, price, is_active, taken_down_at, phone, owner_name, zone, address, bedrooms, bathrooms, square_meters, cover_url, photos, created_at, particular_reference, advertiser_type, price_history:scraper_extra->price_history";
+  "id, portal, external_id, source_url, operation, price, is_active, taken_down_at, phone, owner_name, zone, address, bedrooms, bathrooms, square_meters, cover_url, photos, created_at, particular_reference, reference, advertiser_type, price_history:scraper_extra->price_history, agency_url:scraper_extra->>agency_url, agency_reference:scraper_extra->>agency_reference, portal_id:scraper_extra->>portal_id";
 
 const LEVEL_RANK: Record<string, number> = { cierto: 3, probable: 2, informativo: 1 };
 
@@ -51,6 +51,10 @@ function toAd(row: any, link: LinkInfo | null, withPhotos: boolean): LinkedAd {
     n_photos: photos.length,
     created_at: row.created_at ?? null,
     particular_reference: row.particular_reference ?? null,
+    reference: row.reference ?? null,
+    agency_reference: row.agency_reference ?? null,
+    agency_url: row.agency_url ?? null,
+    portal_id: row.portal_id ?? null,
     advertiser_type: row.advertiser_type ?? null,
     price_history: Array.isArray(row.price_history)
       ? (row.price_history as unknown[]).flatMap((e) =>
