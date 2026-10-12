@@ -46,7 +46,8 @@ function toAd(row: any, link: LinkInfo | null, withPhotos: boolean): LinkedAd {
     bathrooms: row.bathrooms ?? null,
     square_meters: row.square_meters ?? null,
     cover_url: row.cover_url ?? photos[0]?.url ?? null,
-    photos: withPhotos ? photos.slice(0, 12) : [],
+    // Solo URLs (≈100 B cada una): el selector de fuente de fotos de la ficha necesita todas.
+    photos: withPhotos ? photos.slice(0, 150) : [],
     n_photos: photos.length,
     created_at: row.created_at ?? null,
     particular_reference: row.particular_reference ?? null,

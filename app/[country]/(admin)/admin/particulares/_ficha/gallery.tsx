@@ -238,6 +238,7 @@ export function Gallery({
   hasVideo,
   onOpenViewer,
   keyboardActive,
+  sourceBadge,
 }: {
   photos: Photo[];
   index: number;
@@ -254,6 +255,8 @@ export function Gallery({
   onOpenViewer: (what: "photos" | "plan" | "video") => void;
   /** ←/→ cambian de foto (se apaga mientras hay otro visor o diálogo encima). */
   keyboardActive: boolean;
+  /** Fuente de las fotos mostradas (solo con selector): «Fuente: X» con enlace al anuncio original. */
+  sourceBadge?: { label: string; url: string };
 }) {
   const n = photos.length;
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -345,6 +348,19 @@ export function Gallery({
           <span className="rounded-md bg-gold px-2.5 py-1 crm-label-sm text-ink">{portalLabel}</span>
           {retired && <span className="rounded-md bg-red-600 px-2.5 py-1 crm-label-sm text-white">Retirado</span>}
         </div>
+
+        {sourceBadge && (
+          <a
+            href={sourceBadge.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute right-3 top-3 z-[3] inline-flex min-h-8 max-w-[55%] items-center gap-1.5 rounded-full bg-white/92 px-3 text-xs font-semibold text-ink shadow-sm ring-1 ring-ink/10 backdrop-blur transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
+          >
+            <span className="truncate">Fuente: {sourceBadge.label}</span>
+            <ExternalLink size={12} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+            <span className="sr-only">(abre el anuncio original en otra pestaña)</span>
+          </a>
+        )}
 
         {n > 1 && (
           <>

@@ -18,6 +18,9 @@ import { AdMap } from "@/components/admin/particulares/ad-map";
 import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
 import { Gallery, type MediaItem } from "./_ficha/gallery";
 import { Lightbox } from "./_ficha/lightbox";
+import { PhotoSourcePicker } from "./_ficha/photo-source-picker";
+import { buildPhotoSources } from "./_ficha/photo-sources";
+import { useGroupLinks } from "./_ficha/use-group-links";
 import { HistoryTab } from "./_ficha/history-tab";
 import { SourcesTab } from "./_ficha/sources-tab";
 import { consumeTabIntent } from "./_ficha/tab-intent";
@@ -779,7 +782,22 @@ export function ParticularModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id]);
 
-  const photos = currentRow.photos ?? (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
+  const ownPhotos = currentRow.photos ?? (currentRow.cover_url ? [{ url: currentRow.cover_url }] : []);
+
+  // Fuente de fotos: por defecto la de la ficha abierta; la última elegida se
+  // recuerda mientras el modal siga abierto en ESTA ficha (no pasa a otras).
+  const { members: groupMembers } = useGroupLinks(row.id);
+  const [pickedSource, setPickedSource] = useState<{ rowId: string; sourceId: string } | null>(null);
+  const photoSources = useMemo(() => {
+    const list = buildPhotoSources(groupMembers, currentRow.id);
+    // La galería completa de la ficha abierta viene del detalle (puede traer más que el grupo).
+    return list.map((s) => (s.id === currentRow.id && ownPhotos.length > s.photos.length ? { ...s, photos: ownPhotos } : s));
+  }, [groupMembers, currentRow.id, ownPhotos]);
+  const pickerOn = photoSources.length > 1;
+  const activeSource =
+    (pickerOn && pickedSource?.rowId === row.id ? photoSources.find((s) => s.id === pickedSource.sourceId) : undefined) ??
+    photoSources.find((s) => s.id === currentRow.id);
+  const photos = pickerOn && activeSource && activeSource.id !== currentRow.id ? activeSource.photos : ownPhotos;
   const hasPhone = Boolean(currentRow.phone);
   const detailLoading = !currentRow.photos;
 
@@ -903,7 +921,7 @@ export function ParticularModal({
   function openViewer(what: "photos" | "plan" | "video") {
     const items: MediaItem[] = [];
     if (what === "photos") {
-      photos.forEach((p) => items.push({ kind: "photo", url: p.url, alt: p.alt }));
+      photos.forEach((p) => items.push({ kind: "photo", url: p.url, alt: (p as { alt?: string }).alt }));
       setViewer({ items, start: photoIdx });
       return;
     }
@@ -1135,7 +1153,18 @@ export function ParticularModal({
                   hasVideo={Boolean(currentRow.video_url)}
                   onOpenViewer={openViewer}
                   keyboardActive={!viewer && !showEditPhone}
+                  sourceBadge={pickerOn && activeSource ? { label: activeSource.portalLabel, url: activeSource.sourceUrl } : undefined}
                 />
+                {pickerOn && activeSource && (
+                  <PhotoSourcePicker
+                    sources={photoSources}
+                    activeId={activeSource.id}
+                    onChange={(id) => {
+                      setPickedSource({ rowId: row.id, sourceId: id });
+                      setPhotoIdx(0);
+                    }}
+                  />
+                )}
 
                 {/* Precio y dirección: en móvil bajo la foto; en escritorio, en la columna derecha */}
                 <div className="lg:hidden">{priceBlock}</div>
