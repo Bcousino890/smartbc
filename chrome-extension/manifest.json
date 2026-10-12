@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SmartBC → Idealista",
-  "version": "1.12.2",
+  "version": "1.13.0",
   "description": "Rellena y publica anuncios en Idealista con los datos de SmartBC, captura los contactos del inbox y manda anuncios de portales a la ficha de un cliente.",
   "permissions": [
     "storage"
@@ -32,6 +32,7 @@
         "https://www.idealista.com/*"
       ],
       "js": [
+        "filters-core.js",
         "idealista-agencias.js",
         "idealista-filters.js"
       ],
@@ -55,6 +56,16 @@
       ],
       "js": [
         "portal-links.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.fotocasa.es/*"
+      ],
+      "js": [
+        "filters-core.js",
+        "fotocasa-filters.js"
       ],
       "run_at": "document_idle"
     }

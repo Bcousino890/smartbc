@@ -16,6 +16,12 @@
 //     anuncios. Basta un trozo del nombre ("gilmar" oculta las cuatro Gilmar).
 //     También sale "ocultar agencia ✕" en cada anuncio.
 //
+//   · VÍDEO, PRECIO REBAJADO y SUBASTA — lo que Idealista no filtra de serie
+//     (lo demás —habitaciones, baños, situación, estancia, mascotas, plano,
+//     visita virtual— ya está en su barra; ver filters-core.js).
+//   · AGENCIAS: además de ocultarlas, "Solo estas" deja ver únicamente las
+//     que se busquen por nombre.
+//
 // Se filtra en el navegador, sobre los anuncios de la PÁGINA que se está
 // viendo (30 por página): Idealista no admite estos filtros en su búsqueda.
 // Lo elegido se recuerda entre páginas y sesiones (chrome.storage.local).
@@ -39,7 +45,10 @@
   const HIDE = "smartbc-hide";
   const CARD_SEL = "article.item[data-element-id]";
 
-  let state = { floors: [], sides: [], owners: false, terms: [] };
+  // Núcleo común con Fotocasa (filters-core.js, se carga antes en el manifest).
+  const core = window.SmartbcFiltersCore;
+  const freshState = () => ({ floors: [], sides: [], owners: false, terms: [], ...core.emptyState() });
+  let state = freshState();
   let seenAgencies = {}; // slug → nombre: para sugerir al escribir
   let ui = null;
 
@@ -96,6 +105,25 @@
 
   const cards = () => [...document.querySelectorAll(CARD_SEL)];
 
+  /** Lo que se lee de una tarjeta para el núcleo: números y textos, e iconos/etiquetas fiables. */
+  function rawOf(card, joined, title) {
+    const q = (sel) => card.querySelector(sel);
+    const d = q(".item-description");
+    const path = location.pathname;
+    return {
+      title,
+      details: joined,
+      description: (d && d.textContent) || "",
+      operation: /alquiler|rent/.test(path) ? "rent" : /venta|sale/.test(path) ? "sale" : null,
+      badges: {
+        plan: !!q('.multimedia-shortcut[data-button-type="PLAN"]'),
+        video: !!q('.multimedia-shortcut[data-button-type="VIDEO"]'),
+        tour3d: !!q('.multimedia-shortcut[data-button-type="VIRTUAL_TOUR_3D"]'),
+        priceDrop: !!q(".pricedown, .icon-pricedown"),
+      },
+    };
+  }
+
   // Orden de las opciones de planta.
   const FLOOR_ORDER = (id) => {
     if (id === "bajo") return -2;
@@ -118,6 +146,8 @@
     let hiddenN = 0;
     const pageAgencies = {};
     const terms = state.terms.map(norm).filter(Boolean);
+    const onlyTerms = state.only.map(norm).filter(Boolean);
+    const extraCounts = { video: 0, priceDrop: 0, subasta: 0 };
 
     for (const card of all) {
       const joined = detailsOf(card);
@@ -147,17 +177,22 @@
         if (!ok) hide = true;
       }
       if (state.sides.length > 0 && !state.sides.includes(side)) hide = true;
-      if (agency) {
-        if (state.owners) hide = true;
-        if (terms.some((t) => agency.key.includes(t))) hide = true;
-      }
+      if (agency && state.owners) hide = true;
+      if (!core.agencyPasses(agency ? agency.key : null, terms, onlyTerms)) hide = true;
+
+      // Lo que Idealista no filtra de serie (vídeo, precio rebajado, subasta).
+      const feats = core.extract(rawOf(card, joined, title));
+      if (feats.media.includes("video")) extraCounts.video++;
+      if (feats.priceDrop) extraCounts.priceDrop++;
+      if (feats.situation.includes("subasta")) extraCounts.subasta++;
+      if (!core.passes(feats, state)) hide = true;
       card.classList.toggle(HIDE, hide);
       if (hide) hiddenN++;
       decorateAgency(card, agency);
     }
 
     rememberAgencies(pageAgencies);
-    renderUi(floorCounts, sideCounts, all.length, hiddenN);
+    renderUi(floorCounts, sideCounts, all.length, hiddenN, extraCounts);
     window.dispatchEvent(new CustomEvent("smartbc:filters-changed"));
   }
 
@@ -187,14 +222,15 @@
     else logo.insertAdjacentElement("afterend", b);
   }
 
-  /** Una o varias agencias a ocultar. Sin duplicados (ni por mayúsculas ni tildes). */
-  function addTerms(list) {
-    const have = new Set(state.terms.map(norm));
+  /** Una o varias agencias a ocultar (`hide`) o a ver en exclusiva (`only`). Sin duplicados. */
+  function addTerms(list, kind) {
+    const target = kind === "only" ? state.only : state.terms;
+    const have = new Set(target.map(norm));
     for (const raw of list) {
       const t = String(raw || "").trim();
       if (t.length < 2 || have.has(norm(t))) continue;
       have.add(norm(t));
-      state.terms.push(t);
+      target.push(t);
     }
     save();
     apply();
@@ -233,16 +269,20 @@
     root.innerHTML =
       '<span class="title-label">Planta exacta · SmartBC</span><ul class="smartbc-floors"></ul>' +
       '<span class="title-label" style="margin-top:14px;display:block">Exterior / interior · SmartBC</span><ul class="smartbc-sides"></ul>' +
+      '<span class="title-label" style="margin-top:14px;display:block">Vídeo, precio y subasta · SmartBC</span><ul class="smartbc-extra"></ul>' +
+      '<div style="font:11.5px/1.4 -apple-system,sans-serif;color:#777;margin:2px 0 0">Habitaciones, baños, situación, estancia, mascotas, plano y visita virtual ya los trae Idealista en esta barra.</div>' +
       '<span class="title-label" style="margin-top:14px;display:block">Anunciante · SmartBC</span><ul class="smartbc-owners"></ul>' +
       '<div class="smartbc-agency-box" style="margin-top:6px">' +
-      '<div style="font:12px/1.4 -apple-system,sans-serif;color:#555;margin-bottom:4px">Ocultar agencias (escribe el nombre; varias separadas por comas):</div>' +
-      '<div style="display:flex;gap:6px">' +
+      '<div style="font:12px/1.4 -apple-system,sans-serif;color:#555;margin-bottom:4px">Buscar agencia (escribe el nombre; varias separadas por comas) y elegir si ocultarla o ver solo esas:</div>' +
       '<input class="smartbc-agency-input" type="text" list="smartbc-agencias-list" autocomplete="off" placeholder="p. ej. gilmar, engel" ' +
-      'style="flex:1;min-width:0;box-sizing:border-box;padding:7px 9px;border:1px solid #bbb;border-radius:6px;font:13px -apple-system,sans-serif"/>' +
-      '<button type="button" class="smartbc-agency-add" style="flex:none;padding:0 12px;border:1px solid #8a6d1f;border-radius:6px;background:#fff;color:#8a6d1f;font:600 12px -apple-system,sans-serif;cursor:pointer">Ocultar</button>' +
+      'style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #bbb;border-radius:6px;font:13px -apple-system,sans-serif"/>' +
+      '<div style="display:flex;gap:6px;margin-top:6px">' +
+      '<button type="button" class="smartbc-agency-add" style="flex:1;padding:6px 0;border:1px solid #8a6d1f;border-radius:6px;background:#fff;color:#8a6d1f;font:600 12px -apple-system,sans-serif;cursor:pointer">Ocultar</button>' +
+      '<button type="button" class="smartbc-agency-only" style="flex:1;padding:6px 0;border:1px solid #2f6b3f;border-radius:6px;background:#fff;color:#2f6b3f;font:600 12px -apple-system,sans-serif;cursor:pointer">Solo estas</button>' +
       "</div>" +
       '<datalist id="smartbc-agencias-list"></datalist>' +
       '<div class="smartbc-terms" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>' +
+      '<div class="smartbc-only" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px"></div>' +
       "</div>" +
       '<div class="smartbc-status" style="margin-top:10px;font:600 12px/1.4 -apple-system,sans-serif;color:#8a6d1f"></div>';
 
@@ -254,16 +294,17 @@
 
     const input = root.querySelector(".smartbc-agency-input");
     input.addEventListener("focus", () => refreshSuggestions(true));
-    const submit = () => {
+    const submit = (kind) => {
       const parts = input.value.split(/[,;\n]+/);
       input.value = "";
-      addTerms(parts);
+      addTerms(parts, kind);
     };
-    root.querySelector(".smartbc-agency-add").addEventListener("click", submit);
+    root.querySelector(".smartbc-agency-add").addEventListener("click", () => submit("hide"));
+    root.querySelector(".smartbc-agency-only").addEventListener("click", () => submit("only"));
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        submit();
+        submit("hide");
       }
     });
 
@@ -287,7 +328,7 @@
     return ui;
   }
 
-  function renderUi(floorCounts, sideCounts, total, hiddenN) {
+  function renderUi(floorCounts, sideCounts, total, hiddenN, extraCounts) {
     const { root } = ensureUi();
 
     // ── Plantas ──
@@ -327,6 +368,34 @@
       );
     }
 
+    // ── Vídeo, precio rebajado y subasta (lo que Idealista no filtra) ──
+    const extra = root.querySelector(".smartbc-extra");
+    extra.innerHTML = "";
+    const ec = extraCounts || {};
+    extra.appendChild(
+      checkbox("media-video", `Con vídeo (${ec.video || 0})`, state.media.includes("video"), (on) => {
+        state.media = on ? [...state.media, "video"] : state.media.filter((m) => m !== "video");
+        save();
+        apply();
+      }),
+    );
+    extra.appendChild(
+      checkbox("price-drop", `Precio rebajado (${ec.priceDrop || 0})`, state.priceDrop, (on) => {
+        state.priceDrop = on;
+        save();
+        apply();
+      }),
+    );
+    if (/venta|sale/.test(location.pathname)) {
+      extra.appendChild(
+        checkbox("sit-subasta", `Subasta judicial (${ec.subasta || 0}) · por el texto`, state.situation.includes("subasta"), (on) => {
+          state.situation = on ? [...state.situation, "subasta"] : state.situation.filter((x) => x !== "subasta");
+          save();
+          apply();
+        }),
+      );
+    }
+
     // ── Anunciante ──
     const owners = root.querySelector(".smartbc-owners");
     owners.innerHTML = "";
@@ -342,29 +411,31 @@
     // casilla (son miles de nombres) y después solo se añaden las vistas nuevas.
     refreshSuggestions(false);
 
-    // Agencias ocultas, una a una.
-    const termsEl = root.querySelector(".smartbc-terms");
-    termsEl.innerHTML = "";
-    state.terms.forEach((t, i) => {
-      const chip = document.createElement("span");
-      chip.style.cssText =
-        "display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;background:#f3ecdc;color:#5b4a1c;font:600 11.5px/1.2 -apple-system,sans-serif";
-      chip.title = "Agencias cuyo nombre contiene esto";
-      const label = document.createElement("span");
-      label.textContent = t;
-      const x = document.createElement("button");
-      x.type = "button";
-      x.textContent = "✕";
-      x.setAttribute("aria-label", `Volver a mostrar ${t}`);
-      x.style.cssText = "border:0;background:none;cursor:pointer;color:#8a6d1f;font:inherit;padding:0";
-      x.addEventListener("click", () => {
-        state.terms.splice(i, 1);
-        save();
-        apply();
+    // Agencias ocultas y agencias "solo estas", una a una.
+    const drawChips = (el, list, style, title, ariaPrefix) => {
+      el.innerHTML = "";
+      list.forEach((t, i) => {
+        const chip = document.createElement("span");
+        chip.style.cssText = `display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;font:600 11.5px/1.2 -apple-system,sans-serif;${style}`;
+        chip.title = title;
+        const label = document.createElement("span");
+        label.textContent = t;
+        const x = document.createElement("button");
+        x.type = "button";
+        x.textContent = "✕";
+        x.setAttribute("aria-label", `${ariaPrefix} ${t}`);
+        x.style.cssText = "border:0;background:none;cursor:pointer;color:inherit;font:inherit;padding:0";
+        x.addEventListener("click", () => {
+          list.splice(i, 1);
+          save();
+          apply();
+        });
+        chip.append(label, x);
+        el.appendChild(chip);
       });
-      chip.append(label, x);
-      termsEl.appendChild(chip);
-    });
+    };
+    drawChips(root.querySelector(".smartbc-terms"), state.terms, "background:#f3ecdc;color:#5b4a1c", "Agencias ocultas: su nombre contiene esto", "Volver a mostrar");
+    drawChips(root.querySelector(".smartbc-only"), state.only, "background:#e3f1e7;color:#245c35", "Solo se ven estas agencias", "Dejar de ver solo");
 
     // ── Estado ──
     const status = root.querySelector(".smartbc-status");
@@ -376,7 +447,7 @@
       reset.textContent = "quitar filtros";
       reset.style.cssText = LINK_BTN;
       reset.addEventListener("click", () => {
-        state = { floors: [], sides: [], owners: false, terms: [] };
+        state = freshState();
         save();
         apply();
       });
@@ -462,6 +533,7 @@
         sides: Array.isArray(s.sides) ? s.sides : [],
         owners: s.owners === true,
         terms: Array.isArray(s.terms) ? s.terms : [],
+        ...core.sanitize(s),
       };
       // Versión 1.11: las agencias ocultas eran un mapa identificador → nombre.
       if (s.hidden && typeof s.hidden === "object") {
