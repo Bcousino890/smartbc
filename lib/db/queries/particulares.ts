@@ -30,6 +30,11 @@ const BASE_COLUMNS =
 const MEDIA_COLUMNS_0036 =
   "has_floor_plan, floor_plan_url, has_video, video_url";
 
+// Columnas de la migración 0176 (enlace de anuncios del mismo inmueble). Pueden
+// no existir aún en el VPS — por eso van en su propio intento (degradación
+// elegante, como las de 0034/0035/0036).
+const LINK_COLUMNS_0176 = "duplicate_of, link_summary, link_ops";
+
 export type EnrichedParticularRow = Record<string, unknown> & {
   id: string;
   assigned_to: string | null;
@@ -158,6 +163,10 @@ export type ParticularesFilters = {
   condition?: "good" | "to_reform" | "renovated" | "";
   yearBuiltMin?: number;
   yearBuiltMax?: number;
+  /** Por defecto el listado oculta los anuncios que son COPIA de otro (mismo
+   *  inmueble en otro portal / operación — migración 0176): se ven dentro de
+   *  la ficha del principal. `true` los muestra todos. */
+  showDuplicates?: boolean;
 };
 
 /**
@@ -199,8 +208,17 @@ function applyParticularesSort(query: any, sort: ParticularesSort | undefined, s
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress: boolean) {
+function applyParticularesFilters(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  f: ParticularesFilters,
+  hasAddress: boolean,
+  hasLinks = false,
+) {
   let q = query;
+  // Un inmueble con venta Y alquiler enlazados es UNA fila (la del principal):
+  // si se filtra por operación hay que mirar también las de sus enlazados.
+  if (hasLinks && !f.showDuplicates) q = q.is("duplicate_of", null);
   const term = f.search?.trim();
   if (term) {
     // Mismo escapado que lib/db/queries/sales-inbox.ts: PostgREST usa ","
@@ -212,7 +230,11 @@ function applyParticularesFilters(query: any, f: ParticularesFilters, hasAddress
     q = q.or(clauses.join(","));
   }
 
-  if (f.operation) q = q.eq("operation", f.operation);
+  if (f.operation) {
+    q = hasLinks
+      ? q.or(`operation.eq.${f.operation},link_ops.cs.{${f.operation}}`)
+      : q.eq("operation", f.operation);
+  }
 
   // `idsInZone` (zona dibujada en el mapa) gana sobre el desplegable de
   // distrito/barrio si por lo que sea llegaran los dos a la vez — en la
@@ -299,6 +321,7 @@ export async function getParticularesPage(opts?: {
   // 0036 (plano/vídeo) → 0035 (address, phone_confidence) → 0034 (assigned_*)
   // → 0024 (particular_reference) → 0012 (advertiser_type) → base.
   const attempts = [
+    `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}, ${LINK_COLUMNS_0176}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference`,
@@ -325,7 +348,7 @@ export async function getParticularesPage(opts?: {
         .from("particulares")
         .select(cols, { count: "exact" })
         .eq("is_active", !showRetired);
-      query = applyParticularesFilters(query, opts.filters ?? {}, cols.includes("address"));
+      query = applyParticularesFilters(query, opts.filters ?? {}, cols.includes("address"), cols.includes("duplicate_of"));
       query = applyParticularesSort(query, opts.filters?.sort, showRetired);
       // try/catch, no solo `res.error`: un `.in("id", idsInZone)` con miles
       // de ids (zona dibujada grande) puede hacer que la petición a
@@ -366,14 +389,13 @@ export async function getParticularesPage(opts?: {
   for (const cols of attempts) {
     // ACTIVOS: todos, sin límite (por lotes de 1000 para sortear el tope
     // de filas por request de PostgREST).
-    const actives = await fetchAllRows((from, to) =>
-      supabase
-        .from("particulares")
-        .select(cols)
-        .eq("is_active", true)
+    const hideDup = cols.includes("duplicate_of");
+    const actives = await fetchAllRows((from, to) => {
+      const q = supabase.from("particulares").select(cols).eq("is_active", true);
+      return (hideDup ? q.is("duplicate_of", null) : q)
         .order("created_at", { ascending: false })
-        .range(from, to),
-    );
+        .range(from, to);
+    });
     if (actives.error) {
       lastError = actives.error;
       continue;
@@ -384,14 +406,12 @@ export async function getParticularesPage(opts?: {
 
     // RETIRADOS (mismas columnas): también todos, sin límite, para que el
     // tab "Retirados" del cliente muestre todo lo que hay en la BD.
-    const retired = await fetchAllRows((from, to) =>
-      supabase
-        .from("particulares")
-        .select(cols)
-        .eq("is_active", false)
+    const retired = await fetchAllRows((from, to) => {
+      const q = supabase.from("particulares").select(cols).eq("is_active", false);
+      return (hideDup ? q.is("duplicate_of", null) : q)
         .order("taken_down_at", { ascending: false, nullsFirst: false })
-        .range(from, to),
-    );
+        .range(from, to);
+    });
     if (!retired.error) {
       rows = [...rows, ...retired.rows];
     }

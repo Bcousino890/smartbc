@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { createClient } from "@/lib/db/server";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { assertPermission } from "@/lib/auth/guard";
-import { normalizeSpanishPhone } from "@/lib/sync/particulares/idealista-advertiser-detector";
+import { normalizeContactPhone } from "@/lib/sync/particulares/phone-international";
 // Alias: el módulo de queries usa el mismo nombre para la función de datos;
 // el server action de abajo se llama igual de cara al cliente.
 import { createParticularShareLink as insertParticularShareLink } from "@/lib/db/queries/particulares-shares";
@@ -27,18 +27,19 @@ export async function updateParticularPhone(
 
   if (!particularId) return { ok: false, error: "id_required" };
 
-  // Normalizar SIEMPRE al formato canónico +34XXXXXXXXX. Si el asesor
-  // escribió algo que no es un teléfono español válido, rechazamos en vez
-  // de guardar basura. Vacío/null = borrar el teléfono (permitido).
+  // Normalizar SIEMPRE a E.164: +34XXXXXXXXX para España y +CC… para otros
+  // países (un propietario puede tener un móvil francés o británico). Si el
+  // asesor escribió algo que no es un teléfono válido, rechazamos en vez de
+  // guardar basura. Vacío/null = borrar el teléfono (permitido).
   const trimmed = phone?.trim() ?? "";
   let normalized: string | null = null;
   if (trimmed.length > 0) {
-    normalized = normalizeSpanishPhone(trimmed);
+    normalized = normalizeContactPhone(trimmed);
     if (!normalized)
       return {
         ok: false,
         error:
-          "Número inválido. Usa formato 600 123 456 o +34 600 123 456 (9 dígitos, empieza por 6/7/8/9)",
+          "Número inválido. Usa formato 600 123 456 o +34 600 123 456 (9 dígitos, empieza por 6/7/8/9), o con prefijo internacional (+33 7 12 34 56 78)",
       };
   }
 

@@ -1,0 +1,160 @@
+import "server-only";
+import { createAdminClient } from "@/lib/db/admin";
+import {
+  computeLinks,
+  type LinkDecision,
+  type LinkRow,
+  type LinkRelation,
+  type RowGroupState,
+} from "./linking-core";
+
+/**
+ * Job de enlazado de anuncios de particulares (migración 0176).
+ *
+ * Lee `particulares_link_rows`, calcula con `computeLinks` (lógica pura, probada
+ * en scripts/test-particulares-linking.mts) y deja en la BD:
+ *   · `particulares_links`: los pares relacionados, con regla y evidencia;
+ *   · `particulares.duplicate_of / link_summary / link_ops`: la agrupación que
+ *     usan el listado (oculta los duplicados) y la ficha (venta + alquiler +
+ *     portales en una sola).
+ *
+ * Es idempotente y barato (~1 s de cálculo para 21.000 anuncios): se puede
+ * lanzar cada pocos minutos desde el cron o a mano tras confirmar/descartar un
+ * enlace. Las decisiones de una persona (`confirmado` / `descartado`) mandan
+ * siempre sobre el algoritmo.
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = any;
+
+const PAGE = 1000;
+const CHUNK = 400;
+
+export type LinkingRunSummary = {
+  ok: boolean;
+  dryRun: boolean;
+  ms: number;
+  stats: Record<string, number>;
+  changedRows: number;
+  linksWritten: number;
+  linksPruned: number;
+  error?: string;
+};
+
+type CurrentRow = LinkRow & {
+  duplicate_of: string | null;
+  link_summary: unknown;
+  link_ops: string[] | null;
+};
+
+async function loadRows(db: Db): Promise<CurrentRow[]> {
+  const out: CurrentRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("particulares_link_rows")
+      .select("*")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`particulares_link_rows: ${error.message}`);
+    out.push(...((data ?? []) as CurrentRow[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
+async function loadDecisions(db: Db): Promise<LinkDecision[]> {
+  const out: LinkDecision[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("particulares_links")
+      .select("a_id, b_id, relation, status")
+      .in("status", ["confirmado", "descartado"])
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`particulares_links: ${error.message}`);
+    for (const d of data ?? []) {
+      out.push({
+        a: d.a_id as string,
+        b: d.b_id as string,
+        relation: d.relation as LinkRelation,
+        status: d.status as "confirmado" | "descartado",
+      });
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
+const sameState = (cur: CurrentRow, want: RowGroupState): boolean =>
+  (cur.duplicate_of ?? null) === want.duplicate_of &&
+  JSON.stringify(cur.link_summary ?? null) === JSON.stringify(want.link_summary) &&
+  JSON.stringify(cur.link_ops ?? null) === JSON.stringify(want.link_ops);
+
+// Un solo recálculo a la vez en este proceso (PM2 de un solo proceso).
+let running: Promise<LinkingRunSummary> | null = null;
+
+export function runParticularesLinking(opts: { dryRun?: boolean } = {}): Promise<LinkingRunSummary> {
+  if (running) return running;
+  running = doRun(opts).finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function doRun({ dryRun = false }: { dryRun?: boolean }): Promise<LinkingRunSummary> {
+  const started = Date.now();
+  const runStart = new Date(started - 5000).toISOString();
+  const db = createAdminClient() as Db;
+  try {
+    const [rows, decisions] = await Promise.all([loadRows(db), loadDecisions(db)]);
+    const result = computeLinks(rows, decisions);
+
+    const changes: Array<Record<string, unknown>> = [];
+    for (const cur of rows) {
+      const want = result.state.get(cur.id);
+      if (want && !sameState(cur, want)) {
+        changes.push({
+          id: cur.id,
+          duplicate_of: want.duplicate_of,
+          link_summary: want.link_summary,
+          link_ops: want.link_ops,
+        });
+      }
+    }
+
+    let linksWritten = 0;
+    let linksPruned = 0;
+    if (!dryRun) {
+      // Enlaces primero (así el modal los ve en cuanto cambia la agrupación).
+      for (let i = 0; i < result.links.length; i += CHUNK) {
+        const { data, error } = await db.rpc("apply_particulares_links", {
+          p: result.links.slice(i, i + CHUNK),
+        });
+        if (error) throw new Error(`apply_particulares_links: ${error.message}`);
+        linksWritten += Number(data ?? 0);
+      }
+      const pruned = await db.rpc("prune_particulares_links", { p_before: runStart });
+      if (pruned.error) throw new Error(`prune_particulares_links: ${pruned.error.message}`);
+      linksPruned = Number(pruned.data ?? 0);
+
+      for (let i = 0; i < changes.length; i += CHUNK) {
+        const { error } = await db.rpc("apply_particulares_groups", { p: changes.slice(i, i + CHUNK) });
+        if (error) throw new Error(`apply_particulares_groups: ${error.message}`);
+      }
+    }
+
+    return {
+      ok: true,
+      dryRun,
+      ms: Date.now() - started,
+      stats: result.stats,
+      changedRows: changes.length,
+      linksWritten,
+      linksPruned,
+    };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "linking_failed";
+    console.error("[particulares-linking]", error);
+    return { ok: false, dryRun, ms: Date.now() - started, stats: {}, changedRows: 0, linksWritten: 0, linksPruned: 0, error };
+  }
+}

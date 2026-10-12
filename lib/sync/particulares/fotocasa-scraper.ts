@@ -1,5 +1,5 @@
 import "server-only";
-import { normalizeSpanishPhone } from "./idealista-advertiser-detector";
+import { normalizeContactPhone } from "./phone-international";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scraper de Fotocasa — SEGUNDA FUENTE de teléfonos de particulares.
@@ -43,7 +43,7 @@ export type FotocasaListing = {
   externalId: string;
   propertyId: string;
   sourceUrl: string;
-  phone: string | null; // +34XXXXXXXXX o null
+  phone: string | null; // E.164 (+34XXXXXXXXX u otro país, p. ej. +33…) o null
   advertiserType: "particular" | "professional" | "unknown";
   isProfessional: boolean | null;
   contactName: string | null;
@@ -220,7 +220,7 @@ function mapSearchItem(raw: unknown): FotocasaListing | null {
     externalId: `fotocasa-${propertyId}`,
     propertyId,
     sourceUrl,
-    phone: normalizeSpanishPhone(strOrNull(it.phone)),
+    phone: normalizeContactPhone(strOrNull(it.phone)),
     advertiserType,
     isProfessional:
       advertiserType === "unknown" ? null : advertiserType === "professional",

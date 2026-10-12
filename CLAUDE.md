@@ -1233,6 +1233,46 @@ de texto, nunca a clases CSS**. Si un portal cambia su maquetación el campo
 llega vacío pero **el enlace se envía igual**, que es lo único imprescindible
 para llamar. No "arregles" eso metiendo selectores CSS: duran semanas.
 
+## Enlace de anuncios de particulares: mismo inmueble, otros portales/operaciones (2026-10-12, migración 0176)
+Un mismo piso puede estar en Idealista y en Fotocasa, en venta en uno y en alquiler en el otro, y a veces con
+OTRO teléfono y otro nombre (la pareja). Cada anuncio era una fila independiente de `particulares`. Ahora se
+**enlazan** (sin borrar ni fusionar filas) y `/admin/particulares` enseña UNA ficha por inmueble, con venta,
+alquiler, portales, contactos y fotos de todos los anuncios dentro del modal.
+
+- **Datos:** `particulares_links` (par de anuncios + `relation` `mismo_inmueble`/`mismo_contacto`, `level`
+  `cierto`/`probable`/`informativo`, la `rule` que lo detectó y la `evidence` — calle, m², teléfono, precio…
+  — para poder auditarlo) y en `particulares`: `duplicate_of` (la copia apunta al anuncio principal; el
+  listado oculta los que tienen valor), `link_summary` y `link_ops` (resumen ya calculado en el principal:
+  portales, operaciones, ofertas, nº de teléfonos). Una persona puede **confirmar o descartar** un enlace
+  (`status`); el algoritmo no vuelve a tocar una decisión humana.
+- **Algoritmo:** `lib/particulares/linking-core.ts` (PURO, probado con `npm run test:particulares-links`) y el
+  job `linking-runner.ts` → `POST /api/cron/particulares/link-twins` (`?dry=1` solo calcula). Reglas: 1) el
+  mismo teléfono (de cualquier país, E.164) + características compatibles = «cierto»; 2) sin teléfono en común
+  hace falta calle+número+m²+habitaciones y precio casi igual (o mismo nombre/planta si es otra operación);
+  3) coordenadas a ≤100 m + m² + habitaciones; 4) lo demás es «probable» y el equipo decide.
+- ⚠️ **El teléfono por sí solo NO basta** (medido: de 129 pares con el mismo teléfono, 21 eran otro piso del
+  mismo dueño u otra operación) **y «calle + m² + habitaciones» tampoco** (en un edificio con 5 pisos iguales de
+  dueños distintos enlazaba pisos distintos). Por eso: vetos duros (m², habitaciones, baños, planta o calle
+  distintos, >800 m), un enlace sin teléfono se degrada a «probable» si hay otro piso parecido en el edificio,
+  y al agrupar se comprueban TODOS los pares (una planta desconocida unía un 3.º con un 6.º).
+- **Ficha única:** el principal es el activo, con asesor asignado, con teléfono, con más fotos (Idealista de
+  desempate). El modal (`linked-ads-section.tsx`, datos de `/api/admin/particulares/links`) agrupa por
+  operación, enseña los contactos distintos, las fotos de los otros anuncios, los «posibles gemelos» con los
+  botones «Es el mismo inmueble» / «No lo es» (`link-actions.ts`, que recalcula al momento) y los otros
+  anuncios del mismo contacto. En el listado: «Venta + Alquiler», «Idealista + Fotocasa», «También: …» y el
+  botón «Ver anuncios enlazados» (`?enlazados=1`) para ver las copias. Filtrar por operación también mira
+  `link_ops`.
+- ⚠️ **El cron hay que ponerlo a mano en el crontab del VPS** (cada 10 min; script de referencia
+  `scripts/vps-particulares-links.sh`, copia operativa `/opt/smartbc-particulares-links.sh`). Sin él los
+  anuncios nuevos no se enlazan hasta que alguien confirme/descarte algo o se lance a mano.
+- **Deshacer todo:** `update particulares set duplicate_of=null, link_summary=null, link_ops=null;` (las filas
+  nunca se modifican; el listado vuelve a ser el de siempre).
+- **Teléfonos extranjeros (corregido en la misma fecha):** `normalizeSpanishPhone` solo acepta `+34…`, así que
+  un +33/+44 de un anunciante de Fotocasa se DESCARTABA y el anuncio quedaba como «solo chat» (3,2 % de los
+  particulares medidos). `lib/sync/particulares/phone-international.ts` (`normalizeContactPhone`) mantiene las
+  reglas españolas y acepta E.164 internacional; lo usan el extractor de Fotocasa y la edición manual del
+  teléfono. `normalizeSpanishPhone` NO se tocó (sigue siendo el filtro de candidatos en el HTML de Idealista).
+
 ## Idioma del scraping y de los enlaces temporales de `particulares` (2026-09-07)
 El CRM entero es en español, así que la ficha scrapeada de un particular
 (`/admin/particulares`) y su enlace temporal (`/a/[token]`) también deben

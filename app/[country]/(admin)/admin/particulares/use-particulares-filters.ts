@@ -51,6 +51,8 @@ type FilterValues = {
   floorMin: string;
   areaMin: string;
   last24h: boolean;
+  /** Mostrar también los anuncios enlazados (copias del mismo inmueble). */
+  showLinked: boolean;
   phoneFilter: PhoneFilterValue;
   gestion: GestionFilter;
   advertiser: AdvertiserFilter;
@@ -80,6 +82,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   floorMin: "floorMin",
   areaMin: "areaMin",
   last24h: "last24h",
+  showLinked: "enlazados",
   phoneFilter: "phone",
   gestion: "gestion",
   advertiser: "advertiser",
@@ -135,6 +138,7 @@ export function useParticularesFilters() {
   const [floorMin, setFloorMin] = useState(() => searchParams.get(PARAM_KEYS.floorMin) ?? "");
   const [areaMin, setAreaMin] = useState(() => searchParams.get(PARAM_KEYS.areaMin) ?? "");
   const [last24h, setLast24h] = useState(() => searchParams.get(PARAM_KEYS.last24h) === "1");
+  const [showLinked, setShowLinked] = useState(() => searchParams.get(PARAM_KEYS.showLinked) === "1");
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilterValue>(() =>
     readEnum<PhoneFilterValue>(searchParams.get(PARAM_KEYS.phoneFilter), PHONE_VALUES),
   );
@@ -188,6 +192,7 @@ export function useParticularesFilters() {
     floorMin,
     areaMin,
     last24h,
+    showLinked,
     phoneFilter,
     gestion,
     advertiser,
@@ -246,6 +251,7 @@ export function useParticularesFilters() {
     floorMin,
     areaMin,
     last24h,
+    showLinked,
     phoneFilter,
     gestion,
     advertiser,
@@ -289,6 +295,8 @@ export function useParticularesFilters() {
     setAreaMin,
     last24h,
     setLast24h,
+    showLinked,
+    setShowLinked,
     phoneFilter,
     setPhoneFilter,
     gestion,

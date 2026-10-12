@@ -60,6 +60,8 @@ import {
 import { ANUNCIOS_POR_PAGINA } from "./constants";
 import { prefetchParticularDetail } from "./detail-cache";
 import { useParticularesFilters } from "./use-particulares-filters";
+import type { LinkSummaryLite } from "@/lib/particulares/links-types";
+import { LinkedAdsSection, LinkedOffersLine, linkedOpLabel, linkedPortalLabel } from "./linked-ads-section";
 
 export type StaffOption = { id: string; name: string };
 
@@ -133,6 +135,11 @@ export type ParticularRow = {
   last_contact_by?: string | null;
   last_contact_type?: string | null;
   contact_count?: number;
+  // Enlace de anuncios del mismo inmueble (migración 0176). `link_summary` solo
+  // viene en el anuncio PRINCIPAL de un grupo; `duplicate_of` en las copias.
+  duplicate_of?: string | null;
+  link_summary?: LinkSummaryLite | null;
+  link_ops?: string[] | null;
 };
 
 // timeZone fijo a Madrid: sin él, el servidor (VPS en UTC) y el navegador
@@ -879,6 +886,7 @@ function ParticularModal({
   canCreateProperty?: boolean;
   staffOptions?: StaffOption[];
 }) {
+  const router = useRouter();
   const [photoIdx, setPhotoIdx] = useState(0);
   const [currentRow, setCurrentRow] = useState(row);
   const [showEditPhone, setShowEditPhone] = useState(false);
@@ -1220,6 +1228,9 @@ function ParticularModal({
                 .join(" · ")}
             </p>
           </div>
+
+          {/* Mismo inmueble en otros portales / operaciones (migración 0176) */}
+          <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />
 
           {/* Ficha técnica — datos scrapeados de Idealista (bajo demanda) */}
           {(currentRow.price_per_m2 != null ||
@@ -1723,6 +1734,8 @@ export function ParticularesClient({
     setAreaMin,
     last24h,
     setLast24h,
+    showLinked,
+    setShowLinked,
     phoneFilter,
     setPhoneFilter,
     gestion,
@@ -2097,6 +2110,18 @@ export function ParticularesClient({
           >
             Últimas 24h
           </button>
+          <button
+            type="button"
+            onClick={() => setShowLinked((v) => !v)}
+            title="Por defecto cada inmueble sale una sola vez (con su venta, alquiler y portales dentro de la ficha). Actívalo para ver también las copias."
+            className={
+              showLinked
+                ? "rounded-lg border border-gold bg-gold/15 px-3 py-2 text-sm font-medium text-gold-dark"
+                : "rounded-lg border border-ink/10 bg-white/85 px-3 py-2 text-sm text-ink/70 transition hover:border-gold/40"
+            }
+          >
+            Ver anuncios enlazados
+          </button>
           <select
             value={phoneFilter}
             onChange={(e) => setPhoneFilter(e.target.value as typeof phoneFilter)}
@@ -2306,10 +2331,10 @@ export function ParticularesClient({
                       </div>
                     )}
                     <span className="absolute left-2 top-2 rounded-md bg-ink/85 px-2 py-0.5 crm-label-sm text-cream-50">
-                      {r.operation === "rent" ? "Alquiler" : "Venta"}
+                      {linkedOpLabel(r)}
                     </span>
                     <span className="absolute right-2 top-2 rounded-md bg-gold/90 px-2 py-0.5 crm-label-sm text-ink">
-                      {r.portal}
+                      {linkedPortalLabel(r)}
                     </span>
                     {/* Badge de retirado */}
                     {!r.is_active && (
@@ -2374,6 +2399,7 @@ export function ParticularesClient({
                         ? `${formatPrice(r.price)}${r.operation === "rent" ? "/mes" : ""}`
                         : "Precio n/d"}
                     </p>
+                    <LinkedOffersLine row={r} />
                     <p className="mt-1 text-xs text-ink/60">
                       {[
                         r.bedrooms != null ? `${r.bedrooms} hab` : null,
