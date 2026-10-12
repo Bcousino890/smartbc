@@ -11,6 +11,32 @@ Extensión de Chrome con tres funciones:
    portal y los manda a la sección **Enlaces de portales** de su ficha, con el
    compañero que los va a llamar ya asignado.
 
+## Filtros extra en los listados (1.13)
+
+Se filtra en el navegador, sobre los anuncios de la página, y se recuerda entre
+páginas. Cada portal muestra **solo lo que no trae de serie**; lo demás se deja
+a su propia barra de filtros.
+
+| | Idealista (barra izquierda, «· SmartBC») | Fotocasa (botón «Filtros SmartBC», abajo a la izquierda) |
+|---|---|---|
+| Ya lo trae el portal | situación de la vivienda, tipo de alquiler, habitaciones y baños, estado, mascotas / lujo / accesible, plano, visita virtual | situación (con subasta), extras, estado, precio rebajado, vídeo/3D, ayuda pública, fecha |
+| Lo añade SmartBC | planta exacta, exterior/interior, **con vídeo**, **precio rebajado**, **subasta judicial**, solo particulares, ocultar agencias, **«Solo estas» agencias** | **habitaciones exactas (con «Estudio») y baños exactos**, **tipo de alquiler (larga / temporada)**, **mascotas / lujo / accesible**, **con plano**, solo particulares, ocultar agencias, **«Solo estas» agencias** |
+
+- **Agencias:** se escribe parte del nombre (con sugerencias de las ya vistas) y
+  se elige **Ocultar** o **Solo estas**; «Ocultar» manda sobre «Solo estas». Con
+  «Solo estas» los anuncios de particulares también se ocultan.
+- ⚠️ Plano, vídeo, 3D, precio rebajado, habitaciones y baños salen de iconos y
+  números del anuncio: son fiables. **Situación, mascotas, lujo, accesible,
+  ayuda pública y tipo de alquiler salen del texto** que enseña el listado
+  (título y trozo de descripción): son una deducción, y que no aparezcan no
+  significa que el piso no lo tenga. Un dato que no se encuentra nunca descarta
+  un anuncio por sí solo (salvo en las casillas de iconos).
+- El código está repartido en `filters-core.js` (sin DOM, probado con
+  `npm run test:extension-filters`), `idealista-filters.js` y
+  `fotocasa-filters.js`. La lectura de Fotocasa va anclada a textos y URLs
+  (`/es/pro/<agencia>/`, `/<id>/d`), no a clases CSS. Tras actualizar, recarga la
+  extensión en `chrome://extensions`.
+
 ## Instalación (una sola vez)
 
 1. Abre Chrome → `chrome://extensions`
