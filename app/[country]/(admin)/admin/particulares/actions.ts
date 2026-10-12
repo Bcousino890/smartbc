@@ -469,3 +469,106 @@ export async function rescrapeParticularPhones(
   revalidatePath("/admin/particulares");
   return { ok: true, updated };
 }
+
+// ── Enriquecimiento desde la descripción (migración 0187) ───────────────────
+
+export type EnrichmentActionResult = { ok: true } | { ok: false; error: string };
+
+const ENRICH_REASON_ES: Record<string, string> = {
+  valor_cambiado: "El dato se ha cambiado después a mano: no se toca.",
+  ya_deshecho: "Ya estaba deshecho.",
+  no_existe: "El registro ya no existe.",
+  telefono_ocupado: "El anuncio ya tiene teléfono principal.",
+  sin_telefono_principal: "Falta el teléfono principal: ponlo primero.",
+  phone2_ocupado: "El segundo teléfono ya está ocupado.",
+  ya_es_el_principal: "Ese número ya es el principal.",
+  nombre_real_ya_existe: "El anuncio ya tiene un responsable con nombre.",
+  cambio_concurrente: "El anuncio ha cambiado desde que se calculó la sugerencia.",
+  pin_exacto_existente: "El anuncio ya tiene un pin exacto.",
+  direccion_vacia: "Dirección vacía.",
+};
+const enrichReason = (r: unknown) => ENRICH_REASON_ES[String(r)] ?? String(r ?? "No se pudo aplicar");
+
+/**
+ * «Deshacer» un dato que el job añadió desde la descripción: devuelve el campo a como estaba (solo si nadie lo
+ * ha cambiado después) y apunta el valor para que el job no lo vuelva a proponer.
+ */
+export async function undoParticularEnrichment(enrichmentId: string): Promise<EnrichmentActionResult> {
+  await assertPermission("particulares", "edit");
+  if (!enrichmentId) return { ok: false, error: "id_required" };
+  const profile = await getCurrentProfile();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+  const { data, error } = await db.rpc("particulares_enrichment_revert", {
+    p_enrichment: enrichmentId,
+    p_by: profile?.id ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  if (!data?.ok) return { ok: false, error: enrichReason(data?.reason) };
+  revalidatePath("/admin/particulares");
+  return { ok: true };
+}
+
+/**
+ * Aceptar o descartar un candidato de confianza media («Sugerido»). Aceptar lo escribe con las mismas
+ * comprobaciones que el job (no pisa teléfono principal, nombre real ni pin exacto) y lo deja auditado como
+ * `manual`. Descartar lo apunta para que no se vuelva a sugerir.
+ */
+export async function resolveParticularEnrichmentCandidate(
+  particularId: string,
+  key: string,
+  decision: "aceptar" | "descartar",
+): Promise<EnrichmentActionResult> {
+  await assertPermission("particulares", "edit");
+  if (!particularId || !key) return { ok: false, error: "id_required" };
+  const profile = await getCurrentProfile();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createAdminClient() as any;
+  const { data: st, error: stErr } = await db
+    .from("particulares_enrichment_state")
+    .select("candidates, dismissed")
+    .eq("particular_id", particularId)
+    .maybeSingle();
+  if (stErr) return { ok: false, error: stErr.message };
+  type Cand = { key: string; field: string; value: string; confidence: string; rule: string; evidence: string; status: string; expected_before?: string | null };
+  const cands = ((st?.candidates ?? []) as Cand[]).slice();
+  const idx = cands.findIndex((c) => c.key === key && c.status === "pendiente");
+  if (idx < 0) return { ok: false, error: "La sugerencia ya no está disponible." };
+  const cand = cands[idx];
+
+  if (decision === "aceptar") {
+    let field = cand.field;
+    // Un teléfono sugerido como principal pasa a segundo teléfono si mientras tanto alguien puso el principal.
+    if (field === "phone") {
+      const { data: cur } = await db.from("particulares").select("phone").eq("id", particularId).maybeSingle();
+      if (cur?.phone && String(cur.phone).trim()) field = "phone2";
+    }
+    const after = field === "phone" || field === "phone2" ? { [field]: cand.value } : field === "address" ? { address: cand.value } : { owner_name: cand.value };
+    const { data, error } = await db.rpc("particulares_enrichment_apply", {
+      p_id: particularId,
+      p_field: field,
+      p_after: after,
+      p_rule: cand.rule,
+      p_conf: "media",
+      p_evidence: cand.evidence,
+      p_origin: "manual",
+      p_by: profile?.id ?? null,
+      p_expected: field === "address" ? { address: cand.expected_before ?? null } : null,
+    });
+    if (error) return { ok: false, error: error.message };
+    if (!data?.ok) return { ok: false, error: enrichReason(data?.reason) };
+    cands[idx] = { ...cand, status: "aceptado" };
+    await db.from("particulares_enrichment_state").update({ candidates: cands }).eq("particular_id", particularId);
+  } else {
+    cands[idx] = { ...cand, status: "descartado" };
+    const dismissed = ((st?.dismissed ?? []) as string[]).slice();
+    if (!dismissed.includes(cand.key)) dismissed.push(cand.key);
+    const { error } = await db
+      .from("particulares_enrichment_state")
+      .update({ candidates: cands, dismissed })
+      .eq("particular_id", particularId);
+    if (error) return { ok: false, error: error.message };
+  }
+  revalidatePath("/admin/particulares");
+  return { ok: true };
+}

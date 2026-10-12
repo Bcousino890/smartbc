@@ -8,6 +8,10 @@ export type NominatimHit = {
   lng: number;
   /** El resultado trae número de portal (house_number). */
   hasHouseNumber: boolean;
+  /** Detalle de la dirección devuelta (para contrastar calle/número/municipio sin fiarse solo de las coordenadas). */
+  houseNumber?: string;
+  road?: string;
+  city?: string;
 };
 
 const cache = new Map<string, NominatimHit | null>();
@@ -29,13 +33,20 @@ export function nominatimLookup(query: string): Promise<NominatimHit | null> {
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return null; // no cachear fallos transitorios
-      const data = (await res.json()) as Array<{ lat: string; lon: string; address?: { house_number?: string } }>;
+      const data = (await res.json()) as Array<{ lat: string; lon: string; address?: Record<string, string | undefined> }>;
       const h = data[0];
       const lat = h ? Number(h.lat) : NaN;
       const lng = h ? Number(h.lon) : NaN;
       const hit: NominatimHit | null =
         h && Number.isFinite(lat) && Number.isFinite(lng)
-          ? { lat, lng, hasHouseNumber: !!h.address?.house_number }
+          ? {
+              lat,
+              lng,
+              hasHouseNumber: !!h.address?.house_number,
+              houseNumber: h.address?.house_number,
+              road: h.address?.road ?? h.address?.pedestrian ?? h.address?.footway ?? h.address?.path,
+              city: h.address?.city ?? h.address?.town ?? h.address?.village ?? h.address?.municipality,
+            }
           : null;
       if (cache.size > 2000) cache.clear();
       cache.set(key, hit);
