@@ -953,7 +953,14 @@ export function ParticularModal({
 
   const contactCard = (
     <div className="rounded-xl border border-ink/10 bg-white p-4">
-      <p className="mb-3 text-sm font-semibold text-ink">Contacto · Particular</p>
+      <p className="mb-3 text-sm font-semibold text-ink">
+        Contacto · {currentRow.advertiser_type === "professional" ? "Agencia / profesional" : currentRow.advertiser_type === "particular" ? "Particular" : "Anunciante"}
+      </p>
+      {currentRow.advertiser_type === "professional" && (
+        <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Este anuncio es de una agencia, no de un particular.
+        </p>
+      )}
       {currentRow.owner_name && <p className="mb-3 font-medium text-ink">{currentRow.owner_name}</p>}
       {hasPhone ? (
         <div className="space-y-2">
@@ -1243,6 +1250,12 @@ export function ParticularModal({
 
               {/* Columna derecha: precio, contacto, asignación y acciones */}
               <aside className="min-w-0 space-y-4 lg:sticky lg:top-0 lg:self-start">
+                {currentRow.is_active && currentRow.updated_at && Date.now() - new Date(currentRow.updated_at.endsWith("Z") ? currentRow.updated_at : `${currentRow.updated_at}Z`).getTime() > 5 * 86_400_000 && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <span className="font-semibold">Sin comprobar desde {DATE_FMT.format(new Date(currentRow.updated_at.endsWith("Z") ? currentRow.updated_at : `${currentRow.updated_at}Z`))}.</span>{" "}
+                    Puede que el anunciante ya lo haya dado de baja: ábrelo en el portal antes de llamar.
+                  </div>
+                )}
                 {!currentRow.is_active && (
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                     <span className="font-semibold">Anuncio retirado</span>

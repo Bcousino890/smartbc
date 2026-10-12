@@ -16,7 +16,7 @@ import type {
  */
 
 const AD_COLUMNS =
-  "id, portal, external_id, source_url, operation, price, is_active, taken_down_at, phone, owner_name, zone, address, bedrooms, bathrooms, square_meters, cover_url, photos, created_at, particular_reference";
+  "id, portal, external_id, source_url, operation, price, is_active, taken_down_at, phone, owner_name, zone, address, bedrooms, bathrooms, square_meters, cover_url, photos, created_at, particular_reference, advertiser_type";
 
 const LEVEL_RANK: Record<string, number> = { cierto: 3, probable: 2, informativo: 1 };
 
@@ -49,6 +49,7 @@ function toAd(row: any, link: LinkInfo | null, withPhotos: boolean): LinkedAd {
     n_photos: photos.length,
     created_at: row.created_at ?? null,
     particular_reference: row.particular_reference ?? null,
+    advertiser_type: row.advertiser_type ?? null,
     link,
   };
 }

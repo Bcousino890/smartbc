@@ -7,7 +7,6 @@ import { useToast } from "@/components/ui/toast";
 import { ZoneFilter, type ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
 import type { IdealistaScraperConfig } from "@/lib/api/v1/idealista/config";
 import type { ParticularesStats } from "@/lib/db/queries/particulares";
-import { extractFloor } from "@/lib/floor";
 import { extractFurnished } from "@/lib/furnished";
 import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -68,7 +67,7 @@ export function ParticularesClient({
   staffOptions?: StaffOption[];
 }) {
   const f = useParticularesFilters();
-  const { query, setQuery, operation, setOperation, zone, setZone, advertiser, setAdvertiser, portal, setPortal, sort, setSort, priceDrop, setPriceDrop, floorMin, furnished, gestion, showRetired, setShowRetired } = f;
+  const { query, setQuery, operation, setOperation, zone, setZone, advertiser, setAdvertiser, portal, setPortal, sort, setSort, priceDrop, setPriceDrop, furnished, gestion, showRetired, setShowRetired } = f;
 
   const [pageRows, setPageRows] = useState(rows);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
@@ -115,19 +114,14 @@ export function ParticularesClient({
 
   // Planta y amueblado se deducen de texto libre: solo filtran la página actual.
   const visibleRows = useMemo(() => {
-    const fMin = floorMin ? Number(floorMin) : null;
     return pageRows.filter((r) => {
-      if (fMin != null) {
-        const fl = extractFloor(r.features, r.description);
-        if (fl == null || fl < fMin) return false;
-      }
       if (furnished && extractFurnished(r.features, r.description) !== furnished) return false;
       if (gestion === "contacted" && (r.contact_count ?? 0) === 0) return false;
       if (gestion === "unmanaged" && (r.contact_count ?? 0) > 0) return false;
       return true;
     });
-  }, [pageRows, floorMin, furnished, gestion]);
-  const hasClientOnlyFilter = Boolean(floorMin) || Boolean(furnished) || gestion === "contacted" || gestion === "unmanaged";
+  }, [pageRows, furnished, gestion]);
+  const hasClientOnlyFilter = Boolean(furnished) || gestion === "contacted" || gestion === "unmanaged";
 
   const totalPages = Math.max(1, Math.ceil(total / ANUNCIOS_POR_PAGINA));
   const currentPage = Math.min(Math.max(1, page), totalPages);

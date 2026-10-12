@@ -54,6 +54,10 @@ export const EXTRA_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "videoportero", label: "Videoportero" },
   { value: "accesible", label: "Accesible (movilidad reducida)" },
 ];
+export const POSITION_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "exterior", label: "Exterior" },
+  { value: "interior", label: "Interior" },
+];
 export const ENERGY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"];
 export const ORIENTATION_LABEL: Record<string, string> = { sur: "Sur", norte: "Norte", este: "Este", oeste: "Oeste" };
 export const SINCE_LABEL: Record<string, string> = { "1": "Últimas 24 h", "2": "Últimos 2 días", "7": "Última semana", "30": "Último mes" };
@@ -134,7 +138,11 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
   }
   if (f.bedrooms) chips.push({ id: "beds", label: `${f.bedrooms}+ hab.`, onRemove: () => f.setBedrooms("") });
   if (f.areaMin) chips.push({ id: "area", label: `Desde ${fmtNum(Number(f.areaMin))} m²`, onRemove: () => f.setAreaMin("") });
-  if (f.floorMin) chips.push({ id: "floor", label: `Planta ${f.floorMin}.ª o más`, onRemove: () => f.setFloorMin("") });
+  if (f.floorMin || f.floorMax) {
+    const lo = f.floorMin, hi = f.floorMax;
+    const label = hi === "0" && !lo ? "Solo bajos" : lo && hi ? (lo === hi ? `Planta ${lo}` : `Plantas ${lo}–${hi}`) : lo ? `Planta ${lo} o más` : `Hasta planta ${hi}`;
+    chips.push({ id: "floor", label, onRemove: () => { f.setFloorMin(""); f.setFloorMax(""); } });
+  }
   if (f.furnished) chips.push({ id: "furn", label: f.furnished === "yes" ? "Amueblado" : "Sin amueblar", onRemove: () => f.setFurnished("") });
   if (f.pricePerM2Min || f.pricePerM2Max) {
     const a = f.pricePerM2Min ? fmtNum(Number(f.pricePerM2Min)) : "";
@@ -177,7 +185,7 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
     chips.push({ id: `type:${t}`, label: TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t, onRemove: () => f.setTypes(toggleCsv(f.types, t)) });
   }
   for (const x of splitCsv(f.extras)) {
-    chips.push({ id: `extra:${x}`, label: EXTRA_OPTIONS.find((o) => o.value === x)?.label ?? x, onRemove: () => f.setExtras(toggleCsv(f.extras, x)) });
+    chips.push({ id: `extra:${x}`, label: [...EXTRA_OPTIONS, ...POSITION_OPTIONS].find((o) => o.value === x)?.label ?? x, onRemove: () => f.setExtras(toggleCsv(f.extras, x)) });
   }
   if (f.energy) chips.push({ id: "energy", label: `Eficiencia ${splitCsv(f.energy).join(", ")}`, onRemove: () => f.setEnergy("") });
   if (f.orientation) chips.push({ id: "orient", label: `Orientación ${ORIENTATION_LABEL[f.orientation] ?? f.orientation}`, onRemove: () => f.setOrientation("") });
@@ -198,7 +206,7 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   if (f.priceMin || f.priceMax) n++;
   if (f.bedrooms) n++;
   if (f.areaMin) n++;
-  if (f.floorMin) n++;
+  if (f.floorMin || f.floorMax) n++;
   if (f.furnished) n++;
   if (f.pricePerM2Min || f.pricePerM2Max) n++;
   if (f.priceDrop !== "") n++;

@@ -83,6 +83,8 @@ type FilterValues = {
   yearMin: string;
   yearMax: string;
   showRetired: boolean;
+  /** Planta máxima (0 = solo bajos). */
+  floorMax: string;
   /** Baños mínimos. */
   bathrooms: string;
   /** Etiquetas separadas por coma que el anuncio debe tener (piscina,terraza…). */
@@ -124,6 +126,7 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   yearMin: "anioMin",
   yearMax: "anioMax",
   showRetired: "retired",
+  floorMax: "plantaMax",
   bathrooms: "banos",
   extras: "extras",
   types: "tipo",
@@ -144,6 +147,7 @@ const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
   "yearMin",
   "yearMax",
   "bathrooms",
+  "floorMax",
 ]);
 
 /**
@@ -206,6 +210,7 @@ export function useParticularesFilters() {
   const [yearMin, setYearMin] = useState(() => searchParams.get(PARAM_KEYS.yearMin) ?? "");
   const [yearMax, setYearMax] = useState(() => searchParams.get(PARAM_KEYS.yearMax) ?? "");
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
+  const [floorMax, setFloorMax] = useState(() => searchParams.get(PARAM_KEYS.floorMax) ?? "");
   const [bathrooms, setBathrooms] = useState(() => searchParams.get(PARAM_KEYS.bathrooms) ?? "");
   const [extras, setExtras] = useState(() => searchParams.get(PARAM_KEYS.extras) ?? "");
   const [types, setTypes] = useState(() => searchParams.get(PARAM_KEYS.types) ?? "");
@@ -253,6 +258,7 @@ export function useParticularesFilters() {
     yearMin,
     yearMax,
     showRetired,
+    floorMax,
     bathrooms,
     extras,
     types,
@@ -320,6 +326,7 @@ export function useParticularesFilters() {
     yearMin,
     yearMax,
     showRetired,
+    floorMax,
     bathrooms,
     extras,
     types,
@@ -362,6 +369,7 @@ export function useParticularesFilters() {
     setCondition("");
     setYearMin("");
     setYearMax("");
+    setFloorMax("");
     setBathrooms("");
     setExtras("");
     setTypes("");
@@ -425,6 +433,8 @@ export function useParticularesFilters() {
     setYearMax,
     showRetired,
     setShowRetired,
+    floorMax,
+    setFloorMax,
     bathrooms,
     setBathrooms,
     extras,

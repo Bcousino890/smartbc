@@ -62,6 +62,8 @@ export type ParticularRow = {
   reference?: string | null;
   source_update_text?: string | null;
   detected_at?: string | null;
+  /** Última vez que el crawler tocó la fila (si lleva días sin cambiar, el anuncio puede estar ya dado de baja). */
+  updated_at?: string | null;
   created_at: string | null;
   taken_down_at: string | null;
   is_active: boolean;

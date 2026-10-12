@@ -23,7 +23,7 @@ import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filte
  */
 
 const BASE_COLUMNS =
-  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, cover_url, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, detected_at, created_at, is_active";
+  "id, portal, external_id, source_url, zone, price, operation, bedrooms, bathrooms, square_meters, description, cover_url, features, owner_name, phone, chat_only, latitude, longitude, taken_down_at, detected_at, created_at, updated_at, is_active";
 
 // Columnas de la migración 0036 (plano + vídeo). Pueden no existir aún en el
 // VPS — por eso van en intentos separados (degradación elegante).
@@ -175,6 +175,9 @@ export type ParticularesFilters = {
   showDuplicates?: boolean;
   /** Baños mínimos. */
   bathroomsMin?: number;
+  /** Planta (columna `floor_num`, migración 0179): 0 = bajo, -1 = sótano. */
+  floorMin?: number;
+  floorMax?: number;
   /** Etiquetas de `attrs` (migración 0178) que el anuncio DEBE tener todas: piscina, terraza… */
   extras?: string[];
   /** Tipos de inmueble (etiquetas de `attrs`): basta con uno (atico, chalet, adosado…). */
@@ -191,7 +194,7 @@ export type ParticularesFilters = {
 export const PARTICULARES_ATTR_TAGS = [
   "aire", "armarios", "terraza", "balcon", "jardin", "piscina", "garaje", "trastero", "ascensor",
   "amueblado", "accesible", "calefaccion", "calefaccion_central", "parquet", "videoportero",
-  "obra_nueva", "atico", "duplex", "estudio", "adosado", "pareado", "chalet", "rustica",
+  "obra_nueva", "exterior", "interior", "atico", "duplex", "estudio", "adosado", "pareado", "chalet", "rustica",
 ] as const;
 
 /**
@@ -276,6 +279,8 @@ function applyParticularesFilters(
   if (f.bedroomsMin != null) q = q.gte("bedrooms", f.bedroomsMin);
   if (f.areaMin != null) q = q.gte("square_meters", f.areaMin);
   if (f.bathroomsMin != null) q = q.gte("bathrooms", f.bathroomsMin);
+  if (f.floorMin != null) q = q.gte("floor_num", f.floorMin);
+  if (f.floorMax != null) q = q.lte("floor_num", f.floorMax);
 
   // Atributos (migración 0178): solo etiquetas conocidas.
   const okTag = (t: string) => (PARTICULARES_ATTR_TAGS as readonly string[]).includes(t);

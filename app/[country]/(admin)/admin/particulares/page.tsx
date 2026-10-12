@@ -152,6 +152,8 @@ export default async function AdminParticularesPage({
     yearBuiltMin: numOrUndef(one(sp.anioMin)),
     yearBuiltMax: numOrUndef(one(sp.anioMax)),
     bathroomsMin: numOrUndef(one(sp.banos)),
+    floorMin: numOrUndef(one(sp.floorMin)),
+    floorMax: numOrUndef(one(sp.plantaMax)),
     extras: csv(one(sp.extras)),
     types: csv(one(sp.tipo)),
     energy: csv(one(sp.energia)),

@@ -64,7 +64,7 @@ export function SourcesTab({ rowId, onCount }: { rowId: string; onCount?: (n: nu
                   <a href={m.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-ink underline-offset-2 hover:underline">
                     {portalName(m.portal)} <ExternalLink size={12} aria-hidden />
                   </a>
-                  <p className="text-xs text-ink/65">Particular</p>
+                  <p className="text-xs text-ink/65">{m.advertiser_type === "professional" ? "Agencia" : m.advertiser_type === "particular" ? "Particular" : "Anunciante"}</p>
                 </td>
                 <td className="px-4 py-3 font-mono text-xs text-ink/80">{m.particular_reference ?? m.external_id}</td>
                 <td className="px-4 py-3 text-ink">{m.phone ? formatPhone(m.phone) : <span className="text-ink/60">Sin teléfono</span>}</td>

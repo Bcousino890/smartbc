@@ -37,6 +37,8 @@ export type LinkedAd = {
   portal: string;
   external_id: string;
   source_url: string;
+  /** "particular" | "professional" | "unknown": quién publica este anuncio. */
+  advertiser_type?: string | null;
   operation: "rent" | "sale" | null;
   price: number | null;
   is_active: boolean;

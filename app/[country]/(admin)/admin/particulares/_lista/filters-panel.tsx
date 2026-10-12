@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter";
 import type { ParticularesFiltersApi } from "../use-particulares-filters";
-import { ENERGY_LETTERS, EXTRA_OPTIONS, ORIENTATION_LABEL, SINCE_LABEL, TYPE_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
+import { ENERGY_LETTERS, POSITION_OPTIONS, EXTRA_OPTIONS, ORIENTATION_LABEL, SINCE_LABEL, TYPE_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
 import { ChoiceGroup, FOCUS_RING, NumberField, SelectField, SwitchRow } from "./controls";
 import { RangeSlider } from "./range-slider";
 import { fmtEur, fmtNum } from "./format";
@@ -165,12 +165,24 @@ export function FiltersPanel({
           </Section>
 
           <Section title="Detalles del inmueble">
-            <SelectField ariaLabel="Planta" value={f.floorMin} onChange={f.setFloorMin}>
-              <option value="">Planta: cualquiera</option>
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>{n}.ª o más</option>
-              ))}
-            </SelectField>
+<p className="text-xs text-ink/65">Planta (0 = bajo)</p>
+            <Pair>
+              <SelectField ariaLabel="Planta mínima" value={f.floorMin} onChange={f.setFloorMin}>
+                <option value="">Desde: cualquiera</option>
+                <option value="0">Bajo</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 10].map((n) => (
+                  <option key={n} value={n}>{n}.ª</option>
+                ))}
+              </SelectField>
+              <SelectField ariaLabel="Planta máxima" value={f.floorMax} onChange={f.setFloorMax}>
+                <option value="">Hasta: cualquiera</option>
+                <option value="0">Bajo</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 10].map((n) => (
+                  <option key={n} value={n}>{n}.ª</option>
+                ))}
+              </SelectField>
+            </Pair>
+            <Toggles options={POSITION_OPTIONS} value={f.extras} onToggle={(v) => f.setExtras(toggleCsv(f.extras, v))} />
             <ChoiceGroup
               ariaLabel="Amueblado"
               value={f.furnished}
