@@ -104,6 +104,8 @@ export function phoneKey(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let d = raw.replace(/\D/g, "");
   if (d.startsWith("00")) d = d.slice(2);
+  // "0600123456": un 0 delante de un móvil/fijo español de 9 cifras.
+  else if (d.length === 10 && /^0[6-9]/.test(d)) d = d.slice(1);
   if (d.length < 8) return null;
   if (d.length === 9 && /^[6-9]/.test(d)) return `34${d}`;
   return d;
@@ -119,7 +121,17 @@ const STREET_STOP = new Set([
   "villa", "bajo", "venta", "alquiler", "for", "rent", "sale", "studio", "flat", "apartment",
   "penthouse", "house", "to", "in", "the", "and", "of", "unifamiliar", "independiente", "rustica",
   "oficina", "garaje", "trastero", "terreno", "solar", "habitacion", "room",
+  // abreviaturas de vía: «c/», «cl.», «avd», «avgda», «p.º», «ps», «pl.», «cmno»…
+  "avd", "avgda", "ps", "p", "cmno", "crta", "cra", "pje", "pasaje", "sn", "flat", "apartamentos", "pisos",
 ]);
+
+// Abreviaturas de nombre que cambian de un portal a otro («Gral. Pardiñas» / «General Pardiñas»).
+const NAME_ABBR: Record<string, string> = {
+  gral: "general", gen: "general", dr: "doctor", dra: "doctora", sta: "santa", sto: "santo",
+  ntra: "nuestra", sra: "senora", cdad: "ciudad", pte: "puente", mtro: "maestro", ppe: "principe",
+  tte: "teniente", cmdt: "comandante", cnel: "coronel", alf: "alferez", fdez: "fernandez",
+  gmez: "gomez", gzlez: "gonzalez", glez: "gonzalez", rguez: "rodriguez", mrz: "martinez",
+};
 
 export function streetKey(address: string | null | undefined): {
   tokens: Set<string>;
@@ -127,18 +139,29 @@ export function streetKey(address: string | null | undefined): {
 } {
   const a = fold(address);
   if (!a) return { tokens: new Set(), number: null };
-  const parts = a.split(",").map((p) => p.trim());
+  // «Calle Mayor 5 2ºB», «Calle Mayor, nº 5, 2º izq», «C/ Mayor, 14 - Bis»: se quita la
+  // planta/puerta que cuelga detrás del número y el «nº».
+  const cleanPart = (p: string) =>
+    p
+      .replace(/\bn(?:um|[º°o])?\.?\s*(?=\d)/g, "")
+      .replace(/\bs\/n\b/g, " sn ")
+      .replace(/\s+\d{1,2}\s*[º°ª]\s*[a-z]?(?:\s.*)?$/, "")
+      .replace(/\s+(?:bajo|entresuelo|principal|escalera|esc|portal|puerta|izq|izda|dcha|drcha)\b.*$/, "")
+      .trim();
+  const parts = a.split(",").map((p) => cleanPart(p.trim()));
   let street = parts[0] ?? "";
   let number: string | null = null;
-  const tail = street.match(/\b(\d{1,3})\b\s*[a-z]?\s*$/);
+  const tail = street.match(/\b(\d{1,3})\b\s*(?:-\s*)?(?:bis|dup|duplicado|[a-z])?\s*$/);
   if (tail) {
     number = tail[1];
     street = street.slice(0, tail.index).trim();
-  } else if (parts[1] && /^\d{1,3}\s*[a-z]?$/.test(parts[1])) {
+  } else if (parts[1] && /^\d{1,3}\b/.test(parts[1])) {
     number = (parts[1].match(/\d+/) as RegExpMatchArray)[0];
   }
   const tokens = new Set(
-    (street.match(/[a-z0-9]+/g) ?? []).filter((t) => t.length > 1 && !STREET_STOP.has(t)),
+    (street.match(/[a-z0-9]+/g) ?? [])
+      .map((t) => NAME_ABBR[t] ?? t)
+      .filter((t) => t.length > 1 && !STREET_STOP.has(t)),
   );
   return { tokens, number };
 }
@@ -153,9 +176,11 @@ export function exposureOf(floor: string | null | undefined): "ext" | "int" | nu
 export function floorNumber(floor: string | null | undefined): number | null {
   const t = fold(floor);
   if (!t) return null;
-  const m = t.match(/(\d+)\s*[ªa]?\s*planta/) ?? t.match(/planta\s*(\d+)/);
+  // Español («3ª planta exterior») e inglés de Idealista («3rd floor exterior»).
+  const m =
+    t.match(/(\d+)\s*[ªa]?\s*planta/) ?? t.match(/planta\s*(\d+)/) ?? t.match(/(\d+)\s*(?:st|nd|rd|th)\s+floor/);
   if (m) return Number(m[1]);
-  if (/\b(bajo|planta baja|entreplanta|semisotano)\b/.test(t)) return 0;
+  if (/\b(bajo|planta baja|entreplanta|semisotano|ground floor|basement)\b/.test(t)) return 0;
   return null;
 }
 
@@ -219,6 +244,7 @@ type Feats = {
   S: boolean; // misma calle y número
   dist: number | null;
   M: boolean; // m² ±3 %
+  m2Known: boolean;
   Mw: boolean; // m² ±8 %
   m2Conflict: boolean;
   B: boolean;
@@ -227,6 +253,12 @@ type Feats = {
   BA: boolean;
   baKnown: boolean;
   baConflict: boolean;
+  /** Baños que difieren en 1 entre PORTALES distintos con mismo teléfono y metros iguales (5 vs 6: cada portal cuenta los aseos a su manera). */
+  baTol: boolean;
+  /** Coordenadas a menos de 60 m. */
+  near60: boolean;
+  /** Los dos suelos conocidos y la misma planta (y misma exposición si se sabe). */
+  Fx: boolean;
   F: boolean;
   fConflict: boolean;
   eConflict: boolean; // uno «exterior» y el otro «interior»: pisos distintos del mismo edificio
@@ -258,21 +290,28 @@ function pairFeats(x: Norm, y: Norm): Feats {
   const sameOp = a.operation != null && a.operation === b.operation;
   const pr =
     sameOp && a.price && b.price ? Math.abs(a.price - b.price) / Math.max(a.price, b.price) : null;
+  const baDiff = baKnown ? Math.abs((a.bathrooms as number) - (b.bathrooms as number)) : 0;
+  const Mw = m2known && diff <= Math.max(2, 0.08 * mx);
+  const baTol = baKnown && baDiff === 1 && T && a.portal !== b.portal && Mw;
   return {
     T,
     phonesDiffer,
+    baTol,
+    near60: dist != null && dist <= 60,
+    Fx: x.floor != null && x.floor === y.floor && !(x.exposure && y.exposure && x.exposure !== y.exposure),
     streetBoth,
     S,
     dist,
     M: m2known && diff <= Math.max(1, 0.03 * mx),
-    Mw: m2known && diff <= Math.max(2, 0.08 * mx),
+    m2Known: m2known,
+    Mw,
     m2Conflict: m2known && diff > Math.max(4, 0.12 * mx),
     B: bKnown && a.bedrooms === b.bedrooms,
     bKnown,
     bConflict: bKnown && Math.abs((a.bedrooms as number) - (b.bedrooms as number)) >= 1,
     BA: baKnown && a.bathrooms === b.bathrooms,
     baKnown,
-    baConflict: baKnown && Math.abs((a.bathrooms as number) - (b.bathrooms as number)) >= 1,
+    baConflict: baKnown && baDiff >= 1 && !baTol,
     F: x.floor != null && x.floor === y.floor,
     fConflict: x.floor != null && y.floor != null && x.floor !== y.floor,
     eConflict: x.exposure != null && y.exposure != null && x.exposure !== y.exposure,
@@ -313,8 +352,32 @@ function classify(f: Feats): Classified {
   if (!veto) {
     // 1 · El mismo teléfono es la señal más fuerte… pero solo propone: las
     // características tienen que cuadrar (un dueño puede tener varios pisos).
+    // «cierto» exige además que la dirección no contradiga (otra calle u otro número a más
+    // de 60 m = otro piso del mismo dueño) y evidencia fuerte: metros ±3 % y habitaciones
+    // iguales (o ±8 % con habitaciones y baños iguales y precio ±5 %; o sin metros en un
+    // lado pero habitaciones, baños y precio ±5 % iguales).
     if (f.T && (f.Mw || (f.B && f.BA)) && priceOk) {
-      return { relation: "mismo_inmueble", level: "cierto", rule: "R1 teléfono + características" };
+      const bathsOk = !f.baKnown || f.BA || (f.baTol && (!f.sameOp || f.P5));
+      const roomsOk = f.B || !f.bKnown;
+      const addrOk = !streetDiffers || f.near60;
+      const strong =
+        addrOk &&
+        bathsOk &&
+        ((f.M && roomsOk) ||
+          (f.Mw && f.B && f.BA && (!f.sameOp || f.P5)) ||
+          (!f.m2Known && f.B && f.BA && (!f.sameOp || f.P5)));
+      if (strong) {
+        return {
+          relation: "mismo_inmueble",
+          level: "cierto",
+          rule: f.baTol ? "R1 teléfono + características (baños ±1 entre portales)" : "R1 teléfono + características",
+        };
+      }
+      return {
+        relation: "mismo_inmueble",
+        level: "probable",
+        rule: streetDiffers && !f.near60 ? "R1d teléfono, otra dirección" : "R1e teléfono, características aproximadas",
+      };
     }
     if (f.T && f.Mw && f.sameOp && !f.P15 && f.P40) {
       return { relation: "mismo_inmueble", level: "probable", rule: "R1b teléfono, precio distinto" };
@@ -326,7 +389,7 @@ function classify(f: Feats): Classified {
     if (!f.T && !streetDiffers) {
       const strongPrice = f.sameOp ? f.P5 : true;
       if (f.S && f.M && compat) {
-        if (!f.phonesDiffer && strongPrice && priceOk && (f.sameOp || f.N || f.F)) {
+        if (!f.phonesDiffer && strongPrice && priceOk && (f.N || f.F || (f.sameOp && f.BA && f.P3))) {
           return { relation: "mismo_inmueble", level: "cierto", rule: "R2 calle + metros + habitaciones" };
         }
         if (priceOk || f.P40 || !f.sameOp) {
@@ -338,7 +401,9 @@ function classify(f: Feats): Classified {
         }
       }
       if (f.dist != null && f.dist <= 100 && f.M && f.B && (!f.baKnown || f.BA) && priceOk) {
-        if (!f.phonesDiffer && (f.sameOp ? f.P5 : f.N || f.F)) {
+        // «cierto» solo con coordenadas < 60 m + metros + habitaciones + MISMA planta conocida
+        // (y precio ±5 % si es la misma operación); sin planta, a lo sumo probable.
+        if (!f.phonesDiffer && f.near60 && f.Fx && (!f.sameOp || f.P5)) {
           return { relation: "mismo_inmueble", level: "cierto", rule: "R3 coordenadas + metros + habitaciones" };
         }
         return { relation: "mismo_inmueble", level: "probable", rule: "R3b coordenadas, otro contacto" };
