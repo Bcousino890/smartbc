@@ -91,5 +91,32 @@ INSERT INTO scraper_settings (key, value) VALUES
   ('fotocasa.operations',        '{"sale": true, "rent": true}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
+-- ---------- Estadísticas diarias (las escribe SOLO el crawler, las lee el panel) ----------
+-- Una fila por día, portal, zona ('*' = total del portal), tarea ('*' = todas) y
+-- operación ('*' = ambas). El crawler recalcula el día en curso y el anterior con
+-- UPSERT idempotente. avg_price_change_pct: negativa = bajada. credits = requests
+-- x 2 (Idealista) o x 1 (Fotocasa).
+CREATE TABLE IF NOT EXISTS scraper_stats_daily (
+  day                  date NOT NULL,
+  portal               text NOT NULL,
+  zone_key             text NOT NULL,
+  task                 text NOT NULL DEFAULT '*',
+  operation            text NOT NULL DEFAULT '*',
+  new_listings         int NOT NULL DEFAULT 0,
+  taken_down           int NOT NULL DEFAULT 0,
+  reactivated          int NOT NULL DEFAULT 0,
+  price_down           int NOT NULL DEFAULT 0,
+  price_up             int NOT NULL DEFAULT 0,
+  avg_price_change_pct numeric,
+  requests             int NOT NULL DEFAULT 0,
+  credits              int NOT NULL DEFAULT 0,
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (day, portal, zone_key, task, operation)
+);
+CREATE INDEX IF NOT EXISTS scraper_stats_daily_portal_day_idx ON scraper_stats_daily (portal, day);
+ALTER TABLE scraper_stats_daily ENABLE ROW LEVEL SECURITY;
+-- (sin políticas: solo service role)
+GRANT ALL ON scraper_stats_daily TO service_role;
+
 -- PostgREST (API del CRM) debe ver las tablas nuevas sin reiniciar.
 NOTIFY pgrst, 'reload schema';

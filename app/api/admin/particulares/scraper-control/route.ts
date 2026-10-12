@@ -1,6 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/guard";
+import { isOpFilter, isPortalFilter, isStatsPeriod, loadStats } from "@/lib/scrapers/stats";
 import { applyUpdate, loadControl, ControlInputError } from "@/lib/scrapers/control";
 
 export const runtime = "nodejs";
@@ -19,9 +20,26 @@ export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" } as const;
 
-export async function GET() {
+export async function GET(req: Request) {
   const gate = await requirePermission("particulares", "view");
   if (!gate.ok) return gate.response;
+
+  // ?stats=1&period=7|30|billing&portal=all|idealista|fotocasa&op=all|sale|rent → solo estadísticas
+  // (solo lectura de scraper_stats_daily). Los filtros se validan contra listas cerradas.
+  const sp = new URL(req.url).searchParams;
+  if (sp.get("stats")) {
+    const period = sp.get("period") ?? "30";
+    const portal = sp.get("portal") ?? "all";
+    const op = sp.get("op") ?? "all";
+    if (!isStatsPeriod(period) || !isPortalFilter(portal) || !isOpFilter(op)) {
+      return NextResponse.json({ error: "Filtro no válido" }, { status: 400, headers: NO_STORE });
+    }
+    try {
+      return NextResponse.json({ stats: await loadStats(period, portal, op) }, { headers: NO_STORE });
+    } catch {
+      return NextResponse.json({ error: "No se pudieron leer las estadísticas" }, { status: 500, headers: NO_STORE });
+    }
+  }
 
   try {
     // canEdit: para que la interfaz deshabilite los controles a quien solo puede mirar.
