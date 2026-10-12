@@ -59,7 +59,10 @@ async function loadRows(db: Db): Promise<CurrentRow[]> {
     out.push(...((data ?? []) as CurrentRow[]));
     if (!data || data.length < PAGE) break;
   }
-  return out;
+  // Si el crawler inserta filas mientras se pagina, un mismo anuncio puede salir
+  // en dos páginas y generar un enlace consigo mismo (viola a_id < b_id).
+  const seen = new Set<string>();
+  return out.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
 }
 
 async function loadDecisions(db: Db): Promise<LinkDecision[]> {
