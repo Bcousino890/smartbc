@@ -36,7 +36,7 @@ import {
   shortPhone,
   streetLabel,
   telHref,
-  timeAgo,
+  exactTime,
   whatsappHref,
   zoneLabel,
 } from "./format";
@@ -134,7 +134,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
   const isRent = row.operation === "rent";
   const drop = row.price_drop_pct != null && row.price_drop_pct > 0 ? row.price_drop_pct : null;
   const fresh = !retired && isNew(row.created_at, now);
-  const ago = timeAgo(row.created_at, now);
+  const ago = exactTime(row.created_at, now);
   const absolute = row.created_at ? LONG_DATE.format(new Date(row.created_at)) : null;
   const other = otherOffersText(row);
   const hasVideo = Boolean(row.has_video || row.video_url);

@@ -213,6 +213,24 @@ export function timeAgo(iso: string | null | undefined, now: number | null): str
   return y === 1 ? "hace 1 año" : `hace ${y} años`;
 }
 
+const HM = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
+const DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" });
+const DM = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", timeZone: "Europe/Madrid" });
+
+/** Hora exacta (Madrid): «Hoy 14:32», «Ayer 09:10», «8 oct 18:05». */
+export function exactTime(iso: string | null | undefined, now: number | null): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  const hm = HM.format(d);
+  if (now == null) return `${DM.format(d)} ${hm}`;
+  const day = DAY.format(d);
+  if (day === DAY.format(new Date(now))) return `Hoy ${hm}`;
+  if (day === DAY.format(new Date(now - 86400_000))) return `Ayer ${hm}`;
+  return `${DM.format(d)} ${hm}`;
+}
+
 /** Hace menos de 24 h: lo que llamamos «Nuevo». */
 export function isNew(iso: string | null | undefined, now: number | null): boolean {
   if (!iso || now == null) return false;
