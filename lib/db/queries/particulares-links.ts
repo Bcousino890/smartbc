@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "../admin";
 import type {
   LinkedAd,
+  LinkedChange,
   LinkInfo,
   ParticularLinksPayload,
 } from "@/lib/particulares/links-types";
@@ -16,7 +17,7 @@ import type {
  */
 
 const AD_COLUMNS =
-  "id, portal, external_id, source_url, operation, price, is_active, taken_down_at, phone, owner_name, zone, address, bedrooms, bathrooms, square_meters, cover_url, photos, created_at, particular_reference, advertiser_type";
+  "id, portal, external_id, source_url, operation, price, is_active, taken_down_at, phone, owner_name, zone, address, bedrooms, bathrooms, square_meters, cover_url, photos, created_at, particular_reference, advertiser_type, price_history:scraper_extra->price_history";
 
 const LEVEL_RANK: Record<string, number> = { cierto: 3, probable: 2, informativo: 1 };
 
@@ -50,6 +51,11 @@ function toAd(row: any, link: LinkInfo | null, withPhotos: boolean): LinkedAd {
     created_at: row.created_at ?? null,
     particular_reference: row.particular_reference ?? null,
     advertiser_type: row.advertiser_type ?? null,
+    price_history: Array.isArray(row.price_history)
+      ? (row.price_history as unknown[]).flatMap((e) =>
+          Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "number" ? [[e[0], e[1]] as [string, number]] : [],
+        )
+      : [],
     link,
   };
 }
@@ -151,5 +157,16 @@ export async function getParticularLinks(id: string): Promise<ParticularLinksPay
   }
   const contacts = [...byContact.values()].map((c) => ({ phone: c.phone, name: c.name, portals: [...c.portals].sort() }));
 
-  return { root_id: rootId, members, suggestions, same_contact, contacts };
+  // Historial de todas las fuentes del inmueble (para la pestaña «Histórico»).
+  let changes: LinkedChange[] = [];
+  const ch = await db
+    .from("particulares_changes")
+    .select("particular_id, change_type, old_value, new_value, changed_at")
+    .in("particular_id", memberIds)
+    .in("change_type", ["new_listing", "price_up", "price_down", "price_change", "deleted", "reactivated"])
+    .order("changed_at", { ascending: false })
+    .limit(600);
+  if (!ch.error) changes = (ch.data ?? []) as LinkedChange[];
+
+  return { root_id: rootId, members, suggestions, same_contact, contacts, changes };
 }

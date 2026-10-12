@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { setTabIntent } from "../_ficha/tab-intent";
 import type { ParticularRow } from "../particulares-types";
 import {
   fmtEur,
@@ -30,7 +31,7 @@ import {
   hasBothOps,
   isNew,
   opLabel,
-  otherOffersText,
+  sourceOffers,
   portalName,
   pricePerM2Label,
   shortPhone,
@@ -136,7 +137,7 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
   const fresh = !retired && isNew(row.created_at, now);
   const ago = exactTime(row.created_at, now);
   const absolute = row.created_at ? LONG_DATE.format(new Date(row.created_at)) : null;
-  const other = otherOffersText(row);
+  const sources = sourceOffers(row);
   const hasVideo = Boolean(row.has_video || row.video_url);
   const hasPlan = Boolean(row.has_floor_plan || row.floor_plan_url);
   const priceText = row.price != null ? fmtEur(row.price) : null;
@@ -286,11 +287,33 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             )}
           </div>
 
-          {other && (
-            <p className={cn("flex items-start gap-1.5 text-xs text-ink/65", L.linked[layout])} title="Otras ofertas del mismo inmueble">
-              <Link2 size={13} strokeWidth={1.75} className="mt-px shrink-0 text-gold-dark" aria-hidden="true" />
-              <span className="min-w-0">También: {other}</span>
-            </p>
+          {sources && (
+            <div className={cn("min-w-0 rounded-lg border border-ink/10 bg-cream-50/70 px-2.5 py-1.5", L.linked[layout])}>
+              <ul className="space-y-0.5" aria-label="Fuentes del inmueble">
+                {sources.shown.map((o, i) => (
+                  <li key={`${o.portal}-${o.op}-${i}`} className={cn("flex items-baseline gap-1.5 text-xs", o.active ? "text-ink" : "text-ink/50")}>
+                    <Link2 size={11} strokeWidth={1.75} className="shrink-0 translate-y-px text-gold-dark" aria-hidden="true" />
+                    <span className="truncate font-medium">
+                      {portalName(o.portal)}
+                      {o.op && <span className="font-normal text-ink/60"> · {o.op === "rent" ? "Alquiler" : "Venta"}</span>}
+                    </span>
+                    <span className="ml-auto shrink-0 font-semibold tabular-nums">
+                      {o.price != null ? `${fmtEur(o.price)}${o.op === "rent" ? "/mes" : ""}` : "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => {
+                  setTabIntent("fuentes");
+                  onOpen(row);
+                }}
+                className={cn("relative z-[2] mt-1 text-xs font-semibold text-gold-dark underline-offset-2 hover:underline", FOCUS)}
+              >
+                Ver todos los {sources.total} anuncios
+              </button>
+            </div>
           )}
 
           {/* Estado del contacto y gestión interna: pastillas, no párrafos. */}

@@ -289,3 +289,13 @@ export function otherOffersText(row: {
     )
     .join(" · ");
 }
+
+/** Fuentes del grupo para la tarjeta: las 5 primeras (activas antes) y el total de anuncios. */
+export function sourceOffers(row: {
+  link_summary?: LinkSummaryLite | null;
+}): { shown: Array<{ op: "rent" | "sale" | null; portal: string; price: number | null; active: boolean }>; total: number } | null {
+  const s = row.link_summary;
+  if (!s || s.n < 2 || !s.offers?.length) return null;
+  const sorted = [...s.offers].sort((a, b) => Number(b.active) - Number(a.active));
+  return { shown: sorted.slice(0, 5), total: Math.max(s.n, s.offers.length) };
+}

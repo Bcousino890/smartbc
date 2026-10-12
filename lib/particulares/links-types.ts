@@ -55,7 +55,18 @@ export type LinkedAd = {
   n_photos: number;
   created_at: string | null;
   particular_reference: string | null;
+  /** Observaciones de precio del scraper (`scraper_extra.price_history`): [fecha ISO, precio]. */
+  price_history?: Array<[string, number]>;
   link: LinkInfo | null;
+};
+
+/** Un cambio registrado en `particulares_changes` de cualquier fuente del grupo. */
+export type LinkedChange = {
+  particular_id: string;
+  change_type: string;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  changed_at: string;
 };
 
 export type ParticularLinksPayload = {
@@ -69,4 +80,6 @@ export type ParticularLinksPayload = {
   same_contact: LinkedAd[];
   /** Contactos distintos asociados a este inmueble (teléfono + nombre + portales). */
   contacts: Array<{ phone: string | null; name: string | null; portals: string[] }>;
+  /** Historial de cambios de todas las fuentes del inmueble (más reciente primero). */
+  changes?: LinkedChange[];
 };

@@ -18,7 +18,9 @@ import { AdMap } from "@/components/admin/particulares/ad-map";
 import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
 import { Gallery, type MediaItem } from "./_ficha/gallery";
 import { Lightbox } from "./_ficha/lightbox";
+import { HistoryTab } from "./_ficha/history-tab";
 import { SourcesTab } from "./_ficha/sources-tab";
+import { consumeTabIntent } from "./_ficha/tab-intent";
 import { formatEuros, formatPct, formatZone, groupThousands, mapPrecision, portalName, pricePerM2, priceVariation, relativeTime, whatsappUrl, zoneForMap } from "./_ficha/format";
 import type { ParticularChangeRow, ParticularRow, StaffOption } from "./particulares-types";
 
@@ -756,7 +758,7 @@ export function ParticularModal({
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"detalles" | "fuentes" | "historico" | "contactos">("detalles");
+  const [tab, setTab] = useState<"detalles" | "fuentes" | "historico" | "contactos">(() => consumeTabIntent() ?? "detalles");
   const [sourcesCount, setSourcesCount] = useState<number | null>(null);
   const [viewer, setViewer] = useState<{ items: MediaItem[]; start: number } | null>(null);
   const [descOpen, setDescOpen] = useState(false);
@@ -1234,12 +1236,16 @@ export function ParticularModal({
 
                 {tab === "fuentes" && (
                   <div className="space-y-6">
-                    <SourcesTab rowId={currentRow.id} onCount={setSourcesCount} />
+                    <SourcesTab rowId={currentRow.id} currentOp={currentRow.operation} onCount={setSourcesCount} />
                     <LinkedAdsSection rowId={currentRow.id} onChanged={() => router.refresh()} />
                   </div>
                 )}
 
-                {tab === "historico" && <ChangeHistory row={currentRow} />}
+                {tab === "historico" && (
+                  <HistoryTab rowId={currentRow.id}>
+                    <ChangeHistory row={currentRow} />
+                  </HistoryTab>
+                )}
 
                 {tab === "contactos" && (
                   <div className="rounded-xl border border-ink/10 bg-white p-4">
