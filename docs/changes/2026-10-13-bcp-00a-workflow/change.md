@@ -5,7 +5,7 @@ Añade la documentación mínima para que las tareas de Fabricio con agentes de 
 - **Tamaño:** medio
 - **Responsable:** Fabricio
 - **Rama:** `fabri/bcp-00a-workflow`
-- **Estado:** plan aprobado; implementación en curso
+- **Estado:** implementado; pendiente de PR, CI y merge de Fabricio
 
 ## Especificación
 
@@ -125,23 +125,58 @@ Versión aprobada del plan, con la adaptación «sin revisión de Codex» (se om
 
 ### Commits
 
-<Se completa en T10.>
+Base `6e677c2a37124e5a7bae2f71cdc04bffa85790df`:
+
+- `5cc18e0` docs(changes): estructura de expedientes y plantillas
+- `ea5790a` docs(changes): expediente BCP-00A
+- `83379de` docs(workflow): flujo voluntario de Fabricio
+- `9d6f168` docs(workflow): revisión de Codex en solo lectura
+- `200b4ed` docs(claude): bloque inicial del flujo voluntario
+- Este resultado y el registro de PR y CI van en los commits siguientes de la rama.
 
 ### Verificaciones
 
-<Se completa en T10.>
+Ejecutadas el 2026-10-13 en el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-00a`. Los scripts auxiliares y las notas están en `/Users/fabriirguez/SMARTBC/_revisiones/bcp-00a/`, fuera de todo repo.
+
+| Comprobación | Orden | Resultado |
+| --- | --- | --- |
+| Base fijada | `git fetch origin`; `git rev-parse origin/main`; `git ls-remote origin refs/heads/main` | Los dos dan `6e677c2…`. |
+| Worktree aislado | `git worktree add -b fabri/bcp-00a-workflow <wt> 6e677c2…` | `HEAD` = base, árbol limpio, rama sin upstream. |
+| Nada más tocado | `git rev-parse main`, `git stash list`, `git branch --list` comparados con lo guardado antes | `main` local sigue en `1506dbc`; stash (1 entrada) igual; ramas iguales más la nueva. |
+| Plantillas | `grep -c '^#'` en cada una y `grep -nE 'TODO\|XXX'` | Todas con encabezados; sin `TODO` ni `XXX`. |
+| El expediente usa la plantilla | `diff` de los encabezados de `plantillas/change.md` y de este archivo (sin el título) | Idénticos. |
+| Diff limitado | `git diff --name-status 6e677c2…...HEAD` | `M CLAUDE.md` y `A` de los 8 documentos del alcance; nada más. |
+| Enlaces locales | Script `check-enlaces.sh` sobre los documentos nuevos y el bloque de `CLAUDE.md`; probado antes con un enlace roto sintético, que detectó | 33 enlaces relativos (32 en T7 y 1 añadido en este resultado), 0 rotos. |
+| Secretos | `grep` de claves AWS, `sk-`, tokens de GitHub, claves privadas, asignaciones de contraseñas, secretos o tokens, e IPs en las líneas añadidas | Sin coincidencias (un primer intento coincidió con la propia descripción del patrón en este archivo; se cambió la redacción). |
+| Conceptos ajenos a BCP | `grep -i` de `worldlore`, `wl_readonly`, `prisma`, `apps/api`, `apps/web`, `DO-NOT-READ`, `graphify` en las líneas añadidas, más lectura | Sin coincidencias; todo el contenido se refiere a BCP. |
+| Conservación de `CLAUDE.md` | `git diff --numstat 6e677c2… -- CLAUDE.md`; `tail -n +10 CLAUDE.md \| cmp - <original de la base>` | `9 0` (9 líneas añadidas, 0 borradas); `cmp` sin diferencias. |
+| Coherencia entre documentos | `grep` de P-1, revisión solo a petición de Fabricio, rama y PR, merge de Fabricio, rama histórica, posible despliegue, fixtures sintéticos y aprobación de especificación frente a plan; lectura cruzada con la tabla de cobertura | Cada tema aparece donde indica la tabla de cobertura y dice lo mismo en todos los documentos. |
+| Opciones de Codex citadas | `codex exec --help`; `codex features list` | `-s`, `--disable`, `--ephemeral`, `-C` y `-o` existen; `multi_agent` existe. No se ejecutó ninguna revisión. |
+| Árbol limpio | `git status --porcelain` | Vacío. |
+
+No se ejecutaron Node 22, `npm ci`, el build ni los tests de la app (B2): el cambio es solo Markdown y la CI del PR los ejecuta.
 
 ### Criterios de aceptación
 
-<Se completa en T10.>
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| AC1 | Demostrado | Tabla de cobertura, lectura cruzada y `grep` de coherencia. |
+| AC2 | Demostrado | Los 5 archivos de `docs/changes/` y el `diff` de encabezados. |
+| AC3 | Demostrado | Bloque de 9 líneas con la cláusula sobre SSH y la rama histórica; `numstat 9 0` y `cmp` sin diferencias. |
+| AC4 | Demostrado | Diff limitado a los 9 archivos del alcance; sin secretos ni conceptos ajenos a BCP. |
+| AC5 | Demostrado | Comprobaciones de T1 sobre la base, el worktree, el `main` local, el stash y las ramas. |
+| AC6 | Pendiente de T12 | Se completa con el PR y la CI del último commit. |
 
 ### Revisión
 
-<Se completa en T10.>
+Revisión adicional de Codex: **omitida por decisión expresa de Fabricio** (D00-6, presupuesto de tokens). No se hizo ni se sustituyó por otra revisión de IA; no se da por superada. [docs/workflow/revision-codex.md](../../workflow/revision-codex.md) queda como guía para revisiones futuras que Fabricio pida.
 
 ### Pendiente o no demostrado
 
-<Se completa en T10.>
+- **Recuento del bloque:** el plan decía 10 líneas; el bloque real mide 9 (8 de texto y 1 en blanco). La adaptación aprobada permite este ajuste; el texto, el recuento y la comprobación coinciden en 9.
+- **Configuración real del VPS:** el comportamiento de despliegue descrito sale del script versionado; la copia que se ejecuta y su cron siguen sin comprobar. Los documentos lo dicen así.
+- **Permiso SSH local:** el `.claude/settings.json` local del checkout principal sigue permitiendo `ssh root@…` sin preguntar. En las tareas de este flujo P-1 lo prohíbe por escrito, pero no hay control técnico. Retirarlo es la recomendación 00B-1, fuera de esta tarea.
+- **Alcance voluntario:** las tareas que no adoptan el flujo siguen leyendo `CLAUDE.md` como antes, incluida su guía histórica de SSH.
 
 ### PR, CI y merge
 
