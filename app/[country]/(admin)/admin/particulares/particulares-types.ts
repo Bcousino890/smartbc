@@ -60,6 +60,8 @@ export type ParticularRow = {
   orientation?: string | null;
   energy_consumption?: string | null;
   energy_emissions?: string | null;
+  /** Distrito del bloque «Ubicación» (`scraper_extra.district`); llega con el detalle. */
+  district?: string | null;
   advertiser_profile_url?: string | null;
   reference?: string | null;
   source_update_text?: string | null;

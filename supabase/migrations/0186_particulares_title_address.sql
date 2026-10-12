@@ -12,14 +12,16 @@
 --     lo guarda en `title` y deja `address` limpia. Así el crawler externo, que
 --     sigue escribiendo el título en `address`, queda corregido en cada upsert.
 --   · backfill por lotes (solo toca address/title; no `updated_at`).
+--   · title desde scraper_extra->>'listing_title' si el crawler lo envía.
 -- Casos dudosos (documentados):
---   · «Piso en venta en Goya» (solo barrio, sin calle ni número): address = NULL;
---     el barrio queda en `title`.
+--   · «Piso en venta en Goya» (solo barrio/municipio, sin calle ni número):
+--     address = «Goya» (se conserva la información); el título sigue en `title`.
+--     La UI lo pinta como zona, no como calle (address sin vía ni número).
 --   · «Beguinas, Las, 51» → «Las Beguinas, 51» (artículo invertido).
 --   · Textos que son descripciones sueltas (no empiezan por un tipo de inmueble
 --     seguido de «en»/«in») no se tocan.
---   · Solo se recortan «, barrio, ciudad» en Idealista o si había prefijo
---     (Fotocasa/Pisos.com ya vienen limpios y se dejan como están).
+--   · El trigger solo reescribe `address` si tenía prefijo de título; una
+--     dirección ya limpia (del bloque «Ubicación») no se toca.
 -- Idempotente.
 -- ============================================================
 
@@ -95,34 +97,34 @@ BEGIN
   IF num IS NOT NULL THEN
     RETURN btrim(street) || ', ' || btrim(num);
   END IF;
-  -- título con solo un barrio/municipio («Piso en venta en Goya»): sin calle ni
-  -- número no es una dirección (el barrio sigue en `title`).
-  IF titled AND street !~ '[0-9]' AND NOT particulares_looks_like_street(street) THEN
-    RETURN NULL;
-  END IF;
   RETURN btrim(street);
 END $$;
 
--- Trigger: título en address → title; address limpia.
+-- Trigger:
+--  · `title` sale de scraper_extra->>'listing_title' si viene (el crawler nuevo
+--    lo envía; tiene prioridad); si no, del propio `address` cuando es un título.
+--  · `address` solo se toca si trae prefijo de título (crawler antiguo). Si ya
+--    viene limpia (calle y número del bloque «Ubicación») no se modifica.
 CREATE OR REPLACE FUNCTION set_particular_address_title() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
-  cleaned text;
+  lt text;
 BEGIN
-  IF NEW.address IS NULL THEN RETURN NEW; END IF;
-  IF particulares_address_has_title(btrim(NEW.address)) THEN
-    -- es un título fresco del portal: se guarda tal cual (refresca el anterior)
-    NEW.title := btrim(regexp_replace(NEW.address, '\s+', ' ', 'g'));
-  ELSIF NEW.portal IS DISTINCT FROM 'idealista' THEN
-    RETURN NEW;
+  lt := nullif(btrim(NEW.scraper_extra->>'listing_title'), '');
+  IF lt IS NOT NULL THEN
+    NEW.title := lt;
   END IF;
-  cleaned := particulares_clean_address(NEW.address);
-  NEW.address := cleaned;
+  IF NEW.address IS NOT NULL AND particulares_address_has_title(btrim(NEW.address)) THEN
+    IF lt IS NULL THEN
+      NEW.title := btrim(regexp_replace(NEW.address, '\s+', ' ', 'g'));
+    END IF;
+    NEW.address := particulares_clean_address(NEW.address);
+  END IF;
   RETURN NEW;
 END $$;
 
 DROP TRIGGER IF EXISTS particulares_address_title ON particulares;
 CREATE TRIGGER particulares_address_title
-  BEFORE INSERT OR UPDATE OF address ON particulares
+  BEFORE INSERT OR UPDATE OF address, scraper_extra ON particulares
   FOR EACH ROW EXECUTE FUNCTION set_particular_address_title();
 
 -- Backfill: `SET address = address` dispara el trigger de arriba (que rellena
@@ -138,8 +140,7 @@ BEGIN
     WITH batch AS (
       SELECT id FROM particulares
       WHERE address IS NOT NULL
-        AND (particulares_address_has_title(btrim(address))
-             OR (portal = 'idealista' AND address IS DISTINCT FROM particulares_clean_address(address)))
+        AND particulares_address_has_title(btrim(address))
       LIMIT 10000
     )
     UPDATE particulares p SET address = p.address

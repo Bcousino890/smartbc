@@ -15,7 +15,7 @@ import { assignParticular, createParticularShareLink, createPropertyFromParticul
 import { prefetchParticularDetail } from "./detail-cache";
 import { LinkedAdsSection } from "./linked-ads-section";
 import { AdMap } from "@/components/admin/particulares/ad-map";
-import { addressLine, listingTitle } from "@/lib/particulares/address-title";
+import { addressLine, isStreetAddress, listingTitle } from "@/lib/particulares/address-title";
 import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
 import { Gallery, type MediaItem } from "./_ficha/gallery";
 import { Lightbox } from "./_ficha/lightbox";
@@ -804,9 +804,12 @@ export function ParticularModal({
 
   // Español siempre, también para lo guardado en inglés antes del backfill.
   // `address` = solo la dirección (calle + nº); el título del anuncio va aparte (0186).
-  const address = esAddress(addressLine(currentRow.address));
+  const addressRaw = esAddress(addressLine(currentRow.address));
+  const addressIsStreet = isStreetAddress(currentRow.address);
+  const address = addressIsStreet ? addressRaw : "";
   const features = esFeatures(currentRow.features);
-  const zoneText = formatZone(currentRow.zone);
+  const zoneText = [!addressIsStreet ? addressRaw : "", formatZone(currentRow.zone)].filter((v, i, a) => v && a.indexOf(v) === i).join(" · ");
+  const districtText = currentRow.district && !zoneText.toLowerCase().includes(currentRow.district.toLowerCase()) ? currentRow.district : "";
   const title = listingTitle({ title: currentRow.title, address: currentRow.address, zone: zoneText, operation: currentRow.operation });
   const portalLabel = portalName(currentRow.portal);
   const operationLabel = currentRow.operation === "rent" ? "Alquiler" : "Venta";
@@ -966,7 +969,7 @@ export function ParticularModal({
       <MapPin size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold-dark" />
       <span>
         {address || zoneText || "Madrid"}
-        {precision && (
+        {precision && address && (
           <>
             {" – "}
             <a href="#ficha-mapa" className="font-medium text-gold-dark underline-offset-2 hover:underline">Ver en el mapa</a>
@@ -975,6 +978,7 @@ export function ParticularModal({
       </span>
     </p>
     {address && zoneText && <p className="ml-[22px] text-sm text-ink/70">{zoneText}</p>}
+    {districtText && <p className="ml-[22px] text-sm text-ink/70">Distrito {districtText}</p>}
     <div className="mt-3 flex flex-wrap gap-1.5">
       <span className="rounded-md bg-ink px-2 py-0.5 text-xs font-semibold text-cream-50">{operationLabel}</span>
       <span className="rounded-md bg-gold/30 px-2 py-0.5 text-xs font-semibold text-ink">{portalLabel}</span>

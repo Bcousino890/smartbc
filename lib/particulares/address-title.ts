@@ -45,7 +45,7 @@ export function looksLikeStreet(text: string): boolean {
 /**
  * Espejo de `particulares_clean_address`: «Piso en venta en Calle Alcalá, Madrid, 163»
  * → «Calle Alcalá, 163»; «Calle del Barco, 38, Malasaña, Madrid» → «Calle del Barco, 38».
- * Un título que solo trae barrio/municipio («Piso en venta en Goya») → null.
+ * Un título que solo trae barrio/municipio («Piso en venta en Goya») → «Goya».
  * Un texto sin prefijo y sin pinta de calle (descripción, barrio suelto) se devuelve igual.
  */
 export function cleanAddress(raw: string | null | undefined): string | null {
@@ -75,7 +75,6 @@ export function cleanAddress(raw: string | null | undefined): string | null {
     }
   }
   if (num) return `${street.trim()}, ${num.trim()}`;
-  if (titled && !/\d/.test(street) && !looksLikeStreet(street)) return null;
   return street.trim();
 }
 
@@ -103,4 +102,10 @@ export function listingTitle(input: {
   const rent = input.operation === "rent";
   if (!where) return rent ? "Alquiler de piso" : "Piso en venta";
   return rent ? `Alquiler de piso en ${where}` : `Piso en venta en ${where}`;
+}
+
+/** ¿Es calle (vía o número de portal) y no solo un barrio/municipio («Goya», «Meco»)? */
+export function isStreetAddress(address: string | null | undefined): boolean {
+  const a = addressLine(address);
+  return !!a && (looksLikeStreet(a) || /\d/.test(a));
 }
