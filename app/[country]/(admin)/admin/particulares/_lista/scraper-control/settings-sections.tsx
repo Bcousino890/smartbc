@@ -55,7 +55,7 @@ export function SwitchesSection({ data, save }: { data: ScraperControlPayload; s
         </fieldset>
         <fieldset className="space-y-3">
           <legend className="mb-2 text-sm font-bold text-ink">Fotocasa</legend>
-          <SwitchRow checked={s.fotocasaEnabled} onChange={(v) => go({ fotocasaEnabled: v })} label="Fotocasa activo" description="Viene apagado hasta que tú lo actives." />
+          <SwitchRow checked={s.fotocasaEnabled} onChange={(v) => go({ fotocasaEnabled: v })} label="Fotocasa activo" description="Interruptor general de los scrapers de Fotocasa." />
           <SwitchRow
             checked={s.fotocasaOperations.sale}
             onChange={(v) => go({ fotocasaOperations: { ...s.fotocasaOperations, sale: v } })}

@@ -308,7 +308,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
                 </>
               ) : (
                 <>
-                  gasto real <strong>aún sin medir</strong> · cota baja de lo marcado (solo listado) ≈ {fmt(totals.now)} créditos/mes
+                  gasto real <strong>aún sin medir</strong> · {totals.now > 0 ? <>cota baja de lo marcado (solo listado) ≈ {fmt(totals.now)} créditos/mes</> : "sin datos de anuncios por zona todavía, no se puede estimar"}
                 </>
               )}
               {!measured && totals.all > totals.now && <span className="text-emerald-800"> · ahorras ≈ {fmt(totals.all - totals.now)} frente a marcar todo</span>}
