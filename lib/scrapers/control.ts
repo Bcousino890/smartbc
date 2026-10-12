@@ -8,6 +8,7 @@ import {
   WORKER_ID,
   ZONE_PRIORITIES,
   billingPeriod,
+  runPortal,
   isValidCrawioKey,
   keyHint,
   type KeyInfo,
@@ -77,6 +78,10 @@ function parseSettings(rows: SettingRow[]): { settings: ScraperSettingsPublic; k
     verifyDays: num(m.get("idealista.verify_days"), d.verifyDays),
     fotocasaEnabled: bool(m.get("fotocasa.enabled"), d.fotocasaEnabled),
     fotocasaOperations: ops(m.get("fotocasa.operations"), d.fotocasaOperations),
+    pisosEnabled: bool(m.get("pisos.enabled"), d.pisosEnabled),
+    pisosOperations: ops(m.get("pisos.operations"), d.pisosOperations),
+    habitacliaEnabled: bool(m.get("habitaclia.enabled"), d.habitacliaEnabled),
+    habitacliaOperations: ops(m.get("habitaclia.operations"), d.habitacliaOperations),
   };
   const keyInfo = (portal: ScraperPortal): KeyInfo => {
     const v = m.get(`crawio.key.${portal}`) as { key?: unknown; hint?: unknown; label?: unknown } | undefined;
@@ -88,7 +93,7 @@ function parseSettings(rows: SettingRow[]): { settings: ScraperSettingsPublic; k
       label: configured && typeof v?.label === "string" ? v.label : null,
     };
   };
-  return { settings, keys: { idealista: keyInfo("idealista"), fotocasa: keyInfo("fotocasa") } };
+  return { settings, keys: { idealista: keyInfo("idealista"), fotocasa: keyInfo("fotocasa"), pisos: keyInfo("pisos"), habitaclia: keyInfo("habitaclia") } };
 }
 
 type WorkerRow = {
@@ -250,9 +255,9 @@ export async function loadControl(canEdit: boolean): Promise<ScraperControlPaylo
   }
 
   const { settings, keys } = parseSettings((settingsRes.data ?? []) as SettingRow[]);
-  const zones: Record<ScraperPortal, ScraperZone[]> = { idealista: [], fotocasa: [] };
+  const zones: Record<ScraperPortal, ScraperZone[]> = { idealista: [], fotocasa: [], pisos: [], habitaclia: [] };
   for (const z of (zonesRes.data ?? []) as ScraperZone[]) {
-    if (z.portal === "idealista" || z.portal === "fotocasa") zones[z.portal].push(z);
+    if (SCRAPER_PORTALS.includes(z.portal)) zones[z.portal].push(z);
   }
 
   // Últimas ejecuciones (de todas las tareas) y reparto por portal según el run_type.
@@ -263,24 +268,31 @@ export async function loadControl(canEdit: boolean): Promise<ScraperControlPaylo
     .limit(300);
   const allRuns = ((runsRes.data ?? []) as RunRow[]);
   const runBy: Record<ScraperPortal, RunRow[]> = {
-    idealista: allRuns.filter((r) => !r.run_type.startsWith("fotocasa-")),
-    fotocasa: allRuns.filter((r) => r.run_type.startsWith("fotocasa-")),
+    idealista: allRuns.filter((r) => runPortal(r.run_type) === "idealista"),
+    fotocasa: allRuns.filter((r) => runPortal(r.run_type) === "fotocasa"),
+    pisos: allRuns.filter((r) => runPortal(r.run_type) === "pisos"),
+    habitaclia: allRuns.filter((r) => runPortal(r.run_type) === "habitaclia"),
   };
   const workerBy = new Map(((workersRes.data ?? []) as WorkerRow[]).map((w) => [w.worker_id, w]));
 
-  const health = {
-    idealista: buildHealth("idealista", settings.idealistaEnabled, workerBy.get(WORKER_ID.idealista), runBy.idealista, now.getTime()),
-    fotocasa: buildHealth("fotocasa", settings.fotocasaEnabled, workerBy.get(WORKER_ID.fotocasa), runBy.fotocasa, now.getTime()),
+  const enabledBy: Record<ScraperPortal, boolean> = {
+    idealista: settings.idealistaEnabled,
+    fotocasa: settings.fotocasaEnabled,
+    pisos: settings.pisosEnabled,
+    habitaclia: settings.habitacliaEnabled,
   };
+  const health = Object.fromEntries(
+    SCRAPER_PORTALS.map((p) => [p, buildHealth(p, enabledBy[p], workerBy.get(WORKER_ID[p]), runBy[p], now.getTime())]),
+  ) as Record<ScraperPortal, ScraperHealth>;
 
   // Créditos del periodo: el crawler escribe el consumo total de la cuenta de Crawio en su latido.
   // Se toma el dato del latido más reciente que lo traiga.
-  const withCredits = [health.idealista, health.fotocasa]
+  const withCredits = SCRAPER_PORTALS.map((p) => health[p])
     .filter((h) => h.creditsPeriod != null && h.lastHeartbeatAt)
     .sort((a, b) => new Date(b.lastHeartbeatAt!).getTime() - new Date(a.lastHeartbeatAt!).getTime())[0];
   const creditsPeriod = withCredits?.creditsPeriod ?? null;
 
-  let mode: ScraperMode | null = health.idealista.mode ?? health.fotocasa.mode;
+  let mode: ScraperMode | null = SCRAPER_PORTALS.map((p) => health[p].mode).find((m) => m != null) ?? null;
   if (creditsPeriod != null) {
     mode =
       creditsPeriod >= settings.budgetCredits ? "pausa" : creditsPeriod >= settings.budgetCredits - settings.reserveCredits ? "ahorro" : "normal";
@@ -352,7 +364,7 @@ export async function applyUpdate(body: unknown, profileId: string): Promise<voi
   const s = upd.settings;
   if (s !== undefined) {
     if (!s || typeof s !== "object" || Array.isArray(s)) throw new ControlInputError("Ajustes: formato no válido.");
-    const known = ["budgetCredits", "reserveCredits", "idealistaEnabled", "idealistaOperations", "agenciesEnabled", "fotocasaEnabled", "fotocasaOperations"];
+    const known = ["budgetCredits", "reserveCredits", "idealistaEnabled", "idealistaOperations", "agenciesEnabled", "fotocasaEnabled", "fotocasaOperations", "pisosEnabled", "pisosOperations", "habitacliaEnabled", "habitacliaOperations"];
     for (const k of Object.keys(s)) if (!known.includes(k)) throw new ControlInputError(`Ajuste desconocido: ${k.slice(0, 40)}`);
 
     const budget = s.budgetCredits !== undefined ? intIn(s.budgetCredits, 10_000, 100_000_000, "Presupuesto mensual") : curSettings.budgetCredits;
@@ -370,9 +382,10 @@ export async function applyUpdate(body: unknown, profileId: string): Promise<voi
   // 2) Claves de Crawio (la clave se recibe aquí y solo aquí; nunca se devuelve ni se registra)
   if (upd.keys !== undefined) {
     if (!upd.keys || typeof upd.keys !== "object" || Array.isArray(upd.keys)) throw new ControlInputError("Claves: formato no válido.");
-    for (const portal of Object.keys(upd.keys)) {
-      if (portal !== "idealista" && portal !== "fotocasa") throw new ControlInputError("Clave para un portal desconocido.");
-      const entry = (upd.keys as Record<string, { key?: unknown; label?: unknown }>)[portal];
+    for (const portalKey of Object.keys(upd.keys)) {
+      if (!(SCRAPER_PORTALS as readonly string[]).includes(portalKey)) throw new ControlInputError("Clave para un portal desconocido.");
+      const portal = portalKey as ScraperPortal;
+      const entry = (upd.keys as Record<string, { key?: unknown; label?: unknown }>)[portalKey];
       if (!entry || typeof entry.key !== "string") throw new ControlInputError(`Clave de ${PORTAL_LABEL[portal]}: formato no válido.`);
       const key = entry.key.trim();
       if (!isValidCrawioKey(key)) {

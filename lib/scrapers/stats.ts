@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import { TASKS, billingPeriod, type ScraperPortal } from "./control-types";
+import { SCRAPER_PORTALS, TASKS, billingPeriod, type ScraperPortal } from "./control-types";
 import type { StatsOpFilter, StatsPayload, StatsPeriod, StatsPortalFilter, StatsZoneRow } from "./stats-types";
 
 /**
@@ -35,7 +35,7 @@ type Row = {
 };
 
 export const isStatsPeriod = (v: string | null): v is StatsPeriod => v === "7" || v === "30" || v === "billing";
-export const isPortalFilter = (v: string | null): v is StatsPortalFilter => v === "all" || v === "idealista" || v === "fotocasa";
+export const isPortalFilter = (v: string | null): v is StatsPortalFilter => v === "all" || (SCRAPER_PORTALS as readonly string[]).includes(v ?? "");
 export const isOpFilter = (v: string | null): v is StatsOpFilter => v === "all" || v === "sale" || v === "rent";
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);

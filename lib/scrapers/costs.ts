@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/db/admin";
-import type { ScraperPortal } from "./control-types";
+import { SCRAPER_PORTALS, type ScraperPortal } from "./control-types";
 import {
   COMPONENT_PREFIX,
   NO_ZONE_KEY,
@@ -65,7 +65,7 @@ export async function loadCosts(): Promise<CostsPayload> {
     daysMeasured: 0,
     provisional: false,
     projectionDays: 0,
-    portals: { idealista: null, fotocasa: null },
+    portals: { idealista: null, fotocasa: null, pisos: null, habitaclia: null },
   };
 
   const [cmp, tot] = await Promise.all([readRows(db, from, today, "cmp"), readRows(db, from, today, "totals")]);
@@ -94,13 +94,13 @@ export async function loadCosts(): Promise<CostsPayload> {
     return empty;
   }
 
-  const portals: Record<ScraperPortal, PortalCosts | null> = { idealista: null, fotocasa: null };
+  const portals: Record<ScraperPortal, PortalCosts | null> = { idealista: null, fotocasa: null, pisos: null, habitaclia: null };
   const get = (p: ScraperPortal): PortalCosts =>
     (portals[p] ??= { totalCredits: 0, components: emptyComponents(), tasks: [], leaves: [], unattributed: emptyComponents() });
 
   const leafIdx = new Map<string, number>();
   for (const r of cmp.rows) {
-    if (!days.has(r.day) || (r.portal !== "idealista" && r.portal !== "fotocasa")) continue;
+    if (!days.has(r.day) || !SCRAPER_PORTALS.includes(r.portal)) continue;
     const comp = r.task.slice(COMPONENT_PREFIX.length);
     if (!isComponent(comp)) continue;
     const p = get(r.portal);
@@ -120,7 +120,7 @@ export async function loadCosts(): Promise<CostsPayload> {
 
   const taskSum = new Map<string, number>();
   for (const r of tot.rows) {
-    if (!days.has(r.day) || (r.portal !== "idealista" && r.portal !== "fotocasa")) continue;
+    if (!days.has(r.day) || !SCRAPER_PORTALS.includes(r.portal)) continue;
     const p = get(r.portal);
     if (r.task === "*") p.totalCredits += r.credits;
     else if (!r.task.startsWith(COMPONENT_PREFIX)) taskSum.set(`${r.portal}|${r.task}`, (taskSum.get(`${r.portal}|${r.task}`) ?? 0) + r.credits);

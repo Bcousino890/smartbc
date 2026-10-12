@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import {
   PORTAL_LABEL,
-  SCRAPER_PORTALS,
+  ZONE_PORTALS,
   type ScraperControlPayload,
   type ScraperControlUpdate,
   type ScraperPortal,
@@ -199,8 +199,8 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (!dir) return;
     e.preventDefault();
-    const n = (i + dir + SCRAPER_PORTALS.length) % SCRAPER_PORTALS.length;
-    setPortal(SCRAPER_PORTALS[n]);
+    const n = (i + dir + ZONE_PORTALS.length) % ZONE_PORTALS.length;
+    setPortal(ZONE_PORTALS[n]);
     tabRefs.current[n]?.focus();
   };
 
@@ -231,7 +231,7 @@ export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: 
 
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Portal" className="inline-flex h-11 rounded-xl border border-ink/10 bg-white p-0.5">
-          {SCRAPER_PORTALS.map((p, i) => (
+          {ZONE_PORTALS.map((p, i) => (
             <button
               key={p}
               ref={(el) => {

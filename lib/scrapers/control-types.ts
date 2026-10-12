@@ -6,12 +6,21 @@
  * Contrato con el crawler: /opt/idealista-dev/CONTRATO-CONTROL.md
  */
 
-export type ScraperPortal = "idealista" | "fotocasa";
-export const SCRAPER_PORTALS: readonly ScraperPortal[] = ["idealista", "fotocasa"];
-export const PORTAL_LABEL: Record<ScraperPortal, string> = { idealista: "Idealista", fotocasa: "Fotocasa" };
+export type ScraperPortal = "idealista" | "fotocasa" | "pisos" | "habitaclia";
+export const SCRAPER_PORTALS: readonly ScraperPortal[] = ["idealista", "fotocasa", "pisos", "habitaclia"];
+export const PORTAL_LABEL: Record<ScraperPortal, string> = { idealista: "Idealista", fotocasa: "Fotocasa", pisos: "Pisos.com", habitaclia: "Habitaclia" };
+/** Portales con árbol de zonas (y mapa) en el panel. Pisos.com y Habitaclia se controlan por portal entero, sin zonas. */
+export const ZONE_PORTALS: readonly ScraperPortal[] = ["idealista", "fotocasa"];
+/** Portales nuevos, solo de particulares y sin zonas: `pisos` y `habitaclia`. */
+export const isZonePortal = (p: ScraperPortal): boolean => ZONE_PORTALS.includes(p);
 
 /** Identificador con el que cada crawler firma su latido en `idealista_scraper_workers`. */
-export const WORKER_ID: Record<ScraperPortal, string> = { idealista: "vps-crawler", fotocasa: "vps-fotocasa" };
+export const WORKER_ID: Record<ScraperPortal, string> = {
+  idealista: "vps-crawler",
+  fotocasa: "vps-fotocasa",
+  pisos: "vps-pisos",
+  habitaclia: "vps-habitaclia",
+};
 
 export type ZonePriority = "alta" | "normal" | "off";
 export const ZONE_PRIORITIES: readonly ZonePriority[] = ["alta", "normal", "off"];
@@ -56,6 +65,10 @@ export type ScraperSettingsPublic = {
   verifyDays: number;
   fotocasaEnabled: boolean;
   fotocasaOperations: ScraperOperations;
+  pisosEnabled: boolean;
+  pisosOperations: ScraperOperations;
+  habitacliaEnabled: boolean;
+  habitacliaOperations: ScraperOperations;
 };
 
 export const DEFAULT_SETTINGS: ScraperSettingsPublic = {
@@ -69,6 +82,10 @@ export const DEFAULT_SETTINGS: ScraperSettingsPublic = {
   verifyDays: 2,
   fotocasaEnabled: false,
   fotocasaOperations: { sale: true, rent: true },
+  pisosEnabled: false,
+  pisosOperations: { sale: true, rent: true },
+  habitacliaEnabled: false,
+  habitacliaOperations: { sale: true, rent: true },
 };
 
 export type ScraperMode = "normal" | "ahorro" | "pausa";
@@ -91,7 +108,21 @@ export const TASKS: Record<ScraperPortal, Array<{ type: string; label: string; h
     { type: "fotocasa-sweep", label: "Barrido por zonas", help: "Recorre zona por zona." },
     { type: "fotocasa-verify", label: "Comprobar bajas", help: "Confirma si un anuncio sigue publicado." },
   ],
+  pisos: [
+    { type: "pisos-radar", label: "Radar de particulares", help: "Los particulares más recientes, cada poco." },
+    { type: "pisos-verify", label: "Comprobar bajas", help: "Confirma si un anuncio sigue publicado." },
+  ],
+  habitaclia: [
+    { type: "habitaclia-sweep", label: "Barrido de particulares", help: "Recorre toda la provincia." },
+    { type: "habitaclia-verify", label: "Comprobar bajas", help: "Confirma si un anuncio sigue publicado." },
+  ],
 };
+
+/** Portal al que pertenece una ejecución según su `run_type` (los de Idealista no llevan prefijo). */
+export function runPortal(runType: string): ScraperPortal {
+  for (const p of SCRAPER_PORTALS) if (p !== "idealista" && runType.startsWith(`${p}-`)) return p;
+  return "idealista";
+}
 
 export type ScraperTask = {
   runType: string;
@@ -155,6 +186,10 @@ export type ScraperControlUpdate = {
     agenciesEnabled: boolean;
     fotocasaEnabled: boolean;
     fotocasaOperations: ScraperOperations;
+    pisosEnabled: boolean;
+    pisosOperations: ScraperOperations;
+    habitacliaEnabled: boolean;
+    habitacliaOperations: ScraperOperations;
   }>;
   keys?: Partial<Record<ScraperPortal, { key: string; label?: string }>>;
 };
@@ -182,7 +217,10 @@ export function keyHint(key: string): string {
 // medido. Idealista cobra 2 créditos por petición y Fotocasa 1: ÷ 30 anuncios por página × ~10 barridos
 // al mes ≈ 0,67 (Idealista) / 0,33 (Fotocasa). Si la zona aún no tiene `listings_*` no se inventa nada.
 /** Créditos de Crawio por petición (tarifa del plan): Idealista 2, Fotocasa 1. */
-export const CREDITS_PER_REQUEST: Record<ScraperPortal, number> = { idealista: 2, fotocasa: 1 };
+export const CREDITS_PER_REQUEST: Record<ScraperPortal, number> = { idealista: 2, fotocasa: 1, pisos: 1, habitaclia: 1 };
+/** Límite mensual sugerido para la clave de Crawio de los portales pequeños (Idealista se lleva el resto del presupuesto). */
+export const SUGGESTED_KEY_LIMIT: Record<Exclude<ScraperPortal, "idealista">, number> = { fotocasa: 20_000, pisos: 15_000, habitaclia: 5_000 };
+
 /** Una página de listado trae ~30 anuncios y se barre ~10 veces al mes: créditos/mes por anuncio y portal (Idealista ≈ 0,7; Fotocasa ≈ 0,33). */
 export function creditsPerListing(portal: ScraperPortal): number {
   return Math.round(((CREDITS_PER_REQUEST[portal] / 30) * 10) * 100) / 100;

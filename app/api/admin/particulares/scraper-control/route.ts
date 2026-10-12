@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const gate = await requirePermission("particulares", "view");
   if (!gate.ok) return gate.response;
 
-  // ?stats=1&period=7|30|billing&portal=all|idealista|fotocasa&op=all|sale|rent → solo estadísticas
+  // ?stats=1&period=7|30|billing&portal=all|idealista|fotocasa|pisos|habitaclia&op=all|sale|rent → solo estadísticas
   // (solo lectura de scraper_stats_daily). Los filtros se validan contra listas cerradas.
   const sp = new URL(req.url).searchParams;
 

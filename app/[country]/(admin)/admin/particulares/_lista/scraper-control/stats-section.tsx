@@ -18,6 +18,8 @@ const PORTALS = [
   { value: "all" as const, label: "Todos" },
   { value: "idealista" as const, label: "Idealista" },
   { value: "fotocasa" as const, label: "Fotocasa" },
+  { value: "pisos" as const, label: "Pisos.com" },
+  { value: "habitaclia" as const, label: "Habitaclia" },
 ];
 const OPS = [
   { value: "all" as const, label: "Venta y alquiler" },

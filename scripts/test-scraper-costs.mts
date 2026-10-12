@@ -17,7 +17,18 @@ import {
   type CostsPayload,
   type PortalCosts,
 } from "../lib/scrapers/cost-model.ts";
-import type { ScraperZone } from "../lib/scrapers/control-types.ts";
+import {
+  CREDITS_PER_REQUEST,
+  DEFAULT_SETTINGS,
+  PORTAL_LABEL,
+  SCRAPER_PORTALS,
+  SUGGESTED_KEY_LIMIT,
+  TASKS,
+  WORKER_ID,
+  ZONE_PORTALS,
+  runPortal,
+  type ScraperZone,
+} from "../lib/scrapers/control-types.ts";
 
 const zone = (zone_key: string, parent_key: string | null, extra: Partial<ScraperZone> = {}): ScraperZone => ({
   portal: "idealista",
@@ -121,6 +132,34 @@ test("monthView: total del mes frente al presupuesto", () => {
 
 test("el gasto sin zona no entra en ninguna zona", () => {
   assert.equal(NO_ZONE_KEY, "(sin zona)");
+});
+
+test("portales nuevos: pisos y habitaclia", () => {
+  assert.deepEqual([...SCRAPER_PORTALS], ["idealista", "fotocasa", "pisos", "habitaclia"]);
+  assert.deepEqual([...ZONE_PORTALS], ["idealista", "fotocasa"]);
+  assert.equal(PORTAL_LABEL.pisos, "Pisos.com");
+  assert.equal(WORKER_ID.pisos, "vps-pisos");
+  assert.equal(WORKER_ID.habitaclia, "vps-habitaclia");
+  assert.deepEqual(CREDITS_PER_REQUEST, { idealista: 2, fotocasa: 1, pisos: 1, habitaclia: 1 });
+  assert.deepEqual(TASKS.pisos.map((t) => t.type), ["pisos-radar", "pisos-verify"]);
+  assert.deepEqual(TASKS.habitaclia.map((t) => t.type), ["habitaclia-sweep", "habitaclia-verify"]);
+  assert.equal(SUGGESTED_KEY_LIMIT.pisos, 15_000);
+  assert.equal(SUGGESTED_KEY_LIMIT.habitaclia, 5_000);
+  // Apagados por defecto.
+  assert.equal(DEFAULT_SETTINGS.pisosEnabled, false);
+  assert.equal(DEFAULT_SETTINGS.habitacliaEnabled, false);
+});
+
+test("las ejecuciones se reparten por portal según el run_type", () => {
+  assert.equal(runPortal("discovery"), "idealista");
+  assert.equal(runPortal("verify"), "idealista");
+  assert.equal(runPortal("fotocasa-radar"), "fotocasa");
+  assert.equal(runPortal("pisos-radar"), "pisos");
+  assert.equal(runPortal("pisos-verify"), "pisos");
+  assert.equal(runPortal("habitaclia-sweep"), "habitaclia");
+  assert.equal(runPortal("habitaclia-verify"), "habitaclia");
+  // Cada tarea declarada pertenece a su portal.
+  for (const p of SCRAPER_PORTALS) for (const t of TASKS[p]) assert.equal(runPortal(t.type), p);
 });
 
 console.log(`${n} pruebas OK`);

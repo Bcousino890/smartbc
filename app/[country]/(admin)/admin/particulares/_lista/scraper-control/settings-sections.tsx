@@ -7,10 +7,13 @@ import { useToast } from "@/components/ui/toast";
 import {
   PORTAL_LABEL,
   SCRAPER_PORTALS,
+  SUGGESTED_KEY_LIMIT,
   isValidCrawioKey,
   type ScraperControlPayload,
   type ScraperControlUpdate,
+  type ScraperOperations,
   type ScraperPortal,
+  type ScraperSettingsPublic,
 } from "@/lib/scrapers/control-types";
 import { FOCUS_RING, SwitchRow } from "../controls";
 import { BTN_PRIMARY, BTN_SECONDARY, Notice, Section, fmt } from "./shared";
@@ -18,6 +21,18 @@ import { BTN_PRIMARY, BTN_SECONDARY, Notice, Section, fmt } from "./shared";
 type SaveFn = (u: ScraperControlUpdate) => Promise<string | null>;
 
 // ── Interruptores ───────────────────────────────────────────────────────────
+
+/** Portales «de un solo interruptor»: mismo bloque de ajustes (activo + venta + alquiler), sin zonas propias. */
+const SIMPLE_PORTALS = [
+  { portal: "fotocasa", enabled: "fotocasaEnabled", ops: "fotocasaOperations", description: "Interruptor general de los scrapers de Fotocasa." },
+  { portal: "pisos", enabled: "pisosEnabled", ops: "pisosOperations", description: "Apagado = no se gasta ni un crédito en Pisos.com. Solo vigila particulares." },
+  { portal: "habitaclia", enabled: "habitacliaEnabled", ops: "habitacliaOperations", description: "Apagado = no se gasta ni un crédito en Habitaclia. Solo vigila particulares." },
+] as const satisfies ReadonlyArray<{
+  portal: ScraperPortal;
+  enabled: keyof ScraperSettingsPublic;
+  ops: keyof ScraperSettingsPublic;
+  description: string;
+}>;
 
 export function SwitchesSection({ data, save }: { data: ScraperControlPayload; save: SaveFn }) {
   const { toast } = useToast();
@@ -53,20 +68,19 @@ export function SwitchesSection({ data, save }: { data: ScraperControlPayload; s
             description="Apagado = solo se vigilan particulares; las agencias solo por su tarjeta (sin ficha ni teléfono) y se ahorran muchos créditos."
           />
         </fieldset>
-        <fieldset className="space-y-3">
-          <legend className="mb-2 text-sm font-bold text-ink">Fotocasa</legend>
-          <SwitchRow checked={s.fotocasaEnabled} onChange={(v) => go({ fotocasaEnabled: v })} label="Fotocasa activo" description="Interruptor general de los scrapers de Fotocasa." />
-          <SwitchRow
-            checked={s.fotocasaOperations.sale}
-            onChange={(v) => go({ fotocasaOperations: { ...s.fotocasaOperations, sale: v } })}
-            label="Escanear venta"
-          />
-          <SwitchRow
-            checked={s.fotocasaOperations.rent}
-            onChange={(v) => go({ fotocasaOperations: { ...s.fotocasaOperations, rent: v } })}
-            label="Escanear alquiler"
-          />
-        </fieldset>
+        {SIMPLE_PORTALS.map((p) => (
+          <fieldset key={p.portal} className="space-y-3">
+            <legend className="mb-2 text-sm font-bold text-ink">{PORTAL_LABEL[p.portal]}</legend>
+            <SwitchRow
+              checked={s[p.enabled] as boolean}
+              onChange={(v) => go({ [p.enabled]: v })}
+              label={`${PORTAL_LABEL[p.portal]} activo`}
+              description={p.description}
+            />
+            <SwitchRow checked={(s[p.ops] as ScraperOperations).sale} onChange={(v) => go({ [p.ops]: { ...(s[p.ops] as ScraperOperations), sale: v } })} label="Escanear venta" />
+            <SwitchRow checked={(s[p.ops] as ScraperOperations).rent} onChange={(v) => go({ [p.ops]: { ...(s[p.ops] as ScraperOperations), rent: v } })} label="Escanear alquiler" />
+          </fieldset>
+        ))}
       </div>
     </Section>
   );
@@ -260,9 +274,9 @@ function KeyCard({ portal, data, save, suggested }: { portal: ScraperPortal; dat
 }
 
 export function KeysSection({ data, save }: { data: ScraperControlPayload; save: SaveFn }) {
-  // Fotocasa gasta poco (≈15.000 créditos/mes con el radar): límite de 20.000; Idealista, el resto del presupuesto.
-  const fotocasa = 20_000;
-  const idealista = Math.max(data.settings.budgetCredits - fotocasa, 10_000);
+  // Los portales pequeños tienen un tope fijo (Fotocasa ≈15.000 créditos/mes con el radar → 20.000); Idealista, el resto del presupuesto.
+  const small = Object.values(SUGGESTED_KEY_LIMIT).reduce((a, b) => a + b, 0);
+  const idealista = Math.max(data.settings.budgetCredits - small, 10_000);
   return (
     <Section
       id="claves"
@@ -271,7 +285,7 @@ export function KeysSection({ data, save }: { data: ScraperControlPayload; save:
     >
       <div className="grid gap-4">
         {SCRAPER_PORTALS.map((p) => (
-          <KeyCard key={p} portal={p} data={data} save={save} suggested={p === "idealista" ? idealista : fotocasa} />
+          <KeyCard key={p} portal={p} data={data} save={save} suggested={p === "idealista" ? idealista : SUGGESTED_KEY_LIMIT[p]} />
         ))}
       </div>
     </Section>
