@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/guard";
 import { isOpFilter, isPortalFilter, isStatsPeriod, loadStats } from "@/lib/scrapers/stats";
 import { applyUpdate, loadControl, ControlInputError } from "@/lib/scrapers/control";
+import { loadCosts } from "@/lib/scrapers/costs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,17 @@ export async function GET(req: Request) {
   // ?stats=1&period=7|30|billing&portal=all|idealista|fotocasa&op=all|sale|rent → solo estadísticas
   // (solo lectura de scraper_stats_daily). Los filtros se validan contra listas cerradas.
   const sp = new URL(req.url).searchParams;
+
+  // ?costs=1 → gasto REAL en créditos medido por el crawler (últimos 7 días completos), por portal / zona /
+  // componente / tarea. Solo lectura de scraper_stats_daily; la proyección se calcula en cost-model.ts.
+  if (sp.get("costs")) {
+    try {
+      return NextResponse.json({ costs: await loadCosts() }, { headers: NO_STORE });
+    } catch {
+      return NextResponse.json({ error: "No se pudo leer el gasto de créditos" }, { status: 500, headers: NO_STORE });
+    }
+  }
+
   if (sp.get("stats")) {
     const period = sp.get("period") ?? "30";
     const portal = sp.get("portal") ?? "all";

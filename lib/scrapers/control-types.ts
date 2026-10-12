@@ -173,14 +173,14 @@ export function keyHint(key: string): string {
   return `${key.slice(0, 6)}…${key.slice(-4)}`;
 }
 
-// ── Coste estimado por zona (créditos de Crawio al mes) ─────────────────────
+// ── Cota baja de coste por zona (SOLO páginas de listado) ───────────────────
 //
-// Regla honesta y proporcional: créditos/mes ≈ nº de anuncios de la zona × créditos por anuncio del PORTAL.
-// Idealista cobra 2 créditos por petición y Fotocasa 1: 2 (o 1) créditos por página de listado ÷ 30
-// anuncios por página × ~10 barridos al mes ≈ 0,67 (Idealista) / 0,33 (Fotocasa).
-// (Es una orientación para comparar zonas, no una factura.) Si la zona aún no
-// tiene `listings_*` NO se inventa nada: la interfaz dice «sin datos aún».
-// Para cambiar la regla basta con tocar esta constante.
+// ⚠️ Esto ya NO es el coste de una zona: es una COTA BAJA que solo cuenta las páginas de listado.
+// El gasto real (fichas de anuncios nuevos, comprobación de bajas, refresco, reactivaciones, reintentos
+// y 404, que también se cobran) lo mide el crawler y se muestra con `cost-model.ts`. Esta regla solo se
+// usa como último recurso, rotulada «solo listado, cota baja», para las zonas que aún no tienen gasto
+// medido. Idealista cobra 2 créditos por petición y Fotocasa 1: ÷ 30 anuncios por página × ~10 barridos
+// al mes ≈ 0,67 (Idealista) / 0,33 (Fotocasa). Si la zona aún no tiene `listings_*` no se inventa nada.
 /** Créditos de Crawio por petición (tarifa del plan): Idealista 2, Fotocasa 1. */
 export const CREDITS_PER_REQUEST: Record<ScraperPortal, number> = { idealista: 2, fotocasa: 1 };
 /** Una página de listado trae ~30 anuncios y se barre ~10 veces al mes: créditos/mes por anuncio y portal (Idealista ≈ 0,7; Fotocasa ≈ 0,33). */

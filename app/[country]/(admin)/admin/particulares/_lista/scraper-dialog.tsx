@@ -7,9 +7,11 @@ import { FOCUS_RING } from "./controls";
 import { BTN_SECONDARY, Notice } from "./scraper-control/shared";
 import { StatusSection } from "./scraper-control/status-section";
 import { BudgetSection, KeysSection, SwitchesSection } from "./scraper-control/settings-sections";
+import { CostSection } from "./scraper-control/cost-section";
 import { StatsSection } from "./scraper-control/stats-section";
 import { ZonesSection } from "./scraper-control/zones-section";
 import { useScraperControl } from "./scraper-control/use-scraper-control";
+import { useScraperCosts } from "./scraper-control/use-scraper-costs";
 
 type Tab = "config" | "stats";
 const TABS: Array<{ id: Tab; label: string }> = [
@@ -26,6 +28,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
  */
 export function ScraperDialog({ open, onClose }: { open: boolean; onClose: () => void; config?: unknown }) {
   const { data, loading, error, reload, save, patchLocal } = useScraperControl(open);
+  const { costs, costsError } = useScraperCosts(open);
   const [tab, setTab] = useState<Tab>("config");
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -90,7 +93,8 @@ export function ScraperDialog({ open, onClose }: { open: boolean; onClose: () =>
               {error && <Notice tone="warn">{error} Se muestra lo último que se pudo leer.</Notice>}
               <StatusSection data={data} />
               <SwitchesSection data={data} save={save} />
-              <ZonesSection data={data} save={save} patchLocal={patchLocal} reload={reload} />
+              <CostSection data={data} costs={costs} error={costsError} />
+              <ZonesSection data={data} save={save} patchLocal={patchLocal} reload={reload} costs={costs} />
               <BudgetSection data={data} save={save} />
               <KeysSection data={data} save={save} />
             </div>

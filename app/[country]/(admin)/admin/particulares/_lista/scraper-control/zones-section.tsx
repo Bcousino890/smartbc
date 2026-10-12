@@ -19,6 +19,8 @@ import { PrioritySelect, ZoneInfo } from "./priority-select";
 import { BTN_SECONDARY, Notice, Section, fmt } from "./shared";
 import { buildTree, costTotals, family, groupRoots, matches, normalize, type TreeNode } from "./zones-tree";
 import { zoneListings } from "@/lib/scrapers/control-types";
+import { project30, sumComponents, type CostsPayload } from "@/lib/scrapers/cost-model";
+import { ZoneCostProvider } from "./zone-cost";
 
 // El mapa trae contornos (cientos de KB): solo se descarga al abrir la vista «Mapa».
 const ZoneMap = dynamic(() => import("./zone-map").then((m) => m.ZoneMap), {
@@ -142,7 +144,7 @@ function TreeRow({
   );
 }
 
-export function ZonesSection({ data, save, patchLocal, reload }: { data: ScraperControlPayload; save: SaveFn; patchLocal: PatchFn; reload: () => void }) {
+export function ZonesSection({ data, save, patchLocal, reload, costs }: { data: ScraperControlPayload; save: SaveFn; patchLocal: PatchFn; reload: () => void; costs: CostsPayload | null }) {
   const { toast } = useToast();
   const [portal, setPortal] = useState<ScraperPortal>("idealista");
   const [view, setView] = useState<"lista" | "mapa">("lista");
@@ -157,6 +159,9 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
   const groups = useMemo(() => groupRoots(portal, nq ? roots.filter((n) => matches(n, nq)) : roots), [portal, roots, nq]);
   const marked = all.filter((z) => z.priority !== "off").length;
   const totals = useMemo(() => costTotals(all), [all]);
+  // Gasto real del portal (medido por el crawler) y su proyección a 30 días; null = aún sin medir.
+  const pc = costs?.hasData ? costs.portals[portal] : null;
+  const measured = pc && costs ? { proj: sumComponents(project30(pc.components, costs.projectionDays)), days: costs.daysMeasured, provisional: costs.provisional } : null;
 
   /** Aplica al instante en pantalla y guarda; si falla, vuelve a leer lo real. */
   async function apply(changes: Array<{ zone_key: string; priority: ZonePriority }>, okMsg: string) {
@@ -202,6 +207,7 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
   const capitalZones = all.filter((z) => z.scope === "capital");
 
   return (
+    <ZoneCostProvider portal={portal} zones={all} costs={costs}>
     <Section id="zonas" title="Zonas que se escanean" description="Marca las zonas que quieres vigilar. Es la forma más directa de controlar el gasto de créditos.">
       <div role="note" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm font-semibold text-amber-900">
         Lo que no esté marcado NO se scrapea: no se guarda ni su tarjeta, ni su ficha, ni su teléfono, y no cuesta ni un crédito.
@@ -294,10 +300,23 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
               <strong>
                 {marked} de {all.length} zonas marcadas
               </strong>{" "}
-              en {PORTAL_LABEL[portal]} · coste estimado de lo marcado <strong>≈ {fmt(totals.now)} créditos/mes</strong>
-              {totals.all > totals.now && <span className="text-emerald-800"> · ahorras ≈ {fmt(totals.all - totals.now)} frente a marcar todo</span>}
+              en {PORTAL_LABEL[portal]} ·{" "}
+              {measured ? (
+                <>
+                  gasto real proyectado <strong>≈ {fmt(measured.proj)} créditos/mes</strong>
+                  <span className="text-ink/65">{measured.provisional ? " (provisional: solo datos de hoy)" : ` (medido en ${measured.days} ${measured.days === 1 ? "día" : "días"})`}</span>
+                </>
+              ) : (
+                <>
+                  gasto real <strong>aún sin medir</strong> · cota baja de lo marcado (solo listado) ≈ {fmt(totals.now)} créditos/mes
+                </>
+              )}
+              {!measured && totals.all > totals.now && <span className="text-emerald-800"> · ahorras ≈ {fmt(totals.all - totals.now)} frente a marcar todo</span>}
               <span className="block text-xs text-ink/65">
-                Cálculo aproximado en CRÉDITOS (no peticiones): {portal === "idealista" ? "Idealista cobra 2 créditos por petición, ≈ 0,7 créditos al mes por anuncio" : "Fotocasa cobra 1 crédito por petición, ≈ 0,3 créditos al mes por anuncio"}. {totals.unknown > 0 && `${fmt(totals.unknown)} zonas aún sin datos no cuentan.`} Solo cuenta los barridos de listado: las fichas de anuncios nuevos y la comprobación de bajas gastan créditos extra, así que el gasto real es mayor (mira «créditos usados» arriba). No es una factura.
+                {measured
+                  ? "Es lo que el crawler ha medido de verdad en créditos: listado, fichas de anuncios nuevos, comprobación de bajas, refresco, reactivaciones y reintentos (los 404 también se cobran). El reparto por componente está en «Coste real de los créditos». Cada zona enseña su gasto medido; las que aún no tienen datos usan la cota baja de solo listado."
+                  : `Todavía no hay gasto medido: el crawler lo publicará tras su próxima ejecución con el libro de gasto instalado. Mientras, cada zona enseña una cota baja que solo cuenta las páginas de listado (${portal === "idealista" ? "Idealista cobra 2 créditos por petición, ≈ 0,7 créditos al mes por anuncio" : "Fotocasa cobra 1 crédito por petición, ≈ 0,3 créditos al mes por anuncio"}); el gasto real es bastante mayor porque faltan fichas nuevas, comprobación de bajas y refresco.`}{" "}
+                {totals.unknown > 0 && `${fmt(totals.unknown)} zonas sin anuncios contados no entran en la cota. `}No es una factura.
               </span>
             </p>
             {marked === 0 && (
@@ -332,5 +351,6 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
         )}
       </div>
     </Section>
+    </ZoneCostProvider>
   );
 }
