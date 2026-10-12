@@ -10,7 +10,12 @@
 --
 -- Regla de oro: el crawler actualiza listings_* con upsert SIN priority /
 -- sale_active / rent_active (nunca pisa lo que eligió el dueño); el panel solo
--- escribe esas tres columnas. Zona ausente o desconocida = normal y activa.
+-- escribe esas tres columnas.
+--
+-- Regla del dueño (opt-in): SOLO se scrapea lo marcado. priority 'off' = sin
+-- marcar = cero créditos; 'normal' y 'alta' = marcada ('alta' = se revisa el
+-- doble de seguido). Las zonas nuevas que descubre el crawler entran como 'off'
+-- (por eso el DEFAULT es 'off'); zona desconocida = no se procesa.
 --
 -- Idempotente: la siembra de ajustes usa ON CONFLICT DO NOTHING, así que reaplicarla no
 -- deshace las prioridades que el dueño haya cambiado.
@@ -28,7 +33,7 @@ CREATE TABLE IF NOT EXISTS scraper_zones (
   zone_key         text NOT NULL,
   label            text NOT NULL,
   scope            text NOT NULL CHECK (scope IN ('capital', 'provincia')),
-  priority         text NOT NULL DEFAULT 'normal' CHECK (priority IN ('alta', 'normal', 'off')),
+  priority         text NOT NULL DEFAULT 'off' CHECK (priority IN ('alta', 'normal', 'off')),
   sale_active      boolean NOT NULL DEFAULT true,
   rent_active      boolean NOT NULL DEFAULT true,
   listings_sale    int,
@@ -38,6 +43,9 @@ CREATE TABLE IF NOT EXISTS scraper_zones (
   updated_by       uuid,
   PRIMARY KEY (portal, zone_key)
 );
+
+-- Árbol de zonas (distrito -> barrio, municipio -> zonas): lo publica el crawler.
+ALTER TABLE scraper_zones ADD COLUMN IF NOT EXISTS parent_key text;
 
 -- Portales conocidos (si mañana hay otro, se amplía el CHECK en otra migración).
 DO $$ BEGIN
