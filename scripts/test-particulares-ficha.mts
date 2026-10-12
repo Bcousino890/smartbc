@@ -26,6 +26,7 @@ import {
   whatsappUrl,
   zoneForMap,
 } from "../app/[country]/(admin)/admin/particulares/_ficha/format.ts";
+import { summarizePriceHistory } from "../app/[country]/(admin)/admin/particulares/_ficha/price-history.ts";
 
 let ok = 0;
 let fail = 0;
@@ -83,6 +84,22 @@ eq("subida calculada", priceVariation(1100, 1000)?.direction, "up");
 eq("€/m² del portal manda", pricePerM2(915000, 176, 5199), 5199);
 eq("€/m² calculado", pricePerM2(900000, 100, null), 9000);
 eq("€/m² sin superficie", pricePerM2(900000, null, null), null);
+
+console.log("Historial de precio");
+const ch = (id: string, type: string, oldP: number | null, newP: number | null, at: string) => ({
+  id, change_type: type, old_value: oldP == null ? null : { price: oldP }, new_value: newP == null ? null : { price: newP }, changed_at: at,
+});
+const h1 = summarizePriceHistory([ch("2", "price_down", 960000, 915000, "2026-10-11T10:00:00Z"), ch("1", "new_listing", null, 960000, "2026-10-09T10:00:00Z")], 915000, "2026-10-12T10:00:00Z");
+eq("precio inicial del alta", h1.initial, 960000);
+eq("una bajada", [h1.drops, h1.rises], [1, 0]);
+eq("variación total", [h1.total?.direction, Math.round((h1.total?.pct ?? 0) * 10) / 10], ["down", -4.7]);
+eq("serie alta → bajada → hoy", h1.series.map((p) => p.price), [960000, 915000, 915000]);
+eq("hay cambios", h1.hasChanges, true);
+const h2 = summarizePriceHistory([ch("1", "new_listing", null, 500000, "2026-10-09T10:00:00Z")], 500000);
+eq("sin cambios no hay gráfico ni variación", [h2.hasChanges, h2.total], [false, null]);
+const h3 = summarizePriceHistory([ch("1", "price_down", 300000, 280000, "2026-10-09T10:00:00Z")], 280000);
+eq("sin alta: el «antes» del primer cambio es el inicial", [h3.initial, h3.series.map((p) => p.price)], [300000, [300000, 280000, 280000]]);
+eq("sin historial", summarizePriceHistory(null, 1000).total, null);
 
 console.log("Fechas relativas (Madrid)");
 const NOW = Date.parse("2026-10-12T10:30:00Z"); // 12:30 en Madrid (verano)
