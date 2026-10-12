@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { assignParticular, createParticularShareLink, createPropertyFromParticular, logParticularContact, setParticularActive, updateParticularPhone } from "./actions";
 import { prefetchParticularDetail } from "./detail-cache";
 import { LinkedAdsSection } from "./linked-ads-section";
+import { EnrichmentSection } from "./enrichment-section";
 import { AdMap } from "@/components/admin/particulares/ad-map";
 import { addressLine, isStreetAddress, listingTitle } from "@/lib/particulares/address-title";
 import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
@@ -1219,6 +1220,7 @@ export function ParticularModal({
                         )}
                       </section>
                     )}
+                    <EnrichmentSection rowId={currentRow.id} onChanged={() => router.refresh()} />
                     {features.length > 0 && (
                       <section>
                         <h3 className="mb-2 text-sm font-semibold text-ink">Características</h3>

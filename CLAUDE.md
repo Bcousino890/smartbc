@@ -1273,6 +1273,60 @@ alquiler, portales, contactos y fotos de todos los anuncios dentro del modal.
   reglas españolas y acepta E.164 internacional; lo usan el extractor de Fotocasa y la edición manual del
   teléfono. `normalizeSpanishPhone` NO se tocó (sigue siendo el filtro de candidatos en el HTML de Idealista).
 
+## Enriquecer particulares con lo que dice la DESCRIPCIÓN (2026-10-12, migración 0187)
+Si el anunciante escribe en la descripción su teléfono, la dirección exacta o su nombre, se añade solo al
+registro — con reglas, confianza, evidencia y «Deshacer». Código: `lib/particulares/enrich-from-description.ts`
+(PURO, `npm run test:particulares-enrich`), `enrich-runner.ts` (job), `enrich-names.ts`, ruta
+`POST /api/cron/particulares/enrich` (`?dry=1`, `limit`, `geo`, `index`), script `scripts/vps-particulares-enrich.sh`.
+
+- **Niveles:** `alta` se aplica sola; `media`/`baja` quedan como candidatos con su fragmento de evidencia
+  (`particulares_enrichment_state.candidates`) y la ficha los enseña como «Sugerido» (Aceptar/Descartar). Lo
+  aplicado va a `particulares_enrichments` (campo, valor antes/después, regla, confianza, evidencia, quién) y se
+  deshace desde la ficha (`particulares_enrichment_revert`: solo si nadie tocó el campo después; el valor
+  deshecho no se vuelve a proponer). Una fila no se reprocesa si el md5 de su descripción no cambió ni se subió
+  `ENRICH_RULES_VERSION`.
+- ⚠️ **Estado y candidatos NO van en `scraper_extra`** (como pedía el diseño): el crawler externo reescribe
+  `scraper_extra` entero en cada upsert y se llevaría el hash y los candidatos por delante. Van en tabla propia.
+  Lo único que se escribe en `scraper_extra` es `phone_source='description'` al rellenar un teléfono (merge con
+  `||`, y la reversión restaura el valor anterior).
+- **Teléfono:** extrae «6 1 0 5 6 1 5 1 2», «610-56-15-12», «+34 663-041-932», «(+34) 635 129 061», «+ 3 4 6 3 0…»,
+  E.164 extranjero (siempre media). Descarta: referencias, precios/m², 900/800, líneas de autobús («72-73-43-40»),
+  listados de comercios («0,15 km · Tel:»), bloques de empresa («S.L.», «inmobiliaria X»; las frases negadas —
+  «sin comisión de agencia», «abstenerse agencias inmobiliarias» — no cuentan), plantillas de estafa («el
+  apartamento es de mi hermana…»), números que salen en anuncios `professional` o en ≥3 inmuebles distintos
+  (`particulares_enrich_phone_rows`; mismo piso en dos portales cuenta una vez). `alta` = UN número nuevo con
+  etiqueta de contacto o nombre pegado (o al lado del que ya teníamos), sin nada raro. Teléfono vacío → `phone`
+  (`chat_only=false`, `phone_confidence='medium'`, `phone_source='description'`); ya hay uno → `phone2` si está
+  libre; **nunca** se sustituye el principal. Ficha con teléfono extranjero + uno español en el texto → solo media.
+- **Dirección:** «Calle de Orense nº 49», «C/ Serrano, 12, 3ºB», «Avda. …» solo si `address` NO tiene número y la
+  calle del texto es la de `address` (o es el título del portal copiado en la descripción: «Alquiler de piso en C.
+  de Galileo, 7, …»). Fuera: «a 5 min de…», «cerca de…», «junto a…», centros comerciales/metro/colegios, «5 piso»,
+  «3º», «4th floor», rangos «23 y 25» (→ media). Si el título del portal (columna `title` o `owner_name` con el
+  título) ya trae otra dirección, la del texto se descarta. Sin calle en la ficha → solo candidato, y **sube a alta
+  si Nominatim confirma** número + calle + municipio (+ pin del portal a ≤1,5 km). Coordenadas: solo con
+  house_number confirmado, nunca sobre un pin `exact`, y se guardan con `location_precision='exact'` (campo
+  `location` de la auditoría). Si no se confirma, la dirección «trusted» se guarda solo como texto y la precisión
+  no se toca (no se inventa «approximate» donde no hay coordenadas). El job limita las peticiones a Nominatim
+  (`geo`, 12 por pasada, ≤1/s) y deja el anuncio para la siguiente pasada si no caben.
+- **Responsable:** «soy María», «me llamo…», «llamar a Juan», «preguntar por Laura», «Contacto: Pedro», «un
+  saludo, Ana», «Javi 659979697» — solo si `owner_name` está vacío o es genérico («Particular», un teléfono o el
+  TÍTULO del anuncio que el crawler deja a veces ahí), nombre de pila de la lista (`enrich-names.ts`; los que
+  también son barrio o palabra —Sol, Pilar, Mar— solo con fórmula personal), nunca en anuncios de agencia, y si
+  hay varios nombres → media.
+- ⚠️ **No hace nada hasta tener el índice:** la primera vez indexa los teléfonos de TODAS las descripciones
+  (88.000, `?index=20000` por pasada) y no aplica nada hasta que quedan ≤300 sin indexar (un número de agencia
+  parecería de un particular con el índice a medias). `note` en el JSON lo dice.
+- ⚠️ **El cron hay que ponerlo a mano en el VPS** (cada 10 min; copia operativa `/opt/smartbc-particulares-enrich.sh`
+  desde `scripts/vps-particulares-enrich.sh`; `… dry` solo calcula). Activación recomendada: 1) migración (la
+  aplica el autodeploy), 2) `dry` hasta que `index.pendingAfter` sea 0 y revisar `sample`, 3) crontab.
+- **Medido el 2026-10-12** sobre los 22.003 particulares (revisión a mano de 119 teléfonos alta, 45 direcciones
+  alta, 25+40 candidatos y descartes y TODOS los nombres): ver el informe del encargo; reproducible con
+  `scripts/report-particulares-enrich.mts` (copia local en JSONL) y `scripts/dry-run-particulares-enrich.mts`
+  (el job real contra una BD simulada en memoria). Cobertura baja a propósito: solo ~2 % de las descripciones
+  traen un teléfono en claro.
+- **Deshacer todo (de emergencia):** `select particulares_enrichment_revert(id) from particulares_enrichments
+  where reverted_at is null;` (restaura campo a campo y respeta lo editado después).
+
 ## Idioma del scraping y de los enlaces temporales de `particulares` (2026-09-07)
 El CRM entero es en español, así que la ficha scrapeada de un particular
 (`/admin/particulares`) y su enlace temporal (`/a/[token]`) también deben
