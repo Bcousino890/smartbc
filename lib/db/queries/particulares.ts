@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "../admin";
+import { buildSearchPlan } from "@/lib/particulares/search-clauses";
 import { normalizeZone, OTHER_ZONE_LABEL } from "@/lib/madrid-zones";
 import { isPointInAnyPolygon, type ZonePolygon } from "@/lib/zone-polygon";
 import type { ZoneFilterGroup } from "@/components/admin/particulares/zone-filter";
@@ -144,6 +145,12 @@ export type ParticularesFilters = {
   gestion?: "unmanaged" | "contacted" | "assigned" | "mine" | "";
   currentUserId?: string;
   advertiser?: "particular" | "professional" | "unknown" | "";
+  /** Agencias (`agency_key`, migración 0185): solo anuncios de ALGUNA de ellas. */
+  agencyKeys?: string[];
+  /** Agencias excluidas: los anuncios de estas agencias no salen (los demás sí, también los de particulares). */
+  excludeAgencyKeys?: string[];
+  /** Búsqueda de texto en TODOS los estados: sin filtrar activos/retirados y sin ocultar las copias enlazadas. */
+  searchAllStates?: boolean;
   /** Portal de origen (`portal`: "idealista", "fotocasa", "pisos"…). Es una
    *  columna base, así que no necesita degradación por migración. */
   portal?: string;
@@ -264,6 +271,11 @@ function applyParticularesSort(query: any, sort: ParticularesSort | undefined, s
   return q.order("id", { ascending: false });
 }
 
+/** Claves de agencia (la URL es input del usuario): texto corto, sin comillas ni barras. */
+const okAgencyKey = (k: string) => k.length > 0 && k.length <= 120 && !/["\\]/.test(k);
+/** Valor dentro de `not.in.(…)`: entre comillas porque puede llevar comas, paréntesis o espacios. */
+const quoteKey = (k: string) => `"${k}"`;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyParticularesFilters(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,17 +287,9 @@ function applyParticularesFilters(
   let q = query;
   // Un inmueble con venta Y alquiler enlazados es UNA fila (la del principal):
   // si se filtra por operación hay que mirar también las de sus enlazados.
-  if (hasLinks && !f.showDuplicates) q = q.is("duplicate_of", null);
-  const term = f.search?.trim();
-  if (term) {
-    // Mismo escapado que lib/db/queries/sales-inbox.ts: PostgREST usa ","
-    // como separador de cláusulas .or(), así que un término con comas
-    // rompería el filtro si no se sustituye antes.
-    const like = `%${term.replace(/[%,]/g, " ")}%`;
-    const clauses = [`zone.ilike.${like}`, `description.ilike.${like}`, `external_id.ilike.${like}`];
-    if (hasAddress) clauses.push(`address.ilike.${like}`);
-    q = q.or(clauses.join(","));
-  }
+  if (hasLinks && !f.showDuplicates && !(f.searchAllStates && f.search?.trim())) q = q.is("duplicate_of", null);
+  const plan = buildSearchPlan(f.search ?? "", hasAddress);
+  if (plan) q = q.or(plan.clauses.join(","));
 
   if (f.operation) {
     q = hasLinks
@@ -354,6 +358,12 @@ function applyParticularesFilters(
 
   if (f.advertiser === "unknown") q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
   else if (f.advertiser) q = q.eq("advertiser_type", f.advertiser);
+
+  const agencyKeys = (f.agencyKeys ?? []).filter(okAgencyKey);
+  if (agencyKeys.length) q = q.in("agency_key", agencyKeys);
+  const noAgency = (f.excludeAgencyKeys ?? []).filter(okAgencyKey);
+  // `not.in` descartaría también los NULL (particulares): se dejan pasar a propósito.
+  if (noAgency.length) q = q.or(`agency_key.is.null,agency_key.not.in.(${noAgency.map(quoteKey).join(",")})`);
 
   if (f.portal) q = q.eq("portal", f.portal);
 
@@ -442,13 +452,16 @@ export async function getParticularesPage(opts?: {
     const offset = Math.max(0, opts.offset ?? 0);
     const pageSize = Math.max(1, opts.pageSize);
     const showRetired = opts.showRetired ?? false;
+    const anyState = Boolean(opts.filters?.searchAllStates && opts.filters.search?.trim());
     for (const cols of attempts) {
       let query = supabase
         .from("particulares")
-        .select(cols, { count: "exact" })
-        .eq("is_active", !showRetired);
+        .select(cols, { count: "exact" });
+      // Búsqueda de texto: mira en TODOS los estados (activos primero, luego retirados).
+      if (!anyState) query = query.eq("is_active", !showRetired);
       query = applyParticularesFilters(query, opts.filters ?? {}, cols.includes("address"), cols.includes("duplicate_of"));
-      query = applyParticularesSort(query, opts.filters?.sort, showRetired);
+      if (anyState) query = query.order("is_active", { ascending: false });
+      query = applyParticularesSort(query, opts.filters?.sort, showRetired && !anyState);
       // try/catch, no solo `res.error`: un `.in("id", idsInZone)` con miles
       // de ids (zona dibujada grande) puede hacer que la petición a
       // PostgREST falle a nivel de red/HTTP (URL demasiado larga) — eso
@@ -850,4 +863,59 @@ export async function getParticularesIdsInPolygons(
     console.error("[particulares] getParticularesIdsInPolygons: excepción", err);
     return [];
   }
+}
+
+export type ParticularesAgency = {
+  /** Clave normalizada (`agency_key`): lo que viaja en la URL y en el filtro. */
+  key: string;
+  /** Nombre a mostrar (el más frecuente de sus variantes). */
+  name: string;
+  /** Anuncios activos / en total (activos + retirados). */
+  active: number;
+  total: number;
+  portals: string[];
+};
+
+/**
+ * Autocompletado de agencias (función SQL `particulares_agencies`, migración
+ * 0185): agrupa por nombre normalizado, con nº de anuncios y portales. Sin
+ * texto devuelve las de más anuncios activos. Si la migración aún no está
+ * aplicada devuelve `unavailable` en vez de reventar.
+ */
+export async function getParticularesAgencies(
+  q: string,
+  limit = 20,
+): Promise<{ agencies: ParticularesAgency[]; unavailable: boolean }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
+  const { data, error } = await supabase.rpc("particulares_agencies", {
+    p_q: q.trim().slice(0, 80) || null,
+    p_limit: Math.max(1, Math.min(limit, 50)),
+  });
+  if (error) {
+    console.error("[particulares] particulares_agencies", error.message);
+    return { agencies: [], unavailable: true };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const agencies = ((data ?? []) as any[]).map((r) => ({
+    key: String(r.key),
+    name: String(r.name ?? r.key),
+    active: Number(r.active ?? 0),
+    total: Number(r.total ?? 0),
+    portals: Array.isArray(r.portals) ? (r.portals as string[]) : [],
+  }));
+  return { agencies, unavailable: false };
+}
+
+/** Nombres de las agencias elegidas (para los chips al cargar desde la URL). */
+export async function getParticularesAgencyNames(keys: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  await Promise.all(
+    [...new Set(keys)].slice(0, 20).map(async (k) => {
+      const { agencies } = await getParticularesAgencies(k, 5);
+      const hit = agencies.find((a) => a.key === k);
+      if (hit) out[k] = hit.name;
+    }),
+  );
+  return out;
 }

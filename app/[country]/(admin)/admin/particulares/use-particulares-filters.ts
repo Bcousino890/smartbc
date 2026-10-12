@@ -112,7 +112,17 @@ type FilterValues = {
   exactLocation: boolean;
   /** Alquiler: larga duración o de temporada. */
   rentalKind: RentalKindFilter;
+  /** Agencias («Con esta agencia»): claves normalizadas separadas por «|». */
+  agencies: string;
+  /** Agencias excluidas («Excluir esta agencia»), igual. */
+  excludeAgencies: string;
+  /** Búsqueda de texto: true = respeta Activos/Retirados y el anunciante (por defecto mira en todos los estados). */
+  searchScoped: boolean;
 };
+
+/** Separador de claves de agencia en la URL (las claves no llevan «|» ni «,»). */
+export const AGENCY_SEP = "|";
+export const splitAgencies = (v: string): string[] => v.split(AGENCY_SEP).map((x) => x.trim()).filter(Boolean);
 
 const PARAM_KEYS: Record<keyof FilterValues, string> = {
   query: "q",
@@ -156,6 +166,9 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   plotMax: "parcelaMax",
   exactLocation: "ubicExacta",
   rentalKind: "alquiler",
+  agencies: "agencia",
+  excludeAgencies: "sinAgencia",
+  searchScoped: "soloFiltros",
 };
 
 const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
@@ -186,7 +199,7 @@ const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
  * el estado en caliente, para no pelear con lo que el usuario está
  * tecleando.
  */
-export function useParticularesFilters() {
+export function useParticularesFilters(initialAgencyNames: Record<string, string> = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -195,7 +208,7 @@ export function useParticularesFilters() {
   // esqueletos en vez de seguir mostrando datos que ya no corresponden.
   const [pending, startTransition] = useTransition();
 
-  const [query, setQuery] = useState(() => searchParams.get(PARAM_KEYS.query) ?? "");
+  const [query, setQueryRaw] = useState(() => searchParams.get(PARAM_KEYS.query) ?? "");
   const [operation, setOperationRaw] = useState<OperationFilter>(() =>
     readEnum<OperationFilter>(searchParams.get(PARAM_KEYS.operation), OPERATION_VALUES),
   );
@@ -252,6 +265,25 @@ export function useParticularesFilters() {
   const [rentalKind, setRentalKind] = useState<RentalKindFilter>(() =>
     readEnum<RentalKindFilter>(searchParams.get(PARAM_KEYS.rentalKind), RENTAL_KIND_VALUES),
   );
+
+  // Al vaciar la búsqueda, la próxima vuelve a mirar en todos los estados.
+  function setQuery(v: string) {
+    setQueryRaw(v);
+    if (!v.trim()) setSearchScoped(false);
+  }
+  const [agencies, setAgenciesRaw] = useState(() => searchParams.get(PARAM_KEYS.agencies) ?? "");
+  const [excludeAgencies, setExcludeAgencies] = useState(() => searchParams.get(PARAM_KEYS.excludeAgencies) ?? "");
+  const [searchScoped, setSearchScoped] = useState(() => searchParams.get(PARAM_KEYS.searchScoped) === "1");
+  // Nombre a mostrar de cada clave de agencia (no viaja en la URL: lo da el servidor al cargar y el autocompletado al elegir).
+  const [agencyNames, setAgencyNames] = useState<Record<string, string>>(initialAgencyNames);
+  const rememberAgency = useCallback((key: string, name: string) => setAgencyNames((p) => (p[key] === name ? p : { ...p, [key]: name })), []);
+
+  // Elegir «Con esta agencia» enseña sus anuncios aunque el anunciante por
+  // defecto sea «Particulares»: pasa a «Agencias» (y el chip lo recuerda).
+  function setAgencies(v: string) {
+    setAgenciesRaw(v);
+    if (v) setAdvertiser((a) => (a === DEFAULT_ADVERTISER ? "professional" : a));
+  }
 
   // Dibujar una zona y elegir distrito/barrio son dos formas ALTERNATIVAS de
   // acotar por ubicación, no combinables (ver el comentario de FilterValues):
@@ -313,6 +345,9 @@ export function useParticularesFilters() {
     plotMax,
     exactLocation,
     rentalKind,
+    agencies,
+    excludeAgencies,
+    searchScoped,
   };
 
   const prevValuesRef = useRef(values);
@@ -389,6 +424,9 @@ export function useParticularesFilters() {
     plotMax,
     exactLocation,
     rentalKind,
+    agencies,
+    excludeAgencies,
+    searchScoped,
   ]);
 
   useEffect(() => {
@@ -401,7 +439,7 @@ export function useParticularesFilters() {
   // pero conserva la pestaña Activos/Retirados y el orden, que no son filtros
   // sino la vista que el usuario ha elegido.
   const clearAll = useCallback(() => {
-    setQuery("");
+    setQueryRaw("");
     setOperationRaw("");
     setZoneRaw("");
     setDrawnZoneRaw("");
@@ -440,6 +478,9 @@ export function useParticularesFilters() {
     setPlotMax("");
     setExactLocation(false);
     setRentalKind("");
+    setAgenciesRaw("");
+    setExcludeAgencies("");
+    setSearchScoped(false);
   }, []);
 
   return {
@@ -527,6 +568,14 @@ export function useParticularesFilters() {
     setExactLocation,
     rentalKind,
     setRentalKind,
+    agencies,
+    setAgencies,
+    excludeAgencies,
+    setExcludeAgencies,
+    searchScoped,
+    setSearchScoped,
+    agencyNames,
+    rememberAgency,
   };
 }
 

@@ -4,8 +4,9 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter";
 import type { ParticularesFiltersApi } from "../use-particulares-filters";
-import { CONDITION_OPTIONS, ENERGY_LETTERS, EXTRA_OPTIONS, ORIENTATION_LABEL, POSITION_OPTIONS, RENTAL_KIND_LABEL, SINCE_LABEL, TYPE_GROUPS, VIEW_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
+import { ADVERTISER_LABEL, CONDITION_OPTIONS, ENERGY_LETTERS, EXTRA_OPTIONS, ORIENTATION_LABEL, POSITION_OPTIONS, RENTAL_KIND_LABEL, SINCE_LABEL, TYPE_GROUPS, VIEW_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
 import { ChoiceGroup, FOCUS_RING, NumberField, SelectField, SwitchRow } from "./controls";
+import { AgencyCombobox } from "./agency-combobox";
 import { RangeSlider } from "./range-slider";
 import { fmtEur, fmtNum } from "./format";
 
@@ -113,6 +114,40 @@ export function FiltersPanel({
         </header>
 
         <div className="flex-1 overflow-y-auto px-5">
+          <Section title="Particular | Agencia" active={f.advertiser !== "particular" || Boolean(f.agencies || f.excludeAgencies)}>
+            <ChoiceGroup
+              ariaLabel="Tipo de anunciante"
+              value={f.advertiser}
+              onChange={(v) => f.setAdvertiser(v)}
+              options={[
+                { value: "all", label: "Todo" },
+                { value: "particular", label: ADVERTISER_LABEL.particular },
+                { value: "professional", label: ADVERTISER_LABEL.professional },
+                { value: "unknown", label: ADVERTISER_LABEL.unknown },
+              ]}
+            />
+            <div className="space-y-4 rounded-xl border border-ink/10 bg-cream-50/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink/65">Agencias</p>
+              <AgencyCombobox
+                label="Con esta agencia"
+                description="Ver todas las propiedades de esta agencia (puedes elegir varias)."
+                value={f.agencies}
+                onChange={f.setAgencies}
+                names={f.agencyNames}
+                remember={f.rememberAgency}
+              />
+              <AgencyCombobox
+                label="Excluir esta agencia"
+                description="Ver propiedades que esta agencia no ofrece."
+                value={f.excludeAgencies}
+                onChange={f.setExcludeAgencies}
+                names={f.agencyNames}
+                remember={f.rememberAgency}
+                tone="exclude"
+              />
+            </div>
+          </Section>
+
           <Section title="Precio">
             <RangeSlider
               min={0}

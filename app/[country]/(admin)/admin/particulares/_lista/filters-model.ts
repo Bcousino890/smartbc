@@ -1,5 +1,5 @@
 import { decodeZonePolygons } from "@/lib/zone-polygon";
-import { DEFAULT_ADVERTISER, type ParticularesFiltersApi } from "../use-particulares-filters";
+import { DEFAULT_ADVERTISER, splitAgencies, type ParticularesFiltersApi } from "../use-particulares-filters";
 import { fmtEur, fmtNum, portalName } from "./format";
 
 // Etiquetas y chips de filtros activos. Un único sitio para los textos: los
@@ -137,6 +137,21 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
       tone: f.advertiser === DEFAULT_ADVERTISER ? "scope" : "default",
       // Quitar «Particulares» (lo normal) abre a todos; quitar otro vuelve al normal.
       onRemove: () => f.setAdvertiser(f.advertiser === DEFAULT_ADVERTISER ? "all" : DEFAULT_ADVERTISER),
+    });
+  }
+
+  for (const k of splitAgencies(f.agencies)) {
+    chips.push({
+      id: `agency:${k}`,
+      label: `Agencia: ${f.agencyNames[k] ?? k}`,
+      onRemove: () => f.setAgencies(splitAgencies(f.agencies).filter((x) => x !== k).join("|")),
+    });
+  }
+  for (const k of splitAgencies(f.excludeAgencies)) {
+    chips.push({
+      id: `noagency:${k}`,
+      label: `Sin ${f.agencyNames[k] ?? k}`,
+      onRemove: () => f.setExcludeAgencies(splitAgencies(f.excludeAgencies).filter((x) => x !== k).join("|")),
     });
   }
 
@@ -290,6 +305,8 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   if (f.condition) n++;
   if (f.yearMin || f.yearMax) n++;
   if (f.showLinked) n++;
+  if (f.agencies) n++;
+  if (f.excludeAgencies) n++;
   if (splitCsv(f.types).length) n++;
   n += splitCsv(f.extras).length ? 1 : 0;
   if (f.energy) n++;

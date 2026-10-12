@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import {
+  getParticularesAgencyNames,
   getParticularesIdsInPolygons,
   getParticularesPage,
   getParticularesStats,
@@ -19,6 +20,7 @@ import { getCountryConfig, type Country } from "@/lib/country-config";
 export const dynamic = "force-dynamic";
 
 type SP = Record<string, string | string[] | undefined>;
+const pipeList = (v: string | undefined): string[] => [...new Set((v ?? "").split("|").map((x) => x.trim()).filter(Boolean))].slice(0, 20);
 const one = (v: string | string[] | undefined): string | undefined =>
   Array.isArray(v) ? v[0] : v;
 
@@ -72,9 +74,19 @@ export default async function AdminParticularesPage({
   // tapaban lo que interesa). "all" es el valor EXPLÍCITO para verlo todo;
   // "professional" = agencias, "unknown" = sin clasificar. Ver el mismo
   // criterio en use-particulares-filters.ts (ahí vive el default en cliente).
-  const advertiserScope =
-    pick(one(sp.advertiser), ["all", "particular", "professional", "unknown"] as const) || "particular";
-  const advertiserFilter = advertiserScope === "all" ? "" : advertiserScope;
+  const advertiserParam = pick(one(sp.advertiser), ["all", "particular", "professional", "unknown"] as const);
+  const advertiserScope = advertiserParam || "particular";
+  // Agencias (claves normalizadas separadas por «|», ver 0185).
+  const agencyKeys = pipeList(one(sp.agencia));
+  const excludeAgencyKeys = pipeList(one(sp.sinAgencia));
+  // Búsqueda de texto: mira en TODOS los estados (activos y retirados) y en todos
+  // los anunciantes, salvo que el usuario pida «volver a filtrar» (`soloFiltros=1`).
+  // Un anunciante elegido a propósito (en la URL) sí se respeta.
+  const searchAllStates = Boolean(one(sp.q)?.trim()) && one(sp.soloFiltros) !== "1";
+  // Con «Con esta agencia» (o buscando) y sin anunciante explícito, el default
+  // «particulares» no tiene sentido: se muestran las agencias.
+  const advertiserFilter =
+    advertiserScope === "all" || (!advertiserParam && (searchAllStates || agencyKeys.length > 0)) ? "" : advertiserScope;
   // Portal de origen: solo ids "seguros" (letras, cifras, punto/guion). El
   // valor llega a un .eq() parametrizado, pero un id raro no aporta nada.
   const portalParam = one(sp.portal);
@@ -138,6 +150,9 @@ export default async function AdminParticularesPage({
     gestion: pick(one(sp.gestion), ["unmanaged", "contacted", "assigned", "mine"] as const),
     currentUserId: currentProfile?.id,
     advertiser: advertiserFilter,
+    agencyKeys: agencyKeys.length ? agencyKeys : undefined,
+    excludeAgencyKeys: excludeAgencyKeys.length ? excludeAgencyKeys : undefined,
+    searchAllStates,
     portal,
     sort: pick(one(sp.sort), ["oldest", "price_desc", "price_asc", "area_desc", "area_asc"] as const),
     pricePerM2Min: numOrUndef(one(sp.m2Min)),
@@ -171,7 +186,8 @@ export default async function AdminParticularesPage({
   };
   // El amueblado ya se filtra en servidor con las etiquetas de `attrs` (0183).
 
-  const [{ rows: enrichedRows, total, failed }, stats, staffOptions, scraperConfig] = await Promise.all([
+  const agencyNamesPromise = getParticularesAgencyNames([...agencyKeys, ...excludeAgencyKeys]).catch(() => ({}));
+  const [{ rows: enrichedRows, total, failed }, stats, staffOptions, scraperConfig, agencyNames] = await Promise.all([
     getParticularesPage({
       offset: (page - 1) * ANUNCIOS_POR_PAGINA,
       pageSize: ANUNCIOS_POR_PAGINA,
@@ -181,6 +197,7 @@ export default async function AdminParticularesPage({
     statsPromise,
     staffOptionsPromise,
     scraperConfigPromise,
+    agencyNamesPromise,
   ]);
 
   const rows = enrichedRows as unknown as ParticularRow[];
@@ -209,6 +226,7 @@ export default async function AdminParticularesPage({
         currentRole={currentProfile?.role}
         currentUserId={currentProfile?.id}
         staffOptions={staffOptions}
+        agencyNames={agencyNames}
       />
     </div>
   );

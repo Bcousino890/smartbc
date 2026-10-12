@@ -47,6 +47,7 @@ export function ParticularesClient({
   currentRole,
   currentUserId,
   staffOptions = [],
+  agencyNames = {},
 }: {
   /** Página actual YA filtrada y paginada por el servidor (ver page.tsx). */
   rows: ParticularRow[];
@@ -64,8 +65,10 @@ export function ParticularesClient({
   currentRole?: string;
   currentUserId?: string;
   staffOptions?: StaffOption[];
+  /** Nombre a mostrar de las agencias que vienen en la URL (`agencia`, `sinAgencia`). */
+  agencyNames?: Record<string, string>;
 }) {
-  const f = useParticularesFilters();
+  const f = useParticularesFilters(agencyNames);
   const { query, setQuery, operation, setOperation, zone, setZone, advertiser, setAdvertiser, portal, setPortal, sort, setSort, priceDrop, setPriceDrop, gestion, showRetired, setShowRetired } = f;
 
   const [pageRows, setPageRows] = useState(rows);
@@ -186,6 +189,9 @@ export function ParticularesClient({
   const busy = f.pending || pageNavPending;
 
   const opValue = operation === "" ? "all" : operation;
+  // Con texto en la búsqueda se mira en todos los estados y anunciantes (ver page.tsx).
+  const searching = query.trim() !== "";
+  const searchAll = searching && !f.searchScoped;
 
   return (
     <>
@@ -312,10 +318,10 @@ export function ParticularesClient({
         {/* Activos / Retirados + contador + chips */}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex items-center gap-1 rounded-xl border border-ink/10 bg-white p-0.5">
-            <button type="button" onClick={() => setShowRetired(false)} className={cn("rounded-[10px] px-3.5 py-1.5 text-sm font-medium", !showRetired ? "bg-ink text-cream-50" : "text-ink/70 hover:text-ink", FOCUS_RING)}>
+            <button type="button" disabled={searchAll} onClick={() => setShowRetired(false)} className={cn("rounded-[10px] px-3.5 py-1.5 text-sm font-medium disabled:opacity-40", !showRetired && !searchAll ? "bg-ink text-cream-50" : "text-ink/70 hover:text-ink", FOCUS_RING)}>
               Activos
             </button>
-            <button type="button" onClick={() => setShowRetired(true)} className={cn("rounded-[10px] px-3.5 py-1.5 text-sm font-medium", showRetired ? "bg-red-700 text-white" : "text-ink/70 hover:text-red-700", FOCUS_RING)}>
+            <button type="button" disabled={searchAll} onClick={() => setShowRetired(true)} className={cn("rounded-[10px] px-3.5 py-1.5 text-sm font-medium disabled:opacity-40", showRetired && !searchAll ? "bg-red-700 text-white" : "text-ink/70 hover:text-red-700", FOCUS_RING)}>
               Retirados
             </button>
           </div>
@@ -337,6 +343,28 @@ export function ParticularesClient({
             </button>
           )}
         </div>
+        {searching && (
+          <div role="status" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-gold-dark/50 bg-gold/15 px-3 py-2 text-sm text-ink">
+            {searchAll ? (
+              <>
+                <span>
+                  <strong className="font-semibold">Buscando en todos los estados</strong>: activos y retirados, particulares y agencias.
+                </span>
+                <button type="button" onClick={() => f.setSearchScoped(true)} className={cn("font-semibold underline underline-offset-2", FOCUS_RING)}>
+                  Volver a filtrar (solo {showRetired ? "retirados" : "activos"}
+                  {advertiser === "all" ? "" : ` · ${advertiser === "particular" ? "particulares" : advertiser === "professional" ? "agencias" : "sin clasificar"}`})
+                </button>
+              </>
+            ) : (
+              <>
+                <span>La búsqueda respeta {showRetired ? "Retirados" : "Activos"} y el tipo de anunciante.</span>
+                <button type="button" onClick={() => f.setSearchScoped(false)} className={cn("font-semibold underline underline-offset-2", FOCUS_RING)}>
+                  Buscar en todos los estados
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {refreshState === "done" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-emerald-800"><Check size={12} /> {refreshResult?.updated ?? 0} teléfonos nuevos</p>
         )}
