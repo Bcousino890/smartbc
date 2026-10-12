@@ -134,9 +134,12 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
   const perM2 = pricePerM2Label(row.price, row.square_meters, row.operation);
   const isRent = row.operation === "rent";
   const drop = row.price_drop_pct != null && row.price_drop_pct > 0 ? row.price_drop_pct : null;
-  const fresh = !retired && isNew(row.created_at, now);
-  const ago = exactTime(row.created_at, now);
-  const absolute = row.created_at ? LONG_DATE.format(new Date(row.created_at)) : null;
+  // `detected_at` = primera vez que el crawler vio el anuncio (el portal no publica la hora real de
+  // entrada); `created_at` es cuando llegó al CRM, unos 3 min más tarde.
+  const seenAt = row.detected_at ?? row.created_at;
+  const fresh = !retired && isNew(seenAt, now);
+  const ago = exactTime(seenAt, now);
+  const absolute = seenAt ? LONG_DATE.format(new Date(seenAt)) : null;
   const sources = sourceOffers(row);
   const hasVideo = Boolean(row.has_video || row.video_url);
   const hasPlan = Boolean(row.has_floor_plan || row.floor_plan_url);

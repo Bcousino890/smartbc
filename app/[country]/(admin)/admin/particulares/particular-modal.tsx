@@ -1129,7 +1129,7 @@ export function ParticularModal({
               <span className="rounded-md border border-ink/15 bg-ink/5 px-2 py-0.5 font-mono text-xs text-ink/70">
                 {currentRow.portal.toUpperCase()}-{currentRow.external_id}
               </span>
-              {relativeTime(currentRow.created_at) && <span className="text-xs text-ink/65">Detectado {relativeTime(currentRow.created_at)}</span>}
+              {relativeTime(currentRow.detected_at ?? currentRow.created_at) && <span className="text-xs text-ink/65">Detectado {relativeTime(currentRow.detected_at ?? currentRow.created_at)}</span>}
             </div>
             <button type="button" onClick={onClose} aria-label="Cerrar ficha" className="rounded-full p-2 text-ink hover:bg-ink/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink">
               <X size={20} strokeWidth={2} />
