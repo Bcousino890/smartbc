@@ -175,13 +175,18 @@ export function keyHint(key: string): string {
 
 // ── Coste estimado por zona (créditos de Crawio al mes) ─────────────────────
 //
-// Regla honesta y proporcional: créditos/mes ≈ nº de anuncios de la zona × 0,7.
-// De dónde sale el 0,7: ≈ 2 créditos por página de listado (Idealista) ÷ 30
-// anuncios por página × ~10 barridos al mes ≈ 0,67 → se redondea a 0,7.
+// Regla honesta y proporcional: créditos/mes ≈ nº de anuncios de la zona × créditos por anuncio del PORTAL.
+// Idealista cobra 2 créditos por petición y Fotocasa 1: 2 (o 1) créditos por página de listado ÷ 30
+// anuncios por página × ~10 barridos al mes ≈ 0,67 (Idealista) / 0,33 (Fotocasa).
 // (Es una orientación para comparar zonas, no una factura.) Si la zona aún no
 // tiene `listings_*` NO se inventa nada: la interfaz dice «sin datos aún».
 // Para cambiar la regla basta con tocar esta constante.
-export const CREDITS_PER_LISTING = 0.7;
+/** Créditos de Crawio por petición (tarifa del plan): Idealista 2, Fotocasa 1. */
+export const CREDITS_PER_REQUEST: Record<ScraperPortal, number> = { idealista: 2, fotocasa: 1 };
+/** Una página de listado trae ~30 anuncios y se barre ~10 veces al mes: créditos/mes por anuncio y portal (Idealista ≈ 0,7; Fotocasa ≈ 0,35). */
+export function creditsPerListing(portal: ScraperPortal): number {
+  return Math.round(((CREDITS_PER_REQUEST[portal] / 30) * 10) * 100) / 100;
+}
 
 /** Anuncios conocidos de la zona (venta + alquiler); null si el crawler aún no los ha contado. */
 export function zoneListings(z: Pick<ScraperZone, "listings_sale" | "listings_rent">): number | null {
@@ -190,9 +195,9 @@ export function zoneListings(z: Pick<ScraperZone, "listings_sale" | "listings_re
 }
 
 /** Créditos/mes de una zona en prioridad «Marcada»; null = sin datos. */
-export function zoneBaseCredits(z: Pick<ScraperZone, "listings_sale" | "listings_rent">): number | null {
+export function zoneBaseCredits(z: Pick<ScraperZone, "portal" | "listings_sale" | "listings_rent">): number | null {
   const n = zoneListings(z);
-  return n == null ? null : Math.round(n * CREDITS_PER_LISTING);
+  return n == null ? null : Math.round(n * creditsPerListing(z.portal));
 }
 
 /** Marcada = coste base; Alta = como mucho el doble (se revisa el doble de seguido); Sin marcar = 0. */

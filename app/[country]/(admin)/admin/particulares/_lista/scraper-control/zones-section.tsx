@@ -285,7 +285,7 @@ export function ZonesSection({ data, save, patchLocal, reload }: { data: Scraper
               en {PORTAL_LABEL[portal]} · coste estimado de lo marcado <strong>≈ {fmt(totals.now)} créditos/mes</strong>
               {totals.all > totals.now && <span className="text-emerald-800"> · ahorras ≈ {fmt(totals.all - totals.now)} frente a marcar todo</span>}
               <span className="block text-xs text-ink/65">
-                Cálculo aproximado: ≈ 0,7 créditos al mes por cada anuncio de la zona. {totals.unknown > 0 && `${fmt(totals.unknown)} zonas aún sin datos no cuentan.`} No es una factura.
+                Cálculo aproximado en CRÉDITOS (no peticiones): {portal === "idealista" ? "Idealista cobra 2 créditos por petición, ≈ 0,7 créditos al mes por anuncio" : "Fotocasa cobra 1 crédito por petición, ≈ 0,3 créditos al mes por anuncio"}. {totals.unknown > 0 && `${fmt(totals.unknown)} zonas aún sin datos no cuentan.`} No es una factura.
               </span>
             </p>
             {marked === 0 && (
