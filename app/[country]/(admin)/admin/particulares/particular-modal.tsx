@@ -310,14 +310,14 @@ function changeToEntry(c: ParticularChangeRow): TimelineEntry {
     case "deleted":
       return {
         ...base,
-        title: "Anuncio retirado",
+        title: "Anuncio retirado del portal",
         icon: <X size={12} strokeWidth={2.5} />,
         iconClass: "bg-red-100 text-red-600",
       };
     case "reactivated":
       return {
         ...base,
-        title: "Anuncio reactivado",
+        title: "El anuncio volvió a estar publicado",
         icon: <RefreshCw size={12} strokeWidth={2} />,
         iconClass: "bg-emerald-100 text-emerald-600",
       };
@@ -1259,7 +1259,11 @@ export function ParticularModal({
                 {!currentRow.is_active && (
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                     <span className="font-semibold">Anuncio retirado</span>
-                    {currentRow.taken_down_at && <span>· {DATE_FMT.format(new Date(currentRow.taken_down_at))}</span>}
+                    {currentRow.taken_down_at && <span>· el {DATE_FMT.format(new Date(currentRow.taken_down_at))}</span>}
+                    <span className="basis-full text-xs">
+                      {currentRow.source_update_text ? `${esText(currentRow.source_update_text)}. ` : ""}
+                      Si vuelve a publicarse, se reactiva solo y queda anotado en el Histórico.
+                    </span>
                     <button onClick={handleToggleActive} disabled={togglingActive} className="ml-auto rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-60">
                       {togglingActive ? "Guardando…" : "Reactivar"}
                     </button>

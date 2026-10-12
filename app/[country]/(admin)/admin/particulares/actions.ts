@@ -357,15 +357,7 @@ export async function setParticularActive(
     .eq("id", particularId);
   if (error) return { ok: false, error: error.message };
 
-  // Historial: mismo formato que las bajas/reactivaciones del cron.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (admin as any).from("particulares_changes").insert({
-    particular_id: particularId,
-    change_type: active ? "reactivated" : "deleted",
-    old_value: null,
-    new_value: active ? { reactivated_at: now } : { taken_down_at: now },
-    changed_at: now,
-  });
+  // El historial (baja/reactivación) lo escribe el disparador `particulares_active_log` (migración 0180).
 
   revalidatePath("/admin/particulares");
   return { ok: true };
