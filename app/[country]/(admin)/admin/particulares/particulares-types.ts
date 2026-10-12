@@ -39,6 +39,8 @@ export type ParticularRow = {
   longitude: number | null;
   // Campos de la migración 0035 — pueden venir undefined/null si aún no está aplicada
   address?: string | null;
+  /** Título del anuncio (migración 0186); `address` es solo la dirección. */
+  title?: string | null;
   phone_confidence?: "high" | "medium" | "low" | null;
   advertiser_type?: string | null;
   // Campos de la migración 0036 (plano + vídeo) — pueden venir undefined/null

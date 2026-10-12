@@ -1,5 +1,6 @@
 "use client";
 
+import { addressLine } from "@/lib/particulares/address-title";
 import { ExternalLink, Loader2, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { LinkedAd } from "@/lib/particulares/links-types";
@@ -176,7 +177,7 @@ function SourceRow({ m }: { m: LinkedAd }) {
             : m.taken_down_at && `Baja ${relativeTime(m.taken_down_at)}`}
         </p>
       </td>
-      <td className="max-w-[220px] truncate px-3 py-2.5 text-ink/80" title={m.address ?? m.zone ?? ""}>{m.address ?? m.zone ?? "—"}</td>
+      <td className="max-w-[220px] truncate px-3 py-2.5 text-ink/80" title={addressLine(m.address) || m.zone || ""}>{addressLine(m.address) || m.zone || "—"}</td>
       <td className="px-3 py-2.5 tabular-nums">{m.bedrooms ?? "—"}</td>
       <td className="px-3 py-2.5 tabular-nums">{m.bathrooms ?? "—"}</td>
       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{m.square_meters != null ? `${m.square_meters} m²` : "—"}</td>

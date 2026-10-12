@@ -15,6 +15,7 @@ import { assignParticular, createParticularShareLink, createPropertyFromParticul
 import { prefetchParticularDetail } from "./detail-cache";
 import { LinkedAdsSection } from "./linked-ads-section";
 import { AdMap } from "@/components/admin/particulares/ad-map";
+import { addressLine, listingTitle } from "@/lib/particulares/address-title";
 import { esAddress, esCondition, esFeatures, esFloor, esOrientation, esText } from "@/lib/particulares/es-labels";
 import { Gallery, type MediaItem } from "./_ficha/gallery";
 import { Lightbox } from "./_ficha/lightbox";
@@ -802,10 +803,11 @@ export function ParticularModal({
   const detailLoading = !currentRow.photos;
 
   // Español siempre, también para lo guardado en inglés antes del backfill.
-  const address = esAddress(currentRow.address);
+  // `address` = solo la dirección (calle + nº); el título del anuncio va aparte (0186).
+  const address = esAddress(addressLine(currentRow.address));
   const features = esFeatures(currentRow.features);
   const zoneText = formatZone(currentRow.zone);
-  const title = address || zoneText || "Anuncio";
+  const title = listingTitle({ title: currentRow.title, address: currentRow.address, zone: zoneText, operation: currentRow.operation });
   const portalLabel = portalName(currentRow.portal);
   const operationLabel = currentRow.operation === "rent" ? "Alquiler" : "Venta";
   const variation = priceVariation(currentRow.price, currentRow.previous_price, currentRow.price_drop_pct);
@@ -959,10 +961,19 @@ export function ParticularModal({
         {variation.direction === "down" ? "Bajó" : "Subió"} {formatPct(Math.abs(variation.pct))} · antes {formatEuros(variation.previous, { monthly: currentRow.operation === "rent" })}
       </p>
     )}
-    <h2 className="mt-3 flex items-start gap-1.5 text-base font-semibold text-ink">
+    <h2 className="mt-3 text-base font-semibold text-ink">{title}</h2>
+    <p className="mt-1.5 flex items-start gap-1.5 text-sm text-ink/80">
       <MapPin size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-gold-dark" />
-      <span>{address || zoneText || "Madrid"}</span>
-    </h2>
+      <span>
+        {address || zoneText || "Madrid"}
+        {precision && (
+          <>
+            {" – "}
+            <a href="#ficha-mapa" className="font-medium text-gold-dark underline-offset-2 hover:underline">Ver en el mapa</a>
+          </>
+        )}
+      </span>
+    </p>
     {address && zoneText && <p className="ml-[22px] text-sm text-ink/70">{zoneText}</p>}
     <div className="mt-3 flex flex-wrap gap-1.5">
       <span className="rounded-md bg-ink px-2 py-0.5 text-xs font-semibold text-cream-50">{operationLabel}</span>
@@ -1237,13 +1248,13 @@ export function ParticularModal({
                       </section>
                     )}
                     {precision !== null && (
-                      <section>
+                      <section id="ficha-mapa" className="scroll-mt-4">
                         <h3 className="mb-2 text-sm font-semibold text-ink">Ubicación</h3>
                         <AdMap
                           particularId={currentRow.id}
                           latitude={currentRow.latitude}
                           longitude={currentRow.longitude}
-                          address={currentRow.address}
+                          address={addressLine(currentRow.address) || null}
                           zone={zoneForMap(currentRow.zone)}
                           precision={precision}
                           height={288}

@@ -4,11 +4,7 @@ import { createAdminClient } from "@/lib/db/admin";
 import { getCurrentProfile } from "@/lib/db/queries/session";
 import { canAccess } from "@/lib/permissions";
 import { nominatimLookup } from "@/lib/geo/nominatim-queue";
-
-// Idealista guarda el TÍTULO del anuncio como dirección («Alquiler de piso en Calle
-// de Velázquez, 113»): hay que quitar tipo y operación o Nominatim no encuentra nada.
-const TYPE_PREFIX =
-  /^(?:(?:alquiler|venta)\s+de\s+)?(?:piso|apartamento|ático|atico|chalet|casa|dúplex|duplex|estudio|loft|local|finca|flat|apartment|house|studio|penthouse|villa)(?:\s*\/\s*(?:apartment|piso))?(?:\s+(?:en|for)\s+(?:venta|alquiler|sale|rent))?\s+(?:en|in)\s+/i;
+import { addressLine } from "@/lib/particulares/address-title";
 
 /**
  * Pin de un anuncio bajo demanda.
@@ -45,7 +41,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     });
   }
 
-  const address = (row.address ?? "").replace(TYPE_PREFIX, "").trim();
+  // Dirección limpia (calle + número), nunca el título del anuncio (0186; tolera filas sin backfill).
+  const address = addressLine(row.address);
   const zone = (row.zone ?? "").split("/").pop()?.replace(/-/g, " ").trim() ?? "";
   const withNumber = !!address && /\d/.test(address);
   const q = [address, zone, "Madrid", "España"].filter(Boolean).join(", ");

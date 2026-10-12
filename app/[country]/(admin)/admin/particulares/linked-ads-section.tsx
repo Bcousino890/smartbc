@@ -1,5 +1,6 @@
 "use client";
 
+import { addressLine } from "@/lib/particulares/address-title";
 import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Link2, Users } from "lucide-react";
 import { formatPrice } from "@/lib/format";
@@ -134,7 +135,7 @@ function AdRow({
           <LevelBadge link={ad.link} />
         </div>
         <p className="mt-0.5 truncate text-xs text-ink/55">
-          {[ad.square_meters ? `${ad.square_meters} m²` : null, ad.bedrooms != null ? `${ad.bedrooms} hab.` : null, ad.bathrooms != null ? `${ad.bathrooms} baños` : null, ad.address ?? ad.zone]
+          {[ad.square_meters ? `${ad.square_meters} m²` : null, ad.bedrooms != null ? `${ad.bedrooms} hab.` : null, ad.bathrooms != null ? `${ad.bathrooms} baños` : null, addressLine(ad.address) || ad.zone]
             .filter(Boolean)
             .join(" · ")}
         </p>
