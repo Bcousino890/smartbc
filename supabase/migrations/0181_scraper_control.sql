@@ -12,7 +12,7 @@
 -- sale_active / rent_active (nunca pisa lo que eligió el dueño); el panel solo
 -- escribe esas tres columnas. Zona ausente o desconocida = normal y activa.
 --
--- Idempotente: la siembra usa ON CONFLICT DO NOTHING, así que reaplicarla no
+-- Idempotente: la siembra de ajustes usa ON CONFLICT DO NOTHING, así que reaplicarla no
 -- deshace las prioridades que el dueño haya cambiado.
 -- ============================================================
 
@@ -52,62 +52,20 @@ ALTER TABLE scraper_zones    ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON scraper_settings, scraper_zones TO service_role;
 
--- ---------- Siembra de zonas (todas en prioridad normal) ----------
--- Idealista: 21 distritos de Madrid capital + 6 zonas del resto de la Comunidad.
--- Fotocasa: los 21 distritos de fotocasa_zones.json + Pozuelo y La Moraleja
--- (las dos zonas de fuera de la capital que ya vigilaba el scraper antiguo).
-INSERT INTO scraper_zones (portal, zone_key, label, scope) VALUES
-  ('idealista', 'madrid/arganzuela', 'Arganzuela', 'capital'),
-  ('idealista', 'madrid/barajas', 'Barajas', 'capital'),
-  ('idealista', 'madrid/carabanchel', 'Carabanchel', 'capital'),
-  ('idealista', 'madrid/centro', 'Centro', 'capital'),
-  ('idealista', 'madrid/chamartin', 'Chamartín', 'capital'),
-  ('idealista', 'madrid/chamberi', 'Chamberí', 'capital'),
-  ('idealista', 'madrid/ciudad-lineal', 'Ciudad Lineal', 'capital'),
-  ('idealista', 'madrid/fuencarral-el-pardo', 'Fuencarral-El Pardo', 'capital'),
-  ('idealista', 'madrid/hortaleza', 'Hortaleza', 'capital'),
-  ('idealista', 'madrid/latina', 'Latina', 'capital'),
-  ('idealista', 'madrid/moncloa-aravaca', 'Moncloa-Aravaca', 'capital'),
-  ('idealista', 'madrid/moratalaz', 'Moratalaz', 'capital'),
-  ('idealista', 'madrid/puente-de-vallecas', 'Puente de Vallecas', 'capital'),
-  ('idealista', 'madrid/retiro', 'Retiro', 'capital'),
-  ('idealista', 'madrid/salamanca', 'Salamanca', 'capital'),
-  ('idealista', 'madrid/san-blas-canillejas', 'San Blas-Canillejas', 'capital'),
-  ('idealista', 'madrid/tetuan', 'Tetuán', 'capital'),
-  ('idealista', 'madrid/usera', 'Usera', 'capital'),
-  ('idealista', 'madrid/vicalvaro', 'Vicálvaro', 'capital'),
-  ('idealista', 'madrid/villa-de-vallecas', 'Villa de Vallecas', 'capital'),
-  ('idealista', 'madrid/villaverde', 'Villaverde', 'capital'),
-  ('idealista', 'madrid/zona-norte', 'Zona Norte', 'provincia'),
-  ('idealista', 'madrid/zona-sur', 'Zona Sur', 'provincia'),
-  ('idealista', 'madrid/zona-sureste', 'Zona Sureste', 'provincia'),
-  ('idealista', 'madrid/zona-suroeste', 'Zona Suroeste', 'provincia'),
-  ('idealista', 'madrid/zona-noroeste', 'Zona Noroeste', 'provincia'),
-  ('idealista', 'madrid/corredor-del-henares', 'Corredor del Henares', 'provincia'),
-  ('fotocasa', 'madrid-capital/arganzuela', 'Arganzuela', 'capital'),
-  ('fotocasa', 'madrid-capital/barajas', 'Barajas', 'capital'),
-  ('fotocasa', 'madrid-capital/barrio-de-salamanca', 'Barrio de Salamanca', 'capital'),
-  ('fotocasa', 'madrid-capital/carabanchel', 'Carabanchel', 'capital'),
-  ('fotocasa', 'madrid-capital/centro', 'Centro', 'capital'),
-  ('fotocasa', 'madrid-capital/chamartin', 'Chamartín', 'capital'),
-  ('fotocasa', 'madrid-capital/chamberi', 'Chamberí', 'capital'),
-  ('fotocasa', 'madrid-capital/ciudad-lineal', 'Ciudad Lineal', 'capital'),
-  ('fotocasa', 'madrid-capital/fuencarral-el-pardo', 'Fuencarral - El Pardo', 'capital'),
-  ('fotocasa', 'madrid-capital/hortaleza', 'Hortaleza', 'capital'),
-  ('fotocasa', 'madrid-capital/latina', 'Latina', 'capital'),
-  ('fotocasa', 'madrid-capital/moncloa-aravaca', 'Moncloa - Aravaca', 'capital'),
-  ('fotocasa', 'madrid-capital/moratalaz', 'Moratalaz', 'capital'),
-  ('fotocasa', 'madrid-capital/puente-de-vallecas', 'Puente de Vallecas', 'capital'),
-  ('fotocasa', 'madrid-capital/retiro', 'Retiro', 'capital'),
-  ('fotocasa', 'madrid-capital/san-blas', 'San Blas', 'capital'),
-  ('fotocasa', 'madrid-capital/tetuan', 'Tetuán', 'capital'),
-  ('fotocasa', 'madrid-capital/usera', 'Usera', 'capital'),
-  ('fotocasa', 'madrid-capital/vicalvaro', 'Vicálvaro', 'capital'),
-  ('fotocasa', 'madrid-capital/villa-de-vallecas', 'Villa de Vallecas', 'capital'),
-  ('fotocasa', 'madrid-capital/villaverde', 'Villaverde', 'capital'),
-  ('fotocasa', 'pozuelo-de-alarcon/todas-las-zonas', 'Pozuelo de Alarcón (todo el municipio)', 'provincia'),
-  ('fotocasa', 'la-moraleja/todas-las-zonas', 'La Moraleja (toda la zona)', 'provincia')
-ON CONFLICT (portal, zone_key) DO NOTHING;
+-- ---------- Zonas: NO se siembran ----------
+-- Las zonas las define y publica el CRAWLER (comando zones-refresh): zone_key =
+-- ruta real de Idealista tal como la usa shards.py. Mientras la tabla esté
+-- vacía, el panel avisa de que el crawler aún no las ha publicado.
+
+-- ---------- Tareas reales del crawler en idealista_scraper_runs ----------
+-- El check original solo admitía 4 tipos y el crawler escribe una fila por
+-- tarea real. Se amplía (idempotente: se vuelve a crear con la lista completa).
+ALTER TABLE idealista_scraper_runs DROP CONSTRAINT IF EXISTS idealista_scraper_runs_run_type_check;
+ALTER TABLE idealista_scraper_runs ADD CONSTRAINT idealista_scraper_runs_run_type_check CHECK (run_type = ANY (ARRAY[
+  'discovery','full_market','detail_refresh','verification',
+  'agencies','sweep','refresh','phones','verify','sync',
+  'fotocasa-radar','fotocasa-safety','fotocasa-sweep','fotocasa-verify'
+]));
 
 -- ---------- Siembra de ajustes (valores por defecto del contrato) ----------
 -- La clave de Crawio (crawio.key.idealista / crawio.key.fotocasa) NO se siembra:
