@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { isStreetAddress, addressLine, listingTitle } from "@/lib/particulares/address-title";
 import { setTabIntent } from "../_ficha/tab-intent";
 import type { ParticularRow } from "../particulares-types";
 import {
@@ -129,7 +130,11 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
   const op = opLabel(row);
   const both = hasBothOps(row);
   const zone = zoneLabel(row.zone);
-  const street = streetLabel(row.address, row.zone);
+  const isStreet = isStreetAddress(row.address);
+  const street = isStreet ? streetLabel(row.address, row.zone) : "";
+  // address solo con barrio/municipio: se pinta como zona, no como calle.
+  const area = [isStreet ? "" : addressLine(row.address), zone].filter((v, i, a) => v && a.indexOf(v) === i).join(" · ");
+  const title = listingTitle({ title: row.title, address: row.address, zone: zoneLabel(row.zone), operation: row.operation });
   const portal = portalName(row.portal);
   const perM2 = pricePerM2Label(row.price, row.square_meters, row.operation);
   const isRent = row.operation === "rent";
@@ -279,15 +284,15 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
           )}
 
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-              <MapPin size={14} strokeWidth={1.75} className="shrink-0 text-gold-dark" aria-hidden="true" />
-              <span className="truncate">{zone}</span>
+            {/* Encabezado = título del anuncio; la dirección va aparte, con su pin. */}
+            <p className="truncate text-sm font-semibold text-ink" title={title}>
+              {title}
             </p>
-            {street && (
-              <p className="truncate pl-[21px] text-sm text-ink/65" title={street}>
-                {street}
-              </p>
-            )}
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink/80">
+              <MapPin size={14} strokeWidth={1.75} className="shrink-0 text-gold-dark" aria-hidden="true" />
+              <span className="truncate" title={street || area}>{street || area}</span>
+            </p>
+            {street && zone && <p className="truncate pl-[21px] text-xs text-ink/60">{zone}</p>}
           </div>
 
           {sources && (

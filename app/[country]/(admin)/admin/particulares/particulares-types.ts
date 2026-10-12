@@ -41,6 +41,8 @@ export type ParticularRow = {
   longitude: number | null;
   // Campos de la migración 0035 — pueden venir undefined/null si aún no está aplicada
   address?: string | null;
+  /** Título del anuncio (migración 0186); `address` es solo la dirección. */
+  title?: string | null;
   phone_confidence?: "high" | "medium" | "low" | null;
   advertiser_type?: string | null;
   // Campos de la migración 0036 (plano + vídeo) — pueden venir undefined/null
@@ -60,6 +62,8 @@ export type ParticularRow = {
   orientation?: string | null;
   energy_consumption?: string | null;
   energy_emissions?: string | null;
+  /** Distrito del bloque «Ubicación» (`scraper_extra.district`); llega con el detalle. */
+  district?: string | null;
   advertiser_profile_url?: string | null;
   reference?: string | null;
   source_update_text?: string | null;

@@ -430,6 +430,8 @@ export async function getParticularesPage(opts?: {
   // 0036 (plano/vídeo) → 0035 (address, phone_confidence) → 0034 (assigned_*)
   // → 0024 (particular_reference) → 0012 (advertiser_type) → base.
   const attempts = [
+    // 0186: `title` (título del anuncio; `address` ya es solo la dirección).
+    `${BASE_COLUMNS}, advertiser_type, title, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}, ${LINK_COLUMNS_0176}, ${DROP_COLUMNS_0158}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}, ${LINK_COLUMNS_0176}, ${DROP_COLUMNS_0158}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}, ${LINK_COLUMNS_0176}`,
     `${BASE_COLUMNS}, advertiser_type, address, phone_confidence, particular_reference, assigned_to, assigned_at, ${MEDIA_COLUMNS_0036}`,
