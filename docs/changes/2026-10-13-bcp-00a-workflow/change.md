@@ -5,7 +5,7 @@ Añade la documentación mínima para que las tareas de Fabricio con agentes de 
 - **Tamaño:** medio
 - **Responsable:** Fabricio
 - **Rama:** `fabri/bcp-00a-workflow`
-- **Estado:** implementado; pendiente de PR, CI y merge de Fabricio
+- **Estado:** implementado; PR #309 abierto, pendiente del merge de Fabricio
 
 ## Especificación
 
@@ -165,7 +165,7 @@ No se ejecutaron Node 22, `npm ci`, el build ni los tests de la app (B2): el cam
 | AC3 | Demostrado | Bloque de 9 líneas con la cláusula sobre SSH y la rama histórica; `numstat 9 0` y `cmp` sin diferencias. |
 | AC4 | Demostrado | Diff limitado a los 9 archivos del alcance; sin secretos ni conceptos ajenos a BCP. |
 | AC5 | Demostrado | Comprobaciones de T1 sobre la base, el worktree, el `main` local, el stash y las ramas. |
-| AC6 | Pendiente de T12 | Se completa con el PR y la CI del último commit. |
+| AC6 | Demostrado salvo el merge, que hace Fabricio | PR #309, CI en verde (ver «PR, CI y merge») y revisión de Codex anotada como omitida por su decisión. |
 
 ### Revisión
 
@@ -180,4 +180,10 @@ Revisión adicional de Codex: **omitida por decisión expresa de Fabricio** (D00
 
 ### PR, CI y merge
 
-<Se completa en T12.>
+- **PR:** [#309](https://github.com/Bcousino890/smartbc/pull/309), de `fabri/bcp-00a-workflow` hacia `main`. Muestra exactamente los 9 archivos del alcance (`CLAUDE.md` con 9 líneas añadidas y 0 borradas) y GitHub lo marca como fusionable.
+- **`origin/main` antes del push:** seguía en `6e677c2…` (comprobado con `git fetch origin`); no hizo falta rebase.
+- **CI en `4bba5f4`** (commit del resultado): job `check` en verde en 2 min 54 s ([run 38318365863](https://github.com/Bcousino890/smartbc/actions/runs/38318365863)). Incluye TypeScript, los tests offline, el build de Next.js y el lint de migraciones.
+- **CI en el último commit de la rama** (este registro): se comprueba después del push; el resultado está en el propio PR.
+- **Merge:** lo hace Fabricio. Fusionar en `main` puede disparar el autodeploy del VPS (build, despliegue de lo que haya en `main` y migraciones pendientes), según el script versionado. Este cambio no trae migraciones ni código.
+- **Deshacer:** otro PR con `git revert` del merge, fusionado por Fabricio. Nunca comandos en producción.
+- Se conservan el worktree `/Users/fabriirguez/SMARTBC/wt/bcp-00a`, la rama y las notas de `/Users/fabriirguez/SMARTBC/_revisiones/bcp-00a/`.
