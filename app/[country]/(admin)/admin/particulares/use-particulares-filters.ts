@@ -17,7 +17,9 @@ export type FurnishedFilter = "" | "yes" | "no";
 // módulo es server-only, no se puede importar desde este "use client").
 export type SortFilter = "" | "oldest" | "price_desc" | "price_asc" | "area_desc" | "area_asc";
 export type LiftFilter = "" | "yes" | "no";
-export type ConditionFilter = "" | "good" | "to_reform" | "renovated";
+/** Estados separados por coma (cualquiera): nuevo, usado, muy_bueno, bueno, reformar, reformado. */
+export type ConditionFilter = string;
+export type RentalKindFilter = "" | "larga" | "temporada";
 
 const OPERATION_VALUES = new Set(["rent", "sale"]);
 const PHONE_VALUES = new Set(["no_phone", "with_phone"]);
@@ -26,7 +28,7 @@ const ADVERTISER_VALUES = new Set(["all", "particular", "professional", "unknown
 const FURNISHED_VALUES = new Set(["yes", "no"]);
 const SORT_VALUES = new Set(["oldest", "price_desc", "price_asc", "area_desc", "area_asc"]);
 const LIFT_VALUES = new Set(["yes", "no"]);
-const CONDITION_VALUES = new Set(["good", "to_reform", "renovated"]);
+const RENTAL_KIND_VALUES = new Set(["larga", "temporada"]);
 
 function readEnum<T extends string>(
   value: string | null,
@@ -97,6 +99,19 @@ type FilterValues = {
   orientation: string;
   /** Detectado en los últimos N días: "1" | "2" | "7" | "30". */
   since: string;
+  /** Dormitorios / baños: true = número exacto (false = «N o más»). */
+  bedroomsExact: boolean;
+  bathroomsExact: boolean;
+  /** Superficie construida máxima (la mínima es `areaMin`). */
+  areaMax: string;
+  /** Días en cartera: como máximo N (el mínimo es `daysListed`). */
+  daysMax: string;
+  plotMin: string;
+  plotMax: string;
+  /** Solo anuncios con la coordenada exacta (no aproximada). */
+  exactLocation: boolean;
+  /** Alquiler: larga duración o de temporada. */
+  rentalKind: RentalKindFilter;
 };
 
 const PARAM_KEYS: Record<keyof FilterValues, string> = {
@@ -133,6 +148,14 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   energy: "energia",
   orientation: "orientacion",
   since: "desde",
+  bedroomsExact: "dormExacto",
+  bathroomsExact: "banosExacto",
+  areaMax: "areaMax",
+  daysMax: "diasMax",
+  plotMin: "parcelaMin",
+  plotMax: "parcelaMax",
+  exactLocation: "ubicExacta",
+  rentalKind: "alquiler",
 };
 
 const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
@@ -148,6 +171,10 @@ const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
   "yearMax",
   "bathrooms",
   "floorMax",
+  "areaMax",
+  "daysMax",
+  "plotMin",
+  "plotMax",
 ]);
 
 /**
@@ -169,7 +196,7 @@ export function useParticularesFilters() {
   const [pending, startTransition] = useTransition();
 
   const [query, setQuery] = useState(() => searchParams.get(PARAM_KEYS.query) ?? "");
-  const [operation, setOperation] = useState<OperationFilter>(() =>
+  const [operation, setOperationRaw] = useState<OperationFilter>(() =>
     readEnum<OperationFilter>(searchParams.get(PARAM_KEYS.operation), OPERATION_VALUES),
   );
   const [zone, setZoneRaw] = useState(() => searchParams.get(PARAM_KEYS.zone) ?? "");
@@ -204,9 +231,7 @@ export function useParticularesFilters() {
   const [lift, setLift] = useState<LiftFilter>(() =>
     readEnum<LiftFilter>(searchParams.get(PARAM_KEYS.lift), LIFT_VALUES),
   );
-  const [condition, setCondition] = useState<ConditionFilter>(() =>
-    readEnum<ConditionFilter>(searchParams.get(PARAM_KEYS.condition), CONDITION_VALUES),
-  );
+  const [condition, setCondition] = useState<ConditionFilter>(() => searchParams.get(PARAM_KEYS.condition) ?? "");
   const [yearMin, setYearMin] = useState(() => searchParams.get(PARAM_KEYS.yearMin) ?? "");
   const [yearMax, setYearMax] = useState(() => searchParams.get(PARAM_KEYS.yearMax) ?? "");
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
@@ -217,11 +242,26 @@ export function useParticularesFilters() {
   const [energy, setEnergy] = useState(() => searchParams.get(PARAM_KEYS.energy) ?? "");
   const [orientation, setOrientation] = useState(() => searchParams.get(PARAM_KEYS.orientation) ?? "");
   const [since, setSince] = useState(() => searchParams.get(PARAM_KEYS.since) ?? "");
+  const [bedroomsExact, setBedroomsExact] = useState(() => searchParams.get(PARAM_KEYS.bedroomsExact) === "1");
+  const [bathroomsExact, setBathroomsExact] = useState(() => searchParams.get(PARAM_KEYS.bathroomsExact) === "1");
+  const [areaMax, setAreaMax] = useState(() => searchParams.get(PARAM_KEYS.areaMax) ?? "");
+  const [daysMax, setDaysMax] = useState(() => searchParams.get(PARAM_KEYS.daysMax) ?? "");
+  const [plotMin, setPlotMin] = useState(() => searchParams.get(PARAM_KEYS.plotMin) ?? "");
+  const [plotMax, setPlotMax] = useState(() => searchParams.get(PARAM_KEYS.plotMax) ?? "");
+  const [exactLocation, setExactLocation] = useState(() => searchParams.get(PARAM_KEYS.exactLocation) === "1");
+  const [rentalKind, setRentalKind] = useState<RentalKindFilter>(() =>
+    readEnum<RentalKindFilter>(searchParams.get(PARAM_KEYS.rentalKind), RENTAL_KIND_VALUES),
+  );
 
   // Dibujar una zona y elegir distrito/barrio son dos formas ALTERNATIVAS de
   // acotar por ubicación, no combinables (ver el comentario de FilterValues):
   // activar una limpia la otra en vez de dejarlas apilarse como AND, que
   // confundiría más de lo que ayuda en una primera versión.
+  // El tipo de alquiler solo tiene sentido en alquiler: al salir de él se limpia.
+  function setOperation(v: OperationFilter) {
+    setOperationRaw(v);
+    if (v !== "rent") setRentalKind("");
+  }
   function setZone(v: string) {
     setZoneRaw(v);
     if (v) setDrawnZoneRaw("");
@@ -265,6 +305,14 @@ export function useParticularesFilters() {
     energy,
     orientation,
     since,
+    bedroomsExact,
+    bathroomsExact,
+    areaMax,
+    daysMax,
+    plotMin,
+    plotMax,
+    exactLocation,
+    rentalKind,
   };
 
   const prevValuesRef = useRef(values);
@@ -333,6 +381,14 @@ export function useParticularesFilters() {
     energy,
     orientation,
     since,
+    bedroomsExact,
+    bathroomsExact,
+    areaMax,
+    daysMax,
+    plotMin,
+    plotMax,
+    exactLocation,
+    rentalKind,
   ]);
 
   useEffect(() => {
@@ -346,7 +402,7 @@ export function useParticularesFilters() {
   // sino la vista que el usuario ha elegido.
   const clearAll = useCallback(() => {
     setQuery("");
-    setOperation("");
+    setOperationRaw("");
     setZoneRaw("");
     setDrawnZoneRaw("");
     setPriceMin("");
@@ -376,6 +432,14 @@ export function useParticularesFilters() {
     setEnergy("");
     setOrientation("");
     setSince("");
+    setBedroomsExact(false);
+    setBathroomsExact(false);
+    setAreaMax("");
+    setDaysMax("");
+    setPlotMin("");
+    setPlotMax("");
+    setExactLocation(false);
+    setRentalKind("");
   }, []);
 
   return {
@@ -447,6 +511,22 @@ export function useParticularesFilters() {
     setOrientation,
     since,
     setSince,
+    bedroomsExact,
+    setBedroomsExact,
+    bathroomsExact,
+    setBathroomsExact,
+    areaMax,
+    setAreaMax,
+    daysMax,
+    setDaysMax,
+    plotMin,
+    setPlotMin,
+    plotMax,
+    setPlotMax,
+    exactLocation,
+    setExactLocation,
+    rentalKind,
+    setRentalKind,
   };
 }
 

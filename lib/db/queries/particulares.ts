@@ -166,7 +166,7 @@ export type ParticularesFilters = {
   lift?: "yes" | "no" | "";
   /** Estado del inmueble. `condition` es texto libre del portal, así que se
    *  compara con ILIKE por familias en vez de con un enum que no controlamos. */
-  condition?: "good" | "to_reform" | "renovated" | "";
+  condition?: string[];
   yearBuiltMin?: number;
   yearBuiltMax?: number;
   /** Por defecto el listado oculta los anuncios que son COPIA de otro (mismo
@@ -188,6 +188,34 @@ export type ParticularesFilters = {
   orientation?: string;
   /** Detectado en los últimos N días (1, 2, 7, 30). */
   sinceDays?: number;
+  /** Dormitorios / baños EXACTOS (en vez de «N o más»). 6+ y 7+ siguen siendo «o más». */
+  bedroomsExact?: boolean;
+  bathroomsExact?: boolean;
+  areaMax?: number;
+  /** Como mucho N días desde que lo detectamos (par de `minDaysListed`). */
+  maxDaysListed?: number;
+  /** Parcela en m² (columna `plot_m2`, migración 0183). */
+  plotMin?: number;
+  plotMax?: number;
+  /** Solo coordenada exacta (`location_precision = 'exact'`). */
+  exactLocation?: boolean;
+  /** Amueblado sí/no (etiquetas `amueblado` / `sin_amueblar` de `attrs`). */
+  furnished?: "yes" | "no" | "";
+  /** Alquiler de larga duración o de temporada (etiqueta `temporada`). */
+  rentalKind?: "larga" | "temporada" | "";
+};
+
+/** Estado del inmueble → etiquetas de `attrs` (migración 0183). Incluye los valores antiguos. */
+export const PARTICULARES_CONDITION_TAGS: Record<string, string[]> = {
+  nuevo: ["cond_nuevo"],
+  usado: ["cond_usado"],
+  muy_bueno: ["cond_muy_bueno"],
+  bueno: ["cond_bueno"],
+  reformar: ["cond_reformar"],
+  reformado: ["cond_reformado"],
+  good: ["cond_bueno", "cond_muy_bueno"],
+  to_reform: ["cond_reformar"],
+  renovated: ["cond_nuevo", "cond_reformado"],
 };
 
 /** Etiquetas válidas de `attrs` (la URL es input del usuario: solo se aceptan estas). */
@@ -195,6 +223,7 @@ export const PARTICULARES_ATTR_TAGS = [
   "aire", "armarios", "terraza", "balcon", "jardin", "piscina", "garaje", "trastero", "ascensor",
   "amueblado", "accesible", "calefaccion", "calefaccion_central", "parquet", "videoportero",
   "obra_nueva", "exterior", "interior", "atico", "duplex", "estudio", "adosado", "pareado", "chalet", "rustica",
+  "loft", "patio", "sin_amueblar", "vistas", "vistas_mar", "vistas_sierra", "vistas_despejadas", "vistas_jardin", "temporada",
 ] as const;
 
 /**
@@ -276,9 +305,27 @@ function applyParticularesFilters(
 
   if (f.priceMin != null) q = q.gte("price", f.priceMin);
   if (f.priceMax != null) q = q.lte("price", f.priceMax);
-  if (f.bedroomsMin != null) q = q.gte("bedrooms", f.bedroomsMin);
+  if (f.bedroomsMin != null) {
+    // Exacto (0–5): igualdad; 0 incluye los estudios sin dato de dormitorios. 6+ es «6 o más».
+    if (f.bedroomsExact && f.bedroomsMin < 6) {
+      q =
+        f.bedroomsMin === 0
+          ? q.or("bedrooms.eq.0,and(bedrooms.is.null,attrs.cs.{estudio})")
+          : q.eq("bedrooms", f.bedroomsMin);
+    } else q = q.gte("bedrooms", f.bedroomsMin);
+  }
   if (f.areaMin != null) q = q.gte("square_meters", f.areaMin);
-  if (f.bathroomsMin != null) q = q.gte("bathrooms", f.bathroomsMin);
+  if (f.areaMax != null) q = q.lte("square_meters", f.areaMax);
+  if (f.bathroomsMin != null) {
+    q = f.bathroomsExact && f.bathroomsMin < 7 ? q.eq("bathrooms", f.bathroomsMin) : q.gte("bathrooms", f.bathroomsMin);
+  }
+  if (f.plotMin != null) q = q.gte("plot_m2", f.plotMin);
+  if (f.plotMax != null) q = q.lte("plot_m2", f.plotMax);
+  if (f.exactLocation) q = q.eq("location_precision", "exact");
+  if (f.furnished === "yes") q = q.contains("attrs", ["amueblado"]);
+  else if (f.furnished === "no") q = q.contains("attrs", ["sin_amueblar"]);
+  if (f.rentalKind === "temporada") q = q.contains("attrs", ["temporada"]);
+  else if (f.rentalKind === "larga") q = q.not("attrs", "cs", "{temporada}");
   if (f.floorMin != null) q = q.gte("floor_num", f.floorMin);
   if (f.floorMax != null) q = q.lte("floor_num", f.floorMax);
 
@@ -335,15 +382,18 @@ function applyParticularesFilters(
     q = q.lte("created_at", before);
   }
 
+  if (f.maxDaysListed != null && f.maxDaysListed > 0) {
+    q = q.gte("created_at", new Date(Date.now() - f.maxDaysListed * 24 * 60 * 60 * 1000).toISOString());
+  }
+
   if (f.lift === "yes") q = q.eq("has_lift", true);
   else if (f.lift === "no") q = q.eq("has_lift", false);
 
-  // `condition` es texto libre de Idealista ("Buen estado", "A reformar",
-  // "Casi nuevo"…). Ojo con el solapamiento: "%reformad%" casa "reformado"
-  // pero NO "a reformar", que es justo lo contrario y no debe mezclarse.
-  if (f.condition === "good") q = q.ilike("condition", "%buen%");
-  else if (f.condition === "to_reform") q = q.ilike("condition", "%reformar%");
-  else if (f.condition === "renovated") q = q.or("condition.ilike.%reformad%,condition.ilike.%nuevo%");
+  // Estado: etiquetas `cond_*` de `attrs` (migración 0183), que unifican el
+  // texto de Idealista («Segunda mano/buen estado», «Second hand/…») y el
+  // `conservation` de Fotocasa. Basta con una de las elegidas.
+  const condTags = [...new Set((f.condition ?? []).flatMap((c) => PARTICULARES_CONDITION_TAGS[c] ?? []))];
+  if (condTags.length) q = q.overlaps("attrs", condTags);
 
   if (f.yearBuiltMin != null) q = q.gte("year_built", f.yearBuiltMin);
   if (f.yearBuiltMax != null) q = q.lte("year_built", f.yearBuiltMax);
