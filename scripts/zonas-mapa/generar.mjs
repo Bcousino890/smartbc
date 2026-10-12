@@ -22,6 +22,10 @@
 //    puntos; el resto queda sin posición (la interfaz lo lista, nunca lo oculta).
 //    Lee scraper_zones y particulares con `docker exec supabase-db psql` (usa
 //    --sin-bd para solo regenerar contornos).
+//
+// 3) SUBZONAS de los municipios (contornos de barrios/urbanizaciones): después de
+//    este script, ejecutar scripts/zonas-mapa/subzonas.mjs (Nominatim; este script
+//    reescribe geo.json y zone-match.json sin ellas).
 // ============================================================================
 
 import fs from "node:fs";
