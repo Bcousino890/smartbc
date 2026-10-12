@@ -85,10 +85,23 @@ async function loadDecisions(db: Db): Promise<LinkDecision[]> {
   return out;
 }
 
+// jsonb de Postgres NO conserva el orden de las claves (las reordena por
+// longitud y luego alfabéticamente), así que comparar con JSON.stringify
+// "a pelo" daba siempre distinto y cada pasada reescribía ~530 filas. Se
+// compara con las claves ordenadas y sin los `undefined` (que JSON omite).
+function stable(v: unknown): string {
+  if (v === undefined) return "null";
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
+  const o = v as Record<string, unknown>;
+  const keys = Object.keys(o).filter((k) => o[k] !== undefined).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stable(o[k])}`).join(",")}}`;
+}
+
 const sameState = (cur: CurrentRow, want: RowGroupState): boolean =>
   (cur.duplicate_of ?? null) === want.duplicate_of &&
-  JSON.stringify(cur.link_summary ?? null) === JSON.stringify(want.link_summary) &&
-  JSON.stringify(cur.link_ops ?? null) === JSON.stringify(want.link_ops);
+  stable(cur.link_summary ?? null) === stable(want.link_summary) &&
+  stable(cur.link_ops ?? null) === stable(want.link_ops);
 
 // Un solo recálculo a la vez en este proceso (PM2 de un solo proceso).
 let running: Promise<LinkingRunSummary> | null = null;
