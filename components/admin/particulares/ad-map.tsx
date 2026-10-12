@@ -27,10 +27,22 @@ const LABEL = {
   zone: "Solo la zona (aproximada)",
 } as const;
 
+/** Distancia en metros entre dos puntos (haversine). */
+function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 export function AdMap({ particularId, latitude, longitude, address, zone, precision, className, height = 224 }: AdMapProps) {
   const given: Pt | null =
     isNum(latitude) && isNum(longitude) ? { lat: latitude, lng: longitude, precision: precision ?? "approximate" } : null;
   const [fetched, setFetched] = useState<Pt | null>(null);
+  // Pin del portal aproximado: además se enseña el punto que sale de la dirección (otro color).
+  const [estimate, setEstimate] = useState<Pt | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "none">("idle");
   const wrap = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
@@ -54,6 +66,20 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
   }, [given, particularId, address, zone]);
 
   useEffect(() => {
+    setEstimate(null);
+    if (!given || precision !== "approximate" || (!address && !zone)) return;
+    const ctl = new AbortController();
+    fetch(`/api/admin/particulares/${encodeURIComponent(particularId)}/geocode?estimate=1`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && isNum(d.lat) && isNum(d.lng)) setEstimate({ lat: d.lat, lng: d.lng, precision: d.precision ?? "zone" });
+      })
+      .catch(() => {});
+    return () => ctl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [particularId, precision, address, zone, latitude, longitude]);
+
+  useEffect(() => {
     const el = wrap.current;
     if (!el) return;
     setW(el.clientWidth);
@@ -63,11 +89,24 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
   }, []);
 
   const pt = given ?? fetched;
-  const mosaic = useMemo(
-    () => (pt && w ? buildMosaic({ lat: pt.lat, lng: pt.lng, zoom: ZOOM[pt.precision], width: w, height }) : null),
-    [pt, w, height],
-  );
+  // Con dos puntos (portal aproximado + dirección) se centra en el medio y se acerca lo que quepa.
+  const second = pt && estimate && metersBetween(pt, estimate) > 15 ? estimate : null;
+  const mosaic = useMemo(() => {
+    if (!pt || !w) return null;
+    if (!second) return buildMosaic({ lat: pt.lat, lng: pt.lng, zoom: ZOOM[pt.precision], width: w, height });
+    const lat = (pt.lat + second.lat) / 2;
+    const lng = (pt.lng + second.lng) / 2;
+    for (let zoom = 17; zoom >= 13; zoom--) {
+      const m = buildMosaic({ lat, lng, zoom, width: w, height });
+      const a = m.project(pt.lat, pt.lng);
+      const b = m.project(second.lat, second.lng);
+      const inside = (p: { left: number; top: number }) => p.left > 28 && p.left < w - 28 && p.top > 44 && p.top < height - 26;
+      if (inside(a) && inside(b)) return m;
+    }
+    return buildMosaic({ lat, lng, zoom: 13, width: w, height });
+  }, [pt, second, w, height]);
   const pin = mosaic && pt ? mosaic.project(pt.lat, pt.lng) : null;
+  const pin2 = mosaic && second ? mosaic.project(second.lat, second.lng) : null;
 
   return (
     <div ref={wrap} className={className} style={{ height }}>
@@ -96,9 +135,29 @@ export function AdMap({ particularId, latitude, longitude, address, zone, precis
               style={{ left: pin.left, top: pin.top }}
               aria-label="Pin del anuncio"
             />
-            <span className="absolute bottom-1 left-1 rounded bg-white/90 px-1.5 py-0.5 text-xs text-ink/70">
-              {LABEL[pt.precision]}
-            </span>
+            {pin2 && second && (
+              <MapPin
+                className="absolute h-8 w-8 -translate-x-1/2 -translate-y-full fill-blue-600 text-white drop-shadow"
+                style={{ left: pin2.left, top: pin2.top }}
+                aria-label="Punto según la dirección"
+              />
+            )}
+            {second ? (
+              <span className="absolute bottom-1 left-1 flex flex-col gap-0.5 rounded bg-white/90 px-1.5 py-0.5 text-xs text-ink/70">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-red-600" aria-hidden />
+                  Pin de Idealista (aproximado)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-blue-600" aria-hidden />
+                  {second.precision === "zone" ? "Calle según la dirección" : "Según la dirección"}
+                </span>
+              </span>
+            ) : (
+              <span className="absolute bottom-1 left-1 rounded bg-white/90 px-1.5 py-0.5 text-xs text-ink/70">
+                {LABEL[pt.precision]}
+              </span>
+            )}
             <span className="absolute bottom-1 right-1 rounded bg-white/80 px-1 text-xs text-ink/60">
               ©{" "}
               <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline">

@@ -19,7 +19,7 @@ const TYPE_PREFIX =
  *  - Solo zona/calle sin número: se devuelve el punto para pintarlo (precision
  *    'zone'), sin guardarlo.
  */
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
   if (!profile) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (!canAccess(profile.role ?? "", "particulares", "view")) {
@@ -36,7 +36,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (error) return Response.json({ error: error.message }, { status: 500 });
   if (!row) return Response.json({ error: "Anuncio no encontrado" }, { status: 404 });
 
-  if (typeof row.latitude === "number" && typeof row.longitude === "number") {
+  // `?estimate=1`: el punto que sale de la DIRECCIÓN, aunque ya haya pin guardado y sin guardarlo.
+  // Lo usa la ficha cuando el pin del portal es aproximado, para enseñar los dos puntos.
+  const estimate = req.nextUrl.searchParams.get("estimate") === "1";
+
+  if (!estimate && typeof row.latitude === "number" && typeof row.longitude === "number") {
     return Response.json({
       lat: row.latitude,
       lng: row.longitude,
@@ -53,6 +57,15 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   const hit = await nominatimLookup(q);
   if (!hit) return Response.json({ lat: null, lng: null, precision: null });
+
+  if (estimate) {
+    return Response.json({
+      lat: hit.lat,
+      lng: hit.lng,
+      precision: withNumber && hit.hasHouseNumber ? "approximate" : "zone",
+      saved: false,
+    });
+  }
 
   if (withNumber && hit.hasHouseNumber) {
     await admin

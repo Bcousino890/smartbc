@@ -819,6 +819,7 @@ export function ParticularModal({
     longitude: currentRow.longitude,
     address: currentRow.address,
     zone: currentRow.zone,
+    locationPrecision: currentRow.location_precision,
   });
 
   // Bloqueo de scroll + Escape. Con el visor o el diálogo de teléfono abiertos,

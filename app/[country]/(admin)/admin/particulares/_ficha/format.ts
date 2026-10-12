@@ -255,6 +255,8 @@ export function mapPrecision(input: {
   longitude?: number | null;
   address?: string | null;
   zone?: string | null;
+  /** Lo que dice el portal/crawler. Manda sobre la deducción por el número de portal. */
+  locationPrecision?: string | null;
 }): MapPrecision {
   const hasCoords =
     typeof input.latitude === "number" &&
@@ -263,6 +265,7 @@ export function mapPrecision(input: {
     Number.isFinite(input.longitude);
   const hasAddress = !!input.address?.trim();
   const hasZone = !!input.zone?.trim();
+  if (hasCoords && (input.locationPrecision === "exact" || input.locationPrecision === "approximate")) return input.locationPrecision;
   if (hasCoords) return hasAddress && hasStreetNumber(input.address) ? "exact" : "approximate";
   if (hasAddress || hasZone) return "approximate";
   return null;

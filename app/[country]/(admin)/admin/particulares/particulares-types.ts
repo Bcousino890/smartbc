@@ -36,6 +36,8 @@ export type ParticularRow = {
   phone: string | null;
   chat_only: boolean | null;
   latitude: number | null;
+  /** 'exact' | 'approximate': lo dice el crawler (addressVisibility de Idealista); null en los antiguos. */
+  location_precision?: string | null;
   longitude: number | null;
   // Campos de la migración 0035 — pueden venir undefined/null si aún no está aplicada
   address?: string | null;
