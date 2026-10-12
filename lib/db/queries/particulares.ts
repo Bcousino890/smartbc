@@ -173,7 +173,26 @@ export type ParticularesFilters = {
    *  inmueble en otro portal / operación — migración 0176): se ven dentro de
    *  la ficha del principal. `true` los muestra todos. */
   showDuplicates?: boolean;
+  /** Baños mínimos. */
+  bathroomsMin?: number;
+  /** Etiquetas de `attrs` (migración 0178) que el anuncio DEBE tener todas: piscina, terraza… */
+  extras?: string[];
+  /** Tipos de inmueble (etiquetas de `attrs`): basta con uno (atico, chalet, adosado…). */
+  types?: string[];
+  /** Letras de eficiencia energética (A–G) admitidas. */
+  energy?: string[];
+  /** Orientación contiene: sur | norte | este | oeste. */
+  orientation?: string;
+  /** Detectado en los últimos N días (1, 2, 7, 30). */
+  sinceDays?: number;
 };
+
+/** Etiquetas válidas de `attrs` (la URL es input del usuario: solo se aceptan estas). */
+export const PARTICULARES_ATTR_TAGS = [
+  "aire", "armarios", "terraza", "balcon", "jardin", "piscina", "garaje", "trastero", "ascensor",
+  "amueblado", "accesible", "calefaccion", "calefaccion_central", "parquet", "videoportero",
+  "obra_nueva", "atico", "duplex", "estudio", "adosado", "pareado", "chalet", "rustica",
+] as const;
 
 /**
  * Orden del listado. SIEMPRE termina desempatando por `id`: sin eso, dos
@@ -256,6 +275,22 @@ function applyParticularesFilters(
   if (f.priceMax != null) q = q.lte("price", f.priceMax);
   if (f.bedroomsMin != null) q = q.gte("bedrooms", f.bedroomsMin);
   if (f.areaMin != null) q = q.gte("square_meters", f.areaMin);
+  if (f.bathroomsMin != null) q = q.gte("bathrooms", f.bathroomsMin);
+
+  // Atributos (migración 0178): solo etiquetas conocidas.
+  const okTag = (t: string) => (PARTICULARES_ATTR_TAGS as readonly string[]).includes(t);
+  const extras = (f.extras ?? []).filter(okTag);
+  if (extras.length) q = q.contains("attrs", extras);
+  const types = (f.types ?? []).filter(okTag);
+  if (types.length) q = q.overlaps("attrs", types);
+  const energy = (f.energy ?? []).filter((l) => /^[A-G]$/.test(l));
+  if (energy.length) q = q.in("energy_consumption", energy);
+  if (f.orientation && ["sur", "norte", "este", "oeste"].includes(f.orientation)) {
+    q = q.ilike("orientation", `%${f.orientation}%`);
+  }
+  if (f.sinceDays != null && f.sinceDays > 0) {
+    q = q.gte("created_at", new Date(Date.now() - f.sinceDays * 24 * 60 * 60 * 1000).toISOString());
+  }
 
   if (f.last24h) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -617,7 +652,7 @@ export async function getParticularesStats(): Promise<ParticularesStats> {
 // para poder calcularlo server-side sobre el dataset ligero de abajo, en vez
 // de sobre las filas enriquecidas completas.
 function buildZoneGroups(
-  rows: Array<{ zone: string | null; is_active: boolean; phone: string | null }>,
+  rows: Array<{ zone: string | null; is_active: boolean; phone: string | null; municipality?: string | null }>,
   showRetired: boolean,
 ): ZoneFilterGroup[] {
   const districts = new Map<
@@ -627,7 +662,11 @@ function buildZoneGroups(
   for (const r of rows) {
     if (showRetired ? r.is_active : !r.is_active) continue;
     if (!r.zone) continue;
-    const { district } = normalizeZone(r.zone);
+    let { district } = normalizeZone(r.zone);
+    // Fuera de Madrid capital (ojo: «Centro» de Villaviciosa no es el Centro de
+    // Madrid): en vez de un cajón «Otras zonas», agrupar por municipio (el scraper lo guarda en scraper_extra.municipality).
+    const muni = (r.municipality ?? "").trim();
+    if (muni && muni.toLowerCase() !== "madrid") district = muni;
     if (!districts.has(district)) {
       districts.set(district, { total: 0, missingPhone: 0, zones: new Map() });
     }
@@ -687,7 +726,7 @@ export async function getParticularesZoneCounts(
     // anuncios cuando solo se ven los ≈21k de particulares.
     const run = (withAdvertiser: boolean) =>
       fetchAllRows((from, to) => {
-        let q = supabase.from("particulares").select("zone, is_active, phone, portal");
+        let q = supabase.from("particulares").select("zone, is_active, phone, portal, municipality:scraper_extra->>municipality");
         if (withAdvertiser && advertiser === "unknown") {
           q = q.or("advertiser_type.is.null,advertiser_type.eq.unknown");
         } else if (withAdvertiser && advertiser) {

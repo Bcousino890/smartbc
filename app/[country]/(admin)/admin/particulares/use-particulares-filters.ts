@@ -83,6 +83,18 @@ type FilterValues = {
   yearMin: string;
   yearMax: string;
   showRetired: boolean;
+  /** Baños mínimos. */
+  bathrooms: string;
+  /** Etiquetas separadas por coma que el anuncio debe tener (piscina,terraza…). */
+  extras: string;
+  /** Tipos de inmueble separados por coma (cualquiera). */
+  types: string;
+  /** Letras de eficiencia energética separadas por coma. */
+  energy: string;
+  /** sur | norte | este | oeste */
+  orientation: string;
+  /** Detectado en los últimos N días: "1" | "2" | "7" | "30". */
+  since: string;
 };
 
 const PARAM_KEYS: Record<keyof FilterValues, string> = {
@@ -112,6 +124,12 @@ const PARAM_KEYS: Record<keyof FilterValues, string> = {
   yearMin: "anioMin",
   yearMax: "anioMax",
   showRetired: "retired",
+  bathrooms: "banos",
+  extras: "extras",
+  types: "tipo",
+  energy: "energia",
+  orientation: "orientacion",
+  since: "desde",
 };
 
 const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
@@ -125,6 +143,7 @@ const DEBOUNCED_FIELDS = new Set<keyof FilterValues>([
   "pricePerM2Max",
   "yearMin",
   "yearMax",
+  "bathrooms",
 ]);
 
 /**
@@ -187,6 +206,12 @@ export function useParticularesFilters() {
   const [yearMin, setYearMin] = useState(() => searchParams.get(PARAM_KEYS.yearMin) ?? "");
   const [yearMax, setYearMax] = useState(() => searchParams.get(PARAM_KEYS.yearMax) ?? "");
   const [showRetired, setShowRetired] = useState(() => searchParams.get(PARAM_KEYS.showRetired) === "1");
+  const [bathrooms, setBathrooms] = useState(() => searchParams.get(PARAM_KEYS.bathrooms) ?? "");
+  const [extras, setExtras] = useState(() => searchParams.get(PARAM_KEYS.extras) ?? "");
+  const [types, setTypes] = useState(() => searchParams.get(PARAM_KEYS.types) ?? "");
+  const [energy, setEnergy] = useState(() => searchParams.get(PARAM_KEYS.energy) ?? "");
+  const [orientation, setOrientation] = useState(() => searchParams.get(PARAM_KEYS.orientation) ?? "");
+  const [since, setSince] = useState(() => searchParams.get(PARAM_KEYS.since) ?? "");
 
   // Dibujar una zona y elegir distrito/barrio son dos formas ALTERNATIVAS de
   // acotar por ubicación, no combinables (ver el comentario de FilterValues):
@@ -228,6 +253,12 @@ export function useParticularesFilters() {
     yearMin,
     yearMax,
     showRetired,
+    bathrooms,
+    extras,
+    types,
+    energy,
+    orientation,
+    since,
   };
 
   const prevValuesRef = useRef(values);
@@ -289,6 +320,12 @@ export function useParticularesFilters() {
     yearMin,
     yearMax,
     showRetired,
+    bathrooms,
+    extras,
+    types,
+    energy,
+    orientation,
+    since,
   ]);
 
   useEffect(() => {
@@ -325,6 +362,12 @@ export function useParticularesFilters() {
     setCondition("");
     setYearMin("");
     setYearMax("");
+    setBathrooms("");
+    setExtras("");
+    setTypes("");
+    setEnergy("");
+    setOrientation("");
+    setSince("");
   }, []);
 
   return {
@@ -382,6 +425,18 @@ export function useParticularesFilters() {
     setYearMax,
     showRetired,
     setShowRetired,
+    bathrooms,
+    setBathrooms,
+    extras,
+    setExtras,
+    types,
+    setTypes,
+    energy,
+    setEnergy,
+    orientation,
+    setOrientation,
+    since,
+    setSince,
   };
 }
 

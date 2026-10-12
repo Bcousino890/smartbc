@@ -25,6 +25,45 @@ export const ADVERTISER_LABEL: Record<string, string> = {
   unknown: "Sin clasificar",
 };
 
+/** Tipos de inmueble (etiquetas `attrs`, cualquiera de las marcadas). */
+export const TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "atico", label: "Ático" },
+  { value: "duplex", label: "Dúplex" },
+  { value: "estudio", label: "Estudio" },
+  { value: "chalet", label: "Chalet independiente" },
+  { value: "adosado", label: "Chalet adosado" },
+  { value: "pareado", label: "Chalet pareado" },
+  { value: "rustica", label: "Casa rústica" },
+];
+
+/** Extras (etiquetas `attrs`, el anuncio debe tener TODAS las marcadas). */
+export const EXTRA_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "aire", label: "Aire acondicionado" },
+  { value: "armarios", label: "Armarios empotrados" },
+  { value: "ascensor", label: "Ascensor" },
+  { value: "balcon", label: "Balcón" },
+  { value: "terraza", label: "Terraza" },
+  { value: "jardin", label: "Jardín" },
+  { value: "piscina", label: "Piscina" },
+  { value: "garaje", label: "Garaje" },
+  { value: "trastero", label: "Trastero" },
+  { value: "amueblado", label: "Amueblado" },
+  { value: "calefaccion", label: "Calefacción" },
+  { value: "calefaccion_central", label: "Calefacción central" },
+  { value: "parquet", label: "Parquet" },
+  { value: "videoportero", label: "Videoportero" },
+  { value: "accesible", label: "Accesible (movilidad reducida)" },
+];
+export const ENERGY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"];
+export const ORIENTATION_LABEL: Record<string, string> = { sur: "Sur", norte: "Norte", este: "Este", oeste: "Oeste" };
+export const SINCE_LABEL: Record<string, string> = { "1": "Últimas 24 h", "2": "Últimos 2 días", "7": "Última semana", "30": "Último mes" };
+
+export const splitCsv = (v: string): string[] => v.split(",").map((s) => s.trim()).filter(Boolean);
+export const toggleCsv = (v: string, item: string): string => {
+  const a = splitCsv(v);
+  return (a.includes(item) ? a.filter((x) => x !== item) : [...a, item]).join(",");
+};
+
 export type FilterChip = {
   id: string;
   label: string;
@@ -134,6 +173,16 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
       },
     });
   }
+  for (const t of splitCsv(f.types)) {
+    chips.push({ id: `type:${t}`, label: TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t, onRemove: () => f.setTypes(toggleCsv(f.types, t)) });
+  }
+  for (const x of splitCsv(f.extras)) {
+    chips.push({ id: `extra:${x}`, label: EXTRA_OPTIONS.find((o) => o.value === x)?.label ?? x, onRemove: () => f.setExtras(toggleCsv(f.extras, x)) });
+  }
+  if (f.energy) chips.push({ id: "energy", label: `Eficiencia ${splitCsv(f.energy).join(", ")}`, onRemove: () => f.setEnergy("") });
+  if (f.orientation) chips.push({ id: "orient", label: `Orientación ${ORIENTATION_LABEL[f.orientation] ?? f.orientation}`, onRemove: () => f.setOrientation("") });
+  if (f.bathrooms) chips.push({ id: "baths", label: `${f.bathrooms}+ baños`, onRemove: () => f.setBathrooms("") });
+  if (f.since) chips.push({ id: "since", label: SINCE_LABEL[f.since] ?? `Últimos ${f.since} días`, onRemove: () => f.setSince("") });
   if (f.showLinked) chips.push({ id: "linked", label: "Con anuncios enlazados", onRemove: () => f.setShowLinked(false) });
 
   return chips;
@@ -161,6 +210,12 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   if (f.condition) n++;
   if (f.yearMin || f.yearMax) n++;
   if (f.showLinked) n++;
+  if (splitCsv(f.types).length) n++;
+  n += splitCsv(f.extras).length ? 1 : 0;
+  if (f.energy) n++;
+  if (f.orientation) n++;
+  if (f.bathrooms) n++;
+  if (f.since) n++;
   if (decodeZonePolygons(f.drawnZone).length > 0) n++;
   return n;
 }

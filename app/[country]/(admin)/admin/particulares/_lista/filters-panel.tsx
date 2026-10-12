@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter";
 import type { ParticularesFiltersApi } from "../use-particulares-filters";
+import { ENERGY_LETTERS, EXTRA_OPTIONS, ORIENTATION_LABEL, SINCE_LABEL, TYPE_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
 import { ChoiceGroup, FOCUS_RING, NumberField, SelectField, SwitchRow } from "./controls";
 import { RangeSlider } from "./range-slider";
 import { fmtEur, fmtNum } from "./format";
@@ -17,6 +18,29 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
       </summary>
       <div className="mt-3 space-y-3">{children}</div>
     </details>
+  );
+}
+
+/** Pastillas de selección múltiple (cada una se activa/desactiva). */
+function Toggles({ options, value, onToggle }: { options: Array<{ value: string; label: string }>; value: string; onToggle: (v: string) => void }) {
+  const on = splitCsv(value);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const active = on.includes(o.value);
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onToggle(o.value)}
+            className={`inline-flex h-10 items-center rounded-full border px-3.5 text-sm transition ${FOCUS_RING} ${active ? "border-gold-dark bg-gold/25 font-semibold text-ink" : "border-ink/15 bg-white font-medium text-ink/75 hover:border-ink/30 hover:text-ink"}`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -95,6 +119,19 @@ export function FiltersPanel({
             </Pair>
           </Section>
 
+          <Section title="Tipo de inmueble">
+            <Toggles options={TYPE_OPTIONS} value={f.types} onToggle={(v) => f.setTypes(toggleCsv(f.types, v))} />
+          </Section>
+
+          <Section title="Publicado">
+            <ChoiceGroup
+              ariaLabel="Publicado"
+              value={f.since}
+              onChange={f.setSince}
+              options={[{ value: "", label: "Cualquier fecha" }, ...Object.entries(SINCE_LABEL).map(([value, label]) => ({ value, label }))]}
+            />
+          </Section>
+
           <Section title="Dormitorios">
             <ChoiceGroup
               ariaLabel="Dormitorios"
@@ -107,6 +144,15 @@ export function FiltersPanel({
                 { value: "3", label: "3+" },
                 { value: "4", label: "4+" },
               ]}
+            />
+          </Section>
+
+          <Section title="Baños">
+            <ChoiceGroup
+              ariaLabel="Baños"
+              value={f.bathrooms}
+              onChange={f.setBathrooms}
+              options={[{ value: "", label: "Cualquiera" }, { value: "1", label: "1+" }, { value: "2", label: "2+" }, { value: "3", label: "3+" }]}
             />
           </Section>
 
@@ -155,6 +201,26 @@ export function FiltersPanel({
                 { value: "renovated", label: "Reformado / nuevo" },
                 { value: "to_reform", label: "A reformar" },
               ]}
+            />
+          </Section>
+
+          <Section title="Extras (deben tenerlos todos)">
+            <Toggles options={EXTRA_OPTIONS} value={f.extras} onToggle={(v) => f.setExtras(toggleCsv(f.extras, v))} />
+          </Section>
+
+          <Section title="Eficiencia energética y orientación" defaultOpen={false}>
+            <p className="text-xs text-ink/65">Certificado de consumo</p>
+            <Toggles
+              options={ENERGY_LETTERS.map((l) => ({ value: l, label: l }))}
+              value={f.energy}
+              onToggle={(v) => f.setEnergy(toggleCsv(f.energy, v))}
+            />
+            <p className="pt-1 text-xs text-ink/65">Orientación</p>
+            <ChoiceGroup
+              ariaLabel="Orientación"
+              value={f.orientation}
+              onChange={f.setOrientation}
+              options={[{ value: "", label: "Cualquiera" }, ...Object.entries(ORIENTATION_LABEL).map(([value, label]) => ({ value, label }))]}
             />
           </Section>
 

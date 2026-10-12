@@ -25,6 +25,11 @@ const one = (v: string | string[] | undefined): string | undefined =>
 // Réplica MÍNIMA de los enums de use-particulares-filters.ts: ese hook es
 // "use client" y esta página es un Server Component, así que no se puede
 // importar directo de ahí. Si cambias un valor allí, cámbialo también aquí.
+const csv = (v: string | undefined): string[] | undefined => {
+  const a = (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return a.length ? a : undefined;
+};
+
 function pick<T extends string>(v: string | undefined, allowed: readonly T[]): T | "" {
   return v && (allowed as readonly string[]).includes(v) ? (v as T) : "";
 }
@@ -146,6 +151,12 @@ export default async function AdminParticularesPage({
     condition: pick(one(sp.estado), ["good", "to_reform", "renovated"] as const),
     yearBuiltMin: numOrUndef(one(sp.anioMin)),
     yearBuiltMax: numOrUndef(one(sp.anioMax)),
+    bathroomsMin: numOrUndef(one(sp.banos)),
+    extras: csv(one(sp.extras)),
+    types: csv(one(sp.tipo)),
+    energy: csv(one(sp.energia)),
+    orientation: one(sp.orientacion) || undefined,
+    sinceDays: numOrUndef(one(sp.desde)),
   };
   // `floorMin`/`amueblado` NO entran aquí a propósito — ver el comentario de
   // ParticularesFilters en lib/db/queries/particulares.ts.
