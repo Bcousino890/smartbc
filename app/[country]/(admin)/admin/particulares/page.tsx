@@ -148,7 +148,7 @@ export default async function AdminParticularesPage({
     priceDropMinPct: numOrUndef(one(sp.drop)),
     minDaysListed: numOrUndef(one(sp.dias)),
     lift: pick(one(sp.ascensor), ["yes", "no"] as const),
-    condition: pick(one(sp.estado), ["good", "to_reform", "renovated"] as const),
+    condition: csv(one(sp.estado)),
     yearBuiltMin: numOrUndef(one(sp.anioMin)),
     yearBuiltMax: numOrUndef(one(sp.anioMax)),
     bathroomsMin: numOrUndef(one(sp.banos)),
@@ -159,9 +159,17 @@ export default async function AdminParticularesPage({
     energy: csv(one(sp.energia)),
     orientation: one(sp.orientacion) || undefined,
     sinceDays: numOrUndef(one(sp.desde)),
+    bedroomsExact: one(sp.dormExacto) === "1",
+    bathroomsExact: one(sp.banosExacto) === "1",
+    areaMax: numOrUndef(one(sp.areaMax)),
+    maxDaysListed: numOrUndef(one(sp.diasMax)),
+    plotMin: numOrUndef(one(sp.parcelaMin)),
+    plotMax: numOrUndef(one(sp.parcelaMax)),
+    exactLocation: one(sp.ubicExacta) === "1",
+    furnished: pick(one(sp.amueblado), ["yes", "no"] as const),
+    rentalKind: pick(one(sp.alquiler), ["larga", "temporada"] as const),
   };
-  // `floorMin`/`amueblado` NO entran aquí a propósito — ver el comentario de
-  // ParticularesFilters en lib/db/queries/particulares.ts.
+  // El amueblado ya se filtra en servidor con las etiquetas de `attrs` (0183).
 
   const [{ rows: enrichedRows, total, failed }, stats, staffOptions, scraperConfig] = await Promise.all([
     getParticularesPage({

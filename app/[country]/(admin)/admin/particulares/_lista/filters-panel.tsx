@@ -4,16 +4,23 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { DrawZoneFilter } from "@/components/admin/particulares/draw-zone-filter";
 import type { ParticularesFiltersApi } from "../use-particulares-filters";
-import { ENERGY_LETTERS, POSITION_OPTIONS, EXTRA_OPTIONS, ORIENTATION_LABEL, SINCE_LABEL, TYPE_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
+import { CONDITION_OPTIONS, ENERGY_LETTERS, EXTRA_OPTIONS, ORIENTATION_LABEL, POSITION_OPTIONS, RENTAL_KIND_LABEL, SINCE_LABEL, TYPE_GROUPS, VIEW_OPTIONS, splitCsv, toggleCsv } from "./filters-model";
 import { ChoiceGroup, FOCUS_RING, NumberField, SelectField, SwitchRow } from "./controls";
 import { RangeSlider } from "./range-slider";
 import { fmtEur, fmtNum } from "./format";
 
-function Section({ title, defaultOpen = true, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+function Section({ title, defaultOpen = true, active = false, children }: { title: string; defaultOpen?: boolean; active?: boolean; children: React.ReactNode }) {
   return (
     <details open={defaultOpen} className="group border-b border-ink/10 py-4">
       <summary className={`flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-ink ${FOCUS_RING}`}>
-        {title}
+        <span className="flex items-center gap-2">
+          {title}
+          {active && (
+            <span className="rounded-full bg-gold/30 px-2 py-0.5 text-[11px] font-semibold text-ink" aria-label="Filtro activo">
+              activo
+            </span>
+          )}
+        </span>
         <span aria-hidden className="text-ink/50 transition group-open:rotate-180">⌄</span>
       </summary>
       <div className="mt-3 space-y-3">{children}</div>
@@ -41,6 +48,16 @@ function Toggles({ options, value, onToggle }: { options: Array<{ value: string;
         );
       })}
     </div>
+  );
+}
+
+/** Casilla «número exacto» (dormitorios / baños). */
+function ExactCheck({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-ink/80">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className={`h-4 w-4 rounded border-ink/30 accent-ink ${FOCUS_RING}`} />
+      {label}
+    </label>
   );
 }
 
@@ -119,11 +136,80 @@ export function FiltersPanel({
             </Pair>
           </Section>
 
-          <Section title="Tipo de inmueble">
-            <Toggles options={TYPE_OPTIONS} value={f.types} onToggle={(v) => f.setTypes(toggleCsv(f.types, v))} />
+          <Section title="Tipo de propiedad" active={splitCsv(f.types).length > 0}>
+            {TYPE_GROUPS.map((g) => (
+              <div key={g.label} className="space-y-1.5">
+                <p className="text-xs font-medium text-ink/65">{g.label}</p>
+                <Toggles options={g.options} value={f.types} onToggle={(v) => f.setTypes(toggleCsv(f.types, v))} />
+              </div>
+            ))}
           </Section>
 
-          <Section title="Publicado">
+          {f.operation === "rent" && (
+            <Section title="Tipo de alquiler" active={Boolean(f.rentalKind)}>
+              <ChoiceGroup
+                ariaLabel="Tipo de alquiler"
+                value={f.rentalKind}
+                onChange={(v) => f.setRentalKind(v as typeof f.rentalKind)}
+                options={[{ value: "", label: "Cualquiera" }, ...Object.entries(RENTAL_KIND_LABEL).map(([value, label]) => ({ value, label }))]}
+              />
+            </Section>
+          )}
+
+          <Section title="Dormitorios" active={Boolean(f.bedrooms)}>
+            <ChoiceGroup
+              ariaLabel="Dormitorios"
+              value={f.bedrooms}
+              onChange={f.setBedrooms}
+              options={[
+                { value: "", label: "Cualquiera" },
+                ...(f.bedroomsExact ? [{ value: "0", label: "0 (estudio)" }] : []),
+                ...[1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: f.bedroomsExact && n < 6 ? String(n) : `${n}+` })),
+              ]}
+            />
+            <ExactCheck checked={f.bedroomsExact} onChange={(v) => { f.setBedroomsExact(v); if (!v && f.bedrooms === "0") f.setBedrooms(""); }} label="Número exacto" />
+          </Section>
+
+          <Section title="Baños" active={Boolean(f.bathrooms)}>
+            <ChoiceGroup
+              ariaLabel="Baños"
+              value={f.bathrooms}
+              onChange={f.setBathrooms}
+              options={[
+                { value: "", label: "Cualquiera" },
+                ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ value: String(n), label: f.bathroomsExact && n < 7 ? String(n) : `${n}+` })),
+              ]}
+            />
+            <ExactCheck checked={f.bathroomsExact} onChange={f.setBathroomsExact} label="Número exacto" />
+          </Section>
+
+          <Section title="Superficie construida y parcela" active={Boolean(f.areaMin || f.areaMax || f.plotMin || f.plotMax)}>
+            <p className="text-xs text-ink/65">Superficie construida</p>
+            <Pair>
+              <NumberField value={f.areaMin} onChange={f.setAreaMin} placeholder="Desde" suffix="m²" ariaLabel="Superficie construida mínima" />
+              <NumberField value={f.areaMax} onChange={f.setAreaMax} placeholder="Hasta" suffix="m²" ariaLabel="Superficie construida máxima" />
+            </Pair>
+            <p className="pt-1 text-xs text-ink/65">Parcela</p>
+            <Pair>
+              <NumberField value={f.plotMin} onChange={f.setPlotMin} placeholder="Desde" suffix="m²" ariaLabel="Parcela mínima" />
+              <NumberField value={f.plotMax} onChange={f.setPlotMax} placeholder="Hasta" suffix="m²" ariaLabel="Parcela máxima" />
+            </Pair>
+          </Section>
+
+          <Section title="Precio por m²" active={Boolean(f.pricePerM2Min || f.pricePerM2Max)}>
+            <Pair>
+              <NumberField value={f.pricePerM2Min} onChange={f.setPricePerM2Min} placeholder="Desde" suffix="€/m²" ariaLabel="Precio por m² mínimo" />
+              <NumberField value={f.pricePerM2Max} onChange={f.setPricePerM2Max} placeholder="Hasta" suffix="€/m²" ariaLabel="Precio por m² máximo" />
+            </Pair>
+          </Section>
+
+          <Section title="Días en el mercado" active={Boolean(f.daysListed || f.daysMax || f.since)}>
+            <p className="text-xs text-ink/65">Días desde que lo detectamos</p>
+            <Pair>
+              <NumberField value={f.daysListed} onChange={f.setDaysListed} placeholder="Desde" ariaLabel="Días en cartera: mínimo" />
+              <NumberField value={f.daysMax} onChange={f.setDaysMax} placeholder="Hasta" ariaLabel="Días en cartera: máximo" />
+            </Pair>
+            <p className="pt-1 text-xs text-ink/65">Publicado</p>
             <ChoiceGroup
               ariaLabel="Publicado"
               value={f.since}
@@ -132,40 +218,17 @@ export function FiltersPanel({
             />
           </Section>
 
-          <Section title="Dormitorios">
-            <ChoiceGroup
-              ariaLabel="Dormitorios"
-              value={f.bedrooms}
-              onChange={f.setBedrooms}
-              options={[
-                { value: "", label: "Cualquiera" },
-                { value: "1", label: "1+" },
-                { value: "2", label: "2+" },
-                { value: "3", label: "3+" },
-                { value: "4", label: "4+" },
-              ]}
-            />
-          </Section>
-
-          <Section title="Baños">
-            <ChoiceGroup
-              ariaLabel="Baños"
-              value={f.bathrooms}
-              onChange={f.setBathrooms}
-              options={[{ value: "", label: "Cualquiera" }, { value: "1", label: "1+" }, { value: "2", label: "2+" }, { value: "3", label: "3+" }]}
-            />
-          </Section>
-
-          <Section title="Superficie y precio por m²">
-            <NumberField value={f.areaMin} onChange={f.setAreaMin} placeholder="Superficie mínima" suffix="m²" ariaLabel="Superficie mínima" />
+          <Section title="Condición" active={Boolean(f.condition || f.yearMin || f.yearMax)}>
+            <Toggles options={CONDITION_OPTIONS} value={f.condition} onToggle={(v) => f.setCondition(toggleCsv(f.condition, v))} />
+            <p className="pt-1 text-xs text-ink/65">Año de construcción</p>
             <Pair>
-              <NumberField value={f.pricePerM2Min} onChange={f.setPricePerM2Min} placeholder="€/m² mín." ariaLabel="Precio por m² mínimo" />
-              <NumberField value={f.pricePerM2Max} onChange={f.setPricePerM2Max} placeholder="€/m² máx." ariaLabel="Precio por m² máximo" />
+              <NumberField value={f.yearMin} onChange={f.setYearMin} placeholder="Desde" ariaLabel="Año de construcción desde" />
+              <NumberField value={f.yearMax} onChange={f.setYearMax} placeholder="Hasta" ariaLabel="Año de construcción hasta" />
             </Pair>
           </Section>
 
-          <Section title="Detalles del inmueble">
-<p className="text-xs text-ink/65">Planta (0 = bajo)</p>
+          <Section title="Planta, orientación y amueblado" active={Boolean(f.floorMin || f.floorMax || f.orientation || f.furnished || f.lift || splitCsv(f.extras).some((x) => x === "exterior" || x === "interior"))}>
+            <p className="text-xs text-ink/65">Planta (0 = bajo)</p>
             <Pair>
               <SelectField ariaLabel="Planta mínima" value={f.floorMin} onChange={f.setFloorMin}>
                 <option value="">Desde: cualquiera</option>
@@ -183,50 +246,6 @@ export function FiltersPanel({
               </SelectField>
             </Pair>
             <Toggles options={POSITION_OPTIONS} value={f.extras} onToggle={(v) => f.setExtras(toggleCsv(f.extras, v))} />
-            <ChoiceGroup
-              ariaLabel="Amueblado"
-              value={f.furnished}
-              onChange={(v) => f.setFurnished(v as typeof f.furnished)}
-              options={[
-                { value: "", label: "Amueblado: da igual" },
-                { value: "yes", label: "Amueblado" },
-                { value: "no", label: "Sin amueblar" },
-              ]}
-            />
-            <ChoiceGroup
-              ariaLabel="Ascensor"
-              value={f.lift}
-              onChange={(v) => f.setLift(v as typeof f.lift)}
-              options={[
-                { value: "", label: "Ascensor: da igual" },
-                { value: "yes", label: "Con ascensor" },
-                { value: "no", label: "Sin ascensor" },
-              ]}
-            />
-            <ChoiceGroup
-              ariaLabel="Estado"
-              value={f.condition}
-              onChange={(v) => f.setCondition(v as typeof f.condition)}
-              options={[
-                { value: "", label: "Cualquier estado" },
-                { value: "good", label: "Buen estado" },
-                { value: "renovated", label: "Reformado / nuevo" },
-                { value: "to_reform", label: "A reformar" },
-              ]}
-            />
-          </Section>
-
-          <Section title="Extras (deben tenerlos todos)">
-            <Toggles options={EXTRA_OPTIONS} value={f.extras} onToggle={(v) => f.setExtras(toggleCsv(f.extras, v))} />
-          </Section>
-
-          <Section title="Eficiencia energética y orientación" defaultOpen={false}>
-            <p className="text-xs text-ink/65">Certificado de consumo</p>
-            <Toggles
-              options={ENERGY_LETTERS.map((l) => ({ value: l, label: l }))}
-              value={f.energy}
-              onToggle={(v) => f.setEnergy(toggleCsv(f.energy, v))}
-            />
             <p className="pt-1 text-xs text-ink/65">Orientación</p>
             <ChoiceGroup
               ariaLabel="Orientación"
@@ -234,9 +253,47 @@ export function FiltersPanel({
               onChange={f.setOrientation}
               options={[{ value: "", label: "Cualquiera" }, ...Object.entries(ORIENTATION_LABEL).map(([value, label]) => ({ value, label }))]}
             />
+            <p className="pt-1 text-xs text-ink/65">Muebles</p>
+            <ChoiceGroup
+              ariaLabel="Amueblado"
+              value={f.furnished}
+              onChange={(v) => f.setFurnished(v as typeof f.furnished)}
+              options={[
+                { value: "", label: "Da igual" },
+                { value: "yes", label: "Amueblado" },
+                { value: "no", label: "Sin amueblar" },
+              ]}
+            />
+            <p className="pt-1 text-xs text-ink/65">Ascensor</p>
+            <ChoiceGroup
+              ariaLabel="Ascensor"
+              value={f.lift}
+              onChange={(v) => f.setLift(v as typeof f.lift)}
+              options={[
+                { value: "", label: "Da igual" },
+                { value: "yes", label: "Con ascensor" },
+                { value: "no", label: "Sin ascensor" },
+              ]}
+            />
           </Section>
 
-          <Section title="Captación" defaultOpen={false}>
+          <Section title="Vistas" active={splitCsv(f.extras).some((x) => x.startsWith("vistas"))} defaultOpen={false}>
+            <Toggles options={VIEW_OPTIONS} value={f.extras} onToggle={(v) => f.setExtras(toggleCsv(f.extras, v))} />
+          </Section>
+
+          <Section title="Características (deben tenerlas todas)" active={splitCsv(f.extras).some((x) => EXTRA_OPTIONS.some((o) => o.value === x))}>
+            <Toggles options={EXTRA_OPTIONS} value={f.extras} onToggle={(v) => f.setExtras(toggleCsv(f.extras, v))} />
+          </Section>
+
+          <Section title="Calificación energética" active={Boolean(f.energy)} defaultOpen={false}>
+            <Toggles
+              options={ENERGY_LETTERS.map((l) => ({ value: l, label: l }))}
+              value={f.energy}
+              onToggle={(v) => f.setEnergy(toggleCsv(f.energy, v))}
+            />
+          </Section>
+
+          <Section title="Captación" active={f.priceDrop !== ""} defaultOpen={false}>
             <SelectField ariaLabel="Bajada de precio" value={f.priceDrop} onChange={f.setPriceDrop}>
               <option value="">Bajada de precio: cualquiera</option>
               <option value="0">Ha bajado de precio</option>
@@ -244,19 +301,9 @@ export function FiltersPanel({
               <option value="10">Bajó 10 % o más</option>
               <option value="15">Bajó 15 % o más</option>
             </SelectField>
-            <SelectField ariaLabel="Tiempo en cartera" value={f.daysListed} onChange={f.setDaysListed}>
-              <option value="">Tiempo en cartera: cualquiera</option>
-              {[7, 15, 30, 60, 90].map((n) => (
-                <option key={n} value={n}>Detectado hace más de {n} días</option>
-              ))}
-            </SelectField>
-            <Pair>
-              <NumberField value={f.yearMin} onChange={f.setYearMin} placeholder="Año desde" ariaLabel="Año de construcción desde" />
-              <NumberField value={f.yearMax} onChange={f.setYearMax} placeholder="Año hasta" ariaLabel="Año de construcción hasta" />
-            </Pair>
           </Section>
 
-          <Section title="Contacto y gestión" defaultOpen={false}>
+          <Section title="Contacto y gestión" active={Boolean(f.phoneFilter || f.gestion)} defaultOpen={false}>
             <ChoiceGroup
               ariaLabel="Teléfono"
               value={f.phoneFilter}
@@ -276,7 +323,14 @@ export function FiltersPanel({
             </SelectField>
           </Section>
 
-          <Section title="Zona dibujada en el mapa" defaultOpen={false}>
+          <Section title="Ubicación en el mapa" active={Boolean(f.drawnZone || f.exactLocation)} defaultOpen={false}>
+            <SwitchRow
+              label="Solo ubicación exacta"
+              description="Oculta los anuncios cuyo pin es aproximado (solo calle o barrio)."
+              checked={f.exactLocation}
+              onChange={f.setExactLocation}
+            />
+            <p className="pt-1 text-xs text-ink/65">Zona dibujada</p>
             <DrawZoneFilter value={f.drawnZone} onChange={f.setDrawnZone} />
           </Section>
 

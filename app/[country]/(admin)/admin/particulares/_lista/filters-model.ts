@@ -14,10 +14,22 @@ export const GESTION_LABEL: Record<string, string> = {
   mine: "Asignados a mí",
 };
 export const CONDITION_LABEL: Record<string, string> = {
+  nuevo: "Nuevo",
+  usado: "Usado",
+  muy_bueno: "Muy buen estado",
+  bueno: "Buen estado",
+  reformar: "Para reformar",
+  reformado: "Reformado",
+  // valores de enlaces antiguos
   good: "Buen estado",
   renovated: "Reformado / nuevo",
-  to_reform: "A reformar",
+  to_reform: "Para reformar",
 };
+export const CONDITION_OPTIONS = ["nuevo", "usado", "muy_bueno", "bueno", "reformar", "reformado"].map((value) => ({
+  value,
+  label: CONDITION_LABEL[value],
+}));
+export const RENTAL_KIND_LABEL: Record<string, string> = { larga: "Larga duración", temporada: "De temporada" };
 export const ADVERTISER_LABEL: Record<string, string> = {
   all: "Todos los anunciantes",
   particular: "Particulares",
@@ -25,15 +37,37 @@ export const ADVERTISER_LABEL: Record<string, string> = {
   unknown: "Sin clasificar",
 };
 
-/** Tipos de inmueble (etiquetas `attrs`, cualquiera de las marcadas). */
-export const TYPE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "atico", label: "Ático" },
-  { value: "duplex", label: "Dúplex" },
-  { value: "estudio", label: "Estudio" },
-  { value: "chalet", label: "Chalet independiente" },
-  { value: "adosado", label: "Chalet adosado" },
-  { value: "pareado", label: "Chalet pareado" },
-  { value: "rustica", label: "Casa rústica" },
+/** Tipos de inmueble en árbol (etiquetas `attrs`; basta con una de las marcadas). */
+export const TYPE_GROUPS: Array<{ label: string; options: Array<{ value: string; label: string }> }> = [
+  {
+    label: "Pisos",
+    options: [
+      { value: "estudio", label: "Estudio" },
+      { value: "atico", label: "Ático" },
+      { value: "duplex", label: "Dúplex" },
+      { value: "loft", label: "Loft" },
+    ],
+  },
+  {
+    label: "Casas",
+    options: [
+      { value: "chalet", label: "Chalet independiente" },
+      { value: "adosado", label: "Chalet adosado" },
+      { value: "pareado", label: "Chalet pareado" },
+      { value: "rustica", label: "Casa rústica" },
+    ],
+  },
+  { label: "Obra nueva", options: [{ value: "obra_nueva", label: "Obra nueva" }] },
+];
+export const TYPE_OPTIONS: Array<{ value: string; label: string }> = TYPE_GROUPS.flatMap((g) => g.options);
+
+/** Vistas (etiquetas `attrs` deducidas de la descripción; el anuncio debe tener todas las marcadas). */
+export const VIEW_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "vistas", label: "Con vistas" },
+  { value: "vistas_despejadas", label: "Vistas despejadas" },
+  { value: "vistas_sierra", label: "Vistas a la sierra" },
+  { value: "vistas_jardin", label: "Vistas a jardín o piscina" },
+  { value: "vistas_mar", label: "Vistas al mar" },
 ];
 
 /** Extras (etiquetas `attrs`, el anuncio debe tener TODAS las marcadas). */
@@ -53,6 +87,7 @@ export const EXTRA_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "parquet", label: "Parquet" },
   { value: "videoportero", label: "Videoportero" },
   { value: "accesible", label: "Accesible (movilidad reducida)" },
+  { value: "patio", label: "Patio" },
 ];
 export const POSITION_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "exterior", label: "Exterior" },
@@ -77,6 +112,12 @@ export type FilterChip = {
 };
 
 const money = (v: string) => fmtEur(Number(v));
+/** «Desde 80 m²» / «Hasta 120 m²» / «80 – 120 m²». */
+const rangeLabel = (min: string, max: string, unit: string) => {
+  const a = min ? fmtNum(Number(min)) : "";
+  const b = max ? fmtNum(Number(max)) : "";
+  return a && b ? `${a} – ${b} ${unit}` : a ? `Desde ${a} ${unit}` : `Hasta ${b} ${unit}`;
+};
 
 /** Chips de todos los filtros activos, con su forma de quitarlos uno a uno. */
 export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
@@ -136,8 +177,22 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
       },
     });
   }
-  if (f.bedrooms) chips.push({ id: "beds", label: `${f.bedrooms}+ hab.`, onRemove: () => f.setBedrooms("") });
-  if (f.areaMin) chips.push({ id: "area", label: `Desde ${fmtNum(Number(f.areaMin))} m²`, onRemove: () => f.setAreaMin("") });
+  if (f.bedrooms) {
+    const exact = f.bedroomsExact && Number(f.bedrooms) < 6;
+    chips.push({
+      id: "beds",
+      label: exact ? (f.bedrooms === "0" ? "Estudio (0 dorm.)" : `${f.bedrooms} dorm.`) : `${f.bedrooms}+ dorm.`,
+      onRemove: () => f.setBedrooms(""),
+    });
+  }
+  if (f.areaMin || f.areaMax) {
+    chips.push({ id: "area", label: rangeLabel(f.areaMin, f.areaMax, "m²"), onRemove: () => { f.setAreaMin(""); f.setAreaMax(""); } });
+  }
+  if (f.plotMin || f.plotMax) {
+    chips.push({ id: "plot", label: `Parcela ${rangeLabel(f.plotMin, f.plotMax, "m²").toLowerCase()}`, onRemove: () => { f.setPlotMin(""); f.setPlotMax(""); } });
+  }
+  if (f.rentalKind) chips.push({ id: "rentalKind", label: `Alquiler ${RENTAL_KIND_LABEL[f.rentalKind].toLowerCase()}`, onRemove: () => f.setRentalKind("") });
+  if (f.exactLocation) chips.push({ id: "exactLoc", label: "Ubicación exacta", onRemove: () => f.setExactLocation(false) });
   if (f.floorMin || f.floorMax) {
     const lo = f.floorMin, hi = f.floorMax;
     const label = hi === "0" && !lo ? "Solo bajos" : lo && hi ? (lo === hi ? `Planta ${lo}` : `Plantas ${lo}–${hi}`) : lo ? `Planta ${lo} o más` : `Hasta planta ${hi}`;
@@ -163,14 +218,22 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
       onRemove: () => f.setPriceDrop(""),
     });
   }
-  if (f.daysListed) chips.push({ id: "days", label: `Más de ${f.daysListed} días en cartera`, onRemove: () => f.setDaysListed("") });
+  if (f.daysListed || f.daysMax) {
+    chips.push({
+      id: "days",
+      label: f.daysListed && f.daysMax ? `${f.daysListed}–${f.daysMax} días en cartera` : f.daysListed ? `Más de ${f.daysListed} días en cartera` : `Menos de ${f.daysMax} días en cartera`,
+      onRemove: () => { f.setDaysListed(""); f.setDaysMax(""); },
+    });
+  }
   if (f.last24h) chips.push({ id: "24h", label: "Últimas 24 h", onRemove: () => f.setLast24h(false) });
   if (f.phoneFilter) {
     chips.push({ id: "phone", label: f.phoneFilter === "with_phone" ? "Con teléfono" : "Sin teléfono", onRemove: () => f.setPhoneFilter("") });
   }
   if (f.gestion) chips.push({ id: "gestion", label: GESTION_LABEL[f.gestion] ?? f.gestion, onRemove: () => f.setGestion("") });
   if (f.lift) chips.push({ id: "lift", label: f.lift === "yes" ? "Con ascensor" : "Sin ascensor", onRemove: () => f.setLift("") });
-  if (f.condition) chips.push({ id: "cond", label: CONDITION_LABEL[f.condition] ?? f.condition, onRemove: () => f.setCondition("") });
+  for (const c of splitCsv(f.condition)) {
+    chips.push({ id: `cond:${c}`, label: CONDITION_LABEL[c] ?? c, onRemove: () => f.setCondition(toggleCsv(f.condition, c)) });
+  }
   if (f.yearMin || f.yearMax) {
     chips.push({
       id: "year",
@@ -185,11 +248,17 @@ export function buildChips(f: ParticularesFiltersApi): FilterChip[] {
     chips.push({ id: `type:${t}`, label: TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t, onRemove: () => f.setTypes(toggleCsv(f.types, t)) });
   }
   for (const x of splitCsv(f.extras)) {
-    chips.push({ id: `extra:${x}`, label: [...EXTRA_OPTIONS, ...POSITION_OPTIONS].find((o) => o.value === x)?.label ?? x, onRemove: () => f.setExtras(toggleCsv(f.extras, x)) });
+    chips.push({ id: `extra:${x}`, label: [...EXTRA_OPTIONS, ...POSITION_OPTIONS, ...VIEW_OPTIONS].find((o) => o.value === x)?.label ?? x, onRemove: () => f.setExtras(toggleCsv(f.extras, x)) });
   }
   if (f.energy) chips.push({ id: "energy", label: `Eficiencia ${splitCsv(f.energy).join(", ")}`, onRemove: () => f.setEnergy("") });
   if (f.orientation) chips.push({ id: "orient", label: `Orientación ${ORIENTATION_LABEL[f.orientation] ?? f.orientation}`, onRemove: () => f.setOrientation("") });
-  if (f.bathrooms) chips.push({ id: "baths", label: `${f.bathrooms}+ baños`, onRemove: () => f.setBathrooms("") });
+  if (f.bathrooms) {
+    chips.push({
+      id: "baths",
+      label: f.bathroomsExact && Number(f.bathrooms) < 7 ? `${f.bathrooms} ${f.bathrooms === "1" ? "baño" : "baños"}` : `${f.bathrooms}+ baños`,
+      onRemove: () => f.setBathrooms(""),
+    });
+  }
   if (f.since) chips.push({ id: "since", label: SINCE_LABEL[f.since] ?? `Últimos ${f.since} días`, onRemove: () => f.setSince("") });
   if (f.showLinked) chips.push({ id: "linked", label: "Con anuncios enlazados", onRemove: () => f.setShowLinked(false) });
 
@@ -205,12 +274,15 @@ export function countPanelFilters(f: ParticularesFiltersApi): number {
   let n = 0;
   if (f.priceMin || f.priceMax) n++;
   if (f.bedrooms) n++;
-  if (f.areaMin) n++;
+  if (f.areaMin || f.areaMax) n++;
+  if (f.plotMin || f.plotMax) n++;
+  if (f.rentalKind) n++;
+  if (f.exactLocation) n++;
   if (f.floorMin || f.floorMax) n++;
   if (f.furnished) n++;
   if (f.pricePerM2Min || f.pricePerM2Max) n++;
   if (f.priceDrop !== "") n++;
-  if (f.daysListed) n++;
+  if (f.daysListed || f.daysMax) n++;
   if (f.last24h) n++;
   if (f.phoneFilter) n++;
   if (f.gestion) n++;
