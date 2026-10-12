@@ -124,9 +124,6 @@ type CardProps = {
 
 function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied, onCopyPhone }: CardProps) {
   const retired = !row.is_active;
-  // El crawler lleva días sin ver este anuncio: puede que ya no esté publicado.
-  const staleMs = now != null && row.updated_at ? now - new Date(row.updated_at.endsWith("Z") ? row.updated_at : `${row.updated_at}Z`).getTime() : 0;
-  const staleDays = !retired && staleMs > 5 * 86_400_000 ? Math.floor(staleMs / 86_400_000) : null;
   const cover = row.cover_url ?? row.photos?.[0]?.url ?? null;
   const op = opLabel(row);
   const both = hasBothOps(row);
@@ -337,9 +334,6 @@ function ParticularCardImpl({ row, layout, now, href, onOpen, onPrefetch, copied
             )}
             {retired && row.taken_down_at && (
               <Pill tone="red">Retirado · {SHORT_DATE.format(new Date(row.taken_down_at))}</Pill>
-            )}
-            {!retired && staleDays != null && (
-              <Pill tone="amber">Sin comprobar hace {staleDays} días · puede estar de baja</Pill>
             )}
             {hasVideo && (
               <Pill tone="neutral" icon={<Video size={12} strokeWidth={2} />}>
